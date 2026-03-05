@@ -2,7 +2,7 @@
   "account": {
     "balance": 50000,
     "risk_percent": 0.5,
-    "firm": "Funding Pips"
+    "firm": "Funding Pips", "alert_emails": ["avinash.somjani23@gmail.com", "fernandesbrezhnev@gmail.com"]
   },
 
   "pairs": [
