@@ -163,7 +163,10 @@ def call_gemini(prompt):
     body = {"contents": [{"parts": [{"text": prompt}]}]}
     try:
         response = requests.post(url, json=body, timeout=45)
-        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        result = response.json()
+        if "candidates" not in result:
+            return f"Gemini error — full response: {result}"
+        return result["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as e:
         return f"Gemini API error: {str(e)}"
 
