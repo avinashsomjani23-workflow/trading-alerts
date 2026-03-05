@@ -1,0 +1,33 @@
+{
+  "account": {
+    "balance": 50000,
+    "risk_percent": 0.5,
+    "firm": "Funding Pips"
+  },
+
+  "pairs": [
+    {"symbol": "EURUSD=X",  "name": "EURUSD",  "proximity_pct": 0.15},
+    {"symbol": "USDJPY=X",  "name": "USDJPY",  "proximity_pct": 0.15},
+    {"symbol": "NZDUSD=X",  "name": "NZDUSD",  "proximity_pct": 0.15},
+    {"symbol": "BTC-USD",   "name": "BTCUSD",  "proximity_pct": 0.8},
+    {"symbol": "NQ=F",      "name": "NAS100",  "proximity_pct": 0.4},
+    {"symbol": "XAUUSD=X",  "name": "GOLD",    "proximity_pct": 0.3},
+    {"symbol": "XAGUSD=X",  "name": "SILVER",  "proximity_pct": 0.4}
+  ],
+
+  "zone_detection": {
+    "swing_lookback": 3,
+    "min_zone_touches": 2,
+    "cooldown_hours": 8
+  },
+
+  "email_sections": {
+    "micro_view": true,
+    "macro_view": true,
+    "trade_rationale": true,
+    "confluence_checklist": true,
+    "position_size": true,
+    "pretrade_checklist": true,
+    "mindset_note": true
+  }
+}
