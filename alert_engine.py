@@ -169,14 +169,17 @@ def call_gemini(prompt):
 
 # Send email
 def send_email(subject, body_text):
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"]    = GMAIL_ADDRESS
-    msg["To"]      = ALERT_EMAIL
-    msg.attach(MIMEText(body_text, "plain"))
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(GMAIL_ADDRESS, GMAIL_PASS)
-        server.sendmail(GMAIL_ADDRESS, ALERT_EMAIL, msg.as_string())
+    recipients = config["account"].get("alert_emails", [ALERT_EMAIL])
+    for recipient in recipients:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"]    = GMAIL_ADDRESS
+        msg["To"]      = recipient
+        msg.attach(MIMEText(body_text, "plain"))
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(GMAIL_ADDRESS, GMAIL_PASS)
+            server.sendmail(GMAIL_ADDRESS, recipient, msg.as_string())
+        print(f"    Email sent to {recipient}")
 
 # Main loop
 print(f"Alert engine started at {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
