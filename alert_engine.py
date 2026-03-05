@@ -215,7 +215,7 @@ Tailored to the zone type and likely emotional trap. Sharp and relevant, not gen
 
 # Call Gemini API
 def call_gemini(prompt):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key={GEMINI_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
     body = {"contents": [{"parts": [{"text": prompt}]}]}
     try:
         response = requests.post(url, json=body, timeout=45)
