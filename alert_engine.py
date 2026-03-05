@@ -87,132 +87,76 @@ def fetch_macro_news():
 
 # Build the Gemini prompt
 def build_prompt(pair, zone_level, zone_label, current_price, macro_news):
-    s = config["email_sections"]
     risk_dollar = config["account"]["balance"] * (config["account"]["risk_percent"] / 100)
+    ist_time = (datetime.utcnow() + timedelta(hours=5, minutes=30)).strftime("%H:%M")
+    utc_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
 
     prompt = f"""
-You are a highly technical professional trader specialising in Smart Money Concepts (SMC) and ICT methodology.
-A price alert has triggered. Generate a complete, precise trading briefing.
-Write as if briefing a professional prop trader at {config["account"]["firm"]}.
-No filler. No vague language. Every section must contain specific, actionable insight.
+You are a professional SMC trader briefing a busy entrepreneur who trades part-time.
+They understand SMC concepts but have limited time.
+Your job: deliver a briefing they can read in 60 seconds and act on.
 
-ALERT DETAILS:
+STRICT RULES:
+- Maximum 200 words total across the entire briefing
+- Zero filler words. Zero explaining what SMC terms mean.
+- Use symbols: ✅ ❌ ⏳ 🎯 🛑 📐 — they save space and add scannability
+- Bold only the numbers that matter: entry, SL, TP, lot size
+- One emoji per section header only
+- If a confluence IS confirmed, state it in one line.
+- If a confluence is MISSING, write ❌ followed by one plain English sentence (max 10 words) explaining why waiting for it matters. No jargon.
+- The BIAS line must be the very first thing they read
+- End with one sentence max under MINDSET — sharp, specific, no motivation speech
+
+ALERT:
 - Pair: {pair}
-- Zone Type: {zone_label}
+- Zone: {zone_label}
 - Key Level: {zone_level}
 - Current Price: {current_price}
-- Trading Style: Intraday (M15-H1) and Swing (H4-Daily)
-- Time (UTC): {datetime.utcnow().strftime("%Y-%m-%d %H:%M")}
+- Time: {utc_time} UTC | {ist_time} IST
 
-Recent Macro Headlines:
+Macro Headlines:
 {macro_news}
 
+Account: ${config["account"]["balance"]} | Risk: {config["account"]["risk_percent"]}% = ${risk_dollar:.0f}
+
 ---
-ALERT: {pair} has touched a {zone_label} zone at {zone_level}
+
+Generate the briefing in EXACTLY this format and nothing else:
+
+⚡ BIAS: [LONG / SHORT / WAIT] — [one line reason, max 12 words]
+
+📍 ZONE: [zone_label] at [zone_level] | Price: [current_price] | [utc_time] UTC | [ist_time] IST
+
+✅ CONFLUENCES
+[List only what IS confirmed. One line each. Max 4 items.]
+
+❌ MISSING
+[For each missing confluence: one ❌ + one plain English sentence on why it matters to wait for it. Max 2 items.]
+
+🎯 TRADE
+Entry: [price range]
+SL: [price] | TP1: [price] | TP2: [price]
+R:R: [x:x to TP1] / [x:x to TP2]
+
+📐 SIZE
+Lot size: [X lots] (${risk_dollar:.0f} risk / [SL points] pts)
+
+⏳ TRIGGER
+[One sentence. Exactly what must happen before entry. Be specific.]
+
+🛑 INVALID IF
+[One sentence. The exact price action that kills this trade.]
+
+🌍 MACRO
+[Two lines max. What matters for this pair right now.]
+
+🧠 MINDSET
+[One sentence. The specific psychological trap to avoid on this exact setup.]
+
 ---
+Total word count must not exceed 200 words.
 """
-
-    if s.get("micro_view"):
-        prompt += """
-MICRO VIEW
-
-Multi-Timeframe Structure:
-- Daily: [Trend direction, major structure, swing highs/lows, where price sits in the range]
-- H4: [Intermediate structure, order blocks, fair value gaps, key levels nearby]
-- H1: [Intraday structure, entry zones, liquidity pools, current momentum]
-- M15: [Confirmation signals needed, entry refinement, current candle behaviour]
-"""
-
-    if s.get("confluence_checklist"):
-        prompt += """
-Confluence Analysis at This Zone:
-- Order Block (OB): [Valid OB at this level? Bullish or bearish? Mitigated?]
-- Fair Value Gap (FVG): [Any FVG within or near this zone? Direction?]
-- RSI: [Expected condition - oversold, overbought, divergence, midline rejection]
-- Structure Signal: [What BOS or CHoCH to watch for as entry confirmation]
-- Liquidity: [Where are stops resting? Have equal highs/lows been swept?]
-
-Confluence Checklist:
-[ ] Price inside or reacting from a valid OB
-[ ] FVG present and aligning with zone direction
-[ ] RSI divergence or extreme reading present
-[ ] BOS or CHoCH confirmation on M15 or H1
-[ ] Session aligns - London/NY for intraday, H4/D close for swing
-[ ] Liquidity swept before entry
-[ ] No high-impact news in next 30 minutes
-"""
-
-    if s.get("macro_view"):
-        prompt += f"""
----
-MACRO VIEW
-
-What is driving {pair} right now:
-[Central bank stance, risk sentiment, recent or upcoming economic data, geopolitical factors. Be specific.]
-
-Sentiment Bias: [Bullish / Bearish / Neutral - one sharp reason]
-Key Events This Week: [2-3 specific upcoming catalysts for this pair]
-"""
-
-    if s.get("trade_rationale"):
-        prompt += f"""
----
-TRADE RATIONALE
-
-Directional Bias: [Long / Short / Wait for confirmation - and the specific reason]
-
-Why this zone matters:
-[2-3 sentences on the structural significance of this exact level]
-
-Ideal Setup:
-- Entry Trigger: [Exact confirmation required]
-- Entry Zone: [Specific price range]
-- Stop Loss: [Level and reason]
-- TP1: [First target]
-- TP2: [Swing target]
-- Estimated R:R: [Based on the above levels]
-
-Invalidation: [One sentence - what makes this setup void]
-"""
-
-    if s.get("position_size"):
-        prompt += f"""
----
-POSITION SIZE
-
-Account Balance: ${config["account"]["balance"]}
-Risk Per Trade: {config["account"]["risk_percent"]}% = ${risk_dollar:.2f}
-Stop Loss Distance: [Estimate in pips or points]
-Recommended Lot Size: [Lot Size = ${risk_dollar:.2f} divided by (SL distance x pip value)]
-Pip Value Note: [State pip value for {pair}]
-"""
-
-    if s.get("pretrade_checklist"):
-        prompt += f"""
----
-PRE-TRADE CHECKLIST - {config["account"]["firm"]} Rules
-
-[ ] NOT within 1% of daily drawdown limit
-[ ] No high-impact news in next 2 minutes - confirm on Forex Factory
-[ ] This is a pre-identified zone - not chasing price
-[ ] Invalidation level set before entry
-[ ] Lot size within firm maximum
-[ ] Within allowed trading hours for this instrument
-[ ] Directional bias aligns with at least H4 structure
-"""
-
-    if s.get("mindset_note"):
-        prompt += f"""
----
-MINDSET NOTE
-
-[One specific psychological reminder for THIS setup on {pair}. 
-Tailored to the zone type and likely emotional trap. Sharp and relevant, not generic.]
-"""
-
-    prompt += "\n---\nEnd of briefing. Be precise and specific throughout."
     return prompt
-
 # Call Gemini API
 def call_gemini(prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
