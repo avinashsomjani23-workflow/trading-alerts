@@ -185,7 +185,34 @@ def send_email(subject, body_text):
         print(f"    Email sent to {recipient}")
 
 # Main loop
+# Market hours check
+def is_market_open():
+    now = datetime.utcnow()
+    weekday = now.weekday()  # Monday=0, Sunday=6
+
+    # Full weekend block
+    if weekday == 5:  # Saturday
+        return False, "Saturday — market closed."
+    if weekday == 6:  # Sunday
+        # Forex reopens Sunday 21:00 UTC (NY close equivalent)
+        if now.hour < 21:
+            return False, "Sunday before 21:00 UTC — market not yet open."
+
+    # Friday close — Forex closes 21:00 UTC Friday
+    if weekday == 4 and now.hour >= 21:
+        return False, "Friday after 21:00 UTC — market closed for weekend."
+
+    return True, "Market open."
+
+# Main loop
 print(f"Alert engine started at {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
+
+market_open, market_status = is_market_open()
+print(f"  Market status: {market_status}")
+if not market_open:
+    print("  No alerts will be sent. Exiting.")
+    exit(0)
+
 macro_news = fetch_macro_news()
 alerts_fired = 0
 
