@@ -3,7 +3,7 @@
     "balance": 50000,
     "risk_percent": 0.5,
     "firm": "Funding Pips",
-    "alert_emails": ["youremail@gmail.com", "friendsemail@gmail.com"]
+    "alert_emails": ["avinash.somjani23@gmail.com", "fernandesbrezhnev@gmail.com"]
   },
   "pairs": [
     {"symbol": "EURUSD=X", "name": "EURUSD", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5, "style": "intraday"},
