@@ -19,9 +19,9 @@
       "Entry in Premium for short trade",
       "R:R for TP1 exceeds 2:1"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 24999.0,
+    "outcome_checked_at": "2026-03-10 18:23"
   },
   {
     "id": "NAS100_1773143776",
@@ -43,9 +43,9 @@
       "Demand zone is fresh (not retested more than twice)",
       "Excellent Risk:Reward ratio for both TP1 and TP2"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 24935.0,
+    "outcome_checked_at": "2026-03-10 18:23"
   },
   {
     "id": "NZDUSD_1773164183",
