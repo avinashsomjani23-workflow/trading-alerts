@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "id": "NAS100_1773124690",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-10 06:38",
+    "zone_level": 24969.11111,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "24970.00",
+    "sl": 24999.0,
+    "tp1": 24903.75,
+    "tp2": 24858.0,
+    "confidence_score": 7,
+    "confluences": [
+      "Price at Supply/Resistance zone 24969.11111",
+      "Bearish M15 Order Block identified at zone",
+      "Bearish FVG overlaps with OB",
+      "Liquidity swept just above OB (M15 high 24999.00)",
+      "Entry in Premium for short trade",
+      "R:R for TP1 exceeds 2:1"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  }
+]
