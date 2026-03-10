@@ -561,4 +561,44 @@ for pair_conf in config["pairs"]:
 
     for zone_level, touches in zones:
         dist_pct = abs(current_price - zone_level) / zone_level * 100
-        if dist_pct > pr
+        if dist_pct > prox:
+            continue
+        if is_on_cooldown(name, zone_level):
+            print(f"    {name} @ {zone_level:.5f} — cooldown.")
+            continue
+
+        zone_label = get_zone_label(zone_level, current_price)
+        print(f"    ZONE HIT: {name} {zone_label} at {zone_level:.5f}")
+
+        prompt = build_prompt(name, round(zone_level,5), zone_label,
+                              round(current_price,5), macro_news,
+                              df1, df2, tf1_label, tf2_label, min_conf)
+        data, error = call_gemini(prompt)
+
+        if error:
+            print(f"    Gemini error: {error}")
+            continue
+
+        score = data.get("confidence_score", 0)
+        if not data.get("send_alert", False):
+            print(f"    {name} skipped — {score}/10 below {min_conf}. {data.get('confidence_reason','')}")
+            continue
+
+        levels = {
+            'zone': zone_level, 'current': current_price,
+            'entry': data.get('entry',''), 'sl': data.get('sl',0),
+            'tp1': data.get('tp1',0), 'tp2': data.get('tp2',0)
+        }
+        print(f"    Generating charts...")
+        chart1 = generate_chart(df1, f"{name} — {tf1_label}", levels, data) if df1 is not None else None
+        chart2 = generate_chart(df2, f"{name} — {tf2_label}", levels, data) if df2 is not None else None
+
+        subject = f"[{score}/10] {name} | {zone_label} | {round(zone_level,5)} | {datetime.utcnow().strftime('%H:%M')} UTC"
+        send_email(subject, data, name, round(zone_level,5), zone_label,
+                   round(current_price,5), chart1, chart2, tf1_label, tf2_label)
+        log_alert(name, round(zone_level,5), zone_label, round(current_price,5), data)
+        set_cooldown(name, zone_level)
+        alerts_fired += 1
+        print(f"    ✅ Sent: {name} [{score}/10]")
+
+print(f"Done. {alerts_fired} alert(s) fired.")
