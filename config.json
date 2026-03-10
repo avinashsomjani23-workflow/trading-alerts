@@ -3,21 +3,18 @@
     "balance": 50000,
     "risk_percent": 0.5,
     "firm": "Funding Pips",
-    "alert_emails": ["avinash.somjani23@gmail.com", "fernandesbrezhnev@gmail.com"]
+    "alert_emails": ["youremail@gmail.com", "friendsemail@gmail.com"]
   },
-
   "pairs": [
     {"symbol": "EURUSD=X", "name": "EURUSD", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5, "style": "intraday"},
     {"symbol": "USDJPY=X", "name": "USDJPY", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5, "style": "intraday"},
     {"symbol": "NZDUSD=X", "name": "NZDUSD", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5, "style": "intraday"},
-    {"symbol": "BTC-USD",  "name": "BTCUSD", "proximity_pct": 0.8,  "min_touches": 2, "min_confidence": 8, "style": "swing"},
-    {"symbol": "NQ=F",     "name": "NAS100", "proximity_pct": 0.4,  "min_touches": 2, "min_confidence": 5, "style": "intraday"},
-    {"symbol": "XAUUSD=X", "name": "GOLD",   "proximity_pct": 0.35, "min_touches": 1, "min_confidence": 5, "style": "swing"},
-    {"symbol": "XAGUSD=X", "name": "SILVER", "proximity_pct": 0.45, "min_touches": 1, "min_confidence": 5, "style": "swing"}
+    {"symbol": "BTC-USD",  "name": "BTCUSD", "proximity_pct": 0.8,  "min_touches": 1, "min_confidence": 5, "style": "intraday"},
+    {"symbol": "NQ=F",     "name": "NAS100", "proximity_pct": 0.4,  "min_touches": 1, "min_confidence": 5, "style": "intraday"},
+    {"symbol": "GC=F",     "name": "GOLD",   "proximity_pct": 0.35, "min_touches": 1, "min_confidence": 5, "style": "intraday"},
+    {"symbol": "SI=F",     "name": "SILVER", "proximity_pct": 0.45, "min_touches": 1, "min_confidence": 5, "style": "intraday"}
   ],
-
   "zone_detection": {
-    "swing_lookback": 3,
-    "cooldown_hours": 8
+    "swing_lookback": 3
   }
 }
