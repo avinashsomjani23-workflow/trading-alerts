@@ -10,31 +10,26 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-
       - name: Install dependencies
         run: pip install yfinance requests numpy pandas
-
       - name: Run weekly review
         env:
-          GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
-          GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          ALERT_EMAIL:        ${{ secrets.ALERT_EMAIL }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
         run: python weekly_review.py
-
       - name: Save updated log
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add alert_log.json || true
-          git diff --staged --quiet || git commit -m "Update outcomes after review [skip ci]"
+          git diff --staged --quiet || git commit -m "Update outcomes [skip ci]"
           git push || true
