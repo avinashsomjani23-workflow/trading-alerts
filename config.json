@@ -7,13 +7,13 @@
   },
 
   "pairs": [
-    {"symbol": "EURUSD=X", "name": "EURUSD", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5},
-    {"symbol": "USDJPY=X", "name": "USDJPY", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5},
-    {"symbol": "NZDUSD=X", "name": "NZDUSD", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5},
-    {"symbol": "BTC-USD",  "name": "BTCUSD", "proximity_pct": 0.8,  "min_touches": 2, "min_confidence": 8},
-    {"symbol": "NQ=F",     "name": "NAS100", "proximity_pct": 0.4,  "min_touches": 2, "min_confidence": 5},
-    {"symbol": "XAUUSD=X", "name": "GOLD",   "proximity_pct": 0.35, "min_touches": 1, "min_confidence": 5},
-    {"symbol": "XAGUSD=X", "name": "SILVER", "proximity_pct": 0.45, "min_touches": 1, "min_confidence": 5}
+    {"symbol": "EURUSD=X", "name": "EURUSD", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5, "style": "intraday"},
+    {"symbol": "USDJPY=X", "name": "USDJPY", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5, "style": "intraday"},
+    {"symbol": "NZDUSD=X", "name": "NZDUSD", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5, "style": "intraday"},
+    {"symbol": "BTC-USD",  "name": "BTCUSD", "proximity_pct": 0.8,  "min_touches": 2, "min_confidence": 8, "style": "swing"},
+    {"symbol": "NQ=F",     "name": "NAS100", "proximity_pct": 0.4,  "min_touches": 2, "min_confidence": 5, "style": "intraday"},
+    {"symbol": "XAUUSD=X", "name": "GOLD",   "proximity_pct": 0.35, "min_touches": 1, "min_confidence": 5, "style": "swing"},
+    {"symbol": "XAGUSD=X", "name": "SILVER", "proximity_pct": 0.45, "min_touches": 1, "min_confidence": 5, "style": "swing"}
   ],
 
   "zone_detection": {
