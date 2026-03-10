@@ -31,7 +31,7 @@ jobs:
           ALERT_EMAIL:        ${{ secrets.ALERT_EMAIL }}
         run: python alert_engine.py
 
-      - name: Save logs
+      - name: Save logs to repo
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
