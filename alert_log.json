@@ -22,5 +22,29 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "NAS100_1773143776",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-10 11:56",
+    "ist_time": "17:26",
+    "zone_level": 24974.01351,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "24951.00",
+    "sl": 24935.0,
+    "tp1": 25109.0,
+    "tp2": 25150.5,
+    "confidence_score": 7,
+    "confluences": [
+      "Valid H1 bullish Order Block identified",
+      "Bullish H1 FVG (Fair Value Gap) overlaps the OB",
+      "Price is currently in a discount area for a long setup",
+      "Demand zone is fresh (not retested more than twice)",
+      "Excellent Risk:Reward ratio for both TP1 and TP2"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
