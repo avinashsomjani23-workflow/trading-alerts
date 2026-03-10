@@ -46,5 +46,29 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "NZDUSD_1773164183",
+    "pair": "NZDUSD",
+    "timestamp_utc": "2026-03-10 17:36",
+    "ist_time": "23:06",
+    "zone_level": 0.59592,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "0.59588",
+    "sl": 0.5966,
+    "tp1": 0.59488,
+    "tp2": 0.59351,
+    "confidence_score": 6,
+    "confluences": [
+      "Price rejected Supply/Resistance zone 0.59592",
+      "M15 CHoCH confirmed (17:30 M15 candle broke 17:15 M15 low)",
+      "Liquidity swept above previous highs at 0.59652",
+      "Current price is in a premium area for a short trade",
+      "Entry taken within a valid M15 bearish Order Block"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
