@@ -2,12 +2,15 @@ name: Trading Alert Engine
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:
   run-alerts:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -18,7 +21,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install yfinance requests numpy
+        run: pip install yfinance requests numpy matplotlib pandas
 
       - name: Run alert engine
         env:
@@ -27,3 +30,11 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           ALERT_EMAIL:        ${{ secrets.ALERT_EMAIL }}
         run: python alert_engine.py
+
+      - name: Save logs
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add alert_log.json cooldown_state.json || true
+          git diff --staged --quiet || git commit -m "Update logs [skip ci]"
+          git push || true
