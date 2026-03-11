@@ -221,7 +221,7 @@ Return ONLY raw JSON. No markdown. No code fences.
     url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
     body = {"contents":[{"parts":[{"text":prompt}]}]}
     try:
-        r      = requests.post(url,json=body,timeout=90)
+        r      = requests.post(url,json=body,timeout=120)
         result = r.json()
         if "candidates" not in result:
             print(f"  Gemini error: {result}")
@@ -375,7 +375,7 @@ def send_status_email(message):
 </div></body></html>"""
     recipients = config["account"].get("alert_emails",[ALERT_EMAIL])
     for recipient in recipients:
-        msg = MIMEMultipart("alternative")
+        msg = MIMEMultipart("related")   # changed from "alternative" — supports CID images
         msg["Subject"] = subject
         msg["From"]    = GMAIL_ADDRESS
         msg["To"]      = recipient
@@ -384,16 +384,23 @@ def send_status_email(message):
             server.login(GMAIL_ADDRESS,GMAIL_PASS)
             server.sendmail(GMAIL_ADDRESS,recipient,msg.as_string())
 
-def send_weekly_email(html_body, total, wins, losses, win_rate):
+def send_weekly_email(html_body, total, wins, losses, win_rate, chart_images=None):
     ist_date   = (datetime.utcnow()+timedelta(hours=5,minutes=30)).strftime("%d %b")
     subject    = f"Weekly Review | {total} alerts | {wins}W {losses}L | {win_rate:.0f}% WR | {ist_date}"
     recipients = config["account"].get("alert_emails",[ALERT_EMAIL])
     for recipient in recipients:
-        msg = MIMEMultipart("alternative")
+        msg = MIMEMultipart("related")   # changed from "alternative" — supports CID images
         msg["Subject"] = subject
         msg["From"]    = GMAIL_ADDRESS
         msg["To"]      = recipient
         msg.attach(MIMEText(html_body,"html"))
+        if chart_images:
+            from email.mime.image import MIMEImage
+            for cid, img_bytes in chart_images.items():
+                img = MIMEImage(img_bytes, _subtype="png")
+                img.add_header("Content-ID", f"<{cid}>")
+                img.add_header("Content-Disposition", "inline", filename=f"{cid}.png")
+                msg.attach(img)
         with smtplib.SMTP_SSL("smtp.gmail.com",465) as server:
             server.login(GMAIL_ADDRESS,GMAIL_PASS)
             server.sendmail(GMAIL_ADDRESS,recipient,msg.as_string())
