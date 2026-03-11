@@ -1,6 +1,6 @@
 import yfinance as yf
 import pandas as pd
-import json, os, smtplib, requests
+import json, os, smtplib, requests, time
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -9,9 +9,10 @@ from matplotlib.gridspec import GridSpec
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage          # FIX ④ — CID image attachments
 import numpy as np
-import base64
 from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor, as_completed  # FIX ⑤ — parallel fetch
 
 # ── Config ────────────────────────────────────────────────────────────────────
 with open("config.json") as f:
@@ -21,6 +22,9 @@ GEMINI_KEY    = os.environ["GEMINI_API_KEY"]
 GMAIL_ADDRESS = os.environ["GMAIL_ADDRESS"]
 GMAIL_PASS    = os.environ["GMAIL_APP_PASSWORD"]
 ALERT_EMAIL   = os.environ["ALERT_EMAIL"]
+
+# FIX ③ — identifies forex pairs for liquidity sweep exclusion
+FOREX_PAIRS = {"EURUSD", "USDJPY", "NZDUSD", "GBPUSD", "AUDUSD", "USDCAD", "USDCHF"}
 
 # ── Alert log ─────────────────────────────────────────────────────────────────
 ALERT_LOG_FILE = "alert_log.json"
@@ -36,9 +40,6 @@ def save_alert_log():
         json.dump(alert_log, f, indent=2)
 
 # ── Zone visit state ──────────────────────────────────────────────────────────
-# No cooldown hours. No time tracking.
-# A zone re-alerts ONLY when price has moved more than 1.5x proximity_pct
-# away from zone since the last alert on that zone. That is the only rule.
 VISIT_FILE = "zone_visit_state.json"
 try:
     with open(VISIT_FILE) as f:
@@ -76,7 +77,7 @@ def record_breakout_alert(pair, broken_level, current_price):
     visit_state[key] = {"last_alert_price": current_price}
     save_visit_state()
 
-# ── Zone fatigue (for SMC scorecard deduction only) ───────────────────────────
+# ── Zone fatigue ──────────────────────────────────────────────────────────────
 def count_zone_alerts(pair, zone_level, days=30):
     cutoff = datetime.utcnow() - timedelta(days=days)
     count  = 0
@@ -94,14 +95,21 @@ def count_zone_alerts(pair, zone_level, days=30):
             pass
     return count
 
-# ── Market hours (IST) ────────────────────────────────────────────────────────
+# ── Market hours ──────────────────────────────────────────────────────────────
+# FIX ⑦ — blocks 00:00–08:00 IST every weekday + full weekend
 def is_market_open():
     ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
-    wd, h, m = ist.weekday(), ist.hour, ist.minute
-    if wd == 5: return False, "Saturday — closed."
-    if wd == 6: return False, "Sunday — closed."
-    if wd == 0 and (h < 2 or (h == 2 and m < 30)): return False, "Monday before 2:30 AM IST."
-    if wd == 4 and h >= 23 and m >= 30: return False, "Friday after 11:30 PM IST."
+    wd, h = ist.weekday(), ist.hour   # Mon=0 … Fri=4, Sat=5, Sun=6
+
+    if wd == 5:
+        return False, "Saturday — market closed."
+    if wd == 6:
+        return False, "Sunday — market closed."
+    if h < 8:
+        return False, f"Quiet hours (midnight–08:00 IST) — {ist.strftime('%A %H:%M')} IST."
+    if wd == 4 and h >= 23:
+        return False, "Friday after 11:00 PM IST — market closing."
+
     return True, f"Open — {ist.strftime('%A %H:%M')} IST"
 
 # ── Data helpers ──────────────────────────────────────────────────────────────
@@ -127,7 +135,6 @@ def get_atr(df, period=14):
     except:
         return None
 
-# All pairs use intraday: H1 primary, M15 secondary
 def detect_zones_and_candles(symbol, min_touches):
     df1 = clean_df(yf.download(symbol, period="15d", interval="1h",  progress=False))
     df2 = clean_df(yf.download(symbol, period="5d",  interval="15m", progress=False))
@@ -164,12 +171,8 @@ def detect_zones_and_candles(symbol, min_touches):
 def get_zone_label(zone_level, current_price):
     return "Demand / Support" if zone_level < current_price else "Supply / Resistance"
 
-# ── Breakout detection — scored out of 5 ─────────────────────────────────────
-# Break Quality (2pts): +1 body closes beyond level | +1 break candle >= 1.5x ATR14
-# Volume      (1pt):    +1 volume >= 1.3x 20-period avg (gracefully skipped for forex)
-# Level Sig.  (1pt):    +1 level had 3+ prior touches
-# Trend Align (1pt):    +1 break direction matches 50-period MA
-# Minimum score to send: 3/5
+# ── Breakout detection — minimum score raised to 4/5 ─────────────────────────
+# FIX ② — threshold changed from 3 to 4 (two places, clearly marked below)
 def detect_breakout(df1):
     try:
         if df1 is None or len(df1) < 30:
@@ -184,7 +187,7 @@ def detect_breakout(df1):
         if atr is None or atr == 0:
             return None
 
-        last    = len(df1) - 2
+        last   = len(df1) - 2
         if last < 20:
             return None
 
@@ -218,14 +221,14 @@ def detect_breakout(df1):
             score   = 0
             reasons = []
 
-            # Break Quality — 2pts
             if body_ok:
                 score += 2
-                reasons.append(f"+2 Body closed {'above' if direction=='BULLISH' else 'below'} {round(level,5)}, candle {round(l_range/atr,1)}x ATR")
+                reasons.append(
+                    f"+2 Body closed {'above' if direction=='BULLISH' else 'below'} "
+                    f"{round(level,5)}, candle {round(l_range/atr,1)}x ATR")
             else:
-                reasons.append(f"+0 Body did not fully close beyond level")
+                reasons.append("+0 Body did not fully close beyond level")
 
-            # Volume — 1pt
             if 'Volume' in df1.columns:
                 try:
                     vols    = df1['Volume'].values.flatten().astype(float)
@@ -240,31 +243,29 @@ def detect_breakout(df1):
             else:
                 reasons.append("+0 Volume not tracked for this pair (forex/commodity)")
 
-            # Level Significance — 1pt
             if touches >= 3:
                 score += 1
                 reasons.append(f"+1 Level tested {touches} times before (well-established)")
             else:
                 reasons.append(f"+0 Level only {touches} prior touch(es) — needs 3+")
 
-            # Trend Alignment — 1pt
             aligned = (closes[-1] > ma50 if direction == "BULLISH" else closes[-1] < ma50)
             if aligned:
                 score += 1
-                reasons.append(f"+1 Break direction matches 50-period MA trend")
+                reasons.append("+1 Break direction matches 50-period MA trend")
             else:
-                reasons.append(f"+0 Counter-trend break — price on wrong side of 50-MA")
+                reasons.append("+0 Counter-trend break — price on wrong side of 50-MA")
 
             return score, reasons
 
-        # Bullish BOS
+        # ── Bullish BOS ──
         if l_close > l_open:
             candidates = [(lvl,tc) for lvl,tc in sig_highs
                           if l_close > lvl and l_open <= lvl * 1.005]
             if candidates:
                 level, touches = max(candidates, key=lambda x: x[0])
                 score, reasons = score_breakout("BULLISH", level, touches, True)
-                if score >= 3:
+                if score >= 4:   # ← FIX ② was 3
                     return {
                         "direction":       "BULLISH",
                         "timeframe":       "H1",
@@ -279,17 +280,18 @@ def detect_breakout(df1):
                         "retest_entry":    round(level+buf, 5),
                         "sl_momentum":     round(l_low-buf, 5),
                         "sl_retest":       round(level-buf*2, 5),
-                        "description":     f"Bullish BOS on H1: body closed {round((l_close-level)/level*100,3)}% above {round(level,5)}"
+                        "description":     (f"Bullish BOS on H1: body closed "
+                                            f"{round((l_close-level)/level*100,3)}% above {round(level,5)}")
                     }
 
-        # Bearish BOS
+        # ── Bearish BOS ──
         elif l_close < l_open:
             candidates = [(lvl,tc) for lvl,tc in sig_lows
                           if l_close < lvl and l_open >= lvl * 0.995]
             if candidates:
                 level, touches = min(candidates, key=lambda x: x[0])
                 score, reasons = score_breakout("BEARISH", level, touches, True)
-                if score >= 3:
+                if score >= 4:   # ← FIX ② was 3
                     return {
                         "direction":       "BEARISH",
                         "timeframe":       "H1",
@@ -304,7 +306,8 @@ def detect_breakout(df1):
                         "retest_entry":    round(level-buf, 5),
                         "sl_momentum":     round(l_high+buf, 5),
                         "sl_retest":       round(level+buf*2, 5),
-                        "description":     f"Bearish BOS on H1: body closed {round((level-l_close)/level*100,3)}% below {round(level,5)}"
+                        "description":     (f"Bearish BOS on H1: body closed "
+                                            f"{round((level-l_close)/level*100,3)}% below {round(level,5)}")
                     }
 
         return None
@@ -312,6 +315,20 @@ def detect_breakout(df1):
     except Exception as e:
         print(f"    Breakout detection error: {e}")
         return None
+
+# ── Parallel data fetch ───────────────────────────────────────────────────────
+# FIX ⑤ — runs detect_zones_and_candles + detect_breakout in parallel for all pairs
+def fetch_pair_data(pair_conf):
+    name        = pair_conf["name"]
+    symbol      = pair_conf["symbol"]
+    min_touches = pair_conf.get("min_touches", 1)
+    try:
+        zones, current_price, df1, df2 = detect_zones_and_candles(symbol, min_touches)
+        breakout = detect_breakout(df1) if df1 is not None else None
+        return name, zones, current_price, df1, df2, breakout
+    except Exception as e:
+        print(f"    Fetch error {name}: {e}")
+        return name, [], None, None, None, None
 
 # ── Macro news ────────────────────────────────────────────────────────────────
 def fetch_macro_news():
@@ -340,6 +357,7 @@ def format_candles(df, label, n=20):
     return result
 
 # ── Gemini prompt ─────────────────────────────────────────────────────────────
+# FIX ③ — forex pairs get H4/D1 structure alignment instead of liquidity sweep
 def build_zone_prompt(pair, zone_level, zone_label, current_price,
                       macro_news, df1, df2, min_confidence, fatigue_count):
     risk_dollar = config["account"]["balance"] * config["account"]["risk_percent"] / 100
@@ -354,6 +372,23 @@ def build_zone_prompt(pair, zone_level, zone_label, current_price,
                         "Deduct 1 from Zone Quality score.")
     else:
         fatigue_rule = f"Zone alerted {fatigue_count} times in 30 days. FRESH. No deduction."
+
+    # Forex pairs: replace liquidity sweep with H4/D1 structure alignment
+    # (liquidity sweep signals are unreliable on H1 forex data via yfinance)
+    if pair in FOREX_PAIRS:
+        liquidity_section = (
+            "LIQUIDITY (2pts):     "
+            "+1 Entry on correct side (Discount for long, Premium for short) | "
+            "+1 H4 or D1 trend structure aligns with trade direction "
+            "[IMPORTANT: Do NOT score or penalise for liquidity sweeps — "
+            "sweep scoring is excluded for forex pairs in this system]"
+        )
+    else:
+        liquidity_section = (
+            "LIQUIDITY (2pts):     "
+            "+1 Liquidity swept before zone | "
+            "+1 Entry on correct side (Discount for long, Premium for short)"
+        )
 
     return f"""You are a highly skilled professional SMC trader. A zone alert has triggered.
 
@@ -370,7 +405,7 @@ MACRO: {macro_news}
 SMC SCORECARD (score out of 10 — this is the ONLY scorecard):
 STRUCTURE (3pts):     +1 H1 BOS confirms trend direction | +1 Price in Premium or Discount zone | +1 CHoCH confirmed on H1 or M15
 ZONE QUALITY (3pts):  +1 Valid OB at zone | +1 FVG overlaps OB | +1 Zone freshness — rule: {fatigue_rule}
-LIQUIDITY (2pts):     +1 Liquidity swept before zone | +1 Entry on correct side (Discount for long, Premium for short)
+{liquidity_section}
 RISK/MACRO (2pts):    +1 RR at least 2:1 achievable | +1 No high-impact news in next 2 hours
 
 ENTRY: 50pct midpoint of OB candle body. If FVG overlaps OB, use FVG edge (top for longs, bottom for shorts).
@@ -415,22 +450,29 @@ Return ONLY raw JSON. No markdown. No code fences. No text outside the JSON.
 }}"""
 
 # ── Gemini call ───────────────────────────────────────────────────────────────
-def call_gemini(prompt):
+# FIX ⑥ — timeout raised to 120s, plus one automatic retry on failure
+def call_gemini(prompt, retries=1):
     url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
     body = {"contents": [{"parts": [{"text": prompt}]}]}
-    try:
-        r      = requests.post(url, json=body, timeout=90)
-        result = r.json()
-        if "candidates" not in result:
-            return None, f"Gemini error: {result}"
-        raw = result["candidates"][0]["content"]["parts"][0]["text"].strip()
-        if raw.startswith("```"):
-            raw = raw.split("\n",1)[1].rsplit("```",1)[0]
-        return json.loads(raw), None
-    except Exception as e:
-        return None, f"Gemini error: {str(e)}"
+    for attempt in range(retries + 1):
+        try:
+            r      = requests.post(url, json=body, timeout=120)
+            result = r.json()
+            if "candidates" not in result:
+                raise ValueError(f"No candidates in response: {result}")
+            raw = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n",1)[1].rsplit("```",1)[0]
+            return json.loads(raw), None
+        except Exception as e:
+            if attempt < retries:
+                print(f"    Gemini attempt {attempt+1} failed ({e}), retrying in 3s...")
+                time.sleep(3)
+            else:
+                return None, f"Gemini error after {retries+1} attempts: {str(e)}"
 
 # ── Chart generation ──────────────────────────────────────────────────────────
+# FIX ④ — returns raw PNG bytes (not base64); bytes are attached via MIMEImage
 def generate_chart(df, title, levels, data):
     try:
         if df is None or df.empty:
@@ -529,13 +571,13 @@ def generate_chart(df, title, levels, data):
 
         plt.tight_layout(pad=0.3)
         buf = BytesIO()
-        fig.savefig(buf,format='png',dpi=72,bbox_inches='tight',
-            facecolor='#131722',edgecolor='none')
+        fig.savefig(buf, format='png', dpi=72, bbox_inches='tight',
+            facecolor='#131722', edgecolor='none')
         buf.seek(0)
-        b64 = base64.b64encode(buf.read()).decode()
+        img_bytes = buf.read()   # raw bytes — NOT base64
         plt.close(fig)
-        print(f"    Chart ok: {len(b64)//1024}KB")
-        return b64
+        print(f"    Chart ok: {len(img_bytes)//1024}KB")
+        return img_bytes
     except Exception as e:
         print(f"    Chart error: {e}")
         plt.close('all')
@@ -549,14 +591,10 @@ def build_breakout_html_block(bo):
     color  = "#26a69a" if d=="BULLISH" else "#ef5350"
     arrow  = "▲" if d=="BULLISH" else "▼"
     score  = bo.get("bo_score",0)
-    sc     = "#27ae60" if score>=4 else "#f39c12"
-    caution = ('<p style="color:#f39c12;font-size:11px;margin:8px 0 0;">'
-               '⚠ Score 3/5 — moderate breakout. Prefer retest entry over momentum entry.</p>'
-               if score == 3 else "")
+    sc     = "#27ae60" if score >= 5 else "#f39c12"  # 5=green, 4=amber
     reasons_html = "".join([
         f'<li style="font-size:11px;color:#aaa;margin-bottom:3px;">{r}</li>'
-        for r in bo.get("bo_reasons",[])
-    ])
+        for r in bo.get("bo_reasons",[])])
     return f"""<div style="background:#0d1117;border:2px solid {color};border-radius:10px;padding:14px 16px;margin-bottom:20px;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
     <p style="color:{color};font-weight:bold;font-size:14px;margin:0;">{arrow} BREAKOUT ALERT — {d} BOS ({bo.get("timeframe","")})</p>
@@ -573,15 +611,15 @@ def build_breakout_html_block(bo):
     <tr><td style="color:#888;padding:3px 0;">SL if retest</td><td style="color:#ef5350;font-weight:bold;">{bo.get("sl_retest","")}</td></tr>
   </table>
   <ul style="list-style:none;padding:0;margin:0 0 6px;">{reasons_html}</ul>
-  {caution}
   <p style="color:#856404;background:#fff3cd;padding:7px 10px;border-radius:6px;font-size:11px;margin:8px 0 0;">
     FAKEOUT RULE: If price closes back inside the broken level within 2 candles, the breakout has failed. Do not enter, or exit immediately.
   </p>
 </div>"""
 
 # ── Zone email HTML ───────────────────────────────────────────────────────────
+# FIX ④ — uses cid: references; actual PNG bytes are attached separately via MIMEImage
 def build_zone_email_html(data, pair, zone_level, zone_label, current_price,
-                          chart1_b64, chart2_b64, breakout):
+                          has_chart1, has_chart2, breakout):
     ist_time    = (datetime.utcnow()+timedelta(hours=5,minutes=30)).strftime("%H:%M")
     utc_time    = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
     score       = data.get("confidence_score",0)
@@ -628,12 +666,19 @@ def build_zone_email_html(data, pair, zone_level, zone_label, current_price,
     except:
         pass
 
-    chart1_html = (f'<h3 style="color:#1a1a2e;font-size:13px;margin:20px 0 6px;">H1 CHART</h3>'
-                   f'<img src="data:image/png;base64,{chart1_b64}" style="width:100%;border-radius:8px;display:block;" />'
-                   if chart1_b64 else '<p style="color:#aaa;font-size:12px;">H1 chart unavailable.</p>')
-    chart2_html = (f'<h3 style="color:#1a1a2e;font-size:13px;margin:16px 0 6px;">M15 CHART</h3>'
-                   f'<img src="data:image/png;base64,{chart2_b64}" style="width:100%;border-radius:8px;display:block;" />'
-                   if chart2_b64 else '<p style="color:#aaa;font-size:12px;">M15 chart unavailable.</p>')
+    # CID references — Gmail renders these when PNGs are MIME-attached with Content-ID headers
+    chart1_html = (
+        '<h3 style="color:#1a1a2e;font-size:13px;margin:20px 0 6px;">H1 CHART</h3>'
+        '<img src="cid:chart_h1" style="width:100%;border-radius:8px;display:block;" />'
+        if has_chart1 else
+        '<p style="color:#aaa;font-size:12px;margin:20px 0 6px;">H1 chart unavailable.</p>'
+    )
+    chart2_html = (
+        '<h3 style="color:#1a1a2e;font-size:13px;margin:16px 0 6px;">M15 CHART</h3>'
+        '<img src="cid:chart_m15" style="width:100%;border-radius:8px;display:block;" />'
+        if has_chart2 else
+        '<p style="color:#aaa;font-size:12px;margin:16px 0 6px;">M15 chart unavailable.</p>'
+    )
 
     bo_html = build_breakout_html_block(breakout) if breakout else ""
 
@@ -711,8 +756,6 @@ def build_zone_email_html(data, pair, zone_level, zone_label, current_price,
 def build_breakout_only_email_html(bo, pair, current_price):
     ist_time = (datetime.utcnow()+timedelta(hours=5,minutes=30)).strftime("%H:%M")
     utc_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-    d        = bo.get("direction","BULLISH")
-    color    = "#26a69a" if d=="BULLISH" else "#ef5350"
     bo_block = build_breakout_html_block(bo)
     return f"""<!DOCTYPE html>
 <html>
@@ -754,14 +797,29 @@ def log_alert(pair, zone_level, zone_label, current_price, data, alert_type="zon
     save_alert_log()
 
 # ── Send email ────────────────────────────────────────────────────────────────
-def send_email(subject, html_body):
+# FIX ④ — MIMEMultipart("related") + MIMEImage attachments for CID chart rendering
+def send_email(subject, html_body, chart_images=None):
+    """
+    chart_images: dict mapping Content-ID name → PNG bytes
+    e.g. {"chart_h1": bytes, "chart_m15": bytes}
+    Gmail renders <img src="cid:chart_h1"> correctly when the image
+    is attached as MIMEImage with a matching Content-ID header.
+    """
     recipients = config["account"].get("alert_emails", [ALERT_EMAIL])
     for recipient in recipients:
-        msg = MIMEMultipart("alternative")
+        msg = MIMEMultipart("related")
         msg["Subject"] = subject
         msg["From"]    = GMAIL_ADDRESS
         msg["To"]      = recipient
         msg.attach(MIMEText(html_body, "html"))
+
+        if chart_images:
+            for cid, img_bytes in chart_images.items():
+                img = MIMEImage(img_bytes, _subtype="png")
+                img.add_header("Content-ID", f"<{cid}>")
+                img.add_header("Content-Disposition", "inline", filename=f"{cid}.png")
+                msg.attach(img)
+
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(GMAIL_ADDRESS, GMAIL_PASS)
             server.sendmail(GMAIL_ADDRESS, recipient, msg.as_string())
@@ -773,39 +831,52 @@ print(f"Alert engine started {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC"
 market_open, market_status = is_market_open()
 print(f"  Market: {market_status}")
 if not market_open:
-    print("  Exiting — market closed.")
+    print("  Exiting — outside trading hours.")
     save_alert_log()
     exit(0)
 
 macro_news   = fetch_macro_news()
 alerts_fired = 0
 
-for pair_conf in config["pairs"]:
-    symbol      = pair_conf["symbol"]
-    name        = pair_conf["name"]
-    prox        = pair_conf["proximity_pct"]
-    min_touches = pair_conf.get("min_touches", 1)
-    min_conf    = pair_conf.get("min_confidence", 5)
+# ── Phase 1: Parallel data fetch for all pairs ────────────────────────────────
+# FIX ⑤ — all 7 pairs download simultaneously; cuts ~21s serial wait to ~3s
+print(f"  Fetching data for {len(config['pairs'])} pairs in parallel...")
+all_pair_data = {}
+with ThreadPoolExecutor(max_workers=len(config["pairs"])) as executor:
+    futures = {executor.submit(fetch_pair_data, pc): pc["name"] for pc in config["pairs"]}
+    for future in as_completed(futures):
+        name = futures[future]
+        try:
+            _, zones, current_price, df1, df2, breakout = future.result()
+            all_pair_data[name] = (zones, current_price, df1, df2, breakout)
+            status = f"{len(zones)} zones, price={round(current_price,5)}" if current_price else "no data"
+            print(f"    {name}: {status}")
+        except Exception as e:
+            print(f"    {name}: fetch failed — {e}")
+            all_pair_data[name] = ([], None, None, None, None)
 
-    print(f"  Scanning {name}...")
-    zones, current_price, df1, df2 = detect_zones_and_candles(symbol, min_touches)
+# ── Phase 2: Analyse and fire alerts (sequential — safe for shared state) ─────
+for pair_conf in config["pairs"]:
+    name     = pair_conf["name"]
+    prox     = pair_conf["proximity_pct"]
+    min_conf = pair_conf.get("min_confidence", 5)
+
+    zones, current_price, df1, df2, breakout = all_pair_data.get(
+        name, ([], None, None, None, None))
 
     if current_price is None:
-        print(f"    No data for {name}. Skipping.")
+        print(f"  {name}: no data, skipping.")
         continue
 
-    # ── Breakout check (independent of zone alert) ──
-    breakout = detect_breakout(df1)
-    if breakout:
-        if should_alert_breakout(name, breakout["broken_level"], current_price, prox):
-            print(f"    BREAKOUT: {name} {breakout['direction']} [{breakout['bo_score']}/5]")
-            # Breakout stored — will be attached to zone email if zone fires,
-            # or sent standalone if no zone fires
-        else:
-            print(f"    Breakout detected for {name} but price hasn't moved enough since last breakout alert.")
-            breakout = None  # suppress repeat
+    print(f"  Processing {name}...")
 
-    # ── Zone check ──
+    # Suppress breakout repeat if price hasn't moved enough since last BO alert
+    if breakout:
+        if not should_alert_breakout(name, breakout["broken_level"], current_price, prox):
+            print(f"    Breakout suppressed — price hasn't moved enough since last BO alert.")
+            breakout = None
+
+    # ── Zone check ────────────────────────────────────────────────────────────
     zone_alert_fired = False
     for zone_level, touches in zones:
         dist_pct = abs(current_price - zone_level) / zone_level * 100
@@ -813,7 +884,7 @@ for pair_conf in config["pairs"]:
             continue
 
         if not should_alert_zone(name, zone_level, current_price, prox):
-            print(f"    {name} @ {zone_level:.5f} — price hasn't moved enough since last alert.")
+            print(f"    {name} @ {zone_level:.5f} — suppressed (price not moved enough).")
             continue
 
         zone_label = get_zone_label(zone_level, current_price)
@@ -838,16 +909,28 @@ for pair_conf in config["pairs"]:
                   'entry':data.get('entry',''),'sl':data.get('sl',0),
                   'tp1':data.get('tp1',0),'tp2':data.get('tp2',0)}
 
-        chart1 = generate_chart(df1, f"{name} — H1",  levels, data)
-        chart2 = generate_chart(df2, f"{name} — M15", levels, data)
+        chart1_bytes = generate_chart(df1, f"{name} — H1",  levels, data)
+        chart2_bytes = generate_chart(df2, f"{name} — M15", levels, data)
 
-        html    = build_zone_email_html(data, name, round(zone_level,5), zone_label,
-                                        round(current_price,5), chart1, chart2, breakout)
-        subject = f"[{score}/10] {name} | {zone_label} | {round(zone_level,5)} | {datetime.utcnow().strftime('%H:%M')} UTC"
+        # Build CID image dict — only include charts that rendered successfully
+        chart_images = {}
+        if chart1_bytes:
+            chart_images["chart_h1"]  = chart1_bytes
+        if chart2_bytes:
+            chart_images["chart_m15"] = chart2_bytes
+
+        html = build_zone_email_html(
+            data, name, round(zone_level,5), zone_label, round(current_price,5),
+            has_chart1=bool(chart1_bytes), has_chart2=bool(chart2_bytes),
+            breakout=breakout
+        )
+        subject = (f"[{score}/10] {name} | {zone_label} | "
+                   f"{round(zone_level,5)} | {datetime.utcnow().strftime('%H:%M')} UTC")
         if breakout:
-            subject = f"[SMC {score}/10 + BO {breakout['bo_score']}/5] {name} | {zone_label} | {datetime.utcnow().strftime('%H:%M')} UTC"
+            subject = (f"[SMC {score}/10 + BO {breakout['bo_score']}/5] {name} | "
+                       f"{zone_label} | {datetime.utcnow().strftime('%H:%M')} UTC")
 
-        send_email(subject, html)
+        send_email(subject, html, chart_images=chart_images if chart_images else None)
         log_alert(name, round(zone_level,5), zone_label, round(current_price,5), data, "zone")
         record_zone_alert(name, zone_level, current_price)
         if breakout:
@@ -858,17 +941,17 @@ for pair_conf in config["pairs"]:
         print(f"    Sent: {name} SMC[{score}/10]" + (f" + BO[{breakout['bo_score']}/5]" if breakout else ""))
         break  # one zone email per pair per run
 
-    # ── Standalone breakout email (only if no zone alert fired) ──
+    # ── Standalone breakout email (only if no zone alert fired) ──────────────
     if breakout and not zone_alert_fired:
-        if should_alert_breakout(name, breakout["broken_level"], current_price, prox):
-            html    = build_breakout_only_email_html(breakout, name, round(current_price,5))
-            subject = f"[BO {breakout['bo_score']}/5] {name} | {breakout['direction']} Breakout | {round(breakout['broken_level'],5)} | {datetime.utcnow().strftime('%H:%M')} UTC"
-            send_email(subject, html)
-            log_alert(name, breakout["broken_level"], f"{breakout['direction']} Breakout",
-                      round(current_price,5), None, "breakout")
-            record_breakout_alert(name, breakout["broken_level"], current_price)
-            alerts_fired += 1
-            print(f"    Sent standalone breakout: {name} [{breakout['bo_score']}/5]")
+        html    = build_breakout_only_email_html(breakout, name, round(current_price,5))
+        subject = (f"[BO {breakout['bo_score']}/5] {name} | {breakout['direction']} Breakout | "
+                   f"{round(breakout['broken_level'],5)} | {datetime.utcnow().strftime('%H:%M')} UTC")
+        send_email(subject, html)  # No charts on standalone breakout emails
+        log_alert(name, breakout["broken_level"], f"{breakout['direction']} Breakout",
+                  round(current_price,5), None, "breakout")
+        record_breakout_alert(name, breakout["broken_level"], current_price)
+        alerts_fired += 1
+        print(f"    Sent standalone breakout: {name} [{breakout['bo_score']}/5]")
 
 save_alert_log()
 print(f"Log saved: {len(alert_log)} total entries.")
