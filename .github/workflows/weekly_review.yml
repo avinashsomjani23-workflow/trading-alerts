@@ -5,6 +5,9 @@ on:
     - cron: '30 2 * * 1'   # Monday 02:30 UTC = 08:00 AM IST
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"   # silences Node.js 20 deprecation warning
+
 jobs:
   weekly-review:
     runs-on: ubuntu-latest
@@ -13,10 +16,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4      # FIX ① — was @v3 (Node 16, now deprecated)
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5  # FIX ① — was @v4 (Node 16, now deprecated)
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
