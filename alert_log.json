@@ -67,8 +67,8 @@
       "Current price is in a premium area for a short trade",
       "Entry taken within a valid M15 bearish Order Block"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 0.59488,
+    "outcome_checked_at": "2026-03-11 18:43"
   }
 ]
