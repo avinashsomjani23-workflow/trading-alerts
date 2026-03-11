@@ -2,7 +2,7 @@ name: Weekly Review Email
 
 on:
   schedule:
-    - cron: '30 2 * * 1'
+    - cron: '30 2 * * 1'   # Monday 02:30 UTC = 08:00 AM IST
   workflow_dispatch:
 
 jobs:
@@ -13,10 +13,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4      # FIX ① — was @v3 (Node 16, now deprecated)
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5  # FIX ① — was @v4 (Node 16, now deprecated)
         with:
           python-version: '3.11'
 
