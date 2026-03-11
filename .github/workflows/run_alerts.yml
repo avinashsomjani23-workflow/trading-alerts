@@ -13,10 +13,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4      # FIX ① — was @v3 (Node 16, now deprecated)
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5  # FIX ① — was @v4 (Node 16, now deprecated)
         with:
           python-version: '3.11'
 
@@ -35,6 +35,6 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add alert_log.json cooldown_state.json || true
+          git add alert_log.json zone_visit_state.json || true   # FIX ① — was cooldown_state.json (wrong filename)
           git diff --staged --quiet || git commit -m "Update logs [skip ci]"
           git push || true
