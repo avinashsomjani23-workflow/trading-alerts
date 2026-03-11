@@ -12,7 +12,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage          # FIX ④ — CID image attachments
 import numpy as np
 from io import BytesIO
-from concurrent.futures import ThreadPoolExecutor, as_completed  # FIX ⑤ — parallel fetch
+
 
 # ── Config ────────────────────────────────────────────────────────────────────
 with open("config.json") as f:
@@ -315,20 +315,6 @@ def detect_breakout(df1):
     except Exception as e:
         print(f"    Breakout detection error: {e}")
         return None
-
-# ── Parallel data fetch ───────────────────────────────────────────────────────
-# FIX ⑤ — runs detect_zones_and_candles + detect_breakout in parallel for all pairs
-def fetch_pair_data(pair_conf):
-    name        = pair_conf["name"]
-    symbol      = pair_conf["symbol"]
-    min_touches = pair_conf.get("min_touches", 1)
-    try:
-        zones, current_price, df1, df2 = detect_zones_and_candles(symbol, min_touches)
-        breakout = detect_breakout(df1) if df1 is not None else None
-        return name, zones, current_price, df1, df2, breakout
-    except Exception as e:
-        print(f"    Fetch error {name}: {e}")
-        return name, [], None, None, None, None
 
 # ── Macro news ────────────────────────────────────────────────────────────────
 def fetch_macro_news():
@@ -838,42 +824,27 @@ if not market_open:
 macro_news   = fetch_macro_news()
 alerts_fired = 0
 
-# ── Phase 1: Parallel data fetch for all pairs ────────────────────────────────
-# FIX ⑤ — all 7 pairs download simultaneously; cuts ~21s serial wait to ~3s
-print(f"  Fetching data for {len(config['pairs'])} pairs in parallel...")
-all_pair_data = {}
-with ThreadPoolExecutor(max_workers=len(config["pairs"])) as executor:
-    futures = {executor.submit(fetch_pair_data, pc): pc["name"] for pc in config["pairs"]}
-    for future in as_completed(futures):
-        name = futures[future]
-        try:
-            _, zones, current_price, df1, df2, breakout = future.result()
-            all_pair_data[name] = (zones, current_price, df1, df2, breakout)
-            status = f"{len(zones)} zones, price={round(current_price,5)}" if current_price else "no data"
-            print(f"    {name}: {status}")
-        except Exception as e:
-            print(f"    {name}: fetch failed — {e}")
-            all_pair_data[name] = ([], None, None, None, None)
-
-# ── Phase 2: Analyse and fire alerts (sequential — safe for shared state) ─────
+# ── Sequential fetch and analysis (yfinance is not thread-safe) ───────────────
 for pair_conf in config["pairs"]:
-    name     = pair_conf["name"]
-    prox     = pair_conf["proximity_pct"]
-    min_conf = pair_conf.get("min_confidence", 5)
+    name        = pair_conf["name"]
+    symbol      = pair_conf["symbol"]
+    prox        = pair_conf["proximity_pct"]
+    min_touches = pair_conf.get("min_touches", 1)
+    min_conf    = pair_conf.get("min_confidence", 5)
 
-    zones, current_price, df1, df2, breakout = all_pair_data.get(
-        name, ([], None, None, None, None))
+    print(f"  Scanning {name}...")
+    zones, current_price, df1, df2 = detect_zones_and_candles(symbol, min_touches)
 
     if current_price is None:
-        print(f"  {name}: no data, skipping.")
+        print(f"    No data for {name}. Skipping.")
         continue
 
-    print(f"  Processing {name}...")
+    breakout = detect_breakout(df1) if df1 is not None else None
 
     # Suppress breakout repeat if price hasn't moved enough since last BO alert
     if breakout:
         if not should_alert_breakout(name, breakout["broken_level"], current_price, prox):
-            print(f"    Breakout suppressed — price hasn't moved enough since last BO alert.")
+            print(f"    Breakout suppressed — price not moved enough since last BO alert.")
             breakout = None
 
     # ── Zone check ────────────────────────────────────────────────────────────
