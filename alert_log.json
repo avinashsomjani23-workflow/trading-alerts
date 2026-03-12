@@ -194,5 +194,78 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773310138",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-12 10:08",
+    "ist_time": "15:38",
+    "zone_level": 70389.01339,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 70507.02,
+    "sl": 70951.88,
+    "tp1": 69634.16,
+    "tp2": 69252.6,
+    "confidence_score": 7,
+    "confluences": [
+      "H1 22:00 Bearish Order Block identified as supply.",
+      "Bearish FVG (Fair Value Gap) overlaps the OB.",
+      "Entry is positioned in a Premium zone for a short trade.",
+      "RR of 2.82 achievable at TP2."
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "NAS100_1773310187",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-12 10:09",
+    "ist_time": "15:39",
+    "zone_level": 25006.59868,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "25016.50",
+    "sl": 25041.5,
+    "tp1": 24813.0,
+    "tp2": 24700.0,
+    "confidence_score": 7,
+    "confluences": [
+      "H1 Bearish OB identified at zone origin",
+      "Price in premium zone for a short",
+      "Likely liquidity sweep above previous H1 high into OB",
+      "High Risk/Reward potential"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "GOLD_1773310240",
+    "alert_type": "zone",
+    "pair": "GOLD",
+    "timestamp_utc": "2026-03-12 10:10",
+    "ist_time": "15:40",
+    "zone_level": 5178.63499,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 5176.29,
+    "sl": 5165.29,
+    "tp1": 5204.0,
+    "tp2": 5220.0,
+    "confidence_score": 6,
+    "confluences": [
+      "H1 bullish BOS confirmed (from 5130 low to 5196 high)",
+      "Demand zone supported by H1 OB",
+      "M15 FVG overlaps OB providing refined entry",
+      "RR 2:1 achievable at TP1",
+      "Zone freshness (alerted 1 time in 30 days)"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
