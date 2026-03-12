@@ -399,5 +399,55 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773337238",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-12 17:40",
+    "ist_time": "23:10",
+    "zone_level": 70970.94271,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 70507.02344,
+    "sl": 71070.94271,
+    "tp1": 69426.07812,
+    "tp2": 69252.60156,
+    "confidence_score": 8,
+    "confluences": [
+      "Price approaching established Supply/Resistance zone.",
+      "Potential liquidity sweep above prior high (70901.875) towards the zone (70970).",
+      "Entry is in a premium zone for short trade.",
+      "Historical bearish Order Block identified.",
+      "Bearish Fair Value Gap overlaps the Order Block."
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1773337333",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-12 17:42",
+    "ist_time": "23:12",
+    "zone_level": 85.3165,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 85.3165,
+    "sl": 86.29,
+    "tp1": 84.625,
+    "tp2": 84.06,
+    "confidence_score": 6,
+    "confluences": [
+      "H1 BOS confirms bearish trend direction",
+      "Valid OB at zone (16:30 M15 bullish candle)",
+      "FVG overlaps OB",
+      "Zone is fresh (0 times alerted in 30 days)",
+      "Liquidity swept prior to main supply formation (high at 87.695)"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
