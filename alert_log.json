@@ -70,5 +70,56 @@
     "outcome": "win_tp1",
     "outcome_price": 0.59488,
     "outcome_checked_at": "2026-03-11 18:43"
+  },
+  {
+    "id": "BTCUSD_1773292156",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-12 05:09",
+    "ist_time": "10:39",
+    "zone_level": 69433.22098,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 69433.22,
+    "sl": 69656.97,
+    "tp1": 69250.0,
+    "tp2": 68985.72,
+    "confidence_score": 6,
+    "confluences": [
+      "H1 bearish structure confirmed by BOS",
+      "M15 bearish CHoCH confirmed",
+      "Liquidity swept above zone (H:69652.89)",
+      "Valid H1 OB at zone (03:00 H1 candle)",
+      "Zone freshness (0 times alerted in 30 days)"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1773292227",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-12 05:10",
+    "ist_time": "10:40",
+    "zone_level": 84.465,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 84.465,
+    "sl": 83.96,
+    "tp1": 85.8,
+    "tp2": 86.1,
+    "confidence_score": 7,
+    "confluences": [
+      "Price at the Demand/Support Zone 84.465",
+      "Price in higher timeframe Discount zone",
+      "Valid M15 Bullish Order Block identified ([84.475, 84.890])",
+      "Bullish FVG ([84.695, 84.960]) overlaps the Order Block",
+      "M15 internal liquidity (previous lows) swept into the demand zone",
+      "Risk-Reward ratio of at least 2:1 achievable for TP1"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
