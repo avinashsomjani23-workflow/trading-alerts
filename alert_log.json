@@ -121,5 +121,78 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773302166",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-12 07:56",
+    "ist_time": "13:26",
+    "zone_level": 69463.32422,
+    "zone_label": "Demand / Support",
+    "bias": "WAIT",
+    "entry": "69463.32422",
+    "sl": 69367.0,
+    "tp1": 70200.0,
+    "tp2": 70800.0,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 BOS confirmed to upside with recent price action",
+      "Price in discount zone for potential long",
+      "M15 CHoCH confirmed, signaling potential bullish reversal",
+      "Liquidity swept below previous lows before demand reaction",
+      "Demand zone is fresh, not recently mitigated"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "GOLD_1773302252",
+    "alert_type": "zone",
+    "pair": "GOLD",
+    "timestamp_utc": "2026-03-12 07:57",
+    "ist_time": "13:27",
+    "zone_level": 5179.57434,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "5176.2998",
+    "sl": 5150.0,
+    "tp1": 5207.5,
+    "tp2": 5215.75,
+    "confidence_score": 6,
+    "confluences": [
+      "H1 Bullish BOS confirmed by 07:00 candle breaking 02:00 H",
+      "Demand Zone is Fresh (0 times alerted in 30 days)",
+      "Bullish FVG (5176.2998 - 5184.5000) overlaps interpreted H1 OB",
+      "Liquidity swept below H1 04:00 low (5145.2998) by H1 05:00 candle (L:5142.0000)"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1773302315",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-12 07:58",
+    "ist_time": "13:28",
+    "zone_level": 87.135,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 87.118,
+    "sl": 86.6,
+    "tp1": 88.154,
+    "tp2": 88.672,
+    "confidence_score": 6,
+    "confluences": [
+      "H1 Bullish Structure confirmed by BOS",
+      "Price in Discount zone for a long",
+      "Demand zone is Fresh (0 alerts in 30 days)",
+      "Demand/Support level at 87.135"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
