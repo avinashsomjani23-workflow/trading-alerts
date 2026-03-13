@@ -674,5 +674,30 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773402505",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-13 11:48",
+    "ist_time": "17:18",
+    "zone_level": 72336.99219,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "72314.27",
+    "sl": 72412.81,
+    "tp1": 71400.0,
+    "tp2": 71100.0,
+    "confidence_score": 8,
+    "confluences": [
+      "Price at Supply/Resistance zone",
+      "M15 CHoCH to the downside confirmed (11:30 M15 broke 11:00 M15 low)",
+      "Price in Premium zone for short (above 50% of H1 swing)",
+      "Liquidity swept above previous highs (72088.83) before the drop",
+      "Valid M15 bearish OB identified (11:30 candle opened at zone and closed bearish)"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
