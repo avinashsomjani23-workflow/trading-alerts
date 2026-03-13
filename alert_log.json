@@ -650,5 +650,29 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1773396082",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-13 10:01",
+    "ist_time": "15:31",
+    "zone_level": 83.02333,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 82.8125,
+    "sl": 83.085,
+    "tp1": 81.515,
+    "tp2": 80.5,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 Bearish Trend Confirmed",
+      "Price in Premium Supply Zone",
+      "Liquidity Swept Above Supply Zone (M15 09:00 H:83.035)",
+      "Strong Risk-Reward for TP1 and TP2"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
