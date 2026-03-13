@@ -699,5 +699,49 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773412338",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-13 14:32",
+    "ist_time": "20:02",
+    "zone_level": 73527.28906,
+    "zone_label": "Demand / Support",
+    "bias": "WAIT for pullback, then LONG",
+    "entry": "73465.54",
+    "sl": 73275.58,
+    "tp1": 73828.15,
+    "tp2": 74500.0,
+    "confidence_score": 5,
+    "confluences": [
+      "Bullish H1/M15 structure confirmed by BOS.",
+      "Zone freshness (0 alerts in 30 days).",
+      "No high-impact news in next 2 hours.",
+      "RR at least 2:1 achievable for TP2.",
+      "Valid OB identified at the demand zone (M15 14:00 candle)."
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "NAS100_1773412341",
+    "alert_type": "breakout",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-13 14:32",
+    "ist_time": "20:02",
+    "zone_level": 24662.25,
+    "zone_label": "BULLISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
