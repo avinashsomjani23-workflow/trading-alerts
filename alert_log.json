@@ -92,9 +92,9 @@
       "Valid H1 OB at zone (03:00 H1 candle)",
       "Zone freshness (0 times alerted in 30 days)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 69656.97,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "SILVER_1773292227",
@@ -118,9 +118,9 @@
       "M15 internal liquidity (previous lows) swept into the demand zone",
       "Risk-Reward ratio of at least 2:1 achievable for TP1"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 85.8,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "BTCUSD_1773302166",
@@ -167,9 +167,9 @@
       "Bullish FVG (5176.2998 - 5184.5000) overlaps interpreted H1 OB",
       "Liquidity swept below H1 04:00 low (5145.2998) by H1 05:00 candle (L:5142.0000)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 5150.0,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "SILVER_1773302315",
@@ -191,9 +191,9 @@
       "Demand zone is Fresh (0 alerts in 30 days)",
       "Demand/Support level at 87.135"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 86.6,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "BTCUSD_1773310138",
@@ -215,9 +215,9 @@
       "Entry is positioned in a Premium zone for a short trade.",
       "RR of 2.82 achievable at TP2."
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 69634.16,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "NAS100_1773310187",
@@ -239,9 +239,9 @@
       "Likely liquidity sweep above previous H1 high into OB",
       "High Risk/Reward potential"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 24813.0,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "GOLD_1773310240",
@@ -264,9 +264,9 @@
       "RR 2:1 achievable at TP1",
       "Zone freshness (alerted 1 time in 30 days)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 5165.29,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "EURUSD_1773326322",
@@ -307,9 +307,9 @@
       "Zone is fresh (0 alerts in 30 days)",
       "Favorable R:R achievable (TP1 > 2:1)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 0.5845,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "BTCUSD_1773326423",
@@ -334,9 +334,9 @@
       "RR at least 2:1 achievable",
       "No high-impact news in next 2 hours"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 70500.0,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "NAS100_1773326475",
@@ -358,9 +358,9 @@
       "Liquidity swept below previous M15/H1 swing low",
       "High RR potential"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 24585.75,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "GOLD_1773326476",
@@ -421,9 +421,9 @@
       "Historical bearish Order Block identified.",
       "Bearish Fair Value Gap overlaps the Order Block."
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 71070.94271,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "SILVER_1773337333",
@@ -446,9 +446,9 @@
       "Zone is fresh (0 times alerted in 30 days)",
       "Liquidity swept prior to main supply formation (high at 87.695)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 84.625,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "USDJPY_1773378349",
@@ -510,9 +510,9 @@
       "Favorable Risk/Reward (5:1 to 10:1)",
       "Zone is fresh"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 71445.34,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "NAS100_1773378433",
@@ -535,9 +535,9 @@
       "Price is in a discount relative to recent swing highs.",
       "No high-impact news in the short term for NAS100."
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 24614.0,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "GOLD_1773378482",
@@ -560,9 +560,9 @@
       "Entry in discount of impulse leg",
       "Zone freshness"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 5124.6,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "SILVER_1773378548",
@@ -586,9 +586,9 @@
       "Liquidity swept before tapping demand zone",
       "Excellent RR at 3.37:1 for TP1"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 84.005,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "EURUSD_1773388525",
@@ -647,9 +647,9 @@
       "Liquidity swept below demand zone (81.515)",
       "Demand zone is Fresh"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 81.015,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "SILVER_1773396082",
@@ -671,9 +671,9 @@
       "Liquidity Swept Above Supply Zone (M15 09:00 H:83.035)",
       "Strong Risk-Reward for TP1 and TP2"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 83.085,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "BTCUSD_1773402505",
@@ -696,9 +696,9 @@
       "Liquidity swept above previous highs (72088.83) before the drop",
       "Valid M15 bearish OB identified (11:30 candle opened at zone and closed bearish)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 72412.81,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "BTCUSD_1773412338",
@@ -764,9 +764,9 @@
       "M15 micro CHoCH (structure shift at zone)",
       "RR at least 2:1 achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 0.57935,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "BTCUSD_1773421632",
@@ -807,9 +807,9 @@
       "Demand zone is fresh (0 alerts in 30 days)",
       "Favorable Risk-Reward at current targets"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 24340.0,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "GOLD_1773421770",
@@ -832,9 +832,9 @@
       "Liquidity swept before zone",
       "High RR potential"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 5022.8,
+    "outcome_checked_at": "2026-03-15 13:47"
   },
   {
     "id": "SILVER_1773421828",
@@ -856,8 +856,8 @@
       "Supply zone is fresh (not alerted in 30 days)",
       "No high-impact news in next 2 hours"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 80.75,
+    "outcome_checked_at": "2026-03-15 13:47"
   }
 ]
