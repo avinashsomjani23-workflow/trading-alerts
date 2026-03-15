@@ -1,6 +1,6 @@
 import yfinance as yf
 import pandas as pd
-import json, os, smtplib, requests
+import json, os, smtplib, requests, time
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -18,7 +18,7 @@ try:
     with open(ALERT_LOG_FILE) as f:
         alert_log = json.load(f)
     print(f"  Loaded {len(alert_log)} total log entries")
-except:
+except Exception:
     alert_log = []
     print("  No alert log found")
 
@@ -39,7 +39,7 @@ def check_outcome(alert):
         bias = alert.get('bias','LONG')
         sl   = float(alert.get('sl',0) or 0)
         tp1  = float(alert.get('tp1',0) or 0)
-        if sl<=0 or tp1<=0:
+        if sl <= 0 or tp1 <= 0:
             return "pending", None
         df = clean_df(yf.download(symbol,
             start=(alert_time-timedelta(hours=1)).strftime('%Y-%m-%d'),
@@ -52,59 +52,65 @@ def check_outcome(alert):
                 if ts_n < alert_time:
                     continue
                 h = float(row['High']); l = float(row['Low'])
-            except:
+            except Exception:
                 continue
-            if bias=="LONG":
-                if l<=sl:  return "loss", sl
-                if h>=tp1: return "win_tp1", tp1
-            elif bias=="SHORT":
-                if h>=sl:  return "loss", sl
-                if l<=tp1: return "win_tp1", tp1
+            if bias == "LONG":
+                if l <= sl:  return "loss", sl
+                if h >= tp1: return "win_tp1", tp1
+            elif bias == "SHORT":
+                if h >= sl:  return "loss", sl
+                if l <= tp1: return "win_tp1", tp1
         return "pending", None
     except Exception as e:
         print(f"  Outcome error {pair}: {e}")
         return "pending", None
 
 def update_outcomes():
+    """Sequential yfinance fetches — yfinance is NOT thread-safe."""
     updated = 0
     for alert in alert_log:
-        if alert.get('outcome')=='pending':
+        if alert.get('outcome') == 'pending':
             try:
                 alert_time = datetime.strptime(alert['timestamp_utc'],"%Y-%m-%d %H:%M")
                 age_hours  = (datetime.utcnow()-alert_time).total_seconds()/3600
                 if 4 <= age_hours <= 336:
                     outcome, outcome_price = check_outcome(alert)
                     if outcome != 'pending':
-                        alert['outcome']           = outcome
-                        alert['outcome_price']     = outcome_price
+                        alert['outcome']            = outcome
+                        alert['outcome_price']      = outcome_price
                         alert['outcome_checked_at'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
                         updated += 1
-            except:
+            except Exception:
                 pass
     with open(ALERT_LOG_FILE,"w") as f:
-        json.dump(alert_log,f,indent=2)
+        json.dump(alert_log, f, indent=2)
     print(f"  Updated {updated} outcomes")
 
 def get_weekly_alerts():
-    cutoff  = datetime.utcnow()-timedelta(days=7)
-    weekly  = [a for a in alert_log
-               if datetime.strptime(a['timestamp_utc'],"%Y-%m-%d %H:%M")>=cutoff]
+    cutoff = datetime.utcnow()-timedelta(days=7)
+    weekly = [a for a in alert_log
+              if datetime.strptime(a['timestamp_utc'],"%Y-%m-%d %H:%M")>=cutoff]
     print(f"  {len(weekly)} alerts in last 7 days")
     return weekly
 
 def get_session(utc_hour):
-    if 2<=utc_hour<8:    return "Asian"
-    elif 8<=utc_hour<13: return "London"
-    elif 13<=utc_hour<21: return "New York"
-    else:                 return "Off-Hours"
+    if 2  <= utc_hour < 8:  return "Asian"
+    elif 8  <= utc_hour < 13: return "London"
+    elif 13 <= utc_hour < 21: return "New York"
+    else:                     return "Off-Hours"
 
 def build_weekly_analysis(weekly_alerts, wins, losses, pending, win_rate, pair_stats):
-    high_conf        = [a for a in weekly_alerts if a.get('confidence_score',0)>=8]
-    low_conf         = [a for a in weekly_alerts if a.get('confidence_score',0)<8]
-    high_conf_wins   = sum(1 for a in high_conf if a.get('outcome')=='win_tp1')
-    high_conf_losses = sum(1 for a in high_conf if a.get('outcome')=='loss')
-    low_conf_wins    = sum(1 for a in low_conf  if a.get('outcome')=='win_tp1')
-    low_conf_losses  = sum(1 for a in low_conf  if a.get('outcome')=='loss')
+    high_conf        = [a for a in weekly_alerts if a.get('confidence_score',0) >= 8]
+    low_conf         = [a for a in weekly_alerts if a.get('confidence_score',0) < 8]
+    high_conf_wins   = sum(1 for a in high_conf if a.get('outcome') == 'win_tp1')
+    high_conf_losses = sum(1 for a in high_conf if a.get('outcome') == 'loss')
+    low_conf_wins    = sum(1 for a in low_conf  if a.get('outcome') == 'win_tp1')
+    low_conf_losses  = sum(1 for a in low_conf  if a.get('outcome') == 'loss')
+
+    # Intraday vs swing breakdown
+    intraday_alerts = [a for a in weekly_alerts if a.get('alert_type','').startswith('zone_intraday')]
+    swing_alerts    = [a for a in weekly_alerts if a.get('alert_type','').startswith('zone_swing')]
+    breakout_alerts = [a for a in weekly_alerts if a.get('alert_type','') == 'breakout']
 
     session_stats = {}
     for a in weekly_alerts:
@@ -115,14 +121,14 @@ def build_weekly_analysis(weekly_alerts, wins, losses, pending, win_rate, pair_s
                 session_stats[session] = {'alerts':0,'wins':0,'losses':0,'pending':0}
             session_stats[session]['alerts'] += 1
             o = a.get('outcome','pending')
-            if o=='win_tp1': session_stats[session]['wins']   += 1
-            elif o=='loss':  session_stats[session]['losses'] += 1
-            else:            session_stats[session]['pending']+= 1
-        except:
+            if o == 'win_tp1': session_stats[session]['wins']    += 1
+            elif o == 'loss':  session_stats[session]['losses']  += 1
+            else:              session_stats[session]['pending'] += 1
+        except Exception:
             pass
     for s in session_stats.values():
-        w=s.get('wins',0); l=s.get('losses',0)
-        s['win_rate'] = round(w/(w+l)*100,1) if (w+l)>0 else None
+        w = s.get('wins',0); l = s.get('losses',0)
+        s['win_rate'] = round(w/(w+l)*100,1) if (w+l) > 0 else None
 
     hour_buckets = {}
     for a in weekly_alerts:
@@ -133,20 +139,28 @@ def build_weekly_analysis(weekly_alerts, wins, losses, pending, win_rate, pair_s
             if bucket not in hour_buckets:
                 hour_buckets[bucket] = {'wins':0,'losses':0}
             o = a.get('outcome','pending')
-            if o=='win_tp1': hour_buckets[bucket]['wins']   += 1
-            elif o=='loss':  hour_buckets[bucket]['losses'] += 1
-        except:
+            if o == 'win_tp1': hour_buckets[bucket]['wins']   += 1
+            elif o == 'loss':  hour_buckets[bucket]['losses'] += 1
+        except Exception:
             pass
     loss_clusters = [f"{h} ({v['losses']} losses)"
-                     for h,v in sorted(hour_buckets.items()) if v['losses']>=2]
+                     for h, v in sorted(hour_buckets.items()) if v['losses'] >= 2]
 
     alert_data = []
     for a in weekly_alerts:
+        alert_type = a.get('alert_type','zone_intraday')
+        if alert_type == 'zone_intraday':
+            tf_label = "INTRADAY"
+        elif alert_type == 'zone_swing':
+            tf_label = "SWING"
+        else:
+            tf_label = "BREAKOUT"
         alert_data.append({
             "pair":        a.get('pair',''),
             "time":        a.get('timestamp_utc',''),
             "ist_time":    a.get('ist_time',''),
-            "alert_type":  a.get('alert_type','zone'),
+            "alert_type":  a.get('alert_type','zone_intraday'),
+            "tf_label":    tf_label,
             "bias":        a.get('bias',''),
             "entry":       str(a.get('entry','')),
             "sl":          a.get('sl',0),
@@ -167,11 +181,11 @@ def build_weekly_analysis(weekly_alerts, wins, losses, pending, win_rate, pair_s
     prompt = f"""You are a highly skilled SMC trading analyst reviewing one week of automated alerts.
 
 WEEKLY SUMMARY:
-- Total alerts: {total_alerts}
+- Total alerts: {total_alerts} (Intraday: {len(intraday_alerts)}, Swing: {len(swing_alerts)}, Breakout: {len(breakout_alerts)})
 - Wins: {wins} | Losses: {losses} | Pending: {pending}
 - Win rate: {win_rate:.1f}%
 - High confidence alerts (8+/10): {high_count}, {high_conf_wins} wins, {high_conf_losses} losses
-- Low confidence alerts (<8/10): {low_count}, {low_conf_wins} wins, {low_conf_losses} losses
+- Low confidence alerts (<8/10):  {low_count},  {low_conf_wins} wins, {low_conf_losses} losses
 
 SESSION BREAKDOWN:
 {session_stats_json}
@@ -197,6 +211,7 @@ Return ONLY raw JSON. No markdown. No code fences.
   "session_recommendation": "one actionable sentence",
   "timing_observation": "IST time windows where losses cluster",
   "timing_recommendation": "one actionable sentence on time filtering",
+  "intraday_vs_swing": "one sentence comparing intraday vs swing alert performance",
   "zone_fatigue_flags": ["flag if zone alerted 3+ times — empty array if none"],
   "streak_summary": "notable winning or losing streaks by pair",
   "drawdown_flag": "none or describe if 3+ consecutive losses occurred",
@@ -205,7 +220,8 @@ Return ONLY raw JSON. No markdown. No code fences.
     {{
       "pair": "pair",
       "time": "Day HH:MM IST",
-      "alert_type": "zone or breakout",
+      "alert_type": "zone_intraday or zone_swing or breakout",
+      "tf_label": "INTRADAY or SWING or BREAKOUT",
       "bias": "LONG or SHORT",
       "entry": "price",
       "sl": "price",
@@ -219,20 +235,25 @@ Return ONLY raw JSON. No markdown. No code fences.
 }}"""
 
     url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
-    body = {"contents":[{"parts":[{"text":prompt}]}]}
-    try:
-        r      = requests.post(url,json=body,timeout=120)
-        result = r.json()
-        if "candidates" not in result:
-            print(f"  Gemini error: {result}")
-            return None
-        raw = result["candidates"][0]["content"]["parts"][0]["text"].strip()
-        if raw.startswith("```"):
-            raw = raw.split("\n",1)[1].rsplit("```",1)[0]
-        return json.loads(raw)
-    except Exception as e:
-        print(f"  Gemini error: {e}")
-        return None
+    body = {"contents": [{"parts": [{"text": prompt}]}]}
+
+    for attempt in range(2):
+        try:
+            r      = requests.post(url, json=body, timeout=120)
+            result = r.json()
+            if "candidates" not in result:
+                raise ValueError(f"No candidates: {result}")
+            raw = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n",1)[1].rsplit("```",1)[0]
+            return json.loads(raw)
+        except Exception as e:
+            if attempt < 1:
+                print(f"  Gemini attempt 1 failed ({e}), retrying in 3s...")
+                time.sleep(3)
+            else:
+                print(f"  Gemini error: {e}")
+                return None
 
 def insight_card(title, color, content):
     return (f'<div style="background:#f8f9fa;padding:13px 15px;border-radius:10px;margin-bottom:12px;border-left:4px solid {color};">'
@@ -246,16 +267,21 @@ def build_weekly_html(data, weekly_alerts, wins, losses, pending, win_rate):
     total_alerts = len(weekly_alerts)
 
     scorecard_rows = ""
-    for row in data.get("scorecard_rows",[]):
+    for row in data.get("scorecard_rows", []):
         outcome     = row.get('outcome','Pending')
         bg          = '#f0fff4' if 'Win' in outcome else '#fff0f0' if 'Loss' in outcome else '#fffbea'
         outcome_sym = 'WIN' if 'Win' in outcome else 'LOSS' if 'Loss' in outcome else 'WAIT'
         conf        = row.get('confidence',0)
         cc          = "#27ae60" if conf>=8 else "#f39c12" if conf>=6 else "#e74c3c"
-        atype       = row.get('alert_type','zone')
-        type_badge  = (f'<span style="background:#3498db;color:white;font-size:9px;padding:1px 5px;border-radius:8px;">BO</span>'
-                       if atype=='breakout' else
-                       f'<span style="background:#9b59b6;color:white;font-size:9px;padding:1px 5px;border-radius:8px;">SMC</span>')
+        tf_label    = row.get('tf_label','INTRADAY')
+        atype       = row.get('alert_type','zone_intraday')
+        if atype == 'breakout':
+            type_badge = '<span style="background:#3498db;color:white;font-size:9px;padding:1px 5px;border-radius:8px;">BO</span>'
+        elif tf_label == 'SWING':
+            type_badge = '<span style="background:#9b59b6;color:white;font-size:9px;padding:1px 5px;border-radius:8px;">SWING</span>'
+        else:
+            type_badge = '<span style="background:#2ecc71;color:white;font-size:9px;padding:1px 5px;border-radius:8px;">SMC</span>'
+
         scorecard_rows += f"""<tr style="background:{bg};border-bottom:1px solid #eee;">
           <td style="padding:7px 10px;font-weight:bold;font-size:12px;">{row.get('pair','')} {type_badge}</td>
           <td style="padding:7px 10px;font-size:11px;color:#666;">{row.get('time','')}</td>
@@ -271,12 +297,19 @@ def build_weekly_html(data, weekly_alerts, wins, losses, pending, win_rate):
 
     zone_flags = data.get('zone_fatigue_flags',[])
     zone_html  = "".join([f'<li style="font-size:12px;color:#e67e22;margin-bottom:4px;">⚠ {z}</li>'
-                          for z in zone_flags]) if zone_flags else '<li style="font-size:12px;color:#aaa;">No fatigued zones this week.</li>'
+                          for z in zone_flags]) if zone_flags else \
+                 '<li style="font-size:12px;color:#aaa;">No fatigued zones this week.</li>'
 
     drawdown      = data.get('drawdown_flag','none')
     drawdown_html = (f'<div style="background:#fef0f0;padding:12px 16px;border-radius:8px;border-left:4px solid #e74c3c;margin-bottom:16px;">'
                      f'<p style="margin:0;font-size:13px;color:#c0392b;"><b>DRAWDOWN ALERT:</b> {drawdown}</p></div>'
-                     if drawdown and drawdown.lower()!='none' else "")
+                     if drawdown and drawdown.lower() != 'none' else "")
+
+    intraday_vs_swing = data.get('intraday_vs_swing','')
+    ivs_html = (f'<div style="background:#f8f9fa;padding:13px 15px;border-radius:10px;margin-bottom:12px;border-left:4px solid #9b59b6;">'
+                f'<p style="font-size:10px;color:#9b59b6;margin:0 0 4px;text-transform:uppercase;font-weight:bold;letter-spacing:0.5px;">INTRADAY VS SWING</p>'
+                f'<p style="font-size:13px;color:#333;margin:0;line-height:1.5;">{intraday_vs_swing}</p></div>'
+                if intraday_vs_swing else "")
 
     return f"""<!DOCTYPE html>
 <html>
@@ -326,7 +359,7 @@ def build_weekly_html(data, weekly_alerts, wins, losses, pending, win_rate):
 
   <h3 style="color:#1a1a2e;font-size:13px;margin:0 0 10px;">WEEKLY SCORECARD</h3>
   <div style="overflow-x:auto;margin-bottom:24px;">
-  <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:620px;">
+  <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:680px;">
     <thead><tr style="background:#1a1a2e;color:white;">
       <th style="padding:8px 10px;text-align:left;">Pair</th>
       <th style="padding:8px 10px;text-align:left;">Time IST</th>
@@ -349,10 +382,11 @@ def build_weekly_html(data, weekly_alerts, wins, losses, pending, win_rate):
   {insight_card("SESSION RECOMMENDATION", "#27ae60", data.get('session_recommendation','—'))}
   {insight_card("TIMING CLUSTERS", "#f39c12", data.get('timing_observation','—'))}
   {insight_card("TIMING RECOMMENDATION", "#e67e22", data.get('timing_recommendation','—'))}
+  {ivs_html}
   {insight_card("STREAK AWARENESS", "#9b59b6", data.get('streak_summary','—'))}
 
   <div style="background:#fff8f0;padding:13px 15px;border-radius:10px;margin-bottom:12px;border-left:4px solid #e67e22;">
-    <p style="font-size:10px;color:#e67e22;margin:0 0 6px;text-transform:uppercase;font-weight:bold;letter-spacing:0.5px;">ZONE FATIGUE</p>
+    <p style="font-size:10px;color:#e67e22;margin:0 0 6px;text-transform:uppercase;font-weight:bold;letter-spacing:0.5px;">ZONE DEPLETION FLAGS</p>
     <ul style="list-style:none;padding:0;margin:0;">{zone_html}</ul>
   </div>
 
@@ -365,6 +399,7 @@ def build_weekly_html(data, weekly_alerts, wins, losses, pending, win_rate):
 </body>
 </html>"""
 
+# ── Send status email (MIMEMultipart mixed) ────────────────────────────────────
 def send_status_email(message):
     ist_date  = (datetime.utcnow()+timedelta(hours=5,minutes=30)).strftime("%d %b")
     subject   = f"Weekly Review | {ist_date}"
@@ -373,40 +408,33 @@ def send_status_email(message):
 <div style="background:#1a1a2e;padding:20px 24px;"><h2 style="color:white;margin:0;">Weekly Review</h2></div>
 <div style="padding:24px;"><p style="font-size:14px;color:#333;">{message}</p></div>
 </div></body></html>"""
-    recipients = config["account"].get("alert_emails",[ALERT_EMAIL])
+    recipients = config["account"].get("alert_emails", [ALERT_EMAIL])
     for recipient in recipients:
-        msg = MIMEMultipart("related")   # changed from "alternative" — supports CID images
+        msg = MIMEMultipart("mixed")
         msg["Subject"] = subject
         msg["From"]    = GMAIL_ADDRESS
         msg["To"]      = recipient
-        msg.attach(MIMEText(html_body,"html"))
-        with smtplib.SMTP_SSL("smtp.gmail.com",465) as server:
-            server.login(GMAIL_ADDRESS,GMAIL_PASS)
-            server.sendmail(GMAIL_ADDRESS,recipient,msg.as_string())
+        msg.attach(MIMEText(html_body, "html"))
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(GMAIL_ADDRESS, GMAIL_PASS)
+            server.sendmail(GMAIL_ADDRESS, recipient, msg.as_string())
 
-def send_weekly_email(html_body, total, wins, losses, win_rate, chart_images=None):
+def send_weekly_email(html_body, total, wins, losses, win_rate):
     ist_date   = (datetime.utcnow()+timedelta(hours=5,minutes=30)).strftime("%d %b")
     subject    = f"Weekly Review | {total} alerts | {wins}W {losses}L | {win_rate:.0f}% WR | {ist_date}"
-    recipients = config["account"].get("alert_emails",[ALERT_EMAIL])
+    recipients = config["account"].get("alert_emails", [ALERT_EMAIL])
     for recipient in recipients:
-        msg = MIMEMultipart("related")   # changed from "alternative" — supports CID images
+        msg = MIMEMultipart("mixed")
         msg["Subject"] = subject
         msg["From"]    = GMAIL_ADDRESS
         msg["To"]      = recipient
-        msg.attach(MIMEText(html_body,"html"))
-        if chart_images:
-            from email.mime.image import MIMEImage
-            for cid, img_bytes in chart_images.items():
-                img = MIMEImage(img_bytes, _subtype="png")
-                img.add_header("Content-ID", f"<{cid}>")
-                img.add_header("Content-Disposition", "inline", filename=f"{cid}.png")
-                msg.attach(img)
-        with smtplib.SMTP_SSL("smtp.gmail.com",465) as server:
-            server.login(GMAIL_ADDRESS,GMAIL_PASS)
-            server.sendmail(GMAIL_ADDRESS,recipient,msg.as_string())
+        msg.attach(MIMEText(html_body, "html"))
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(GMAIL_ADDRESS, GMAIL_PASS)
+            server.sendmail(GMAIL_ADDRESS, recipient, msg.as_string())
         print(f"  Weekly review sent to {recipient}")
 
-# ── MAIN ──────────────────────────────────────────────────────────────────────
+# ── MAIN ───────────────────────────────────────────────────────────────────────
 print(f"Weekly review started {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
 print("  Updating outcomes...")
 update_outcomes()
@@ -417,10 +445,10 @@ if not weekly_alerts:
     send_status_email("No alerts logged in the past 7 days. System is still building history — expected in early weeks.")
     exit(0)
 
-wins     = sum(1 for a in weekly_alerts if a.get('outcome')=='win_tp1')
-losses   = sum(1 for a in weekly_alerts if a.get('outcome')=='loss')
-pending  = sum(1 for a in weekly_alerts if a.get('outcome')=='pending')
-win_rate = (wins/(wins+losses)*100) if (wins+losses)>0 else 0
+wins     = sum(1 for a in weekly_alerts if a.get('outcome') == 'win_tp1')
+losses   = sum(1 for a in weekly_alerts if a.get('outcome') == 'loss')
+pending  = sum(1 for a in weekly_alerts if a.get('outcome') == 'pending')
+win_rate = (wins/(wins+losses)*100) if (wins+losses) > 0 else 0
 
 pair_stats = {}
 for a in weekly_alerts:
@@ -429,17 +457,17 @@ for a in weekly_alerts:
         pair_stats[p] = {'alerts':0,'wins':0,'losses':0,'pending':0}
     pair_stats[p]['alerts'] += 1
     o = a.get('outcome','pending')
-    if o=='win_tp1': pair_stats[p]['wins']   += 1
-    elif o=='loss':  pair_stats[p]['losses'] += 1
-    else:            pair_stats[p]['pending']+= 1
+    if o == 'win_tp1': pair_stats[p]['wins']    += 1
+    elif o == 'loss':  pair_stats[p]['losses']  += 1
+    else:              pair_stats[p]['pending'] += 1
 
 print("  Calling Gemini for analysis...")
-analysis = build_weekly_analysis(weekly_alerts,wins,losses,pending,win_rate,pair_stats)
+analysis = build_weekly_analysis(weekly_alerts, wins, losses, pending, win_rate, pair_stats)
 
 if not analysis:
     send_status_email(f"Found {len(weekly_alerts)} alerts but Gemini analysis failed. Raw: {wins}W / {losses}L / {pending} pending.")
     exit(0)
 
-html = build_weekly_html(analysis,weekly_alerts,wins,losses,pending,win_rate)
-send_weekly_email(html,len(weekly_alerts),wins,losses,win_rate)
+html = build_weekly_html(analysis, weekly_alerts, wins, losses, pending, win_rate)
+send_weekly_email(html, len(weekly_alerts), wins, losses, win_rate)
 print("  Done.")
