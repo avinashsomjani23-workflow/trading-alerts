@@ -6,13 +6,78 @@
     "alert_emails": ["avinash.somjani23@gmail.com", "fernandesbrezhnev@gmail.com"]
   },
   "pairs": [
-    {"symbol": "EURUSD=X", "name": "EURUSD", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5, "style": "intraday"},
-    {"symbol": "USDJPY=X", "name": "USDJPY", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5, "style": "intraday"},
-    {"symbol": "NZDUSD=X", "name": "NZDUSD", "proximity_pct": 0.25, "min_touches": 1, "min_confidence": 5, "style": "intraday"},
-    {"symbol": "BTC-USD",  "name": "BTCUSD", "proximity_pct": 0.8,  "min_touches": 1, "min_confidence": 5, "style": "intraday"},
-    {"symbol": "NQ=F",     "name": "NAS100", "proximity_pct": 0.4,  "min_touches": 1, "min_confidence": 5, "style": "intraday"},
-    {"symbol": "GC=F",     "name": "GOLD",   "proximity_pct": 0.35, "min_touches": 1, "min_confidence": 5, "style": "intraday"},
-    {"symbol": "SI=F",     "name": "SILVER", "proximity_pct": 0.45, "min_touches": 1, "min_confidence": 5, "style": "intraday"}
+    {
+      "symbol": "EURUSD=X",
+      "name": "EURUSD",
+      "proximity_pct": 0.25,
+      "min_touches": 1,
+      "min_confidence": 5,
+      "style": "both",
+      "spread_pips": 1,
+      "spread_pips_note": "for_reference_only"
+    },
+    {
+      "symbol": "USDJPY=X",
+      "name": "USDJPY",
+      "proximity_pct": 0.25,
+      "min_touches": 1,
+      "min_confidence": 5,
+      "style": "both",
+      "spread_pips": 1,
+      "spread_pips_note": "for_reference_only"
+    },
+    {
+      "symbol": "NZDUSD=X",
+      "name": "NZDUSD",
+      "proximity_pct": 0.25,
+      "min_touches": 1,
+      "min_confidence": 5,
+      "style": "both",
+      "spread_pips": 1.5,
+      "spread_pips_note": "for_reference_only"
+    },
+    {
+      "symbol": "BTC-USD",
+      "name": "BTCUSD",
+      "proximity_pct": 0.8,
+      "min_touches": 1,
+      "min_confidence": 5,
+      "style": "both",
+      "spread_pips": 15,
+      "spread_pips_note": "for_reference_only"
+    },
+    {
+      "symbol": "^NDX",
+      "name": "NAS100",
+      "proximity_pct": 0.4,
+      "min_touches": 1,
+      "min_confidence": 5,
+      "style": "both",
+      "spread_pips": 1.5,
+      "spread_pips_note": "for_reference_only"
+    },
+    {
+      "symbol": "GC=F",
+      "name": "GOLD",
+      "proximity_pct": 0.35,
+      "proximity_buffer_pct": 0.5,
+      "min_touches": 1,
+      "min_confidence": 5,
+      "style": "both",
+      "spread_pips": 0.3,
+      "spread_pips_note": "for_reference_only"
+    },
+    {
+      "symbol": "SI=F",
+      "name": "SILVER",
+      "proximity_pct": 0.45,
+      "proximity_buffer_pct": 0.5,
+      "min_touches": 1,
+      "min_confidence": 5,
+      "style": "both",
+      "spread_pips": 0.03,
+      "spread_pips_note": "for_reference_only"
+    }
   ],
   "zone_detection": {
     "swing_lookback": 3
