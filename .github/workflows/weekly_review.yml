@@ -24,7 +24,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install yfinance requests numpy pandas
+        run: pip install yfinance requests numpy pandas openpyxl
 
       - name: Run weekly review
         env:
