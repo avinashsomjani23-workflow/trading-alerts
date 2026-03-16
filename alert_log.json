@@ -859,5 +859,30 @@
     "outcome": "loss",
     "outcome_price": 80.75,
     "outcome_checked_at": "2026-03-15 13:47"
+  },
+  {
+    "id": "NZDUSD_1773641260",
+    "alert_type": "zone_intraday",
+    "pair": "NZDUSD",
+    "timestamp_utc": "2026-03-16 06:07",
+    "ist_time": "11:37",
+    "zone_level": 0.58109,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 0.58102,
+    "sl": 0.5821,
+    "tp1": 0.5785,
+    "tp2": 0.57747,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 CHoCH to bearish confirmed from 0.58160.",
+      "Price approaching H1 Bearish OB (0.58109-0.58160) at the resistance zone.",
+      "Bearish H1 FVG (0.58109-0.58102) overlaps the OB.",
+      "Entry planned in a Premium zone relative to recent H1 swing.",
+      "H4/D1 trend structure aligns with the bearish direction."
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
