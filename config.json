@@ -11,7 +11,7 @@
       "name": "EURUSD",
       "proximity_pct": 0.25,
       "min_touches": 1,
-      "min_confidence": 5,
+      "min_confidence": 8,
       "style": "both",
       "spread_pips": 1,
       "spread_pips_note": "for_reference_only"
@@ -21,7 +21,7 @@
       "name": "USDJPY",
       "proximity_pct": 0.25,
       "min_touches": 1,
-      "min_confidence": 5,
+      "min_confidence": 8,
       "style": "both",
       "spread_pips": 1,
       "spread_pips_note": "for_reference_only"
@@ -31,7 +31,7 @@
       "name": "NZDUSD",
       "proximity_pct": 0.25,
       "min_touches": 1,
-      "min_confidence": 5,
+      "min_confidence": 8,
       "style": "both",
       "spread_pips": 1.5,
       "spread_pips_note": "for_reference_only"
@@ -41,7 +41,7 @@
       "name": "BTCUSD",
       "proximity_pct": 0.8,
       "min_touches": 1,
-      "min_confidence": 5,
+      "min_confidence": 8,
       "style": "both",
       "spread_pips": 15,
       "spread_pips_note": "for_reference_only"
@@ -51,7 +51,7 @@
       "name": "NAS100",
       "proximity_pct": 0.4,
       "min_touches": 1,
-      "min_confidence": 5,
+      "min_confidence": 8,
       "style": "both",
       "spread_pips": 1.5,
       "spread_pips_note": "for_reference_only"
@@ -62,7 +62,7 @@
       "proximity_pct": 0.35,
       "proximity_buffer_pct": 0.5,
       "min_touches": 1,
-      "min_confidence": 5,
+      "min_confidence": 8,
       "style": "both",
       "spread_pips": 0.3,
       "spread_pips_note": "for_reference_only"
@@ -73,7 +73,7 @@
       "proximity_pct": 0.45,
       "proximity_buffer_pct": 0.5,
       "min_touches": 1,
-      "min_confidence": 5,
+      "min_confidence": 8,
       "style": "both",
       "spread_pips": 0.03,
       "spread_pips_note": "for_reference_only"
