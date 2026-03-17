@@ -1,8 +1,6 @@
 name: Trading Alert Engine
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 env:
