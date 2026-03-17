@@ -621,56 +621,75 @@ Return ONLY raw JSON. No markdown. No code fences. No text outside the JSON.
 }}"""
 
 # ── Gemini breakout prompt ────────────────────────────────────────────────────
-def build_breakout_prompt(pair, bo, current_price, macro_news, df1):
-    risk_dollar = config["account"]["balance"] * config["account"]["risk_percent"] / 100
-    ist_time    = (datetime.utcnow()+timedelta(hours=5,minutes=30)).strftime("%H:%M")
-    utc_time    = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-    dow_context = get_day_of_week_context(pair)
-    d           = bo.get("direction","BULLISH")
+def build_breakout_html_block(bo):
+    if not bo:
+        return ""
+    d      = bo.get("direction","BULLISH")
+    color  = "#26a69a" if d=="BULLISH" else "#ef5350"
+    arrow  = "▲" if d=="BULLISH" else "▼"
+    score  = bo.get("bo_score",0)
+    sc     = "#27ae60" if score>=4 else "#f39c12"
 
-    return f"""You are a highly skilled professional breakout trader. A scored H1 breakout alert has triggered.
+    scorecard_rows = ""
+    for item in bo.get("bo_scorecard",[]):
+        s    = item["score"]
+        m    = item["max"]
+        icon = "✓" if s==m else ("~" if s>0 else "✗")
+        ic   = "#27ae60" if s==m else ("#f39c12" if s>0 else "#e74c3c")
+        scorecard_rows += (
+            f'<tr style="border-bottom:1px solid #2a2a3e;">'
+            f'<td style="padding:7px 10px;color:#aaa;font-size:11px;width:160px;">{item["criterion"]}</td>'
+            f'<td style="padding:7px 8px;text-align:center;width:50px;"><span style="color:{ic};font-weight:bold;font-size:11px;">{icon} {s}/{m}</span></td>'
+            f'<td style="padding:7px 10px;color:#666;font-size:10px;line-height:1.5;">{item["detail"]}</td>'
+            f'</tr>'
+        )
 
-PAIR: {pair} | DIRECTION: {d} | BROKEN LEVEL: {bo.get('broken_level','')} | PRICE NOW: {current_price}
-TIME: {utc_time} UTC | {ist_time} IST
-BREAKOUT SCORE: {bo.get('bo_score','')}/5
-BREAK DESCRIPTION: {bo.get('description','')}
-ACCOUNT: ${config["account"]["balance"]} | RISK: {config["account"]["risk_percent"]}% = ${risk_dollar:.0f} | FIRM: {config["account"]["firm"]}
-DAY CONTEXT: {dow_context}
+    return f"""<div style="background:#0d1117;border:2px solid {color};border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+    <p style="color:{color};font-weight:bold;font-size:13px;margin:0;">{arrow} BREAKOUT — {d} BOS (H1)</p>
+    <span style="background:{sc};color:white;font-weight:bold;font-size:12px;padding:2px 9px;border-radius:20px;">{score}/5</span>
+  </div>
+  <p style="color:#666;font-size:11px;margin:0 0 10px;">{bo.get("description","")}</p>
 
-CANDLE DATA:
-{format_candles(df1, "H1")}
+  <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+    <tr style="border-bottom:1px solid #2a2a3e;">
+      <td style="padding:7px 10px;color:#666;font-size:11px;width:160px;">H1 Level Broken</td>
+      <td style="padding:7px 10px;color:white;font-weight:bold;font-size:12px;">{bo.get("broken_level","")}</td>
+    </tr>
+    <tr style="border-bottom:1px solid #2a2a3e;">
+      <td style="padding:7px 10px;color:#666;font-size:11px;">Retest Zone</td>
+      <td style="padding:7px 10px;color:white;font-weight:bold;font-size:12px;">{bo.get("retest_zone_bot","")} – {bo.get("retest_zone_top","")}</td>
+    </tr>
+    <tr style="border-bottom:1px solid #2a2a3e;">
+      <td style="padding:7px 10px;color:#666;font-size:11px;">Retest Entry</td>
+      <td style="padding:7px 10px;color:{color};font-weight:bold;font-size:12px;">{bo.get("retest_entry","")}</td>
+    </tr>
+    <tr style="border-bottom:1px solid #2a2a3e;">
+      <td style="padding:7px 10px;color:#666;font-size:11px;">Stop Loss</td>
+      <td style="padding:7px 10px;color:#ef5350;font-weight:bold;font-size:12px;">{bo.get("sl_retest","")}</td>
+    </tr>
+    <tr style="border-bottom:1px solid #2a2a3e;">
+      <td style="padding:7px 10px;color:#666;font-size:11px;">TP1 (R:R {bo.get("rr_tp1","2.0")})</td>
+      <td style="padding:7px 10px;color:#27ae60;font-weight:bold;font-size:12px;">{bo.get("tp1_retest","")}</td>
+    </tr>
+    <tr>
+      <td style="padding:7px 10px;color:#666;font-size:11px;">TP2 (R:R {bo.get("rr_tp2","3.0")})</td>
+      <td style="padding:7px 10px;color:#1e8449;font-weight:bold;font-size:12px;">{bo.get("tp2_retest","")}</td>
+    </tr>
+  </table>
 
-MACRO NEWS (use full descriptions — do NOT base any insight on headline alone):
-{macro_news}
+  <p style="color:#555;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 4px;">SCORECARD</p>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">{scorecard_rows}</table>
 
-BREAKOUT SCORING ALREADY DONE:
-{chr(10).join(bo.get('bo_reasons', []))}
-
-RETEST ZONE: {bo.get('retest_zone_bot','')} — {bo.get('retest_zone_top','')}
-MOMENTUM ENTRY: {bo.get('momentum_entry','')} (aggressive — enter now)
-RETEST ENTRY: {bo.get('retest_entry','')} (preferred — wait for pullback to broken level)
-SL IF MOMENTUM: {bo.get('sl_momentum','')}
-SL IF RETEST: {bo.get('sl_retest','')}
-
-MACRO INSTRUCTION: For each relevant macro item, state: (1) the news event in 5 words, (2) directional impact on {pair}, (3) confidence high/medium/low. Maximum 3 bullet points. If nothing is materially relevant to {pair} in the next 4–8 hours, say exactly: "No material macro driver in the next 4–8 hours."
-
-Every candle reference MUST include "H1" or "M15" — never say "the candle" without a timeframe.
-
-MIN CONFIDENCE TO SEND: 4/5 (already scored — confirm validity and add context below).
-
-Return ONLY raw JSON. No markdown. No code fences. No text outside the JSON.
-{{
-  "confirmed": true,
-  "confidence_score": {bo.get('bo_score','')},
-  "confidence_reason": "one sentence on why this breakout is or isn't reliable",
-  "news_flag": "none or describe the event",
-  "trigger": "exact H1 or M15 condition to confirm entry — must name timeframe",
-  "invalid_if": "exact H1 price action that cancels this breakout — must name timeframe",
-  "fakeout_warning": "one sentence on the most likely fakeout scenario here",
-  "macro_bullets": ["bullet 1 (5-word event | direction | confidence)", "bullet 2", "bullet 3"],
-  "mindset": "one sharp psychological trap to avoid on this breakout"
-}}"""
-
+  <div style="background:#0a1a0a;border-left:3px solid #27ae60;padding:8px 10px;border-radius:4px;margin-bottom:8px;">
+    <p style="color:#555;font-size:9px;text-transform:uppercase;margin:0 0 3px;">WHEN TO ENTER</p>
+    <p style="color:#a3e6b3;font-size:11px;margin:0;line-height:1.5;">{bo.get("trigger_text","Wait for a confirmation candle in the retest zone.")}</p>
+  </div>
+  <div style="background:#1a0a0a;border-left:3px solid #ef5350;padding:8px 10px;border-radius:4px;">
+    <p style="color:#555;font-size:9px;text-transform:uppercase;margin:0 0 3px;">TRADE IS INVALID IF</p>
+    <p style="color:#f5a0a0;font-size:11px;margin:0;line-height:1.5;">{bo.get("invalid_if_text","Price closes back inside the broken level.")}</p>
+  </div>
+</div>"""
 # ── Gemini call — 120s timeout, 1 automatic retry ────────────────────────────
 def call_gemini(prompt, retries=1):
     url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
