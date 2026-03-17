@@ -966,5 +966,24 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "NZDUSD_1773739924",
+    "alert_type": "breakout",
+    "pair": "NZDUSD",
+    "timestamp_utc": "2026-03-17 09:32",
+    "ist_time": "15:02",
+    "zone_level": 0.5816,
+    "zone_label": "BULLISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
