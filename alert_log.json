@@ -884,5 +884,24 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1773729105",
+    "alert_type": "breakout",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-17 06:31",
+    "ist_time": "12:01",
+    "zone_level": 81.515,
+    "zone_label": "BEARISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
