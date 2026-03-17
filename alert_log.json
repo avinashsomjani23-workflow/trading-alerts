@@ -922,5 +922,30 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773736391",
+    "alert_type": "zone_intraday",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-17 08:33",
+    "ist_time": "14:03",
+    "zone_level": 74410.88672,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 74435.90625,
+    "sl": 74510.90625,
+    "tp1": 73889.75781,
+    "tp2": 73839.92188,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 BOS confirms bearish trend",
+      "Price in premium for short setup",
+      "M15 07:15 OB at supply zone",
+      "Bearish FVG (M15 07:15-07:45) overlaps OB",
+      "Local liquidity swept before entry (M15 07:15 H)"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
