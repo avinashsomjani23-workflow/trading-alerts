@@ -115,20 +115,13 @@ def zone_depletion_label(touch_count):
     else:
         return f"Heavily depleted — zone tested {touch_count} times, trade with caution, require extra confluence."
 
-# ── Market hours — blocks 00:00–08:00 IST weekdays + full weekend ─────────────
+# ── Market hours (IST) ────────────────────────────────────────────────────────
 def is_market_open():
     ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
-    wd, h = ist.weekday(), ist.hour  # Mon=0 … Fri=4, Sat=5, Sun=6
-
-    if wd == 5:
-        return False, "Saturday — market closed."
-    if wd == 6:
-        return False, "Sunday — market closed."
-    if h < 8:
-        return False, f"Quiet hours (midnight–08:00 IST) — {ist.strftime('%A %H:%M')} IST."
-    if wd == 4 and h >= 23:
-        return False, "Friday after 11:00 PM IST — market closing."
-
+    wd, h = ist.weekday(), ist.hour
+    if wd == 5: return False, "Saturday — alerts off."
+    if wd == 6: return False, "Sunday — alerts off."
+    if h < 8: return False, f"Blackout window — {ist.strftime('%H:%M')} IST (resumes at 08:00 IST)."
     return True, f"Open — {ist.strftime('%A %H:%M')} IST"
 
 # ── Data helpers ──────────────────────────────────────────────────────────────
