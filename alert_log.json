@@ -1125,5 +1125,30 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773819110",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-18 07:31",
+    "ist_time": "13:01",
+    "zone_level": 73531.23958,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 73531.23958,
+    "sl": 73413.92188,
+    "tp1": 73978.35156,
+    "tp2": 74468.10156,
+    "confidence_score": 8,
+    "confluences": [
+      "Valid H1 Order Block at zone",
+      "Bullish FVG overlaps OB/Zone",
+      "Liquidity swept by OB formation",
+      "Price entering a discount zone",
+      "RR at least 2:1 achievable"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
