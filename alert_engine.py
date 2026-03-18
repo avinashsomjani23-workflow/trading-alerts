@@ -9,6 +9,7 @@ from matplotlib.gridspec import GridSpec
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
 import numpy as np
 import base64
 from io import BytesIO
@@ -306,7 +307,7 @@ def detect_breakout(df1):
             if candidates:
                 level, touches = max(candidates, key=lambda x: x[0])
                 score, reasons, scorecard = score_breakout("BULLISH", level, touches, True)
-                if score >= 3:
+                if score >= 4:
                     _re   = round(level+buf, 5)
                     _sl   = round(level-buf*2, 5)
                     _dist = round(abs(_re - _sl), 5)
@@ -347,7 +348,7 @@ def detect_breakout(df1):
             if candidates:
                 level, touches = min(candidates, key=lambda x: x[0])
                 score, reasons, scorecard = score_breakout("BEARISH", level, touches, True)
-                if score >= 3:
+                if score >= 4:
                     _re   = round(level-buf, 5)
                     _sl   = round(level+buf*2, 5)
                     _dist = round(abs(_sl - _re), 5)
@@ -736,10 +737,10 @@ def build_zone_email_html(data, pair, zone_level, zone_label, current_price,
         pass
 
     chart1_html = (f'<h3 style="color:#1a1a2e;font-size:13px;margin:20px 0 6px;">H1 CHART</h3>'
-                   f'<img src="data:image/png;base64,{chart1_b64}" style="width:100%;border-radius:8px;display:block;" />'
+                   f'<img src="cid:chart_h1" style="width:100%;border-radius:8px;display:block;" />'
                    if chart1_b64 else '<p style="color:#aaa;font-size:12px;">H1 chart unavailable.</p>')
     chart2_html = (f'<h3 style="color:#1a1a2e;font-size:13px;margin:16px 0 6px;">M15 CHART</h3>'
-                   f'<img src="data:image/png;base64,{chart2_b64}" style="width:100%;border-radius:8px;display:block;" />'
+                   f'<img src="cid:chart_m15" style="width:100%;border-radius:8px;display:block;" />'
                    if chart2_b64 else '<p style="color:#aaa;font-size:12px;">M15 chart unavailable.</p>')
 
     bo_html = build_breakout_html_block(breakout) if breakout else ""
@@ -894,7 +895,7 @@ def build_breakout_only_email_html(bo, pair, current_price, chart_b64=None):
         chart_html = (
             f'<h3 style="color:#8899bb;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">'
             f'H1 CHART — RETEST LEVELS</h3>'
-            f'<img src="data:image/png;base64,{chart_b64}" style="width:100%;border-radius:8px;display:block;margin-bottom:20px;" />'
+            f'<img src="cid:chart_h1" style="width:100%;border-radius:8px;display:block;margin-bottom:20px;" />'
         )
 
     # ── Glossary ───────────────────────────────────────────────────────────────
@@ -1076,14 +1077,20 @@ def log_alert(pair, zone_level, zone_label, current_price, data, alert_type="zon
     save_alert_log()
 
 # ── Send email ────────────────────────────────────────────────────────────────
-def send_email(subject, html_body):
+def send_email(subject, html_body, chart1_b64=None, chart2_b64=None):
     recipients = config["account"].get("alert_emails", [ALERT_EMAIL])
     for recipient in recipients:
-        msg = MIMEMultipart("alternative")
+        msg = MIMEMultipart("related")
         msg["Subject"] = subject
         msg["From"]    = GMAIL_ADDRESS
         msg["To"]      = recipient
         msg.attach(MIMEText(html_body, "html"))
+        for cid, b64data in [("chart_h1", chart1_b64), ("chart_m15", chart2_b64)]:
+            if b64data:
+                img = MIMEImage(base64.b64decode(b64data))
+                img.add_header("Content-ID", f"<{cid}>")
+                img.add_header("Content-Disposition", "inline", filename=f"{cid}.png")
+                msg.attach(img)
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(GMAIL_ADDRESS, GMAIL_PASS)
             server.sendmail(GMAIL_ADDRESS, recipient, msg.as_string())
@@ -1169,7 +1176,7 @@ for pair_conf in config["pairs"]:
         if breakout:
             subject = f"[SMC {score}/10 + BO {breakout['bo_score']}/5] {name} | {zone_label} | {datetime.utcnow().strftime('%H:%M')} UTC"
 
-        send_email(subject, html)
+        send_email(subject, html, chart1, chart2)
         log_alert(name, round(zone_level,5), zone_label, round(current_price,5), data, "zone")
         record_zone_alert(name, zone_level, current_price)
         if breakout:
@@ -1195,7 +1202,7 @@ for pair_conf in config["pairs"]:
             html    = build_breakout_only_email_html(breakout, name, round(current_price,5), bo_chart)
             _ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
             subject = f"[BO {breakout['bo_score']}/5] {name} | {breakout['direction']} Breakout | {round(breakout['broken_level'],5)} | {_ist_now.strftime('%H:%M')} IST"
-            send_email(subject, html)
+            send_email(subject, html, bo_chart)
             log_alert(name, breakout["broken_level"], f"{breakout['direction']} Breakout",
                       round(current_price,5), None, "breakout")
             record_breakout_alert(name, breakout["broken_level"], current_price)
