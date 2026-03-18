@@ -1049,5 +1049,81 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773817430",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-18 07:03",
+    "ist_time": "12:33",
+    "zone_level": 74549.30273,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 74549.3,
+    "sl": 74689.86,
+    "tp1": 74179.29,
+    "tp2": 73616.63,
+    "confidence_score": 8,
+    "confluences": [
+      "M15 CHoCH to the downside from 74614.85 high",
+      "Liquidity swept above alert zone by 74614.85 high",
+      "Price retracing into premium for short setup",
+      "H1 BOS confirms potential bearish trend continuation after retracement"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "NAS100_1773817478",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-18 07:04",
+    "ist_time": "12:34",
+    "zone_level": 24796.63672,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 24774.89,
+    "sl": 24819.5,
+    "tp1": 24638.21,
+    "tp2": 24607.36,
+    "confidence_score": 8,
+    "confluences": [
+      "Price in Premium zone",
+      "Valid M15 Bearish OB at zone",
+      "Bearish FVG overlapping OB",
+      "Liquidity swept by 19:45 M15 candle",
+      "Zone Freshness",
+      "RR at least 2:1 achievable"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1773817541",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-18 07:05",
+    "ist_time": "12:35",
+    "zone_level": 79.8425,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 79.89,
+    "sl": 80.305,
+    "tp1": 78.22,
+    "tp2": 77.0,
+    "confidence_score": 9,
+    "confluences": [
+      "Price in H1 premium zone (relative to 78.220 low and 81.595 high)",
+      "M15 CHoCH confirmed (06:45 UTC candle broke prior M15 low)",
+      "Liquidity swept above resistance zone at 80.255 (M15 06:30 H)",
+      "Valid Bearish OB identified (M15 06:30 candle)",
+      "Bearish FVG overlaps OB",
+      "Zone freshness confirmed (alerted 0 times in 30 days)"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
