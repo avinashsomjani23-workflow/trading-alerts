@@ -1727,5 +1727,31 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1773874939",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-18 23:02",
+    "ist_time": "04:32",
+    "zone_level": 75.635,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 75.55,
+    "sl": 74.515,
+    "tp1": 77.62,
+    "tp2": 78.05,
+    "confidence_score": 8,
+    "confluences": [
+      "Price in discount zone relative to recent range",
+      "Liquidity swept below previous lows (75.635) to deeper demand (75.015)",
+      "Bullish OB identified at deep demand extreme",
+      "Bullish FVG overlaps OB",
+      "Demand zone freshness (first alert in 30 days)",
+      "RR at least 2:1 achievable"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
