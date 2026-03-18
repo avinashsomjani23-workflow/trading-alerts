@@ -1023,5 +1023,31 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773804710",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-18 03:31",
+    "ist_time": "09:01",
+    "zone_level": 74813.33594,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "74797.69",
+    "sl": 74866.5,
+    "tp1": 74089.37,
+    "tp2": 73607.17,
+    "confidence_score": 8,
+    "confluences": [
+      "Price approaching significant H1 supply/resistance zone",
+      "Presence of a valid bearish Order Block (H1 22:00)",
+      "Bearish FVG (from H1 21:00 H to H1 00:00 O) defining entry",
+      "Price is in a premium area for a short position",
+      "Prior liquidity sweep near the zone (H1 15:00 high at 74816.50)",
+      "Excellent risk-reward ratio (>10:1 for TP1)"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
