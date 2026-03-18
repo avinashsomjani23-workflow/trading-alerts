@@ -1535,5 +1535,50 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773847913",
+    "alert_type": "breakout",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-18 15:31",
+    "ist_time": "21:01",
+    "zone_level": 71794.00781,
+    "zone_label": "BEARISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1773847986",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-18 15:33",
+    "ist_time": "21:03",
+    "zone_level": 77.125,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 76.9725,
+    "sl": 77.275,
+    "tp1": 76.3,
+    "tp2": 75.635,
+    "confidence_score": 9,
+    "confluences": [
+      "H1 BOS confirms bearish trend",
+      "Price entered Premium zone for short",
+      "M15 CHoCH confirmed",
+      "Liquidity swept above zone",
+      "Valid OB identified at zone",
+      "RR at least 2:1 achievable"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
