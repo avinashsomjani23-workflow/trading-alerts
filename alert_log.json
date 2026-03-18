@@ -1270,5 +1270,31 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773828114",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-18 10:01",
+    "ist_time": "15:31",
+    "zone_level": 74612.66094,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 74624.04,
+    "sl": 74897.69,
+    "tp1": 73940.07,
+    "tp2": 73607.18,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 Bearish BOS confirmed",
+      "Price in H1 Premium zone for short",
+      "Valid H1 Bearish Order Block at zone",
+      "Bearish FVG overlaps with OB",
+      "Zone is fresh, no recent alerts",
+      "RR at least 2:1 achievable"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
