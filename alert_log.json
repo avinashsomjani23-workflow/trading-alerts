@@ -1454,5 +1454,48 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "NZDUSD_1773840704",
+    "alert_type": "zone",
+    "pair": "NZDUSD",
+    "timestamp_utc": "2026-03-18 13:31",
+    "ist_time": "19:01",
+    "zone_level": 0.58105,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 0.58105,
+    "sl": 0.5805,
+    "tp1": 0.583,
+    "tp2": 0.584,
+    "confidence_score": 8,
+    "confluences": [
+      "System-validated demand zone at 0.58105.",
+      "Price entering a discount area for potential long setup.",
+      "Recent price action shows liquidity sweep on approach to the zone.",
+      "Favorable Risk-Reward ratio achievable at TP1 and TP2."
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1773840760",
+    "alert_type": "breakout",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-18 13:32",
+    "ist_time": "19:02",
+    "zone_level": 78.06,
+    "zone_label": "BEARISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
