@@ -1242,5 +1242,33 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "NZDUSD_1773826294",
+    "alert_type": "zone",
+    "pair": "NZDUSD",
+    "timestamp_utc": "2026-03-18 09:31",
+    "ist_time": "15:01",
+    "zone_level": 0.58588,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 0.58589,
+    "sl": 0.5856,
+    "tp1": 0.58734,
+    "tp2": 0.588,
+    "confidence_score": 10,
+    "confluences": [
+      "M15 CHoCH confirmed (08:45 M15 candle)",
+      "H1 trend bullish (impulsive move from 0.58548 to 0.58734)",
+      "Price in H1 Discount zone for long entry",
+      "Valid H1 Order Block (02:00 H1 candle) at demand zone",
+      "Bullish FVG (0.58589-0.58644) overlaps with OB",
+      "Liquidity swept below OB (08:15 M15 low 0.58555)",
+      "Strong RR potential (5:1+)",
+      "Zone freshness"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
