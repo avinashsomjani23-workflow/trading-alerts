@@ -2082,5 +2082,49 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "NZDUSD_1773934296",
+    "alert_type": "zone",
+    "pair": "NZDUSD",
+    "timestamp_utc": "2026-03-19 15:31",
+    "ist_time": "21:01",
+    "zone_level": 0.58394,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 0.58462,
+    "sl": 0.5854,
+    "tp1": 0.58306,
+    "tp2": 0.58015,
+    "confidence_score": 9,
+    "confluences": [
+      "Strong bearish impulse from supply",
+      "M15 CHoCH confirmed to the downside",
+      "Liquidity sweep above prior highs (0.58480)",
+      "Valid OB and FVG overlap for entry",
+      "Price in Premium zone for short"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773934445",
+    "alert_type": "breakout",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-19 15:34",
+    "ist_time": "21:04",
+    "zone_level": 69825.10156,
+    "zone_label": "BEARISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
