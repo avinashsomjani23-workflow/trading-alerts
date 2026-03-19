@@ -2276,5 +2276,32 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "USDJPY_1773963101",
+    "alert_type": "zone",
+    "pair": "USDJPY",
+    "timestamp_utc": "2026-03-19 23:31",
+    "ist_time": "05:01",
+    "zone_level": 158.09887,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "158.292",
+    "sl": 158.43,
+    "tp1": 157.499,
+    "tp2": 157.0,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 BOS confirms bearish trend direction",
+      "Price in Premium zone for short entry",
+      "Valid Bearish Order Block identified at the zone",
+      "Zone freshness confirmed",
+      "Liquidity swept before approaching the zone",
+      "Entry aligns with Premium for short trade",
+      "RR at least 2:1 achievable at TP1"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
