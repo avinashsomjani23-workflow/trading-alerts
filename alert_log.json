@@ -2225,5 +2225,30 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "USDJPY_1773955887",
+    "alert_type": "zone",
+    "pair": "USDJPY",
+    "timestamp_utc": "2026-03-19 21:31",
+    "ist_time": "03:01",
+    "zone_level": 158.10666,
+    "zone_label": "Supply / Resistance",
+    "bias": "WAIT",
+    "entry": "158.221",
+    "sl": 158.43,
+    "tp1": 157.5,
+    "tp2": 157.18,
+    "confidence_score": 8,
+    "confluences": [
+      "Strong H1 bearish trend confirmed by multiple BOS",
+      "Price rallying into a premium supply zone",
+      "Clear H1 bearish Order Block identified",
+      "FVG overlaps with OB, providing precise entry",
+      "Good risk-reward potential for short"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
