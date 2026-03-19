@@ -2173,5 +2173,31 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773943313",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-19 18:01",
+    "ist_time": "23:31",
+    "zone_level": 69485.20573,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 69201.46875,
+    "sl": 69095.45,
+    "tp1": 69981.78,
+    "tp2": 70248.15,
+    "confidence_score": 9,
+    "confluences": [
+      "M15 CHoCH confirmed",
+      "H1 CHoCH confirmed",
+      "Valid bullish OB at demand zone",
+      "Bullish FVG overlaps OB",
+      "Liquidity swept below OB/demand zone",
+      "High RR potential (>2:1)"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
