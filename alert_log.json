@@ -1842,5 +1842,30 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773909124",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-19 08:32",
+    "ist_time": "14:02",
+    "zone_level": 69825.10156,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "70007.54688",
+    "sl": 69444.03125,
+    "tp1": 71139.42188,
+    "tp2": 71616.71094,
+    "confidence_score": 8,
+    "confluences": [
+      "Price at Demand Zone (69825.10156)",
+      "Liquidity swept below demand zone (Low: 69519.03125)",
+      "Valid Bullish Order Block (07:15 M15 candle) identified",
+      "Bullish FVG (70007.54688-70037.36719) identified overlapping OB",
+      "Favorable Risk/Reward (2.0:1 for TP1 and 2.9:1 for TP2)"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
