@@ -2145,5 +2145,33 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1773939886",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-19 17:04",
+    "ist_time": "22:34",
+    "zone_level": 70.07,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 70.39,
+    "sl": 71.7,
+    "tp1": 65.55,
+    "tp2": 64.0,
+    "confidence_score": 10,
+    "confluences": [
+      "H1 bearish BOS",
+      "Price in H1 premium",
+      "M15 CHoCH confirmed",
+      "Valid H1 Bearish OB (15:00 H1 candle)",
+      "FVG overlaps OB",
+      "Zone freshness",
+      "Local liquidity sweep (15:00 H1 high taken out)",
+      "RR at least 2:1 achievable"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
