@@ -1779,5 +1779,30 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "GOLD_1773896537",
+    "alert_type": "zone",
+    "pair": "GOLD",
+    "timestamp_utc": "2026-03-19 05:02",
+    "ist_time": "10:32",
+    "zone_level": 4837.1001,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 4817.0,
+    "sl": 4801.0,
+    "tp1": 4867.4,
+    "tp2": 4904.0,
+    "confidence_score": 9,
+    "confluences": [
+      "H1 BOS confirms bullish structural shift (break of 4850.7998 H1 00:00 high by H1 01:00 candle).",
+      "Price is currently in the discount zone (below 50% of the 4806-4867.4 swing).",
+      "Liquidity below previous H1 lows (4809.2998) was swept by the H1 22:00 candle's low (4806.00).",
+      "Valid H1 22:00 bullish Order Block (4806.00-4828.00) is present at the demand zone.",
+      "Excellent risk-reward ratio achievable for both TP1 and TP2 targets."
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
