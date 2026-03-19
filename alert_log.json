@@ -2250,5 +2250,31 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "EURUSD_1773961314",
+    "alert_type": "zone",
+    "pair": "EURUSD",
+    "timestamp_utc": "2026-03-19 23:01",
+    "ist_time": "04:31",
+    "zone_level": 1.15927,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 1.15915,
+    "sl": 1.16032,
+    "tp1": 1.15681,
+    "tp2": 1.15407,
+    "confidence_score": 10,
+    "confluences": [
+      "Price in Premium zone",
+      "Bearish OB at supply zone",
+      "Bearish FVG overlapping OB",
+      "Liquidity swept above zone",
+      "Fresh supply zone",
+      "M15 CHoCH confirmed"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
