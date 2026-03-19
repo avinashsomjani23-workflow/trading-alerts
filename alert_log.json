@@ -2038,5 +2038,49 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "USDJPY_1773932523",
+    "alert_type": "zone",
+    "pair": "USDJPY",
+    "timestamp_utc": "2026-03-19 15:02",
+    "ist_time": "20:32",
+    "zone_level": 158.10666,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "158.1955",
+    "sl": 158.155,
+    "tp1": 158.939,
+    "tp2": 159.292,
+    "confidence_score": 8,
+    "confluences": [
+      "Price reacted at a significant demand zone.",
+      "Liquidity was swept below the demand zone (158.05701).",
+      "M15 Change of Character (CHoCH) confirmed by breaking 158.23700.",
+      "Price is currently trading in a discount zone on the higher timeframe.",
+      "A valid Order Block (OB) is identified at the zone."
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1773932653",
+    "alert_type": "breakout",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-19 15:04",
+    "ist_time": "20:34",
+    "zone_level": 69619.67969,
+    "zone_label": "BEARISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
