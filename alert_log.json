@@ -2330,5 +2330,55 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "NZDUSD_1773990254",
+    "alert_type": "zone",
+    "pair": "NZDUSD",
+    "timestamp_utc": "2026-03-20 07:04",
+    "ist_time": "12:34",
+    "zone_level": 0.58837,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "0.58863",
+    "sl": 0.5894,
+    "tp1": 0.587,
+    "tp2": 0.58682,
+    "confidence_score": 8,
+    "confluences": [
+      "Valid H1 Bearish Order Block identified",
+      "M15 bearish BOS (Change of Character) confirmed",
+      "Entry at Premium (Supply) zone",
+      "Liquidity above recent highs (0.58837, 0.58862) to be swept before OB entry",
+      "Favorable Risk/Reward (2:1+)"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "NAS100_1773990326",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-20 07:05",
+    "ist_time": "12:35",
+    "zone_level": 24314.30729,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 24289.78,
+    "sl": 24216.69,
+    "tp1": 24461.77,
+    "tp2": 24435.96,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 BOS confirms bullish trend",
+      "Price in discount zone for long",
+      "CHoCH confirmed on H1 timeframe for trend shift",
+      "Fresh demand zone",
+      "RR at least 2:1 achievable"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
