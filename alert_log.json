@@ -2556,5 +2556,31 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "USDJPY_1774008098",
+    "alert_type": "zone",
+    "pair": "USDJPY",
+    "timestamp_utc": "2026-03-20 12:01",
+    "ist_time": "17:31",
+    "zone_level": 158.26662,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "158.399",
+    "sl": 158.243,
+    "tp1": 158.86,
+    "tp2": 159.0,
+    "confidence_score": 10,
+    "confluences": [
+      "H1 bullish market structure (BOS) confirmed",
+      "Price in discount zone for long entry",
+      "Valid M15 bullish OB (07:45 M15 candle) at demand zone",
+      "Bullish FVG (158.313-158.399) overlaps the OB",
+      "Liquidity swept below the OB (08:15 M15 low 158.248) before impulse",
+      "Strong RR > 2:1 achievable on TP1"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
