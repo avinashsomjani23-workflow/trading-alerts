@@ -2380,5 +2380,30 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "EURUSD_1773991893",
+    "alert_type": "zone",
+    "pair": "EURUSD",
+    "timestamp_utc": "2026-03-20 07:31",
+    "ist_time": "13:01",
+    "zone_level": 1.1574,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "1.15674",
+    "sl": 1.15615,
+    "tp1": 1.1585,
+    "tp2": 1.16,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 Bullish CHoCH confirmed at 1.15687",
+      "Liquidity swept below 1.15580 (H1 L 04:00) to 1.15553 (H1 L 05:00)",
+      "Valid M15 Demand OB with FVG overlap",
+      "Strong bullish momentum on 07:00 M15 candle",
+      "Favorable Risk-Reward ratio for both TPs"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
