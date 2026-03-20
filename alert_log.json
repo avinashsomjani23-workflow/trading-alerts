@@ -2582,5 +2582,29 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774011720",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-20 13:02",
+    "ist_time": "18:32",
+    "zone_level": 69783.02734,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 70060.14844,
+    "sl": 69665.95312,
+    "tp1": 70848.53908,
+    "tp2": 71242.7344,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 bullish market structure",
+      "Price approaching demand zone for potential bounce",
+      "Valid H1 bullish Order Block identified",
+      "Liquidity swept by OB prior to upward impulse"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
