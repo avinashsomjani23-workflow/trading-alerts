@@ -2532,5 +2532,29 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774006338",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-20 11:32",
+    "ist_time": "17:02",
+    "zone_level": 71065.77041,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "71219.664065",
+    "sl": 71318.09375,
+    "tp1": 70482.78906,
+    "tp2": 70223.30469,
+    "confidence_score": 9,
+    "confluences": [
+      "H1/M15 CHoCH confirmed down",
+      "Liquidity swept above zone (71315)",
+      "Entry at Bearish OB in Premium",
+      "High Risk-Reward ratio"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
