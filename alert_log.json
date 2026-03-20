@@ -2303,5 +2303,32 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "EURUSD_1773966691",
+    "alert_type": "zone",
+    "pair": "EURUSD",
+    "timestamp_utc": "2026-03-20 00:31",
+    "ist_time": "06:01",
+    "zone_level": 1.15734,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "1.15734",
+    "sl": 1.15523,
+    "tp1": 1.16184,
+    "tp2": 1.16573,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 bullish BOS confirms trend direction",
+      "Price pulling back into H1 discount zone",
+      "Valid H1 Order Block (18:00 H1 candle) midpoint at demand zone",
+      "Bullish FVG (1.15687 - 1.15808) overlaps the demand zone",
+      "Fresh demand zone (alerted <2 times in 30 days)",
+      "Achievable RR of 2:1 or greater for TP1",
+      "No high-impact news in next 2 hours"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
