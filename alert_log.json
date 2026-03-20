@@ -2606,5 +2606,50 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "USDJPY_1774015262",
+    "alert_type": "breakout",
+    "pair": "USDJPY",
+    "timestamp_utc": "2026-03-20 14:01",
+    "ist_time": "19:31",
+    "zone_level": 158.97701,
+    "zone_label": "BULLISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1774015330",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-20 14:02",
+    "ist_time": "19:32",
+    "zone_level": 71.29,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 72.035,
+    "sl": 72.655,
+    "tp1": 70.455,
+    "tp2": 70.125,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 BOS confirms bearish trend",
+      "Price broke previous support at 71.29 (S/R flip potential)",
+      "Valid Bearish Order Block (12:45 M15) at 71.450-72.035",
+      "Bearish FVG (72.035-70.935) aligns with OB top",
+      "Entry in Premium zone for short",
+      "RR at least 2:1 achievable"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
