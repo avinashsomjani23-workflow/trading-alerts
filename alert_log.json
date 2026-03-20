@@ -2462,5 +2462,32 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "GOLD_1774000986",
+    "alert_type": "zone",
+    "pair": "GOLD",
+    "timestamp_utc": "2026-03-20 10:03",
+    "ist_time": "15:33",
+    "zone_level": 4661.6001,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 4663.1,
+    "sl": 4661.1,
+    "tp1": 4701.79,
+    "tp2": 4736.29,
+    "confidence_score": 9,
+    "confluences": [
+      "Demand / Support zone at 4661.6001",
+      "H1 BOS confirms bullish trend (H:4736.29 > H:4724.10)",
+      "Price in discount zone for potential long",
+      "Liquidity swept prior to zone tag (06:15 M15 L:4681.20 swept by 06:30 M15)",
+      "Valid Bullish Order Block (06:30 M15) at zone",
+      "Bullish FVG (4697.10-4663.10) overlaps OB",
+      "Zone alerted 0 times in 30 days (FRESH)"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
