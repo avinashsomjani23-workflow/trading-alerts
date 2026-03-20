@@ -2489,5 +2489,48 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "EURUSD_1774004459",
+    "alert_type": "breakout",
+    "pair": "EURUSD",
+    "timestamp_utc": "2026-03-20 11:00",
+    "ist_time": "16:30",
+    "zone_level": 1.15567,
+    "zone_label": "BULLISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "NAS100_1774004515",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-20 11:01",
+    "ist_time": "16:31",
+    "zone_level": 24314.28841,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 24314.28841,
+    "sl": 24192.5,
+    "tp1": 24558.29,
+    "tp2": 24700.0,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 CHoCH confirmed (bullish structure shift)",
+      "Price in discount relative to recent impulse",
+      "Liquidity swept prior to impulse",
+      "Demand zone is fresh"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
