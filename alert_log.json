@@ -2784,5 +2784,30 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774215133",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-22 21:32",
+    "ist_time": "03:02",
+    "zone_level": 67439.63281,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 67439.63,
+    "sl": 67308.29,
+    "tp1": 68192.75,
+    "tp2": 68489.18,
+    "confidence_score": 8,
+    "confluences": [
+      "Fresh demand zone tapped",
+      "Liquidity swept below demand zone",
+      "Price in discount zone",
+      "Strong RR potential",
+      "Awaiting M15 CHoCH"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
