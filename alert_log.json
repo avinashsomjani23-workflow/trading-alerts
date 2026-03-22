@@ -2835,5 +2835,51 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774218732",
+    "alert_type": "breakout",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-22 22:32",
+    "ist_time": "04:02",
+    "zone_level": 68213.74219,
+    "zone_label": "BEARISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1774218816",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-22 22:33",
+    "ist_time": "04:03",
+    "zone_level": 68.5,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "68.905",
+    "sl": 68.4,
+    "tp1": 69.915,
+    "tp2": 72.3,
+    "confidence_score": 9,
+    "confluences": [
+      "Price in H1 Discount Zone",
+      "H1 CHoCH confirmed (break above 68.350)",
+      "Valid Bullish OB at demand zone",
+      "FVG overlaps OB area",
+      "Liquidity swept below demand zone (67.740, 67.805)",
+      "RR of at least 2:1 achievable",
+      "No high-impact news in next 2 hours"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
