@@ -4237,5 +4237,26 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "USDJPY_1774281718",
+    "alert_type": "breakout",
+    "pair": "USDJPY",
+    "timestamp_utc": "2026-03-23 16:01",
+    "ist_time": "21:31",
+    "zone_level": 158.41499,
+    "zone_label": "BULLISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "trigger": "",
+    "invalid_if": "",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
