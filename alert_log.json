@@ -2926,5 +2926,31 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774224183",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-23 00:03",
+    "ist_time": "05:33",
+    "zone_level": 68273.13672,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "68272.27",
+    "sl": 68086.375,
+    "tp1": 68644.06,
+    "tp2": 68734.7,
+    "confidence_score": 8,
+    "confluences": [
+      "Price in Demand Zone",
+      "Liquidity sweep before zone entry (19:00 H1 / 19:45 M15 low)",
+      "Price in Discount",
+      "Valid OB identified (M15 19:45)",
+      "FVG (imbalance) overlaps demand zone",
+      "Strong bullish reaction on 20:00 M15/H1"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
