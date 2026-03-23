@@ -3091,5 +3091,33 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774233187",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-23 02:33",
+    "ist_time": "08:03",
+    "zone_level": 68272.46484,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "68272.46484",
+    "sl": 68486.77,
+    "tp1": 67466.71,
+    "tp2": 67000.0,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 BOS confirmed bearish trend leg (68411 to 67466)",
+      "Price in H1 Premium for short",
+      "Valid Bearish OB identified at zone (H1 22:00/23:00 candle region)",
+      "Zone is fresh, not alerted recently",
+      "Internal M15 liquidity (previous highs) swept before tapping zone",
+      "Entry is in a premium zone for short",
+      "RR at least 2:1 achievable",
+      "No high-impact news in next 2 hours"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
