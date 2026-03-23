@@ -4209,5 +4209,33 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "NZDUSD_1774279954",
+    "alert_type": "zone",
+    "pair": "NZDUSD",
+    "timestamp_utc": "2026-03-23 15:32",
+    "ist_time": "21:02",
+    "zone_level": 0.58743,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 0.58822,
+    "sl": 0.58919,
+    "tp1": 0.58507,
+    "tp2": 0.58326,
+    "confidence_score": 8,
+    "confluences": [
+      "Price rejected Supply/Resistance zone at 0.58743",
+      "M15 CHoCH confirmed with 15:15 UTC candle breaking previous lows",
+      "Price is in a premium zone for shorting on H1 impulse",
+      "Liquidity swept above the supply zone with H1/M15 highs (0.58869)",
+      "Valid bearish Order Block identified for retest entry",
+      "Risk-reward of 2:1 or better is achievable"
+    ],
+    "trigger": "M15 price retests the OB after the confirmed CHoCH with a bearish candle entry confirmation.",
+    "invalid_if": "Price closes above 0.58919 before entry or fails to retest the OB/FVG area.",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
