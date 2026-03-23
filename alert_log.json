@@ -958,16 +958,16 @@
       "Entry planned in a Premium zone relative to recent H1 swing.",
       "H4/D1 trend structure aligns with the bearish direction."
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 0.5821,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "SILVER_1773729105",
@@ -1042,16 +1042,16 @@
       "Bearish FVG (M15 07:15-07:45) overlaps OB",
       "Local liquidity swept before entry (M15 07:15 H)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 73889.75781,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "EURUSD_1773738080",
@@ -1179,16 +1179,16 @@
       "Prior liquidity sweep near the zone (H1 15:00 high at 74816.50)",
       "Excellent risk-reward ratio (>10:1 for TP1)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 74089.37,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1773817430",
@@ -1210,16 +1210,16 @@
       "Price retracing into premium for short setup",
       "H1 BOS confirms potential bearish trend continuation after retracement"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 74179.29,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "NAS100_1773817478",
@@ -1243,16 +1243,16 @@
       "Zone Freshness",
       "RR at least 2:1 achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 24638.21,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "SILVER_1773817541",
@@ -1276,16 +1276,16 @@
       "Bearish FVG overlaps OB",
       "Zone freshness confirmed (alerted 0 times in 30 days)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 78.22,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1773819110",
@@ -1308,16 +1308,16 @@
       "Price entering a discount zone",
       "RR at least 2:1 achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 73978.35156,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1773822730",
@@ -1342,16 +1342,16 @@
       "Price is in a discount zone for long",
       "At least 2:1 RR achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 73689.23438,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "GOLD_1773822733",
@@ -1402,16 +1402,16 @@
       "Zone is fresh, alerted 0 times in 30 days",
       "RR at least 2:1 achievable for TP2"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 79.905,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "EURUSD_1773824468",
@@ -1463,16 +1463,16 @@
       "Strong RR potential (5:1+)",
       "Zone freshness"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 0.5856,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1773828114",
@@ -1496,16 +1496,16 @@
       "Zone is fresh, no recent alerts",
       "RR at least 2:1 achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 73940.07,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "GOLD_1773833522",
@@ -1580,16 +1580,16 @@
       "Liquidity swept above zone prior to drop",
       "Price entering Premium zone for short entry"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 72893.62,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "GOLD_1773835339",
@@ -1741,16 +1741,16 @@
       "Recent price action shows liquidity sweep on approach to the zone.",
       "Favorable Risk-Reward ratio achievable at TP1 and TP2."
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 0.583,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "SILVER_1773840760",
@@ -1878,16 +1878,16 @@
       "Valid OB identified at zone",
       "RR at least 2:1 achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 77.275,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1773858701",
@@ -1911,16 +1911,16 @@
       "Zone freshness confirmed",
       "RR at least 2:1 achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 70928.14,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "NAS100_1773858759",
@@ -1944,16 +1944,16 @@
       "Fresh demand zone alerted, no recent retests beyond initial tap",
       "Favorable Risk/Reward (3.52 at TP1, 6.54 at TP2) achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 24562.4,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "EURUSD_1773860462",
@@ -2107,16 +2107,16 @@
       "Demand zone freshness (first alert in 30 days)",
       "RR at least 2:1 achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 74.515,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1773891107",
@@ -2140,16 +2140,16 @@
       "Liquidity swept below zone",
       "Excellent risk-reward potential"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 71148.03906,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "GOLD_1773896537",
@@ -2172,16 +2172,16 @@
       "Valid H1 22:00 bullish Order Block (4806.00-4828.00) is present at the demand zone.",
       "Excellent risk-reward ratio achievable for both TP1 and TP2 targets."
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 4801.0,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "GOLD_1773905524",
@@ -2256,16 +2256,16 @@
       "Bullish FVG (70007.54688-70037.36719) identified overlapping OB",
       "Favorable Risk/Reward (2.0:1 for TP1 and 2.9:1 for TP2)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 69444.03125,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "USDJPY_1773910863",
@@ -2522,16 +2522,16 @@
       "Price is currently trading in a discount zone on the higher timeframe.",
       "A valid Order Block (OB) is identified at the zone."
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 158.155,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1773932653",
@@ -2580,16 +2580,16 @@
       "Valid OB and FVG overlap for entry",
       "Price in Premium zone for short"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 0.5854,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1773934445",
@@ -2667,16 +2667,16 @@
       "Local liquidity sweep (15:00 H1 high taken out)",
       "RR at least 2:1 achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 71.7,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1773943313",
@@ -2700,16 +2700,16 @@
       "Liquidity swept below OB/demand zone",
       "High RR potential (>2:1)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 69981.78,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "EURUSD_1773950536",
@@ -2733,16 +2733,16 @@
       "Zone is fresh, not recently traded",
       "Risk/Reward ratio of at least 2:1 achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 1.1558,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "USDJPY_1773955887",
@@ -2798,16 +2798,16 @@
       "Fresh supply zone",
       "M15 CHoCH confirmed"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 1.15681,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "USDJPY_1773963101",
@@ -2832,16 +2832,16 @@
       "Entry aligns with Premium for short trade",
       "RR at least 2:1 achievable at TP1"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 158.43,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "EURUSD_1773966691",
@@ -2866,16 +2866,16 @@
       "Achievable RR of 2:1 or greater for TP1",
       "No high-impact news in next 2 hours"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 1.15523,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "NZDUSD_1773990254",
@@ -2898,16 +2898,16 @@
       "Liquidity above recent highs (0.58837, 0.58862) to be swept before OB entry",
       "Favorable Risk/Reward (2:1+)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 0.587,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "NAS100_1773990326",
@@ -2930,16 +2930,16 @@
       "Fresh demand zone",
       "RR at least 2:1 achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 24216.69,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "EURUSD_1773991893",
@@ -2962,16 +2962,16 @@
       "Strong bullish momentum on 07:00 M15 candle",
       "Favorable Risk-Reward ratio for both TPs"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 1.15615,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "EURUSD_1773993661",
@@ -3074,16 +3074,16 @@
       "Bullish FVG (4697.10-4663.10) overlaps OB",
       "Zone alerted 0 times in 30 days (FRESH)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 4661.1,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "EURUSD_1774004459",
@@ -3131,16 +3131,16 @@
       "Liquidity swept prior to impulse",
       "Demand zone is fresh"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 24192.5,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1774006338",
@@ -3162,16 +3162,16 @@
       "Entry at Bearish OB in Premium",
       "High Risk-Reward ratio"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 70482.78906,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "USDJPY_1774008098",
@@ -3195,16 +3195,16 @@
       "Liquidity swept below the OB (08:15 M15 low 158.248) before impulse",
       "Strong RR > 2:1 achievable on TP1"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 158.86,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1774011720",
@@ -3226,16 +3226,16 @@
       "Valid H1 bullish Order Block identified",
       "Liquidity swept by OB prior to upward impulse"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 69665.95312,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "USDJPY_1774015262",
@@ -3285,16 +3285,16 @@
       "Entry in Premium zone for short",
       "RR at least 2:1 achievable"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 70.455,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "NZDUSD_1774017050",
@@ -3499,16 +3499,16 @@
       "Strong RR potential",
       "Awaiting M15 CHoCH"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 68192.75,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1774216935",
@@ -3532,16 +3532,16 @@
       "Fresh Supply Zone",
       "2.78 RR achievable to TP1"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 68564.1875,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1774218732",
@@ -3592,16 +3592,16 @@
       "RR of at least 2:1 achievable",
       "No high-impact news in next 2 hours"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 68.4,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "GOLD_1774220544",
@@ -3625,16 +3625,16 @@
       "Valid Bullish OB (M15 22:00 candle) at demand zone",
       "RR at least 2:1 achievable (2.4:1 for TP1)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 4485.0,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "BTCUSD_1774222252",
@@ -3684,16 +3684,16 @@
       "FVG (imbalance) overlaps demand zone",
       "Strong bullish reaction on 20:00 M15/H1"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 68086.375,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "USDJPY_1774227702",
@@ -3820,16 +3820,16 @@
       "Entry in discount zone relative to previous swing",
       "RR at least 2:1 achievable for TP2"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "win_tp1",
+    "outcome_price": 68364.66,
+    "outcome_checked_at": "2026-03-23 14:52",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
     "trigger_reasoning": "Skipped \u2014 missing data.",
     "invalid_candle_time": null,
     "invalid_reasoning": "Skipped.",
-    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "GOLD_1774231400",
@@ -3907,9 +3907,10 @@
       "RR at least 2:1 achievable",
       "No high-impact news in next 2 hours"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 68486.77,
+    "outcome_checked_at": "2026-03-23 14:52",
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "SILVER_1774234984",
@@ -3933,9 +3934,10 @@
       "FVG overlaps identified bearish Order Block",
       "Horizontal resistance at 65.55 aligns with bearish market flow"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 64.83,
+    "outcome_checked_at": "2026-03-23 14:52",
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "NZDUSD_1774247451",
@@ -4015,9 +4017,10 @@
       "Valid H1 OB (22-Mar 15:00 H1) containing the supply zone",
       "Zone freshness (0 times alerted in 30 days)"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 69015.57,
+    "outcome_checked_at": "2026-03-23 14:52",
+    "gemini_setup_note": "Outcome via SL/TP scan only \u2014 no trigger data saved at alert time."
   },
   {
     "id": "EURUSD_1774260064",
