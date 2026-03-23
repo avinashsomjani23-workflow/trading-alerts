@@ -145,7 +145,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "GOLD_1773302252",
@@ -285,7 +292,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773326365",
@@ -379,7 +393,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1773326478",
@@ -398,7 +419,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773337238",
@@ -467,7 +495,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773378352",
@@ -486,7 +521,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773378391",
@@ -607,7 +649,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773388527",
@@ -626,7 +675,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1773388578",
@@ -723,7 +779,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NAS100_1773412341",
@@ -742,7 +805,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773421629",
@@ -785,7 +855,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NAS100_1773421693",
@@ -883,7 +960,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1773729105",
@@ -902,7 +986,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1773734483",
@@ -921,7 +1012,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773736391",
@@ -946,7 +1044,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1773738080",
@@ -965,7 +1070,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773739924",
@@ -984,7 +1096,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773761557",
@@ -1003,7 +1122,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1773804550",
@@ -1022,7 +1148,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773804710",
@@ -1048,7 +1181,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773817430",
@@ -1072,7 +1212,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NAS100_1773817478",
@@ -1098,7 +1245,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1773817541",
@@ -1124,7 +1278,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773819110",
@@ -1149,7 +1310,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773822730",
@@ -1176,7 +1344,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "GOLD_1773822733",
@@ -1195,7 +1370,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1773822785",
@@ -1222,7 +1404,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1773824468",
@@ -1241,7 +1430,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773826294",
@@ -1269,7 +1465,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773828114",
@@ -1295,7 +1498,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "GOLD_1773833522",
@@ -1314,7 +1524,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1773835264",
@@ -1333,7 +1550,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773835336",
@@ -1358,7 +1582,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "GOLD_1773835339",
@@ -1377,7 +1608,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773837054",
@@ -1396,7 +1634,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773837057",
@@ -1415,7 +1660,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "GOLD_1773837061",
@@ -1434,7 +1686,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1773838865",
@@ -1453,7 +1712,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773840704",
@@ -1477,7 +1743,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1773840760",
@@ -1496,7 +1769,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773842470",
@@ -1515,7 +1795,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NAS100_1773844599",
@@ -1534,7 +1821,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773847913",
@@ -1553,7 +1847,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1773847986",
@@ -1579,7 +1880,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773858701",
@@ -1605,7 +1913,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NAS100_1773858759",
@@ -1631,7 +1946,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1773860462",
@@ -1650,7 +1972,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "USDJPY_1773860464",
@@ -1669,7 +1998,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773862253",
@@ -1688,7 +2024,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773862256",
@@ -1707,7 +2050,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NAS100_1773862259",
@@ -1726,7 +2076,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1773874939",
@@ -1752,7 +2109,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773891107",
@@ -1778,7 +2142,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "GOLD_1773896537",
@@ -1803,7 +2174,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "GOLD_1773905524",
@@ -1822,7 +2200,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1773907260",
@@ -1841,7 +2226,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773909124",
@@ -1866,7 +2258,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "USDJPY_1773910863",
@@ -1885,7 +2284,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "USDJPY_1773925263",
@@ -1904,7 +2310,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773927189",
@@ -1923,7 +2336,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1773927195",
@@ -1942,7 +2362,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "USDJPY_1773928939",
@@ -1961,7 +2388,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773928981",
@@ -1980,7 +2414,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773928987",
@@ -1999,7 +2440,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1773929053",
@@ -2018,7 +2466,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773930911",
@@ -2037,7 +2492,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "USDJPY_1773932523",
@@ -2062,7 +2524,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773932653",
@@ -2081,7 +2550,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773934296",
@@ -2106,7 +2582,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773934445",
@@ -2125,7 +2608,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773937858",
@@ -2144,7 +2634,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1773939886",
@@ -2172,7 +2669,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773943313",
@@ -2198,7 +2702,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1773950536",
@@ -2224,7 +2735,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "USDJPY_1773955887",
@@ -2249,7 +2767,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1773961314",
@@ -2275,7 +2800,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "USDJPY_1773963101",
@@ -2302,7 +2834,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1773966691",
@@ -2329,7 +2868,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773990254",
@@ -2354,7 +2900,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NAS100_1773990326",
@@ -2379,7 +2932,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1773991893",
@@ -2404,7 +2964,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1773993661",
@@ -2423,7 +2990,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1773993717",
@@ -2442,7 +3016,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1773995559",
@@ -2461,7 +3042,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "GOLD_1774000986",
@@ -2488,7 +3076,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "EURUSD_1774004459",
@@ -2507,7 +3102,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NAS100_1774004515",
@@ -2531,7 +3133,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1774006338",
@@ -2555,7 +3164,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "USDJPY_1774008098",
@@ -2581,7 +3197,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1774011720",
@@ -2605,7 +3228,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "USDJPY_1774015262",
@@ -2624,7 +3254,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1774015330",
@@ -2650,7 +3287,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1774017050",
@@ -2669,7 +3313,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NAS100_1774017052",
@@ -2688,7 +3339,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1774017055",
@@ -2707,7 +3365,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1774018869",
@@ -2726,7 +3391,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1774020655",
@@ -2745,7 +3417,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "USDJPY_1774022480",
@@ -2764,7 +3443,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1774022485",
@@ -2783,7 +3469,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1774215133",
@@ -2808,7 +3501,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1774216935",
@@ -2834,7 +3534,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1774218732",
@@ -2853,7 +3560,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1774218816",
@@ -2880,7 +3594,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "GOLD_1774220544",
@@ -2906,7 +3627,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1774222252",
@@ -2925,7 +3653,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1774224183",
@@ -2951,7 +3686,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "USDJPY_1774227702",
@@ -2970,7 +3712,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "NZDUSD_1774229486",
@@ -2989,7 +3738,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "GOLD_1774229548",
@@ -3008,7 +3764,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1774229550",
@@ -3027,7 +3790,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1774231396",
@@ -3052,7 +3822,14 @@
     ],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "GOLD_1774231400",
@@ -3071,7 +3848,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "SILVER_1774231403",
@@ -3090,7 +3874,14 @@
     "confluences": [],
     "outcome": "pending",
     "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome_checked_at": null,
+    "trigger_met": false,
+    "trigger_candle_time": null,
+    "trigger_confidence": "unknown",
+    "trigger_reasoning": "Skipped \u2014 missing data.",
+    "invalid_candle_time": null,
+    "invalid_reasoning": "Skipped.",
+    "gemini_setup_note": "Trigger or invalid_if text missing from alert \u2014 cannot evaluate."
   },
   {
     "id": "BTCUSD_1774233187",
