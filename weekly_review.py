@@ -301,7 +301,7 @@ def update_outcomes():
             if not (4 <= age_hours <= 336):
                 continue
 
-          print(f"    Evaluating {alert['pair']} ({alert['timestamp_utc']})...")
+         print(f"    Evaluating {alert['pair']} ({alert['timestamp_utc']})...")
             has_trigger_data = bool(alert.get('trigger','').strip()) and bool(alert.get('invalid_if','').strip())
 
             if not has_trigger_data:
