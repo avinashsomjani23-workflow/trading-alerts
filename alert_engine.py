@@ -1070,6 +1070,8 @@ def log_alert(pair, zone_level, zone_label, current_price, data, alert_type="zon
         "tp2":              data.get("tp2",0) if data else 0,
         "confidence_score": data.get("confidence_score",0) if data else 0,
         "confluences":      data.get("confluences",[]) if data else [],
+        "trigger":          data.get("trigger","") if data else "",
+        "invalid_if":       data.get("invalid_if","") if data else "",
         "outcome":          "pending",
         "outcome_price":    None,
         "outcome_checked_at": None
