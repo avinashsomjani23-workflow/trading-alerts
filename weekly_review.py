@@ -301,7 +301,23 @@ def update_outcomes():
             if not (4 <= age_hours <= 336):
                 continue
 
-            print(f"    Evaluating {alert['pair']} ({alert['timestamp_utc']})...")
+          print(f"    Evaluating {alert['pair']} ({alert['timestamp_utc']})...")
+            has_trigger_data = bool(alert.get('trigger','').strip()) and bool(alert.get('invalid_if','').strip())
+
+            if not has_trigger_data:
+                print(f"      → No trigger/invalid_if saved. Running SL/TP scan only (fallback).")
+                outcome, outcome_price = check_sl_tp_outcome(alert)
+                if outcome != 'pending':
+                    alert['outcome']            = outcome
+                    alert['outcome_price']      = outcome_price
+                    alert['outcome_checked_at'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+                    alert['gemini_setup_note']  = "Outcome via SL/TP scan only — no trigger data saved at alert time."
+                    print(f"      → Fallback outcome: {outcome}")
+                    updated += 1
+                else:
+                    print(f"      → Fallback: SL/TP not yet hit. Staying pending.")
+                continue
+
             det = detect_trigger_and_invalidation(alert)
 
             # Store all detection fields on the alert record
