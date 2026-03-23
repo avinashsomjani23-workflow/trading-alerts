@@ -3119,5 +3119,31 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1774234984",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-23 03:03",
+    "ist_time": "08:33",
+    "zone_level": 65.55,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "66.530",
+    "sl": 67.15,
+    "tp1": 64.83,
+    "tp2": 64.05,
+    "confidence_score": 10,
+    "confluences": [
+      "H1 Bearish BOS confirmed",
+      "M15 CHoCH after pullback into supply",
+      "Liquidity swept above previous swing highs",
+      "Entry in Premium zone of recent bearish impulse",
+      "FVG overlaps identified bearish Order Block",
+      "Horizontal resistance at 65.55 aligns with bearish market flow"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
