@@ -4363,5 +4363,35 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774297923",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-23 20:32",
+    "ist_time": "02:02",
+    "zone_level": 70640.41895,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "70710.519535",
+    "sl": 70526.10938,
+    "tp1": 71170.86719,
+    "tp2": 71696.07812,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 BOS confirms overall bullish trend",
+      "Price in discount zone for long entry",
+      "Valid bullish OB at demand zone",
+      "Zone is fresh, not overused",
+      "Liquidity swept below previous M15 low before reaction",
+      "Entry on the correct side (discount)",
+      "RR at least 2:1 achievable for TP1",
+      "No high-impact news in next 2 hours"
+    ],
+    "trigger": "Price retests 50% OB midpoint (70710.519535) and shows bullish M15 candle closure above it.",
+    "invalid_if": "M15 candle closes below 70596.10938 (OB low).",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
