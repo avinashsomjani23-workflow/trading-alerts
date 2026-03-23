@@ -4307,5 +4307,61 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774294351",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-23 19:32",
+    "ist_time": "01:02",
+    "zone_level": 70640.07259,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "70633.38281",
+    "sl": 70344.92969,
+    "tp1": 71696.07812,
+    "tp2": 72500.0,
+    "confidence_score": 10,
+    "confluences": [
+      "H1 BOS confirms bullish trend",
+      "Price in Discount Zone",
+      "M15 CHoCH confirmed",
+      "Valid M15 OB identified",
+      "Bullish FVG overlaps with OB",
+      "Liquidity swept before zone entry",
+      "Excellent RR for TP1 and TP2"
+    ],
+    "trigger": "Bullish reversal candle on M15 upon re-entry into the zone.",
+    "invalid_if": "M15 candle closes below 70344.92969",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "NAS100_1774294404",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-23 19:33",
+    "ist_time": "01:03",
+    "zone_level": 24313.17383,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 24319.28906,
+    "sl": 24421.13086,
+    "tp1": 24098.68945,
+    "tp2": 23800.0,
+    "confidence_score": 8,
+    "confluences": [
+      "Supply zone identified",
+      "Liquidity swept above zone",
+      "Price in premium for short",
+      "Bearish FVG overlaps OB",
+      "RR at least 2:1 achievable"
+    ],
+    "trigger": "M15 bearish engulfing or pin bar candle pattern upon re-entry to FVG edge.",
+    "invalid_if": "Price closes M15 candle above OB high (24406.13) or continues rally without clear rejection at entry.",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
