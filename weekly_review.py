@@ -350,6 +350,20 @@ def update_outcomes():
             else:
                 print(f"      → Trigger not yet met. Staying pending.")
 
+            elif det['trigger_met']:
+                outcome, outcome_price = check_sl_tp_outcome(alert)
+                if outcome != 'pending':
+                    alert['outcome']            = outcome
+                    alert['outcome_price']      = outcome_price
+                    alert['outcome_checked_at'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+                    print(f"      → Trigger met ({det['trigger_confidence']} confidence). "
+                          f"Outcome: {outcome}")
+                    updated += 1
+                else:
+                    print(f"      → Trigger met, SL/TP not yet hit. Staying pending.")
+            else:
+                print(f"      → Trigger not yet met. Staying pending.")
+
         except Exception as e:
             print(f"  Update error {alert.get('pair','?')}: {e}")
 
