@@ -4158,5 +4158,32 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "NAS100_1774272798",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-23 13:33",
+    "ist_time": "19:03",
+    "zone_level": 24313.20215,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "24326.41016",
+    "sl": 24476.77539,
+    "tp1": 23835.89648,
+    "tp2": 23760.89258,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 bearish structural bias (retrace to supply)",
+      "Price in H1 Premium",
+      "Valid H1 Bearish OB at zone",
+      "Bearish FVG overlaps OB and zone",
+      "Entry at FVG top (potential rejection point)",
+      "RR at least 2:1 achievable",
+      "No high-impact news in next 2 hours"
+    ],
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
