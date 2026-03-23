@@ -4393,5 +4393,35 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "NAS100_1774303375",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-23 22:02",
+    "ist_time": "03:32",
+    "zone_level": 24104.87695,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 24104.87695,
+    "sl": 24083.68945,
+    "tp1": 24315.44727,
+    "tp2": 24461.91016,
+    "confidence_score": 8,
+    "confluences": [
+      "Price in discount",
+      "Valid M15 OB at zone",
+      "FVG overlaps OB",
+      "Liquidity swept before zone",
+      "Entry on correct side (Discount)",
+      "RR at least 2:1 achievable",
+      "Zone freshness",
+      "No high-impact news"
+    ],
+    "trigger": "M15 bullish CHoCH confirmation (break of immediate short-term M15 swing high) upon retest of demand zone",
+    "invalid_if": "Price breaks decisively below OB wick low (24098.68945) without a clear retest and CHoCH, or if a H1 bearish BOS is confirmed below current structure.",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
