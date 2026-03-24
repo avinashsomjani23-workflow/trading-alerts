@@ -4578,5 +4578,33 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774380723",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-24 19:32",
+    "ist_time": "01:02",
+    "zone_level": 69519.46562,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "69479.46875",
+    "sl": 69369.03125,
+    "tp1": 69700.34375,
+    "tp2": 70193.49219,
+    "confidence_score": 8,
+    "confluences": [
+      "Demand zone at 69519.46562",
+      "Price in Discount zone for long",
+      "H1 FVG (69479.46875 - 69795.57031) overlaps OB and demand zone",
+      "Liquidity swept to 68934.43750 before returning to zone",
+      "M15 Order Block identified near entry"
+    ],
+    "trigger": "M15 bullish CHoCH (close above recent swing high) after price taps into FVG / demand zone.",
+    "invalid_if": "Price closes below 69369.03125 (SL) without triggering bullish CHoCH.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
