@@ -1088,7 +1088,7 @@ def build_breakout_only_email_html(bo, pair, current_price, chart_b64=None):
 </html>"""
 
 # ── Log alert ─────────────────────────────────────────────────────────────────
-def log_alert(pair, zone_level, zone_label, current_price, data, alert_type="zone"):
+def log_alert(pair, zone_level, zone_label, current_price, data, alert_type="zone", geo_flag=False):
     ist_time = (datetime.utcnow()+timedelta(hours=5,minutes=30)).strftime("%H:%M")
     alert_log.append({
         "id":               f"{pair}_{int(datetime.utcnow().timestamp())}",
@@ -1107,6 +1107,7 @@ def log_alert(pair, zone_level, zone_label, current_price, data, alert_type="zon
         "confluences":      data.get("confluences",[]) if data else [],
         "trigger":          data.get("trigger","") if data else "",
         "invalid_if":       data.get("invalid_if","") if data else "",
+        "geo_flag":         geo_flag,
         "outcome":          "pending",
         "outcome_price":    None,
         "outcome_checked_at": None
