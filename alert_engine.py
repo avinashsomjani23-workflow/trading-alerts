@@ -520,7 +520,8 @@ Return ONLY raw JSON. No markdown. No code fences. No text outside the JSON.
   "fvg_bottom": 0.0,
   "fvg_type": "bullish or bearish",
   "fvg_confirmed": true,
-  "chart_annotations": [{{"label": "short label", "price": 0.0, "status": "confirmed or missing"}}]
+ "chart_annotations": [{{"label": "short label", "price": 0.0, "status": "confirmed or missing"}}],
+  "geo_flag": false
 }}"""
 
 # ── Gemini call ───────────────────────────────────────────────────────────────
