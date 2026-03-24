@@ -762,7 +762,8 @@ def insight_card(title, color, content):
 
 
 def build_weekly_email_html(data, weekly_alerts, wins, losses,
-                            invalidated_count, pending, win_rate):
+                            invalidated_count, pending, win_rate,
+                            analysis_run_time_ist="—"):
     ist_now    = (datetime.utcnow()+timedelta(hours=5,minutes=30)).strftime("%A, %d %b %Y")
     grade      = (data.get('overall_grade','—') or '—') if data else '—'
     grade_color = "#27ae60" if grade=="A" else "#f39c12" if grade in ("B","C") else "#e74c3c"
