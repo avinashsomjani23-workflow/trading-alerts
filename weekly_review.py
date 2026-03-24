@@ -424,7 +424,8 @@ def build_excel_journal(weekly_alerts, analysis):
         ("Win Rate (triggered trades only)", f"{wr}%",            None),
         ("Invalidated (not taken)",       inv_n,                   None),
         ("Invalidation Rate",             f"{inv_rate}%",          None),
-        ("Still Pending",                 pend_n,                  None),
+      ("Still Pending",                 pend_n,                  None),
+        ("Geo-Flagged Alerts",            len([a for a in weekly_alerts if a.get('geo_flag', False)]), None),
         ("Net Estimated P&L (USD)",       f"${net_pnl:+.2f}",      None),
         ("QUALITY METRICS",              None,                   C_SEC_BG),
         ("Avg R:R on Winning Trades",     f"{avg_rr}x",            None),
@@ -442,7 +443,7 @@ def build_excel_journal(weekly_alerts, analysis):
         ("Timing Observation",            safe('timing_observation'), None),
         ("Timing Recommendation",         safe('timing_recommendation'), None),
         ("Intraday vs Swing",             safe('intraday_vs_swing'), None),
-        ("Invalidation Insight",          safe('invalidation_insight'), None),
+        ("Geo-Flagged Insight",           safe('geo_insight'),          None),
         ("Streak Summary",                safe('streak_summary'),  None),
         ("Drawdown Flag",                 safe('drawdown_flag'),   None),
         ("Improvement Suggestion",        safe('improvement_suggestion'), None),
@@ -917,16 +918,17 @@ def send_weekly_email(html_body, excel_bytes, total, wins, losses,
 
 
 # ── MAIN ───────────────────────────────────────────────────────────────────────
-print(f"Weekly review started {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
-print("  Running outcome update (Gemini trigger detection + SL/TP check)...")
+analysis_run_time_ist = (datetime.utcnow() + timedelta(hours=5, minutes=30)).strftime("%H:%M IST, %d %b %Y")
+print(f"Weekly review started {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC | {analysis_run_time_ist}")
+print("  Running outcome update (SL/TP scan — 0 Gemini calls)...")
 update_outcomes()
 
 weekly_alerts = get_weekly_alerts()
 
 if not weekly_alerts:
     send_status_email(
-        "No alerts logged in the past 7 days. "
-        "System is still building history — expected in early weeks."
+        "No alerts found for the previous Mon–Fri trading week. "
+        "The system is monitoring — alerts will appear here once a full week has been captured."
     )
     exit(0)
 
@@ -965,7 +967,8 @@ excel_bytes = build_excel_journal(weekly_alerts, analysis)
 
 print("  Building email...")
 html = build_weekly_email_html(
-    analysis, weekly_alerts, wins, losses, invalidated_count, pending, win_rate
+    analysis, weekly_alerts, wins, losses, invalidated_count, pending, win_rate,
+    analysis_run_time_ist
 )
 
 send_weekly_email(html, excel_bytes, len(weekly_alerts),
