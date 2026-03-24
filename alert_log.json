@@ -4688,5 +4688,32 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "GOLD_1774391453",
+    "alert_type": "breakout",
+    "pair": "GOLD",
+    "timestamp_utc": "2026-03-24 22:30",
+    "ist_time": "04:00",
+    "zone_level": 4443.2002,
+    "zone_label": "BULLISH Breakout",
+    "bias": "LONG",
+    "entry": 4456.38091,
+    "sl": 4416.83876,
+    "tp1": 4535.46521,
+    "tp2": 4575.00736,
+    "confidence_score": 4,
+    "confluences": [
+      "+2 H1 body closed above 4443.2002, candle 2.0x ATR",
+      "+0 Volume below 1.3x average",
+      "+1 Level tested 7 times before (well-established)",
+      "+1 Break direction matches 50-period MA trend"
+    ],
+    "trigger": "Wait for price to pull back into the retest zone (4430.01948 \u2013 4456.38091). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
+    "invalid_if": "Any H1 candle closes back below 4443.2002 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
