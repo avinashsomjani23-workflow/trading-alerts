@@ -4715,5 +4715,33 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "GOLD_1774393485",
+    "alert_type": "zone",
+    "pair": "GOLD",
+    "timestamp_utc": "2026-03-24 23:04",
+    "ist_time": "04:34",
+    "zone_level": 4478.3999,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "4479.55",
+    "sl": 4493.3,
+    "tp1": 4400.8,
+    "tp2": 4372.2,
+    "confidence_score": 8,
+    "confluences": [
+      "Price reacted to Supply/Resistance zone",
+      "M15 CHoCH confirms bearish shift",
+      "Liquidity swept above the zone (H:4492.29980)",
+      "Entry in Premium zone for a short",
+      "Achievable Risk/Reward of at least 2:1"
+    ],
+    "trigger": "M15 candle showing strong rejection from the OB (e.g., bearish engulfing or pin bar) confirming retest of the OB before entry.",
+    "invalid_if": "M15 candle closes above 4493.30 or if price fails to retest the OB for entry.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
