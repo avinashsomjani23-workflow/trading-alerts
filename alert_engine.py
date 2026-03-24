@@ -1242,8 +1242,21 @@ for pair_conf in config["pairs"]:
             _ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
             subject = f"[BO {breakout['bo_score']}/5] {name} | {breakout['direction']} Breakout | {round(breakout['broken_level'],5)} | {_ist_now.strftime('%H:%M')} IST"
             send_email(subject, html, bo_chart)
+           bo_bias = "LONG" if breakout["direction"] == "BULLISH" else "SHORT"
+            bo_data = {
+                "bias":             bo_bias,
+                "entry":            breakout.get("retest_entry", 0),
+                "sl":               breakout.get("sl_retest", 0),
+                "tp1":              breakout.get("tp1_retest", 0),
+                "tp2":              breakout.get("tp2_retest", 0),
+                "confidence_score": breakout.get("bo_score", 0),
+                "confluences":      breakout.get("bo_reasons", []),
+                "trigger":          breakout.get("trigger_text", ""),
+                "invalid_if":       breakout.get("invalid_if_text", ""),
+            }
             log_alert(name, breakout["broken_level"], f"{breakout['direction']} Breakout",
-                      round(current_price,5), None, "breakout")
+                      round(current_price,5), bo_data, "breakout",
+                      geo_flag=detect_geo_flag_phrases(macro_news))
             record_breakout_alert(name, breakout["broken_level"], current_price)
             alerts_fired += 1
             print(f"    Sent standalone breakout: {name} [{breakout['bo_score']}/5]")
