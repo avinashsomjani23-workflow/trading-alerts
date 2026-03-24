@@ -498,7 +498,7 @@ def build_excel_journal(weekly_alerts, analysis):
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = 'A3'
 
-    # (column_name, width, group_colour)
+   # (column_name, width, group_colour)
     columns = [
         # IDENTITY (1-5)
         ("Date (IST)",                16, C_ID),
@@ -520,17 +520,15 @@ def build_excel_journal(weekly_alerts, analysis):
         ("Risk:Reward (TP1)",         16, C_RISK),
         ("Lot Size",                  11, C_RISK),
         ("Risk (USD)",                12, C_RISK),
-        # TRIGGER & INVALIDATION (18-21)
-        ("Trigger Met",               13, C_TRIG),
-        ("Trigger Candle Time",       20, C_TRIG),
-        ("Trigger Confidence",        17, C_TRIG),
-        ("Invalidated",               13, C_TRIG),
-        # OUTCOME (22-25)
+        # GEO & CONTEXT (18-19)
+        ("Geo Flag",                  12, C_TRIG),
+        ("Outcome Method",            18, C_TRIG),
+        # OUTCOME (20-23)
         ("Outcome",                   14, C_OUT),
         ("Outcome Price",             14, C_OUT),
         ("Points +/-",                13, C_OUT),
         ("Est. P&L (USD)",            14, C_OUT),
-        # LEARNING (26-30)
+        # LEARNING (24-28)
         ("Gemini Setup Note",         42, C_LEARN),
         ("Session Note",              36, C_LEARN),
         ("Lesson",                    36, C_LEARN),
@@ -540,12 +538,12 @@ def build_excel_journal(weekly_alerts, analysis):
 
     # Group header row (row 1)
     groups = [
-        ("IDENTITY",               1,  5,  C_ID),
-        ("SETUP QUALITY",          6,  10, C_SETUP),
-        ("RISK LEVELS",            11, 17, C_RISK),
-        ("TRIGGER & INVALIDATION", 18, 21, C_TRIG),
-        ("OUTCOME",                22, 25, C_OUT),
-        ("LEARNING",               26, 30, C_LEARN),
+        ("IDENTITY",      1,  5,  C_ID),
+        ("SETUP QUALITY", 6,  10, C_SETUP),
+        ("RISK LEVELS",   11, 17, C_RISK),
+        ("GEO & CONTEXT", 18, 19, C_TRIG),
+        ("OUTCOME",       20, 23, C_OUT),
+        ("LEARNING",      24, 28, C_LEARN),
     ]
     for grp, c_start, c_end, grp_col in groups:
         sl = get_column_letter(c_start)
@@ -571,20 +569,16 @@ def build_excel_journal(weekly_alerts, analysis):
         ws.column_dimensions[lt].width = col_w
     ws.row_dimensions[2].height = 36
 
-    # Data rows starting from row 3
+# Data rows starting from row 3
     dr = 3
     for a in weekly_alerts:
         outcome   = a.get('outcome', 'pending')
-        trig_conf = (a.get('trigger_confidence') or 'unknown').lower()
 
         # Row background
         if   outcome == 'win_tp1':    row_bg = C_WIN
         elif outcome == 'loss':       row_bg = C_LOSS
         elif outcome == 'invalidated':row_bg = C_INVALID
         else:                         row_bg = C_PENDING
-        # Amber override for low-confidence trigger detection
-        if trig_conf == 'low' and outcome not in ('invalidated','pending'):
-            row_bg = C_LOWCONF
 
         pnl_usd, pts_str = estimate_pnl(a)
 
@@ -644,8 +638,8 @@ def build_excel_journal(weekly_alerts, analysis):
             'pending':    'PENDING'
         }.get(outcome, outcome.upper())
 
-        trig_met_lbl  = {True:'YES', False:'NO', None:'UNKNOWN'}.get(a.get('trigger_met'), 'UNKNOWN')
-        inv_lbl       = 'YES' if outcome == 'invalidated' else 'NO'
+       geo_lbl        = "YES ⚑" if a.get('geo_flag', False) else "NO"
+        outcome_method = "SL/TP Scan" if outcome in ('win_tp1', 'loss') else "—"
         pnl_display   = f"${pnl_usd:+.2f}" if pnl_usd != 0.0 else "—"
         op            = a.get('outcome_price')
         op_str        = str(round(float(op), 5)) if op is not None else "—"
@@ -657,7 +651,7 @@ def build_excel_journal(weekly_alerts, analysis):
         setup_note   = a.get('gemini_setup_note','')
         session_note = a.get('session_note', setup_note)
 
-        row_vals = [
+       row_vals = [
             date_str,                              # 1  Date (IST)
             a.get('pair',''),                      # 2  Pair
             session,                               # 3  Session
@@ -675,19 +669,17 @@ def build_excel_journal(weekly_alerts, analysis):
             rr_str,                                # 15 Risk:Reward (TP1)
             lot_str,                               # 16 Lot Size
             f"${RISK_PER_TRADE:.0f}",              # 17 Risk (USD)
-            trig_met_lbl,                          # 18 Trigger Met
-            a.get('trigger_candle_time','—') or '—', # 19 Trigger Candle Time
-            trig_conf.upper(),                     # 20 Trigger Confidence
-            inv_lbl,                               # 21 Invalidated
-            outcome_label,                         # 22 Outcome
-            op_str,                                # 23 Outcome Price
-            pts_str,                               # 24 Points +/-
-            pnl_display,                           # 25 Est. P&L (USD)
-            setup_note,                            # 26 Gemini Setup Note
-            session_note,                          # 27 Session Note
-            a.get('lesson',''),                    # 28 Lesson
-            a.get('system_flag',''),               # 29 System Flag
-            a.get('why_taken',''),                 # 30 Why This Trade Was Taken
+            geo_lbl,                               # 18 Geo Flag
+            outcome_method,                        # 19 Outcome Method
+            outcome_label,                         # 20 Outcome
+            op_str,                                # 21 Outcome Price
+            pts_str,                               # 22 Points +/-
+            pnl_display,                           # 23 Est. P&L (USD)
+            setup_note,                            # 24 Gemini Setup Note
+            session_note,                          # 25 Session Note
+            a.get('lesson',''),                    # 26 Lesson
+            a.get('system_flag',''),               # 27 System Flag
+            a.get('why_taken',''),                 # 28 Why This Trade Was Taken
         ]
 
         for ci, val in enumerate(row_vals, start=1):
@@ -699,23 +691,21 @@ def build_excel_journal(weekly_alerts, analysis):
             cell.alignment = align()
             bc(cell)
 
-            # Column-specific formatting
+           # Column-specific formatting
             if ci == 7:   # Confidence score
                 conf = a.get('confidence_score', 0)
                 cell.font = cfont(bold=True, size=9,
                     color=("27AE60" if conf>=8 else "F39C12" if conf>=6 else "E74C3C"))
-            if ci == 18:  # Trigger Met
+            if ci == 18:  # Geo Flag
                 cell.font = cfont(bold=True, size=9,
-                    color=("1E8449" if trig_met_lbl=='YES' else
-                           "C0392B" if trig_met_lbl=='NO' else "888888"))
-            if ci == 22:  # Outcome
+                    color=("E74C3C" if a.get('geo_flag', False) else "888888"))
+            if ci == 20:  # Outcome
                 clr = {"WIN (TP1)":"1E8449","LOSS (SL)":"C0392B",
                        "INVALIDATED":"E67E22","PENDING":"888888"}
                 cell.font = cfont(bold=True, size=9, color=clr.get(outcome_label,"000000"))
-            if ci == 25:  # Est. P&L
+            if ci == 23:  # Est. P&L
                 cell.font = cfont(bold=True, size=9,
                     color=("1E8449" if pnl_usd>0 else "C0392B" if pnl_usd<0 else "888888"))
-
         ws.row_dimensions[dr].height = 58
         dr += 1
 
@@ -729,12 +719,12 @@ def build_excel_journal(weekly_alerts, analysis):
     ws[f'A{dr}'].alignment = align()
     dr += 1
 
-    legend = [
-        (C_WIN,     "Green  — Trade triggered and won (TP1 hit). Counted in win rate."),
-        (C_LOSS,    "Red    — Trade triggered and lost (SL hit). Counted in win rate."),
-        (C_INVALID, "Orange — Setup invalidated before trigger. NOT counted in win rate."),
-        (C_LOWCONF, "Amber  — Low-confidence trigger detection. Verify this row manually."),
+legend = [
+        (C_WIN,     "Green  — Trade resolved: TP1 hit (win). Counted in win rate."),
+        (C_LOSS,    "Red    — Trade resolved: SL hit (loss). Counted in win rate."),
+        (C_INVALID, "Orange — Outcome invalidated or not taken. Not counted in win rate."),
         (C_PENDING, "White  — Outcome still pending resolution."),
+    ]
     ]
     for leg_bg, leg_text in legend:
         ws.merge_cells(f'A{dr}:F{dr}')
@@ -797,9 +787,10 @@ def build_weekly_email_html(data, weekly_alerts, wins, losses,
 <div style="max-width:640px;margin:auto;background:white;border-radius:14px;
      overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.12);">
 
-  <div style="background:#1a1a2e;padding:20px 24px;">
+<div style="background:#1a1a2e;padding:20px 24px;">
     <h2 style="color:white;margin:0;font-size:18px;">Weekly Trading Review</h2>
     <p style="color:#8899bb;margin:5px 0 0;font-size:12px;">{ist_now}</p>
+    <p style="color:#445566;margin:3px 0 0;font-size:11px;">Analysis generated: {analysis_run_time_ist}</p>
   </div>
 
   <div style="display:flex;background:#f8f9fa;border-bottom:1px solid #eee;flex-wrap:wrap;">
@@ -850,7 +841,7 @@ def build_weekly_email_html(data, weekly_alerts, wins, losses,
     {insight_card("TIMING CLUSTERS", "#f39c12", safe('timing_observation'))}
     {insight_card("TIMING RECOMMENDATION", "#e67e22", safe('timing_recommendation'))}
     {insight_card("INTRADAY vs SWING", "#9b59b6", safe('intraday_vs_swing'))}
-    {insight_card("INVALIDATION INSIGHT", "#e67e22", safe('invalidation_insight'))}
+    {insight_card("GEO-FLAGGED vs CLEAN TECHNICAL", "#e67e22", safe('geo_insight'))}
     {insight_card("STREAK AWARENESS", "#9b59b6", safe('streak_summary'))}
 
     <div style="background:#fff8f0;padding:13px 15px;border-radius:10px;
