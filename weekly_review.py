@@ -164,10 +164,24 @@ def update_outcomes():
     print(f"  Updated {updated} outcomes (Python SL/TP scan — 0 Gemini calls)")
 
 def get_weekly_alerts():
-    cutoff = datetime.utcnow() - timedelta(days=7)
+    """
+    Returns alerts from the previous trading week: Mon 00:00 IST to Fri 23:59 IST.
+    Always reviews the Mon-Fri week that has fully completed.
+    Safe to run on any day — always resolves to the most recent complete Mon-Fri.
+    """
+    ist_now             = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    days_to_this_monday = ist_now.weekday()  # Monday=0, Tuesday=1, ...
+    this_monday_ist     = ist_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_to_this_monday)
+    last_monday_ist     = this_monday_ist - timedelta(days=7)
+    last_friday_ist     = last_monday_ist + timedelta(days=4, hours=23, minutes=59, seconds=59)
+    last_monday_utc     = last_monday_ist - timedelta(hours=5, minutes=30)
+    last_friday_utc     = last_friday_ist - timedelta(hours=5, minutes=30)
+
     weekly = [a for a in alert_log
-              if datetime.strptime(a['timestamp_utc'], "%Y-%m-%d %H:%M") >= cutoff]
-    print(f"  {len(weekly)} alerts in last 7 days")
+              if last_monday_utc
+              <= datetime.strptime(a['timestamp_utc'], "%Y-%m-%d %H:%M")
+              <= last_friday_utc]
+    print(f"  {len(weekly)} alerts | window: {last_monday_ist.strftime('%d %b %Y')} (Mon) to {last_friday_ist.strftime('%d %b %Y')} (Fri)")
     return weekly
 
 
