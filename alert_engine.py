@@ -1215,7 +1215,7 @@ for pair_conf in config["pairs"]:
             subject = f"[SMC {score}/10 + BO {breakout['bo_score']}/5] {name} | {zone_label} | {datetime.utcnow().strftime('%H:%M')} UTC"
 
         send_email(subject, html, chart1, chart2)
-       log_alert(name, round(zone_level,5), zone_label, round(current_price,5), data, "zone", geo_flag=bool(data.get('geo_flag', False)))
+        log_alert(name, round(zone_level,5), zone_label, round(current_price,5), data, "zone", geo_flag=bool(data.get('geo_flag', False)))
         record_zone_alert(name, zone_level, current_price)
         if breakout:
             record_breakout_alert(name, breakout["broken_level"], current_price)
@@ -1241,7 +1241,7 @@ for pair_conf in config["pairs"]:
             _ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
             subject = f"[BO {breakout['bo_score']}/5] {name} | {breakout['direction']} Breakout | {round(breakout['broken_level'],5)} | {_ist_now.strftime('%H:%M')} IST"
             send_email(subject, html, bo_chart)
-           bo_bias = "LONG" if breakout["direction"] == "BULLISH" else "SHORT"
+            bo_bias = "LONG" if breakout["direction"] == "BULLISH" else "SHORT"
             bo_data = {
                 "bias":             bo_bias,
                 "entry":            breakout.get("retest_entry", 0),
