@@ -4158,9 +4158,9 @@
       "Fresh Supply zone identified",
       "Valid Bearish OB identified"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 71219.43,
+    "outcome_checked_at": "2026-03-24 11:00"
   },
   {
     "id": "NAS100_1774272798",
@@ -4234,9 +4234,9 @@
     ],
     "trigger": "M15 price retests the OB after the confirmed CHoCH with a bearish candle entry confirmation.",
     "invalid_if": "Price closes above 0.58919 before entry or fails to retest the OB/FVG area.",
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 0.58507,
+    "outcome_checked_at": "2026-03-24 11:00"
   },
   {
     "id": "USDJPY_1774281718",
@@ -4283,9 +4283,9 @@
     ],
     "trigger": "Price must drop to entry 1.15754, then M15 bullish engulfing or pin bar rejection candle from FVG/OB.",
     "invalid_if": "Price breaks and closes below SL at 1.15517 or fails to show a clear bullish rejection at entry.",
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 1.16144,
+    "outcome_checked_at": "2026-03-24 11:00"
   },
   {
     "id": "BTCUSD_1774283514",
@@ -4333,9 +4333,9 @@
     ],
     "trigger": "Bullish reversal candle on M15 upon re-entry into the zone.",
     "invalid_if": "M15 candle closes below 70344.92969",
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 70344.92969,
+    "outcome_checked_at": "2026-03-24 11:00"
   },
   {
     "id": "NAS100_1774294404",
@@ -4390,9 +4390,9 @@
     ],
     "trigger": "Price retests 50% OB midpoint (70710.519535) and shows bullish M15 candle closure above it.",
     "invalid_if": "M15 candle closes below 70596.10938 (OB low).",
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 70526.10938,
+    "outcome_checked_at": "2026-03-24 11:00"
   },
   {
     "id": "NAS100_1774303375",
