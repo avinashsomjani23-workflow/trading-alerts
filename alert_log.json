@@ -4423,5 +4423,26 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "EURUSD_1774339260",
+    "alert_type": "breakout",
+    "pair": "EURUSD",
+    "timestamp_utc": "2026-03-24 08:01",
+    "ist_time": "13:31",
+    "zone_level": 1.15835,
+    "zone_label": "BULLISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "trigger": "",
+    "invalid_if": "",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
