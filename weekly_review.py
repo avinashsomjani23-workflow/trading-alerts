@@ -40,32 +40,6 @@ def clean_df(df):
         df.columns = [col[0] for col in df.columns]
     return df
 
-
-def format_candles_for_review(df, label, alert_time, n=60):
-    """Returns formatted candle string + count of candles strictly after alert_time."""
-    if df is None or df.empty:
-        return f"{label}: No data\n", 0
-    result = f"{label} candles after alert ({alert_time.strftime('%Y-%m-%d %H:%M')} UTC):\n"
-    count  = 0
-    for i in range(len(df)):
-        try:
-            ts   = df.index[i]
-            ts_n = ts.replace(tzinfo=None) if hasattr(ts, 'tzinfo') and ts.tzinfo else ts
-            if ts_n < alert_time:
-                continue
-            tss = ts.strftime('%Y-%m-%d %H:%M') if hasattr(ts, 'strftime') else str(ts)[:16]
-            result += (f"{tss}  O:{float(df['Open'].iloc[i]):.5f} "
-                       f"H:{float(df['High'].iloc[i]):.5f} "
-                       f"L:{float(df['Low'].iloc[i]):.5f} "
-                       f"C:{float(df['Close'].iloc[i]):.5f}\n")
-            count += 1
-            if count >= n:
-                break
-        except Exception:
-            continue
-    return result, count
-
-
 def get_session(utc_hour):
     if   2  <= utc_hour < 8:  return "Asian"
     elif 8  <= utc_hour < 13: return "London"
@@ -94,141 +68,6 @@ def call_gemini(prompt, retries=1):
                 time.sleep(3)
             else:
                 return None, f"Gemini error: {str(e)}"
-
-
-# ── Trigger + Invalidation detection — Option 5 (Gemini reads actual candles) ─
-#
-# Logic:
-#   1. Fetch H1 + M15 candles after alert_time
-#   2. Send to Gemini: trigger_text, invalid_if text, actual candle data
-#   3. Gemini determines:
-#      a. Did the TRIGGER CONDITION form? (yes/no, timestamp, confidence)
-#      b. Did the INVALID-IF condition fire BEFORE the trigger? (yes/no, timestamp)
-#   4. Safety rule: if Gemini says both fired, the earlier timestamp wins
-#   5. If < 3 candles available after alert_time → stay pending (not enough data)
-#   6. Low-confidence rows are flagged in journal with amber highlighting
-#
-def detect_trigger_and_invalidation(alert):
-    """
-    Returns a dict with:
-      trigger_met, trigger_candle_time, trigger_confidence, trigger_reasoning,
-      invalidated, invalid_candle_time, invalid_reasoning, gemini_note
-    """
-    pair         = alert['pair']
-    symbol       = next((p['symbol'] for p in config['pairs'] if p['name'] == pair), None)
-    trigger_text = alert.get('trigger', '').strip()
-    invalid_text = alert.get('invalid_if', '').strip()
-    bias         = alert.get('bias', '')
-
-    blank = {
-        "trigger_met": False, "trigger_candle_time": None,
-        "trigger_confidence": "unknown", "trigger_reasoning": "Skipped — missing data.",
-        "invalidated": False, "invalid_candle_time": None,
-        "invalid_reasoning": "Skipped.", "gemini_note": ""
-    }
-
-    if not symbol or not trigger_text or not invalid_text:
-        blank["gemini_note"] = "Trigger or invalid_if text missing from alert — cannot evaluate."
-        return blank
-
-    try:
-        alert_time = datetime.strptime(alert['timestamp_utc'], "%Y-%m-%d %H:%M")
-
-        # Sequential fetch — yfinance NOT thread-safe
-        df1 = clean_df(yf.download(symbol,
-            start=alert_time.strftime('%Y-%m-%d'),
-            interval="1h", progress=False))
-        df2 = clean_df(yf.download(symbol,
-            start=alert_time.strftime('%Y-%m-%d'),
-            interval="15m", progress=False))
-
-        candles_h1,  count_h1  = format_candles_for_review(df1, "H1",  alert_time)
-        candles_m15, count_m15 = format_candles_for_review(df2, "M15", alert_time)
-
-        # Need at least 3 candles in at least one timeframe
-        if count_h1 < 3 and count_m15 < 3:
-            blank["gemini_note"] = "Fewer than 3 post-alert candles available — staying pending."
-            return blank
-
-        prompt = f"""You are reviewing a live trade alert to determine exactly two things:
-1. Did the TRIGGER CONDITION form in the candle data after the alert time?
-2. Did the INVALID-IF CONDITION fire BEFORE the trigger formed?
-
-PAIR: {pair} | BIAS: {bias}
-ALERT TIME: {alert['timestamp_utc']} UTC
-
-TRIGGER CONDITION — the exact candle pattern or price action required to enter this trade:
-"{trigger_text}"
-
-INVALID-IF CONDITION — the exact price action that cancels this setup before entry:
-"{invalid_text}"
-
-CANDLE DATA AFTER THE ALERT:
-{candles_h1}
-{candles_m15}
-
-INSTRUCTIONS:
-- Read BOTH conditions literally. Do not generalise or paraphrase them.
-- Scan candles in strict time order. The FIRST condition satisfied determines the outcome.
-- If invalid-if fired BEFORE the trigger formed → set invalidated=true, trigger_met=false.
-- If the trigger formed before or without the invalid-if firing → set trigger_met=true, invalidated=false.
-- If neither has clearly occurred in the available data → both false, gemini_note="pending".
-- Set trigger_confidence="low" if the candle data is ambiguous or the match is approximate.
-  Still record your best determination — just flag low confidence so the trader can verify.
-- Every timestamp you cite MUST appear in the candle data above. Never invent timestamps.
-
-Return ONLY raw JSON. No markdown. No code fences.
-{{
-  "trigger_met": false,
-  "trigger_candle_time": "YYYY-MM-DD HH:MM UTC or null",
-  "trigger_confidence": "high or medium or low",
-  "trigger_reasoning": "one sentence — cite the candle time and what it showed",
-  "invalidated": false,
-  "invalid_candle_time": "YYYY-MM-DD HH:MM UTC or null",
-  "invalid_reasoning": "one sentence — cite the candle time and what it showed",
-  "gemini_note": "one sentence summary of what happened to this setup after the alert"
-}}"""
-
-        result, err = call_gemini(prompt)
-        if err or result is None:
-            blank["gemini_note"] = f"Gemini detection failed: {err}"
-            return blank
-
-        trigger_met  = bool(result.get('trigger_met', False))
-        invalidated  = bool(result.get('invalidated', False))
-        trigger_time = result.get('trigger_candle_time')
-        invalid_time = result.get('invalid_candle_time')
-
-        # Safety: if Gemini says both fired, earlier timestamp wins
-        if trigger_met and invalidated:
-            try:
-                t_dt = datetime.strptime(trigger_time[:16], "%Y-%m-%d %H:%M") if trigger_time else None
-                i_dt = datetime.strptime(invalid_time[:16], "%Y-%m-%d %H:%M") if invalid_time else None
-                if t_dt and i_dt:
-                    invalidated = i_dt < t_dt
-                    trigger_met = not invalidated
-                elif i_dt:
-                    trigger_met = False
-                else:
-                    invalidated = False
-            except Exception:
-                invalidated = False
-
-        return {
-            "trigger_met":         trigger_met,
-            "trigger_candle_time": trigger_time,
-            "trigger_confidence":  result.get('trigger_confidence', 'unknown'),
-            "trigger_reasoning":   result.get('trigger_reasoning', ''),
-            "invalidated":         invalidated,
-            "invalid_candle_time": invalid_time,
-            "invalid_reasoning":   result.get('invalid_reasoning', ''),
-            "gemini_note":         result.get('gemini_note', '')
-        }
-
-    except Exception as e:
-        blank["gemini_note"] = f"Detection error: {str(e)}"
-        return blank
-
 
 # ── SL/TP outcome check — only runs after trigger confirmed ───────────────────
 def check_sl_tp_outcome(alert):
@@ -284,11 +123,9 @@ def check_sl_tp_outcome(alert):
 # ── Full outcome update pipeline ───────────────────────────────────────────────
 def update_outcomes():
     """
-    For each pending alert:
-    1. Gemini reads trigger + invalid_if text against actual post-alert candles
-    2. If invalid-if fired before trigger → 'invalidated' → excluded from win rate
-    3. If trigger confirmed → SL/TP scan from trigger candle time
-    4. If neither confirmed yet → stay pending
+    For each pending alert: pure Python SL/TP candle scan. No Gemini calls.
+    Scans H1 candles from alert_time. If SL hit first → loss. If TP1 hit first → win_tp1.
+    Alerts with no SL/TP (old breakouts logged with data=None) are skipped gracefully.
     Sequential yfinance fetches only — NOT thread-safe.
     """
     updated = 0
@@ -301,62 +138,30 @@ def update_outcomes():
             if not (4 <= age_hours <= 336):
                 continue
 
-            print(f"    Evaluating {alert['pair']} ({alert['timestamp_utc']})...")
-            has_trigger_data = bool(alert.get('trigger','').strip()) and bool(alert.get('invalid_if','').strip())
-
-            if not has_trigger_data:
-                print(f"      → No trigger/invalid_if saved. Running SL/TP scan only (fallback).")
-                outcome, outcome_price = check_sl_tp_outcome(alert)
-                if outcome != 'pending':
-                    alert['outcome']            = outcome
-                    alert['outcome_price']      = outcome_price
-                    alert['outcome_checked_at'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-                    alert['gemini_setup_note']  = "Outcome via SL/TP scan only — no trigger data saved at alert time."
-                    print(f"      → Fallback outcome: {outcome}")
-                    updated += 1
-                else:
-                    print(f"      → Fallback: SL/TP not yet hit. Staying pending.")
+            sl  = float(alert.get('sl',  0) or 0)
+            tp1 = float(alert.get('tp1', 0) or 0)
+            if sl <= 0 or tp1 <= 0:
+                print(f"    Skipping {alert['pair']} ({alert['timestamp_utc']}) — no SL/TP stored.")
                 continue
 
-            det = detect_trigger_and_invalidation(alert)
+            print(f"    Scanning {alert['pair']} ({alert['timestamp_utc']})...")
+            outcome, outcome_price = check_sl_tp_outcome(alert)
 
-            # Store all detection fields on the alert record
-            alert['trigger_met']          = det['trigger_met']
-            alert['trigger_candle_time']  = det['trigger_candle_time']
-            alert['trigger_confidence']   = det['trigger_confidence']
-            alert['trigger_reasoning']    = det['trigger_reasoning']
-            alert['invalid_candle_time']  = det['invalid_candle_time']
-            alert['invalid_reasoning']    = det['invalid_reasoning']
-            alert['gemini_setup_note']    = det['gemini_note']
-
-            if det['invalidated']:
-                alert['outcome']            = 'invalidated'
-                alert['outcome_price']      = None
+            if outcome != 'pending':
+                alert['outcome']            = outcome
+                alert['outcome_price']      = outcome_price
                 alert['outcome_checked_at'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-                print(f"      → INVALIDATED before trigger. {det['gemini_note']}")
+                print(f"      → {outcome} at {outcome_price}")
                 updated += 1
-
-            elif det['trigger_met']:
-                outcome, outcome_price = check_sl_tp_outcome(alert)
-                if outcome != 'pending':
-                    alert['outcome']            = outcome
-                    alert['outcome_price']      = outcome_price
-                    alert['outcome_checked_at'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-                    print(f"      → Trigger met ({det['trigger_confidence']} confidence). "
-                          f"Outcome: {outcome}")
-                    updated += 1
-                else:
-                    print(f"      → Trigger met, SL/TP not yet hit. Staying pending.")
             else:
-                print(f"      → Trigger not yet met. Staying pending.")
+                print(f"      → SL/TP not yet hit. Staying pending.")
 
         except Exception as e:
             print(f"  Update error {alert.get('pair','?')}: {e}")
 
     with open(ALERT_LOG_FILE, "w") as f:
         json.dump(alert_log, f, indent=2)
-    print(f"  Updated {updated} outcomes")
-
+    print(f"  Updated {updated} outcomes (Python SL/TP scan — 0 Gemini calls)")
 
 def get_weekly_alerts():
     cutoff = datetime.utcnow() - timedelta(days=7)
