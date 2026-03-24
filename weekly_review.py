@@ -251,29 +251,42 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
 
     invalidation_rate = round(invalidated_count / len(weekly_alerts) * 100, 1) if weekly_alerts else 0
 
+   geo_alerts   = [a for a in weekly_alerts if a.get('geo_flag', False)]
+    clean_alerts = [a for a in weekly_alerts if not a.get('geo_flag', False)]
+    geo_wins     = sum(1 for a in geo_alerts   if a.get('outcome') == 'win_tp1')
+    geo_losses   = sum(1 for a in geo_alerts   if a.get('outcome') == 'loss')
+    cl_wins      = sum(1 for a in clean_alerts if a.get('outcome') == 'win_tp1')
+    cl_losses    = sum(1 for a in clean_alerts if a.get('outcome') == 'loss')
+    geo_wr       = round(geo_wins/(geo_wins+geo_losses)*100,1) if (geo_wins+geo_losses) > 0 else 0
+    cl_wr        = round(cl_wins/(cl_wins+cl_losses)*100,1)   if (cl_wins+cl_losses)   > 0 else 0
+
     alert_summary = []
     for a in weekly_alerts:
         alert_summary.append({
-            "pair":               a.get('pair',''),
-            "ist_time":           a.get('ist_time',''),
-            "alert_type":         a.get('alert_type','zone_intraday'),
-            "bias":               a.get('bias',''),
-            "confidence":         a.get('confidence_score',0),
-            "confluences":        a.get('confluences',[]),
-            "outcome":            a.get('outcome','pending'),
-            "trigger_met":        a.get('trigger_met', None),
-            "trigger_confidence": a.get('trigger_confidence','unknown'),
-            "gemini_note":        a.get('gemini_setup_note','')
+            "pair":       a.get('pair',''),
+            "ist_time":   a.get('ist_time',''),
+            "alert_type": a.get('alert_type','zone_intraday'),
+            "bias":       a.get('bias',''),
+            "confidence": a.get('confidence_score',0),
+            "confluences":a.get('confluences',[]),
+            "outcome":    a.get('outcome','pending'),
+            "geo_flag":   a.get('geo_flag', False),
         })
 
     prompt = f"""You are a highly skilled SMC trading analyst reviewing one week of automated alerts.
-Win rate is calculated on TRIGGERED trades only (wins + losses). Invalidated and pending excluded.
+Win rate is calculated on triggered trades only (wins + losses). Pending excluded.
+Outcomes were determined by SL/TP candle scan from alert time.
+
+REVIEW PERIOD: Previous Mon–Fri trading week
 
 WEEKLY NUMBERS:
 - Total alerts fired: {len(weekly_alerts)} (Intraday: {intraday_count}, Swing: {swing_count}, Breakout: {breakout_count})
 - Triggered and resolved: Wins {wins} | Losses {losses} | Win Rate {win_rate:.1f}%
-- Invalidated (setup broke before trigger — not taken): {invalidated_count} ({invalidation_rate}% of all alerts)
 - Still pending resolution: {pending}
+
+GEOPOLITICAL SPLIT:
+- Clean technical alerts (no geo event active): {len(clean_alerts)} total → {cl_wins}W / {cl_losses}L → {cl_wr}% win rate
+- Geo-flagged alerts (geopolitical event active at alert time): {len(geo_alerts)} total → {geo_wins}W / {geo_losses}L → {geo_wr}% win rate
 
 SESSION BREAKDOWN (triggered trades only):
 {json.dumps(session_stats, indent=2)}
@@ -300,8 +313,8 @@ Return ONLY raw JSON. No markdown. No code fences.
   "timing_observation": "IST windows where losses cluster",
   "timing_recommendation": "one actionable sentence on time filtering",
   "intraday_vs_swing": "one sentence comparing intraday vs swing triggered performance",
-  "invalidation_insight": "what the {invalidation_rate}% invalidation rate tells us about setup quality this week",
-  "zone_fatigue_flags": ["list any pair+zone invalidated or alerted 3+ times — empty array if none"],
+  "geo_insight": "compare geo-flagged vs clean technical win rates and what that tells us this week",
+  "zone_fatigue_flags": ["list any pair+zone alerted 3+ times this week — empty array if none"],
   "streak_summary": "notable winning or losing streaks in the triggered set",
   "drawdown_flag": "none or describe if 3+ consecutive losses in triggered trades",
   "improvement_suggestion": "one specific actionable change based on this week only"
