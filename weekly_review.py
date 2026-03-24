@@ -251,7 +251,7 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
 
     invalidation_rate = round(invalidated_count / len(weekly_alerts) * 100, 1) if weekly_alerts else 0
 
-   geo_alerts   = [a for a in weekly_alerts if a.get('geo_flag', False)]
+    geo_alerts   = [a for a in weekly_alerts if a.get('geo_flag', False)]
     clean_alerts = [a for a in weekly_alerts if not a.get('geo_flag', False)]
     geo_wins     = sum(1 for a in geo_alerts   if a.get('outcome') == 'win_tp1')
     geo_losses   = sum(1 for a in geo_alerts   if a.get('outcome') == 'loss')
