@@ -755,6 +755,12 @@ def build_weekly_email_html(data, weekly_alerts, wins, losses,
                             invalidated_count, pending, win_rate,
                             analysis_run_time_ist="—"):
     ist_now    = (datetime.utcnow()+timedelta(hours=5,minutes=30)).strftime("%A, %d %b %Y")
+    ist_now_dt = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    days_to_monday = ist_now_dt.weekday()
+    this_monday    = ist_now_dt - timedelta(days=days_to_monday)
+    last_monday    = this_monday - timedelta(days=7)
+    last_friday    = last_monday + timedelta(days=4)
+    review_period  = f"{last_monday.strftime('%d %b')} – {last_friday.strftime('%d %b %Y')}"
     grade      = (data.get('overall_grade','—') or '—') if data else '—'
     grade_color = "#27ae60" if grade=="A" else "#f39c12" if grade in ("B","C") else "#e74c3c"
     total       = len(weekly_alerts)
@@ -790,6 +796,7 @@ def build_weekly_email_html(data, weekly_alerts, wins, losses,
 <div style="background:#1a1a2e;padding:20px 24px;">
     <h2 style="color:white;margin:0;font-size:18px;">Weekly Trading Review</h2>
     <p style="color:#8899bb;margin:5px 0 0;font-size:12px;">{ist_now}</p>
+    <p style="color:#8899bb;margin:3px 0 0;font-size:12px;">Review period: {review_period}</p>
     <p style="color:#445566;margin:3px 0 0;font-size:11px;">Analysis generated: {analysis_run_time_ist}</p>
   </div>
 
