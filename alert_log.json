@@ -4548,5 +4548,35 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774378965",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-24 19:02",
+    "ist_time": "00:32",
+    "zone_level": 68911.81641,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "69221.26562",
+    "sl": 68859.4375,
+    "tp1": 69702.84375,
+    "tp2": 70193.49219,
+    "confidence_score": 10,
+    "confluences": [
+      "Demand zone identified at 68911.81641",
+      "Liquidity swept before zone entry (M15 17:45 low)",
+      "M15 Change of Character (CHoCH) confirmed (18:00 M15 candle broke 17:30 M15 high)",
+      "H1 Order Block (17:00 H1 candle) identified at zone",
+      "M15 FVG (17:45 H - 18:15 L) overlaps H1 Order Block",
+      "Entry is in a discount zone for a long setup",
+      "RR at least 2:1 achievable to TP2"
+    ],
+    "trigger": "Price retraces and fills limit order at M15 FVG bottom.",
+    "invalid_if": "M15 candle closes below 68859.43750 before entry.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
