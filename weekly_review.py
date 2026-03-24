@@ -639,7 +639,7 @@ def build_excel_journal(weekly_alerts, analysis):
             'pending':    'PENDING'
         }.get(outcome, outcome.upper())
 
-       geo_lbl        = "YES ⚑" if a.get('geo_flag', False) else "NO"
+        geo_lbl        = "YES ⛑" if a.get('geo_flag', False) else "NO"
         outcome_method = "SL/TP Scan" if outcome in ('win_tp1', 'loss') else "—"
         pnl_display   = f"${pnl_usd:+.2f}" if pnl_usd != 0.0 else "—"
         op            = a.get('outcome_price')
@@ -652,7 +652,7 @@ def build_excel_journal(weekly_alerts, analysis):
         setup_note   = a.get('gemini_setup_note','')
         session_note = a.get('session_note', setup_note)
 
-       row_vals = [
+        row_vals = [
             date_str,                              # 1  Date (IST)
             a.get('pair',''),                      # 2  Pair
             session,                               # 3  Session
@@ -720,12 +720,11 @@ def build_excel_journal(weekly_alerts, analysis):
     ws[f'A{dr}'].alignment = align()
     dr += 1
 
-legend = [
+    legend = [
         (C_WIN,     "Green  — Trade resolved: TP1 hit (win). Counted in win rate."),
         (C_LOSS,    "Red    — Trade resolved: SL hit (loss). Counted in win rate."),
         (C_INVALID, "Orange — Outcome invalidated or not taken. Not counted in win rate."),
         (C_PENDING, "White  — Outcome still pending resolution."),
-    ]
     ]
     for leg_bg, leg_text in legend:
         ws.merge_cells(f'A{dr}:F{dr}')
