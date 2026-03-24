@@ -4444,5 +4444,26 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774341175",
+    "alert_type": "breakout",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-24 08:32",
+    "ist_time": "14:02",
+    "zone_level": 71315.32812,
+    "zone_label": "BULLISH Breakout",
+    "bias": "",
+    "entry": "",
+    "sl": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "confidence_score": 0,
+    "confluences": [],
+    "trigger": "",
+    "invalid_if": "",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
