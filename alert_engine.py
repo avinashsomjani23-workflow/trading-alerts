@@ -388,6 +388,40 @@ def detect_breakout(df1):
         print(f"    Breakout detection error: {e}")
         return None
 
+# ── Geopolitical context detection (breakout alerts only) ─────────────────────
+# Zone alerts: Gemini reads full news and returns geo_flag directly in its JSON.
+# Breakout alerts: no Gemini call, so we scan full headline lines for phrases.
+# We match on PHRASES (not single words) to avoid false positives like "oil prices".
+GEO_PHRASES = [
+    "military operation", "air strike", "airstrike", "missile attack", "missile strike",
+    "troops deployed", "troops advancing", "war declared", "invasion", "ceasefire",
+    "sanctions imposed", "new sanctions", "oil field", "oil supply", "pipeline attack",
+    "port blockade", "energy embargo", "trade war", "tariff imposed", "tariff hike",
+    "nuclear threat", "nato response", "nato deployment", "conflict escalat",
+    "coup attempt", "government collapse", "regime change", "political crisis",
+    "terrorist attack", "bombing campaign", "blockade", "geopolit",
+    "supply disruption", "refugee crisis", "humanitarian crisis",
+    "armed conflict", "cross-border", "warship", "naval blockade",
+]
+
+def detect_geo_flag_phrases(news_text):
+    """
+    Contextual phrase scan for breakout alerts where Gemini is not called.
+    Checks each full headline line — not individual words — to reduce false positives.
+    Returns True if any headline contains a recognised geopolitical phrase.
+    """
+    if not news_text or news_text.strip() == "Macro news unavailable.":
+        return False
+    lower = news_text.lower()
+    for line in lower.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        for phrase in GEO_PHRASES:
+            if phrase in line:
+                return True
+    return False
+
 # ── Macro news ────────────────────────────────────────────────────────────────
 def fetch_macro_news():
     try:
