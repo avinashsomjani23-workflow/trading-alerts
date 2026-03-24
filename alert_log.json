@@ -4465,5 +4465,34 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774352005",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-24 11:33",
+    "ist_time": "17:03",
+    "zone_level": 71001.55945,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 70906.32812,
+    "sl": 70813.78906,
+    "tp1": 71300.0,
+    "tp2": 71331.5,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 BOS confirms strong bullish trend after the 07:00 and 09:00 H1 candles.",
+      "Price is currently in a discount relative to the latest H1 bullish leg (70863.78906 to 71318.82812).",
+      "Valid H1 bullish Order Block (H1 08:00 candle, 70863.78906 - 71277.52344) contains the demand zone.",
+      "M15 bullish Fair Value Gap (70906.32812 - 71084.32812) overlaps the demand zone and is within the H1 OB.",
+      "Minor liquidity sweep occurred at M15 11:15 (low of 70994.43750) just below the demand zone (71001.55945).",
+      "Excellent Risk/Reward potential of over 4:1 achievable for both TP1 and TP2."
+    ],
+    "trigger": "Bullish M15 reversal candle (e.g., engulfing or pin bar) confirmation after FVG bottom tap.",
+    "invalid_if": "Price closes H1 candle below H1 OB low (70863.78906) or fails to show bullish reaction on M15.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
