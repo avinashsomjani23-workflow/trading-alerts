@@ -4827,5 +4827,34 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774409501",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-25 03:31",
+    "ist_time": "09:01",
+    "zone_level": 70976.01953,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 70941.3,
+    "sl": 71070.45,
+    "tp1": 70400.0,
+    "tp2": 68950.0,
+    "confidence_score": 8,
+    "confluences": [
+      "M15 CHoCH confirmed bearish.",
+      "Price in Premium zone for short.",
+      "Valid Bearish OB at the supply zone.",
+      "Bearish FVG overlapping the OB.",
+      "Liquidity swept before original price rejection.",
+      "Excellent RR achievable for both TPs."
+    ],
+    "trigger": "M15 candle forms bearish rejection/engulfing upon retest of FVG/OB zone.",
+    "invalid_if": "M15 candle closes above 71070.45 (SL level) before entry trigger.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
