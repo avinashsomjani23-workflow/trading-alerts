@@ -4938,5 +4938,33 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "USDJPY_1774443717",
+    "alert_type": "zone",
+    "pair": "USDJPY",
+    "timestamp_utc": "2026-03-25 13:01",
+    "ist_time": "18:31",
+    "zone_level": 158.61267,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 158.619,
+    "sl": 158.501,
+    "tp1": 159.085,
+    "tp2": 159.201,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 bullish BOS confirmed",
+      "M15 CHoCH confirmed",
+      "Demand zone in discount for entry",
+      "Valid H1 OB with FVG overlap",
+      "Excellent R:R potential"
+    ],
+    "trigger": "M15 bullish engulfing or pin bar within 158.619 - 158.551 range after price enters",
+    "invalid_if": "Price breaks below 158.501 without reaction or closes strongly below OB",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
