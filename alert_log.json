@@ -4884,5 +4884,32 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774431114",
+    "alert_type": "breakout",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-25 09:31",
+    "ist_time": "15:01",
+    "zone_level": 71170.86719,
+    "zone_label": "BULLISH Breakout",
+    "bias": "LONG",
+    "entry": 71290.2173,
+    "sl": 70932.16696,
+    "tp1": 72006.31798,
+    "tp2": 72364.36832,
+    "confidence_score": 5,
+    "confluences": [
+      "+2 H1 body closed above 71170.86719, candle 1.7x ATR",
+      "+1 Volume 3.6x average (institutional)",
+      "+1 Level tested 28 times before (well-established)",
+      "+1 Break direction matches 50-period MA trend"
+    ],
+    "trigger": "Wait for price to pull back into the retest zone (71051.51708 \u2013 71290.2173). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
+    "invalid_if": "Any H1 candle closes back below 71170.86719 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
