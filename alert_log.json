@@ -4770,5 +4770,62 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "USDJPY_1774404116",
+    "alert_type": "zone",
+    "pair": "USDJPY",
+    "timestamp_utc": "2026-03-25 02:01",
+    "ist_time": "07:31",
+    "zone_level": 158.59944,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "158.58800",
+    "sl": 158.5,
+    "tp1": 158.83501,
+    "tp2": 159.034,
+    "confidence_score": 9,
+    "confluences": [
+      "Price at a fresh H1 demand zone (158.59944)",
+      "Valid H1 Order Block (158.55099 - 158.69400) at zone",
+      "Bearish FVG (158.58800 - 159.03400) overlaps OB and demand zone",
+      "M15 CHoCH confirmed earlier, indicating short-term bullish shift",
+      "Liquidity swept before price interacted with the OB",
+      "Entry in discount zone relative to recent range",
+      "Achievable RR of at least 2:1 for both targets"
+    ],
+    "trigger": "M15 or H1 bullish engulfing candle or strong rejection wick at FVG edge (158.588) inside the demand zone.",
+    "invalid_if": "Price breaks and closes below 158.55099 (OB low) on M15 or H1.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "NAS100_1774404185",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-25 02:03",
+    "ist_time": "07:33",
+    "zone_level": 23930.98047,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 24008.788,
+    "sl": 23915.98,
+    "tp1": 24168.67,
+    "tp2": 24260.0,
+    "confidence_score": 8,
+    "confluences": [
+      "Price in discount zone",
+      "Fresh demand zone",
+      "Liquidity swept prior to demand zone",
+      "H1 Change of Character confirmed"
+    ],
+    "trigger": "M15 confirmation candle, such as a strong bullish engulfing candle or rejection wick from the OB/entry level after price revisits.",
+    "invalid_if": "Price closes below the OB wick extreme (23930.98047) on H1 candle, indicating zone failure.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
