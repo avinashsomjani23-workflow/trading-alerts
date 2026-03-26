@@ -5214,5 +5214,34 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1774494121",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-26 03:02",
+    "ist_time": "08:32",
+    "zone_level": 71.29,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 71.235,
+    "sl": 70.44,
+    "tp1": 72.825,
+    "tp2": 73.5,
+    "confidence_score": 10,
+    "confluences": [
+      "H1 bullish CHoCH",
+      "Price in H1 discount",
+      "Liquidity swept below zone",
+      "Valid H1 Demand OB at zone",
+      "H1 FVG overlaps OB",
+      "2:1 RR achievable"
+    ],
+    "trigger": "M15 bullish engulfing or pin bar after entry hit",
+    "invalid_if": "M15 candle close below 70.515",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
