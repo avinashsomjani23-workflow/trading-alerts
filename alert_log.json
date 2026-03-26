@@ -5751,5 +5751,32 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "GOLD_1774562511",
+    "alert_type": "zone",
+    "pair": "GOLD",
+    "timestamp_utc": "2026-03-26 22:01",
+    "ist_time": "03:31",
+    "zone_level": 4372.2002,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 4368.45,
+    "sl": 4355.7,
+    "tp1": 4416.0,
+    "tp2": 4460.0,
+    "confidence_score": 9,
+    "confluences": [
+      "M15 CHoCH confirmed (M15 H:4384.8999 broken)",
+      "Liquidity swept below previous lows (4356.3, 4362.7)",
+      "Price in discount zone of recent bearish leg",
+      "Fresh demand zone"
+    ],
+    "trigger": "M15 bullish engulfing or hammer candle confirmed at or near entry price",
+    "invalid_if": "Price breaks below SL (4355.7) before entry is triggered, or fails to retrace to entry.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
