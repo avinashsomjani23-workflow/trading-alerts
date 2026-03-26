@@ -5694,5 +5694,35 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "NAS100_1774548149",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-26 18:02",
+    "ist_time": "23:32",
+    "zone_level": 23760.89258,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 23771.41,
+    "sl": 23826.52,
+    "tp1": 23661.19,
+    "tp2": 23606.08,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 Bearish Break of Structure (BOS) confirmed",
+      "Valid Bearish Order Block identified (H1 16:30 candle)",
+      "Bearish Fair Value Gap (FVG) overlaps the OB",
+      "Zone is fresh (0 alerts in 30 days)",
+      "Liquidity swept above zone (H1 16:30 H:23811.52)",
+      "Risk/Reward of 2:1+ achievable",
+      "No high-impact news in next 2 hours"
+    ],
+    "trigger": "Wait for M15 candle to touch 23771.41 and close bearish below this price.",
+    "invalid_if": "H1 or M15 candle closes above 23811.52.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
