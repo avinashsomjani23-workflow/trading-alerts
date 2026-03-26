@@ -5274,5 +5274,32 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1774506653",
+    "alert_type": "breakout",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-26 06:30",
+    "ist_time": "12:00",
+    "zone_level": 70.07,
+    "zone_label": "BEARISH Breakout",
+    "bias": "SHORT",
+    "entry": 69.7745,
+    "sl": 70.661,
+    "tp1": 68.0015,
+    "tp2": 67.115,
+    "confidence_score": 5,
+    "confluences": [
+      "+2 H1 body closed below 70.07, candle 2.5x ATR",
+      "+1 Volume 1.4x average (institutional)",
+      "+1 Level tested 3 times before (well-established)",
+      "+1 Break direction matches 50-period MA trend"
+    ],
+    "trigger": "Wait for price to pull back into the retest zone (69.7745 \u2013 70.3655). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
+    "invalid_if": "Any H1 candle closes back above 70.07 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
