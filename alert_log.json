@@ -5441,5 +5441,32 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "USDJPY_1774526464",
+    "alert_type": "breakout",
+    "pair": "USDJPY",
+    "timestamp_utc": "2026-03-26 12:01",
+    "ist_time": "17:31",
+    "zone_level": 159.63901,
+    "zone_label": "BULLISH Breakout",
+    "bias": "LONG",
+    "entry": 159.6794,
+    "sl": 159.55822,
+    "tp1": 159.92176,
+    "tp2": 160.04294,
+    "confidence_score": 4,
+    "confluences": [
+      "+2 H1 body closed above 159.63901, candle 1.5x ATR",
+      "+0 Volume below 1.3x average",
+      "+1 Level tested 102 times before (well-established)",
+      "+1 Break direction matches 50-period MA trend"
+    ],
+    "trigger": "Wait for price to pull back into the retest zone (159.59861 \u2013 159.6794). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
+    "invalid_if": "Any H1 candle closes back below 159.63901 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
