@@ -5413,5 +5413,33 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774524697",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-26 11:31",
+    "ist_time": "17:01",
+    "zone_level": 68895.70898,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "68980.0",
+    "sl": 68800.0,
+    "tp1": 69600.0,
+    "tp2": 70000.0,
+    "confidence_score": 8,
+    "confluences": [
+      "Price entering Demand Zone at 68895",
+      "Liquidity swept below recent M15 lows (69383, 69424) by current candle",
+      "Price in Discount from recent high",
+      "Achievable Risk/Reward greater than 2:1",
+      "Demand Zone is confirmed as Fresh"
+    ],
+    "trigger": "M15 bullish CHoCH after price enters the FVG/OB range (68900-68980).",
+    "invalid_if": "M15 candle closes below 68850 (inferred OB bottom).",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
