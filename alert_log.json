@@ -5525,5 +5525,34 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774539100",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-26 15:31",
+    "ist_time": "21:01",
+    "zone_level": 69534.45982,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 69650.37,
+    "sl": 69876.12,
+    "tp1": 68819.42,
+    "tp2": 68500.0,
+    "confidence_score": 9,
+    "confluences": [
+      "H1 bearish BOS confirms trend direction",
+      "Price in Premium for short",
+      "Valid M15 bearish Order Block identified",
+      "Bearish FVG overlaps with the Order Block",
+      "Liquidity swept above OB by 13:45 M15 candle's high",
+      "RR at least 2:1 achievable"
+    ],
+    "trigger": "Price enters OB/FVG, M15 CHoCH confirms bearish reversal with strong bearish M15 candle close.",
+    "invalid_if": "H1 candle close above 69826.12 (OB high).",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
