@@ -5184,5 +5184,35 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774486908",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-26 01:01",
+    "ist_time": "06:31",
+    "zone_level": 70971.0987,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 71010.4375,
+    "sl": 70890.92,
+    "tp1": 71524.36,
+    "tp2": 71907.2,
+    "confidence_score": 10,
+    "confluences": [
+      "H1 BOS confirmed bullish trend after recent low",
+      "Price in discount relative to recent high",
+      "M15 CHoCH confirmed before rally",
+      "Valid Bullish OB at demand zone (22:00 M15)",
+      "Bullish FVG (22:00, 22:15, 22:30 M15) overlaps with OB",
+      "Liquidity swept before entering demand zone (20:15 M15 low)",
+      "Excellent R:R (4.3:1 & 7.5:1) achievable"
+    ],
+    "trigger": "M15 candle taps FVG low (71010.44) and shows bullish rejection (e.g., pin bar, engulfing).",
+    "invalid_if": "Price closes below OB low (70965.92) or sweeps past SL without immediate recovery.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
