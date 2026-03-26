@@ -5495,5 +5495,35 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "NAS100_1774533739",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-26 14:02",
+    "ist_time": "19:32",
+    "zone_level": 23944.03223,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 23939.63,
+    "sl": 23850.81,
+    "tp1": 24178.2,
+    "tp2": 24312.33,
+    "confidence_score": 8,
+    "confluences": [
+      "M15 CHoCH confirmed (13:45 M15 candle broke 13:30 M15 H)",
+      "Liquidity swept below demand zone (H1 13:30 L:23865.81)",
+      "Price in discount zone (relative to recent H1 swing high/low)",
+      "FVG formed from 23939.63 to 24004.00, overlapping OB/demand zone.",
+      "Demand zone is fresh (alerted 1 time in 30 days)",
+      "RR at least 2:1 achievable for both TPs",
+      "No high-impact news in next 2 hours"
+    ],
+    "trigger": "M15 bullish engulfing or strong M15 candle close on retest of 23939.63 entry.",
+    "invalid_if": "M15 candle closes below 23865.81",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
