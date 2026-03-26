@@ -5328,5 +5328,35 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "GOLD_1774510359",
+    "alert_type": "zone",
+    "pair": "GOLD",
+    "timestamp_utc": "2026-03-26 07:32",
+    "ist_time": "13:02",
+    "zone_level": 4443.2002,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 4445.2002,
+    "sl": 4457.2001,
+    "tp1": 4412.1001,
+    "tp2": 4400.0,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 Bearish BOS confirmed by 06:00 candle breaking structure below prior lows.",
+      "M15 Bearish CHoCH confirmed by 07:00 candle breaking structure.",
+      "Liquidity swept above previous M15 highs (4456.60010 vs 4456.39990).",
+      "Valid Bearish OB identified at 06:45 M15 bullish candle.",
+      "Bearish FVG overlaps with the identified OB.",
+      "Zone freshness: Alerted 0 times in 30 days.",
+      "RR at least 2:1 achievable (TP1: 2.76, TP2: 3.77)."
+    ],
+    "trigger": "M15 bearish rejection candle upon price re-entering the FVG/Entry at 4445.2",
+    "invalid_if": "Price closes above the liquidity sweep high (4456.6) or breaks above SL at 4457.20010 before entry.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
