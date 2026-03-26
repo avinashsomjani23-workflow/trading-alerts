@@ -5554,5 +5554,60 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774542658",
+    "alert_type": "breakout",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-26 16:30",
+    "ist_time": "22:00",
+    "zone_level": 69242.03125,
+    "zone_label": "BEARISH Breakout",
+    "bias": "SHORT",
+    "entry": 69124.39358,
+    "sl": 69477.30658,
+    "tp1": 68418.56758,
+    "tp2": 68065.65458,
+    "confidence_score": 5,
+    "confluences": [
+      "+2 H1 body closed below 69242.03125, candle 1.6x ATR",
+      "+1 Volume 4.0x average (institutional)",
+      "+1 Level tested 19 times before (well-established)",
+      "+1 Break direction matches 50-period MA trend"
+    ],
+    "trigger": "Wait for price to pull back into the retest zone (69124.39358 \u2013 69359.66892). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
+    "invalid_if": "Any H1 candle closes back above 69242.03125 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "GOLD_1774542768",
+    "alert_type": "zone",
+    "pair": "GOLD",
+    "timestamp_utc": "2026-03-26 16:32",
+    "ist_time": "22:02",
+    "zone_level": 4409.2998,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "4438.90",
+    "sl": 4443.9,
+    "tp1": 4396.4,
+    "tp2": 4388.9,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 Bearish Break of Structure below 4409.30",
+      "Price in premium zone for retest of supply",
+      "Valid M15 Bearish Order Block (16:00 M15 candle)",
+      "Bearish FVG adjacent to OB, indicating imbalance",
+      "RR at least 2:1 achievable (calculated 8.5 for TP1)"
+    ],
+    "trigger": "M5 CHoCH after price enters FVG (4438.90-4442.80)",
+    "invalid_if": "M15 candle close above 4442.80",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
