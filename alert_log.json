@@ -5837,5 +5837,62 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774593115",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-27 06:31",
+    "ist_time": "12:01",
+    "zone_level": 68302.96094,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "68636.28516",
+    "sl": 68219.15625,
+    "tp1": 69470.54,
+    "tp2": 69826.125,
+    "confidence_score": 8,
+    "confluences": [
+      "Demand zone at 68302.96 tapped",
+      "Liquidity swept below demand zone (H1 04:00 candle low)",
+      "M15 Change of Character (CHoCH) confirmed by 05:00 M15 candle",
+      "Valid H1 Bullish Order Block identified at the zone",
+      "Entry within discount relative to recent swing highs"
+    ],
+    "trigger": "M15 bullish engulfing or pin bar close at OB midpoint on retest",
+    "invalid_if": "Price closes below H1 04:00 candle low (68269.156) on H1 timeframe.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1774593189",
+    "alert_type": "zone",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-27 06:33",
+    "ist_time": "12:03",
+    "zone_level": 69.83,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "69.905",
+    "sl": 70.93,
+    "tp1": 69.55,
+    "tp2": 67.44,
+    "confidence_score": 9,
+    "confluences": [
+      "Liquidity swept above resistance at 70.430",
+      "M15 CHoCH confirmed by 05:45 candle breaking 05:30 M15 low (69.645)",
+      "Price is in a premium zone for shorting",
+      "Valid M15 Order Block (05:30 M15 candle) identified",
+      "Bearish FVG (69.645-69.905) overlaps with OB for refined entry",
+      "2:1 RR achievable on TP2"
+    ],
+    "trigger": "M15 bearish candle close after price taps FVG edge 69.905",
+    "invalid_if": "Price closes above 70.930 or breaks below 69.645 without activating entry",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
