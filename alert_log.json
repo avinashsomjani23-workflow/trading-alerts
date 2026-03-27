@@ -5778,5 +5778,35 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "EURUSD_1774575110",
+    "alert_type": "zone",
+    "pair": "EURUSD",
+    "timestamp_utc": "2026-03-27 01:31",
+    "ist_time": "07:01",
+    "zone_level": 1.15551,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "1.15551",
+    "sl": 1.15724,
+    "tp1": 1.15274,
+    "tp2": 1.152,
+    "confidence_score": 9,
+    "confluences": [
+      "Bearish H1 order flow (lower lows/highs confirmed)",
+      "Price trading in Premium zone for short",
+      "Liquidity swept below previous low (1.15247) before current rally towards zone",
+      "Valid Bearish H1 Order Block identified (1.15580-1.15674)",
+      "Bearish Fair Value Gap (1.15380-1.15580) overlaps with OB",
+      "Alerted zone 1.15551 is within the FVG and related to the OB",
+      "Risk/Reward of 2:1 achievable at TP2"
+    ],
+    "trigger": "M15 bearish engulfing or strong bearish candle close after price taps 1.15551.",
+    "invalid_if": "Price breaks and M15 candle closes above 1.15724 (SL) or above 1.15600 without bearish rejection.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
