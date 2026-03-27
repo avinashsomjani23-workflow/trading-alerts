@@ -5921,5 +5921,61 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774602140",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-27 09:02",
+    "ist_time": "14:32",
+    "zone_level": 68296.2,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": 68232.57031,
+    "sl": 68530.76562,
+    "tp1": 67616.82,
+    "tp2": 67300.0,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 and M15 Break of Structure (BOS) to the downside.",
+      "Price below Supply/Resistance zone, expecting retest.",
+      "Valid Bearish Order Block and FVG overlap within the zone.",
+      "Entry placed in Premium zone for short after a retrace.",
+      "Liquidity swept above previous highs (07:15 M15) before initial strong drop."
+    ],
+    "trigger": "Price enters FVG/OB zone and shows rejection (e.g., M15 bearish engulfing or pin bar).",
+    "invalid_if": "Price breaks and closes above SL (68530.76) or closes significantly below current low (67616.82) before entry, invalidating retracement.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "GOLD_1774602203",
+    "alert_type": "zone",
+    "pair": "GOLD",
+    "timestamp_utc": "2026-03-27 09:03",
+    "ist_time": "14:33",
+    "zone_level": 4479.7666,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "4478.20020",
+    "sl": 4483.2002,
+    "tp1": 4458.1001,
+    "tp2": 4441.2002,
+    "confidence_score": 9,
+    "confluences": [
+      "Price in Premium zone for short",
+      "M15 Change of Character (CHoCH) confirmed to bearish",
+      "Liquidity swept above the supply zone before the drop",
+      "Bearish Fair Value Gap (FVG) overlaps the Order Block (OB)",
+      "Price interacting with a defined Supply/Resistance zone"
+    ],
+    "trigger": "Price retests FVG top at 4478.20020 with M15 bearish rejection.",
+    "invalid_if": "H1 or M15 candle closes above 4483.20020 (liquidity sweep high).",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
