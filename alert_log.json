@@ -6277,5 +6277,33 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "BTCUSD_1774632726",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-27 17:32",
+    "ist_time": "23:02",
+    "zone_level": 65703.72656,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 65703.72656,
+    "sl": 65628.72656,
+    "tp1": 66175.20312,
+    "tp2": 66552.05469,
+    "confidence_score": 8,
+    "confluences": [
+      "Demand zone reaction confirmed",
+      "Price in discount zone",
+      "Liquidity swept before zone entry",
+      "Valid OB and FVG overlap",
+      "Favorable Risk/Reward ratio (TP1 > 2R)"
+    ],
+    "trigger": "M15 bullish engulfing or strong bullish reaction candle close upon retest of the demand zone",
+    "invalid_if": "Price closes below 65628.72656",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
