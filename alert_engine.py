@@ -101,7 +101,7 @@ def is_market_open():
     wd, h, m = ist.weekday(), ist.hour, ist.minute
     if wd == 5: return False, "Saturday — closed."
     if wd == 6: return False, "Sunday — closed."
-    if wd == 0 and (h < 2 or (h == 2 and m < 30)): return False, "Monday before 2:30 AM IST."
+    if h < 8: return False, f"Before 8:00 AM IST — {ist.strftime('%A %H:%M')} IST."
     if wd == 4 and h >= 23 and m >= 30: return False, "Friday after 11:30 PM IST."
     return True, f"Open — {ist.strftime('%A %H:%M')} IST"
 
