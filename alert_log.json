@@ -5894,5 +5894,32 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "EURUSD_1774598462",
+    "alert_type": "breakout",
+    "pair": "EURUSD",
+    "timestamp_utc": "2026-03-27 08:01",
+    "ist_time": "13:31",
+    "zone_level": 1.15234,
+    "zone_label": "BEARISH Breakout",
+    "bias": "SHORT",
+    "entry": 1.15202,
+    "sl": 1.15298,
+    "tp1": 1.1501,
+    "tp2": 1.14914,
+    "confidence_score": 4,
+    "confluences": [
+      "+2 H1 body closed below 1.15234, candle 1.6x ATR",
+      "+0 Volume below 1.3x average",
+      "+1 Level tested 105 times before (well-established)",
+      "+1 Break direction matches 50-period MA trend"
+    ],
+    "trigger": "Wait for price to pull back into the retest zone (1.15202 \u2013 1.15266). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
+    "invalid_if": "Any H1 candle closes back above 1.15234 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
