@@ -5808,5 +5808,34 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "GOLD_1774580514",
+    "alert_type": "zone",
+    "pair": "GOLD",
+    "timestamp_utc": "2026-03-27 03:01",
+    "ist_time": "08:31",
+    "zone_level": 4413.0498,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": 4411.3999,
+    "sl": 4400.5,
+    "tp1": 4434.6001,
+    "tp2": 4476.6001,
+    "confidence_score": 8,
+    "confluences": [
+      "H1/M15 Bullish Structure confirmed",
+      "M15 CHoCH confirmed",
+      "Valid M15 Bullish OB identified (01:45 M15 candle)",
+      "Bullish FVG (4411.3999-4413.3999) overlapping OB",
+      "Liquidity swept prior to initial rally (M15 00:45 low)",
+      "RR ratio at least 2:1 achieved for TP1"
+    ],
+    "trigger": "Strong M15 bullish candle printing from the entry zone after price retraces.",
+    "invalid_if": "Price closes M15 candle below 4405.5000 or breaks SL at 4400.5000.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
