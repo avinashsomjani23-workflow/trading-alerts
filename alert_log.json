@@ -6058,5 +6058,59 @@
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null
+  },
+  {
+    "id": "GOLD_1774625502",
+    "alert_type": "breakout",
+    "pair": "GOLD",
+    "timestamp_utc": "2026-03-27 15:31",
+    "ist_time": "21:01",
+    "zone_level": 4516.5,
+    "zone_label": "BULLISH Breakout",
+    "bias": "LONG",
+    "entry": 4526.18787,
+    "sl": 4497.12426,
+    "tp1": 4584.31509,
+    "tp2": 4613.3787,
+    "confidence_score": 5,
+    "confluences": [
+      "+2 H1 body closed above 4516.5, candle 2.7x ATR",
+      "+1 Volume 3.4x average (institutional)",
+      "+1 Level tested 7 times before (well-established)",
+      "+1 Break direction matches 50-period MA trend"
+    ],
+    "trigger": "Wait for price to pull back into the retest zone (4506.81213 \u2013 4526.18787). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
+    "invalid_if": "Any H1 candle closes back below 4516.5 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
+  },
+  {
+    "id": "SILVER_1774625505",
+    "alert_type": "breakout",
+    "pair": "SILVER",
+    "timestamp_utc": "2026-03-27 15:31",
+    "ist_time": "21:01",
+    "zone_level": 70.43,
+    "zone_label": "BULLISH Breakout",
+    "bias": "LONG",
+    "entry": 70.71232,
+    "sl": 69.86536,
+    "tp1": 72.40624,
+    "tp2": 73.2532,
+    "confidence_score": 5,
+    "confluences": [
+      "+2 H1 body closed above 70.43, candle 2.9x ATR",
+      "+1 Volume 3.5x average (institutional)",
+      "+1 Level tested 13 times before (well-established)",
+      "+1 Break direction matches 50-period MA trend"
+    ],
+    "trigger": "Wait for price to pull back into the retest zone (70.14768 \u2013 70.71232). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
+    "invalid_if": "Any H1 candle closes back below 70.43 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
