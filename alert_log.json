@@ -4185,9 +4185,9 @@
       "RR at least 2:1 achievable",
       "No high-impact news in next 2 hours"
     ],
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 23835.89648,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "EURUSD_1774278071",
@@ -4360,9 +4360,9 @@
     ],
     "trigger": "M15 bearish engulfing or pin bar candle pattern upon re-entry to FVG edge.",
     "invalid_if": "Price closes M15 candle above OB high (24406.13) or continues rally without clear rejection at entry.",
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 24098.68945,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774297923",
@@ -4420,9 +4420,9 @@
     ],
     "trigger": "M15 bullish CHoCH confirmation (break of immediate short-term M15 swing high) upon retest of demand zone",
     "invalid_if": "Price breaks decisively below OB wick low (24098.68945) without a clear retest and CHoCH, or if a H1 bearish BOS is confirmed below current structure.",
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 24083.68945,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "EURUSD_1774339260",
@@ -4491,9 +4491,9 @@
     "trigger": "Bullish M15 reversal candle (e.g., engulfing or pin bar) confirmation after FVG bottom tap.",
     "invalid_if": "Price closes H1 candle below H1 OB low (70863.78906) or fails to show bullish reaction on M15.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 70813.78906,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774362655",
@@ -4518,9 +4518,9 @@
     "trigger": "Wait for price to pull back into the retest zone (69979.02478 \u2013 70235.05335). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 70107.03906 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 69210.93908,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "USDJPY_1774368095",
@@ -4545,9 +4545,9 @@
     "trigger": "Wait for price to pull back into the retest zone (158.84247 \u2013 158.95352). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 158.89799 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 158.78695,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774378965",
@@ -4575,9 +4575,9 @@
     "trigger": "Price retraces and fills limit order at M15 FVG bottom.",
     "invalid_if": "M15 candle closes below 68859.43750 before entry.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 69702.84375,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774380723",
@@ -4603,9 +4603,9 @@
     "trigger": "M15 bullish CHoCH (close above recent swing high) after price taps into FVG / demand zone.",
     "invalid_if": "Price closes below 69369.03125 (SL) without triggering bullish CHoCH.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 69369.03125,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "EURUSD_1774386062",
@@ -4630,9 +4630,9 @@
     "trigger": "Wait for price to pull back into the retest zone (1.16006 \u2013 1.1612). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 1.16063 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 1.1595,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "USDJPY_1774386155",
@@ -4657,9 +4657,9 @@
     "trigger": "Wait for price to pull back into the retest zone (158.64426 \u2013 158.78573). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 158.715 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 158.85647,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "SILVER_1774386294",
@@ -4685,9 +4685,9 @@
     "trigger": "M15 candle close above 71.03 after wicking into 71.03 or below.",
     "invalid_if": "M15 candle close below 70.710.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 71.67,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774391453",
@@ -4712,9 +4712,9 @@
     "trigger": "Wait for price to pull back into the retest zone (4430.01948 \u2013 4456.38091). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 4443.2002 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 4535.46521,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774393485",
@@ -4740,9 +4740,9 @@
     "trigger": "M15 candle showing strong rejection from the OB (e.g., bearish engulfing or pin bar) confirming retest of the OB before entry.",
     "invalid_if": "M15 candle closes above 4493.30 or if price fails to retest the OB for entry.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 4493.3,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774398716",
@@ -4767,9 +4767,9 @@
     "trigger": "Wait for price to pull back into the retest zone (4502.42358 \u2013 4530.57642). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 4516.5 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 4488.34717,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "USDJPY_1774404116",
@@ -4797,9 +4797,9 @@
     "trigger": "M15 or H1 bullish engulfing candle or strong rejection wick at FVG edge (158.588) inside the demand zone.",
     "invalid_if": "Price breaks and closes below 158.55099 (OB low) on M15 or H1.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 158.83501,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "NAS100_1774404185",
@@ -4824,9 +4824,9 @@
     "trigger": "M15 confirmation candle, such as a strong bullish engulfing candle or rejection wick from the OB/entry level after price revisits.",
     "invalid_if": "Price closes below the OB wick extreme (23930.98047) on H1 candle, indicating zone failure.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 24168.67,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774409501",
@@ -4853,9 +4853,9 @@
     "trigger": "M15 candle forms bearish rejection/engulfing upon retest of FVG/OB zone.",
     "invalid_if": "M15 candle closes above 71070.45 (SL level) before entry trigger.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 71070.45,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "USDJPY_1774411304",
@@ -4881,9 +4881,9 @@
     "trigger": "M15 candle touches FVG lower edge at 158.629",
     "invalid_if": "Price breaks below 158.558 (SL) or fails to show bullish momentum after retesting entry.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 158.83,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774431114",
@@ -4908,9 +4908,9 @@
     "trigger": "Wait for price to pull back into the retest zone (71051.51708 \u2013 71290.2173). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 71170.86719 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 70932.16696,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "NZDUSD_1774434652",
@@ -4935,9 +4935,9 @@
     "trigger": "Wait for price to pull back into the retest zone (0.58178 \u2013 0.58229). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 0.58204 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 0.58255,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "USDJPY_1774443717",
@@ -4963,9 +4963,9 @@
     "trigger": "M15 bullish engulfing or pin bar within 158.619 - 158.551 range after price enters",
     "invalid_if": "Price breaks below 158.501 without reaction or closes strongly below OB",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 159.085,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "EURUSD_1774447267",
@@ -4990,9 +4990,9 @@
     "trigger": "Wait for price to pull back into the retest zone (1.15755 \u2013 1.15834). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 1.15794 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 1.15873,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774450938",
@@ -5017,9 +5017,9 @@
     "trigger": "M15 candle forms a strong bearish rejection pattern (e.g., engulfing or pin bar) when retesting the OB at 4580.25.",
     "invalid_if": "Price breaks and closes above 4586.90 on the H1 timeframe.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 4531.2,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "NAS100_1774452728",
@@ -5044,9 +5044,9 @@
     "trigger": "Wait for price to pull back into the retest zone (24247.4627 \u2013 24331.17793). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 24289.32031 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 23996.317,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774456290",
@@ -5071,9 +5071,9 @@
     "trigger": "Wait for price to pull back into the retest zone (70804.35061 \u2013 71069.27439). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 70936.8125 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 71201.73627,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774459858",
@@ -5098,9 +5098,9 @@
     "trigger": "Wait for price to pull back into the retest zone (71149.38153 \u2013 71413.97785). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 71281.67969 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 71017.08337,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774461665",
@@ -5125,9 +5125,9 @@
     "trigger": "Wait for price to pull back into the retest zone (71141.44107 \u2013 71417.2308). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 71279.33594 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 71003.54621,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "NZDUSD_1774467047",
@@ -5152,9 +5152,9 @@
     "trigger": "Wait for price to pull back into the retest zone (0.58111 \u2013 0.58181). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 0.58146 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 0.57899,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774476149",
@@ -5181,9 +5181,9 @@
     "trigger": "M15 bearish rejection candle (e.g., pin bar, engulfing) forming at the 4513.66667 zone after price retests it.",
     "invalid_if": "Price closes above 4589.60010 (SL level) on H1 or M15, or breaks through the zone without clear rejection.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 4492.8999,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774486908",
@@ -5211,9 +5211,9 @@
     "trigger": "M15 candle taps FVG low (71010.44) and shows bullish rejection (e.g., pin bar, engulfing).",
     "invalid_if": "Price closes below OB low (70965.92) or sweeps past SL without immediate recovery.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 70890.92,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "SILVER_1774494121",
@@ -5240,9 +5240,9 @@
     "trigger": "M15 bullish engulfing or pin bar after entry hit",
     "invalid_if": "M15 candle close below 70.515",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 70.44,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774499587",
@@ -5271,9 +5271,9 @@
     "trigger": "M15 bullish engulfing or strong bullish candle after retest of 4510.75",
     "invalid_if": "H1 candle closes below 4474.89",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 4474.89,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "SILVER_1774506653",
@@ -5298,9 +5298,9 @@
     "trigger": "Wait for price to pull back into the retest zone (69.7745 \u2013 70.3655). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 70.07 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 68.0015,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774508593",
@@ -5325,9 +5325,9 @@
     "trigger": "Wait for price to pull back into the retest zone (4467.90845 \u2013 4488.89135). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 4478.3999 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 4404.95973,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774510359",
@@ -5355,9 +5355,9 @@
     "trigger": "M15 bearish rejection candle upon price re-entering the FVG/Entry at 4445.2",
     "invalid_if": "Price closes above the liquidity sweep high (4456.6) or breaks above SL at 4457.20010 before entry.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 4412.1001,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "SILVER_1774517489",
@@ -5382,9 +5382,9 @@
     "trigger": "Wait for price to pull back into the retest zone (68.17225 \u2013 68.82775). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 68.5 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 69.1555,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774522919",
@@ -5410,9 +5410,9 @@
     "trigger": "M15 bearish engulfing or rejection candle at entry zone after tap",
     "invalid_if": "M15 candle closes above 69733.32812 (SL price)",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 69230.75783,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774524697",
@@ -5438,9 +5438,9 @@
     "trigger": "M15 bullish CHoCH after price enters the FVG/OB range (68900-68980).",
     "invalid_if": "M15 candle closes below 68850 (inferred OB bottom).",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 69600.0,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "USDJPY_1774526464",
@@ -5465,9 +5465,9 @@
     "trigger": "Wait for price to pull back into the retest zone (159.59861 \u2013 159.6794). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 159.63901 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 159.55822,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "NZDUSD_1774528252",
@@ -5492,9 +5492,9 @@
     "trigger": "Wait for price to pull back into the retest zone (0.57723 \u2013 0.57771). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 0.57747 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 0.57795,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "NAS100_1774533739",
@@ -5522,9 +5522,9 @@
     "trigger": "M15 bullish engulfing or strong M15 candle close on retest of 23939.63 entry.",
     "invalid_if": "M15 candle closes below 23865.81",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 23850.81,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774539100",
@@ -5551,9 +5551,9 @@
     "trigger": "Price enters OB/FVG, M15 CHoCH confirms bearish reversal with strong bearish M15 candle close.",
     "invalid_if": "H1 candle close above 69826.12 (OB high).",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 68819.42,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774542658",
@@ -5578,9 +5578,9 @@
     "trigger": "Wait for price to pull back into the retest zone (69124.39358 \u2013 69359.66892). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 69242.03125 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 68418.56758,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774542768",
@@ -5606,9 +5606,9 @@
     "trigger": "M5 CHoCH after price enters FVG (4438.90-4442.80)",
     "invalid_if": "M15 candle close above 4442.80",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 4396.4,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "EURUSD_1774546296",
@@ -5636,9 +5636,9 @@
     "trigger": "M15 candle closes bearish after wicking into or above the entry point (1.15580).",
     "invalid_if": "H1 candle close above 1.15724.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 1.15274,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774546301",
@@ -5663,9 +5663,9 @@
     "trigger": "Wait for price to pull back into the retest zone (4397.58266 \u2013 4421.01695). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 4409.2998 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 4432.7341,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "SILVER_1774546355",
@@ -5691,9 +5691,9 @@
     "trigger": "Bullish engulfing or strong demand rejection candle on M15 at or near the OB midpoint (67.63).",
     "invalid_if": "Price breaks below 67.480 before entry is triggered, or if a new lower low is formed on M15 below the OB.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 67.48,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "NAS100_1774548149",
@@ -5721,9 +5721,9 @@
     "trigger": "Wait for M15 candle to touch 23771.41 and close bearish below this price.",
     "invalid_if": "H1 or M15 candle closes above 23811.52.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 23661.19,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774560659",
@@ -5748,9 +5748,9 @@
     "trigger": "Wait for price to pull back into the retest zone (68807.71635 \u2013 69073.42427). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 68940.57031 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 68674.86239,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774562511",
@@ -5775,9 +5775,9 @@
     "trigger": "M15 bullish engulfing or hammer candle confirmed at or near entry price",
     "invalid_if": "Price breaks below SL (4355.7) before entry is triggered, or fails to retrace to entry.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 4416.0,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "EURUSD_1774575110",
@@ -5805,9 +5805,9 @@
     "trigger": "M15 bearish engulfing or strong bearish candle close after price taps 1.15551.",
     "invalid_if": "Price breaks and M15 candle closes above 1.15724 (SL) or above 1.15600 without bearish rejection.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 1.15274,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774580514",
@@ -5834,9 +5834,9 @@
     "trigger": "Strong M15 bullish candle printing from the entry zone after price retraces.",
     "invalid_if": "Price closes M15 candle below 4405.5000 or breaks SL at 4400.5000.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 4434.6001,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774593115",
@@ -5862,9 +5862,9 @@
     "trigger": "M15 bullish engulfing or pin bar close at OB midpoint on retest",
     "invalid_if": "Price closes below H1 04:00 candle low (68269.156) on H1 timeframe.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 68219.15625,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "SILVER_1774593189",
@@ -5891,9 +5891,9 @@
     "trigger": "M15 bearish candle close after price taps FVG edge 69.905",
     "invalid_if": "Price closes above 70.930 or breaks below 69.645 without activating entry",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 69.55,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "EURUSD_1774598462",
@@ -5918,9 +5918,9 @@
     "trigger": "Wait for price to pull back into the retest zone (1.15202 \u2013 1.15266). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 1.15234 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 1.15298,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774602140",
@@ -5946,9 +5946,9 @@
     "trigger": "Price enters FVG/OB zone and shows rejection (e.g., M15 bearish engulfing or pin bar).",
     "invalid_if": "Price breaks and closes above SL (68530.76) or closes significantly below current low (67616.82) before entry, invalidating retracement.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 67616.82,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774602203",
@@ -5974,9 +5974,9 @@
     "trigger": "Price retests FVG top at 4478.20020 with M15 bearish rejection.",
     "invalid_if": "H1 or M15 candle closes above 4483.20020 (liquidity sweep high).",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 4458.1001,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774603988",
@@ -6001,9 +6001,9 @@
     "trigger": "Wait for price to pull back into the retest zone (68011.0736 \u2013 68257.45765). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 68134.26562 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 67271.92146,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "EURUSD_1774609264",
@@ -6028,9 +6028,9 @@
     "trigger": "Wait for price to pull back into the retest zone (1.15181 \u2013 1.15233). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 1.15207 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 1.15259,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774611058",
@@ -6055,9 +6055,9 @@
     "trigger": "Wait for price to pull back into the retest zone (67274.74464 \u2013 67541.84911). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 67408.29688 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 66473.43124,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774625502",
@@ -6109,9 +6109,9 @@
     "trigger": "Wait for price to pull back into the retest zone (70.14768 \u2013 70.71232). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 70.43 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 69.86536,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "EURUSD_1774627264",
@@ -6163,9 +6163,9 @@
     "trigger": "Wait for price to pull back into the retest zone (159.9244 \u2013 160.0276). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 159.976 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 160.3372,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "SILVER_1774627308",
@@ -6190,9 +6190,9 @@
     "trigger": "Wait for price to pull back into the retest zone (70.14425 \u2013 70.71575). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 70.43 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 69.8585,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "NZDUSD_1774629054",
@@ -6217,9 +6217,9 @@
     "trigger": "Wait for price to pull back into the retest zone (0.5762 \u2013 0.57667). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 0.57644 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 0.5748,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "GOLD_1774629056",
@@ -6244,9 +6244,9 @@
     "trigger": "Wait for price to pull back into the retest zone (4532.00224 \u2013 4551.19795). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 4541.6001 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 4522.40439,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "SILVER_1774629113",
@@ -6274,9 +6274,9 @@
     "trigger": "Price re-enters FVG/OB area and M15 bearish rejection candle forms.",
     "invalid_if": "M15 candle closes above 71.875 before entry or if price drops significantly without triggering.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 70.27,
+    "outcome_checked_at": "2026-03-28 07:05"
   },
   {
     "id": "BTCUSD_1774632726",
@@ -6302,8 +6302,8 @@
     "trigger": "M15 bullish engulfing or strong bullish reaction candle close upon retest of the demand zone",
     "invalid_if": "Price closes below 65628.72656",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 65628.72656,
+    "outcome_checked_at": "2026-03-28 07:05"
   }
 ]
