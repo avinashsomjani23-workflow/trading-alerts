@@ -2,7 +2,7 @@ name: Weekly Review Email
 
 on:
   schedule:
-    - cron: '30 2 * * 1'   # Monday 02:30 UTC = 08:00 AM IST
+   - cron: '30 2 * * 6'   # Saturday 02:30 UTC = 08:00 AM IST
   workflow_dispatch:
 
 env:
