@@ -16,15 +16,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check market hours (IST)
+        id: market_check
+        run: |
+          IST_HOUR=$(TZ='Asia/Kolkata' date +%H)
+          IST_DOW=$(TZ='Asia/Kolkata' date +%u)   # 1=Mon … 6=Sat, 7=Sun
+          HOUR_NUM=$((10#$IST_HOUR))               # strip leading zero safely
+          echo "IST time: $(TZ='Asia/Kolkata' date '+%A %H:%M')"
+          if [ "$IST_DOW" -ge 6 ] || [ "$HOUR_NUM" -lt 8 ]; then
+            echo "Blackout window — skipping run (weekend or 00:00–08:00 IST)."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Market open — proceeding."
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Set up Python
+        if: steps.market_check.outputs.skip != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install dependencies
+        if: steps.market_check.outputs.skip != 'true'
         run: pip install yfinance requests numpy matplotlib pandas
 
       - name: Run alert engine
+        if: steps.market_check.outputs.skip != 'true'
         env:
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
           GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
@@ -34,6 +52,7 @@ jobs:
         run: python alert_engine.py
 
       - name: Save logs to repo
+        if: steps.market_check.outputs.skip != 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
