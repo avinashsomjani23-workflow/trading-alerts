@@ -165,23 +165,33 @@ def update_outcomes():
 
 def get_weekly_alerts():
     """
-    Returns alerts from the previous trading week: Mon 00:00 IST to Fri 23:59 IST.
-    Always reviews the Mon-Fri week that has fully completed.
-    Safe to run on any day — always resolves to the most recent complete Mon-Fri.
+    Returns alerts from Monday 00:00 IST of the current week up to now,
+    capped at Friday 23:59 IST so Saturday/Sunday runs always show Mon–Fri.
+    Examples:
+      - Run on Thursday 2 PM  → Mon 00:00 to Thu 14:00 IST
+      - Run on Saturday 8 AM  → Mon 00:00 to Fri 23:59 IST
     """
     ist_now             = datetime.utcnow() + timedelta(hours=5, minutes=30)
-    days_to_this_monday = ist_now.weekday()  # Monday=0, Tuesday=1, ...
-    this_monday_ist     = ist_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_to_this_monday)
-    last_monday_ist     = this_monday_ist - timedelta(days=7)
-    last_friday_ist     = last_monday_ist + timedelta(days=4, hours=23, minutes=59, seconds=59)
-    last_monday_utc     = last_monday_ist - timedelta(hours=5, minutes=30)
-    last_friday_utc     = last_friday_ist - timedelta(hours=5, minutes=30)
+    days_to_this_monday = ist_now.weekday()   # Monday=0 … Sunday=6
+    this_monday_ist     = ist_now.replace(hour=0, minute=0, second=0, microsecond=0) \
+                          - timedelta(days=days_to_this_monday)
+    this_friday_ist     = this_monday_ist + timedelta(days=4, hours=23, minutes=59, seconds=59)
+
+    week_start_utc = this_monday_ist - timedelta(hours=5, minutes=30)
+    # Cap end at Friday 23:59 IST — Saturday/Sunday runs see Mon–Fri only
+    week_end_ist   = min(ist_now, this_friday_ist)
+    week_end_utc   = week_end_ist - timedelta(hours=5, minutes=30)
 
     weekly = [a for a in alert_log
-              if last_monday_utc
+              if week_start_utc
               <= datetime.strptime(a['timestamp_utc'], "%Y-%m-%d %H:%M")
-              <= last_friday_utc]
-    print(f"  {len(weekly)} alerts | window: {last_monday_ist.strftime('%d %b %Y')} (Mon) to {last_friday_ist.strftime('%d %b %Y')} (Fri)")
+              <= week_end_utc]
+
+    end_day_label = "Fri" if ist_now >= this_friday_ist else ist_now.strftime('%a')
+    print(f"  {len(weekly)} alerts | window: "
+          f"{this_monday_ist.strftime('%d %b %Y')} (Mon) "
+          f"to {week_end_ist.strftime('%d %b %Y')} ({end_day_label}) — "
+          f"IST: {this_monday_ist.strftime('%H:%M')} to {week_end_ist.strftime('%H:%M')}")
     return weekly
 
 
