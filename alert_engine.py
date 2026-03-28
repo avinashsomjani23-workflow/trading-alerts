@@ -1250,11 +1250,14 @@ def send_email(subject, html_body, chart1_b64=None, chart2_b64=None):
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 print(f"Alert engine started {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
 
+# Outcome check runs first — regardless of market hours.
+# This means manual triggers on weekends still update this week's results.
+run_intraweek_outcome_check()
+
 market_open, market_status = is_market_open()
 print(f"  Market: {market_status}")
 if not market_open:
     print("  Exiting — market closed.")
-    save_alert_log()
     exit(0)
 
 macro_news   = fetch_macro_news()
