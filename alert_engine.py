@@ -540,6 +540,119 @@ def call_gemini(prompt):
     except Exception as e:
         return None, f"Gemini error: {str(e)}"
 
+# ── Intra-week outcome checking ───────────────────────────────────────────────
+def get_week_start_utc():
+    """Returns UTC datetime for Monday 00:00 IST of the current week."""
+    ist_now           = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    days_since_monday = ist_now.weekday()          # Monday=0 … Sunday=6
+    monday_ist        = ist_now.replace(hour=0, minute=0, second=0, microsecond=0) \
+                        - timedelta(days=days_since_monday)
+    monday_utc        = monday_ist - timedelta(hours=5, minutes=30)
+    return monday_ist, monday_utc   # returns both for display and comparison
+
+
+def check_outcome_for_alert(alert):
+    """
+    Fetches M15 candles after alert_time and returns the first SL or TP1 hit.
+    M15 used (not H1) — same single fetch, finer resolution.
+    Returns: ('win_tp1', price) | ('loss', price) | ('pending', None)
+    Sequential yfinance fetch — never call in parallel.
+    """
+    pair   = alert.get('pair', '')
+    symbol = next((p['symbol'] for p in config['pairs'] if p['name'] == pair), None)
+    if not symbol:
+        return 'pending', None
+    try:
+        # Normalise bias — handles strings like "WAIT for pullback, then LONG"
+        raw_bias = str(alert.get('bias', '')).upper()
+        if   'LONG'  in raw_bias: bias = 'LONG'
+        elif 'SHORT' in raw_bias: bias = 'SHORT'
+        else: return 'pending', None
+
+        sl  = float(alert.get('sl',  0) or 0)
+        tp1 = float(alert.get('tp1', 0) or 0)
+        if sl <= 0 or tp1 <= 0:
+            return 'pending', None
+
+        alert_time = datetime.strptime(alert['timestamp_utc'], "%Y-%m-%d %H:%M")
+
+        # Single M15 fetch — one call, finer resolution than H1
+        df = clean_df(yf.download(symbol,
+            start=(alert_time - timedelta(hours=1)).strftime('%Y-%m-%d'),
+            interval="15m", progress=False))
+        if df is None:
+            return 'pending', None
+
+        for ts, row in df.iterrows():
+            try:
+                ts_n = ts.replace(tzinfo=None) if hasattr(ts, 'tzinfo') and ts.tzinfo else ts
+                if ts_n < alert_time:
+                    continue
+                h = float(row['High'])
+                l = float(row['Low'])
+            except Exception:
+                continue
+            if bias == 'LONG':
+                if l <= sl:  return 'loss',    sl
+                if h >= tp1: return 'win_tp1', tp1
+            else:
+                if h >= sl:  return 'loss',    sl
+                if l <= tp1: return 'win_tp1', tp1
+
+        return 'pending', None
+
+    except Exception as e:
+        print(f"    Outcome check error ({pair}): {e}")
+        return 'pending', None
+
+
+def run_intraweek_outcome_check():
+    """
+    Scans all pending alerts fired since Monday 00:00 IST.
+    Updates outcomes in alert_log and saves. Sequential fetches only.
+    """
+    monday_ist, monday_utc = get_week_start_utc()
+    print(f"  Intra-week outcome check — from "
+          f"{monday_ist.strftime('%a %d %b %H:%M IST')} "
+          f"/ {monday_utc.strftime('%d %b %H:%M UTC')} to now...")
+
+    updated = 0
+    for alert in alert_log:
+        if alert.get('outcome') in ('win_tp1', 'loss', 'invalidated'):
+            continue
+        if alert.get('alert_type') not in ('zone', 'zone_intraday', 'breakout'):
+            continue
+
+        try:
+            alert_time = datetime.strptime(alert['timestamp_utc'], "%Y-%m-%d %H:%M")
+        except Exception:
+            continue
+
+        if alert_time < monday_utc:
+            continue
+
+        # Skip alerts with no trade levels (pure breakout notifications)
+        sl  = float(alert.get('sl',  0) or 0)
+        tp1 = float(alert.get('tp1', 0) or 0)
+        if sl <= 0 or tp1 <= 0:
+            continue
+
+        print(f"    Checking {alert['pair']} @ {alert['timestamp_utc']} UTC...", end=" ")
+        outcome, outcome_price = check_outcome_for_alert(alert)
+
+        if outcome != 'pending':
+            alert['outcome']            = outcome
+            alert['outcome_price']      = outcome_price
+            alert['outcome_checked_at'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+            print(f"→ {outcome} at {outcome_price}")
+            updated += 1
+        else:
+            print("→ still pending.")
+
+    save_alert_log()
+    print(f"  Done. {updated} outcome(s) updated.")
+
+
 # ── Chart generation ──────────────────────────────────────────────────────────
 def generate_chart(df, title, levels, data):
     try:
