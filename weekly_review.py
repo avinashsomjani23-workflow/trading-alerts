@@ -312,7 +312,9 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
     cl_wr        = round(cl_wins/(cl_wins+cl_losses)*100,1)   if (cl_wins+cl_losses)   > 0 else 0
 
     alert_summary = []
-    for a in [x for x in weekly_alerts if x.get('outcome') in ('win_tp1', 'loss')]:
+    for a in [x for x in weekly_alerts
+              if x.get('outcome') in ('win_tp1', 'loss')
+              and x.get('alert_type', '') != 'breakout']:
         alert_summary.append({
             "pair":       a.get('pair',''),
             "ist_time":   a.get('ist_time',''),
