@@ -993,6 +993,7 @@ if not weekly_alerts:
 wins              = sum(1 for a in weekly_alerts if a.get('outcome') == 'win_tp1')
 losses            = sum(1 for a in weekly_alerts if a.get('outcome') == 'loss')
 invalidated_count = sum(1 for a in weekly_alerts if a.get('outcome') == 'invalidated')
+not_triggered     = sum(1 for a in weekly_alerts if a.get('outcome') == 'not_triggered')
 pending           = sum(1 for a in weekly_alerts if a.get('outcome') == 'pending')
 win_rate          = (wins/(wins+losses)*100) if (wins+losses) > 0 else 0
 
