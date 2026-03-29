@@ -424,13 +424,41 @@ def detect_geo_flag_phrases(news_text):
 
 # ── Macro news ────────────────────────────────────────────────────────────────
 def fetch_macro_news():
+    """
+    Two-source news fetch:
+    1. FXStreet RSS — forex-specific macro (rate decisions, CPI, etc.)
+    2. Google News RSS — geopolitical headlines (Iran, war, sanctions, tariffs, oil supply)
+    Both sources are combined and passed to Gemini as context.
+    """
+    headlines = []
+
+    # Source 1 — FXStreet (forex macro)
     try:
         url   = "https://api.rss2json.com/v1/api.json?rss_url=https://www.fxstreet.com/rss/news&count=5"
         r     = requests.get(url, timeout=10)
         items = r.json().get("items", [])
-        return "\n".join([f"- {i['title']}" for i in items])
-    except:
-        return "Macro news unavailable."
+        for i in items:
+            headlines.append(f"[FXStreet] {i['title']}")
+    except Exception:
+        headlines.append("[FXStreet] Unavailable")
+
+    # Source 2 — Google News RSS (geopolitical: US-Iran, sanctions, oil, war, tariffs)
+    geo_query = "Iran+war+OR+military+strike+OR+sanctions+OR+oil+supply+OR+tariff+OR+ceasefire"
+    geo_url   = (f"https://news.google.com/rss/search?q={geo_query}"
+                 f"&hl=en-US&gl=US&ceid=US:en")
+    try:
+        import xml.etree.ElementTree as ET
+        r   = requests.get(geo_url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        root = ET.fromstring(r.content)
+        items = root.findall(".//item")[:5]
+        for item in items:
+            title = item.findtext("title", "").strip()
+            if title:
+                headlines.append(f"[GeoNews] {title}")
+    except Exception:
+        headlines.append("[GeoNews] Unavailable")
+
+    return "\n".join(headlines) if headlines else "Macro news unavailable."
 
 def format_candles(df, label, n=20):
     if df is None or df.empty:
