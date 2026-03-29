@@ -99,7 +99,7 @@ def check_entry_gated_outcome(alert):
         alert_time = datetime.strptime(alert['timestamp_utc'], "%Y-%m-%d %H:%M")
         df = clean_df(yf.download(symbol,
             start=(alert_time - timedelta(hours=1)).strftime('%Y-%m-%d'),
-            interval="1h", progress=False))
+            interval="15m", progress=False))
         if df is None:
             return "pending", None
 
