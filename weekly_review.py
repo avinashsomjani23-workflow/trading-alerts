@@ -286,7 +286,21 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
     loss_clusters = [f"{h} IST ({v['losses']} losses)"
                      for h, v in sorted(hour_buckets.items()) if v['losses'] >= 2]
 
-    invalidation_rate = round(invalidated_count / len(weekly_alerts) * 100, 1) if weekly_alerts else 0
+   invalidation_rate = round(invalidated_count / len(weekly_alerts) * 100, 1) if weekly_alerts else 0
+
+    # Zone fatigue computed in Python — not delegated to Gemini
+    # Count alerts per pair this week, zone alerts only
+    zone_alert_counts = {}
+    for a in weekly_alerts:
+        if a.get('alert_type', '') == 'breakout':
+            continue
+        p = a.get('pair', '')
+        zone_alert_counts[p] = zone_alert_counts.get(p, 0) + 1
+    python_zone_flags = [
+        f"{pair}: {count} zone alerts this week"
+        for pair, count in zone_alert_counts.items()
+        if count >= 3
+    ]
 
     geo_alerts   = [a for a in weekly_alerts if a.get('geo_flag', False)]
     clean_alerts = [a for a in weekly_alerts if not a.get('geo_flag', False)]
@@ -351,7 +365,7 @@ Return ONLY raw JSON. No markdown. No code fences.
   "timing_recommendation": "one actionable sentence on time filtering",
   "intraday_vs_swing": "one sentence comparing intraday vs swing triggered performance",
   "geo_insight": "compare geo-flagged vs clean technical win rates and what that tells us this week",
-  "zone_fatigue_flags": ["list any pair+zone alerted 3+ times this week — empty array if none"],
+  "zone_fatigue_flags": {json.dumps(python_zone_flags)},
   "streak_summary": "notable winning or losing streaks in the triggered set",
   "drawdown_flag": "none or describe if 3+ consecutive losses in triggered trades",
   "improvement_suggestion": "one specific actionable change based on this week only"
