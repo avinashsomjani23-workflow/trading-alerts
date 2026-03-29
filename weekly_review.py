@@ -69,8 +69,14 @@ def call_gemini(prompt, retries=1):
             else:
                 return None, f"Gemini error: {str(e)}"
 
-# ── SL/TP outcome check — only runs after trigger confirmed ───────────────────
-def check_sl_tp_outcome(alert):
+# ── Entry-gated outcome check ──────────────────────────────────────────────────
+# Three-step logic — no Gemini, no text parsing:
+#   Step 1: Was SL hit before price ever reached entry? → not_triggered
+#   Step 2: Did price reach entry? If never → not_triggered
+#   Step 3: From the first candle where entry was reached, did SL or TP1 hit first?
+#           → loss or win_tp1
+# This ensures win rate only counts trades that were actually enterable.
+def check_entry_gated_outcome(alert):
     pair   = alert['pair']
     symbol = next((p['symbol'] for p in config['pairs'] if p['name'] == pair), None)
     if not symbol:
@@ -82,55 +88,77 @@ def check_sl_tp_outcome(alert):
         if sl <= 0 or tp1 <= 0:
             return "pending", None
 
-        # Start scanning from trigger candle time if known, else from alert time
-        alert_time   = datetime.strptime(alert['timestamp_utc'], "%Y-%m-%d %H:%M")
-        trigger_ts   = alert.get('trigger_candle_time')
-        scan_from    = alert_time
-        if trigger_ts:
-            try:
-                scan_from = datetime.strptime(trigger_ts[:16], "%Y-%m-%d %H:%M")
-            except Exception:
-                pass
+        # Parse entry — handle range entries like "1.1050-1.1060" by taking first value
+        try:
+            entry = float(str(alert.get('entry', '0')).split('-')[0].strip() or 0)
+        except Exception:
+            entry = 0
+        if entry <= 0:
+            return "pending", None
 
+        alert_time = datetime.strptime(alert['timestamp_utc'], "%Y-%m-%d %H:%M")
         df = clean_df(yf.download(symbol,
-            start=(scan_from - timedelta(hours=1)).strftime('%Y-%m-%d'),
+            start=(alert_time - timedelta(hours=1)).strftime('%Y-%m-%d'),
             interval="1h", progress=False))
         if df is None:
             return "pending", None
 
+        entry_reached_at = None  # timestamp of first candle where price touched entry
+
         for ts, row in df.iterrows():
             try:
                 ts_n = ts.replace(tzinfo=None) if hasattr(ts, 'tzinfo') and ts.tzinfo else ts
-                if ts_n < scan_from:
+                if ts_n < alert_time:
                     continue
                 h = float(row['High'])
                 l = float(row['Low'])
             except Exception:
                 continue
-            if bias == "LONG":
-                if l <= sl:  return "loss",    sl
-                if h >= tp1: return "win_tp1", tp1
-            elif bias == "SHORT":
-                if h >= sl:  return "loss",    sl
-                if l <= tp1: return "win_tp1", tp1
+
+            if entry_reached_at is None:
+                # Before entry is touched — check if SL was hit first
+                if bias == "LONG"  and l <= sl: return "not_triggered", None
+                if bias == "SHORT" and h >= sl: return "not_triggered", None
+
+                # Check if entry is touched this candle
+                if bias == "LONG"  and l <= entry <= h: entry_reached_at = ts_n
+                if bias == "SHORT" and l <= entry <= h: entry_reached_at = ts_n
+
+            else:
+                # Entry was reached — now track SL vs TP1 from here
+                if bias == "LONG":
+                    if l <= sl:  return "loss",    sl
+                    if h >= tp1: return "win_tp1", tp1
+                elif bias == "SHORT":
+                    if h >= sl:  return "loss",    sl
+                    if l <= tp1: return "win_tp1", tp1
+
+        # If entry was reached but SL/TP1 not yet hit → still pending
+        # If entry was never reached → not_triggered
+        if entry_reached_at is None:
+            # Only mark not_triggered if alert is old enough that entry is unlikely to come
+            alert_age_hours = (datetime.utcnow() - alert_time).total_seconds() / 3600
+            if alert_age_hours >= 48:
+                return "not_triggered", None
         return "pending", None
 
     except Exception as e:
-        print(f"  SL/TP check error {pair}: {e}")
+        print(f"  Outcome check error {pair}: {e}")
         return "pending", None
 
 
 # ── Full outcome update pipeline ───────────────────────────────────────────────
 def update_outcomes():
     """
-    For each pending alert: pure Python SL/TP candle scan. No Gemini calls.
-    Scans H1 candles from alert_time. If SL hit first → loss. If TP1 hit first → win_tp1.
-    Alerts with no SL/TP (old breakouts logged with data=None) are skipped gracefully.
+    Entry-gated outcome scan. No Gemini calls.
+    Step 1: SL hit before entry → not_triggered (excluded from win rate).
+    Step 2: Price never reached entry after 48h → not_triggered.
+    Step 3: Entry reached, then SL/TP1 hit → loss or win_tp1 (counted in win rate).
     Sequential yfinance fetches only — NOT thread-safe.
     """
     updated = 0
     for alert in alert_log:
-        if alert.get('outcome') in ('win_tp1', 'loss', 'invalidated'):
+        if alert.get('outcome') in ('win_tp1', 'loss', 'not_triggered', 'invalidated'):
             continue
         try:
             alert_time = datetime.strptime(alert['timestamp_utc'], "%Y-%m-%d %H:%M")
@@ -145,24 +173,23 @@ def update_outcomes():
                 continue
 
             print(f"    Scanning {alert['pair']} ({alert['timestamp_utc']})...")
-            outcome, outcome_price = check_sl_tp_outcome(alert)
+            outcome, outcome_price = check_entry_gated_outcome(alert)
 
             if outcome != 'pending':
                 alert['outcome']            = outcome
                 alert['outcome_price']      = outcome_price
                 alert['outcome_checked_at'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-                print(f"      → {outcome} at {outcome_price}")
+                print(f"      → {outcome}" + (f" at {outcome_price}" if outcome_price else ""))
                 updated += 1
             else:
-                print(f"      → SL/TP not yet hit. Staying pending.")
+                print(f"      → Entry not yet reached or SL/TP not yet hit. Staying pending.")
 
         except Exception as e:
             print(f"  Update error {alert.get('pair','?')}: {e}")
 
     with open(ALERT_LOG_FILE, "w") as f:
         json.dump(alert_log, f, indent=2)
-    print(f"  Updated {updated} outcomes (Python SL/TP scan — 0 Gemini calls)")
-
+    print(f"  Updated {updated} outcomes (entry-gated scan — 0 Gemini calls)")
 def get_weekly_alerts():
     """
     Returns alerts from Monday 00:00 IST of the current week up to now,
