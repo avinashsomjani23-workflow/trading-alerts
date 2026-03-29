@@ -2765,9 +2765,9 @@
       "FVG overlaps with OB, providing precise entry",
       "Good risk-reward potential for short"
     ],
-    "outcome": "pending",
+    "outcome": "not_triggered",
     "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome_checked_at": "2026-03-29 17:55",
     "trigger_met": false,
     "trigger_candle_time": null,
     "trigger_confidence": "unknown",
