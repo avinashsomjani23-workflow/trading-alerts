@@ -939,11 +939,26 @@ print(f"Weekly review started {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC
 print("  Running outcome update (SL/TP scan — 0 Gemini calls)...")
 update_outcomes()
 
-weekly_alerts = get_weekly_alerts()
+weekly_alerts_all = get_weekly_alerts()
+
+# Hard filter: zone alerts must have score >= 8; breakout alerts >= 4.
+# This removes any alerts that slipped through below the minimum threshold.
+# After the alert_engine fix, this should never remove anything —
+# but it protects the review's accuracy against historical leakage.
+weekly_alerts_below = [
+    a for a in weekly_alerts_all
+    if (a.get('alert_type','zone') == 'breakout' and a.get('confidence_score',0) < 4)
+    or (a.get('alert_type','zone') != 'breakout' and a.get('confidence_score',0) < 8)
+]
+weekly_alerts = [a for a in weekly_alerts_all if a not in weekly_alerts_below]
+below_count   = len(weekly_alerts_below)
+
+if below_count > 0:
+    print(f"  WARNING: {below_count} alert(s) removed — below minimum score threshold. These are excluded from all stats.")
 
 if not weekly_alerts:
     send_status_email(
-        "No alerts found for the previous Mon–Fri trading week. "
+        "No qualifying alerts (zone score ≥ 8 / breakout score ≥ 4) found for the previous Mon–Fri trading week. "
         "The system is monitoring — alerts will appear here once a full week has been captured."
     )
     exit(0)
