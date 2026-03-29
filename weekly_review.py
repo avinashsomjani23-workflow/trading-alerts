@@ -286,7 +286,7 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
     loss_clusters = [f"{h} IST ({v['losses']} losses)"
                      for h, v in sorted(hour_buckets.items()) if v['losses'] >= 2]
 
-   invalidation_rate = round(invalidated_count / len(weekly_alerts) * 100, 1) if weekly_alerts else 0
+    invalidation_rate = round(invalidated_count / len(weekly_alerts) * 100, 1) if weekly_alerts else 0
 
     # Zone fatigue computed in Python — not delegated to Gemini
     # Count alerts per pair this week, zone alerts only
