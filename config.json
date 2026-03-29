@@ -56,28 +56,6 @@
       "spread_pips": 1.5,
       "spread_pips_note": "for_reference_only"
     },
-    {
-      "symbol": "GC=F",
-      "name": "GOLD",
-      "proximity_pct": 0.35,
-      "proximity_buffer_pct": 0.5,
-      "min_touches": 1,
-      "min_confidence": 8,
-      "style": "both",
-      "spread_pips": 0.3,
-      "spread_pips_note": "for_reference_only"
-    },
-    {
-      "symbol": "SI=F",
-      "name": "SILVER",
-      "proximity_pct": 0.45,
-      "proximity_buffer_pct": 0.5,
-      "min_touches": 1,
-      "min_confidence": 8,
-      "style": "both",
-      "spread_pips": 0.03,
-      "spread_pips_note": "for_reference_only"
-    }
   ],
   "zone_detection": {
     "swing_lookback": 3
