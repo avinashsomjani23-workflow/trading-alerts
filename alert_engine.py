@@ -1340,7 +1340,7 @@ for pair_conf in config["pairs"]:
             print(f"    {error}")
             continue
 
-      score = data.get("confidence_score", 0)
+        score = data.get("confidence_score", 0)
         if score < min_conf or not data.get("send_alert", False):
             print(f"    {name} skipped — score {score}/10 below minimum {min_conf}. {data.get('confidence_reason','')}")
             continue
