@@ -6330,9 +6330,9 @@
     "trigger": "M15 bearish candle close within FVG (67548.00781-67493.78125) after price retraces into it.",
     "invalid_if": "M15 candle closes above 67548.00781 (top of FVG) or H1 candle closes above OB high (67655.22656) before entry.",
     "geo_flag": true,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 67730.22656,
+    "outcome_checked_at": "2026-03-30 08:30"
   },
   {
     "id": "NZDUSD_1774857667",
