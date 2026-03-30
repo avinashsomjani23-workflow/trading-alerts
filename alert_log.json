@@ -6360,5 +6360,32 @@
     "outcome": "win_tp1",
     "outcome_price": 0.57233,
     "outcome_checked_at": "2026-03-30 09:30"
+  },
+  {
+    "id": "NZDUSD_1774879267",
+    "alert_type": "breakout",
+    "pair": "NZDUSD",
+    "timestamp_utc": "2026-03-30 14:01",
+    "ist_time": "19:31",
+    "zone_level": 0.57179,
+    "zone_label": "BEARISH Breakout",
+    "bias": "SHORT",
+    "entry": 0.57155,
+    "sl": 0.57227,
+    "tp1": 0.57011,
+    "tp2": 0.56939,
+    "confidence_score": 4,
+    "confluences": [
+      "+2 H1 body closed below 0.57179, candle 1.8x ATR",
+      "+0 Volume below 1.3x average",
+      "+1 Level tested 9 times before (well-established)",
+      "+1 Break direction matches 50-period MA trend"
+    ],
+    "trigger": "Wait for price to pull back into the retest zone (0.57155 \u2013 0.57203). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
+    "invalid_if": "Any H1 candle closes back above 0.57179 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
+    "geo_flag": false,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
