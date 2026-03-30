@@ -55,7 +55,7 @@
       "style": "both",
       "spread_pips": 1.5,
       "spread_pips_note": "for_reference_only"
-    },
+    }
   ],
   "zone_detection": {
     "swing_lookback": 3
