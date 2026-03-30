@@ -6305,5 +6305,33 @@
     "outcome": "loss",
     "outcome_price": 65628.72656,
     "outcome_checked_at": "2026-03-28 07:05"
+  },
+  {
+    "id": "BTCUSD_1774852298",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-30 06:31",
+    "ist_time": "12:01",
+    "zone_level": 67475.67188,
+    "zone_label": "Supply / Resistance",
+    "bias": "SHORT",
+    "entry": "67493.78125",
+    "sl": 67730.22656,
+    "tp1": 67091.39062,
+    "tp2": 66934.85938,
+    "confidence_score": 9,
+    "confluences": [
+      "M15 CHoCH confirmed (05:30 M15)",
+      "Price in H1 Premium zone",
+      "Liquidity swept above previous high (04:00 H1) before drop",
+      "Bearish H1 OB and M15 FVG overlap",
+      "Strong rejection from 67655 area"
+    ],
+    "trigger": "M15 bearish candle close within FVG (67548.00781-67493.78125) after price retraces into it.",
+    "invalid_if": "M15 candle closes above 67548.00781 (top of FVG) or H1 candle closes above OB high (67655.22656) before entry.",
+    "geo_flag": true,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
