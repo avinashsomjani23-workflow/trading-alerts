@@ -411,5 +411,40 @@
     "zone": 23405.0,
     "status": "error",
     "reason": "Gemini error: {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}"
+  },
+  {
+    "time": "2026-03-31 13:31",
+    "pair": "EURUSD",
+    "zone": 1.15402,
+    "status": "rejected_gemini_no_alert",
+    "reason": "Low confidence due to heavily fatigued zone, inability to confirm OB/FVG with provided data, lack of bearish structural shift, and unachievable RR."
+  },
+  {
+    "time": "2026-03-31 13:31",
+    "pair": "USDJPY",
+    "zone": 159.18738,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time": "2026-03-31 13:31",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 13:31",
+    "pair": "BTCUSD",
+    "zone": 66471.9375,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time": "2026-03-31 13:32",
+    "pair": "NAS100",
+    "zone": 23405.0,
+    "status": "rejected_gemini_no_alert",
+    "reason": "Low confidence due to lack of M15 CHoCH confirmation, absence of FVG overlap, and prevailing H1 bullish trend."
   }
 ]
