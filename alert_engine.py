@@ -25,16 +25,64 @@ ALERT_EMAIL   = os.environ["ALERT_EMAIL"]
 
 # ── Alert log ─────────────────────────────────────────────────────────────────
 ALERT_LOG_FILE = "alert_log.json"
-try:
-    with open(ALERT_LOG_FILE) as f:
-        alert_log = json.load(f)
-    print(f"  Loaded {len(alert_log)} existing log entries")
-except:
-    alert_log = []
+SCAN_LOG_FILE = "scan_log.json"
+SYSTEM_STATUS_FILE = "system_status.json"
+VISIT_FILE = "zone_visit_state.json"
 
-def save_alert_log():
-    with open(ALERT_LOG_FILE, "w") as f:
-        json.dump(alert_log, f, indent=2)
+def load_json(path, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except:
+        return default
+
+def save_json(path, data):
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+
+alert_log = load_json(ALERT_LOG_FILE, [])
+scan_log = load_json(SCAN_LOG_FILE, [])
+system_status = load_json(SYSTEM_STATUS_FILE, {
+    "last_ok_email_utc": None,
+    "last_error_email_utc": None,
+    "last_trade_alert_utc": None
+})
+visit_state = load_json(VISIT_FILE, {})
+
+def utc_now():
+    return datetime.utcnow()
+
+def utc_str():
+    return utc_now().strftime("%Y-%m-%d %H:%M")
+
+def hours_since(ts):
+    if not ts:
+        return None
+    try:
+        t = datetime.strptime(ts, "%Y-%m-%d %H:%M")
+        return (utc_now() - t).total_seconds() / 3600
+    except:
+        return None
+
+def should_send_ok():
+    last_ok = hours_since(system_status.get("last_ok_email_utc"))
+    last_trade = hours_since(system_status.get("last_trade_alert_utc"))
+
+    return (last_ok is None or last_ok >= 3) and (last_trade is None or last_trade >= 3)
+
+def should_send_error():
+    last_err = hours_since(system_status.get("last_error_email_utc"))
+    return (last_err is None or last_err >= 3)
+
+def log_scan(pair, status, reason, zone=None):
+    scan_log.append({
+        "time": utc_str(),
+        "pair": pair,
+        "zone": round(zone, 5) if zone else None,
+        "status": status,
+        "reason": reason
+    })
+    save_json(SCAN_LOG_FILE, scan_log)
 
 # ── Zone visit state ──────────────────────────────────────────────────────────
 # No cooldown hours. No time tracking.
@@ -691,6 +739,37 @@ def send_email(subject, html_body, chart1_b64=None, chart2_b64=None):
             server.login(GMAIL_ADDRESS, GMAIL_PASS)
             server.sendmail(GMAIL_ADDRESS, recipient, msg.as_string())
         print(f"    Sent to {recipient}")
+    def send_simple_email(subject, html_body):
+    send_email(subject, html_body, None, None)
+
+def build_ok_email_html():
+    return f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; background:#f6f8fb; padding:24px;">
+        <div style="max-width:600px; margin:auto; background:white; border-radius:12px; padding:24px; border:1px solid #e5e7eb;">
+          <h2 style="margin-top:0; color:#1f2937;">System OK — No valid trade in the last 3 hours</h2>
+          <p style="color:#374151; font-size:14px;">The trading system ran correctly.</p>
+          <p style="color:#374151; font-size:14px;">No valid trade setup passed all filters in the last 3 hours.</p>
+          <p style="color:#6b7280; font-size:12px; margin-top:20px;">{utc_str()} UTC</p>
+        </div>
+      </body>
+    </html>
+    """
+
+def build_error_email_html(error_lines):
+    items = "".join([f"<li>{line}</li>" for line in error_lines[:10]])
+    return f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; background:#fff7f7; padding:24px;">
+        <div style="max-width:600px; margin:auto; background:white; border-radius:12px; padding:24px; border:1px solid #fecaca;">
+          <h2 style="margin-top:0; color:#991b1b;">System Error — Trading engine needs attention</h2>
+          <p style="color:#374151; font-size:14px;">The system hit one or more errors in the last run.</p>
+          <ul style="color:#374151; font-size:14px;">{items}</ul>
+          <p style="color:#6b7280; font-size:12px; margin-top:20px;">{utc_str()} UTC</p>
+        </div>
+      </body>
+    </html>
+    """
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 print(f"Alert engine started {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
