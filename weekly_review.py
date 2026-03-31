@@ -998,7 +998,7 @@ if not weekly_alerts:
         "No qualifying alerts (zone score ≥ 8) found for the previous Mon–Fri trading week. "
         "The system is monitoring — alerts will appear here once a full week has been captured."
     )
-    exit(0)
+   exit(0)
 
 wins              = sum(1 for a in weekly_alerts if a.get('outcome') == 'win_tp1')
 losses            = sum(1 for a in weekly_alerts if a.get('outcome') == 'loss')
