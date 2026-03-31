@@ -897,7 +897,7 @@ for pair_conf in config["pairs"]:
             print(f"    Sent: {name} SMC[{score}/10]")
             break
 
-            if zones_in_proximity == 0:
+        if zones_in_proximity == 0:
             log_scan(name, "zone_outside_proximity", "Zones were detected, but none are close enough to current price.")
 
     except Exception as e:
