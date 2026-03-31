@@ -6384,9 +6384,9 @@
     "trigger": "Wait for price to pull back into the retest zone (0.57155 \u2013 0.57203). Enter short after a bearish confirmation candle on the H1 or M15 timeframe \u2014 look for a bearish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the downside.",
     "invalid_if": "Any H1 candle closes back above 0.57179 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 0.57227,
+    "outcome_checked_at": "2026-03-31 02:30"
   },
   {
     "id": "BTCUSD_1774881058",
@@ -6467,8 +6467,8 @@
     "trigger": "M15 bullish engulfing candle or confirmed M15 CHoCH (break of minor bearish structure) occurring within the demand zone (between 66234.48 and 66585.34).",
     "invalid_if": "Price breaks definitively below the OB low of 66234.48438 without a valid trigger, or fails to show a bullish M15 reaction within the zone.",
     "geo_flag": true,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 67823.1,
+    "outcome_checked_at": "2026-03-31 02:30"
   }
 ]
