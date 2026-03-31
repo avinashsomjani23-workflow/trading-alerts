@@ -799,7 +799,222 @@ def build_error_email_html(error_lines):
       </body>
     </html>
     """
+def get_pair_conf(pair_name):
+    return next((p for p in config["pairs"] if p["name"] == pair_name), None)
 
+def parse_entry_mid(entry_value):
+    try:
+        s = str(entry_value).strip()
+        if not s:
+            return None
+        if "-" in s:
+            nums = [float(x.strip()) for x in s.split("-") if x.strip()]
+            if len(nums) == 2:
+                return (nums[0] + nums[1]) / 2
+        return float(s)
+    except:
+        return None
+
+def get_alert2_near_entry_pct(pair_name):
+    custom = {
+        "NAS100": 0.18,
+        "XAUUSD": 0.12,
+        "US30":   0.15
+    }
+    return custom.get(pair_name, 0.08)
+
+def build_alert2_email_html(original_alert, refreshed_data, current_price):
+    score = refreshed_data.get("confidence_score", 0)
+    bias = refreshed_data.get("bias", original_alert.get("bias", "WAIT"))
+    bias_color = "#e74c3c" if bias == "SHORT" else "#27ae60" if bias == "LONG" else "#f39c12"
+    score_color = "#27ae60" if score >= 8 else "#f39c12" if score >= 6 else "#e74c3c"
+
+    conf_items = "".join([
+        f'<li style="margin-bottom:5px;padding:7px 10px;background:#f0fff4;border-radius:6px;font-size:13px;">&#10003; {c}</li>'
+        for c in refreshed_data.get("confluences", [])
+    ])
+    miss_items = "".join([
+        f'<li style="margin-bottom:5px;padding:7px 10px;background:#fff8f0;border-radius:6px;font-size:13px;">&#10007; <b>{m["item"]}</b> — <span style="color:#777;font-style:italic;">{m["reason"]}</span></li>'
+        for m in refreshed_data.get("missing", [])
+    ])
+
+    ist_time = (datetime.utcnow() + timedelta(hours=5, minutes=30)).strftime("%H:%M")
+    utc_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+
+    return f"""<!DOCTYPE html>
+<html>
+<body style="font-family:Arial,sans-serif;background:#f0f2f5;padding:16px;margin:0;">
+<div style="max-width:620px;margin:auto;background:white;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.12);">
+
+  <div style="background:#1a1a2e;padding:18px 24px;">
+    <h2 style="color:white;margin:0;font-size:17px;">ENTRY ALERT: {original_alert['pair']}</h2>
+    <p style="color:#8899bb;margin:5px 0 0;font-size:12px;">{utc_time} UTC | {ist_time} IST</p>
+  </div>
+
+  <div style="background:{bias_color};padding:12px 24px;">
+    <p style="color:white;margin:0;font-size:15px;font-weight:bold;">{bias} — trigger ready now</p>
+  </div>
+
+  <div style="padding:10px 24px;background:#f8f9fa;border-bottom:1px solid #eee;">
+    <span style="font-size:12px;color:#666;">Updated SMC Confidence: </span>
+    <span style="font-size:18px;font-weight:bold;color:{score_color};">{score}/10</span>
+    <span style="font-size:12px;color:#888;margin-left:8px;">— {refreshed_data.get("confidence_reason","")}</span>
+  </div>
+
+  <div style="padding:20px 24px;">
+    <p style="background:#f4f4f8;padding:10px 14px;border-radius:8px;font-size:13px;color:#333;margin:0 0 16px;">
+      Original zone: <b>{original_alert.get("zone_label","")}</b> at <b>{original_alert.get("zone_level","")}</b>
+      &nbsp;|&nbsp; Now: <b>{current_price}</b>
+    </p>
+
+    <h3 style="color:#1a1a2e;font-size:13px;margin:0 0 8px;">TRADE LEVELS</h3>
+    <table style="width:100%;font-size:13px;margin-bottom:16px;">
+      <tr><td style="padding:5px 0;color:#555;width:140px;">Entry</td><td style="padding:5px 0;font-weight:bold;">{refreshed_data.get("entry","")}</td></tr>
+      <tr><td style="padding:5px 0;color:#555;">Entry model</td><td style="padding:5px 0;font-weight:bold;">{refreshed_data.get("entry_model","")}</td></tr>
+      <tr><td style="padding:5px 0;color:#555;">Trigger TF</td><td style="padding:5px 0;font-weight:bold;">{refreshed_data.get("trigger_tf","")}</td></tr>
+      <tr><td style="padding:5px 0;color:#555;">Trigger kind</td><td style="padding:5px 0;font-weight:bold;">{refreshed_data.get("trigger_kind","")}</td></tr>
+      <tr><td style="padding:5px 0;color:#e74c3c;">Stop Loss</td><td style="padding:5px 0;font-weight:bold;color:#e74c3c;">{refreshed_data.get("sl","")}</td></tr>
+      <tr><td style="padding:5px 0;color:#27ae60;">TP1</td><td style="padding:5px 0;font-weight:bold;color:#27ae60;">{refreshed_data.get("tp1","")} (R:R {refreshed_data.get("rr_tp1","")})</td></tr>
+      <tr><td style="padding:5px 0;color:#1e8449;">TP2</td><td style="padding:5px 0;font-weight:bold;color:#1e8449;">{refreshed_data.get("tp2","")} (R:R {refreshed_data.get("rr_tp2","")})</td></tr>
+    </table>
+
+    <h3 style="color:#1a1a2e;font-size:13px;margin:0 0 8px;">CONFLUENCES</h3>
+    <ul style="list-style:none;padding:0;margin:0 0 20px;">{conf_items}</ul>
+
+    <h3 style="color:#1a1a2e;font-size:13px;margin:0 0 8px;">MISSING</h3>
+    <ul style="list-style:none;padding:0;margin:0 0 20px;">{miss_items}</ul>
+
+    <h3 style="color:#1a1a2e;font-size:13px;margin:0 0 6px;">TRIGGER</h3>
+    <p style="font-size:13px;color:#333;background:#fffbea;padding:10px 14px;border-radius:8px;border-left:4px solid #f39c12;margin:0 0 20px;">{refreshed_data.get("trigger","")}</p>
+
+    <h3 style="color:#1a1a2e;font-size:13px;margin:0 0 6px;">INVALID IF</h3>
+    <p style="font-size:13px;color:#c0392b;background:#fef0f0;padding:10px 14px;border-radius:8px;border-left:4px solid #e74c3c;margin:0;">{refreshed_data.get("invalid_if","")}</p>
+  </div>
+</div>
+</body>
+</html>"""
+
+def build_invalidation_email_html(alert, refreshed_data, current_price):
+    ist_time = (datetime.utcnow() + timedelta(hours=5, minutes=30)).strftime("%H:%M")
+    utc_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+
+    return f"""<!DOCTYPE html>
+<html>
+<body style="font-family:Arial,sans-serif;background:#fff7f7;padding:16px;margin:0;">
+<div style="max-width:620px;margin:auto;background:white;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.12);">
+  <div style="background:#7f1d1d;padding:18px 24px;">
+    <h2 style="color:white;margin:0;font-size:17px;">TRADE INVALIDATED: {alert['pair']}</h2>
+    <p style="color:#fecaca;margin:5px 0 0;font-size:12px;">{utc_time} UTC | {ist_time} IST</p>
+  </div>
+  <div style="padding:20px 24px;">
+    <p style="font-size:14px;color:#374151;">The earlier setup is no longer valid.</p>
+    <table style="width:100%;font-size:13px;margin-top:12px;">
+      <tr><td style="padding:5px 0;color:#555;width:140px;">Pair</td><td style="padding:5px 0;font-weight:bold;">{alert.get("pair","")}</td></tr>
+      <tr><td style="padding:5px 0;color:#555;">Bias</td><td style="padding:5px 0;font-weight:bold;">{alert.get("bias","")}</td></tr>
+      <tr><td style="padding:5px 0;color:#555;">Current price</td><td style="padding:5px 0;font-weight:bold;">{current_price}</td></tr>
+      <tr><td style="padding:5px 0;color:#555;">Trigger status</td><td style="padding:5px 0;font-weight:bold;">{refreshed_data.get("trigger_status","")}</td></tr>
+      <tr><td style="padding:5px 0;color:#555;">Invalid if</td><td style="padding:5px 0;">{refreshed_data.get("invalid_if","")}</td></tr>
+    </table>
+  </div>
+</div>
+</body>
+</html>"""
+
+def run_second_alert_checks(macro_news):
+    fired = 0
+
+    for alert in alert_log:
+        try:
+            if alert.get("alert_type") != "zone":
+                continue
+            if alert.get("outcome") in ("win_tp1", "loss", "invalidated"):
+                continue
+            if alert.get("entry_alert_sent"):
+                continue
+            if alert.get("invalidation_email_sent"):
+                continue
+
+            pair_conf = get_pair_conf(alert.get("pair"))
+            if not pair_conf:
+                continue
+
+            symbol = pair_conf["symbol"]
+            min_conf = pair_conf.get("min_confidence", 5)
+
+            df1 = clean_df(yf.download(symbol, period="15d", interval="1h", progress=False))
+            df2 = fetch_m15_data(symbol)
+            if df1 is None or df2 is None:
+                continue
+
+            current_price = float(df1["Close"].iloc[-1])
+            entry_mid = parse_entry_mid(alert.get("entry", ""))
+            if entry_mid is None:
+                continue
+
+            near_entry_pct = get_alert2_near_entry_pct(alert["pair"])
+            entry_dist_pct = abs(current_price - entry_mid) / entry_mid * 100
+            if entry_dist_pct > near_entry_pct:
+                continue
+
+            zone_level = float(alert.get("zone_level", 0) or 0)
+            zone_label = alert.get("zone_label", get_zone_label(zone_level, current_price))
+            fatigue = count_zone_alerts(alert["pair"], zone_level) if zone_level > 0 else 0
+
+            prompt = build_zone_prompt(
+                alert["pair"],
+                round(zone_level, 5),
+                zone_label,
+                round(current_price, 5),
+                macro_news,
+                df1,
+                df2,
+                min_conf,
+                fatigue
+            )
+
+            refreshed_data, error = call_gemini(prompt)
+            if error or not refreshed_data:
+                continue
+
+            trigger_status = str(refreshed_data.get("trigger_status", "not_ready")).lower()
+            score = refreshed_data.get("confidence_score", 0)
+
+            if trigger_status == "invalidated":
+                send_simple_email(
+                    f"INVALIDATED | {alert['pair']} | {datetime.utcnow().strftime('%H:%M')} UTC",
+                    build_invalidation_email_html(alert, refreshed_data, round(current_price, 5))
+                )
+                alert["outcome"] = "invalidated"
+                alert["outcome_checked_at"] = utc_str()
+                alert["invalidation_email_sent"] = True
+                save_alert_log()
+                fired += 1
+                continue
+
+            if trigger_status != "ready":
+                continue
+
+            if not refreshed_data.get("entry_ready_now", False):
+                continue
+            if not refreshed_data.get("send_alert", False):
+                continue
+            if score < min_conf:
+                continue
+
+            subject = f"[{score}/10] ENTRY ALERT | {alert['pair']} | {datetime.utcnow().strftime('%H:%M')} UTC"
+            html = build_alert2_email_html(alert, refreshed_data, round(current_price, 5))
+            send_simple_email(subject, html)
+
+            alert["entry_alert_sent"] = True
+            alert["entry_alert_sent_at"] = utc_str()
+            alert["entry_alert_price"] = round(current_price, 5)
+            save_alert_log()
+            fired += 1
+
+        except Exception as e:
+            print(f"    Alert 2 error ({alert.get('pair', 'unknown')}): {e}")
+
+    return fired
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 print(f"Alert engine started {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
 
