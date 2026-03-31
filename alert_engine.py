@@ -783,7 +783,6 @@ if not market_open:
     exit(0)
 
 macro_news = fetch_macro_news()
-
 for pair_conf in config["pairs"]:
     symbol      = pair_conf["symbol"]
     name        = pair_conf["name"]
@@ -794,7 +793,7 @@ for pair_conf in config["pairs"]:
     print(f"  Scanning {name}...")
 
     try:
-        zones, current_price, df1, df2 = detect_zones_and_candles(symbol, min_touches)
+        zones, current_price, df1 = detect_zones_and_candles(symbol, min_touches)
 
         if current_price is None:
             print(f"    No data for {name}. Skipping.")
@@ -820,6 +819,12 @@ for pair_conf in config["pairs"]:
             if not should_alert_zone(name, zone_level, current_price, prox):
                 print(f"    {name} @ {zone_level:.5f} — price hasn't moved enough since last alert.")
                 log_scan(name, "blocked_revisit", "Zone already alerted and price has not moved far enough away yet.", zone_level)
+                continue
+
+            df2 = fetch_m15_data(symbol)
+            if df2 is None:
+                print(f"    No M15 data for {name}. Skipping zone.")
+                log_scan(name, "error", "No M15 market data returned once zone entered proximity.", zone_level)
                 continue
 
             fatigue = count_zone_alerts(name, zone_level)
@@ -892,14 +897,14 @@ for pair_conf in config["pairs"]:
             print(f"    Sent: {name} SMC[{score}/10]")
             break
 
-        if zones_in_proximity == 0:
+            if zones_in_proximity == 0:
             log_scan(name, "zone_outside_proximity", "Zones were detected, but none are close enough to current price.")
 
     except Exception as e:
         print(f"    Unexpected pair-level error: {str(e)}")
         log_scan(name, "error", f"Unexpected pair-level error: {str(e)}")
         run_errors.append(f"{name}: {str(e)}")
-
+   
 if alerts_fired == 0 and not run_errors and should_send_ok():
     print("  Sending 3-hour OK email...")
     send_simple_email(
