@@ -56,6 +56,6 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add alert_log.json zone_visit_state.json || true
+          git add alert_log.json scan_log.json system_status.json zone_visit_state.json || true
           git diff --staged --quiet || git commit -m "Update logs [skip ci]"
-          git push || true
+          git push
