@@ -254,7 +254,6 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
 
     intraday_count = len([a for a in weekly_alerts if 'intraday'  in a.get('alert_type','')])
     swing_count    = len([a for a in weekly_alerts if 'swing'     in a.get('alert_type','')])
-    breakout_count = len([a for a in weekly_alerts if a.get('alert_type','') == 'breakout'])
 
     session_stats = {}
     for a in triggered:
@@ -292,7 +291,7 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
     # Count alerts per pair this week, zone alerts only
     zone_alert_counts = {}
     for a in weekly_alerts:
-        if a.get('alert_type', '') == 'breakout':
+        if 'zone' not in a.get('alert_type', 'zone'):
             continue
         p = a.get('pair', '')
         zone_alert_counts[p] = zone_alert_counts.get(p, 0) + 1
@@ -314,7 +313,7 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
     alert_summary = []
     for a in [x for x in weekly_alerts
               if x.get('outcome') in ('win_tp1', 'loss')
-              and x.get('alert_type', '') != 'breakout']:
+              and 'zone' in x.get('alert_type', 'zone')]:
         alert_summary.append({
             "pair":       a.get('pair',''),
             "ist_time":   a.get('ist_time',''),
@@ -333,7 +332,7 @@ Outcomes were determined by SL/TP candle scan from alert time.
 REVIEW PERIOD: Previous Mon–Fri trading week
 
 WEEKLY NUMBERS:
-- Total alerts fired: {len(weekly_alerts)} (Intraday: {intraday_count}, Swing: {swing_count}, Breakout: {breakout_count})
+- Total alerts fired: {len(weekly_alerts)} (Intraday: {intraday_count}, Swing: {swing_count})
 - Triggered and resolved: Wins {wins} | Losses {losses} | Win Rate {win_rate:.1f}%
 - Still pending resolution: {pending}
 
@@ -470,7 +469,6 @@ def build_excel_journal(weekly_alerts, analysis):
         ("Total Alerts Fired",            len(weekly_alerts),     None),
         ("  — Intraday",                  len([a for a in weekly_alerts if 'intraday' in a.get('alert_type','')]), None),
         ("  — Swing",                     len([a for a in weekly_alerts if 'swing'    in a.get('alert_type','')]), None),
-        ("  — Breakout",                  len([a for a in weekly_alerts if a.get('alert_type','')=='breakout']),   None),
         ("Triggered Trades (W + L)",      wins_n + losses_n,      None),
         ("Wins",                          wins_n,                  None),
         ("Losses",                        losses_n,                None),
@@ -652,10 +650,7 @@ def build_excel_journal(weekly_alerts, analysis):
 
         # Alert type / scoring label
         atype = a.get('alert_type','zone_intraday')
-        if atype == 'breakout':
-            score_type = f"Breakout {a.get('confidence_score',0)}/5"
-            tf_label   = "Breakout"
-        elif 'swing' in atype:
+        if 'swing' in atype:
             score_type = f"SMC {a.get('confidence_score',0)}/10"
             tf_label   = "Swing"
         else:
@@ -984,14 +979,13 @@ update_outcomes()
 
 weekly_alerts_all = get_weekly_alerts()
 
-# Hard filter: zone alerts must have score >= 8; breakout alerts >= 4.
+# Hard filter: all zone alerts must have score >= 8.
 # This removes any alerts that slipped through below the minimum threshold.
 # After the alert_engine fix, this should never remove anything —
 # but it protects the review's accuracy against historical leakage.
 weekly_alerts_below = [
     a for a in weekly_alerts_all
-    if (a.get('alert_type','zone') == 'breakout' and a.get('confidence_score',0) < 4)
-    or (a.get('alert_type','zone') != 'breakout' and a.get('confidence_score',0) < 8)
+    if a.get('confidence_score', 0) < 8
 ]
 weekly_alerts = [a for a in weekly_alerts_all if a not in weekly_alerts_below]
 below_count   = len(weekly_alerts_below)
@@ -1000,8 +994,8 @@ if below_count > 0:
     print(f"  WARNING: {below_count} alert(s) removed — below minimum score threshold. These are excluded from all stats.")
 
 if not weekly_alerts:
-    send_status_email(
-        "No qualifying alerts (zone score ≥ 8 / breakout score ≥ 4) found for the previous Mon–Fri trading week. "
+   send_status_email(
+        "No qualifying alerts (zone score ≥ 8) found for the previous Mon–Fri trading week. "
         "The system is monitoring — alerts will appear here once a full week has been captured."
     )
     exit(0)
