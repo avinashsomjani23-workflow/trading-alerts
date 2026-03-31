@@ -287,6 +287,14 @@ ENTRY: 50pct midpoint of OB candle body. If FVG overlaps OB, use FVG edge (top f
 SL: OB wick extreme plus ATR buffer (3-5 pips forex, 10-15pts NAS100, 50-100pts BTC/Gold/Silver).
 After trigger fires: refine SL to trigger candle extreme only if it gives a tighter SL than OB wick.
 
+IMPORTANT FOR AUTOMATION:
+- trigger_status must be one of: "not_ready", "ready", "invalidated"
+- entry_ready_now must be true only if the trigger condition has ALREADY been confirmed on the latest candles
+- Do not mark "ready" just because price touched entry. Retest entries need confirmation.
+- invalidate_above / invalidate_below must be numeric whenever possible.
+- Use null only if a boundary truly cannot be defined from the setup.
+- Keep the human-readable "trigger" and "invalid_if" too.
+
 MIN CONFIDENCE TO SEND: {min_confidence}/10. Below this, set send_alert to false.
 
 Return ONLY raw JSON. No markdown. No code fences. No text outside the JSON.
@@ -297,7 +305,21 @@ Return ONLY raw JSON. No markdown. No code fences. No text outside the JSON.
   "news_flag": "none or describe the event",
   "bias": "LONG or SHORT or WAIT",
   "bias_reason": "max 12 words",
+
   "entry": "price or range",
+  "entry_model": "retest or limit or market",
+  "entry_ready_now": false,
+
+  "trigger_status": "not_ready",
+  "trigger_tf": "M15 or H1",
+  "trigger_kind": "retest or choch or engulf or break_retest or none",
+  "trigger_level": 0.0,
+  "trigger": "exact M15 or H1 candle pattern required before entry",
+
+  "invalidate_above": null,
+  "invalidate_below": null,
+  "invalid_if": "exact price action that cancels this trade",
+
   "sl": 0.0,
   "sl_note": "one sentence on SL placement logic and refinement after trigger",
   "tp1": 0.0,
@@ -306,13 +328,13 @@ Return ONLY raw JSON. No markdown. No code fences. No text outside the JSON.
   "rr_tp2": "x.x",
   "lot_size": "x.x",
   "sl_pts": 0,
-  "trigger": "exact M15 or H1 candle pattern required before entry",
-  "invalid_if": "exact price action that cancels this trade",
+
   "confluences": ["item1", "item2", "item3"],
   "missing": [{{"item": "name", "reason": "why it matters"}}],
   "macro_line1": "main macro driver for {pair} right now",
   "macro_line2": "key upcoming event for {pair} this week",
   "mindset": "one sharp psychological trap to avoid on this exact setup",
+
   "ob_top": 0.0,
   "ob_bottom": 0.0,
   "ob_type": "bullish or bearish",
@@ -321,7 +343,7 @@ Return ONLY raw JSON. No markdown. No code fences. No text outside the JSON.
   "fvg_bottom": 0.0,
   "fvg_type": "bullish or bearish",
   "fvg_confirmed": true,
- "chart_annotations": [{{"label": "short label", "price": 0.0, "status": "confirmed or missing"}}],
+  "chart_annotations": [{{"label": "short label", "price": 0.0, "status": "confirmed or missing"}}],
   "geo_flag": false
 }}"""
 
