@@ -249,7 +249,7 @@ def estimate_pnl(alert):
 
 # ── Gemini weekly analysis (email body cards) ──────────────────────────────────
 def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
-                          pending, win_rate, pair_stats):
+                          pending, win_rate, pair_stats, alert2_triggered, alert2_invalidated):
     triggered = [a for a in weekly_alerts if a.get('outcome') in ('win_tp1', 'loss')]
 
     intraday_count = len([a for a in weekly_alerts if 'intraday'  in a.get('alert_type','')])
@@ -372,7 +372,8 @@ Return ONLY raw JSON. No markdown. No code fences.
   "zone_fatigue_flags": {json.dumps(python_zone_flags)},
   "streak_summary": "notable winning or losing streaks in the triggered set",
   "drawdown_flag": "none or describe if 3+ consecutive losses in triggered trades",
-  "improvement_suggestion": "one specific actionable change based on this week only"
+  "improvement_suggestion": "one specific actionable change based on this week only",
+  "alert2_observation": "one sentence on how many setups progressed from alert1 to alert2 and how many invalidated before entry"
 }}"""
 
     result, err = call_gemini(prompt)
