@@ -1021,9 +1021,6 @@ print(f"Alert engine started {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC"
 run_errors = []
 alerts_fired = 0
 
-# Outcome check runs first — regardless of market hours.
-run_intraweek_outcome_check()
-
 market_open, market_status = is_market_open()
 print(f"  Market: {market_status}")
 if not market_open:
