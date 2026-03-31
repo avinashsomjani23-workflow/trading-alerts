@@ -6497,8 +6497,8 @@
     "trigger": "M15 bullish CHoCH after price enters the demand zone",
     "invalid_if": "Price breaks definitively below H1 00:00 candle low (66507.42) without bullish CHoCH.",
     "geo_flag": true,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 66432.42,
+    "outcome_checked_at": "2026-03-31 09:30"
   }
 ]
