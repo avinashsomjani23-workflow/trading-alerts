@@ -6500,5 +6500,34 @@
     "outcome": "loss",
     "outcome_price": 66432.42,
     "outcome_checked_at": "2026-03-31 09:30"
+  },
+  {
+    "id": "NAS100_1774953109",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "timestamp_utc": "2026-03-31 10:31",
+    "ist_time": "16:01",
+    "zone_level": 23235.0,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "23235.0",
+    "sl": 23220.0,
+    "tp1": 23390.25,
+    "tp2": 23405.0,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 bullish structure (BOS confirmed)",
+      "Price in Discount zone for long",
+      "M15 CHoCH confirmed after initial zone touch",
+      "Liquidity swept before zone",
+      "Fresh demand zone",
+      "High RR potential achievable"
+    ],
+    "trigger": "M15 bullish engulfing candle or strong bullish close after retesting 23235.0",
+    "invalid_if": "Price closes M15 candle below 23220.0 or fails to show bullish reaction upon retesting 23235.0.",
+    "geo_flag": true,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]
