@@ -47,7 +47,7 @@
       "spread_pips_note": "for_reference_only"
     },
     {
-      "symbol": "^NDX",
+      "symbol": "NQ=F",
       "name": "NAS100",
       "proximity_pct": 0.4,
       "min_touches": 1,
