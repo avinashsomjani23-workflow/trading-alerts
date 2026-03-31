@@ -667,5 +667,8 @@
   },
   "NAS100_23235.0": {
     "last_alert_price": 23302.0
+  },
+  "BTCUSD_66471.9375": {
+    "last_alert_price": 66687.1484375
   }
 }
