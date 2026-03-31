@@ -1152,7 +1152,10 @@ for pair_conf in config["pairs"]:
         print(f"    Unexpected pair-level error: {str(e)}")
         log_scan(name, "error", f"Unexpected pair-level error: {str(e)}")
         run_errors.append(f"{name}: {str(e)}")
-   
+        
+alert2_fired = run_second_alert_checks(macro_news)
+alerts_fired += alert2_fired
+
 if alerts_fired == 0 and not run_errors and should_send_ok():
     print("  Sending 3-hour OK email...")
     send_simple_email(
