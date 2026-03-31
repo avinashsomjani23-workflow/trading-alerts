@@ -157,13 +157,12 @@ def get_atr(df, period=14):
     except:
         return None
 
-# All pairs use intraday: H1 primary, M15 secondary
+# All pairs use intraday: H1 primary. M15 fetched only after zone is in proximity.
 def detect_zones_and_candles(symbol, min_touches):
-    df1 = clean_df(yf.download(symbol, period="15d", interval="1h",  progress=False))
-    df2 = clean_df(yf.download(symbol, period="5d",  interval="15m", progress=False))
+    df1 = clean_df(yf.download(symbol, period="15d", interval="1h", progress=False))
 
     if df1 is None:
-        return [], None, None, None
+        return [], None, None
 
     current_price = float(df1['Close'].iloc[-1])
     lb    = config["zone_detection"]["swing_lookback"]
@@ -174,11 +173,11 @@ def detect_zones_and_candles(symbol, min_touches):
     for i in range(lb, len(highs) - lb):
         if highs[i] == max(highs[i-lb:i+lb+1]):
             swing_points.append(float(highs[i]))
-        if lows[i]  == min(lows[i-lb:i+lb+1]):
+        if lows[i] == min(lows[i-lb:i+lb+1]):
             swing_points.append(float(lows[i]))
 
     if not swing_points:
-        return [], current_price, df1, df2
+        return [], current_price, df1
 
     swing_points = sorted(swing_points)
     clusters = [[swing_points[0]]]
@@ -189,8 +188,11 @@ def detect_zones_and_candles(symbol, min_touches):
             clusters.append([lvl])
 
     zones = [(float(np.mean(c)), len(c)) for c in clusters if len(c) >= min_touches]
-    return zones, current_price, df1, df2
+    return zones, current_price, df1
 
+
+def fetch_m15_data(symbol):
+    return clean_df(yf.download(symbol, period="5d", interval="15m", progress=False))
 def get_zone_label(zone_level, current_price):
     return "Demand / Support" if zone_level < current_price else "Supply / Resistance"
 # ── Macro news ────────────────────────────────────────────────────────────────
