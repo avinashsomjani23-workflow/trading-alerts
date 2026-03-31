@@ -39,6 +39,8 @@ def load_json(path, default):
 def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
+def save_alert_log():
+    save_json(ALERT_LOG_FILE, alert_log)
 
 alert_log = load_json(ALERT_LOG_FILE, [])
 scan_log = load_json(SCAN_LOG_FILE, [])
