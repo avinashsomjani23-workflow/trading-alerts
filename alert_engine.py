@@ -88,16 +88,8 @@ def log_scan(pair, status, reason, zone=None):
 # No cooldown hours. No time tracking.
 # A zone re-alerts ONLY when price has moved more than 1.5x proximity_pct
 # away from zone since the last alert on that zone. That is the only rule.
-VISIT_FILE = "zone_visit_state.json"
-try:
-    with open(VISIT_FILE) as f:
-        visit_state = json.load(f)
-except:
-    visit_state = {}
-
 def save_visit_state():
-    with open(VISIT_FILE, "w") as f:
-        json.dump(visit_state, f)
+    save_json(VISIT_FILE, visit_state)
 
 def should_alert_zone(pair, zone_level, current_price, proximity_pct):
     key = f"{pair}_{round(zone_level, 4)}"
@@ -739,7 +731,7 @@ def send_email(subject, html_body, chart1_b64=None, chart2_b64=None):
             server.login(GMAIL_ADDRESS, GMAIL_PASS)
             server.sendmail(GMAIL_ADDRESS, recipient, msg.as_string())
         print(f"    Sent to {recipient}")
-    def send_simple_email(subject, html_body):
+def send_simple_email(subject, html_body):
     send_email(subject, html_body, None, None)
 
 def build_ok_email_html():
@@ -774,8 +766,10 @@ def build_error_email_html(error_lines):
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 print(f"Alert engine started {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
 
+run_errors = []
+alerts_fired = 0
+
 # Outcome check runs first — regardless of market hours.
-# This means manual triggers on weekends still update this week's results.
 run_intraweek_outcome_check()
 
 market_open, market_status = is_market_open()
@@ -784,8 +778,7 @@ if not market_open:
     print("  Exiting — market closed.")
     exit(0)
 
-macro_news   = fetch_macro_news()
-alerts_fired = 0
+macro_news = fetch_macro_news()
 
 for pair_conf in config["pairs"]:
     symbol      = pair_conf["symbol"]
@@ -795,11 +788,138 @@ for pair_conf in config["pairs"]:
     min_conf    = pair_conf.get("min_confidence", 5)
 
     print(f"  Scanning {name}...")
-    zones, current_price, df1, df2 = detect_zones_and_candles(symbol, min_touches)
 
-    if current_price is None:
-        print(f"    No data for {name}. Skipping.")
-        continue
+    try:
+        zones, current_price, df1, df2 = detect_zones_and_candles(symbol, min_touches)
+
+        if current_price is None:
+            print(f"    No data for {name}. Skipping.")
+            log_scan(name, "error", "No market data returned for this pair.")
+            run_errors.append(f"{name}: No market data returned for this pair.")
+            continue
+
+        if not zones:
+            log_scan(name, "no_zone_found", "No valid zones detected in current scan.")
+            continue
+
+        zones_in_proximity = 0
+
+        for zone_level, touches in zones:
+            dist_pct = abs(current_price - zone_level) / zone_level * 100
+
+            if dist_pct > prox:
+                continue
+
+            zones_in_proximity += 1
+            zone_label = get_zone_label(zone_level, current_price)
+
+            if not should_alert_zone(name, zone_level, current_price, prox):
+                print(f"    {name} @ {zone_level:.5f} — price hasn't moved enough since last alert.")
+                log_scan(name, "blocked_revisit", "Zone already alerted and price has not moved far enough away yet.", zone_level)
+                continue
+
+            fatigue = count_zone_alerts(name, zone_level)
+            print(f"    ZONE HIT: {name} {zone_label} @ {zone_level:.5f} dist:{dist_pct:.2f}% fatigue:{fatigue}")
+
+            prompt = build_zone_prompt(
+                name,
+                round(zone_level, 5),
+                zone_label,
+                round(current_price, 5),
+                macro_news,
+                df1,
+                df2,
+                min_conf,
+                fatigue
+            )
+
+            data, error = call_gemini(prompt)
+
+            if error:
+                print(f"    {error}")
+                log_scan(name, "error", error, zone_level)
+                run_errors.append(f"{name}: {error}")
+                continue
+
+            score = data.get("confidence_score", 0)
+
+            if not data.get("send_alert", False):
+                reason = data.get("confidence_reason", "Gemini rejected this setup.")
+                print(f"    {name} skipped — Gemini said no alert. {reason}")
+                log_scan(name, "rejected_gemini_no_alert", reason, zone_level)
+                continue
+
+            if score < min_conf:
+                reason = f"Score {score}/10 below minimum {min_conf}. {data.get('confidence_reason', '')}".strip()
+                print(f"    {name} skipped — {reason}")
+                log_scan(name, "rejected_low_confidence", reason, zone_level)
+                continue
+
+            levels = {
+                'zone': zone_level,
+                'current': current_price,
+                'entry': data.get('entry', ''),
+                'sl': data.get('sl', 0),
+                'tp1': data.get('tp1', 0),
+                'tp2': data.get('tp2', 0)
+            }
+
+            chart1 = generate_chart(df1, f"{name} — H1", levels, data)
+            chart2 = generate_chart(df2, f"{name} — M15", levels, data)
+
+            html = build_zone_email_html(
+                data,
+                name,
+                round(zone_level, 5),
+                zone_label,
+                round(current_price, 5),
+                chart1,
+                chart2
+            )
+            subject = f"[{score}/10] {name} | {zone_label} | {round(zone_level, 5)} | {datetime.utcnow().strftime('%H:%M')} UTC"
+
+            send_email(subject, html, chart1, chart2)
+            log_alert(name, round(zone_level, 5), zone_label, round(current_price, 5), data, "zone", geo_flag=bool(data.get('geo_flag', False)))
+            log_scan(name, "alert_sent", f"Trade alert sent successfully at score {score}/10.", zone_level)
+            record_zone_alert(name, zone_level, current_price)
+
+            system_status["last_trade_alert_utc"] = utc_str()
+            alerts_fired += 1
+            print(f"    Sent: {name} SMC[{score}/10]")
+            break
+
+        if zones_in_proximity == 0:
+            log_scan(name, "zone_outside_proximity", "Zones were detected, but none are close enough to current price.")
+
+    except Exception as e:
+        print(f"    Unexpected pair-level error: {str(e)}")
+        log_scan(name, "error", f"Unexpected pair-level error: {str(e)}")
+        run_errors.append(f"{name}: {str(e)}")
+
+if alerts_fired == 0 and not run_errors and should_send_ok():
+    print("  Sending 3-hour OK email...")
+    send_simple_email(
+        "System OK — No valid trade in the last 3 hours",
+        build_ok_email_html()
+    )
+    system_status["last_ok_email_utc"] = utc_str()
+
+if run_errors and should_send_error():
+    print("  Sending 3-hour error email...")
+    send_simple_email(
+        "System Error — Trading engine needs attention",
+        build_error_email_html(run_errors)
+    )
+    system_status["last_error_email_utc"] = utc_str()
+
+save_alert_log()
+save_json(SCAN_LOG_FILE, scan_log)
+save_json(SYSTEM_STATUS_FILE, system_status)
+save_visit_state()
+
+print(f"Alert log saved: {len(alert_log)} total entries.")
+print(f"Scan log saved: {len(scan_log)} total entries.")
+print(f"Scan complete. {alerts_fired} alert(s) fired.")
 
     # ── Zone check ──
     for zone_level, touches in zones:
