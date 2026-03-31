@@ -530,5 +530,47 @@
     "zone": 23574.0,
     "status": "blocked_revisit",
     "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time": "2026-03-31 16:32",
+    "pair": "EURUSD",
+    "zone": 1.15393,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time": "2026-03-31 16:32",
+    "pair": "USDJPY",
+    "zone": 159.18738,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time": "2026-03-31 16:32",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 16:32",
+    "pair": "BTCUSD",
+    "zone": 67475.67188,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time": "2026-03-31 16:33",
+    "pair": "NAS100",
+    "zone": 23405.0,
+    "status": "rejected_gemini_no_alert",
+    "reason": "Price has already reacted to and moved significantly away from the demand zone; waiting for a deeper pullback or a new setup confirmation is required."
+  },
+  {
+    "time": "2026-03-31 16:33",
+    "pair": "NAS100",
+    "zone": 23574.0,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
   }
 ]
