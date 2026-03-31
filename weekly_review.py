@@ -467,7 +467,8 @@ def build_excel_journal(weekly_alerts, analysis):
     ws_s['A1'].fill      = bg(C_HDR_BG)
     ws_s['A1'].alignment = align('center')
     ws_s.row_dimensions[1].height = 28
-
+    alert2_triggered   = sum(1 for a in weekly_alerts if a.get('entry_alert_sent'))
+    alert2_invalidated = sum(1 for a in weekly_alerts if a.get('invalidation_email_sent'))
     rows = [
         ("PERFORMANCE",                  None,                   C_SEC_BG),
         ("Total Alerts Fired",            len(weekly_alerts),     None),
@@ -479,7 +480,9 @@ def build_excel_journal(weekly_alerts, analysis):
         ("Win Rate (triggered trades only)", f"{wr}%",            None),
         ("Invalidated (not taken)",       inv_n,                   None),
         ("Invalidation Rate",             f"{inv_rate}%",          None),
-      ("Still Pending",                 pend_n,                  None),
+        ("Alert 2 Entry Alerts",          alert2_triggered,        None),
+        ("Alert 2 Invalidations",         alert2_invalidated,      None),
+        ("Still Pending",                 pend_n,                  None),
         ("Geo-Flagged Alerts",            len([a for a in weekly_alerts if a.get('geo_flag', False)]), None),
         ("Net Estimated P&L (USD)",       f"${net_pnl:+.2f}",      None),
         ("QUALITY METRICS",              None,                   C_SEC_BG),
@@ -1032,7 +1035,8 @@ for a in weekly_alerts:
 
 print("  Calling Gemini for weekly analysis...")
 analysis = build_weekly_analysis(
-    weekly_alerts, wins, losses, invalidated_count, pending, win_rate, pair_stats
+    weekly_alerts, wins, losses, invalidated_count, pending, win_rate, pair_stats,
+    alert2_triggered, alert2_invalidated
 )
 
 if not analysis:
