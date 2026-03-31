@@ -334,7 +334,10 @@ REVIEW PERIOD: Previous Mon–Fri trading week
 WEEKLY NUMBERS:
 - Total alerts fired: {len(weekly_alerts)} (Intraday: {intraday_count}, Swing: {swing_count})
 - Triggered and resolved: Wins {wins} | Losses {losses} | Win Rate {win_rate:.1f}%
+- Invalidated before entry / setup failed: {invalidated_count}
 - Still pending resolution: {pending}
+- Alert 2 entry alerts sent: {alert2_triggered}
+- Alert 2 invalidation emails sent: {alert2_invalidated}
 
 GEOPOLITICAL SPLIT:
 - Clean technical alerts (no geo event active): {len(clean_alerts)} total → {cl_wins}W / {cl_losses}L → {cl_wr}% win rate
