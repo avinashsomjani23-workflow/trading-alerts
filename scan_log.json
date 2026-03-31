@@ -292,5 +292,47 @@
     "zone": 23405.0,
     "status": "rejected_gemini_no_alert",
     "reason": "The setup lacks strong structural alignment, with the H1 trend being bullish, and the required entry trigger (CHoCH) and FVG confluence are missing, leading to a low confidence score of 6/10."
+  },
+  {
+    "time": "2026-03-31 12:01",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 12:01",
+    "pair": "USDJPY",
+    "zone": 159.18738,
+    "status": "rejected_gemini_no_alert",
+    "reason": "Confidence is low due to inability to identify or confirm the specific Order Block and FVG from provided candle data, and price has not yet reached the demand zone."
+  },
+  {
+    "time": "2026-03-31 12:01",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 12:01",
+    "pair": "BTCUSD",
+    "zone": 66507.00614,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time": "2026-03-31 12:01",
+    "pair": "NAS100",
+    "zone": 23235.0,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time": "2026-03-31 12:03",
+    "pair": "NAS100",
+    "zone": 23405.0,
+    "status": "error",
+    "reason": "Gemini error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=90)"
   }
 ]
