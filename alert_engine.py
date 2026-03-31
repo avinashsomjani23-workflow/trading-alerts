@@ -377,7 +377,7 @@ def run_intraweek_outcome_check():
     for alert in alert_log:
         if alert.get('outcome') in ('win_tp1', 'loss', 'invalidated'):
             continue
-        if alert.get('alert_type') not in ('zone', 'zone_intraday', 'breakout'):
+        if alert.get('alert_type') not in ('zone', 'zone_intraday'):
             continue
 
         try:
@@ -605,8 +605,6 @@ def build_zone_email_html(data, pair, zone_level, zone_label, current_price,
       Zone: <b>{zone_label}</b> at <b>{zone_level}</b> &nbsp;|&nbsp; Now: <b>{current_price}</b>
     </p>
 
-    {bo_html}
-
     {chart1_html}
     {chart2_html}
 
@@ -724,19 +722,7 @@ for pair_conf in config["pairs"]:
         print(f"    No data for {name}. Skipping.")
         continue
 
-    # ── Breakout check (independent of zone alert) ──
-    breakout = detect_breakout(df1)
-    if breakout:
-        if should_alert_breakout(name, breakout["broken_level"], current_price, prox):
-            print(f"    BREAKOUT: {name} {breakout['direction']} [{breakout['bo_score']}/5]")
-            # Breakout stored — will be attached to zone email if zone fires,
-            # or sent standalone if no zone fires
-        else:
-            print(f"    Breakout detected for {name} but price hasn't moved enough since last breakout alert.")
-            breakout = None  # suppress repeat
-
     # ── Zone check ──
-    zone_alert_fired = False
     for zone_level, touches in zones:
         dist_pct = abs(current_price - zone_level) / zone_level * 100
         if dist_pct > prox:
@@ -772,57 +758,17 @@ for pair_conf in config["pairs"]:
         chart2 = generate_chart(df2, f"{name} — M15", levels, data)
 
         html    = build_zone_email_html(data, name, round(zone_level,5), zone_label,
-                                        round(current_price,5), chart1, chart2, breakout)
+                                        round(current_price,5), chart1, chart2)
         subject = f"[{score}/10] {name} | {zone_label} | {round(zone_level,5)} | {datetime.utcnow().strftime('%H:%M')} UTC"
-        if breakout:
-            subject = f"[SMC {score}/10 + BO {breakout['bo_score']}/5] {name} | {zone_label} | {datetime.utcnow().strftime('%H:%M')} UTC"
 
         send_email(subject, html, chart1, chart2)
         log_alert(name, round(zone_level,5), zone_label, round(current_price,5), data, "zone", geo_flag=bool(data.get('geo_flag', False)))
         record_zone_alert(name, zone_level, current_price)
-        if breakout:
-            record_breakout_alert(name, breakout["broken_level"], current_price)
 
         alerts_fired += 1
-        zone_alert_fired = True
-        print(f"    Sent: {name} SMC[{score}/10]" + (f" + BO[{breakout['bo_score']}/5]" if breakout else ""))
+        print(f"    Sent: {name} SMC[{score}/10]")
         break  # one zone email per pair per run
-
-    # ── Standalone breakout email (only if no zone alert fired) ──
-    if breakout and not zone_alert_fired:
-        if should_alert_breakout(name, breakout["broken_level"], current_price, prox):
-            bo_levels = {
-                'zone':    breakout["broken_level"],
-                'current': current_price,
-                'entry':   breakout.get("retest_entry", 0),
-                'sl':      breakout.get("sl_retest", 0),
-                'tp1':     breakout.get("tp1_retest", 0),
-                'tp2':     breakout.get("tp2_retest", 0),
-            }
-            bo_chart = generate_chart(df1, f"{name} — H1 Retest Setup", bo_levels, {})
-            html    = build_breakout_only_email_html(breakout, name, round(current_price,5), bo_chart)
-            _ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
-            subject = f"[BO {breakout['bo_score']}/5] {name} | {breakout['direction']} Breakout | {round(breakout['broken_level'],5)} | {_ist_now.strftime('%H:%M')} IST"
-            send_email(subject, html, bo_chart)
-            bo_bias = "LONG" if breakout["direction"] == "BULLISH" else "SHORT"
-            bo_data = {
-                "bias":             bo_bias,
-                "entry":            breakout.get("retest_entry", 0),
-                "sl":               breakout.get("sl_retest", 0),
-                "tp1":              breakout.get("tp1_retest", 0),
-                "tp2":              breakout.get("tp2_retest", 0),
-                "confidence_score": breakout.get("bo_score", 0),
-                "confluences":      breakout.get("bo_reasons", []),
-                "trigger":          breakout.get("trigger_text", ""),
-                "invalid_if":       breakout.get("invalid_if_text", ""),
-            }
-            log_alert(name, breakout["broken_level"], f"{breakout['direction']} Breakout",
-                      round(current_price,5), bo_data, "breakout",
-                      geo_flag=detect_geo_flag_phrases(macro_news))
-            record_breakout_alert(name, breakout["broken_level"], current_price)
-            alerts_fired += 1
-            print(f"    Sent standalone breakout: {name} [{breakout['bo_score']}/5]")
-
+   
 save_alert_log()
 print(f"Log saved: {len(alert_log)} total entries.")
 print(f"Scan complete. {alerts_fired} alert(s) fired.")
