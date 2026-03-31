@@ -6526,8 +6526,8 @@
     "trigger": "M15 bullish engulfing candle or strong bullish close after retesting 23235.0",
     "invalid_if": "Price closes M15 candle below 23220.0 or fails to show bullish reaction upon retesting 23235.0.",
     "geo_flag": true,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "win_tp1",
+    "outcome_price": 23390.25,
+    "outcome_checked_at": "2026-03-31 11:58"
   }
 ]
