@@ -1005,19 +1005,26 @@ losses            = sum(1 for a in weekly_alerts if a.get('outcome') == 'loss')
 invalidated_count = sum(1 for a in weekly_alerts if a.get('outcome') == 'invalidated')
 not_triggered     = sum(1 for a in weekly_alerts if a.get('outcome') == 'not_triggered')
 pending           = sum(1 for a in weekly_alerts if a.get('outcome') == 'pending')
+alert2_triggered  = sum(1 for a in weekly_alerts if a.get('entry_alert_sent'))
+alert2_invalidated = sum(1 for a in weekly_alerts if a.get('invalidation_email_sent'))
 win_rate          = (wins/(wins+losses)*100) if (wins+losses) > 0 else 0
 
 pair_stats = {}
 for a in weekly_alerts:
     p = a['pair']
     if p not in pair_stats:
-        pair_stats[p] = {'alerts':0,'wins':0,'losses':0,'invalidated':0,'pending':0}
+        pair_stats[p] = {'alerts':0,'wins':0,'losses':0,'invalidated':0,'pending':0,'alert2_triggered':0,'alert2_invalidated':0}
     pair_stats[p]['alerts'] += 1
     o = a.get('outcome','pending')
     if   o == 'win_tp1':    pair_stats[p]['wins']        += 1
     elif o == 'loss':       pair_stats[p]['losses']      += 1
     elif o == 'invalidated':pair_stats[p]['invalidated'] += 1
     else:                   pair_stats[p]['pending']     += 1
+
+    if a.get('entry_alert_sent'):
+    pair_stats[p]['alert2_triggered'] += 1
+    if a.get('invalidation_email_sent'):
+    pair_stats[p]['alert2_invalidated'] += 1
 
 print("  Calling Gemini for weekly analysis...")
 analysis = build_weekly_analysis(
