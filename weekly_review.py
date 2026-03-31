@@ -1022,9 +1022,9 @@ for a in weekly_alerts:
     else:                   pair_stats[p]['pending']     += 1
 
     if a.get('entry_alert_sent'):
-    pair_stats[p]['alert2_triggered'] += 1
+        pair_stats[p]['alert2_triggered'] += 1
     if a.get('invalidation_email_sent'):
-    pair_stats[p]['alert2_invalidated'] += 1
+        pair_stats[p]['alert2_invalidated'] += 1
 
 print("  Calling Gemini for weekly analysis...")
 analysis = build_weekly_analysis(
