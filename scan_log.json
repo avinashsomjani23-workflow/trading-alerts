@@ -1,1 +1,37 @@
-[]
+[
+  {
+    "time": "2026-03-31 08:50",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 08:50",
+    "pair": "USDJPY",
+    "zone": 159.17843,
+    "status": "rejected_gemini_no_alert",
+    "reason": "Confidence is low due to inability to confirm the Order Block and FVG at the demand zone with the provided candle data, making entry and risk assessment impossible."
+  },
+  {
+    "time": "2026-03-31 08:50",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 08:51",
+    "pair": "BTCUSD",
+    "zone": 66507.00614,
+    "status": "rejected_gemini_no_alert",
+    "reason": "Low confidence due to missing M15 CHoCH confirmation and active high-impact geopolitical news creating market uncertainty."
+  },
+  {
+    "time": "2026-03-31 08:51",
+    "pair": "NAS100",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  }
+]
