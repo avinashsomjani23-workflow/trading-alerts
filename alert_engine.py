@@ -78,7 +78,7 @@ def log_scan(pair, status, reason, zone=None):
     scan_log.append({
         "time": utc_str(),
         "pair": pair,
-        "zone": round(zone, 5) if zone else None,
+        "zone": round(zone, 5) if zone is not None else None,
         "status": status,
         "reason": reason
     })
@@ -919,55 +919,4 @@ save_visit_state()
 
 print(f"Alert log saved: {len(alert_log)} total entries.")
 print(f"Scan log saved: {len(scan_log)} total entries.")
-print(f"Scan complete. {alerts_fired} alert(s) fired.")
-
-    # ── Zone check ──
-    for zone_level, touches in zones:
-        dist_pct = abs(current_price - zone_level) / zone_level * 100
-        if dist_pct > prox:
-            continue
-
-        if not should_alert_zone(name, zone_level, current_price, prox):
-            print(f"    {name} @ {zone_level:.5f} — price hasn't moved enough since last alert.")
-            continue
-
-        zone_label = get_zone_label(zone_level, current_price)
-        fatigue    = count_zone_alerts(name, zone_level)
-        print(f"    ZONE HIT: {name} {zone_label} @ {zone_level:.5f} dist:{dist_pct:.2f}% fatigue:{fatigue}")
-
-        prompt = build_zone_prompt(name, round(zone_level,5), zone_label,
-                                   round(current_price,5), macro_news,
-                                   df1, df2, min_conf, fatigue)
-        data, error = call_gemini(prompt)
-
-        if error:
-            print(f"    {error}")
-            continue
-
-        score = data.get("confidence_score", 0)
-        if score < min_conf or not data.get("send_alert", False):
-            print(f"    {name} skipped — score {score}/10 below minimum {min_conf}. {data.get('confidence_reason','')}")
-            continue
-
-        levels = {'zone':zone_level,'current':current_price,
-                  'entry':data.get('entry',''),'sl':data.get('sl',0),
-                  'tp1':data.get('tp1',0),'tp2':data.get('tp2',0)}
-
-        chart1 = generate_chart(df1, f"{name} — H1",  levels, data)
-        chart2 = generate_chart(df2, f"{name} — M15", levels, data)
-
-        html    = build_zone_email_html(data, name, round(zone_level,5), zone_label,
-                                        round(current_price,5), chart1, chart2)
-        subject = f"[{score}/10] {name} | {zone_label} | {round(zone_level,5)} | {datetime.utcnow().strftime('%H:%M')} UTC"
-
-        send_email(subject, html, chart1, chart2)
-        log_alert(name, round(zone_level,5), zone_label, round(current_price,5), data, "zone", geo_flag=bool(data.get('geo_flag', False)))
-        record_zone_alert(name, zone_level, current_price)
-
-        alerts_fired += 1
-        print(f"    Sent: {name} SMC[{score}/10]")
-        break  # one zone email per pair per run
-   
-save_alert_log()
-print(f"Log saved: {len(alert_log)} total entries.")
 print(f"Scan complete. {alerts_fired} alert(s) fired.")
