@@ -6470,5 +6470,35 @@
     "outcome": "win_tp1",
     "outcome_price": 67823.1,
     "outcome_checked_at": "2026-03-31 02:30"
+  },
+  {
+    "id": "BTCUSD_1774947760",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "timestamp_utc": "2026-03-31 09:02",
+    "ist_time": "14:32",
+    "zone_level": 66507.00614,
+    "zone_label": "Demand / Support",
+    "bias": "LONG",
+    "entry": "66617.47",
+    "sl": 66432.42,
+    "tp1": 67373.27,
+    "tp2": 67713.53,
+    "confidence_score": 8,
+    "confluences": [
+      "H1 BOS confirms bullish trend",
+      "Price in H1 Discount Zone",
+      "Valid H1 OB at Demand Zone (H1 00:00 origin)",
+      "Zone is Fresh",
+      "M15 Liquidity Swept before zone entry",
+      "Entry is in Discount zone",
+      "RR at least 2:1 achievable"
+    ],
+    "trigger": "M15 bullish CHoCH after price enters the demand zone",
+    "invalid_if": "Price breaks definitively below H1 00:00 candle low (66507.42) without bullish CHoCH.",
+    "geo_flag": true,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null
   }
 ]

@@ -33,5 +33,40 @@
     "zone": null,
     "status": "zone_outside_proximity",
     "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 09:01",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 09:01",
+    "pair": "USDJPY",
+    "zone": 159.17843,
+    "status": "rejected_gemini_no_alert",
+    "reason": "Very low score due to price being far above the demand zone, inability to confirm an OB/FVG from provided data, and significant ongoing geopolitical high-impact news."
+  },
+  {
+    "time": "2026-03-31 09:01",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 09:02",
+    "pair": "BTCUSD",
+    "zone": 66507.00614,
+    "status": "alert_sent",
+    "reason": "Trade alert sent successfully at score 8/10."
+  },
+  {
+    "time": "2026-03-31 09:02",
+    "pair": "NAS100",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
   }
 ]
