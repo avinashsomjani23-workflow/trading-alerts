@@ -53,13 +53,13 @@ jobs:
           NEWS_API_KEY:       ${{ secrets.NEWS_API_KEY }}
         run: python alert_engine.py
         
-     - name: Save logs to repo
-       if: steps.market_check.outputs.skip != 'true'
-       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git fetch origin main
-        git pull --rebase origin main || true
-        git add alert_log.json scan_log.json system_status.json zone_visit_state.json || true
-        git diff --staged --quiet || git commit -m "Update logs [skip ci]"
-        git push origin HEAD:main || true
+      -  name: Save logs to repo
+         if: steps.market_check.outputs.skip != 'true'
+         run: |
+           git config --local user.email "action@github.com"
+           git config --local user.name "GitHub Action"
+           git fetch origin main
+           git pull --rebase origin main || true
+           git add alert_log.json scan_log.json system_status.json zone_visit_state.json || true
+           git diff --staged --quiet || git commit -m "Update logs [skip ci]"
+           git push origin HEAD:main || true
