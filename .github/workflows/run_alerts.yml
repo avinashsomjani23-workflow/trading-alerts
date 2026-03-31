@@ -2,7 +2,9 @@ name: Trading Alert Engine
 
 on:
   workflow_dispatch:
-
+concurrency:
+  group: trading-alert-log
+  cancel-in-progress: false
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"   # silences Node.js deprecation warning
 
