@@ -103,5 +103,47 @@
     "zone": null,
     "status": "zone_outside_proximity",
     "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 10:01",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 10:01",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 10:01",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-03-31 10:01",
+    "pair": "BTCUSD",
+    "zone": 65539.1875,
+    "status": "error",
+    "reason": "Gemini error: {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}"
+  },
+  {
+    "time": "2026-03-31 10:01",
+    "pair": "BTCUSD",
+    "zone": 66507.00614,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time": "2026-03-31 10:01",
+    "pair": "NAS100",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
   }
 ]
