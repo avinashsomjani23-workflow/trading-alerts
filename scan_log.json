@@ -1314,5 +1314,68 @@
     "zone": 4774.2002,
     "status": "alert_sent",
     "reason": "Trade alert sent successfully at score 8/10."
+  },
+  {
+    "time": "2026-04-01 11:02",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 11:03",
+    "pair": "GBPUSD",
+    "zone": 1.33222,
+    "status": "alert_sent",
+    "reason": "Trade alert sent successfully at score 8/10."
+  },
+  {
+    "time": "2026-04-01 11:03",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 11:03",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 11:03",
+    "pair": "BTCUSD",
+    "zone": 68283.56337,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time": "2026-04-01 11:03",
+    "pair": "NAS100",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 11:03",
+    "pair": "DJ30",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 11:03",
+    "pair": "GOLD",
+    "zone": 4742.1333,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time": "2026-04-01 11:03",
+    "pair": "GOLD",
+    "zone": 4774.2002,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
   }
 ]
