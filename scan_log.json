@@ -1505,5 +1505,77 @@
     "zone": null,
     "status": "zone_outside_proximity",
     "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 18:02 IST",
+    "time_utc": "2026-04-01 12:32",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 18:03 IST",
+    "time_utc": "2026-04-01 12:33",
+    "pair": "GBPUSD",
+    "zone": 1.33353,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "01 Apr 18:03 IST",
+    "time_utc": "2026-04-01 12:33",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 18:03 IST",
+    "time_utc": "2026-04-01 12:33",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 18:04 IST",
+    "time_utc": "2026-04-01 12:34",
+    "pair": "BTCUSD",
+    "zone": 68241.55729,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "01 Apr 18:06 IST",
+    "time_utc": "2026-04-01 12:36",
+    "pair": "BTCUSD",
+    "zone": 68901.61979,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "01 Apr 18:06 IST",
+    "time_utc": "2026-04-01 12:36",
+    "pair": "NAS100",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 18:07 IST",
+    "time_utc": "2026-04-01 12:37",
+    "pair": "DJ30",
+    "zone": 46679.23077,
+    "status": "alert_sent",
+    "reason": "Zone alert sent at score 9.0/10."
+  },
+  {
+    "time_ist": "01 Apr 18:08 IST",
+    "time_utc": "2026-04-01 12:38",
+    "pair": "GOLD",
+    "zone": 4738.2002,
+    "status": "rejected_validation",
+    "reason": "After SL widening, RR dropped to 0.1 (below 2:1)"
   }
 ]

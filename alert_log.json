@@ -6934,5 +6934,64 @@
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
     "invalidation_email_sent": false
+  },
+  {
+    "id": "DJ30_1775047023",
+    "alert_type": "zone",
+    "pair": "DJ30",
+    "pair_type": "index",
+    "timestamp_utc": "2026-04-01 12:37",
+    "ist_time": "18:07",
+    "zone_level": 46679.23,
+    "zone_label": "Demand",
+    "bias": "LONG",
+    "entry": 46650.0,
+    "entry_model": "limit",
+    "entry_ready_now": false,
+    "trigger_status": "not_ready",
+    "trigger_tf": "M15",
+    "trigger_kind": "choch",
+    "trigger_level": 46650.0,
+    "trigger": "M15 bullish CHoCH or engulfing candle formation upon price reaching 46650.0",
+    "invalidate_above": null,
+    "invalidate_below": 46600.0,
+    "invalid_if": "Price closes below 46600.0 on M15 timeframe.",
+    "sl": 46600.0,
+    "tp1": 46986.0,
+    "tp2": 47100.0,
+    "rr_tp1": "6.72",
+    "confidence_score": 9.0,
+    "score_breakdown": {
+      "liquidity_swept": 2.5,
+      "fvg_overlaps_ob": 2.0,
+      "premium_discount": 1.5,
+      "multi_tf_alignment": 1.5,
+      "zone_freshness": 1.0,
+      "no_high_impact_news": 0.0,
+      "session_alignment": 0.5
+    },
+    "confluences": [
+      "Bullish H1 BOS at 01 Apr 10:30 IST (close 46701.0 broke 46693.0 high)",
+      "Bullish M15 BOS at 01 Apr 10:30 IST (close 46701.0 broke 46687.0 high)",
+      "H1 Demand OB from 01 Apr 06:30 IST (46608.0-46693.0)",
+      "Price entry at 46650.0 is in discount zone (below midpoint 46785.5)",
+      "Liquidity swept by 01 Apr 07:30 IST H1 (low 46585.0 swept 46594.0)",
+      "Bullish H1 FVG (46650.0-46694.0) overlaps OB"
+    ],
+    "missing": [
+      {
+        "item": "No high-impact news",
+        "reason": "Ongoing geopolitical conflict introduces high uncertainty and volatility, increasing risk."
+      }
+    ],
+    "geo_flag": true,
+    "news_flag": "Ongoing geopolitical conflict (Iran-Israel war, US involvement, oil crisis).",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null,
+    "entry_alert_sent": false,
+    "entry_alert_sent_at": null,
+    "entry_alert_price": null,
+    "invalidation_email_sent": false
   }
 ]
