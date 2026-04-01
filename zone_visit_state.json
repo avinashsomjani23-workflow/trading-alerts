@@ -700,5 +700,11 @@
   },
   "DJ30_46679.2308": {
     "last_alert_price": 46861.0
+  },
+  "BTCUSD_68241.5573": {
+    "last_alert_price": 68568.03125
+  },
+  "NAS100_24250.625": {
+    "last_alert_price": 24188.75
   }
 }

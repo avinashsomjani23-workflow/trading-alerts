@@ -6993,5 +6993,132 @@
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
     "invalidation_email_sent": false
+  },
+  {
+    "id": "BTCUSD_1775054165",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "pair_type": "crypto",
+    "timestamp_utc": "2026-04-01 14:36",
+    "ist_time": "20:06",
+    "zone_level": 68241.56,
+    "zone_label": "Demand",
+    "bias": "LONG",
+    "entry": 68192.38,
+    "entry_model": "limit",
+    "entry_ready_now": false,
+    "trigger_status": "ready",
+    "trigger_tf": "M15",
+    "trigger_kind": "choch",
+    "trigger_level": 68558.57,
+    "trigger": "M15 candle closed above 68558.57 (01 Apr 20:00 IST M15 candle confirmed CHoCH).",
+    "invalidate_above": null,
+    "invalidate_below": 67944.12,
+    "invalid_if": "Price closes below SL level 67944.12.",
+    "sl": 67944.12,
+    "tp1": 69204.47,
+    "tp2": 69500.0,
+    "rr_tp1": "4.08",
+    "confidence_score": 8.0,
+    "score_breakdown": {
+      "liquidity_swept": 2.5,
+      "fvg_overlaps_ob": 2.0,
+      "premium_discount": 1.5,
+      "multi_tf_alignment": 1.5,
+      "zone_freshness": 0.0,
+      "no_high_impact_news": 0.0,
+      "session_alignment": 0.5
+    },
+    "confluences": [
+      "H1 and M15 CHoCH confirmed: H1 (01 Apr 19:30 IST H:68568.03 breaking 01 Apr 18:30 IST H:68558.57) and M15 (01 Apr 20:00 IST H:68568.03 breaking 01 Apr 18:45 IST H:68558.57).",
+      "Liquidity sweep before entry: 01 Apr 18:30 IST H1 candle (L:67969.12) swept prior H1 low (01 Apr 17:30 IST L:68291.77).",
+      "Entry within discount: The entry price (68192.38) is below the 50% midpoint (68564.93) of the recent H1 range (H:69160.76, L:67969.12).",
+      "FVG overlaps OB: A bullish M15 FVG (68192.38-68214.20) is present and fully contained within the H1 OB (68173.15-68346.67)."
+    ],
+    "missing": [
+      {
+        "item": "Zone Freshness",
+        "reason": "Zone is heavily fatigued (alerted 6 times in 30 days), indicating potential weakening of demand."
+      },
+      {
+        "item": "No High-Impact News",
+        "reason": "Significant ongoing geopolitical events (Iran war, NATO threats, oil crisis) introduce high volatility and unpredictable market movements."
+      }
+    ],
+    "geo_flag": true,
+    "news_flag": "Ongoing geopolitical conflict (Iran war, Trump's statements) and escalating oil crisis.",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null,
+    "entry_alert_sent": false,
+    "entry_alert_sent_at": null,
+    "entry_alert_price": null,
+    "invalidation_email_sent": false
+  },
+  {
+    "id": "NAS100_1775054249",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "pair_type": "index",
+    "timestamp_utc": "2026-04-01 14:37",
+    "ist_time": "20:07",
+    "zone_level": 24250.62,
+    "zone_label": "Supply",
+    "bias": "SHORT",
+    "entry": 24234.75,
+    "entry_model": "limit",
+    "entry_ready_now": false,
+    "trigger_status": "not_ready",
+    "trigger_tf": "M15",
+    "trigger_kind": "break_retest",
+    "trigger_level": 24234.75,
+    "trigger": "Price must reach 24234.75 to fill limit order for short entry.",
+    "invalidate_above": 24274.75,
+    "invalidate_below": null,
+    "invalid_if": "Price closes above SL (24274.75) or breaks structural low without retracing to entry.",
+    "sl": 24274.75,
+    "tp1": 24036.0,
+    "tp2": 23978.5,
+    "rr_tp1": "4.96",
+    "confidence_score": 8.0,
+    "score_breakdown": {
+      "liquidity_swept": 2.5,
+      "fvg_overlaps_ob": 2.0,
+      "premium_discount": 1.5,
+      "multi_tf_alignment": 1.5,
+      "zone_freshness": 0.0,
+      "no_high_impact_news": 0.0,
+      "session_alignment": 0.5
+    },
+    "confluences": [
+      "Price reacted strongly from 24246.00 (01 Apr 18:00 M15 candle) near the supply zone (24250.62) causing structural breaks.",
+      "Liquidity swept above previous swing high of 24205.00 (01 Apr 17:15 M15) by wick to 24246.00 (01 Apr 18:00 M15).",
+      "H1 CHoCH confirmed at 24123.50 by 01 Apr 17:30 H1 candle.",
+      "M15 CHoCH confirmed at 24104.75 by 01 Apr 18:15 M15 candle.",
+      "Valid M15 Order Block identified at 01 Apr 17:15 M15 (24178.75-24191.00 body).",
+      "FVG (24104.75-24234.75) overlaps with the M15 OB.",
+      "Entry is in a premium zone for selling (current price 24188.75, entry 24234.75 vs range midpoint 24141.00).",
+      "Trade aligns with primary NAS100 trading session (New York).",
+      "High Risk:Reward of 4.96:1 to TP1."
+    ],
+    "missing": [
+      {
+        "item": "Zone Freshness",
+        "reason": "Zone is explicitly stated as fatigued (alerted 4 times in 30 days), reducing its predictive power."
+      },
+      {
+        "item": "No High-Impact News",
+        "reason": "Multiple geopolitical headlines regarding Iran war, Trump comments, and oil crisis create significant uncertainty and potential for erratic moves."
+      }
+    ],
+    "geo_flag": true,
+    "news_flag": "Geopolitical - Iran war escalation, Trump comments, oil crisis. Highly volatile market conditions.",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null,
+    "entry_alert_sent": false,
+    "entry_alert_sent_at": null,
+    "entry_alert_price": null,
+    "invalidation_email_sent": false
   }
 ]
