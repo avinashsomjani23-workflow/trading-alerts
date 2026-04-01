@@ -17,6 +17,16 @@
       "spread_pips_note": "for_reference_only"
     },
     {
+      "symbol": "GBPUSD=X",
+      "name": "GBPUSD",
+      "proximity_pct": 0.25,
+      "min_touches": 1,
+      "min_confidence": 8,
+      "style": "both",
+      "spread_pips": 1.5,
+      "spread_pips_note": "for_reference_only"
+    },
+    {
       "symbol": "USDJPY=X",
       "name": "USDJPY",
       "proximity_pct": 0.25,
@@ -49,15 +59,36 @@
     {
       "symbol": "NQ=F",
       "name": "NAS100",
-      "proximity_pct": 0.6,
+      "proximity_pct": 0.4,
       "min_touches": 1,
       "min_confidence": 8,
       "style": "both",
-      "spread_pips": 1.5,
+      "spread_pips": 2,
+      "spread_pips_note": "for_reference_only"
+    },
+    {
+      "symbol": "YM=F",
+      "name": "DJ30",
+      "proximity_pct": 0.4,
+      "min_touches": 1,
+      "min_confidence": 8,
+      "style": "both",
+      "spread_pips": 3,
+      "spread_pips_note": "for_reference_only"
+    },
+    {
+      "symbol": "GC=F",
+      "name": "GOLD",
+      "proximity_pct": 0.5,
+      "min_touches": 1,
+      "min_confidence": 8,
+      "style": "both",
+      "spread_pips": 50,
       "spread_pips_note": "for_reference_only"
     }
-  ],
-  "zone_detection": {
+  
+    ],
+    "zone_detection": {
     "swing_lookback": 3
   }
 }
