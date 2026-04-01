@@ -7113,13 +7113,13 @@
     ],
     "geo_flag": true,
     "news_flag": "Geopolitical - Iran war escalation, Trump comments, oil crisis. Highly volatile market conditions.",
-    "outcome": "pending",
+    "outcome": "invalidated",
     "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome_checked_at": "2026-04-01 16:05",
     "entry_alert_sent": false,
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
-    "invalidation_email_sent": false
+    "invalidation_email_sent": true
   },
   {
     "id": "BTCUSD_1775055856",
