@@ -6082,9 +6082,9 @@
     "trigger": "Wait for price to pull back into the retest zone (4506.81213 \u2013 4526.18787). Enter long after a bullish confirmation candle on the H1 or M15 timeframe \u2014 look for a bullish engulfing candle, a pin bar, or an M15 Change of Character (CHoCH) to the upside.",
     "invalid_if": "Any H1 candle closes back below 4516.5 (the broken level). This signals a fakeout \u2014 the breakout has failed and you should not enter, or exit immediately if already in the trade.",
     "geo_flag": false,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null
+    "outcome": "loss",
+    "outcome_price": 4497.12426,
+    "outcome_checked_at": "2026-04-01 04:39"
   },
   {
     "id": "SILVER_1774625505",
@@ -6601,9 +6601,9 @@
       "Favorable Risk/Reward (2:1 minimum)"
     ],
     "geo_flag": true,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 159.085,
+    "outcome_checked_at": "2026-04-01 04:39",
     "entry_alert_sent": false,
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
@@ -6643,9 +6643,9 @@
       "Bearish Geopolitical Macro (Iran war tensions)"
     ],
     "geo_flag": true,
-    "outcome": "pending",
-    "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome": "loss",
+    "outcome_price": 23602.75,
+    "outcome_checked_at": "2026-04-01 04:39",
     "entry_alert_sent": false,
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
@@ -6685,9 +6685,9 @@
       "RR > 2:1 achievable"
     ],
     "geo_flag": true,
-    "outcome": "pending",
+    "outcome": "not_triggered",
     "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome_checked_at": "2026-04-01 04:39",
     "entry_alert_sent": false,
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
