@@ -819,7 +819,7 @@ def get_alert2_near_entry_pct(pair_name):
     custom = {
         "NAS100": 0.18,
         "XAUUSD": 0.12,
-        "US30":   0.15
+        "DJ30":   0.15
     }
     return custom.get(pair_name, 0.08)
 
