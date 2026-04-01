@@ -6807,13 +6807,13 @@
       "RR at least 2:1 achievable for TP1 (3.27:1)"
     ],
     "geo_flag": true,
-    "outcome": "pending",
+    "outcome": "invalidated",
     "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome_checked_at": "2026-04-01 12:11",
     "entry_alert_sent": false,
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
-    "invalidation_email_sent": false
+    "invalidation_email_sent": true
   },
   {
     "id": "BTCUSD_1775036031",
@@ -6887,13 +6887,13 @@
       "Risk/Reward of 2.5:1 achievable with TP2"
     ],
     "geo_flag": true,
-    "outcome": "pending",
+    "outcome": "invalidated",
     "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome_checked_at": "2026-04-01 12:11",
     "entry_alert_sent": false,
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
-    "invalidation_email_sent": false
+    "invalidation_email_sent": true
   },
   {
     "id": "GBPUSD_1775041396",

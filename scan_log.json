@@ -1433,5 +1433,77 @@
     "zone": 4774.2002,
     "status": "blocked_revisit",
     "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time_ist": "01 Apr 17:39 IST",
+    "time_utc": "2026-04-01 12:09",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 17:39 IST",
+    "time_utc": "2026-04-01 12:09",
+    "pair": "GBPUSD",
+    "zone": 1.33353,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "01 Apr 17:39 IST",
+    "time_utc": "2026-04-01 12:09",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 17:39 IST",
+    "time_utc": "2026-04-01 12:09",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 17:40 IST",
+    "time_utc": "2026-04-01 12:10",
+    "pair": "BTCUSD",
+    "zone": 68241.55729,
+    "status": "error",
+    "reason": "Gemini error (code 429): You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 44.9920945s."
+  },
+  {
+    "time_ist": "01 Apr 17:40 IST",
+    "time_utc": "2026-04-01 12:10",
+    "pair": "BTCUSD",
+    "zone": 68901.61979,
+    "status": "error",
+    "reason": "Gemini error (code 429): You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 14.455982706s."
+  },
+  {
+    "time_ist": "01 Apr 17:41 IST",
+    "time_utc": "2026-04-01 12:11",
+    "pair": "NAS100",
+    "zone": 24250.625,
+    "status": "error",
+    "reason": "Gemini error (code 429): You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 43.869065771s."
+  },
+  {
+    "time_ist": "01 Apr 17:41 IST",
+    "time_utc": "2026-04-01 12:11",
+    "pair": "DJ30",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 17:41 IST",
+    "time_utc": "2026-04-01 12:11",
+    "pair": "GOLD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
   }
 ]
