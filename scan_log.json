@@ -1641,5 +1641,77 @@
     "zone": 4738.2002,
     "status": "rejected_validation",
     "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "01 Apr 19:02 IST",
+    "time_utc": "2026-04-01 13:32",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 19:03 IST",
+    "time_utc": "2026-04-01 13:33",
+    "pair": "GBPUSD",
+    "zone": 1.33353,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "01 Apr 19:03 IST",
+    "time_utc": "2026-04-01 13:33",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 19:03 IST",
+    "time_utc": "2026-04-01 13:33",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 19:04 IST",
+    "time_utc": "2026-04-01 13:34",
+    "pair": "BTCUSD",
+    "zone": 68241.55729,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "01 Apr 19:05 IST",
+    "time_utc": "2026-04-01 13:35",
+    "pair": "BTCUSD",
+    "zone": 68901.61979,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "01 Apr 19:05 IST",
+    "time_utc": "2026-04-01 13:35",
+    "pair": "NAS100",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 19:05 IST",
+    "time_utc": "2026-04-01 13:35",
+    "pair": "DJ30",
+    "zone": 46679.23077,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted, price hasn't moved enough."
+  },
+  {
+    "time_ist": "01 Apr 19:05 IST",
+    "time_utc": "2026-04-01 13:35",
+    "pair": "GOLD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
   }
 ]
