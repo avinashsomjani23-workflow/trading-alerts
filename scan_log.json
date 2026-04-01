@@ -2225,5 +2225,77 @@
     "zone": 4806.0,
     "status": "rejected_validation",
     "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "01 Apr 23:02 IST",
+    "time_utc": "2026-04-01 17:32",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 23:03 IST",
+    "time_utc": "2026-04-01 17:33",
+    "pair": "GBPUSD",
+    "zone": 1.33353,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "01 Apr 23:03 IST",
+    "time_utc": "2026-04-01 17:33",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 23:03 IST",
+    "time_utc": "2026-04-01 17:33",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 23:03 IST",
+    "time_utc": "2026-04-01 17:33",
+    "pair": "BTCUSD",
+    "zone": 68241.55729,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted, price hasn't moved enough."
+  },
+  {
+    "time_ist": "01 Apr 23:03 IST",
+    "time_utc": "2026-04-01 17:33",
+    "pair": "BTCUSD",
+    "zone": 68901.61979,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted, price hasn't moved enough."
+  },
+  {
+    "time_ist": "01 Apr 23:03 IST",
+    "time_utc": "2026-04-01 17:33",
+    "pair": "NAS100",
+    "zone": 24250.625,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted, price hasn't moved enough."
+  },
+  {
+    "time_ist": "01 Apr 23:03 IST",
+    "time_utc": "2026-04-01 17:33",
+    "pair": "DJ30",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "01 Apr 23:04 IST",
+    "time_utc": "2026-04-01 17:34",
+    "pair": "GOLD",
+    "zone": 4806.0,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
   }
 ]
