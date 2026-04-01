@@ -6927,13 +6927,13 @@
       "High RR achievable (4.6+)"
     ],
     "geo_flag": true,
-    "outcome": "pending",
+    "outcome": "invalidated",
     "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome_checked_at": "2026-04-01 15:04",
     "entry_alert_sent": false,
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
-    "invalidation_email_sent": false
+    "invalidation_email_sent": true
   },
   {
     "id": "DJ30_1775047023",
@@ -7113,6 +7113,64 @@
     ],
     "geo_flag": true,
     "news_flag": "Geopolitical - Iran war escalation, Trump comments, oil crisis. Highly volatile market conditions.",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null,
+    "entry_alert_sent": false,
+    "entry_alert_sent_at": null,
+    "entry_alert_price": null,
+    "invalidation_email_sent": false
+  },
+  {
+    "id": "BTCUSD_1775055856",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "pair_type": "crypto",
+    "timestamp_utc": "2026-04-01 15:04",
+    "ist_time": "20:34",
+    "zone_level": 68901.62,
+    "zone_label": "Supply",
+    "bias": "SHORT",
+    "entry": 69160.76,
+    "entry_model": "limit",
+    "entry_ready_now": false,
+    "trigger_status": "not_ready",
+    "trigger_tf": "M15",
+    "trigger_kind": "retest_fvg_ob",
+    "trigger_level": 69160.76,
+    "trigger": "Price must retrace up to 69160.76 to activate the sell limit order.",
+    "invalidate_above": 69214.47,
+    "invalidate_below": 68006.92,
+    "invalid_if": "Price breaks below M15 CHoCH low (68006.92) before entry.",
+    "sl": 69360.76,
+    "tp1": 68291.77,
+    "tp2": 67565.4,
+    "rr_tp1": "4.34",
+    "confidence_score": 9.0,
+    "score_breakdown": {
+      "liquidity_swept": 2.5,
+      "fvg_overlaps_ob": 2.0,
+      "premium_discount": 1.5,
+      "multi_tf_alignment": 1.5,
+      "zone_freshness": 1.0,
+      "no_high_impact_news": 0.0,
+      "session_alignment": 0.5
+    },
+    "confluences": [
+      "Liquidity swept: 01 Apr 12:30 IST H1 (H:69204.47) swept 01 Apr 11:30 IST H1 (H:69160.76).",
+      "H1 CHoCH: Bearish structural break at 68401.53 by 01 Apr 17:30 IST H1 candle (C:68334.52).",
+      "M15 CHoCH: Bearish structural break at 68401.53 by 01 Apr 17:00 IST M15 candle (C:68006.92).",
+      "FVG overlaps OB: Bearish FVG [68467.27, 69160.76] overlaps OB [68401.53, 69125.27].",
+      "Premium Zone: Entry (69160.76) is in premium for short, above the range midpoint (68384.94)."
+    ],
+    "missing": [
+      {
+        "item": "No high-impact news",
+        "reason": "Ongoing geopolitical events could introduce unexpected volatility, potentially invalidating the setup despite technical confluence."
+      }
+    ],
+    "geo_flag": true,
+    "news_flag": "Ongoing geopolitical events regarding the Iran war and ceasefire negotiations are high-impact news.",
     "outcome": "pending",
     "outcome_price": null,
     "outcome_checked_at": null,
