@@ -1083,5 +1083,61 @@
     "zone": 4742.1333,
     "status": "blocked_revisit",
     "reason": "Zone already alerted and price has not moved far enough away yet."
+  },
+  {
+    "time": "2026-04-01 09:02",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 09:03",
+    "pair": "GBPUSD",
+    "zone": 1.33222,
+    "status": "rejected_gemini_no_alert",
+    "reason": "Price is not yet at the supply zone, therefore key SMC trigger conditions (CHoCH, OB/FVG formation, liquidity sweep) cannot be confirmed."
+  },
+  {
+    "time": "2026-04-01 09:03",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 09:03",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 09:03",
+    "pair": "BTCUSD",
+    "zone": 68283.56337,
+    "status": "rejected_gemini_no_alert",
+    "reason": "Low confidence due to heavily fatigued demand zone, absence of a clear Order Block at the zone, and lack of liquidity sweep before entry, compounded by ongoing high-impact geopolitical news."
+  },
+  {
+    "time": "2026-04-01 09:03",
+    "pair": "NAS100",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 09:03",
+    "pair": "DJ30",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 09:03",
+    "pair": "GOLD",
+    "zone": 4742.1333,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
   }
 ]
