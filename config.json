@@ -9,86 +9,154 @@
     {
       "symbol": "EURUSD=X",
       "name": "EURUSD",
+      "pair_type": "forex",
       "proximity_pct": 0.25,
       "min_touches": 1,
-      "min_confidence": 8,
-      "style": "both",
+      "min_confidence": 7,
+      "min_sl_pips": 15,
+      "decimal_places": 5,
       "spread_pips": 1,
-      "spread_pips_note": "for_reference_only"
+      "primary_session": "London",
+      "structure_tf": ["H1"],
+      "extra_gate": null,
+      "near_entry_pct": 0.08
     },
     {
       "symbol": "GBPUSD=X",
       "name": "GBPUSD",
+      "pair_type": "forex",
       "proximity_pct": 0.25,
       "min_touches": 1,
-      "min_confidence": 8,
-      "style": "both",
+      "min_confidence": 7,
+      "min_sl_pips": 15,
+      "decimal_places": 5,
       "spread_pips": 1.5,
-      "spread_pips_note": "for_reference_only"
+      "primary_session": "London",
+      "structure_tf": ["H1", "M15"],
+      "extra_gate": null,
+      "near_entry_pct": 0.08
     },
     {
       "symbol": "USDJPY=X",
       "name": "USDJPY",
+      "pair_type": "forex",
       "proximity_pct": 0.25,
       "min_touches": 1,
-      "min_confidence": 8,
-      "style": "both",
+      "min_confidence": 7,
+      "min_sl_pips": 20,
+      "decimal_places": 3,
       "spread_pips": 1,
-      "spread_pips_note": "for_reference_only"
+      "primary_session": "Asian_London",
+      "structure_tf": ["H1", "M15"],
+      "extra_gate": null,
+      "near_entry_pct": 0.08
     },
     {
       "symbol": "NZDUSD=X",
       "name": "NZDUSD",
+      "pair_type": "forex",
       "proximity_pct": 0.25,
       "min_touches": 1,
-      "min_confidence": 8,
-      "style": "both",
+      "min_confidence": 7,
+      "min_sl_pips": 15,
+      "decimal_places": 5,
       "spread_pips": 1.5,
-      "spread_pips_note": "for_reference_only"
+      "primary_session": "Asian",
+      "structure_tf": ["H1"],
+      "extra_gate": null,
+      "near_entry_pct": 0.08
     },
     {
       "symbol": "BTC-USD",
       "name": "BTCUSD",
+      "pair_type": "crypto",
       "proximity_pct": 0.8,
       "min_touches": 1,
-      "min_confidence": 8,
-      "style": "both",
+      "min_confidence": 7,
+      "min_sl_pips": 200,
+      "decimal_places": 2,
       "spread_pips": 15,
-      "spread_pips_note": "for_reference_only"
+      "primary_session": "any",
+      "structure_tf": ["H1", "M15"],
+      "extra_gate": "liquidity_swept_required",
+      "near_entry_pct": 0.12
     },
     {
       "symbol": "NQ=F",
       "name": "NAS100",
+      "pair_type": "index",
       "proximity_pct": 0.4,
       "min_touches": 1,
-      "min_confidence": 8,
-      "style": "both",
+      "min_confidence": 7,
+      "min_sl_pips": 40,
+      "decimal_places": 2,
       "spread_pips": 2,
-      "spread_pips_note": "for_reference_only"
+      "primary_session": "New_York",
+      "structure_tf": ["H1", "M15"],
+      "extra_gate": null,
+      "near_entry_pct": 0.18
     },
     {
       "symbol": "YM=F",
       "name": "DJ30",
+      "pair_type": "index",
       "proximity_pct": 0.4,
       "min_touches": 1,
-      "min_confidence": 8,
-      "style": "both",
+      "min_confidence": 7,
+      "min_sl_pips": 50,
+      "decimal_places": 2,
       "spread_pips": 3,
-      "spread_pips_note": "for_reference_only"
+      "primary_session": "New_York",
+      "structure_tf": ["H1", "M15"],
+      "extra_gate": null,
+      "near_entry_pct": 0.15
     },
     {
       "symbol": "GC=F",
       "name": "GOLD",
+      "pair_type": "metal",
       "proximity_pct": 0.5,
       "min_touches": 1,
-      "min_confidence": 8,
-      "style": "both",
+      "min_confidence": 7,
+      "min_sl_pips": 400,
+      "decimal_places": 2,
       "spread_pips": 50,
-      "spread_pips_note": "for_reference_only"
+      "primary_session": "London_NY",
+      "structure_tf": ["H1"],
+      "extra_gate": "macro_alignment_required",
+      "near_entry_pct": 0.12
     }
-  
+  ],
+  "zone_detection": {
+    "swing_lookback": 5
+  },
+  "scoring": {
+    "hard_gates": [
+      "structure_confirmed",
+      "valid_ob",
+      "rr_minimum_2"
     ],
-    "zone_detection": {
-    "swing_lookback": 3
+    "confluences": {
+      "liquidity_swept": 2.5,
+      "fvg_overlaps_ob": 2.0,
+      "premium_discount_zone": 1.5,
+      "multi_tf_alignment": 1.5,
+      "zone_freshness": 1.0,
+      "no_high_impact_news": 1.0,
+      "session_alignment": 0.5
+    },
+    "min_score_to_send": 7,
+    "max_score": 10.0,
+    "news_blackout_hours_before": 2,
+    "news_blackout_hours_after": 1,
+    "zone_fatigue_threshold": 3
+  },
+  "sessions": {
+    "Asian":        {"utc_start": 0,  "utc_end": 8},
+    "London":       {"utc_start": 7,  "utc_end": 16},
+    "New_York":     {"utc_start": 13, "utc_end": 22},
+    "Asian_London": {"utc_start": 0,  "utc_end": 16},
+    "London_NY":    {"utc_start": 7,  "utc_end": 22},
+    "any":          {"utc_start": 0,  "utc_end": 24}
   }
 }
