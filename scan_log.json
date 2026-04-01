@@ -964,5 +964,61 @@
     "zone": 4742.1333,
     "status": "rejected_gemini_no_alert",
     "reason": "No clear SMC OB at the zone, price in premium, no CHoCH, and no liquidity sweep. Low confidence for trade."
+  },
+  {
+    "time": "2026-04-01 08:02",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 08:02",
+    "pair": "GBPUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 08:02",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 08:02",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 08:03",
+    "pair": "BTCUSD",
+    "zone": 68283.56337,
+    "status": "rejected_gemini_no_alert",
+    "reason": "Fatigued demand zone and missing liquidity sweep reduce confidence despite strong bullish structure and good risk/reward."
+  },
+  {
+    "time": "2026-04-01 08:04",
+    "pair": "NAS100",
+    "zone": 23995.6875,
+    "status": "alert_sent",
+    "reason": "Trade alert sent successfully at score 9/10."
+  },
+  {
+    "time": "2026-04-01 08:04",
+    "pair": "DJ30",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 08:05",
+    "pair": "GOLD",
+    "zone": 4742.1333,
+    "status": "alert_sent",
+    "reason": "Trade alert sent successfully at score 10/10."
   }
 ]
