@@ -1020,5 +1020,68 @@
     "zone": 4742.1333,
     "status": "alert_sent",
     "reason": "Trade alert sent successfully at score 10/10."
+  },
+  {
+    "time": "2026-04-01 08:32",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 08:33",
+    "pair": "GBPUSD",
+    "zone": 1.33222,
+    "status": "rejected_gemini_no_alert",
+    "reason": "Low confidence due to unconfirmed Order Block/FVG at the zone from provided data and a counter-trend H1 setup."
+  },
+  {
+    "time": "2026-04-01 08:33",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 08:33",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 08:34",
+    "pair": "BTCUSD",
+    "zone": 68283.56337,
+    "status": "rejected_gemini_no_alert",
+    "reason": "Fatigued demand zone significantly reduces the overall confidence despite strong structural alignment and clear liquidity sweeps."
+  },
+  {
+    "time": "2026-04-01 08:35",
+    "pair": "BTCUSD",
+    "zone": 69254.05664,
+    "status": "rejected_gemini_no_alert",
+    "reason": "The alert zone was not reached, no valid OB at the alerted zone, no CHoCH confirmed, and the zone is showing fatigue with a low overall SMC score."
+  },
+  {
+    "time": "2026-04-01 08:35",
+    "pair": "NAS100",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 08:35",
+    "pair": "DJ30",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones were detected, but none are close enough to current price."
+  },
+  {
+    "time": "2026-04-01 08:35",
+    "pair": "GOLD",
+    "zone": 4742.1333,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted and price has not moved far enough away yet."
   }
 ]
