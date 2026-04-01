@@ -55,7 +55,7 @@
       "symbol": "NZDUSD=X",
       "name": "NZDUSD",
       "pair_type": "forex",
-      "proximity_pct": 0.25,
+      "proximity_pct": 0.3,
       "min_touches": 1,
       "min_confidence": 7,
       "min_sl_pips": 15,
