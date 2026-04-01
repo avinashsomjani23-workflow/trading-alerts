@@ -7178,5 +7178,63 @@
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
     "invalidation_email_sent": false
+  },
+  {
+    "id": "BTCUSD_1775057799",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "pair_type": "crypto",
+    "timestamp_utc": "2026-04-01 15:36",
+    "ist_time": "21:06",
+    "zone_level": 69204.47,
+    "zone_label": "Supply",
+    "bias": "SHORT",
+    "entry": 69141.81,
+    "entry_model": "limit",
+    "entry_ready_now": false,
+    "trigger_status": "not_ready",
+    "trigger_tf": "H1",
+    "trigger_kind": "price_reach",
+    "trigger_level": 69141.81,
+    "trigger": "Price must reach entry level 69141.81 for limit order fill.",
+    "invalidate_above": 69341.81,
+    "invalidate_below": null,
+    "invalid_if": "Price trades above SL 69341.81 before entry.",
+    "sl": 69341.81,
+    "tp1": 67565.39,
+    "tp2": 67000.0,
+    "rr_tp1": "7.88",
+    "confidence_score": 7.0,
+    "score_breakdown": {
+      "liquidity_swept": 2.5,
+      "fvg_overlaps_ob": 0.0,
+      "premium_discount": 1.5,
+      "multi_tf_alignment": 1.5,
+      "zone_freshness": 1.0,
+      "no_high_impact_news": 0.0,
+      "session_alignment": 0.5
+    },
+    "confluences": [
+      "Liquidity swept: 01 Apr 12:30 IST H1 high of 69204.47 swept 01 Apr 11:30 IST H1 high of 69160.76.",
+      "Premium Zone: Current price (68652.68) and supply zone (69204.47) are above the recent range midpoint (68384.93).",
+      "Multi-Timeframe Alignment: H1 CHoCH at 01 Apr 18:30 IST. M15 BOS at 01 Apr 18:00 IST (01 Apr 18:00 M15 C:68305.15 broke 01 Apr 17:00 M15 C:68529.36).",
+      "Zone Freshness: Zone is fresh, alerted 1 time in 30 days.",
+      "Session Alignment: Trading within highly liquid London-New York overlap session."
+    ],
+    "missing": [
+      {
+        "item": "FVG Overlapping OB",
+        "reason": "No clear Fair Value Gap identified overlapping the Order Block range (69079.14 - 69204.47) based on 3-candle pattern (11:30 H1, 12:30 H1, 13:30 H1), which is a key component for high-probability SMC zone retests."
+      }
+    ],
+    "geo_flag": true,
+    "news_flag": "Geopolitical event: Trump's statements and potential address regarding Iran war and NATO alliance.",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null,
+    "entry_alert_sent": false,
+    "entry_alert_sent_at": null,
+    "entry_alert_price": null,
+    "invalidation_email_sent": false
   }
 ]
