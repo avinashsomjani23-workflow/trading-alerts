@@ -7236,5 +7236,64 @@
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
     "invalidation_email_sent": false
+  },
+  {
+    "id": "GBPUSD_1775066608",
+    "alert_type": "zone",
+    "pair": "GBPUSD",
+    "pair_type": "forex",
+    "timestamp_utc": "2026-04-01 18:03",
+    "ist_time": "23:33",
+    "zone_level": 1.33353,
+    "zone_label": "Supply",
+    "bias": "SHORT",
+    "entry": 1.33373,
+    "entry_model": "limit",
+    "entry_ready_now": false,
+    "trigger_status": "ready",
+    "trigger_tf": "M15",
+    "trigger_kind": "choch",
+    "trigger_level": 1.33147,
+    "trigger": "Price broke below 1.33178 (M15 01 Apr 21:30 low) at 1.33147 (M15 01 Apr 23:30 candle).",
+    "invalidate_above": 1.33448,
+    "invalidate_below": null,
+    "invalid_if": "Price trades above 1.33448 after entry.",
+    "sl": 1.33523,
+    "tp1": 1.32951,
+    "tp2": 1.32663,
+    "rr_tp1": "2.8",
+    "confidence_score": 9.0,
+    "score_breakdown": {
+      "liquidity_swept": 2.5,
+      "fvg_overlaps_ob": 2.0,
+      "premium_discount": 1.5,
+      "multi_tf_alignment": 1.5,
+      "zone_freshness": 1.0,
+      "no_high_impact_news": 0.0,
+      "session_alignment": 0.5
+    },
+    "confluences": [
+      "M15 CHoCH confirmed (01 Apr 23:30 IST low 1.33147 broke 01 Apr 21:30 low 1.33178).",
+      "H1 CHoCH confirmed (01 Apr 23:30 IST low 1.33147 broke 01 Apr 21:30 low 1.33148).",
+      "Liquidity sweep above previous highs (M15 01 Apr 22:30 H:1.33438 swept 01 Apr 20:15 H:1.33351).",
+      "Valid Bearish Order Block at reversal point (M15 01 Apr 22:30 candle).",
+      "Fair Value Gap (1.33373-1.33305) overlaps with the bottom of the Order Block (1.33373).",
+      "Entry at 1.33373 is positioned in a premium zone for a short trade (above the recent range's 50% mark)."
+    ],
+    "missing": [
+      {
+        "item": "Absence of high-impact news",
+        "reason": "Ongoing geopolitical events related to Iran conflict create uncertainty and can lead to sudden, unpredictable price movements or significant gaps, increasing execution risk."
+      }
+    ],
+    "geo_flag": true,
+    "news_flag": "Ongoing geopolitical events related to Iran war and Trump's statements.",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null,
+    "entry_alert_sent": false,
+    "entry_alert_sent_at": null,
+    "entry_alert_price": null,
+    "invalidation_email_sent": false
   }
 ]
