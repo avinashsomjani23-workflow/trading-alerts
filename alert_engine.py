@@ -21,7 +21,17 @@ GEMINI_KEY    = os.environ["GEMINI_API_KEY"]
 GMAIL_ADDRESS = os.environ["GMAIL_ADDRESS"]
 GMAIL_PASS    = os.environ["GMAIL_APP_PASSWORD"]
 ALERT_EMAIL   = os.environ["ALERT_EMAIL"]
-
+# ── Scoring maximums — Python-enforced caps per item ──────────────────────────
+SCORE_MAX = {
+    "liquidity_swept":      2.5,
+    "fvg_overlaps_ob":      2.0,
+    "premium_discount":     1.5,
+    "premium_discount_zone":1.5,
+    "multi_tf_alignment":   1.5,
+    "zone_freshness":       1.0,
+    "no_high_impact_news":  1.0,
+    "session_alignment":    0.5,
+}
 MACRO_CACHE_FILE = "macro_cache.json"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
