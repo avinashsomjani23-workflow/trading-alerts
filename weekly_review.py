@@ -61,7 +61,14 @@ def get_pair_type(pair_name):
 def call_gemini(prompt, retries=2):
     url  = (f"https://generativelanguage.googleapis.com/v1beta/"
             f"models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}")
-    body = {"contents": [{"parts": [{"text": prompt}]}]}
+    body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "thinkingConfig": {
+                "thinkingBudget": 0
+            }
+        }
+    }
     for attempt in range(retries + 1):
         try:
             r      = requests.post(url, json=body, timeout=120)
