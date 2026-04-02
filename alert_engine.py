@@ -1388,7 +1388,8 @@ for pair_conf in config["pairs"]:
         zones_in_proximity = 0
         zone_alerted = False
 
-        for zone_level, touches in zones:
+        zones_by_dist = sorted(zones, key=lambda z: abs(current_price - z[0]))
+        for zone_level, touches in zones_by_dist[:1]:
             if zone_alerted:
                 break
 
@@ -1455,11 +1456,13 @@ for pair_conf in config["pairs"]:
             if not data.get("gates_passed", False):
                 reason = f"Hard gates failed. {data.get('confidence_reason', '')}"
                 log_scan(name, "rejected_gates", reason, zone_level)
+                record_zone_rejection(name, zone_level, current_price)
                 continue
 
             if score < min_conf:
                 reason = f"Score {score}/10 below {min_conf}. {data.get('confidence_reason', '')}"
                 log_scan(name, "rejected_low_score", reason, zone_level)
+                record_zone_rejection(name, zone_level, current_price)
                 continue
 
             # ── Generate charts ───────────────────────────────────────────
