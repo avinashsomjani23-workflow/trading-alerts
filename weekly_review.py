@@ -66,7 +66,8 @@ def call_gemini(prompt, retries=2):
         "generationConfig": {
             "thinkingConfig": {
                 "thinkingBudget": 0
-            }
+            },
+            "maxOutputTokens": 2500
         }
     }
     for attempt in range(retries + 1):
