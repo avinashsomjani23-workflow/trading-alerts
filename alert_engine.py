@@ -1448,7 +1448,8 @@ for pair_conf in config["pairs"]:
 
             if not data.get("send_alert", False):
                 reason = data.get("confidence_reason", "Gemini rejected setup.")
-                log_scan(name, "rejected_gemini", reason, zone_level)
+                log_scan(name, "rejected_validation", reason, zone_level)
+                record_zone_rejection(name, zone_level, current_price)
                 continue
 
             if not data.get("gates_passed", False):
