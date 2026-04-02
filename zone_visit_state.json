@@ -730,5 +730,8 @@
   },
   "USDJPY_rej_159.1575": {
     "rejected_at_price": 159.47000122070312
+  },
+  "NAS100_rej_23976.0": {
+    "rejected_at_price": 23980.25
   }
 }
