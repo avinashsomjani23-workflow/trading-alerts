@@ -7295,5 +7295,67 @@
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
     "invalidation_email_sent": false
+  },
+  {
+    "id": "BTCUSD_1775111852",
+    "alert_type": "zone",
+    "pair": "BTCUSD",
+    "pair_type": "crypto",
+    "timestamp_utc": "2026-04-02 06:37",
+    "ist_time": "12:07",
+    "zone_level": 66468.92,
+    "zone_label": "Demand",
+    "bias": "LONG",
+    "entry": 66353.74,
+    "entry_model": "limit",
+    "entry_ready_now": false,
+    "trigger_status": "not_ready",
+    "trigger_tf": "M15",
+    "trigger_kind": "retest_fvg_ob",
+    "trigger_level": 66353.74,
+    "trigger": "Price must retest the FVG top at 66353.74 for entry.",
+    "invalidate_above": null,
+    "invalidate_below": 66350.27,
+    "invalid_if": "Price closes below 66350.27 (FVG bottom) on M15 before entry.",
+    "sl": 66153.74,
+    "tp1": 67099.53,
+    "tp2": 68052.53,
+    "rr_tp1": "3.73",
+    "confidence_score": 8.5,
+    "score_breakdown": {
+      "liquidity_swept": 2.5,
+      "fvg_overlaps_ob": 2.0,
+      "premium_discount": 1.5,
+      "multi_tf_alignment": 1.5,
+      "zone_freshness": 1.0,
+      "no_high_impact_news": 0.0,
+      "session_alignment": 0.0
+    },
+    "confluences": [
+      "Liquidity swept: M15 02 Apr 10:00 IST candle (L:66230.24) swept prior M15 low (02 Apr 09:45 IST L:66377.40).",
+      "H1 Bullish CHoCH: 02 Apr 11:30 IST candle H:66743.85 broke 02 Apr 09:30 IST H:66614.12.",
+      "M15 Bullish CHoCH: 02 Apr 10:30 IST candle H:66434.91 broke 02 Apr 10:00 IST H:66412.88.",
+      "Price in Discount: Current price 66638.33 is below the 50% midpoint (67667.53) of the H1 range (69104.82-66230.24).",
+      "FVG overlaps OB: Bullish FVG (66350.27-66353.74) is located within the M15 OB (66230.24-66412.88)."
+    ],
+    "missing": [
+      {
+        "item": "No High-Impact News",
+        "reason": "Active geopolitical conflict in Iran may introduce high volatility and unpredictable price movements."
+      },
+      {
+        "item": "Session Alignment",
+        "reason": "Trading outside primary BTCUSD liquidity sessions (London/NY overlap) reduces overall market depth and volume."
+      }
+    ],
+    "geo_flag": true,
+    "news_flag": "High-impact geopolitical news: Iran war developments, U.S. attacks, and oil price shocks are active.",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null,
+    "entry_alert_sent": false,
+    "entry_alert_sent_at": null,
+    "entry_alert_price": null,
+    "invalidation_email_sent": false
   }
 ]

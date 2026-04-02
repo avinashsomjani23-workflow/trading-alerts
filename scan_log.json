@@ -2737,5 +2737,77 @@
     "zone": 4606.19995,
     "status": "rejected_validation",
     "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 12:03 IST",
+    "time_utc": "2026-04-02 06:33",
+    "pair": "EURUSD",
+    "zone": 1.15346,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 12:03 IST",
+    "time_utc": "2026-04-02 06:33",
+    "pair": "GBPUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 12:04 IST",
+    "time_utc": "2026-04-02 06:34",
+    "pair": "USDJPY",
+    "zone": 159.15751,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 12:05 IST",
+    "time_utc": "2026-04-02 06:35",
+    "pair": "NZDUSD",
+    "zone": 0.57022,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 12:06 IST",
+    "time_utc": "2026-04-02 06:36",
+    "pair": "BTCUSD",
+    "zone": 66135.56445,
+    "status": "rejected_gemini",
+    "reason": "Low confidence due to absence of an FVG overlapping the order block and active high-impact geopolitical news."
+  },
+  {
+    "time_ist": "02 Apr 12:07 IST",
+    "time_utc": "2026-04-02 06:37",
+    "pair": "BTCUSD",
+    "zone": 66468.92188,
+    "status": "alert_sent",
+    "reason": "Zone alert sent at score 8.5/10."
+  },
+  {
+    "time_ist": "02 Apr 12:08 IST",
+    "time_utc": "2026-04-02 06:38",
+    "pair": "NAS100",
+    "zone": 23767.875,
+    "status": "rejected_gemini",
+    "reason": "Confidence score 6.5 is below the 7.0 minimum due to ongoing high-impact geopolitical news and lack of FVG, despite passing hard gates."
+  },
+  {
+    "time_ist": "02 Apr 12:08 IST",
+    "time_utc": "2026-04-02 06:38",
+    "pair": "DJ30",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 12:09 IST",
+    "time_utc": "2026-04-02 06:39",
+    "pair": "GOLD",
+    "zone": 4606.19995,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
   }
 ]
