@@ -409,8 +409,11 @@ WEIGHTED SCORECARD — SCORE OUT OF 10 (minimum {min_conf} to send):
    0.5 = {name} is trading during its primary session window.
    0   = Outside primary session.
 
+HARD SCORING RULES — VIOLATIONS WILL BE REJECTED:
+- NEVER score ANY item above its stated maximum. Session Alignment max is 0.5. Liquidity Swept max is 2.5. Etc.
+- If you score a partial value (e.g. 0.5 on Multi-TF Alignment), you MUST explain which timeframe confirmed and which did not.
+- confidence_score MUST equal the exact arithmetic sum of all 7 items above. Python will verify and reject mismatches.
 TOTAL POSSIBLE: 10.0 | MINIMUM TO SEND: {min_conf}
-Your confidence_score MUST equal the sum of the individual scores above.
 
 ═══════════════════════════════════════════════════════════════
 ENTRY, SL, TP RULES:
