@@ -1404,6 +1404,11 @@ for pair_conf in config["pairs"]:
                          "Zone already alerted, price hasn't moved enough.", zone_level)
                 continue
 
+            if not should_call_gemini_for_zone(name, zone_level, current_price, prox):
+                log_scan(name, "skipped_rejected_zone",
+                         "Zone rejected by Gemini recently, price hasn't moved enough.", zone_level)
+                continue
+
             df2 = fetch_m15_data(symbol)
             if df2 is None:
                 log_scan(name, "error", "No M15 data.", zone_level)
