@@ -1443,13 +1443,14 @@ for pair_conf in config["pairs"]:
             if not is_valid:
                 print(f"    {name} blocked by validation: {reason}")
                 log_scan(name, "rejected_validation", reason, zone_level)
+                record_zone_rejection(name, zone_level, current_price)
                 continue
 
             score = data.get("confidence_score", 0)
 
             if not data.get("send_alert", False):
                 reason = data.get("confidence_reason", "Gemini rejected setup.")
-                log_scan(name, "rejected_validation", reason, zone_level)
+                log_scan(name, "rejected_gemini", reason, zone_level)
                 record_zone_rejection(name, zone_level, current_price)
                 continue
 
