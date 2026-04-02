@@ -6766,13 +6766,13 @@
       "Good RR potential (2:1 and 3:1)"
     ],
     "geo_flag": true,
-    "outcome": "pending",
+    "outcome": "invalidated",
     "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome_checked_at": "2026-04-02 04:08",
     "entry_alert_sent": false,
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
-    "invalidation_email_sent": false
+    "invalidation_email_sent": true
   },
   {
     "id": "GOLD_1775030737",
@@ -6986,13 +6986,13 @@
     ],
     "geo_flag": true,
     "news_flag": "Ongoing geopolitical conflict (Iran-Israel war, US involvement, oil crisis).",
-    "outcome": "pending",
+    "outcome": "invalidated",
     "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome_checked_at": "2026-04-02 04:08",
     "entry_alert_sent": false,
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
-    "invalidation_email_sent": false
+    "invalidation_email_sent": true
   },
   {
     "id": "BTCUSD_1775054165",
@@ -7047,13 +7047,13 @@
     ],
     "geo_flag": true,
     "news_flag": "Ongoing geopolitical conflict (Iran war, Trump's statements) and escalating oil crisis.",
-    "outcome": "pending",
+    "outcome": "invalidated",
     "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome_checked_at": "2026-04-02 04:08",
     "entry_alert_sent": false,
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
-    "invalidation_email_sent": false
+    "invalidation_email_sent": true
   },
   {
     "id": "NAS100_1775054249",
@@ -7171,13 +7171,13 @@
     ],
     "geo_flag": true,
     "news_flag": "Ongoing geopolitical events regarding the Iran war and ceasefire negotiations are high-impact news.",
-    "outcome": "pending",
+    "outcome": "invalidated",
     "outcome_price": null,
-    "outcome_checked_at": null,
+    "outcome_checked_at": "2026-04-02 04:08",
     "entry_alert_sent": false,
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
-    "invalidation_email_sent": false
+    "invalidation_email_sent": true
   },
   {
     "id": "BTCUSD_1775057799",

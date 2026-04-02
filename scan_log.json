@@ -2361,5 +2361,85 @@
     "zone": 4806.0,
     "status": "rejected_validation",
     "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 09:33 IST",
+    "time_utc": "2026-04-02 04:03",
+    "pair": "EURUSD",
+    "zone": 1.15331,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 09:33 IST",
+    "time_utc": "2026-04-02 04:03",
+    "pair": "GBPUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 09:34 IST",
+    "time_utc": "2026-04-02 04:04",
+    "pair": "USDJPY",
+    "zone": 159.15751,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 09:34 IST",
+    "time_utc": "2026-04-02 04:04",
+    "pair": "NZDUSD",
+    "zone": 0.57022,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 09:35 IST",
+    "time_utc": "2026-04-02 04:05",
+    "pair": "BTCUSD",
+    "zone": 66135.56445,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 09:36 IST",
+    "time_utc": "2026-04-02 04:06",
+    "pair": "BTCUSD",
+    "zone": 66468.92188,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 09:37 IST",
+    "time_utc": "2026-04-02 04:07",
+    "pair": "BTCUSD",
+    "zone": 67023.39844,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 09:38 IST",
+    "time_utc": "2026-04-02 04:08",
+    "pair": "NAS100",
+    "zone": 23767.875,
+    "status": "rejected_gemini",
+    "reason": "Low score due to geopolitical news, no FVG, and current market session, despite strong structure and R:R."
+  },
+  {
+    "time_ist": "02 Apr 09:38 IST",
+    "time_utc": "2026-04-02 04:08",
+    "pair": "DJ30",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 09:38 IST",
+    "time_utc": "2026-04-02 04:08",
+    "pair": "GOLD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
   }
 ]
