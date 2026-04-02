@@ -490,7 +490,14 @@ Return ONLY raw JSON. No markdown. No code fences. No text outside the JSON.
 # ── Gemini call with retry ────────────────────────────────────────────────────
 def call_gemini(prompt, max_retries=2):
     url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
-    body = {"contents": [{"parts": [{"text": prompt}]}]}
+    body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "thinkingConfig": {
+                "thinkingBudget": 0
+            }
+        }
+    }
     for attempt in range(max_retries + 1):
         try:
             r      = requests.post(url, json=body, timeout=90)
