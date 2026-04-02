@@ -7357,5 +7357,69 @@
     "entry_alert_sent_at": null,
     "entry_alert_price": null,
     "invalidation_email_sent": false
+  },
+  {
+    "id": "NAS100_1775113392",
+    "alert_type": "zone",
+    "pair": "NAS100",
+    "pair_type": "index",
+    "timestamp_utc": "2026-04-02 07:03",
+    "ist_time": "12:33",
+    "zone_level": 23767.88,
+    "zone_label": "Demand",
+    "bias": "LONG",
+    "entry": 23769.75,
+    "entry_model": "limit",
+    "entry_ready_now": false,
+    "trigger_status": "ready",
+    "trigger_tf": "M15",
+    "trigger_kind": "bos",
+    "trigger_level": 23805.5,
+    "trigger": "M15 candle closed above 23805.50 (02 Apr 12:15 IST candle closed at 23808.25)",
+    "invalidate_above": null,
+    "invalidate_below": 23753.75,
+    "invalid_if": "Price closes below 23753.75 (OB low)",
+    "sl": 23713.75,
+    "tp1": 23856.0,
+    "tp2": 23912.5,
+    "rr_tp1": "2.12",
+    "confidence_score": 7.5,
+    "score_breakdown": {
+      "liquidity_swept": 0.0,
+      "fvg_overlaps_ob": 2.0,
+      "premium_discount": 1.5,
+      "multi_tf_alignment": 0.5,
+      "zone_freshness": 1.0,
+      "no_high_impact_news": 1.0,
+      "session_alignment": 1.5
+    },
+    "confluences": [
+      "M15 BOS confirmed by 02 Apr 12:15 IST candle close at 23808.25, breaking previous swing high of 23805.50 (02 Apr 12:00 IST candle H)",
+      "Bullish Order Block identified at 02 Apr 11:15 IST candle (O:23783.75, H:23785.50, L:23753.75, C:23756.00)",
+      "Bullish FVG exists from 23781.75 (02 Apr 11:00 IST C) to 23757.50 (02 Apr 11:30 IST O), overlapping OB",
+      "Price is in a discount zone: recent range H:24348.25, L:23752.50, Mid:24050.38, current price 23808.25 is below midpoint.",
+      "Zone is fresh, not alerted in 30 days.",
+      "NAS100 is trading during its primary session (06:00 - 20:00 EST / 15:30 - 05:30 IST)",
+      "No high-impact news within 2 hours prior or 1 hour after, other than ongoing geopolitical tensions related to Iran."
+    ],
+    "missing": [
+      {
+        "item": "Liquidity Swept",
+        "reason": "No clear sweep of a prior swing low before the move into the demand zone. Price dipped into the zone directly."
+      },
+      {
+        "item": "H1 Structural Confirmation",
+        "reason": "H1 is currently bearish, with the last candle (02 Apr 11:30 IST) being a bullish engulfing, but no clear H1 BOS or CHoCH yet."
+      }
+    ],
+    "geo_flag": true,
+    "news_flag": "Iran war concerns causing energy shocks are ongoing, creating macro uncertainty.",
+    "outcome": "invalidated",
+    "outcome_price": null,
+    "outcome_checked_at": "2026-04-02 07:03",
+    "entry_alert_sent": false,
+    "entry_alert_sent_at": null,
+    "entry_alert_price": null,
+    "invalidation_email_sent": true
   }
 ]
