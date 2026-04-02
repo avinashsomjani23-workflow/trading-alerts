@@ -733,5 +733,11 @@
   },
   "NAS100_rej_23976.0": {
     "rejected_at_price": 23980.25
+  },
+  "EURUSD_rej_1.1534": {
+    "rejected_at_price": 1.155001163482666
+  },
+  "USDJPY_rej_159.1715": {
+    "rejected_at_price": 159.322998046875
   }
 }
