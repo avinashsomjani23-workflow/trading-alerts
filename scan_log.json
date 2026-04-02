@@ -2513,5 +2513,77 @@
     "zone": null,
     "status": "zone_outside_proximity",
     "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 10:33 IST",
+    "time_utc": "2026-04-02 05:03",
+    "pair": "EURUSD",
+    "zone": 1.15331,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 10:33 IST",
+    "time_utc": "2026-04-02 05:03",
+    "pair": "GBPUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 10:34 IST",
+    "time_utc": "2026-04-02 05:04",
+    "pair": "USDJPY",
+    "zone": 159.15751,
+    "status": "rejected_validation",
+    "reason": "After SL widening, RR dropped to 1.2 (below 2:1)"
+  },
+  {
+    "time_ist": "02 Apr 10:34 IST",
+    "time_utc": "2026-04-02 05:04",
+    "pair": "NZDUSD",
+    "zone": 0.57022,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 10:35 IST",
+    "time_utc": "2026-04-02 05:05",
+    "pair": "BTCUSD",
+    "zone": 66135.56445,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 10:37 IST",
+    "time_utc": "2026-04-02 05:07",
+    "pair": "BTCUSD",
+    "zone": 66468.92188,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 10:37 IST",
+    "time_utc": "2026-04-02 05:07",
+    "pair": "NAS100",
+    "zone": 23767.875,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 10:37 IST",
+    "time_utc": "2026-04-02 05:07",
+    "pair": "DJ30",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 10:38 IST",
+    "time_utc": "2026-04-02 05:08",
+    "pair": "GOLD",
+    "zone": 4693.0,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
   }
 ]
