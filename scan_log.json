@@ -3257,5 +3257,37 @@
     "zone": 23767.875,
     "status": "blocked_revisit",
     "reason": "Zone already alerted, price hasn't moved enough."
+  },
+  {
+    "time_ist": "02 Apr 18:32 IST",
+    "time_utc": "2026-04-02 13:02",
+    "pair": "EURUSD",
+    "zone": 1.15346,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 18:32 IST",
+    "time_utc": "2026-04-02 13:02",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 18:32 IST",
+    "time_utc": "2026-04-02 13:02",
+    "pair": "NZDUSD",
+    "zone": 0.57021,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 18:32 IST",
+    "time_utc": "2026-04-02 13:02",
+    "pair": "NAS100",
+    "zone": 23767.875,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted, price hasn't moved enough."
   }
 ]

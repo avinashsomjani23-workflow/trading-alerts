@@ -721,5 +721,11 @@
   },
   "NAS100_23767.875": {
     "last_alert_price": 23808.25
+  },
+  "EURUSD_rej_1.1535": {
+    "rejected_at_price": 1.1528706550598145
+  },
+  "NZDUSD_rej_0.5702": {
+    "rejected_at_price": 0.5713959336280823
   }
 }
