@@ -512,12 +512,6 @@ def call_gemini(prompt, max_retries=2):
             "maxOutputTokens": 2500
         }
     }
-        "generationConfig": {
-            "thinkingConfig": {
-                "thinkingBudget": 0
-            }
-        }
-    }
     for attempt in range(max_retries + 1):
         try:
             r      = requests.post(url, json=body, timeout=90)
