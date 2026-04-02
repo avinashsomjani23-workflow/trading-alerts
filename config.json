@@ -22,21 +22,6 @@
       "near_entry_pct": 0.08
     },
     {
-      "symbol": "GBPUSD=X",
-      "name": "GBPUSD",
-      "pair_type": "forex",
-      "proximity_pct": 0.25,
-      "min_touches": 1,
-      "min_confidence": 7,
-      "min_sl_pips": 15,
-      "decimal_places": 5,
-      "spread_pips": 1.5,
-      "primary_session": "London",
-      "structure_tf": ["H1", "M15"],
-      "extra_gate": null,
-      "near_entry_pct": 0.08
-    },
-    {
       "symbol": "USDJPY=X",
       "name": "USDJPY",
       "pair_type": "forex",
@@ -67,21 +52,6 @@
       "near_entry_pct": 0.08
     },
     {
-      "symbol": "BTC-USD",
-      "name": "BTCUSD",
-      "pair_type": "crypto",
-      "proximity_pct": 0.8,
-      "min_touches": 1,
-      "min_confidence": 7,
-      "min_sl_pips": 200,
-      "decimal_places": 2,
-      "spread_pips": 15,
-      "primary_session": "any",
-      "structure_tf": ["H1", "M15"],
-      "extra_gate": "liquidity_swept_required",
-      "near_entry_pct": 0.12
-    },
-    {
       "symbol": "NQ=F",
       "name": "NAS100",
       "pair_type": "index",
@@ -95,36 +65,6 @@
       "structure_tf": ["H1", "M15"],
       "extra_gate": null,
       "near_entry_pct": 0.18
-    },
-    {
-      "symbol": "YM=F",
-      "name": "DJ30",
-      "pair_type": "index",
-      "proximity_pct": 0.4,
-      "min_touches": 1,
-      "min_confidence": 7,
-      "min_sl_pips": 50,
-      "decimal_places": 2,
-      "spread_pips": 3,
-      "primary_session": "New_York",
-      "structure_tf": ["H1", "M15"],
-      "extra_gate": null,
-      "near_entry_pct": 0.15
-    },
-    {
-      "symbol": "GC=F",
-      "name": "GOLD",
-      "pair_type": "metal",
-      "proximity_pct": 0.5,
-      "min_touches": 1,
-      "min_confidence": 7,
-      "min_sl_pips": 400,
-      "decimal_places": 2,
-      "spread_pips": 50,
-      "primary_session": "London_NY",
-      "structure_tf": ["H1"],
-      "extra_gate": "macro_alignment_required",
-      "near_entry_pct": 0.12
     }
   ],
   "zone_detection": {
