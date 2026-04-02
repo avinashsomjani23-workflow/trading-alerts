@@ -552,13 +552,22 @@ def validate_gemini_response(data, pair_conf, zone_label, current_price):
     if bias not in ("LONG", "SHORT"):
         return False, f"Bias is '{bias}' — must be LONG or SHORT"
 
-    # 3. Score breakdown must sum to confidence_score (tolerance ±0.5)
+    # 3. Clamp each score item to its maximum, recalculate, override Gemini's total
     breakdown = data.get("score_breakdown", {})
-    calc_sum  = sum(float(v) for v in breakdown.values())
-    reported  = float(data.get("confidence_score", 0))
-    if abs(calc_sum - reported) > 0.5:
-        data["confidence_score"] = round(calc_sum, 1)
-        print(f"    Score corrected: Gemini said {reported}, breakdown sums to {calc_sum:.1f}")
+    clamped = False
+    for key in list(breakdown.keys()):
+        raw_val = float(breakdown[key])
+        max_val = SCORE_MAX.get(key, 0)
+        if max_val > 0 and raw_val > max_val:
+            print(f"    Score clamped: {key} was {raw_val}, max is {max_val}")
+            breakdown[key] = max_val
+            clamped = True
+    data["score_breakdown"] = breakdown
+    calc_sum = round(sum(float(v) for v in breakdown.values()), 1)
+    reported = float(data.get("confidence_score", 0))
+    if clamped or abs(calc_sum - reported) >= 0.3:
+        print(f"    Score corrected: Gemini said {reported}, clamped breakdown sums to {calc_sum}")
+        data["confidence_score"] = calc_sum
 
     # 4. SL on correct side of entry
     try:
