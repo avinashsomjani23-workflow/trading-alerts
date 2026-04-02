@@ -3577,5 +3577,37 @@
     "zone": null,
     "status": "zone_outside_proximity",
     "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 23:32 IST",
+    "time_utc": "2026-04-02 18:02",
+    "pair": "EURUSD",
+    "zone": 1.15342,
+    "status": "skipped_rejected_zone",
+    "reason": "Zone rejected by Gemini recently, price hasn't moved enough."
+  },
+  {
+    "time_ist": "02 Apr 23:32 IST",
+    "time_utc": "2026-04-02 18:02",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 23:32 IST",
+    "time_utc": "2026-04-02 18:02",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 23:32 IST",
+    "time_utc": "2026-04-02 18:02",
+    "pair": "NAS100",
+    "zone": 23976.0,
+    "status": "skipped_rejected_zone",
+    "reason": "Zone rejected by Gemini recently, price hasn't moved enough."
   }
 ]
