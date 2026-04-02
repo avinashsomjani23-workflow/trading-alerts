@@ -2889,5 +2889,85 @@
     "zone": 4649.5,
     "status": "rejected_validation",
     "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 13:02 IST",
+    "time_utc": "2026-04-02 07:32",
+    "pair": "EURUSD",
+    "zone": 1.15346,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 13:02 IST",
+    "time_utc": "2026-04-02 07:32",
+    "pair": "GBPUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 13:02 IST",
+    "time_utc": "2026-04-02 07:32",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 13:02 IST",
+    "time_utc": "2026-04-02 07:32",
+    "pair": "NZDUSD",
+    "zone": 0.57022,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 13:02 IST",
+    "time_utc": "2026-04-02 07:32",
+    "pair": "BTCUSD",
+    "zone": 66135.56445,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 13:02 IST",
+    "time_utc": "2026-04-02 07:32",
+    "pair": "BTCUSD",
+    "zone": 66468.92188,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted, price hasn't moved enough."
+  },
+  {
+    "time_ist": "02 Apr 13:02 IST",
+    "time_utc": "2026-04-02 07:32",
+    "pair": "BTCUSD",
+    "zone": 67023.39844,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "02 Apr 13:02 IST",
+    "time_utc": "2026-04-02 07:32",
+    "pair": "NAS100",
+    "zone": 23767.875,
+    "status": "blocked_revisit",
+    "reason": "Zone already alerted, price hasn't moved enough."
+  },
+  {
+    "time_ist": "02 Apr 13:02 IST",
+    "time_utc": "2026-04-02 07:32",
+    "pair": "DJ30",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "02 Apr 13:03 IST",
+    "time_utc": "2026-04-02 07:33",
+    "pair": "GOLD",
+    "zone": 4649.5,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
   }
 ]
