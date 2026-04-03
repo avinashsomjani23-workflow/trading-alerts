@@ -1386,14 +1386,9 @@ for pair_conf in config["pairs"]:
             zones_in_proximity += 1
             zone_label = get_zone_label(zone_level, current_price)
 
-            if not should_alert_zone(name, zone_level, current_price, prox):
-                log_scan(name, "blocked_revisit",
-                         "Zone already alerted, price hasn't moved enough.", zone_level)
-                continue
-
-            if not should_call_gemini_for_zone(name, zone_level, current_price, prox):
-                log_scan(name, "skipped_rejected_zone",
-                         "Zone rejected by Gemini recently, price hasn't moved enough.", zone_level)
+            if not should_alert_zone(name, zone_level):
+                log_scan(name, "cooldown",
+                         "Zone alerted within last 1 hour — cooling down.", zone_level)
                 continue
 
             df2 = fetch_m15_data(symbol)
@@ -1429,7 +1424,6 @@ for pair_conf in config["pairs"]:
             if not is_valid:
                 print(f"    {name} blocked by validation: {reason}")
                 log_scan(name, "rejected_validation", reason, zone_level)
-                record_zone_rejection(name, zone_level, current_price)
                 continue
 
             score = data.get("confidence_score", 0)
@@ -1437,19 +1431,16 @@ for pair_conf in config["pairs"]:
             if not data.get("send_alert", False):
                 reason = data.get("confidence_reason", "Gemini rejected setup.")
                 log_scan(name, "rejected_gemini", reason, zone_level)
-                record_zone_rejection(name, zone_level, current_price)
                 continue
 
             if not data.get("gates_passed", False):
                 reason = f"Hard gates failed. {data.get('confidence_reason', '')}"
                 log_scan(name, "rejected_gates", reason, zone_level)
-                record_zone_rejection(name, zone_level, current_price)
                 continue
 
             if score < min_conf:
                 reason = f"Score {score}/10 below {min_conf}. {data.get('confidence_reason', '')}"
                 log_scan(name, "rejected_low_score", reason, zone_level)
-                record_zone_rejection(name, zone_level, current_price)
                 continue
 
             # ── Generate charts ───────────────────────────────────────────
