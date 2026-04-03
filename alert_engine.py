@@ -445,6 +445,20 @@ NEVER suggest breakout entries, momentum entries, or trend-following entries.
 If current price action is a breakout without a valid zone retest, set send_alert to false.
 
 Return ONLY raw JSON. No markdown. No code fences. No text outside the JSON.
+
+CRITICAL OUTPUT RULE: If ANY hard gate fails, return ONLY this short-form JSON and STOP:
+{{
+  "send_alert": false,
+  "gates_passed": false,
+  "gate_structure": "cite specific candle or false",
+  "gate_ob": "cite OB candle or false",
+  "gate_rr": "cite RR value or false",
+  "confidence_score": 0.0,
+  "confidence_reason": "one sentence why gates failed",
+  "bias": "LONG or SHORT"
+}}
+
+If ALL gates pass, return the full JSON:
 {{
   "send_alert": true,
   "gates_passed": true,
@@ -504,7 +518,6 @@ Return ONLY raw JSON. No markdown. No code fences. No text outside the JSON.
   "fvg_confirmed": true,
   "chart_annotations": [{{"label": "short label", "price": 0.0, "status": "confirmed or missing"}}]
 }}"""
-
 # ── Gemini call with retry ────────────────────────────────────────────────────
 def call_gemini(prompt, max_retries=2):
     url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
