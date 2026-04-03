@@ -3609,5 +3609,37 @@
     "zone": 23976.0,
     "status": "skipped_rejected_zone",
     "reason": "Zone rejected by Gemini recently, price hasn't moved enough."
+  },
+  {
+    "time_ist": "03 Apr 09:32 IST",
+    "time_utc": "2026-04-03 04:02",
+    "pair": "EURUSD",
+    "zone": 1.15433,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "03 Apr 09:32 IST",
+    "time_utc": "2026-04-03 04:02",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "03 Apr 09:32 IST",
+    "time_utc": "2026-04-03 04:02",
+    "pair": "NZDUSD",
+    "zone": 0.57021,
+    "status": "skipped_rejected_zone",
+    "reason": "Zone rejected by Gemini recently, price hasn't moved enough."
+  },
+  {
+    "time_ist": "03 Apr 09:32 IST",
+    "time_utc": "2026-04-03 04:02",
+    "pair": "NAS100",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
   }
 ]
