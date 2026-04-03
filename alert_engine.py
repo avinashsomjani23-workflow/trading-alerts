@@ -1472,7 +1472,7 @@ for pair_conf in config["pairs"]:
                       round(current_price, dp), data, pair_conf)
             log_scan(name, "alert_sent",
                      f"Zone alert sent at score {score}/10.", zone_level)
-            record_zone_alert(name, zone_level, current_price)
+            record_zone_alert(name, zone_level)
 
             system_status["last_trade_alert_utc"] = utc_str()
             alerts_fired += 1
