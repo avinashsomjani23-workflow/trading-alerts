@@ -125,42 +125,28 @@ def log_scan(pair, status, reason, zone=None):
     })
     save_json(SCAN_LOG_FILE, scan_log)
 
-# ── Zone visit state ──────────────────────────────────────────────────────────
+# ── Zone alert cooldown (1-hour dedup after successful alert send) ────────────
 def save_visit_state():
     save_json(VISIT_FILE, visit_state)
 
-def should_alert_zone(pair, zone_level, current_price, proximity_pct):
+def should_alert_zone(pair, zone_level):
+    """Block re-alerting the same zone within 1 hour of a successful alert."""
     key = f"{pair}_{round(zone_level, 4)}"
     if key not in visit_state:
         return True
-    last_price = float(visit_state[key].get("last_alert_price", current_price))
-    dist_pct   = abs(current_price - last_price) / zone_level * 100
-    return dist_pct > proximity_pct * 1.5
-
-def record_zone_alert(pair, zone_level, current_price):
-    key = f"{pair}_{round(zone_level, 4)}"
-    visit_state[key] = {"last_alert_price": current_price}
-    # Clear any rejection record for this zone — it passed
-    rej_key = f"{pair}_rej_{round(zone_level, 4)}"
-    visit_state.pop(rej_key, None)
-    save_visit_state()
-
-# ── Zone rejection tracking (prevents repeat Gemini calls for rejected zones) ─
-def should_call_gemini_for_zone(pair, zone_level, current_price, proximity_pct):
-    """Skip Gemini call if zone was recently rejected and price hasn't moved."""
-    key = f"{pair}_rej_{round(zone_level, 4)}"
-    if key not in visit_state:
+    last_utc = visit_state[key].get("alerted_at_utc")
+    if not last_utc:
         return True
-    last_price = float(visit_state[key].get("rejected_at_price", current_price))
-    dist_pct = abs(current_price - last_price) / zone_level * 100
-    return dist_pct > proximity_pct * 1.0
+    elapsed = hours_since(last_utc)
+    if elapsed is None:
+        return True
+    return elapsed >= 1.0
 
-def record_zone_rejection(pair, zone_level, current_price):
-    """Record that Gemini rejected this zone at this price."""
-    key = f"{pair}_rej_{round(zone_level, 4)}"
-    visit_state[key] = {"rejected_at_price": current_price}
+def record_zone_alert(pair, zone_level):
+    """Record that a zone alert was successfully sent."""
+    key = f"{pair}_{round(zone_level, 4)}"
+    visit_state[key] = {"alerted_at_utc": utc_str()}
     save_visit_state()
-
 # ── Zone fatigue ──────────────────────────────────────────────────────────────
 def count_zone_alerts(pair, zone_level, days=30):
     cutoff = utc_now() - timedelta(days=days)
