@@ -742,5 +742,8 @@
   },
   "EURUSD_rej_1.1543": {
     "rejected_at_price": 1.1539349555969238
+  },
+  "USDJPY_rej_159.1745": {
+    "rejected_at_price": 159.55999755859375
   }
 }
