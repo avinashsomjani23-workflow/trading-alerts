@@ -51,7 +51,6 @@ def get_session(utc_hour):
     else:                     return "Off-Hours"
 
 def get_pair_type(pair_name):
-    """Get asset class from config for a pair."""
     for p in config["pairs"]:
         if p["name"] == pair_name:
             return p.get("pair_type", "forex")
@@ -187,14 +186,8 @@ def update_outcomes():
         json.dump(alert_log, f, indent=2)
     print(f"  Updated {updated} outcomes (entry-gated — 0 Gemini calls)")
 
-# ── Weekly alerts window (FIXED date label) ───────────────────────────────────
+# ── Weekly alerts window ──────────────────────────────────────────────────────
 def get_weekly_alerts():
-    """
-    Returns alerts from Monday 00:00 IST through Friday 23:59 IST.
-    Saturday/Sunday runs always show the JUST-ENDED Mon-Fri.
-    Mid-week runs show Mon-now.
-    The review_period label is derived from the SAME dates as the data.
-    """
     ist = ist_now()
     days_to_monday = ist.weekday()
     this_monday_ist = ist.replace(hour=0, minute=0, second=0, microsecond=0) \
@@ -212,7 +205,6 @@ def get_weekly_alerts():
               <= week_end_utc]
 
     end_label = "Fri" if ist >= this_friday_ist else ist.strftime('%a')
-    # Store review period for email label — derived from SAME dates
     global review_period_label
     review_period_label = f"{this_monday_ist.strftime('%d %b')} – {week_end_ist.strftime('%d %b %Y')}"
 
@@ -250,7 +242,7 @@ def estimate_pnl(alert):
 # ── Gemini weekly analysis ────────────────────────────────────────────────────
 def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
                           not_triggered_count, pending, win_rate, pair_stats,
-                          asset_class_stats, alert2_triggered, alert2_invalidated):
+                          asset_class_stats, trade_ready_count, inv_email_count):
     triggered = [a for a in weekly_alerts if a.get('outcome') in ('win_tp1', 'loss')]
 
     session_stats = {}
@@ -283,7 +275,6 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
     loss_clusters = [f"{h} IST ({v['losses']} losses)"
                      for h, v in sorted(hour_buckets.items()) if v['losses'] >= 2]
 
-    # Zone fatigue — computed in Python
     zone_alert_counts = {}
     for a in weekly_alerts:
         p = a.get('pair', '')
@@ -291,10 +282,9 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
     python_zone_flags = [
         f"{pair}: {count} zone alerts this week"
         for pair, count in zone_alert_counts.items()
-        if count >= FATIGUE_THRESH + 2  # Only flag if significantly above threshold
+        if count >= FATIGUE_THRESH + 2
     ]
 
-    # Geo split
     geo_alerts   = [a for a in weekly_alerts if a.get('geo_flag', False)]
     clean_alerts = [a for a in weekly_alerts if not a.get('geo_flag', False)]
     geo_wins     = sum(1 for a in geo_alerts   if a.get('outcome') == 'win_tp1')
@@ -304,11 +294,35 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
     geo_wr = round(geo_wins/(geo_wins+geo_losses)*100, 1) if (geo_wins+geo_losses) > 0 else 0
     cl_wr  = round(cl_wins/(cl_wins+cl_losses)*100, 1)   if (cl_wins+cl_losses)   > 0 else 0
 
-    # News-flagged trades (separate from geo_flag)
     news_alerts  = [a for a in weekly_alerts if a.get('news_flag', 'none').lower() != 'none']
     news_wins    = sum(1 for a in news_alerts if a.get('outcome') == 'win_tp1')
     news_losses  = sum(1 for a in news_alerts if a.get('outcome') == 'loss')
     news_wr      = round(news_wins/(news_wins+news_losses)*100, 1) if (news_wins+news_losses) > 0 else 0
+
+    # Buffer analysis — per pair
+    buffer_stats = {}
+    for a in weekly_alerts:
+        p = a.get('pair', '')
+        buf = a.get('buffer_applied')
+        atr = a.get('atr_h1')
+        if buf is not None and atr is not None:
+            if p not in buffer_stats:
+                buffer_stats[p] = {'buffers': [], 'atrs': [], 'sl_widened': 0, 'total': 0}
+            buffer_stats[p]['buffers'].append(float(buf))
+            buffer_stats[p]['atrs'].append(float(atr))
+            buffer_stats[p]['total'] += 1
+            # Check if SL was widened (buffer > original SL distance would mean sl_note mentions widening)
+            if 'widened' in str(a.get('sl_note', '')).lower() or 'buffer' in str(a.get('sl_note', '')).lower():
+                buffer_stats[p]['sl_widened'] += 1
+
+    buffer_summary = {}
+    for p, s in buffer_stats.items():
+        buffer_summary[p] = {
+            'avg_buffer': round(sum(s['buffers'])/len(s['buffers']), 6) if s['buffers'] else 0,
+            'avg_atr': round(sum(s['atrs'])/len(s['atrs']), 6) if s['atrs'] else 0,
+            'sl_widened_count': s['sl_widened'],
+            'total_trades': s['total']
+        }
 
     alert_summary = []
     for a in triggered:
@@ -332,13 +346,13 @@ Outcomes determined by entry-gated SL/TP candle scan (3-step: SL before entry �
 REVIEW PERIOD: {review_period_label}
 
 WEEKLY NUMBERS:
-- Total zone alerts: {len(weekly_alerts)}
+- Total zone alerts (trade ready): {len(weekly_alerts)}
 - Triggered (entry reached, resolved): {wins}W / {losses}L = {win_rate:.1f}% win rate
 - Not triggered (SL hit before entry or entry never reached): {not_triggered_count}
 - Invalidated (setup cancelled before entry): {invalidated_count}
 - Still pending: {pending}
-- Entry Alerts sent (trigger confirmed): {alert2_triggered}
-- Invalidation emails sent: {alert2_invalidated}
+- Trade Ready alerts sent: {trade_ready_count}
+- Invalidation emails sent: {inv_email_count}
 
 ASSET CLASS BREAKDOWN:
 {json.dumps(asset_class_stats, indent=2)}
@@ -357,6 +371,10 @@ LOSS CLUSTERS (IST hours with 2+ losses):
 PAIR PERFORMANCE:
 {json.dumps(pair_stats, indent=2)}
 
+ATR BUFFER ANALYSIS (per pair):
+{json.dumps(buffer_summary, indent=2)}
+Current multiplier: {config.get('scoring', {}).get('atr_buffer_multiplier', 0.2)}
+
 TRIGGERED TRADE DATA:
 {json.dumps(alert_summary, indent=2)}
 
@@ -372,14 +390,14 @@ Return ONLY raw JSON. No markdown. No code fences.
   "session_recommendation": "one actionable sentence",
   "timing_observation": "IST windows where losses cluster",
   "timing_recommendation": "one actionable sentence",
-  "asset_class_insight": "compare forex vs indices vs crypto vs metals win rates",
+  "asset_class_insight": "compare forex vs indices vs commodity win rates",
   "geo_insight": "compare geo-flagged vs clean technical win rates — always provide even if no geo trades",
   "not_triggered_insight": "what does the not_triggered rate tell us about entry aggressiveness",
   "zone_fatigue_flags": {json.dumps(python_zone_flags)},
   "streak_summary": "notable win/loss streaks",
   "drawdown_flag": "none or describe if 3+ consecutive losses",
   "improvement_suggestion": "one specific actionable change based on this week",
-  "entry_alert_observation": "how many progressed to entry alert vs invalidated"
+  "buffer_recommendation": "per-pair: should multiplier stay at 0.2, increase, or decrease — cite data from buffer analysis"
 }}"""
 
     result, err = call_gemini(prompt)
@@ -429,8 +447,8 @@ def build_excel_journal(weekly_alerts, analysis):
     wr = round(w_n/(w_n+l_n)*100, 1) if (w_n+l_n) > 0 else 0
     inv_rate = round(inv_n/len(weekly_alerts)*100, 1) if weekly_alerts else 0
     net_pnl = sum(estimate_pnl(a)[0] for a in triggered)
-    a2_trig = sum(1 for a in weekly_alerts if a.get('entry_alert_sent'))
-    a2_inv  = sum(1 for a in weekly_alerts if a.get('invalidation_email_sent'))
+    tr_count = sum(1 for a in weekly_alerts if a.get('alert_stage') == 'trade_ready' or a.get('entry_alert_sent'))
+    inv_email = sum(1 for a in weekly_alerts if a.get('invalidation_email_sent'))
 
     rrs = []
     for a in wins_list:
@@ -466,8 +484,8 @@ def build_excel_journal(weekly_alerts, analysis):
         ("Not Triggered (entry not reached)", nt_n,             None),
         ("Invalidated (setup cancelled)",   inv_n,              None),
         ("Invalidation Rate",               f"{inv_rate}%",     None),
-        ("Entry Alerts Sent",               a2_trig,            None),
-        ("Invalidation Emails Sent",        a2_inv,             None),
+        ("Trade Ready Alerts Sent",         tr_count,           None),
+        ("Invalidation Emails Sent",        inv_email,          None),
         ("Still Pending",                   pend_n,             None),
         ("Geo-Flagged Alerts",              len([a for a in weekly_alerts if a.get('geo_flag')]), None),
         ("News-Active Alerts",              len([a for a in weekly_alerts if a.get('news_flag','none').lower()!='none']), None),
@@ -492,6 +510,7 @@ def build_excel_journal(weekly_alerts, analysis):
         ("Not-Triggered Insight",           safe('not_triggered_insight'), None),
         ("Streak Summary",                  safe('streak_summary'), None),
         ("Drawdown Flag",                   safe('drawdown_flag'), None),
+        ("Buffer Recommendation",           safe('buffer_recommendation'), None),
         ("Improvement Suggestion",          safe('improvement_suggestion'), None),
     ]
 
@@ -516,7 +535,6 @@ def build_excel_journal(weekly_alerts, analysis):
         bc(ws_s[f'A{ri}']); bc(ws_s[f'B{ri}'])
         ri += 1
 
-    # Zone flags
     flags = safe('zone_fatigue_flags')
     if isinstance(flags, list) and flags:
         ws_s.merge_cells(f'A{ri}:B{ri}')
@@ -548,13 +566,14 @@ def build_excel_journal(weekly_alerts, analysis):
         ("Geo Flag",             10, C_TRIG),  ("News Flag",         18, C_TRIG),
         ("Outcome",              14, C_OUT),   ("Outcome Price",     14, C_OUT),
         ("Points +/-",           12, C_OUT),   ("Est. P&L",          12, C_OUT),
-        ("Entry Alert Sent",     14, C_LEARN), ("System Note",       36, C_LEARN),
+        ("ATR (H1)",             12, C_LEARN), ("Buffer Applied",    14, C_LEARN),
+        ("Zone Tests",           10, C_LEARN), ("System Note",       36, C_LEARN),
     ]
 
     groups = [
         ("IDENTITY",      1,  5,  C_ID),    ("SETUP",    6,  9,  C_SETUP),
         ("RISK LEVELS",   10, 15, C_RISK),  ("CONTEXT",  16, 17, C_TRIG),
-        ("OUTCOME",       18, 21, C_OUT),   ("TRACKING", 22, 23, C_LEARN),
+        ("OUTCOME",       18, 21, C_OUT),   ("TRACKING", 22, 25, C_LEARN),
     ]
     for grp, cs, ce, gc in groups:
         sl_l = get_column_letter(cs); el_l = get_column_letter(ce)
@@ -611,7 +630,12 @@ def build_excel_journal(weekly_alerts, analysis):
         pnl_d = f"${pnl_usd:+.2f}" if pnl_usd != 0.0 else "—"
         pair_type = a.get('pair_type', get_pair_type(a.get('pair','')))
         news_f = a.get('news_flag', 'none')
-        a2_sent = "Yes" if a.get('entry_alert_sent') else "No"
+
+        atr_val = a.get('atr_h1')
+        atr_str = f"{atr_val:.5f}" if atr_val is not None else "—"
+        buf_val = a.get('buffer_applied')
+        buf_str = f"{buf_val:.5f}" if buf_val is not None else "—"
+        zt_val  = a.get('zone_tests_30d', '—')
 
         row_vals = [
             date_str, a.get('pair',''), pair_type.title(), session, a.get('bias',''),
@@ -620,7 +644,7 @@ def build_excel_journal(weekly_alerts, analysis):
             rr_str, f"${RISK_PER_TRADE:.0f}",
             "YES" if a.get('geo_flag') else "NO", news_f if news_f.lower()!='none' else "—",
             outcome_label, op_str, pts_str, pnl_d,
-            a2_sent, a.get('confidence_reason', ''),
+            atr_str, buf_str, zt_val, a.get('confidence_reason', ''),
         ]
 
         for ci, val in enumerate(row_vals, 1):
@@ -639,7 +663,6 @@ def build_excel_journal(weekly_alerts, analysis):
         ws.row_dimensions[dr].height = 50
         dr += 1
 
-    # Legend
     dr += 1
     ws.merge_cells(f'A{dr}:D{dr}')
     ws[f'A{dr}'].value = "COLOUR LEGEND"; ws[f'A{dr}'].font = hfont(9)
@@ -663,7 +686,7 @@ def build_excel_journal(weekly_alerts, analysis):
 # ── Email HTML ────────────────────────────────────────────────────────────────
 def insight_card(title, color, content):
     if not content or content == '—':
-        return ""  # Hide empty sections
+        return ""
     return (f'<div style="background:#f8f9fa;padding:12px 14px;border-radius:10px;'
             f'margin-bottom:10px;border-left:4px solid {color};">'
             f'<p style="font-size:10px;color:{color};margin:0 0 3px;text-transform:uppercase;'
@@ -696,7 +719,6 @@ def build_weekly_email_html(data, weekly_alerts, wins, losses,
     else:
         flags_html = '<li style="font-size:11px;color:#aaa;">No depletion flags this week.</li>'
 
-    # Geo section always shown
     geo_card = insight_card("GEO-FLAGGED vs CLEAN TECHNICAL", "#e67e22", safe('geo_insight'))
     if not geo_card:
         geo_card = insight_card("GEO-FLAGGED vs CLEAN TECHNICAL", "#e67e22",
@@ -750,7 +772,7 @@ def build_weekly_email_html(data, weekly_alerts, wins, losses,
 
     <p style="font-size:11px;color:#2980b9;background:#e8f4fd;padding:8px 12px;
        border-radius:8px;margin:0 0 16px;">
-      Full trade journal attached — Excel workbook with scorecard breakdown, P&L, and outcomes.</p>
+      Full trade journal attached — Excel workbook with scorecard breakdown, P&L, buffer analysis, and outcomes.</p>
 
     {insight_card("PATTERN INTELLIGENCE", "#3498db", safe('pattern_insight'))}
     {insight_card("CONFIDENCE CALIBRATION", "#27ae60", safe('confidence_calibration'))}
@@ -761,7 +783,7 @@ def build_weekly_email_html(data, weekly_alerts, wins, losses,
     {insight_card("TIMING RECOMMENDATION", "#e67e22", safe('timing_recommendation'))}
     {geo_card}
     {insight_card("NOT-TRIGGERED ANALYSIS", "#3498db", safe('not_triggered_insight'))}
-    {insight_card("ENTRY ALERT PIPELINE", "#27ae60", safe('entry_alert_observation'))}
+    {insight_card("ATR BUFFER PERFORMANCE", "#9b59b6", safe('buffer_recommendation'))}
     {insight_card("STREAK AWARENESS", "#9b59b6", safe('streak_summary'))}
 
     <div style="background:#fff8f0;padding:12px 14px;border-radius:10px;
@@ -828,7 +850,6 @@ update_outcomes()
 
 weekly_alerts_all = get_weekly_alerts()
 
-# Filter: minimum score from config
 weekly_alerts_below = [a for a in weekly_alerts_all if a.get('confidence_score', 0) < MIN_SCORE]
 weekly_alerts = [a for a in weekly_alerts_all if a not in weekly_alerts_below]
 below_count = len(weekly_alerts_below)
@@ -848,17 +869,16 @@ losses            = sum(1 for a in weekly_alerts if a.get('outcome') == 'loss')
 invalidated_count = sum(1 for a in weekly_alerts if a.get('outcome') == 'invalidated')
 not_triggered     = sum(1 for a in weekly_alerts if a.get('outcome') == 'not_triggered')
 pending           = sum(1 for a in weekly_alerts if a.get('outcome') == 'pending')
-alert2_triggered  = sum(1 for a in weekly_alerts if a.get('entry_alert_sent'))
-alert2_invalidated = sum(1 for a in weekly_alerts if a.get('invalidation_email_sent'))
+trade_ready_count = sum(1 for a in weekly_alerts if a.get('alert_stage') == 'trade_ready' or a.get('entry_alert_sent'))
+inv_email_count   = sum(1 for a in weekly_alerts if a.get('invalidation_email_sent'))
 win_rate          = (wins/(wins+losses)*100) if (wins+losses) > 0 else 0
 
-# Pair stats
 pair_stats = {}
 for a in weekly_alerts:
     p = a['pair']
     if p not in pair_stats:
         pair_stats[p] = {'alerts':0,'wins':0,'losses':0,'invalidated':0,
-                         'not_triggered':0,'pending':0,'entry_alerts':0}
+                         'not_triggered':0,'pending':0}
     pair_stats[p]['alerts'] += 1
     o = a.get('outcome','pending')
     if   o == 'win_tp1':      pair_stats[p]['wins']          += 1
@@ -866,9 +886,7 @@ for a in weekly_alerts:
     elif o == 'invalidated':  pair_stats[p]['invalidated']   += 1
     elif o == 'not_triggered':pair_stats[p]['not_triggered'] += 1
     else:                     pair_stats[p]['pending']       += 1
-    if a.get('entry_alert_sent'): pair_stats[p]['entry_alerts'] += 1
 
-# Asset class stats
 asset_class_stats = {}
 for a in weekly_alerts:
     pt = a.get('pair_type', get_pair_type(a.get('pair', '')))
@@ -886,7 +904,7 @@ for pt, s in asset_class_stats.items():
 print("  Calling Gemini for analysis...")
 analysis = build_weekly_analysis(
     weekly_alerts, wins, losses, invalidated_count, not_triggered, pending,
-    win_rate, pair_stats, asset_class_stats, alert2_triggered, alert2_invalidated
+    win_rate, pair_stats, asset_class_stats, trade_ready_count, inv_email_count
 )
 
 if not analysis:
