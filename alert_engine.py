@@ -67,7 +67,6 @@ def hours_since(ts):
         return None
 
 def fmt_price(price, pair_conf):
-    """Format price to correct decimal places for this pair."""
     dp = pair_conf.get("decimal_places", 5)
     return f"{float(price):,.{dp}f}"
 
@@ -86,6 +85,28 @@ def parse_entry_mid(entry_value):
         return float(s)
     except Exception:
         return None
+
+def spread_to_price(pair_conf):
+    """Convert spread_pips to price distance for this pair."""
+    spread = pair_conf.get("spread_pips", 0)
+    if pair_conf.get("pair_type") == "forex":
+        if "JPY" in pair_conf["name"]:
+            return spread * 0.01
+        else:
+            return spread * 0.0001
+    else:
+        return spread
+
+def min_sl_to_price(pair_conf):
+    """Convert min_sl_pips (fallback) to price distance."""
+    min_sl = pair_conf.get("min_sl_pips", 15)
+    if pair_conf.get("pair_type") == "forex":
+        if "JPY" in pair_conf["name"]:
+            return min_sl * 0.01
+        else:
+            return min_sl * 0.0001
+    else:
+        return min_sl
 
 # ── File state ────────────────────────────────────────────────────────────────
 ALERT_LOG_FILE     = "alert_log.json"
@@ -125,28 +146,60 @@ def log_scan(pair, status, reason, zone=None):
     })
     save_json(SCAN_LOG_FILE, scan_log)
 
-# ── Zone alert cooldown (1-hour dedup after successful alert send) ────────────
+# ── Zone cooldown — prevents spam, allows re-entry after resolution ───────────
 def save_visit_state():
     save_json(VISIT_FILE, visit_state)
 
-def should_alert_zone(pair, zone_level):
-    """Block re-alerting the same zone within 1 hour of a successful alert."""
-    key = f"{pair}_{round(zone_level, 4)}"
-    if key not in visit_state:
-        return True
-    last_utc = visit_state[key].get("alerted_at_utc")
-    if not last_utc:
-        return True
-    elapsed = hours_since(last_utc)
-    if elapsed is None:
-        return True
-    return elapsed >= 1.0
+def has_active_trade(pair, zone_level):
+    """Check if there's an unresolved TRADE READY alert on this zone."""
+    for a in alert_log:
+        if a.get("pair") != pair:
+            continue
+        if a.get("alert_type") != "zone":
+            continue
+        if a.get("alert_stage") != "trade_ready":
+            continue
+        if a.get("outcome") != "pending":
+            continue
+        try:
+            logged_zone = float(a.get("zone_level", 0))
+            if logged_zone > 0 and abs(logged_zone - zone_level) / zone_level * 100 < 0.3:
+                return True
+        except Exception:
+            pass
+    return False
 
-def record_zone_alert(pair, zone_level):
-    """Record that a zone alert was successfully sent."""
+def should_send_approaching(pair, zone_level):
+    """Allow APPROACHING if no active trade and last approaching was 2+ hours ago."""
+    if has_active_trade(pair, zone_level):
+        return False
     key = f"{pair}_{round(zone_level, 4)}"
-    visit_state[key] = {"alerted_at_utc": utc_str()}
+    state = visit_state.get(key, {})
+    last_appr = state.get("approaching_at_utc")
+    if last_appr:
+        elapsed = hours_since(last_appr)
+        if elapsed is not None and elapsed < 2.0:
+            return False
+    return True
+
+def should_send_trade_ready(pair, zone_level):
+    """Allow TRADE READY if no active trade on this zone."""
+    return not has_active_trade(pair, zone_level)
+
+def record_approaching(pair, zone_level):
+    key = f"{pair}_{round(zone_level, 4)}"
+    state = visit_state.get(key, {})
+    state["approaching_at_utc"] = utc_str()
+    visit_state[key] = state
     save_visit_state()
+
+def record_trade_ready(pair, zone_level):
+    key = f"{pair}_{round(zone_level, 4)}"
+    state = visit_state.get(key, {})
+    state["trade_ready_at_utc"] = utc_str()
+    visit_state[key] = state
+    save_visit_state()
+
 # ── Zone fatigue ──────────────────────────────────────────────────────────────
 def count_zone_alerts(pair, zone_level, days=30):
     cutoff = utc_now() - timedelta(days=days)
@@ -178,7 +231,6 @@ def is_market_open():
 
 # ── Session alignment check ──────────────────────────────────────────────────
 def is_in_session(pair_conf):
-    """Check if current UTC hour falls within this pair's primary session."""
     session_name = pair_conf.get("primary_session", "any")
     session_def  = config.get("sessions", {}).get(session_name)
     if not session_def:
@@ -212,6 +264,18 @@ def get_atr(df, period=14):
         return float(np.mean(trs[-period:]))
     except Exception:
         return None
+
+def compute_sl_buffer(pair_conf, atr_value):
+    """Dynamic SL buffer = spread + (multiplier × ATR14_H1).
+    Falls back to min_sl_pips if ATR unavailable."""
+    multiplier = config.get("scoring", {}).get("atr_buffer_multiplier", 0.2)
+    spread_price = spread_to_price(pair_conf)
+    if atr_value is not None and atr_value > 0:
+        buffer = spread_price + (multiplier * atr_value)
+    else:
+        buffer = min_sl_to_price(pair_conf)
+        print(f"    ATR unavailable for {pair_conf['name']}, using min_sl fallback: {buffer}")
+    return buffer
 
 def detect_zones_and_candles(symbol, min_touches):
     df1 = clean_df(yf.download(symbol, period="15d", interval="1h", progress=False))
@@ -248,7 +312,6 @@ def get_zone_label(zone_level, current_price):
 # ── Macro news ────────────────────────────────────────────────────────────────
 def fetch_macro_news():
     headlines = []
-    # Source 1 — FXStreet RSS
     try:
         url   = "https://api.rss2json.com/v1/api.json?rss_url=https://www.fxstreet.com/rss/news&count=5"
         r     = requests.get(url, timeout=10)
@@ -257,7 +320,6 @@ def fetch_macro_news():
             headlines.append(f"[FXStreet] {i['title']}")
     except Exception:
         headlines.append("[FXStreet] Unavailable")
-    # Source 2 — Google News RSS (geopolitical)
     geo_query = "Iran+war+OR+military+strike+OR+sanctions+OR+oil+supply+OR+tariff+OR+ceasefire+OR+invasion+OR+embargo"
     geo_url   = f"https://news.google.com/rss/search?q={geo_query}&hl=en-US&gl=US&ceid=US:en"
     try:
@@ -272,12 +334,10 @@ def fetch_macro_news():
     except Exception:
         headlines.append("[GeoNews] Unavailable")
     news_text = "\n".join(headlines) if headlines else "Macro news unavailable."
-    # Cache for merged Alert 2 to use without re-fetching
     save_json(MACRO_CACHE_FILE, {"cached_at": utc_str(), "news": news_text})
     return news_text
 
 def get_cached_macro_news():
-    """Read cached macro news. Used by Job 2 (entry/invalidation checks)."""
     cache = load_json(MACRO_CACHE_FILE, {})
     return cache.get("news", "Macro news unavailable (cache miss).")
 
@@ -288,7 +348,6 @@ def format_candles(df, label, n=20):
     for i in range(max(0, len(df)-n), len(df)):
         try:
             ts  = df.index[i]
-            # Convert to IST for display
             if hasattr(ts, 'tz_localize') and ts.tzinfo is None:
                 ts_ist = ts + timedelta(hours=5, minutes=30)
             elif hasattr(ts, 'tz_convert'):
@@ -307,25 +366,23 @@ def format_candles(df, label, n=20):
 
 # ── Gemini prompt ─────────────────────────────────────────────────────────────
 def build_zone_prompt(pair_conf, zone_level, zone_label, current_price,
-                      macro_news, df1, df2, fatigue_count):
+                      macro_news, df1, df2, fatigue_count, atr_value):
     name        = pair_conf["name"]
     pair_type   = pair_conf.get("pair_type", "forex")
     dp          = pair_conf.get("decimal_places", 5)
     min_conf    = pair_conf.get("min_confidence", 7)
-    min_sl      = pair_conf.get("min_sl_pips", 15)
     structure_tf = pair_conf.get("structure_tf", ["H1"])
     extra_gate  = pair_conf.get("extra_gate")
     risk_dollar = config["account"]["balance"] * config["account"]["risk_percent"] / 100
     scoring     = config.get("scoring", {})
     ist_time    = ist_now().strftime("%H:%M IST, %d %b %Y")
+    atr_str     = f"{atr_value:.5f}" if atr_value else "unavailable"
 
-    # Structure TF instruction
     if "M15" in structure_tf and "H1" in structure_tf:
         tf_rule = "H1 BOS or H1 CHoCH or M15 BOS or M15 CHoCH — any ONE of these passes the gate."
     else:
         tf_rule = "H1 BOS or H1 CHoCH ONLY. M15 structure is NOT accepted for this pair."
 
-    # Extra gate instruction
     extra_gate_text = ""
     if extra_gate == "liquidity_swept_required":
         extra_gate_text = (f"\nADDITIONAL HARD GATE FOR {name}: Liquidity MUST be swept before zone entry. "
@@ -335,7 +392,6 @@ def build_zone_prompt(pair_conf, zone_level, zone_label, current_price,
                            "If DXY direction, safe-haven flows, or geopolitical context contradicts the trade direction, "
                            "set send_alert to false. Gold is driven by macro first, technicals second.")
 
-    # Fatigue text
     fatigue_thresh = scoring.get("zone_fatigue_threshold", 3)
     if fatigue_count >= fatigue_thresh + 2:
         fatigue_rule = f"Zone alerted {fatigue_count} times in 30 days. HEAVILY FATIGUED. Score zone_freshness as 0."
@@ -344,7 +400,6 @@ def build_zone_prompt(pair_conf, zone_level, zone_label, current_price,
     else:
         fatigue_rule = f"Zone alerted {fatigue_count} times in 30 days. FRESH. Score zone_freshness as 1.0."
 
-    # News blackout
     nb_before = scoring.get("news_blackout_hours_before", 2)
     nb_after  = scoring.get("news_blackout_hours_after", 1)
 
@@ -354,6 +409,7 @@ PAIR: {name} ({pair_type}) | ZONE: {zone_label} at {zone_level} | PRICE NOW: {cu
 TIME: {ist_time}
 ACCOUNT: ${config["account"]["balance"]} | RISK: {config["account"]["risk_percent"]}% = ${risk_dollar:.0f}
 PRICE FORMAT: {dp} decimal places for this pair.
+ATR(14, H1): {atr_str}
 
 CANDLE DATA:
 {format_candles(df1, "H1")}
@@ -424,20 +480,25 @@ TOTAL POSSIBLE: 10.0 | MINIMUM TO SEND: {min_conf}
 ENTRY, SL, TP RULES:
 ═══════════════════════════════════════════════════════════════
 ENTRY: 50% midpoint of OB candle body. If FVG overlaps OB, use FVG edge (top for longs, bottom for shorts).
-SL: OB wick extreme + buffer. MINIMUM SL distance for {name}: {min_sl} pips/points.
-  If your calculated SL is tighter than {min_sl}, widen it to {min_sl}.
+SL: Place SL at OB wick extreme (low of OB candle for LONG, high for SHORT).
+  Python will add a dynamic volatility buffer on top of your SL. Do NOT add buffer yourself.
+  Just place SL at the exact OB wick extreme.
 TP1: Next significant opposing zone or liquidity pool. Must achieve 2:1 RR minimum.
 TP2: Second opposing zone beyond TP1.
 PARTIAL CLOSE: Close 50% at TP1, move SL to breakeven, let remaining run to TP2.
 
 ═══════════════════════════════════════════════════════════════
-TRIGGER & AUTOMATION RULES:
+TRIGGER & ENTRY READINESS:
 ═══════════════════════════════════════════════════════════════
-- trigger_status: "not_ready" (waiting for confirmation) | "ready" (confirmed) | "invalidated" (setup broken)
-- entry_ready_now: true ONLY if trigger candle pattern is ALREADY confirmed on latest candles
-- trigger_level: the EXACT price level that must be broken for trigger (e.g., M15 swing low for CHoCH)
-  This will be used to set a TradingView alert. It must be a single numeric value.
-- invalidate_above / invalidate_below: numeric price where setup is cancelled
+- entry_ready_now: Set to true ONLY if a trigger candle pattern is ALREADY confirmed on the
+  LATEST CLOSED candle (M15 or H1). This means the most recent closed candle shows:
+  - Bullish/bearish engulfing at the zone, OR
+  - CHoCH (change of character) at the zone, OR
+  - BOS (break of structure) confirming zone defense.
+  If the latest candle does NOT show a completed confirmation pattern, set entry_ready_now to false.
+  Do NOT set true based on the current forming candle — only closed candles count.
+- trigger_status: "ready" if entry_ready_now is true, "not_ready" if still waiting.
+- invalidate_above / invalidate_below: numeric price where setup is cancelled.
 - bias MUST be "LONG" or "SHORT". Never "WAIT". If the setup is not tradeable, set send_alert to false.
 
 THIS SYSTEM ONLY TRADES ZONE RETESTS (OB + FVG setups).
@@ -485,18 +546,17 @@ If ALL gates pass, return the full JSON:
   "entry_model": "limit",
   "entry_ready_now": false,
 
-  "trigger_status": "not_ready",
+  "trigger_status": "not_ready or ready",
   "trigger_tf": "M15 or H1",
   "trigger_kind": "choch or bos or engulf or break_retest",
-  "trigger_level": 0.0,
-  "trigger": "exact candle pattern required — cite specific price and what must happen",
+  "trigger": "exact candle pattern needed — cite what the latest candle shows or what must happen next",
 
   "invalidate_above": null,
   "invalidate_below": null,
   "invalid_if": "exact condition that cancels this trade",
 
   "sl": 0.0,
-  "sl_note": "one sentence on SL logic",
+  "sl_note": "one sentence on SL logic — place at OB wick extreme, Python adds buffer",
   "tp1": 0.0,
   "tp2": 0.0,
   "rr_tp1": "x.x",
@@ -516,8 +576,10 @@ If ALL gates pass, return the full JSON:
   "fvg_bottom": 0.0,
   "fvg_type": "bullish or bearish",
   "fvg_confirmed": true,
+  "lq_sweep_price": 0.0,
   "chart_annotations": [{{"label": "short label", "price": 0.0, "status": "confirmed or missing"}}]
 }}"""
+
 # ── Gemini call with retry ────────────────────────────────────────────────────
 def call_gemini(prompt, max_retries=2):
     url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
@@ -556,25 +618,22 @@ def call_gemini(prompt, max_retries=2):
     return None, "Gemini failed after all retries"
 
 # ── Python post-validation ────────────────────────────────────────────────────
-def validate_gemini_response(data, pair_conf, zone_label, current_price):
+def validate_gemini_response(data, pair_conf, zone_label, current_price, atr_value):
     """
-    Validates Gemini's JSON response. Returns (is_valid, reason).
-    Checks: gates, score math, SL sanity, bias sanity, minimum SL distance.
+    Validates Gemini's JSON response. Returns (is_valid, reason, buffer_applied).
+    Checks: gates, score math, SL sanity, bias sanity, ATR-based buffer.
     """
     name   = pair_conf["name"]
-    min_sl = pair_conf.get("min_sl_pips", 15)
     dp     = pair_conf.get("decimal_places", 5)
 
-    # 1. Gates must all pass
     if not data.get("gates_passed", False):
-        return False, "Hard gates not passed"
+        return False, "Hard gates not passed", 0
 
-    # 2. Bias must be LONG or SHORT (not WAIT)
     bias = str(data.get("bias", "")).upper()
     if bias not in ("LONG", "SHORT"):
-        return False, f"Bias is '{bias}' — must be LONG or SHORT"
+        return False, f"Bias is '{bias}' — must be LONG or SHORT", 0
 
-    # 3. Clamp each score item to its maximum, recalculate, override Gemini's total
+    # Clamp each score item to its maximum, recalculate
     breakdown = data.get("score_breakdown", {})
     clamped = False
     for key in list(breakdown.keys()):
@@ -591,57 +650,48 @@ def validate_gemini_response(data, pair_conf, zone_label, current_price):
         print(f"    Score corrected: Gemini said {reported}, clamped breakdown sums to {calc_sum}")
         data["confidence_score"] = calc_sum
 
-    # 4. SL on correct side of entry
+    # Parse entry/SL/TP
     try:
         entry = float(str(data.get("entry", 0)).split("-")[0].strip() or 0)
         sl    = float(data.get("sl", 0) or 0)
         tp1   = float(data.get("tp1", 0) or 0)
         if entry <= 0 or sl <= 0 or tp1 <= 0:
-            return False, "Missing entry/SL/TP1 values"
+            return False, "Missing entry/SL/TP1 values", 0
         if bias == "LONG" and sl >= entry:
-            return False, f"SL ({sl}) above entry ({entry}) for LONG"
+            return False, f"SL ({sl}) above entry ({entry}) for LONG", 0
         if bias == "SHORT" and sl <= entry:
-            return False, f"SL ({sl}) below entry ({entry}) for SHORT"
+            return False, f"SL ({sl}) below entry ({entry}) for SHORT", 0
     except Exception:
-        return False, "Could not parse entry/SL/TP1"
+        return False, "Could not parse entry/SL/TP1", 0
 
-    # 5. Minimum SL distance enforcement
+    # ATR-based dynamic buffer
+    buffer = compute_sl_buffer(pair_conf, atr_value)
     sl_dist = abs(entry - sl)
-    # Convert min_sl_pips to price distance
-    if pair_conf.get("pair_type") == "forex":
-        if "JPY" in name:
-            min_sl_price = min_sl * 0.01  # JPY pips = 0.01
-        else:
-            min_sl_price = min_sl * 0.0001  # Standard forex pips = 0.0001
-    else:
-        min_sl_price = min_sl  # Indices/BTC/Gold: pips = points
 
-    if sl_dist < min_sl_price:
-        # Widen SL to minimum
+    if sl_dist < buffer:
         if bias == "LONG":
-            data["sl"] = round(entry - min_sl_price, dp)
+            data["sl"] = round(entry - buffer, dp)
         else:
-            data["sl"] = round(entry + min_sl_price, dp)
-        data["sl_note"] = f"SL widened to minimum {min_sl} pips/pts for {name}. " + data.get("sl_note", "")
-        print(f"    SL widened: {sl_dist:.5f} → {min_sl_price:.5f} (min for {name})")
-        # Recalculate RR
+            data["sl"] = round(entry + buffer, dp)
+        data["sl_note"] = f"SL widened by ATR buffer ({buffer:.{dp}f}) for {name}. " + data.get("sl_note", "")
+        print(f"    SL buffered: {sl_dist:.{dp}f} → {buffer:.{dp}f} (ATR buffer for {name})")
         new_sl   = float(data["sl"])
         new_risk = abs(entry - new_sl)
         new_rr   = abs(tp1 - entry) / new_risk if new_risk > 0 else 0
         data["rr_tp1"] = f"{new_rr:.1f}"
         if new_rr < 2.0:
-            return False, f"After SL widening, RR dropped to {new_rr:.1f} (below 2:1)"
+            return False, f"After ATR buffer, RR dropped to {new_rr:.1f} (below 2:1)", buffer
 
-    # 6. Bias matches zone type
+    # Bias matches zone type
     if "Demand" in zone_label and bias == "SHORT":
-        return False, "SHORT bias at Demand zone — contradictory"
+        return False, "SHORT bias at Demand zone — contradictory", buffer
     if "Supply" in zone_label and bias == "LONG":
-        return False, "LONG bias at Supply zone — contradictory"
+        return False, "LONG bias at Supply zone — contradictory", buffer
 
-    return True, "OK"
+    return True, "OK", buffer
 
 
-# ── Chart generation (improved) ───────────────────────────────────────────────
+# ── Chart generation — clean, no volume, smart labels ─────────────────────────
 def generate_chart(df, title, levels, data, pair_conf):
     try:
         if df is None or df.empty:
@@ -652,16 +702,12 @@ def generate_chart(df, title, levels, data, pair_conf):
             if col not in df_plot.columns:
                 return None
 
-        fig, (ax, ax_vol) = plt.subplots(2, 1, figsize=(12, 6),
-            gridspec_kw={'height_ratios': [4, 1], 'hspace': 0.05},
-            facecolor='#131722')
+        fig, ax = plt.subplots(1, 1, figsize=(12, 5.5), facecolor='#131722')
+        ax.set_facecolor('#131722')
+        for s in ax.spines.values():
+            s.set_color('#2a2a3e')
 
-        for a in [ax, ax_vol]:
-            a.set_facecolor('#131722')
-            for s in a.spines.values():
-                s.set_color('#2a2a3e')
-
-        # Draw candles — wider bodies, thicker wicks
+        # Draw candles
         for i, row in df_plot.iterrows():
             try:
                 o = float(row['Open']); h = float(row['High'])
@@ -670,47 +716,60 @@ def generate_chart(df, title, levels, data, pair_conf):
                     continue
                 col_c = '#26a69a' if c >= o else '#ef5350'
                 ax.plot([i,i], [l,h], color=col_c, linewidth=1.2, zorder=2)
-                body = abs(c-o) or (h-l) * 0.02  # Minimum body height for dojis
+                body = abs(c-o) or (h-l) * 0.02
                 ax.add_patch(patches.Rectangle(
-                    (i-0.4, min(o,c)), 0.8, body,
+                    (i-0.35, min(o,c)), 0.7, body,
                     facecolor=col_c, linewidth=0, alpha=0.95, zorder=3))
             except Exception:
                 continue
 
         n = len(df_plot)
 
-        # OB zone shading
+        # OB zone shading — uniform amber color regardless of direction
         ob_top    = float(data.get('ob_top', 0) or 0)
         ob_bottom = float(data.get('ob_bottom', 0) or 0)
         if ob_top > 0 and ob_bottom > 0 and abs(ob_top - ob_bottom) > 0:
-            oc = '#26a69a' if data.get('ob_type','') == 'bullish' else '#ef5350'
+            ob_color = '#E8A838'
             ax.add_patch(patches.Rectangle(
-                (0, ob_bottom), n, ob_top - ob_bottom,
-                facecolor=oc, edgecolor=oc, linewidth=1.5,
-                alpha=0.25, zorder=1))
-            ax.text(1, ob_top + (ob_top - ob_bottom) * 0.1, "OB",
-                color=oc, fontsize=10, va='bottom', fontweight='bold', zorder=5)
+                (max(0, n-15), ob_bottom), min(n, 15), ob_top - ob_bottom,
+                facecolor=ob_color, edgecolor=ob_color, linewidth=2.0,
+                alpha=0.20, zorder=1, linestyle='-'))
+            ax.text(max(0.5, n-14.5), ob_top + (ob_top - ob_bottom) * 0.08, "OB",
+                color=ob_color, fontsize=9, va='bottom', fontweight='bold', zorder=5,
+                bbox=dict(boxstyle='round,pad=0.15', facecolor='#131722', edgecolor=ob_color, alpha=0.9))
 
-        # FVG zone shading
+        # FVG zone shading — purple with dashed border
         fvg_top    = float(data.get('fvg_top', 0) or 0)
         fvg_bottom = float(data.get('fvg_bottom', 0) or 0)
         if fvg_top > 0 and fvg_bottom > 0 and abs(fvg_top - fvg_bottom) > 0:
+            fvg_color = '#7C6FD4'
             ax.add_patch(patches.Rectangle(
-                (0, fvg_bottom), n, fvg_top - fvg_bottom,
-                facecolor='#3498db', edgecolor='#3498db', linewidth=1.5,
-                alpha=0.22, zorder=1))
-            ax.text(1, fvg_top + (fvg_top - fvg_bottom) * 0.1, "FVG",
-                color='#3498db', fontsize=10, va='bottom', fontweight='bold', zorder=5)
+                (max(0, n-15), fvg_bottom), min(n, 15), fvg_top - fvg_bottom,
+                facecolor=fvg_color, edgecolor=fvg_color, linewidth=1.5,
+                alpha=0.15, zorder=1, linestyle='--'))
+            ax.text(max(0.5, n-14.5), fvg_bottom - (fvg_top - fvg_bottom) * 0.08, "FVG",
+                color=fvg_color, fontsize=9, va='top', fontweight='bold', zorder=5,
+                bbox=dict(boxstyle='round,pad=0.15', facecolor='#131722', edgecolor=fvg_color, alpha=0.9))
 
-        # Price levels — clear labels on right margin
+        # Liquidity sweep marker
+        lq_price = float(data.get('lq_sweep_price', 0) or 0)
+        if lq_price > 0:
+            ax.plot(n-2, lq_price, marker='v', color='#F39C12', markersize=10, zorder=6)
+            ax.text(n-1, lq_price, " LQ", color='#F39C12', fontsize=8, va='center',
+                fontweight='bold', zorder=5)
+
+        # ── Smart label stacking ──────────────────────────────────────────
         level_cfg = {
-            'tp2':     ('#1e8449', '--', 1.2, 'TP2'),
-            'tp1':     ('#27ae60', '-',  1.8, 'TP1'),
-            'entry':   ('#e67e22', '-',  1.8, 'ENTRY'),
-            'zone':    ('#9b59b6', '--', 1.0, 'ZONE'),
-            'current': ('#ffffff', ':',  1.0, 'NOW'),
-            'sl':      ('#e74c3c', '-',  1.8, 'SL'),
+            'tp2':     ('#1e8449', '--', 1.0, 'TP2'),
+            'tp1':     ('#27ae60', '-',  1.5, 'TP1'),
+            'entry':   ('#e67e22', '-',  1.5, 'ENTRY'),
+            'zone':    ('#9b59b6', '--', 0.8, 'ZONE'),
+            'current': ('#ffffff', ':',  0.8, 'NOW'),
+            'sl':      ('#e74c3c', '-',  1.5, 'SL'),
         }
+
+        # Collect all valid levels
+        label_items = []
         for key, (color, style, width, lbl) in level_cfg.items():
             val = levels.get(key, 0)
             try:
@@ -718,37 +777,64 @@ def generate_chart(df, title, levels, data, pair_conf):
             except Exception:
                 price = 0
             if price > 0:
-                ax.axhline(y=price, color=color, linestyle=style, linewidth=width, alpha=0.9, zorder=4)
-                ax.text(n + 0.5, price, f" {lbl}: {price:,.{dp}f}",
-                    color=color, fontsize=9, va='center', fontweight='bold', zorder=5,
-                    bbox=dict(boxstyle='round,pad=0.2', facecolor='#131722', edgecolor='none', alpha=0.8))
+                label_items.append({'price': price, 'label': lbl, 'color': color,
+                                    'style': style, 'width': width})
 
-        # Trigger level (if present)
-        trig_level = float(data.get('trigger_level', 0) or 0)
-        if trig_level > 0:
-            ax.axhline(y=trig_level, color='#f39c12', linestyle='-.', linewidth=1.5, alpha=0.8, zorder=4)
-            ax.text(n + 0.5, trig_level, f" TRIGGER: {trig_level:,.{dp}f}",
-                color='#f39c12', fontsize=9, va='center', fontweight='bold', zorder=5,
-                bbox=dict(boxstyle='round,pad=0.2', facecolor='#131722', edgecolor='none', alpha=0.8))
+        # Sort by price ascending
+        label_items.sort(key=lambda x: x['price'])
 
-        # Volume bars
-        for i, row in df_plot.iterrows():
-            try:
-                vol = float(row.get('Volume', 0) or 0)
-                if np.isnan(vol): vol = 0
-                vc = '#26a69a' if float(row['Close']) >= float(row['Open']) else '#ef5350'
-                ax_vol.bar(i, vol, color=vc, alpha=0.5, width=0.7)
-            except Exception:
-                continue
+        # Compute minimum spacing (3.5% of visible price range)
+        all_prices = [li['price'] for li in label_items]
+        if all_prices:
+            price_range = max(all_prices) - min(all_prices)
+            if price_range <= 0:
+                price_range = max(all_prices) * 0.01
+            min_spacing = price_range * 0.035
+        else:
+            min_spacing = 0
 
-        # IST timestamps on x-axis (every 5 candles)
+        # Resolve overlaps by shifting display position
+        display_positions = []
+        for i, item in enumerate(label_items):
+            display_y = item['price']
+            for prev_y in display_positions:
+                if abs(display_y - prev_y) < min_spacing:
+                    display_y = prev_y + min_spacing
+            display_positions.append(display_y)
+
+        # Draw level lines and labels
+        for i, item in enumerate(label_items):
+            actual_price = item['price']
+            display_y    = display_positions[i]
+            color  = item['color']
+            style  = item['style']
+            width  = item['width']
+            lbl    = item['label']
+
+            ax.axhline(y=actual_price, color=color, linestyle=style,
+                       linewidth=width, alpha=0.85, zorder=4)
+
+            # If display position differs from actual, draw a thin connector
+            if abs(display_y - actual_price) > min_spacing * 0.1:
+                ax.plot([n+0.5, n+2], [actual_price, display_y],
+                        color=color, linewidth=0.6, alpha=0.4, zorder=4)
+
+            ax.text(n + 2.5, display_y, f" {lbl}: {actual_price:,.{dp}f}",
+                color=color, fontsize=8, va='center', fontweight='bold', zorder=5,
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='#1a1a2e',
+                          edgecolor=color, alpha=0.9, linewidth=0.8))
+
+        # IST timestamps on x-axis
         tick_positions = list(range(0, n, max(1, n // 6)))
         tick_labels = []
         for pos in tick_positions:
             try:
                 ts = df.iloc[-(n - pos)].name
                 if hasattr(ts, 'strftime'):
-                    ts_ist = ts.tz_localize(None) + timedelta(hours=5, minutes=30) if hasattr(ts, 'tz_localize') and ts.tzinfo is None else ts + timedelta(hours=5, minutes=30)
+                    if hasattr(ts, 'tz_localize') and ts.tzinfo is None:
+                        ts_ist = ts + timedelta(hours=5, minutes=30)
+                    else:
+                        ts_ist = ts + timedelta(hours=5, minutes=30)
                     tick_labels.append(ts_ist.strftime('%d %b\n%H:%M'))
                 else:
                     tick_labels.append('')
@@ -759,15 +845,10 @@ def generate_chart(df, title, levels, data, pair_conf):
         ax.tick_params(colors='#888', labelsize=8)
         ax.yaxis.tick_right()
         ax.yaxis.set_tick_params(labelcolor='#aaa', labelsize=8)
-        ax.xaxis.set_visible(False)
-        ax.set_xlim(-1, n + 14)
 
-        ax_vol.set_xticks(tick_positions)
-        ax_vol.set_xticklabels(tick_labels, fontsize=7, color='#888')
-        ax_vol.tick_params(colors='#666', labelsize=7)
-        ax_vol.yaxis.tick_right()
-        ax_vol.set_xlim(-1, n + 14)
-        ax_vol.set_ylabel('Vol', color='#666', fontsize=7)
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels, fontsize=7, color='#888')
+        ax.set_xlim(-1, n + 16)
 
         plt.tight_layout(pad=0.5)
         buf = BytesIO()
@@ -784,9 +865,9 @@ def generate_chart(df, title, levels, data, pair_conf):
         return None
 
 
-# ── Zone Alert email HTML ─────────────────────────────────────────────────────
-def build_zone_email_html(data, pair, pair_conf, zone_level, zone_label,
-                          current_price, chart1_b64, chart2_b64):
+# ── APPROACHING email HTML ────────────────────────────────────────────────────
+def build_approaching_email_html(data, pair, pair_conf, zone_level, zone_label,
+                                  current_price, chart1_b64, chart2_b64, fatigue_count):
     dp          = pair_conf.get("decimal_places", 5)
     ist_time    = ist_now().strftime("%H:%M IST, %d %b %Y")
     score       = data.get("confidence_score", 0)
@@ -794,14 +875,12 @@ def build_zone_email_html(data, pair, pair_conf, zone_level, zone_label,
     bias_color  = "#e74c3c" if bias == "SHORT" else "#27ae60"
     score_color = "#27ae60" if score >= 8 else "#e67e22" if score >= 7 else "#e74c3c"
 
-    # News flag
     news_flag = data.get("news_flag", "none")
     news_html = ""
     if news_flag and news_flag.lower() != "none":
         news_html = (f'<div style="background:#fff3cd;padding:10px 20px;border-left:4px solid #f39c12;'
                      f'font-size:12px;color:#856404;"><b>⚠ NEWS:</b> {news_flag}</div>')
 
-    # Format prices
     entry_p = fmt_price(data.get("entry", 0), pair_conf)
     sl_p    = fmt_price(data.get("sl", 0), pair_conf)
     tp1_p   = fmt_price(data.get("tp1", 0), pair_conf)
@@ -809,38 +888,165 @@ def build_zone_email_html(data, pair, pair_conf, zone_level, zone_label,
     zone_p  = fmt_price(zone_level, pair_conf)
     now_p   = fmt_price(current_price, pair_conf)
 
-    # Trigger instruction for TradingView
-    trigger_level = data.get("trigger_level", 0)
-    trigger_kind  = data.get("trigger_kind", "")
-    trigger_tf    = data.get("trigger_tf", "M15")
-    trig_price_f  = fmt_price(trigger_level, pair_conf) if trigger_level else "—"
+    fatigue_label = f"Zone tested {fatigue_count}× in 30 days"
 
-    if data.get("entry_ready_now"):
-        action_box = f"""<div style="background:#27ae60;padding:16px 20px;border-radius:10px;margin-bottom:16px;">
-          <p style="color:white;margin:0;font-size:11px;text-transform:uppercase;letter-spacing:1px;opacity:0.8;">✅ TRIGGER CONFIRMED — PLACE ORDER NOW</p>
-          <p style="color:white;margin:8px 0 0;font-size:16px;font-weight:bold;">
-            {'SELL' if bias=='SHORT' else 'BUY'} LIMIT at {entry_p}</p>
-          <p style="color:white;margin:4px 0 0;font-size:14px;">SL: {sl_p} &nbsp;|&nbsp; TP1: {tp1_p} &nbsp;|&nbsp; TP2: {tp2_p}</p>
-          <p style="color:#d5f5e3;margin:8px 0 0;font-size:11px;">Close 50% at TP1, move SL to breakeven, let rest run to TP2</p>
-        </div>"""
-    else:
-        action_box = f"""<div style="background:#1a1a2e;padding:16px 20px;border-radius:10px;margin-bottom:16px;">
-          <p style="color:#f39c12;margin:0;font-size:11px;text-transform:uppercase;letter-spacing:1px;">⏳ WAITING FOR TRIGGER — DO NOT PLACE ORDER YET</p>
-          <p style="color:white;margin:10px 0 0;font-size:13px;">
-            <b>Step 1:</b> Set TradingView alert → {trigger_tf} close {'below' if bias=='SHORT' else 'above'} {trig_price_f}</p>
-          <p style="color:white;margin:4px 0 0;font-size:13px;">
-            <b>Step 2:</b> When alert fires → place {'SELL' if bias=='SHORT' else 'BUY'} LIMIT at {entry_p}</p>
-          <p style="color:white;margin:4px 0 0;font-size:13px;">
-            <b>Levels:</b> SL: {sl_p} &nbsp;|&nbsp; TP1: {tp1_p} &nbsp;|&nbsp; TP2: {tp2_p}</p>
-          <p style="color:#8899bb;margin:10px 0 0;font-size:11px;">
-            Cancel if: {trigger_tf} closes {'above' if bias=='SHORT' else 'below'} {sl_p}</p>
-          <p style="color:#8899bb;margin:2px 0 0;font-size:11px;">
-            Close 50% at TP1, move SL to breakeven, let rest run to TP2</p>
-          <p style="color:#445566;margin:8px 0 0;font-size:10px;">
-            System will send Entry Alert when trigger is confirmed, or Invalidation if setup breaks.</p>
-        </div>"""
+    action_box = f"""<div style="background:#1a1a2e;padding:16px 20px;border-radius:10px;margin-bottom:16px;">
+      <p style="color:#f39c12;margin:0;font-size:11px;text-transform:uppercase;letter-spacing:1px;">⏳ APPROACHING ZONE — LEVELS READY, WAITING FOR CONFIRMATION</p>
+      <p style="color:white;margin:10px 0 0;font-size:13px;">
+        <b>Pre-set your order:</b> {'SELL' if bias=='SHORT' else 'BUY'} LIMIT at {entry_p}</p>
+      <p style="color:white;margin:4px 0 0;font-size:13px;">
+        <b>Levels:</b> SL: {sl_p} &nbsp;|&nbsp; TP1: {tp1_p} &nbsp;|&nbsp; TP2: {tp2_p}</p>
+      <p style="color:#8899bb;margin:10px 0 0;font-size:11px;">
+        Place limit order now OR wait for the TRADE READY email to confirm trigger.</p>
+      <p style="color:#8899bb;margin:2px 0 0;font-size:11px;">
+        Close 50% at TP1, move SL to breakeven, let rest run to TP2</p>
+      <p style="color:#445566;margin:8px 0 0;font-size:10px;">
+        System checks every 15 min. You'll receive TRADE READY or INVALIDATION next.</p>
+    </div>"""
 
-    # Confluence table with weights and colors
+    conf_table = _build_scorecard_html(data, score, score_color)
+    chart1_html = (f'<img src="cid:chart_h1" style="width:100%;border-radius:8px;display:block;margin-bottom:12px;" />'
+                   if chart1_b64 else '')
+    chart2_html = (f'<img src="cid:chart_m15" style="width:100%;border-radius:8px;display:block;margin-bottom:12px;" />'
+                   if chart2_b64 else '')
+    miss_items = _build_missing_html(data)
+
+    return f"""<!DOCTYPE html>
+<html>
+<body style="font-family:Arial,sans-serif;background:#f0f2f5;padding:12px;margin:0;">
+<div style="max-width:620px;margin:auto;background:white;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.12);">
+  <div style="background:#1a1a2e;padding:16px 20px;">
+    <h2 style="color:white;margin:0;font-size:16px;">APPROACHING: {pair} — {zone_label}</h2>
+    <p style="color:#8899bb;margin:4px 0 0;font-size:11px;">{ist_time}</p>
+  </div>
+  <div style="background:{bias_color};padding:10px 20px;">
+    <p style="color:white;margin:0;font-size:14px;font-weight:bold;">{bias} — {data.get("bias_reason","")}</p>
+  </div>
+  {news_html}
+  <div style="padding:16px 20px;">
+    {action_box}
+    <p style="font-size:12px;color:#666;margin:0 0 4px;">Zone: <b>{zone_label}</b> at {zone_p} &nbsp;|&nbsp; Now: {now_p} &nbsp;|&nbsp; R:R {data.get("rr_tp1","—")}:1</p>
+    <p style="font-size:11px;color:#888;margin:0 0 12px;">{fatigue_label}</p>
+    {chart1_html}
+    {chart2_html}
+    {conf_table}
+    <table style="width:100%;font-size:12px;margin-bottom:14px;border-collapse:collapse;">
+      <tr style="background:#f8f9fa;"><td style="padding:6px 10px;color:#555;width:100px;">Entry</td><td style="padding:6px 10px;font-weight:bold;">{entry_p}</td></tr>
+      <tr><td style="padding:6px 10px;color:#e74c3c;">Stop Loss</td><td style="padding:6px 10px;font-weight:bold;color:#e74c3c;">{sl_p}</td></tr>
+      <tr style="background:#f8f9fa;"><td style="padding:6px 10px;color:#555;">SL Note</td><td style="padding:6px 10px;font-size:11px;color:#777;">{data.get("sl_note","")}</td></tr>
+      <tr><td style="padding:6px 10px;color:#27ae60;">TP1</td><td style="padding:6px 10px;font-weight:bold;color:#27ae60;">{tp1_p} (R:R {data.get("rr_tp1","")})</td></tr>
+      <tr style="background:#f8f9fa;"><td style="padding:6px 10px;color:#1e8449;">TP2</td><td style="padding:6px 10px;font-weight:bold;color:#1e8449;">{tp2_p} (R:R {data.get("rr_tp2","")})</td></tr>
+    </table>
+    {miss_items}
+    <div style="background:#fffbea;padding:10px 14px;border-radius:8px;border-left:4px solid #f39c12;margin-bottom:14px;">
+      <p style="font-size:10px;color:#f39c12;margin:0 0 4px;font-weight:bold;">WAITING FOR</p>
+      <p style="font-size:12px;color:#333;margin:0;">{data.get("trigger","")}</p>
+    </div>
+    <div style="background:#fef0f0;padding:10px 14px;border-radius:8px;border-left:4px solid #e74c3c;margin-bottom:14px;">
+      <p style="font-size:10px;color:#e74c3c;margin:0 0 4px;font-weight:bold;">INVALIDATION</p>
+      <p style="font-size:12px;color:#c0392b;margin:0;">{data.get("invalid_if","")}</p>
+    </div>
+    <p style="font-size:11px;color:#666;margin:0 0 4px;"><b>Macro:</b> {data.get("macro_line1","")}</p>
+    <p style="font-size:11px;color:#666;margin:0 0 14px;">{data.get("macro_line2","")}</p>
+    <div style="background:#1a1a2e;padding:12px 16px;border-radius:8px;">
+      <p style="color:#8899bb;font-size:9px;margin:0 0 3px;text-transform:uppercase;letter-spacing:1px;">MINDSET</p>
+      <p style="color:white;font-size:12px;margin:0;font-style:italic;">{data.get("mindset","")}</p>
+    </div>
+    <p style="font-size:9px;color:#bbb;margin:12px 0 0;text-align:center;">
+      Prices from market data feed. Your broker prices may differ slightly. Adjust levels to match your MT5 chart.</p>
+  </div>
+</div>
+</body>
+</html>"""
+
+
+# ── TRADE READY email HTML ────────────────────────────────────────────────────
+def build_trade_ready_email_html(data, pair, pair_conf, zone_level, zone_label,
+                                  current_price, chart1_b64, chart2_b64, fatigue_count):
+    dp          = pair_conf.get("decimal_places", 5)
+    ist_time    = ist_now().strftime("%H:%M IST, %d %b %Y")
+    score       = data.get("confidence_score", 0)
+    bias        = data.get("bias", "—")
+    bias_color  = "#e74c3c" if bias == "SHORT" else "#27ae60"
+    score_color = "#27ae60" if score >= 8 else "#e67e22" if score >= 7 else "#e74c3c"
+
+    news_flag = data.get("news_flag", "none")
+    news_html = ""
+    if news_flag and news_flag.lower() != "none":
+        news_html = (f'<div style="background:#fff3cd;padding:10px 20px;border-left:4px solid #f39c12;'
+                     f'font-size:12px;color:#856404;"><b>⚠ NEWS:</b> {news_flag}</div>')
+
+    entry_p = fmt_price(data.get("entry", 0), pair_conf)
+    sl_p    = fmt_price(data.get("sl", 0), pair_conf)
+    tp1_p   = fmt_price(data.get("tp1", 0), pair_conf)
+    tp2_p   = fmt_price(data.get("tp2", 0), pair_conf)
+    zone_p  = fmt_price(zone_level, pair_conf)
+    now_p   = fmt_price(current_price, pair_conf)
+
+    fatigue_label = f"Zone tested {fatigue_count}× in 30 days"
+
+    action_box = f"""<div style="background:#27ae60;padding:16px 20px;border-radius:10px;margin-bottom:16px;">
+      <p style="color:white;margin:0;font-size:11px;text-transform:uppercase;letter-spacing:1px;opacity:0.8;">✅ TRADE READY — PLACE ORDER NOW</p>
+      <p style="color:white;margin:8px 0 0;font-size:16px;font-weight:bold;">
+        {'SELL' if bias=='SHORT' else 'BUY'} LIMIT at {entry_p}</p>
+      <p style="color:white;margin:4px 0 0;font-size:14px;">SL: {sl_p} &nbsp;|&nbsp; TP1: {tp1_p} &nbsp;|&nbsp; TP2: {tp2_p}</p>
+      <p style="color:#d5f5e3;margin:8px 0 0;font-size:11px;">Close 50% at TP1, move SL to breakeven, let rest run to TP2</p>
+    </div>"""
+
+    conf_table = _build_scorecard_html(data, score, score_color)
+    chart1_html = (f'<img src="cid:chart_h1" style="width:100%;border-radius:8px;display:block;margin-bottom:12px;" />'
+                   if chart1_b64 else '')
+    chart2_html = (f'<img src="cid:chart_m15" style="width:100%;border-radius:8px;display:block;margin-bottom:12px;" />'
+                   if chart2_b64 else '')
+    miss_items = _build_missing_html(data)
+
+    return f"""<!DOCTYPE html>
+<html>
+<body style="font-family:Arial,sans-serif;background:#f0f2f5;padding:12px;margin:0;">
+<div style="max-width:620px;margin:auto;background:white;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.12);">
+  <div style="background:#1a1a2e;padding:16px 20px;">
+    <h2 style="color:white;margin:0;font-size:16px;">TRADE READY: {pair} — {zone_label}</h2>
+    <p style="color:#8899bb;margin:4px 0 0;font-size:11px;">{ist_time}</p>
+  </div>
+  <div style="background:{bias_color};padding:10px 20px;">
+    <p style="color:white;margin:0;font-size:14px;font-weight:bold;">{bias} — {data.get("bias_reason","")}</p>
+  </div>
+  {news_html}
+  <div style="padding:16px 20px;">
+    {action_box}
+    <p style="font-size:12px;color:#666;margin:0 0 4px;">Zone: <b>{zone_label}</b> at {zone_p} &nbsp;|&nbsp; Now: {now_p} &nbsp;|&nbsp; R:R {data.get("rr_tp1","—")}:1</p>
+    <p style="font-size:11px;color:#888;margin:0 0 12px;">{fatigue_label}</p>
+    {chart1_html}
+    {chart2_html}
+    {conf_table}
+    <table style="width:100%;font-size:12px;margin-bottom:14px;border-collapse:collapse;">
+      <tr style="background:#f8f9fa;"><td style="padding:6px 10px;color:#555;width:100px;">Entry</td><td style="padding:6px 10px;font-weight:bold;">{entry_p}</td></tr>
+      <tr><td style="padding:6px 10px;color:#e74c3c;">Stop Loss</td><td style="padding:6px 10px;font-weight:bold;color:#e74c3c;">{sl_p}</td></tr>
+      <tr style="background:#f8f9fa;"><td style="padding:6px 10px;color:#555;">SL Note</td><td style="padding:6px 10px;font-size:11px;color:#777;">{data.get("sl_note","")}</td></tr>
+      <tr><td style="padding:6px 10px;color:#27ae60;">TP1</td><td style="padding:6px 10px;font-weight:bold;color:#27ae60;">{tp1_p} (R:R {data.get("rr_tp1","")})</td></tr>
+      <tr style="background:#f8f9fa;"><td style="padding:6px 10px;color:#1e8449;">TP2</td><td style="padding:6px 10px;font-weight:bold;color:#1e8449;">{tp2_p} (R:R {data.get("rr_tp2","")})</td></tr>
+    </table>
+    {miss_items}
+    <div style="background:#fef0f0;padding:10px 14px;border-radius:8px;border-left:4px solid #e74c3c;margin-bottom:14px;">
+      <p style="font-size:10px;color:#e74c3c;margin:0 0 4px;font-weight:bold;">INVALIDATION</p>
+      <p style="font-size:12px;color:#c0392b;margin:0;">{data.get("invalid_if","")}</p>
+    </div>
+    <p style="font-size:11px;color:#666;margin:0 0 4px;"><b>Macro:</b> {data.get("macro_line1","")}</p>
+    <p style="font-size:11px;color:#666;margin:0 0 14px;">{data.get("macro_line2","")}</p>
+    <div style="background:#1a1a2e;padding:12px 16px;border-radius:8px;">
+      <p style="color:#8899bb;font-size:9px;margin:0 0 3px;text-transform:uppercase;letter-spacing:1px;">MINDSET</p>
+      <p style="color:white;font-size:12px;margin:0;font-style:italic;">{data.get("mindset","")}</p>
+    </div>
+    <p style="font-size:9px;color:#bbb;margin:12px 0 0;text-align:center;">
+      Prices from market data feed. Your broker prices may differ slightly. Adjust levels to match your MT5 chart.</p>
+  </div>
+</div>
+</body>
+</html>"""
+
+
+# ── Shared email builder helpers ──────────────────────────────────────────────
+def _build_scorecard_html(data, score, score_color):
     breakdown = data.get("score_breakdown", {})
     weights   = config.get("scoring", {}).get("confluences", {})
     conf_rows = ""
@@ -853,7 +1059,6 @@ def build_zone_email_html(data, pair, pair_conf, zone_level, zone_label,
         ("no_high_impact_news", "No High-Impact News"),
         ("session_alignment",   "Session Alignment"),
     ]
-    # Map breakdown keys (Gemini might use premium_discount or premium_discount_zone)
     for key, label in conf_order:
         max_pts = weights.get(key, weights.get(key.replace("premium_discount", "premium_discount_zone"), 0))
         scored  = float(breakdown.get(key, breakdown.get(key.replace("premium_discount", "premium_discount_zone"), 0)))
@@ -868,146 +1073,40 @@ def build_zone_email_html(data, pair, pair_conf, zone_level, zone_label,
                       f'<td style="padding:6px 10px;font-size:12px;color:#333;">{label}</td>'
                       f'<td style="padding:6px 10px;font-size:12px;color:{txt_c};font-weight:bold;text-align:center;">{scored}/{max_pts}</td>'
                       f'</tr>')
+    return (f'<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;margin-bottom:16px;">'
+            f'<tr style="background:#1a1a2e;">'
+            f'<td colspan="3" style="padding:8px 10px;color:white;font-size:11px;font-weight:bold;letter-spacing:1px;">SCORECARD BREAKDOWN</td>'
+            f'</tr>{conf_rows}'
+            f'<tr style="background:#f4f4f8;">'
+            f'<td colspan="2" style="padding:8px 10px;font-size:13px;font-weight:bold;color:#1a1a2e;">TOTAL</td>'
+            f'<td style="padding:8px 10px;font-size:14px;font-weight:bold;color:{score_color};text-align:center;">{score}/10</td>'
+            f'</tr></table>')
 
-    conf_table = (f'<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;margin-bottom:16px;">'
-                  f'<tr style="background:#1a1a2e;">'
-                  f'<td colspan="3" style="padding:8px 10px;color:white;font-size:11px;font-weight:bold;letter-spacing:1px;">SCORECARD BREAKDOWN</td>'
-                  f'</tr>{conf_rows}'
-                  f'<tr style="background:#f4f4f8;">'
-                  f'<td colspan="2" style="padding:8px 10px;font-size:13px;font-weight:bold;color:#1a1a2e;">TOTAL</td>'
-                  f'<td style="padding:8px 10px;font-size:14px;font-weight:bold;color:{score_color};text-align:center;">{score}/10</td>'
-                  f'</tr></table>')
-
-    # Charts
-    chart1_html = (f'<img src="cid:chart_h1" style="width:100%;border-radius:8px;display:block;margin-bottom:12px;" />'
-                   if chart1_b64 else '<p style="color:#aaa;font-size:11px;">H1 chart unavailable.</p>')
-    chart2_html = (f'<img src="cid:chart_m15" style="width:100%;border-radius:8px;display:block;margin-bottom:12px;" />'
-                   if chart2_b64 else '<p style="color:#aaa;font-size:11px;">M15 chart unavailable.</p>')
-
-    # Missing items
+def _build_missing_html(data):
     miss_items = ""
     for m in data.get("missing", []):
         if isinstance(m, dict):
             miss_items += (f'<p style="font-size:12px;color:#c62828;margin:4px 0;padding:6px 10px;background:#ffebee;border-radius:6px;">'
                            f'✗ <b>{m.get("item","")}</b> — {m.get("reason","")}</p>')
+    return miss_items
 
-    return f"""<!DOCTYPE html>
-<html>
-<body style="font-family:Arial,sans-serif;background:#f0f2f5;padding:12px;margin:0;">
-<div style="max-width:620px;margin:auto;background:white;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.12);">
 
-  <div style="background:#1a1a2e;padding:16px 20px;">
-    <h2 style="color:white;margin:0;font-size:16px;">ZONE ALERT: {pair} — {zone_label}</h2>
-    <p style="color:#8899bb;margin:4px 0 0;font-size:11px;">{ist_time}</p>
-  </div>
-
-  <div style="background:{bias_color};padding:10px 20px;">
-    <p style="color:white;margin:0;font-size:14px;font-weight:bold;">{bias} — {data.get("bias_reason","")}</p>
-  </div>
-
-  {news_html}
-
-  <div style="padding:16px 20px;">
-
-    {action_box}
-
-    <p style="font-size:12px;color:#666;margin:0 0 12px;">Zone: <b>{zone_label}</b> at {zone_p} &nbsp;|&nbsp; Now: {now_p} &nbsp;|&nbsp; R:R {data.get("rr_tp1","—")}:1</p>
-
-    {chart1_html}
-    {chart2_html}
-
-    {conf_table}
-
-    <table style="width:100%;font-size:12px;margin-bottom:14px;border-collapse:collapse;">
-      <tr style="background:#f8f9fa;"><td style="padding:6px 10px;color:#555;width:100px;">Entry</td><td style="padding:6px 10px;font-weight:bold;">{entry_p}</td></tr>
-      <tr><td style="padding:6px 10px;color:#e74c3c;">Stop Loss</td><td style="padding:6px 10px;font-weight:bold;color:#e74c3c;">{sl_p}</td></tr>
-      <tr style="background:#f8f9fa;"><td style="padding:6px 10px;color:#555;">SL Note</td><td style="padding:6px 10px;font-size:11px;color:#777;">{data.get("sl_note","")}</td></tr>
-      <tr><td style="padding:6px 10px;color:#27ae60;">TP1</td><td style="padding:6px 10px;font-weight:bold;color:#27ae60;">{tp1_p} (R:R {data.get("rr_tp1","")})</td></tr>
-      <tr style="background:#f8f9fa;"><td style="padding:6px 10px;color:#1e8449;">TP2</td><td style="padding:6px 10px;font-weight:bold;color:#1e8449;">{tp2_p} (R:R {data.get("rr_tp2","")})</td></tr>
-    </table>
-
-    {miss_items}
-
-    <div style="background:#fffbea;padding:10px 14px;border-radius:8px;border-left:4px solid #f39c12;margin-bottom:14px;">
-      <p style="font-size:10px;color:#f39c12;margin:0 0 4px;font-weight:bold;">TRIGGER CONDITION</p>
-      <p style="font-size:12px;color:#333;margin:0;">{data.get("trigger","")}</p>
-    </div>
-
-    <div style="background:#fef0f0;padding:10px 14px;border-radius:8px;border-left:4px solid #e74c3c;margin-bottom:14px;">
-      <p style="font-size:10px;color:#e74c3c;margin:0 0 4px;font-weight:bold;">INVALIDATION</p>
-      <p style="font-size:12px;color:#c0392b;margin:0;">{data.get("invalid_if","")}</p>
-    </div>
-
-    <p style="font-size:11px;color:#666;margin:0 0 4px;"><b>Macro:</b> {data.get("macro_line1","")}</p>
-    <p style="font-size:11px;color:#666;margin:0 0 14px;">{data.get("macro_line2","")}</p>
-
-    <div style="background:#1a1a2e;padding:12px 16px;border-radius:8px;">
-      <p style="color:#8899bb;font-size:9px;margin:0 0 3px;text-transform:uppercase;letter-spacing:1px;">MINDSET</p>
-      <p style="color:white;font-size:12px;margin:0;font-style:italic;">{data.get("mindset","")}</p>
-    </div>
-
-    <p style="font-size:9px;color:#bbb;margin:12px 0 0;text-align:center;">
-      Prices from market data feed. Your broker prices may differ slightly. Adjust levels to match your MT5 chart.</p>
-  </div>
-</div>
-</body>
-</html>"""
-
-# ── Entry Alert email (Stage 2) ───────────────────────────────────────────────
-def build_entry_email_html(original_alert, refreshed_data, pair_conf, current_price):
-    dp    = pair_conf.get("decimal_places", 5)
-    score = refreshed_data.get("confidence_score", 0)
-    bias  = refreshed_data.get("bias", original_alert.get("bias", "—"))
-    bias_color  = "#e74c3c" if bias == "SHORT" else "#27ae60"
-    score_color = "#27ae60" if score >= 8 else "#e67e22" if score >= 7 else "#e74c3c"
+# ── Invalidation email — references original alert ───────────────────────────
+def build_invalidation_email_html(alert, reason_text, pair_conf, current_price):
     ist_time = ist_now().strftime("%H:%M IST, %d %b %Y")
+    # Reference back to original alert
+    orig_ist = alert.get("ist_time", "")
+    orig_utc = alert.get("timestamp_utc", "")
+    try:
+        orig_dt = datetime.strptime(orig_utc, "%Y-%m-%d %H:%M") + timedelta(hours=5, minutes=30)
+        orig_ref = orig_dt.strftime("%d %b %Y, %H:%M IST")
+    except Exception:
+        orig_ref = f"{orig_ist} (UTC: {orig_utc})"
 
-    entry_p = fmt_price(refreshed_data.get("entry", 0), pair_conf)
-    sl_p    = fmt_price(refreshed_data.get("sl", 0), pair_conf)
-    tp1_p   = fmt_price(refreshed_data.get("tp1", 0), pair_conf)
-    tp2_p   = fmt_price(refreshed_data.get("tp2", 0), pair_conf)
+    entry_p = fmt_price(alert.get("entry", 0), pair_conf)
+    sl_p    = fmt_price(alert.get("sl", 0), pair_conf)
+    tp1_p   = fmt_price(alert.get("tp1", 0), pair_conf)
 
-    return f"""<!DOCTYPE html>
-<html>
-<body style="font-family:Arial,sans-serif;background:#f0f2f5;padding:12px;margin:0;">
-<div style="max-width:620px;margin:auto;background:white;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.12);">
-
-  <div style="background:#1a1a2e;padding:16px 20px;">
-    <h2 style="color:white;margin:0;font-size:16px;">ENTRY ALERT: {original_alert['pair']}</h2>
-    <p style="color:#8899bb;margin:4px 0 0;font-size:11px;">{ist_time}</p>
-  </div>
-
-  <div style="background:{bias_color};padding:14px 20px;">
-    <p style="color:white;margin:0;font-size:16px;font-weight:bold;">
-      {'SELL' if bias=='SHORT' else 'BUY'} LIMIT at {entry_p}</p>
-    <p style="color:rgba(255,255,255,0.9);margin:6px 0 0;font-size:14px;">
-      SL: {sl_p} &nbsp;|&nbsp; TP1: {tp1_p} &nbsp;|&nbsp; TP2: {tp2_p}</p>
-    <p style="color:rgba(255,255,255,0.7);margin:6px 0 0;font-size:11px;">
-      Close 50% at TP1, move SL to breakeven, let rest run to TP2</p>
-  </div>
-
-  <div style="padding:14px 20px;background:#f8f9fa;border-bottom:1px solid #eee;">
-    <span style="font-size:11px;color:#666;">Updated confidence: </span>
-    <span style="font-size:16px;font-weight:bold;color:{score_color};">{score}/10</span>
-    <span style="font-size:11px;color:#888;margin-left:6px;">— {refreshed_data.get("confidence_reason","")}</span>
-  </div>
-
-  <div style="padding:14px 20px;">
-    <p style="font-size:12px;color:#666;margin:0 0 10px;">
-      Original zone: <b>{original_alert.get("zone_label","")}</b> at {original_alert.get("zone_level","")}
-      &nbsp;|&nbsp; Now: {fmt_price(current_price, pair_conf)}
-      &nbsp;|&nbsp; R:R {refreshed_data.get("rr_tp1","—")}:1</p>
-
-    <p style="font-size:11px;color:#888;margin:0;">
-      Refer to your earlier Zone Alert for full chart and analysis.</p>
-  </div>
-</div>
-</body>
-</html>"""
-
-# ── Invalidation email (Stage 3) ──────────────────────────────────────────────
-def build_invalidation_email_html(alert, refreshed_data, pair_conf, current_price):
-    ist_time = ist_now().strftime("%H:%M IST, %d %b %Y")
     return f"""<!DOCTYPE html>
 <html>
 <body style="font-family:Arial,sans-serif;background:#fff7f7;padding:12px;margin:0;">
@@ -1022,15 +1121,20 @@ def build_invalidation_email_html(alert, refreshed_data, pair_conf, current_pric
   <div style="padding:14px 20px;">
     <p style="font-size:13px;color:#374151;margin:0 0 10px;">The earlier setup is no longer valid.</p>
     <table style="width:100%;font-size:12px;">
-      <tr><td style="padding:4px 0;color:#555;width:120px;">Pair</td><td style="padding:4px 0;font-weight:bold;">{alert.get("pair","")}</td></tr>
+      <tr><td style="padding:4px 0;color:#555;width:130px;">Original Alert</td><td style="padding:4px 0;font-weight:bold;">{orig_ref}</td></tr>
+      <tr><td style="padding:4px 0;color:#555;">Pair</td><td style="padding:4px 0;font-weight:bold;">{alert.get("pair","")}</td></tr>
       <tr><td style="padding:4px 0;color:#555;">Bias was</td><td style="padding:4px 0;font-weight:bold;">{alert.get("bias","")}</td></tr>
+      <tr><td style="padding:4px 0;color:#555;">Entry was</td><td style="padding:4px 0;">{entry_p}</td></tr>
+      <tr><td style="padding:4px 0;color:#555;">SL was</td><td style="padding:4px 0;">{sl_p}</td></tr>
+      <tr><td style="padding:4px 0;color:#555;">TP1 was</td><td style="padding:4px 0;">{tp1_p}</td></tr>
       <tr><td style="padding:4px 0;color:#555;">Current price</td><td style="padding:4px 0;font-weight:bold;">{fmt_price(current_price, pair_conf)}</td></tr>
-      <tr><td style="padding:4px 0;color:#555;">Reason</td><td style="padding:4px 0;">{refreshed_data.get("invalid_if", refreshed_data.get("confidence_reason","Setup no longer valid"))}</td></tr>
+      <tr><td style="padding:4px 0;color:#555;">Reason</td><td style="padding:4px 0;color:#dc2626;font-weight:bold;">{reason_text}</td></tr>
     </table>
   </div>
 </div>
 </body>
 </html>"""
+
 
 # ── System emails ─────────────────────────────────────────────────────────────
 def build_ok_email_html():
@@ -1042,15 +1146,11 @@ def build_ok_email_html():
 </div></body></html>"""
 
 def build_error_email_html(error_lines, pairs_ok):
-    """Plain English error email with pair status and guidance."""
     error_items = ""
     for line in error_lines[:10]:
-        # Parse pair name and simplify error message
         parts  = line.split(":", 1)
         p_name = parts[0].strip() if len(parts) > 1 else "Unknown"
         err    = parts[1].strip() if len(parts) > 1 else line
-
-        # Simplify Gemini errors
         if "429" in err or "RESOURCE_EXHAUSTED" in err or "quota" in err.lower():
             simple = "Gemini API rate limit reached. Will retry automatically on next scan."
         elif "Gemini error" in err:
@@ -1059,11 +1159,9 @@ def build_error_email_html(error_lines, pairs_ok):
             simple = "Market data unavailable (yfinance). Likely a temporary data feed issue."
         else:
             simple = err[:120]
-
         error_items += (f'<div style="background:#fef2f2;padding:8px 12px;border-radius:6px;margin-bottom:6px;">'
                         f'<p style="margin:0;font-size:12px;"><b style="color:#dc2626;">{p_name}:</b> '
                         f'<span style="color:#374151;">{simple}</span></p></div>')
-
     ok_items = ""
     if pairs_ok:
         ok_list = ", ".join([f"<b>{p}</b> ✓" for p in pairs_ok])
@@ -1081,11 +1179,17 @@ def build_error_email_html(error_lines, pairs_ok):
 </div></body></html>"""
 
 
-# ── Log alert ─────────────────────────────────────────────────────────────────
-def log_alert(pair, zone_level, zone_label, current_price, data, pair_conf):
+# ── Log alert (TRADE READY only — APPROACHING goes to scan_log) ───────────────
+def log_alert(pair, zone_level, zone_label, current_price, data, pair_conf,
+              alert_stage, atr_value, buffer_applied, fatigue_count):
+    # Check if an approaching was sent earlier for this zone
+    key = f"{pair}_{round(zone_level, 4)}"
+    approaching_at = visit_state.get(key, {}).get("approaching_at_utc")
+
     alert_log.append({
         "id":                 f"{pair}_{int(utc_now().timestamp())}",
         "alert_type":         "zone",
+        "alert_stage":        alert_stage,
         "pair":               pair,
         "pair_type":          pair_conf.get("pair_type", "forex"),
         "timestamp_utc":      utc_str(),
@@ -1099,7 +1203,6 @@ def log_alert(pair, zone_level, zone_label, current_price, data, pair_conf):
         "trigger_status":     data.get("trigger_status", "not_ready"),
         "trigger_tf":         data.get("trigger_tf", ""),
         "trigger_kind":       data.get("trigger_kind", ""),
-        "trigger_level":      data.get("trigger_level", 0),
         "trigger":            data.get("trigger", ""),
         "invalidate_above":   data.get("invalidate_above"),
         "invalidate_below":   data.get("invalidate_below"),
@@ -1114,12 +1217,16 @@ def log_alert(pair, zone_level, zone_label, current_price, data, pair_conf):
         "missing":            data.get("missing", []),
         "geo_flag":           data.get("geo_flag", False),
         "news_flag":          data.get("news_flag", "none"),
+        "atr_h1":             round(atr_value, 6) if atr_value else None,
+        "buffer_applied":     round(buffer_applied, 6) if buffer_applied else None,
+        "zone_tests_30d":     fatigue_count,
+        "approaching_sent_at": approaching_at,
         "outcome":            "pending",
         "outcome_price":      None,
         "outcome_checked_at": None,
-        "entry_alert_sent":   False,
-        "entry_alert_sent_at": None,
-        "entry_alert_price":  None,
+        "entry_alert_sent":   alert_stage == "trade_ready",
+        "entry_alert_sent_at": utc_str() if alert_stage == "trade_ready" else None,
+        "entry_alert_price":  round(current_price, 5) if alert_stage == "trade_ready" else None,
         "invalidation_email_sent": False
     })
     save_alert_log()
@@ -1149,12 +1256,6 @@ def send_simple_email(subject, html_body):
 
 # ── Entry-gated outcome check (aligned with weekly_review.py) ─────────────────
 def check_entry_gated_outcome(alert):
-    """
-    Three-step entry-gated outcome logic:
-    Step 1: SL hit before price reached entry → not_triggered
-    Step 2: Price never reached entry after 48h → not_triggered
-    Step 3: Entry reached, then SL or TP1 hit first → loss or win_tp1
-    """
     pair   = alert.get('pair', '')
     symbol = next((p['symbol'] for p in config['pairs'] if p['name'] == pair), None)
     if not symbol:
@@ -1213,12 +1314,13 @@ def check_entry_gated_outcome(alert):
         print(f"    Outcome check error ({pair}): {e}")
         return "pending", None
 
-# ── Job 2: Entry/Invalidation monitoring (merged from alert2_engine) ──────────
-def run_entry_invalidation_checks(macro_news):
+
+# ── Job 2: Pure Python invalidation — ZERO Gemini calls ──────────────────────
+def run_invalidation_checks(current_prices):
     """
-    Checks pending zone alerts where entry hasn't been sent yet and setup
-    hasn't been invalidated. Uses cached macro news from Job 1.
-    Only monitors alerts between 'Zone Alert sent' and 'Entry Alert sent or Invalidated'.
+    Checks ALL pending alerts for invalidation using pure Python price checks.
+    No Gemini calls. Uses current prices already fetched in Job 1.
+    Checks: invalidation levels, price-ran-away, 48h timeout.
     """
     fired = 0
     for alert in alert_log:
@@ -1227,117 +1329,69 @@ def run_entry_invalidation_checks(macro_news):
                 continue
             if alert.get("outcome") in ("win_tp1", "loss", "invalidated", "not_triggered"):
                 continue
-            if alert.get("entry_alert_sent"):
-                continue
             if alert.get("invalidation_email_sent"):
                 continue
 
-            pair_conf = get_pair_conf(alert.get("pair"))
+            pair = alert.get("pair")
+            pair_conf = get_pair_conf(pair)
             if not pair_conf:
                 continue
 
-            symbol   = pair_conf["symbol"]
-            min_conf = pair_conf.get("min_confidence", 7)
-
-            # Fetch current price (H1 only — lightweight)
-            df1 = clean_df(yf.download(symbol, period="15d", interval="1h", progress=False))
-            if df1 is None:
-                continue
-            current_price = float(df1["Close"].iloc[-1])
-
-            # Check proximity to entry
-            entry_mid = parse_entry_mid(alert.get("entry", ""))
-            if entry_mid is None:
-                continue
-            near_pct   = pair_conf.get("near_entry_pct", 0.08)
-            entry_dist = abs(current_price - entry_mid) / entry_mid * 100
-            if entry_dist > near_pct:
-                # Also check invalidation levels even when price isn't near entry
-                inv_above = alert.get("invalidate_above")
-                inv_below = alert.get("invalidate_below")
-                invalidated = False
-                if inv_above and current_price > float(inv_above):
-                    invalidated = True
-                if inv_below and current_price < float(inv_below):
-                    invalidated = True
-                if invalidated:
-                    send_simple_email(
-                        f"INVALIDATED | {alert['pair']} | {ist_now().strftime('%H:%M IST')}",
-                        build_invalidation_email_html(alert, {"invalid_if": alert.get("invalid_if", "Price breached invalidation level")},
-                                                     pair_conf, round(current_price, pair_conf.get("decimal_places", 5)))
-                    )
-                    alert["outcome"] = "invalidated"
-                    alert["outcome_checked_at"] = utc_str()
-                    alert["invalidation_email_sent"] = True
-                    save_alert_log()
-                    fired += 1
+            current_price = current_prices.get(pair)
+            if current_price is None:
                 continue
 
-            # Price is near entry — call Gemini for fresh trigger check
-            df2 = fetch_m15_data(symbol)
-            if df2 is None:
-                continue
+            dp = pair_conf.get("decimal_places", 5)
+            reason = None
 
-            zone_level = float(alert.get("zone_level", 0) or 0)
-            zone_label = alert.get("zone_label", get_zone_label(zone_level, current_price))
-            fatigue    = count_zone_alerts(alert["pair"], zone_level) if zone_level > 0 else 0
+            # Check 1: Invalidation levels breached
+            inv_above = alert.get("invalidate_above")
+            inv_below = alert.get("invalidate_below")
+            if inv_above and current_price > float(inv_above):
+                reason = f"Price ({fmt_price(current_price, pair_conf)}) broke above invalidation level ({fmt_price(float(inv_above), pair_conf)})"
+            if inv_below and current_price < float(inv_below):
+                reason = f"Price ({fmt_price(current_price, pair_conf)}) broke below invalidation level ({fmt_price(float(inv_below), pair_conf)})"
 
-            prompt = build_zone_prompt(
-                pair_conf, round(zone_level, 5), zone_label,
-                round(current_price, 5), macro_news, df1, df2, fatigue
-            )
+            # Check 2: Price ran away (2x risk distance beyond entry)
+            if not reason:
+                try:
+                    entry = float(str(alert.get('entry', '0')).split('-')[0].strip() or 0)
+                    sl    = float(alert.get('sl', 0) or 0)
+                    bias  = str(alert.get('bias', '')).upper()
+                    if entry > 0 and sl > 0 and bias in ('LONG', 'SHORT'):
+                        risk_dist = abs(entry - sl)
+                        if bias == "LONG" and current_price > entry + (2 * risk_dist):
+                            reason = f"Price ran away above entry — now {fmt_price(current_price, pair_conf)}, entry was {fmt_price(entry, pair_conf)}. Retest window closed."
+                        elif bias == "SHORT" and current_price < entry - (2 * risk_dist):
+                            reason = f"Price ran away below entry — now {fmt_price(current_price, pair_conf)}, entry was {fmt_price(entry, pair_conf)}. Retest window closed."
+                except Exception:
+                    pass
 
-            refreshed_data, error = call_gemini(prompt)
-            if error or not refreshed_data:
-                continue
+            # Check 3: 48-hour timeout
+            if not reason:
+                try:
+                    alert_time = datetime.strptime(alert['timestamp_utc'], "%Y-%m-%d %H:%M")
+                    age_h = (utc_now() - alert_time).total_seconds() / 3600
+                    if age_h >= 48:
+                        reason = "Setup expired — 48 hours without entry being reached."
+                except Exception:
+                    pass
 
-            trigger_status = str(refreshed_data.get("trigger_status", "not_ready")).lower()
-            score          = refreshed_data.get("confidence_score", 0)
-
-            # Invalidated
-            if trigger_status == "invalidated":
+            if reason:
                 send_simple_email(
-                    f"INVALIDATED | {alert['pair']} | {ist_now().strftime('%H:%M IST')}",
-                    build_invalidation_email_html(alert, refreshed_data, pair_conf,
-                                                 round(current_price, pair_conf.get("decimal_places", 5)))
+                    f"INVALIDATED | {pair} | Ref: {alert.get('ist_time','')} | {ist_now().strftime('%H:%M IST')}",
+                    build_invalidation_email_html(alert, reason, pair_conf,
+                                                 round(current_price, dp))
                 )
                 alert["outcome"] = "invalidated"
                 alert["outcome_checked_at"] = utc_str()
                 alert["invalidation_email_sent"] = True
                 save_alert_log()
                 fired += 1
-                continue
-
-            # Trigger ready
-            if trigger_status != "ready":
-                continue
-            if not refreshed_data.get("entry_ready_now", False):
-                continue
-            if not refreshed_data.get("send_alert", False):
-                continue
-            if score < min_conf:
-                continue
-
-            # Validate response
-            is_valid, reason = validate_gemini_response(
-                refreshed_data, pair_conf, zone_label, current_price)
-            if not is_valid:
-                print(f"    Entry alert blocked for {alert['pair']}: {reason}")
-                continue
-
-            subject = f"[{score}/10] ENTRY | {alert['pair']} | {ist_now().strftime('%H:%M IST')}"
-            html    = build_entry_email_html(alert, refreshed_data, pair_conf,
-                                             round(current_price, pair_conf.get("decimal_places", 5)))
-            send_simple_email(subject, html)
-
-            alert["entry_alert_sent"]    = True
-            alert["entry_alert_sent_at"] = utc_str()
-            alert["entry_alert_price"]   = round(current_price, 5)
-            save_alert_log()
-            fired += 1
+                print(f"    INVALIDATED: {pair} — {reason}")
 
         except Exception as e:
-            print(f"    Entry check error ({alert.get('pair', '?')}): {e}")
+            print(f"    Invalidation check error ({alert.get('pair', '?')}): {e}")
 
     return fired
 
@@ -1348,9 +1402,10 @@ def run_entry_invalidation_checks(macro_news):
 ist_start = ist_now().strftime("%H:%M IST, %d %b %Y")
 print(f"Alert engine started {ist_start} ({utc_str()} UTC)")
 
-run_errors  = []
-pairs_ok    = []
-alerts_fired = 0
+run_errors    = []
+pairs_ok      = []
+alerts_fired  = 0
+current_prices = {}
 
 market_open, market_status = is_market_open()
 print(f"  Market: {market_status}")
@@ -1379,6 +1434,12 @@ for pair_conf in config["pairs"]:
             run_errors.append(f"{name}: No market data returned for this pair.")
             continue
 
+        # Cache current price for Job 2 invalidation checks
+        current_prices[name] = current_price
+
+        # Compute ATR for this pair
+        atr_value = get_atr(df1) if df1 is not None else None
+
         if not zones:
             log_scan(name, "no_zone_found", "No valid zones detected.")
             pairs_ok.append(name)
@@ -1399,11 +1460,6 @@ for pair_conf in config["pairs"]:
             zones_in_proximity += 1
             zone_label = get_zone_label(zone_level, current_price)
 
-            if not should_alert_zone(name, zone_level):
-                log_scan(name, "cooldown",
-                         "Zone alerted within last 1 hour — cooling down.", zone_level)
-                continue
-
             df2 = fetch_m15_data(symbol)
             if df2 is None:
                 log_scan(name, "error", "No M15 data.", zone_level)
@@ -1419,7 +1475,7 @@ for pair_conf in config["pairs"]:
                 round(zone_level, dp),
                 zone_label,
                 round(current_price, dp),
-                macro_news, df1, df2, fatigue
+                macro_news, df1, df2, fatigue, atr_value
             )
 
             data, error = call_gemini(prompt)
@@ -1431,8 +1487,8 @@ for pair_conf in config["pairs"]:
                 continue
 
             # ── Python post-validation ────────────────────────────────────
-            is_valid, reason = validate_gemini_response(
-                data, pair_conf, zone_label, current_price)
+            is_valid, reason, buffer_applied = validate_gemini_response(
+                data, pair_conf, zone_label, current_price, atr_value)
 
             if not is_valid:
                 print(f"    {name} blocked by validation: {reason}")
@@ -1456,41 +1512,73 @@ for pair_conf in config["pairs"]:
                 log_scan(name, "rejected_low_score", reason, zone_level)
                 continue
 
-            # ── Generate charts ───────────────────────────────────────────
-            levels = {
-                'zone': zone_level,
-                'current': current_price,
-                'entry': data.get('entry', ''),
-                'sl': data.get('sl', 0),
-                'tp1': data.get('tp1', 0),
-                'tp2': data.get('tp2', 0)
-            }
+            # ── Determine email type: TRADE READY or APPROACHING ──────────
+            entry_ready = data.get("entry_ready_now", False)
+            trigger_ok  = str(data.get("trigger_status", "")).lower() == "ready"
+            is_trade_ready = entry_ready and trigger_ok
 
-            chart1 = generate_chart(df1, f"{name} — H1", levels, data, pair_conf)
-            chart2 = generate_chart(df2, f"{name} — M15", levels, data, pair_conf)
+            if is_trade_ready:
+                # ── TRADE READY ───────────────────────────────────────────
+                if not should_send_trade_ready(name, zone_level):
+                    log_scan(name, "blocked_active_trade",
+                             "Active trade on this zone — blocked.", zone_level)
+                    continue
 
-            # ── Build and send email ──────────────────────────────────────
-            html = build_zone_email_html(
-                data, name, pair_conf,
-                round(zone_level, dp),
-                zone_label,
-                round(current_price, dp),
-                chart1, chart2
-            )
+                levels = {
+                    'zone': zone_level, 'current': current_price,
+                    'entry': data.get('entry', ''), 'sl': data.get('sl', 0),
+                    'tp1': data.get('tp1', 0), 'tp2': data.get('tp2', 0)
+                }
+                chart1 = generate_chart(df1, f"{name} — H1", levels, data, pair_conf)
+                chart2 = generate_chart(df2, f"{name} — M15", levels, data, pair_conf)
 
-            subject = f"[{score}/10] {name} | {zone_label} | {ist_now().strftime('%H:%M IST')}"
+                html = build_trade_ready_email_html(
+                    data, name, pair_conf, round(zone_level, dp),
+                    zone_label, round(current_price, dp), chart1, chart2, fatigue
+                )
+                subject = f"[{score}/10] TRADE READY | {name} | {'SELL' if data.get('bias')=='SHORT' else 'BUY'} | {ist_now().strftime('%H:%M IST')}"
+                send_email(subject, html, chart1, chart2)
 
-            send_email(subject, html, chart1, chart2)
-            log_alert(name, round(zone_level, dp), zone_label,
-                      round(current_price, dp), data, pair_conf)
-            log_scan(name, "alert_sent",
-                     f"Zone alert sent at score {score}/10.", zone_level)
-            record_zone_alert(name, zone_level)
+                log_alert(name, round(zone_level, dp), zone_label,
+                          round(current_price, dp), data, pair_conf,
+                          "trade_ready", atr_value, buffer_applied, fatigue)
+                log_scan(name, "trade_ready_sent",
+                         f"Trade ready alert sent at score {score}/10.", zone_level)
+                record_trade_ready(name, zone_level)
 
-            system_status["last_trade_alert_utc"] = utc_str()
-            alerts_fired += 1
-            zone_alerted = True
-            print(f"    ✓ Sent: {name} [{score}/10]")
+                system_status["last_trade_alert_utc"] = utc_str()
+                alerts_fired += 1
+                zone_alerted = True
+                print(f"    ✓ TRADE READY: {name} [{score}/10]")
+
+            else:
+                # ── APPROACHING ───────────────────────────────────────────
+                if not should_send_approaching(name, zone_level):
+                    log_scan(name, "approaching_cooldown",
+                             "Approaching already sent within 2h or active trade.", zone_level)
+                    continue
+
+                levels = {
+                    'zone': zone_level, 'current': current_price,
+                    'entry': data.get('entry', ''), 'sl': data.get('sl', 0),
+                    'tp1': data.get('tp1', 0), 'tp2': data.get('tp2', 0)
+                }
+                chart1 = generate_chart(df1, f"{name} — H1", levels, data, pair_conf)
+                chart2 = generate_chart(df2, f"{name} — M15", levels, data, pair_conf)
+
+                html = build_approaching_email_html(
+                    data, name, pair_conf, round(zone_level, dp),
+                    zone_label, round(current_price, dp), chart1, chart2, fatigue
+                )
+                subject = f"APPROACHING | {name} | {zone_label} | {ist_now().strftime('%H:%M IST')}"
+                send_email(subject, html, chart1, chart2)
+
+                log_scan(name, "approaching_sent",
+                         f"Approaching alert sent at score {score}/10.", zone_level)
+                record_approaching(name, zone_level)
+
+                zone_alerted = True
+                print(f"    → APPROACHING: {name} [{score}/10]")
 
         if zones_in_proximity == 0:
             log_scan(name, "zone_outside_proximity",
@@ -1504,14 +1592,13 @@ for pair_conf in config["pairs"]:
         log_scan(name, "error", f"Pair-level error: {str(e)}")
         run_errors.append(f"{name}: {str(e)}")
 
-# ── Job 2: Check pending alerts for entry/invalidation ────────────────────────
-print(f"\n  Job 2: Checking pending alerts for entry/invalidation...")
-cached_news = get_cached_macro_news()
-entry_fired = run_entry_invalidation_checks(cached_news)
-print(f"  Job 2 complete. {entry_fired} entry/invalidation alert(s) sent.")
+# ── Job 2: Pure Python invalidation checks ────────────────────────────────────
+print(f"\n  Job 2: Checking pending alerts for invalidation (Python only, 0 Gemini calls)...")
+inv_fired = run_invalidation_checks(current_prices)
+print(f"  Job 2 complete. {inv_fired} invalidation(s) sent.")
 
 # ── System status emails ──────────────────────────────────────────────────────
-if alerts_fired == 0 and entry_fired == 0 and not run_errors and should_send_ok():
+if alerts_fired == 0 and inv_fired == 0 and not run_errors and should_send_ok():
     print("  Sending system OK email...")
     send_simple_email("System OK — No trade setups in last 3 hours", build_ok_email_html())
     system_status["last_ok_email_utc"] = utc_str()
@@ -1530,6 +1617,6 @@ save_json(SCAN_LOG_FILE, scan_log)
 save_json(SYSTEM_STATUS_FILE, system_status)
 save_visit_state()
 
-total_actions = alerts_fired + entry_fired
+total_actions = alerts_fired + inv_fired
 print(f"\nAlert log: {len(alert_log)} entries | Scan log: {len(scan_log)} entries")
-print(f"Scan complete. {alerts_fired} zone alert(s), {entry_fired} entry/invalidation(s).")
+print(f"Scan complete. {alerts_fired} zone alert(s), {inv_fired} invalidation(s).")
