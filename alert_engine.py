@@ -1320,9 +1320,39 @@ def run_invalidation_checks(current_prices):
     """
     Checks ALL pending alerts for invalidation using pure Python price checks.
     No Gemini calls. Uses current prices already fetched in Job 1.
-    Checks: invalidation levels, price-ran-away, 48h timeout.
+
+    CRITICAL: If entry price was reached AFTER the Trade Ready alert was sent,
+    the trade is LIVE. Invalidation is permanently skipped — the outcome checker
+    (SL vs TP1) handles live trades from here.
+
+    Checks (only if entry NOT yet filled):
+      1. Invalidation levels breached
+      2. Price ran away (2x risk distance beyond entry without filling)
+      3. 48-hour timeout (entry never reached)
     """
     fired = 0
+
+    # Pre-fetch M15 data once per pair that has pending alerts
+    pairs_with_pending = set()
+    for alert in alert_log:
+        if (alert.get("alert_type") == "zone"
+            and alert.get("outcome") == "pending"
+            and not alert.get("invalidation_email_sent")):
+            pairs_with_pending.add(alert.get("pair"))
+
+    m15_cache = {}
+    for pair_name in pairs_with_pending:
+        pc = get_pair_conf(pair_name)
+        if not pc:
+            continue
+        try:
+            df = clean_df(yf.download(pc["symbol"], period="5d",
+                                      interval="15m", progress=False))
+            if df is not None:
+                m15_cache[pair_name] = df
+        except Exception:
+            pass
+
     for alert in alert_log:
         try:
             if alert.get("alert_type") != "zone":
@@ -1330,6 +1360,10 @@ def run_invalidation_checks(current_prices):
             if alert.get("outcome") in ("win_tp1", "loss", "invalidated", "not_triggered"):
                 continue
             if alert.get("invalidation_email_sent"):
+                continue
+
+            # Already marked as filled on a previous scan — skip permanently
+            if alert.get("entry_filled"):
                 continue
 
             pair = alert.get("pair")
@@ -1342,6 +1376,33 @@ def run_invalidation_checks(current_prices):
                 continue
 
             dp = pair_conf.get("decimal_places", 5)
+
+            # ── Check if entry was filled AFTER the Trade Ready alert ─────
+            try:
+                entry_val = float(str(alert.get('entry', '0')).split('-')[0].strip() or 0)
+                bias_val  = str(alert.get('bias', '')).upper()
+                if entry_val > 0 and bias_val in ('LONG', 'SHORT'):
+                    alert_time = datetime.strptime(alert['timestamp_utc'], "%Y-%m-%d %H:%M")
+                    df_m15 = m15_cache.get(pair)
+                    if df_m15 is not None:
+                        for ts_c, row_c in df_m15.iterrows():
+                            ts_n = ts_c.replace(tzinfo=None) if hasattr(ts_c, 'tzinfo') and ts_c.tzinfo else ts_c
+                            if ts_n < alert_time:
+                                continue
+                            h_c = float(row_c['High']); l_c = float(row_c['Low'])
+                            if l_c <= entry_val <= h_c:
+                                alert["entry_filled"] = True
+                                alert["entry_filled_at"] = ts_n.strftime("%Y-%m-%d %H:%M")
+                                save_alert_log()
+                                print(f"    {pair}: Entry filled at {entry_val} on {ts_n.strftime('%d %b %H:%M')} — trade live, skipping invalidation")
+                                break
+            except Exception:
+                pass
+
+            if alert.get("entry_filled"):
+                continue
+
+            # ── Entry NOT filled — run invalidation checks ────────────────
             reason = None
 
             # Check 1: Invalidation levels breached
@@ -1352,7 +1413,7 @@ def run_invalidation_checks(current_prices):
             if inv_below and current_price < float(inv_below):
                 reason = f"Price ({fmt_price(current_price, pair_conf)}) broke below invalidation level ({fmt_price(float(inv_below), pair_conf)})"
 
-            # Check 2: Price ran away (2x risk distance beyond entry)
+            # Check 2: Price ran away (2x risk distance beyond entry without filling)
             if not reason:
                 try:
                     entry = float(str(alert.get('entry', '0')).split('-')[0].strip() or 0)
@@ -1367,7 +1428,7 @@ def run_invalidation_checks(current_prices):
                 except Exception:
                     pass
 
-            # Check 3: 48-hour timeout
+            # Check 3: 48-hour timeout (entry never reached)
             if not reason:
                 try:
                     alert_time = datetime.strptime(alert['timestamp_utc'], "%Y-%m-%d %H:%M")
@@ -1394,7 +1455,6 @@ def run_invalidation_checks(current_prices):
             print(f"    Invalidation check error ({alert.get('pair', '?')}): {e}")
 
     return fired
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN
