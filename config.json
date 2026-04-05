@@ -18,8 +18,7 @@
       "spread_pips": 1,
       "primary_session": "London",
       "structure_tf": ["H1"],
-      "extra_gate": null,
-      "near_entry_pct": 0.08
+      "extra_gate": null
     },
     {
       "symbol": "USDJPY=X",
@@ -33,8 +32,7 @@
       "spread_pips": 1,
       "primary_session": "Asian_London",
       "structure_tf": ["H1", "M15"],
-      "extra_gate": null,
-      "near_entry_pct": 0.08
+      "extra_gate": null
     },
     {
       "symbol": "NZDUSD=X",
@@ -48,8 +46,7 @@
       "spread_pips": 1.5,
       "primary_session": "Asian",
       "structure_tf": ["H1"],
-      "extra_gate": null,
-      "near_entry_pct": 0.08
+      "extra_gate": null
     },
     {
       "symbol": "NQ=F",
@@ -63,8 +60,21 @@
       "spread_pips": 2,
       "primary_session": "New_York",
       "structure_tf": ["H1", "M15"],
-      "extra_gate": null,
-      "near_entry_pct": 0.18
+      "extra_gate": null
+    },
+    {
+      "symbol": "GC=F",
+      "name": "GOLD",
+      "pair_type": "commodity",
+      "proximity_pct": 0.5,
+      "min_touches": 1,
+      "min_confidence": 7,
+      "min_sl_pips": 5.0,
+      "decimal_places": 2,
+      "spread_pips": 0.30,
+      "primary_session": "London_NY",
+      "structure_tf": ["H1"],
+      "extra_gate": "macro_alignment_required"
     }
   ],
   "zone_detection": {
@@ -87,6 +97,7 @@
     },
     "min_score_to_send": 7,
     "max_score": 10.0,
+    "atr_buffer_multiplier": 0.2,
     "news_blackout_hours_before": 2,
     "news_blackout_hours_after": 1,
     "zone_fatigue_threshold": 3
