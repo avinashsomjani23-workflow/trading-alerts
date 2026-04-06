@@ -6705,5 +6705,45 @@
     "zone": 4693.0,
     "status": "rejected_validation",
     "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "06 Apr 23:00 IST",
+    "time_utc": "2026-04-06 17:30",
+    "pair": "EURUSD",
+    "zone": 1.15458,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "06 Apr 23:00 IST",
+    "time_utc": "2026-04-06 17:30",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "06 Apr 23:00 IST",
+    "time_utc": "2026-04-06 17:30",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "06 Apr 23:00 IST",
+    "time_utc": "2026-04-06 17:30",
+    "pair": "NAS100",
+    "zone": 24283.79545,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "06 Apr 23:00 IST",
+    "time_utc": "2026-04-06 17:30",
+    "pair": "GOLD",
+    "zone": 4693.0,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
   }
 ]
