@@ -651,12 +651,23 @@ def validate_gemini_response(data, pair_conf, zone_label, current_price, atr_val
         entry = float(str(data.get("entry", 0)).split("-")[0].strip() or 0)
         sl    = float(data.get("sl", 0) or 0)
         tp1   = float(data.get("tp1", 0) or 0)
-        if entry <= 0 or sl <= 0 or tp1 <= 0:
-            return False, "Missing entry/SL/TP1 values", 0
         if bias == "LONG" and sl >= entry:
             return False, f"SL ({sl}) above entry ({entry}) for LONG", 0
         if bias == "SHORT" and sl <= entry:
             return False, f"SL ({sl}) below entry ({entry}) for SHORT", 0
+
+        # Python always calculates RR — never trust Gemini's numbers
+        risk = abs(entry - sl)
+        if risk > 0:
+            rr1 = abs(tp1 - entry) / risk
+            data["rr_tp1"] = f"{rr1:.1f}"
+            try:
+                tp2 = float(data.get("tp2", 0) or 0)
+                if tp2 > 0:
+                    rr2 = abs(tp2 - entry) / risk
+                    data["rr_tp2"] = f"{rr2:.1f}"
+            except Exception:
+                pass
     except Exception:
         return False, "Could not parse entry/SL/TP1", 0
 
