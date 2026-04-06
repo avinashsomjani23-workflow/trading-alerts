@@ -1445,8 +1445,9 @@ print(f"Alert engine started {ist_start} ({utc_str()} UTC)")
 
 run_errors    = []
 pairs_ok      = []
-alerts_fired  = 0
-current_prices = {}
+alerts_fired      = 0
+approaching_fired = 0
+current_prices    = {}
 
 market_open, market_status = is_market_open()
 print(f"  Market: {market_status}")
@@ -1618,6 +1619,7 @@ for pair_conf in config["pairs"]:
                          f"Approaching alert sent at score {score}/10.", zone_level)
                 record_approaching(name, zone_level)
 
+                approaching_fired += 1
                 zone_alerted = True
                 print(f"    → APPROACHING: {name} [{score}/10]")
 
@@ -1639,7 +1641,7 @@ inv_fired = run_invalidation_checks(current_prices)
 print(f"  Job 2 complete. {inv_fired} invalidation(s) sent.")
 
 # ── System status emails ──────────────────────────────────────────────────────
-if alerts_fired == 0 and inv_fired == 0 and not run_errors and should_send_ok():
+if alerts_fired == 0 and approaching_fired == 0 and inv_fired == 0 and not run_errors and should_send_ok():
     print("  Sending system OK email...")
     send_simple_email("System OK — No trade setups in last 3 hours", build_ok_email_html())
     system_status["last_ok_email_utc"] = utc_str()
