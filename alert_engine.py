@@ -480,8 +480,14 @@ SL: Place SL at OB wick extreme (low of OB candle for LONG, high for SHORT).
   Python will add a dynamic volatility buffer on top of your SL. Do NOT add buffer yourself.
   Just place SL at the exact OB wick extreme.
 TP1: Next significant opposing zone or liquidity pool. Must achieve 2:1 RR minimum.
-TP2: Second opposing zone beyond TP1.
+TP2: Second opposing zone beyond TP1. TP2 must be further from entry than TP1.
 PARTIAL CLOSE: Close 50% at TP1, move SL to breakeven, let remaining run to TP2.
+RR FORMULA — USE EXACTLY THIS:
+  risk = abs(entry - sl)
+  rr_tp1 = abs(tp1 - entry) / risk
+  rr_tp2 = abs(tp2 - entry) / risk
+  Both are measured from ENTRY, not from TP1. rr_tp2 MUST always be greater than rr_tp1.
+  If your numbers produce rr_tp2 <= rr_tp1, your TP2 placement is wrong. Fix it.
 
 ═══════════════════════════════════════════════════════════════
 TRIGGER & ENTRY READINESS:
@@ -1502,7 +1508,7 @@ for pair_conf in config["pairs"]:
         zone_alerted = False
 
         zones_by_dist = sorted(zones, key=lambda z: abs(current_price - z[0]))
-        for zone_level, touches in zones_by_dist[:1]:
+        for zone_level, touches in zones_by_dist[:2]:
             if zone_alerted:
                 break
 
@@ -1629,11 +1635,13 @@ for pair_conf in config["pairs"]:
                 log_scan(name, "approaching_sent",
                          f"Approaching alert sent at score {score}/10.", zone_level)
                 record_approaching(name, zone_level)
+                log_alert(name, round(zone_level, dp), zone_label,
+                          round(current_price, dp), data, pair_conf,
+                          "approaching", atr_value, 0, fatigue)
 
                 approaching_fired += 1
                 zone_alerted = True
                 print(f"    → APPROACHING: {name} [{score}/10]")
-
         if zones_in_proximity == 0:
             log_scan(name, "zone_outside_proximity",
                      "Zones detected but none near current price.")
