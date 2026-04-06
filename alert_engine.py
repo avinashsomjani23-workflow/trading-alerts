@@ -664,23 +664,8 @@ def validate_gemini_response(data, pair_conf, zone_label, current_price, atr_val
     except Exception:
         return False, "Could not parse entry/SL/TP1", 0
 
-    # ATR-based dynamic buffer
-    buffer = compute_sl_buffer(pair_conf, atr_value)
-    sl_dist = abs(entry - sl)
-
-    if sl_dist < buffer:
-        if bias == "LONG":
-            data["sl"] = round(entry - buffer, dp)
-        else:
-            data["sl"] = round(entry + buffer, dp)
-        data["sl_note"] = f"SL widened by ATR buffer ({buffer:.{dp}f}) for {name}. " + data.get("sl_note", "")
-        print(f"    SL buffered: {sl_dist:.{dp}f} → {buffer:.{dp}f} (ATR buffer for {name})")
-        new_sl   = float(data["sl"])
-        new_risk = abs(entry - new_sl)
-        new_rr   = abs(tp1 - entry) / new_risk if new_risk > 0 else 0
-        data["rr_tp1"] = f"{new_rr:.1f}"
-        if new_rr < 2.0:
-            return False, f"After ATR buffer, RR dropped to {new_rr:.1f} (below 2:1)", buffer
+    # SL widening removed — SL is taken as Gemini places it at OB wick extreme
+    buffer = 0
 
     # Bias matches zone type
     if "Demand" in zone_label and bias == "SHORT":
