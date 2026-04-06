@@ -341,7 +341,7 @@ def get_cached_macro_news():
     cache = load_json(MACRO_CACHE_FILE, {})
     return cache.get("news", "Macro news unavailable (cache miss).")
 
-def format_candles(df, label, n=20):
+def format_candles(df, label, n=40):
     if df is None or df.empty:
         return f"{label}: No data\n"
     lines = [f"{label} (last {n} candles):"]
@@ -408,8 +408,8 @@ PRICE FORMAT: {dp} decimal places for this pair.
 ATR(14, H1): {atr_str}
 
 CANDLE DATA:
-{format_candles(df1, "H1")}
-{format_candles(df2, "M15")}
+{format_candles(df1, "H1", n=20)}
+{format_candles(df2, "M15", n=40)}
 
 MACRO HEADLINES:
 {macro_news}
