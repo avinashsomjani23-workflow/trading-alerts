@@ -378,11 +378,7 @@ def build_zone_prompt(pair_conf, zone_level, zone_label, current_price,
     ist_time    = ist_now().strftime("%H:%M IST, %d %b %Y")
     atr_str     = f"{atr_value:.5f}" if atr_value else "unavailable"
 
-    if "M15" in structure_tf and "H1" in structure_tf:
-        tf_rule = "H1 BOS or H1 CHoCH or M15 BOS or M15 CHoCH — any ONE of these passes the gate."
-    else:
-        tf_rule = "H1 BOS or H1 CHoCH ONLY. M15 structure is NOT accepted for this pair."
-
+    tf_rule = "M15 BOS or M15 CHoCH ONLY. H1 structure alone does NOT pass this gate. You MUST cite a specific M15 candle timestamp and price where BOS or CHoCH occurred."
     extra_gate_text = ""
     if extra_gate == "liquidity_swept_required":
         extra_gate_text = (f"\nADDITIONAL HARD GATE FOR {name}: Liquidity MUST be swept before zone entry. "
