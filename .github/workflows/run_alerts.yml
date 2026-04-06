@@ -25,7 +25,7 @@ jobs:
           IST_DOW=$(TZ='Asia/Kolkata' date +%u)
           HOUR_NUM=$((10#$IST_HOUR))
           echo "IST time: $(TZ='Asia/Kolkata' date '+%A %H:%M')"
-          if [ "$IST_DOW" -ge 6 ] || [ "$HOUR_NUM" -lt 8 ]; then
+          if [ "$IST_DOW" -ge 6 ] || [ "$HOUR_NUM" -lt 9 ]; then
             echo "Blackout — skipping."
             echo "skip=true" >> $GITHUB_OUTPUT
           else
