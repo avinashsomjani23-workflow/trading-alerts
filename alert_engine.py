@@ -704,7 +704,40 @@ def validate_gemini_response(data, pair_conf, zone_label, current_price, atr_val
         data["invalidate_above"] = None
 
     return True, "OK", buffer
+# ── FVG fallback verifier ─────────────────────────────────────────────────────
+def verify_fvg(dfs, data):
+    """Check if Gemini's claimed FVG coordinates match a real 3-candle gap.
+    Loose tolerance — confirms the gap exists, not pixel-perfect."""
+    fvg_top = float(data.get('fvg_top', 0) or 0)
+    fvg_bottom = float(data.get('fvg_bottom', 0) or 0)
+    if fvg_top <= 0 or fvg_bottom <= 0:
+        return False
+    gap_size = abs(fvg_top - fvg_bottom)
+    if gap_size <= 0:
+        return False
+    tolerance = gap_size * 1.0  # 100% of gap size — loose
 
+    verifiable = False
+    for df in dfs:
+        if df is None or len(df) < 3:
+            continue
+        verifiable = True
+        for i in range(2, len(df)):
+            try:
+                c1_h = float(df['High'].iloc[i-2]); c1_l = float(df['Low'].iloc[i-2])
+                c3_h = float(df['High'].iloc[i]);    c3_l = float(df['Low'].iloc[i])
+                # Bearish FVG
+                if c1_l > c3_h:
+                    if abs(c1_l - fvg_top) <= tolerance and abs(c3_h - fvg_bottom) <= tolerance:
+                        return True
+                # Bullish FVG
+                if c1_h < c3_l:
+                    if abs(c3_l - fvg_top) <= tolerance and abs(c1_h - fvg_bottom) <= tolerance:
+                        return True
+            except Exception:
+                continue
+    # If no data to verify against, give benefit of doubt
+    return not verifiable
 
 # ── Chart generation — clean, no volume, smart labels ─────────────────────────
 def generate_chart(df, title, levels, data, pair_conf):
@@ -1562,6 +1595,19 @@ for pair_conf in config["pairs"]:
                 print(f"    {name} blocked by validation: {reason}")
                 log_scan(name, "rejected_validation", reason, zone_level)
                 continue
+
+            # FVG fallback: clamp score if Gemini's claimed FVG doesn't exist in candle data
+            fvg_pts = float(data.get("score_breakdown", {}).get("fvg_overlaps_ob", 0))
+            if fvg_pts > 0 and not verify_fvg([df2, df1], data):
+                print(f"    FVG not confirmed in candle data — clamping fvg_overlaps_ob to 0")
+                data["score_breakdown"]["fvg_overlaps_ob"] = 0
+                data["fvg_confirmed"] = False
+                data["fvg_top"] = 0
+                data["fvg_bottom"] = 0
+                data["confidence_score"] = round(
+                    sum(float(v) for v in data["score_breakdown"].values()), 1)
+
+            score = data.get("confidence_score", 0)
 
             score = data.get("confidence_score", 0)
 
