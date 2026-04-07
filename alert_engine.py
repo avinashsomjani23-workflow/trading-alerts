@@ -1331,8 +1331,7 @@ def run_invalidation_checks(current_prices):
 
     Checks (only if entry NOT yet filled):
       1. Invalidation levels breached
-      2. Price ran away (2x risk distance beyond entry without filling)
-      3. 48-hour timeout (entry never reached)
+      2. 48-hour timeout (entry never reached)
     """
     fired = 0
 
@@ -1417,22 +1416,7 @@ def run_invalidation_checks(current_prices):
             if inv_below and current_price < float(inv_below):
                 reason = f"Price ({fmt_price(current_price, pair_conf)}) broke below invalidation level ({fmt_price(float(inv_below), pair_conf)})"
 
-            # Check 2: Price ran away (2x risk distance beyond entry without filling)
-            if not reason:
-                try:
-                    entry = float(str(alert.get('entry', '0')).split('-')[0].strip() or 0)
-                    sl    = float(alert.get('sl', 0) or 0)
-                    bias  = str(alert.get('bias', '')).upper()
-                    if entry > 0 and sl > 0 and bias in ('LONG', 'SHORT'):
-                        risk_dist = abs(entry - sl)
-                        if bias == "LONG" and current_price > entry + (2 * risk_dist):
-                            reason = f"Price ran away above entry — now {fmt_price(current_price, pair_conf)}, entry was {fmt_price(entry, pair_conf)}. Retest window closed."
-                        elif bias == "SHORT" and current_price < entry - (2 * risk_dist):
-                            reason = f"Price ran away below entry — now {fmt_price(current_price, pair_conf)}, entry was {fmt_price(entry, pair_conf)}. Retest window closed."
-                except Exception:
-                    pass
-
-            # Check 3: 48-hour timeout (entry never reached)
+            # Check 2: 48-hour timeout (entry never reached)
             if not reason:
                 try:
                     alert_time = datetime.strptime(alert['timestamp_utc'], "%Y-%m-%d %H:%M")
