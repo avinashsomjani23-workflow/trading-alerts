@@ -363,10 +363,49 @@ def format_candles(df, label, n=40):
             pass
     return "\n".join(lines) + "\n"
 
+def _format_fvgs_for_prompt(fvgs, zone_level, pair_conf, max_show=5):
+    """Format Python-detected FVGs for Gemini prompt — near the zone only."""
+    if not fvgs:
+        return "  None detected on M15."
+    dp = pair_conf.get("decimal_places", 5)
+    prox = pair_conf.get("proximity_pct", 0.5) * 3  # wider window for context
+    nearby = [f for f in fvgs
+              if abs(((f['fvg_top'] + f['fvg_bottom']) / 2) - zone_level)
+              / zone_level * 100 < prox]
+    if not nearby:
+        nearby = fvgs[-max_show:]  # fallback: most recent
+    nearby = nearby[-max_show:]
+    lines = []
+    for f in nearby:
+        lines.append(f"  [{f['type'].upper()}] top={f['fvg_top']:.{dp}f} "
+                     f"bottom={f['fvg_bottom']:.{dp}f} "
+                     f"| candles: {f['c1_ts']} → {f['c3_ts']}")
+    return "\n".join(lines) if lines else "  None near zone."
 
+
+def _format_obs_for_prompt(obs, zone_level, pair_conf, max_show=5):
+    """Format Python-detected OBs for Gemini prompt — near the zone only."""
+    if not obs:
+        return "  None detected on M15."
+    dp = pair_conf.get("decimal_places", 5)
+    prox = pair_conf.get("proximity_pct", 0.5) * 3
+    nearby = [o for o in obs
+              if abs(((o['ob_top'] + o['ob_bottom']) / 2) - zone_level)
+              / zone_level * 100 < prox]
+    if not nearby:
+        nearby = obs[-max_show:]
+    nearby = nearby[-max_show:]
+    lines = []
+    for o in nearby:
+        lines.append(f"  [{o['type'].upper()} OB] top={o['ob_top']:.{dp}f} "
+                     f"bottom={o['ob_bottom']:.{dp}f} "
+                     f"body={o['ob_body_bottom']:.{dp}f}–{o['ob_body_top']:.{dp}f} "
+                     f"| candle: {o['ts']}")
+    return "\n".join(lines) if lines else "  None near zone."    
 # ── Gemini prompt ─────────────────────────────────────────────────────────────
 def build_zone_prompt(pair_conf, zone_level, zone_label, current_price,
-                      macro_news, df1, df2, fatigue_count, atr_value):
+                      macro_news, df1, df2, fatigue_count, atr_value,
+                      python_fvgs=None, python_obs=None):
     name        = pair_conf["name"]
     pair_type   = pair_conf.get("pair_type", "forex")
     dp          = pair_conf.get("decimal_places", 5)
@@ -421,12 +460,29 @@ GATE 1 — STRUCTURE: {tf_rule}
   You MUST cite the specific candle timestamp and price where BOS or CHoCH occurred.
   If you cannot identify a specific candle, this gate FAILS.
 
-GATE 2 — VALID ORDER BLOCK: A valid OB must exist at or near the zone.
-  You MUST cite ob_top, ob_bottom, and the candle that formed the OB.
-  If no OB is identifiable, this gate FAILS.
+GATE 2 — VALID ORDER BLOCK:
+Python has already detected the following valid, unmitigated OBs from M15 candle data.
+These are mathematically exact. Your job is to select the most relevant one near the zone.
 
-GATE 3 — RISK:REWARD: R:R to TP1 must be at least 2.0:1.
-  Calculate from entry to TP1 vs entry to SL. If below 2:1, this gate FAILS.
+PYTHON-DETECTED OBs (M15):
+{_format_obs_for_prompt(python_obs, zone_level, pair_conf)}
+
+Select the OB nearest the zone and most aligned with bias. Return its exact ob_top and ob_bottom
+as provided above — do not modify these values. If no OB from this list suits the setup,
+set gate_ob to false and send_alert to false.
+  
+GATE 3 — RISK:REWARD: You MUST do this arithmetic explicitly before deciding:
+  entry = midpoint of OB candle body
+  sl = OB wick extreme (low for LONG, high for SHORT)
+  risk = abs(entry - sl)
+  reward_tp1 = abs(first_opposing_zone - entry)
+  rr = reward_tp1 / risk
+
+  Show your calculation in gate_rr like this: "entry=4693.10, sl=4721.20, risk=28.10, tp1=4684.00, reward=9.10, rr=0.32 → FAIL"
+  If rr < 2.0, this gate FAILS. Return short-form JSON immediately.
+
+  IMPORTANT: If your OB is wide (large risk), your TP1 must be proportionally far away.
+  A wide OB with a nearby TP1 will always fail this gate. Do not adjust your SL to manufacture RR.
 {extra_gate_text}
 
 ═══════════════════════════════════════════════════════════════
@@ -439,14 +495,16 @@ WEIGHTED SCORECARD — SCORE OUT OF 10 (minimum {min_conf} to send):
    0   = No visible sweep. Prior swing extremes untested.
 
 2. FVG OVERLAPS OB (2.0 pts):
-   A Fair Value Gap is a THREE-CANDLE pattern with a genuine price gap:
-   - BEARISH FVG: Candle 1's LOW > Candle 3's HIGH. fvg_top = Candle 1 Low, fvg_bottom = Candle 3 High.
-   - BULLISH FVG: Candle 1's HIGH < Candle 3's LOW. fvg_top = Candle 3 Low, fvg_bottom = Candle 1 High.
-   The middle candle (Candle 2) is the impulse that created the gap.
-   If Candle 1's low/high overlaps with Candle 3's high/low, there is NO gap and NO FVG.
-   2.0 = A valid 3-candle FVG exists AND overlaps the OB. Cite the 3 candle timestamps, fvg_top, fvg_bottom.
-   0   = No valid 3-candle gap found, or gap does not overlap OB. Set fvg_top and fvg_bottom to 0.
-   Do NOT fabricate an FVG. If no real gap exists, score 0 and set both fvg fields to 0.
+Python has already detected the following valid FVGs from M15 candle data.
+These coordinates are mathematically exact from real OHLC values.
+
+PYTHON-DETECTED FVGs (M15):
+{_format_fvgs_for_prompt(python_fvgs, zone_level, pair_conf)}
+
+   2.0 = A FVG from the list above overlaps the selected OB. Return its exact fvg_top and
+         fvg_bottom from the list — do not modify these values.
+   0   = No FVG from the list overlaps the OB, or the list is empty.
+         Set fvg_top and fvg_bottom to 0. Do NOT invent coordinates.
 
 3. PREMIUM/DISCOUNT ZONE (1.5 pts):
    1.5 = For SHORT: price is above the 50% mark of the recent range (premium). For LONG: below 50% (discount).
@@ -627,7 +685,8 @@ def call_gemini(prompt, max_retries=2):
     return None, "Gemini failed after all retries"
 
 # ── Python post-validation ────────────────────────────────────────────────────
-def validate_gemini_response(data, pair_conf, zone_label, current_price, atr_value):
+def validate_gemini_response(data, pair_conf, zone_label, current_price, atr_value,
+                              python_fvgs=None, python_obs=None):
     """
     Validates Gemini's JSON response. Returns (is_valid, reason, buffer_applied).
     Checks: gates, score math, SL sanity, bias sanity, ATR-based buffer.
@@ -673,17 +732,56 @@ def validate_gemini_response(data, pair_conf, zone_label, current_price, atr_val
         risk = abs(entry - sl)
         if risk > 0:
             rr1 = abs(tp1 - entry) / risk
-            data["rr_tp1"] = f"{rr1:.1f}"
+            data["rr_tp1"] = f"{rr1:.2f}"
+            if rr1 < 2.0:
+                return False, f"Python hard-gate: RR is {rr1:.2f}:1 — minimum is 2.0:1. " \
+                      f"entry={entry}, sl={sl}, tp1={tp1}, risk={risk:.5f}", 0
             try:
                 tp2 = float(data.get("tp2", 0) or 0)
                 if tp2 > 0:
                     rr2 = abs(tp2 - entry) / risk
-                    data["rr_tp2"] = f"{rr2:.1f}"
+                    data["rr_tp2"] = f"{rr2:.2f}"
             except Exception:
                 pass
-    except Exception:
-        return False, "Could not parse entry/SL/TP1", 0
+            except Exception:
+                return False, "Could not parse entry/SL/TP1", 0
+                
+# ── FVG verification against Python-detected list ─────────────────────
+    fvg_pts = float(data.get("score_breakdown", {}).get("fvg_overlaps_ob", 0))
+    if fvg_pts > 0 and python_fvgs is not None:
+        g_top = float(data.get("fvg_top", 0) or 0)
+        g_bot = float(data.get("fvg_bottom", 0) or 0)
+        if g_top <= 0 or g_bot <= 0:
+            # Gemini claimed FVG but gave no coordinates
+            print(f"    FVG score claimed but coordinates empty — zeroing fvg_overlaps_ob")
+            data["score_breakdown"]["fvg_overlaps_ob"] = 0
+            data["fvg_confirmed"] = False
+        else:
+            matched = any(
+                abs(f["fvg_top"] - g_top) < 0.01 and abs(f["fvg_bottom"] - g_bot) < 0.01
+                for f in python_fvgs
+            )
+            if not matched:
+                print(f"    FVG coordinates ({g_top}, {g_bot}) not in Python-detected list — zeroing")
+                data["score_breakdown"]["fvg_overlaps_ob"] = 0
+                data["fvg_confirmed"] = False
+                data["fvg_top"] = 0
+                data["fvg_bottom"] = 0
+        data["confidence_score"] = round(
+            sum(float(v) for v in data["score_breakdown"].values()), 1)
 
+    # ── OB verification against Python-detected list ──────────────────────
+    if python_obs is not None:
+        g_ob_top = float(data.get("ob_top", 0) or 0)
+        g_ob_bot = float(data.get("ob_bottom", 0) or 0)
+        if g_ob_top <= 0 or g_ob_bot <= 0:
+            return False, "Gate 2 failed: OB coordinates missing from Gemini response", 0
+        matched_ob = any(
+            abs(o["ob_top"] - g_ob_top) < 0.01 and abs(o["ob_bottom"] - g_ob_bot) < 0.01
+            for o in python_obs
+        )
+        if not matched_ob:
+            return False, f"Gate 2 failed: OB ({g_ob_top}, {g_ob_bot}) not in Python-detected list — Gemini fabricated", 0
     # SL widening removed — SL is taken as Gemini places it at OB wick extreme
     buffer = 0
 
@@ -705,39 +803,97 @@ def validate_gemini_response(data, pair_conf, zone_label, current_price, atr_val
 
     return True, "OK", buffer
 # ── FVG fallback verifier ─────────────────────────────────────────────────────
-def verify_fvg(dfs, data):
-    """Check if Gemini's claimed FVG coordinates match a real 3-candle gap.
-    Loose tolerance — confirms the gap exists, not pixel-perfect."""
-    fvg_top = float(data.get('fvg_top', 0) or 0)
-    fvg_bottom = float(data.get('fvg_bottom', 0) or 0)
-    if fvg_top <= 0 or fvg_bottom <= 0:
-        return False
-    gap_size = abs(fvg_top - fvg_bottom)
-    if gap_size <= 0:
-        return False
-    tolerance = gap_size * 1.0  # 100% of gap size — loose
-
-    verifiable = False
-    for df in dfs:
-        if df is None or len(df) < 3:
+def detect_fvgs(df):
+    """
+    Detect all FVGs using strict SMC arithmetic.
+    Bearish FVG: candle[i].Low > candle[i+2].High — gap between them.
+    Bullish FVG: candle[i].High < candle[i+2].Low — gap between them.
+    No approximation. Binary condition on exact OHLC values.
+    """
+    fvgs = []
+    if df is None or len(df) < 3:
+        return fvgs
+    for i in range(len(df) - 2):
+        try:
+            c1_h = float(df['High'].iloc[i])
+            c1_l = float(df['Low'].iloc[i])
+            c3_h = float(df['High'].iloc[i + 2])
+            c3_l = float(df['Low'].iloc[i + 2])
+            if c1_l > c3_h:  # Bearish FVG
+                fvgs.append({
+                    'type': 'bearish',
+                    'fvg_top':    round(c1_l, 6),
+                    'fvg_bottom': round(c3_h, 6),
+                    'c1_ts': str(df.index[i]),
+                    'c3_ts': str(df.index[i + 2]),
+                    'idx': i
+                })
+            elif c1_h < c3_l:  # Bullish FVG
+                fvgs.append({
+                    'type': 'bullish',
+                    'fvg_top':    round(c3_l, 6),
+                    'fvg_bottom': round(c1_h, 6),
+                    'c1_ts': str(df.index[i]),
+                    'c3_ts': str(df.index[i + 2]),
+                    'idx': i
+                })
+        except Exception:
             continue
-        verifiable = True
-        for i in range(2, len(df)):
+    return fvgs
+
+
+def detect_obs(df, fvgs):
+    """
+    Detect OBs using strict SMC definition:
+    OB = last opposing candle before the impulse candle that created a given FVG.
+    Bearish OB: last bullish candle (close > open) before a bearish FVG.
+    Bullish OB: last bearish candle (close < open) before a bullish FVG.
+    Mitigated OBs (price fully closed through body) are excluded.
+    """
+    obs = []
+    seen_idx = set()
+    if df is None or len(df) == 0:
+        return obs
+    current_close = float(df['Close'].iloc[-1])
+
+    for fvg in fvgs:
+        fvg_idx  = fvg['idx']
+        fvg_type = fvg['type']
+        for j in range(fvg_idx, -1, -1):
             try:
-                c1_h = float(df['High'].iloc[i-2]); c1_l = float(df['Low'].iloc[i-2])
-                c3_h = float(df['High'].iloc[i]);    c3_l = float(df['Low'].iloc[i])
-                # Bearish FVG
-                if c1_l > c3_h:
-                    if abs(c1_l - fvg_top) <= tolerance and abs(c3_h - fvg_bottom) <= tolerance:
-                        return True
-                # Bullish FVG
-                if c1_h < c3_l:
-                    if abs(c3_l - fvg_top) <= tolerance and abs(c1_h - fvg_bottom) <= tolerance:
-                        return True
+                o = float(df['Open'].iloc[j])
+                c = float(df['Close'].iloc[j])
+                h = float(df['High'].iloc[j])
+                l = float(df['Low'].iloc[j])
+                is_opposing = (fvg_type == 'bearish' and c > o) or \
+                              (fvg_type == 'bullish' and c < o)
+                if not is_opposing:
+                    continue
+                if j in seen_idx:
+                    break
+                ob_body_top = max(o, c)
+                ob_body_bot = min(o, c)
+                # Mitigation check — if price already closed through body, OB is dead
+                if fvg_type == 'bearish' and current_close > ob_body_top:
+                    break
+                if fvg_type == 'bullish' and current_close < ob_body_bot:
+                    break
+                seen_idx.add(j)
+                obs.append({
+                    'type':            'bearish' if fvg_type == 'bearish' else 'bullish',
+                    'ob_top':          round(h, 6),
+                    'ob_bottom':       round(l, 6),
+                    'ob_body_top':     round(ob_body_top, 6),
+                    'ob_body_bottom':  round(ob_body_bot, 6),
+                    'ts':              str(df.index[j]),
+                    'idx':             j,
+                    'related_fvg_top':    fvg['fvg_top'],
+                    'related_fvg_bottom': fvg['fvg_bottom']
+                })
+                break
             except Exception:
                 continue
-    # If no data to verify against, give benefit of doubt
-    return not verifiable
+    return obs
 
 # ── Chart generation — clean, no volume, smart labels ─────────────────────────
 def generate_chart(df, title, levels, data, pair_conf):
@@ -1571,12 +1727,18 @@ for pair_conf in config["pairs"]:
             print(f"    ZONE HIT: {name} {zone_label} @ {zone_level:.{dp}f} "
                   f"dist:{dist_pct:.2f}% fatigue:{fatigue}")
 
+            python_fvgs = detect_fvgs(df2)
+            python_obs  = detect_obs(df2, python_fvgs)
+            print(f"    Python detected: {len(python_fvgs)} FVGs, {len(python_obs)} OBs on M15")
+
             prompt = build_zone_prompt(
                 pair_conf,
                 round(zone_level, dp),
                 zone_label,
                 round(current_price, dp),
-                macro_news, df1, df2, fatigue, atr_value
+                macro_news, df1, df2, fatigue, atr_value,
+                python_fvgs=python_fvgs,
+                python_obs=python_obs
             )
 
             data, error = call_gemini(prompt)
@@ -1589,23 +1751,13 @@ for pair_conf in config["pairs"]:
 
             # ── Python post-validation ────────────────────────────────────
             is_valid, reason, buffer_applied = validate_gemini_response(
-                data, pair_conf, zone_label, current_price, atr_value)
+                data, pair_conf, zone_label, current_price, atr_value,
+                python_fvgs=python_fvgs, python_obs=python_obs)
 
             if not is_valid:
                 print(f"    {name} blocked by validation: {reason}")
                 log_scan(name, "rejected_validation", reason, zone_level)
                 continue
-
-            # FVG fallback: clamp score if Gemini's claimed FVG doesn't exist in candle data
-            fvg_pts = float(data.get("score_breakdown", {}).get("fvg_overlaps_ob", 0))
-            if fvg_pts > 0 and not verify_fvg([df2, df1], data):
-                print(f"    FVG not confirmed in candle data — clamping fvg_overlaps_ob to 0")
-                data["score_breakdown"]["fvg_overlaps_ob"] = 0
-                data["fvg_confirmed"] = False
-                data["fvg_top"] = 0
-                data["fvg_bottom"] = 0
-                data["confidence_score"] = round(
-                    sum(float(v) for v in data["score_breakdown"].values()), 1)
 
             score = data.get("confidence_score", 0)
 
