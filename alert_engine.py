@@ -601,8 +601,9 @@ def call_gemini(prompt, max_retries=2):
             if "candidates" not in result:
                 err_code = result.get("error", {}).get("code", 0)
                 if err_code in (429, 503) and attempt < max_retries:
-                    wait = 10 * (attempt + 1)
-                    print(f"    Gemini rate limit — retrying in {wait}s (attempt {attempt+1}/{max_retries})...")
+                    wait = 15 * (attempt + 1)
+                    label = "rate limit" if err_code == 429 else "server overload (503)"
+                    print(f"    Gemini {label} — retrying in {wait}s (attempt {attempt+1}/{max_retries})...")
                     time.sleep(wait)
                     continue
                 return None, f"Gemini error (code {err_code}): {result.get('error', {}).get('message', 'Unknown')}"
