@@ -7476,5 +7476,74 @@
     "entry_alert_sent_at": "2026-04-07 06:01",
     "entry_alert_price": 4665.0,
     "invalidation_email_sent": true
+  },
+  {
+    "id": "GOLD_1775555154",
+    "alert_type": "zone",
+    "alert_stage": "trade_ready",
+    "pair": "GOLD",
+    "pair_type": "commodity",
+    "timestamp_utc": "2026-04-07 09:45",
+    "ist_time": "15:15",
+    "zone_level": 4729.75,
+    "zone_label": "Supply",
+    "bias": "SHORT",
+    "entry": 4716.75,
+    "entry_model": "limit",
+    "entry_ready_now": true,
+    "trigger_status": "ready",
+    "trigger_tf": "M15",
+    "trigger_kind": "choch",
+    "trigger": "M15 07 Apr 15:00 IST candle closed C:4707.60010, breaking structure of prior low (4709.29980) after a liquidity sweep.",
+    "invalidate_above": null,
+    "invalidate_below": 4721.2,
+    "invalid_if": "Price closes above 4721.20 (OB high)",
+    "sl": 4721.2,
+    "tp1": 4694.0,
+    "tp2": 4677.89,
+    "rr_tp1": "5.1",
+    "confidence_score": 7.5,
+    "score_breakdown": {
+      "liquidity_swept": 2.5,
+      "fvg_overlaps_ob": 2.0,
+      "premium_discount": 1.5,
+      "multi_tf_alignment": 0.5,
+      "zone_freshness": 1.0,
+      "no_high_impact_news": 0.0,
+      "session_alignment": 0.0
+    },
+    "confluences": [
+      "Price reacted strongly to the supply zone after sweeping previous highs (M15 14:45 IST H:4721.20020).",
+      "A clear M15 bearish CHoCH confirms the short-term shift in market structure (M15 15:00 IST C:4707.60010 broke 14:45 IST L:4709.29980).",
+      "Fair Value Gap present within the Order Block, acting as a magnet for price to retrace for entry.",
+      "Price is currently trading in a premium, suitable for short entries."
+    ],
+    "missing": [
+      {
+        "item": "Multi-Timeframe Alignment",
+        "reason": "H1 did not show a clear CHoCH or BOS in the bearish direction yet; only M15 confirmation is present."
+      },
+      {
+        "item": "Session Alignment",
+        "reason": "15:15 IST is outside of the peak liquidity for Gold trading (London/NY overlap)."
+      },
+      {
+        "item": "No High-Impact News",
+        "reason": "Major geopolitical events are currently active, introducing significant market volatility and unpredictability for Gold."
+      }
+    ],
+    "geo_flag": true,
+    "news_flag": "High-impact geopolitical news related to Iran/US conflict, including Trump's threats and ceasefire deadline.",
+    "atr_h1": 23.72862,
+    "buffer_applied": null,
+    "zone_tests_30d": 1,
+    "approaching_sent_at": null,
+    "outcome": "invalidated",
+    "outcome_price": null,
+    "outcome_checked_at": "2026-04-07 09:45",
+    "entry_alert_sent": true,
+    "entry_alert_sent_at": "2026-04-07 09:45",
+    "entry_alert_price": 4707.6,
+    "invalidation_email_sent": true
   }
 ]
