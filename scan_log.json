@@ -9025,5 +9025,53 @@
     "zone": 4671.3999,
     "status": "error",
     "reason": "Gemini returned invalid JSON: Expecting value: line 1 column 1 (char 0)"
+  },
+  {
+    "time_ist": "07 Apr 21:01 IST",
+    "time_utc": "2026-04-07 15:31",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "07 Apr 21:01 IST",
+    "time_utc": "2026-04-07 15:31",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "07 Apr 21:01 IST",
+    "time_utc": "2026-04-07 15:31",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "07 Apr 21:01 IST",
+    "time_utc": "2026-04-07 15:31",
+    "pair": "NAS100",
+    "zone": 23978.75,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "07 Apr 21:01 IST",
+    "time_utc": "2026-04-07 15:31",
+    "pair": "GOLD",
+    "zone": 4671.3999,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "07 Apr 21:01 IST",
+    "time_utc": "2026-04-07 15:31",
+    "pair": "GOLD",
+    "zone": 4693.0,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
   }
 ]
