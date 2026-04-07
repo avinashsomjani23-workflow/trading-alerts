@@ -7545,5 +7545,65 @@
     "entry_alert_sent_at": "2026-04-07 09:45",
     "entry_alert_price": 4707.6,
     "invalidation_email_sent": true
+  },
+  {
+    "id": "GOLD_1775565075",
+    "alert_type": "zone",
+    "alert_stage": "trade_ready",
+    "pair": "GOLD",
+    "pair_type": "commodity",
+    "timestamp_utc": "2026-04-07 12:31",
+    "ist_time": "18:01",
+    "zone_level": 4693.0,
+    "zone_label": "Supply",
+    "bias": "SHORT",
+    "entry": 4693.1,
+    "entry_model": "limit",
+    "entry_ready_now": true,
+    "trigger_status": "ready",
+    "trigger_tf": "M15",
+    "trigger_kind": "engulf",
+    "trigger": "M15 07 Apr 15:00 IST candle O:4713.10010 H:4714.10010 L:4690.39990 C:4693.10010 engulfed the prior bullish candles and closed below the OB, showing immediate rejection.",
+    "invalidate_above": 4721.2,
+    "invalidate_below": null,
+    "invalid_if": "Price closes above 4721.20 (H of 07 Apr 14:45 M15 candle).",
+    "sl": 4721.2,
+    "tp1": 4684.0,
+    "tp2": 4668.0,
+    "rr_tp1": "0.3",
+    "confidence_score": 8.0,
+    "score_breakdown": {
+      "liquidity_swept": 2.5,
+      "fvg_overlaps_ob": 2.0,
+      "premium_discount": 1.5,
+      "multi_tf_alignment": 0.5,
+      "zone_freshness": 1.0,
+      "no_high_impact_news": 0.0,
+      "session_alignment": 0.5
+    },
+    "confluences": [
+      "Liquidity sweep above previous swing high (4717.60 at 07 Apr 13:45 H, then 4721.20 at 07 Apr 14:45 H) confirmed by 07 Apr 14:45 M15 candle wick.",
+      "M15 BOS to the downside, breaking the bullish structure (07 Apr 15:00 IST candle closing at 4693.10, below previous low of 4696.60 (07 Apr 15:15 C, corrected from M15 07 Apr 15:30 candle C:4702.89990 as it is still above previous low))",
+      "FVG (07 Apr 15:00 M15 to 07 Apr 15:15 M15) overlaps with the OB."
+    ],
+    "missing": [
+      {
+        "item": "H1 Structural Confirmation",
+        "reason": "H1 structure is currently bullish/ranging, not aligning with short bias."
+      }
+    ],
+    "geo_flag": true,
+    "news_flag": "Trump's threats on Iran",
+    "atr_h1": 28.028669,
+    "buffer_applied": null,
+    "zone_tests_30d": 0,
+    "approaching_sent_at": null,
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null,
+    "entry_alert_sent": true,
+    "entry_alert_sent_at": "2026-04-07 12:31",
+    "entry_alert_price": 4684.8,
+    "invalidation_email_sent": false
   }
 ]
