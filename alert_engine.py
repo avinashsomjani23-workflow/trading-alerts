@@ -439,8 +439,14 @@ WEIGHTED SCORECARD — SCORE OUT OF 10 (minimum {min_conf} to send):
    0   = No visible sweep. Prior swing extremes untested.
 
 2. FVG OVERLAPS OB (2.0 pts):
-   2.0 = A Fair Value Gap overlaps with the Order Block range. Cite fvg_top and fvg_bottom.
-   0   = No FVG found within or overlapping the OB range.
+   A Fair Value Gap is a THREE-CANDLE pattern with a genuine price gap:
+   - BEARISH FVG: Candle 1's LOW > Candle 3's HIGH. fvg_top = Candle 1 Low, fvg_bottom = Candle 3 High.
+   - BULLISH FVG: Candle 1's HIGH < Candle 3's LOW. fvg_top = Candle 3 Low, fvg_bottom = Candle 1 High.
+   The middle candle (Candle 2) is the impulse that created the gap.
+   If Candle 1's low/high overlaps with Candle 3's high/low, there is NO gap and NO FVG.
+   2.0 = A valid 3-candle FVG exists AND overlaps the OB. Cite the 3 candle timestamps, fvg_top, fvg_bottom.
+   0   = No valid 3-candle gap found, or gap does not overlap OB. Set fvg_top and fvg_bottom to 0.
+   Do NOT fabricate an FVG. If no real gap exists, score 0 and set both fvg fields to 0.
 
 3. PREMIUM/DISCOUNT ZONE (1.5 pts):
    1.5 = For SHORT: price is above the 50% mark of the recent range (premium). For LONG: below 50% (discount).
@@ -686,6 +692,16 @@ def validate_gemini_response(data, pair_conf, zone_label, current_price, atr_val
         return False, "SHORT bias at Demand zone — contradictory", buffer
     if "Supply" in zone_label and bias == "LONG":
         return False, "LONG bias at Supply zone — contradictory", buffer
+
+    # Directional cleanup: null out invalidation fields that contradict the bias
+    # SHORT profits from price falling — invalidate_below is nonsensical
+    # LONG profits from price rising — invalidate_above is nonsensical
+    if bias == "SHORT" and data.get("invalidate_below") is not None:
+        print(f"    Nulled invalidate_below for SHORT (was {data['invalidate_below']})")
+        data["invalidate_below"] = None
+    if bias == "LONG" and data.get("invalidate_above") is not None:
+        print(f"    Nulled invalidate_above for LONG (was {data['invalidate_above']})")
+        data["invalidate_above"] = None
 
     return True, "OK", buffer
 
@@ -1408,12 +1424,15 @@ def run_invalidation_checks(current_prices):
             # ── Entry NOT filled — run invalidation checks ────────────────
             reason = None
 
-            # Check 1: Invalidation levels breached
+            # Check 1: Invalidation levels breached (direction-aware)
+            # SHORT: only invalidate_above matters (price breaking UP = setup dead)
+            # LONG: only invalidate_below matters (price breaking DOWN = setup dead)
+            bias_dir = str(alert.get("bias", "")).upper()
             inv_above = alert.get("invalidate_above")
             inv_below = alert.get("invalidate_below")
-            if inv_above and current_price > float(inv_above):
+            if inv_above and current_price > float(inv_above) and bias_dir != "LONG":
                 reason = f"Price ({fmt_price(current_price, pair_conf)}) broke above invalidation level ({fmt_price(float(inv_above), pair_conf)})"
-            if inv_below and current_price < float(inv_below):
+            if inv_below and current_price < float(inv_below) and bias_dir != "SHORT":
                 reason = f"Price ({fmt_price(current_price, pair_conf)}) broke below invalidation level ({fmt_price(float(inv_below), pair_conf)})"
 
             # Check 2: 48-hour timeout (entry never reached)
