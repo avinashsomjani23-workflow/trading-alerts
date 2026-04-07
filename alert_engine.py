@@ -600,7 +600,7 @@ def call_gemini(prompt, max_retries=2):
             result = r.json()
             if "candidates" not in result:
                 err_code = result.get("error", {}).get("code", 0)
-                if err_code == 429 and attempt < max_retries:
+                if err_code in (429, 503) and attempt < max_retries:
                     wait = 10 * (attempt + 1)
                     print(f"    Gemini rate limit — retrying in {wait}s (attempt {attempt+1}/{max_retries})...")
                     time.sleep(wait)
