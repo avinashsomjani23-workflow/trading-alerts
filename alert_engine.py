@@ -745,8 +745,8 @@ def validate_gemini_response(data, pair_conf, zone_label, current_price, atr_val
                 pass
             except Exception:
                 return False, "Could not parse entry/SL/TP1", 0
-                
-# ── FVG verification against Python-detected list ─────────────────────
+
+    # ── FVG verification against Python-detected list ─────────────────────
     fvg_pts = float(data.get("score_breakdown", {}).get("fvg_overlaps_ob", 0))
     if fvg_pts > 0 and python_fvgs is not None:
         g_top = float(data.get("fvg_top", 0) or 0)
