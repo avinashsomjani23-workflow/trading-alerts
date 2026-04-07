@@ -6865,5 +6865,53 @@
     "zone": 4693.0,
     "status": "rejected_validation",
     "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "07 Apr 09:31 IST",
+    "time_utc": "2026-04-07 04:01",
+    "pair": "EURUSD",
+    "zone": 1.15475,
+    "status": "error",
+    "reason": "Gemini error (code 503): This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+  },
+  {
+    "time_ist": "07 Apr 09:31 IST",
+    "time_utc": "2026-04-07 04:01",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "07 Apr 09:31 IST",
+    "time_utc": "2026-04-07 04:01",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "07 Apr 09:31 IST",
+    "time_utc": "2026-04-07 04:01",
+    "pair": "NAS100",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "07 Apr 09:31 IST",
+    "time_utc": "2026-04-07 04:01",
+    "pair": "GOLD",
+    "zone": 4671.3999,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
+  },
+  {
+    "time_ist": "07 Apr 09:31 IST",
+    "time_utc": "2026-04-07 04:01",
+    "pair": "GOLD",
+    "zone": 4693.0,
+    "status": "rejected_validation",
+    "reason": "Hard gates not passed"
   }
 ]
