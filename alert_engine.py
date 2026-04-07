@@ -1151,16 +1151,21 @@ def build_error_email_html(error_lines, pairs_ok):
         p_name = parts[0].strip() if len(parts) > 1 else "Unknown"
         err    = parts[1].strip() if len(parts) > 1 else line
         if "429" in err or "RESOURCE_EXHAUSTED" in err or "quota" in err.lower():
-            simple = "Gemini API rate limit reached. Will retry automatically on next scan."
+            simple = "Gemini API rate limit (429). Will retry automatically on next scan."
+        elif "503" in err:
+            simple = "Gemini server overload (503) — Google's servers were too busy. Will retry on next scan."
         elif "Gemini error" in err:
-            simple = "Gemini could not analyze this pair. Will retry on next scan."
+            simple = "Gemini call failed. Will retry on next scan."
         elif "No market data" in err:
             simple = "Market data unavailable (yfinance). Likely a temporary data feed issue."
         else:
             simple = err[:120]
+        raw_detail = err[:200]
         error_items += (f'<div style="background:#fef2f2;padding:8px 12px;border-radius:6px;margin-bottom:6px;">'
-                        f'<p style="margin:0;font-size:12px;"><b style="color:#dc2626;">{p_name}:</b> '
-                        f'<span style="color:#374151;">{simple}</span></p></div>')
+                        f'<p style="margin:0 0 3px;font-size:12px;"><b style="color:#dc2626;">{p_name}:</b> '
+                        f'<span style="color:#374151;">{simple}</span></p>'
+                        f'<p style="margin:0;font-size:10px;color:#9ca3af;font-family:monospace;">{raw_detail}</p>'
+                        f'</div>')
     ok_items = ""
     if pairs_ok:
         ok_list = ", ".join([f"<b>{p}</b> ✓" for p in pairs_ok])
@@ -1647,7 +1652,7 @@ for pair_conf in config["pairs"]:
             log_scan(name, "zone_outside_proximity",
                      "Zones detected but none near current price.")
 
-        if not zone_alerted:
+        if not zone_alerted and not any(e.startswith(f"{name}:") for e in run_errors):
             pairs_ok.append(name)
 
     except Exception as e:
