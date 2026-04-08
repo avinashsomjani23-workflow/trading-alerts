@@ -299,30 +299,40 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
     news_losses  = sum(1 for a in news_alerts if a.get('outcome') == 'loss')
     news_wr      = round(news_wins/(news_wins+news_losses)*100, 1) if (news_wins+news_losses) > 0 else 0
 
-    # Buffer analysis — per pair
-    buffer_stats = {}
+    # ── Sweep quality analysis (replaces old buffer analysis) ─────────────
+    sweep_stats = {'confirmed': 0, 'near_miss': 0, 'none': 0,
+                   'confirmed_wins': 0, 'confirmed_losses': 0,
+                   'near_miss_wins': 0, 'near_miss_losses': 0,
+                   'none_wins': 0, 'none_losses': 0}
     for a in weekly_alerts:
-        p = a.get('pair', '')
-        buf = a.get('buffer_applied')
-        atr = a.get('atr_h1')
-        if buf is not None and atr is not None:
-            if p not in buffer_stats:
-                buffer_stats[p] = {'buffers': [], 'atrs': [], 'sl_widened': 0, 'total': 0}
-            buffer_stats[p]['buffers'].append(float(buf))
-            buffer_stats[p]['atrs'].append(float(atr))
-            buffer_stats[p]['total'] += 1
-            # Check if SL was widened (buffer > original SL distance would mean sl_note mentions widening)
-            if 'widened' in str(a.get('sl_note', '')).lower() or 'buffer' in str(a.get('sl_note', '')).lower():
-                buffer_stats[p]['sl_widened'] += 1
+        ss = float(a.get('sweep_score', 0) or 0)
+        # Backward compat: old alerts without sweep_score — check score_breakdown
+        if ss == 0 and a.get('score_breakdown'):
+            ss = float(a['score_breakdown'].get('liquidity_swept', 0))
+        outcome = a.get('outcome', '')
+        if ss >= 2.5:
+            sweep_stats['confirmed'] += 1
+            if outcome == 'win_tp1': sweep_stats['confirmed_wins'] += 1
+            elif outcome == 'loss': sweep_stats['confirmed_losses'] += 1
+        elif ss >= 1.0:
+            sweep_stats['near_miss'] += 1
+            if outcome == 'win_tp1': sweep_stats['near_miss_wins'] += 1
+            elif outcome == 'loss': sweep_stats['near_miss_losses'] += 1
+        else:
+            sweep_stats['none'] += 1
+            if outcome == 'win_tp1': sweep_stats['none_wins'] += 1
+            elif outcome == 'loss': sweep_stats['none_losses'] += 1
 
-    buffer_summary = {}
-    for p, s in buffer_stats.items():
-        buffer_summary[p] = {
-            'avg_buffer': round(sum(s['buffers'])/len(s['buffers']), 6) if s['buffers'] else 0,
-            'avg_atr': round(sum(s['atrs'])/len(s['atrs']), 6) if s['atrs'] else 0,
-            'sl_widened_count': s['sl_widened'],
-            'total_trades': s['total']
-        }
+    # ── TP source analysis ────────────────────────────────────────────────
+    tp_sources = {}
+    for a in weekly_alerts:
+        src = a.get('tp1_source', 'unknown')
+        if src not in tp_sources:
+            tp_sources[src] = {'count': 0, 'wins': 0, 'losses': 0}
+        tp_sources[src]['count'] += 1
+        outcome = a.get('outcome', '')
+        if outcome == 'win_tp1': tp_sources[src]['wins'] += 1
+        elif outcome == 'loss': tp_sources[src]['losses'] += 1
 
     alert_summary = []
     for a in triggered:
@@ -337,6 +347,11 @@ def build_weekly_analysis(weekly_alerts, wins, losses, invalidated_count,
             "outcome":    a.get('outcome', 'pending'),
             "geo_flag":   a.get('geo_flag', False),
             "news_flag":  a.get('news_flag', 'none'),
+            "sweep_score": float(a.get('sweep_score', 0) or 0),
+            "sweep_method": a.get('sweep_method', ''),
+            "entry_source": a.get('entry_source', ''),
+            "tp1_source":  a.get('tp1_source', ''),
+            "m15_break_level": a.get('m15_break_level', ''),
         })
 
     prompt = f"""You are an elite SMC trading analyst reviewing one week of automated zone alerts.
@@ -371,9 +386,13 @@ LOSS CLUSTERS (IST hours with 2+ losses):
 PAIR PERFORMANCE:
 {json.dumps(pair_stats, indent=2)}
 
-ATR BUFFER ANALYSIS (per pair):
-{json.dumps(buffer_summary, indent=2)}
-Current multiplier: {config.get('scoring', {}).get('atr_buffer_multiplier', 0.2)}
+SWEEP QUALITY ANALYSIS:
+- Confirmed sweeps (2.5 pts): {sweep_stats['confirmed']} alerts → {sweep_stats['confirmed_wins']}W / {sweep_stats['confirmed_losses']}L
+- Near-miss sweeps (1.5 pts): {sweep_stats['near_miss']} alerts → {sweep_stats['near_miss_wins']}W / {sweep_stats['near_miss_losses']}L
+- No sweep (0 pts): {sweep_stats['none']} alerts → {sweep_stats['none_wins']}W / {sweep_stats['none_losses']}L
+
+TP SOURCE ANALYSIS:
+{json.dumps(tp_sources, indent=2)}
 
 TRIGGERED TRADE DATA:
 {json.dumps(alert_summary, indent=2)}
@@ -384,7 +403,7 @@ Return ONLY raw JSON. No markdown. No code fences.
   "grade_comment": "one sentence on triggered trades only",
   "best_pair": "pair or none",
   "worst_pair": "pair or none",
-  "pattern_insight": "which weighted confluence combination appeared most in winners",
+  "pattern_insight": "which weighted confluence combination appeared most in winners — cite sweep_score, entry_source, m15_break_level from the data",
   "confidence_calibration": "do higher-scored alerts win more — cite numbers from score_breakdown",
   "session_summary": "best and worst session with win rates",
   "session_recommendation": "one actionable sentence",
@@ -396,8 +415,9 @@ Return ONLY raw JSON. No markdown. No code fences.
   "zone_fatigue_flags": {json.dumps(python_zone_flags)},
   "streak_summary": "notable win/loss streaks",
   "drawdown_flag": "none or describe if 3+ consecutive losses",
-  "improvement_suggestion": "one specific actionable change based on this week",
-  "buffer_recommendation": "per-pair: should multiplier stay at 0.2, increase, or decrease — cite data from buffer analysis"
+  "sweep_quality_insight": "compare win rates across confirmed vs near-miss vs no-sweep. Should the system weight sweeps differently?",
+  "tp_source_insight": "which TP source (h1_zone, m15_opposing_fvg, fallback) produces best outcomes? Should TP selection be adjusted?",
+  "improvement_suggestion": "one specific actionable change based on this week"
 }}"""
 
     result, err = call_gemini(prompt)
@@ -510,7 +530,8 @@ def build_excel_journal(weekly_alerts, analysis):
         ("Not-Triggered Insight",           safe('not_triggered_insight'), None),
         ("Streak Summary",                  safe('streak_summary'), None),
         ("Drawdown Flag",                   safe('drawdown_flag'), None),
-        ("Buffer Recommendation",           safe('buffer_recommendation'), None),
+        ("Sweep Quality Insight",           safe('sweep_quality_insight'), None),
+        ("TP Source Insight",               safe('tp_source_insight'), None),
         ("Improvement Suggestion",          safe('improvement_suggestion'), None),
     ]
 
@@ -566,7 +587,7 @@ def build_excel_journal(weekly_alerts, analysis):
         ("Geo Flag",             10, C_TRIG),  ("News Flag",         18, C_TRIG),
         ("Outcome",              14, C_OUT),   ("Outcome Price",     14, C_OUT),
         ("Points +/-",           12, C_OUT),   ("Est. P&L",          12, C_OUT),
-        ("ATR (H1)",             12, C_LEARN), ("Buffer Applied",    14, C_LEARN),
+        ("Sweep",                12, C_LEARN), ("Entry Source",      14, C_LEARN),
         ("Zone Tests",           10, C_LEARN), ("System Note",       36, C_LEARN),
     ]
 
@@ -631,11 +652,16 @@ def build_excel_journal(weekly_alerts, analysis):
         pair_type = a.get('pair_type', get_pair_type(a.get('pair','')))
         news_f = a.get('news_flag', 'none')
 
-        atr_val = a.get('atr_h1')
-        atr_str = f"{atr_val:.5f}" if atr_val is not None else "—"
-        buf_val = a.get('buffer_applied')
-        buf_str = f"{buf_val:.5f}" if buf_val is not None else "—"
-        zt_val  = a.get('zone_tests_30d', '—')
+        # Sweep score display
+        ss = float(a.get('sweep_score', 0) or 0)
+        if ss == 0 and a.get('score_breakdown'):
+            ss = float(a['score_breakdown'].get('liquidity_swept', 0))
+        if ss >= 2.5:   sweep_str = f"✓ {ss}"
+        elif ss >= 1.0: sweep_str = f"◐ {ss}"
+        else:           sweep_str = "✗ 0"
+
+        entry_src = a.get('entry_source', a.get('entry_model', '—'))
+        zt_val    = a.get('zone_tests_30d', '—')
 
         row_vals = [
             date_str, a.get('pair',''), pair_type.title(), session, a.get('bias',''),
@@ -644,7 +670,7 @@ def build_excel_journal(weekly_alerts, analysis):
             rr_str, f"${RISK_PER_TRADE:.0f}",
             "YES" if a.get('geo_flag') else "NO", news_f if news_f.lower()!='none' else "—",
             outcome_label, op_str, pts_str, pnl_d,
-            atr_str, buf_str, zt_val, a.get('confidence_reason', ''),
+            sweep_str, entry_src, zt_val, a.get('confidence_reason', ''),
         ]
 
         for ci, val in enumerate(row_vals, 1):
@@ -772,7 +798,7 @@ def build_weekly_email_html(data, weekly_alerts, wins, losses,
 
     <p style="font-size:11px;color:#2980b9;background:#e8f4fd;padding:8px 12px;
        border-radius:8px;margin:0 0 16px;">
-      Full trade journal attached — Excel workbook with scorecard breakdown, P&L, buffer analysis, and outcomes.</p>
+      Full trade journal attached — Excel workbook with scorecard breakdown, P&L, sweep analysis, and outcomes.</p>
 
     {insight_card("PATTERN INTELLIGENCE", "#3498db", safe('pattern_insight'))}
     {insight_card("CONFIDENCE CALIBRATION", "#27ae60", safe('confidence_calibration'))}
@@ -783,7 +809,8 @@ def build_weekly_email_html(data, weekly_alerts, wins, losses,
     {insight_card("TIMING RECOMMENDATION", "#e67e22", safe('timing_recommendation'))}
     {geo_card}
     {insight_card("NOT-TRIGGERED ANALYSIS", "#3498db", safe('not_triggered_insight'))}
-    {insight_card("ATR BUFFER PERFORMANCE", "#9b59b6", safe('buffer_recommendation'))}
+    {insight_card("SWEEP QUALITY", "#9b59b6", safe('sweep_quality_insight'))}
+    {insight_card("TP SOURCE PERFORMANCE", "#27ae60", safe('tp_source_insight'))}
     {insight_card("STREAK AWARENESS", "#9b59b6", safe('streak_summary'))}
 
     <div style="background:#fff8f0;padding:12px 14px;border-radius:10px;
