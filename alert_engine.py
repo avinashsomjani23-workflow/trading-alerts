@@ -13,6 +13,9 @@ import numpy as np
 import base64
 from io import BytesIO
 
+# Phase 2: Python-first analysis
+import smc_detector
+
 # ── Config ────────────────────────────────────────────────────────────────────
 with open("config.json") as f:
     config = json.load(f)
@@ -21,18 +24,9 @@ GEMINI_KEY    = os.environ["GEMINI_API_KEY"]
 GMAIL_ADDRESS = os.environ["GMAIL_ADDRESS"]
 GMAIL_PASS    = os.environ["GMAIL_APP_PASSWORD"]
 ALERT_EMAIL   = os.environ["ALERT_EMAIL"]
-# ── Scoring maximums — Python-enforced caps per item ──────────────────────────
-SCORE_MAX = {
-    "liquidity_swept":      2.5,
-    "fvg_overlaps_ob":      2.0,
-    "premium_discount":     1.5,
-    "premium_discount_zone":1.5,
-    "multi_tf_alignment":   1.5,
-    "zone_freshness":       1.0,
-    "no_high_impact_news":  1.0,
-    "session_alignment":    0.5,
-}
+
 MACRO_CACHE_FILE = "macro_cache.json"
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def load_json(path, default):
@@ -86,27 +80,6 @@ def parse_entry_mid(entry_value):
     except Exception:
         return None
 
-def spread_to_price(pair_conf):
-    """Convert spread_pips to price distance for this pair."""
-    spread = pair_conf.get("spread_pips", 0)
-    if pair_conf.get("pair_type") == "forex":
-        if "JPY" in pair_conf["name"]:
-            return spread * 0.01
-        else:
-            return spread * 0.0001
-    else:
-        return spread
-
-def min_sl_to_price(pair_conf):
-    """Convert min_sl_pips (fallback) to price distance."""
-    min_sl = pair_conf.get("min_sl_pips", 15)
-    if pair_conf.get("pair_type") == "forex":
-        if "JPY" in pair_conf["name"]:
-            return min_sl * 0.01
-        else:
-            return min_sl * 0.0001
-    else:
-        return min_sl
 
 # ── File state ────────────────────────────────────────────────────────────────
 ALERT_LOG_FILE     = "alert_log.json"
@@ -146,12 +119,12 @@ def log_scan(pair, status, reason, zone=None):
     })
     save_json(SCAN_LOG_FILE, scan_log)
 
-# ── Zone cooldown — prevents spam, allows re-entry after resolution ───────────
+
+# ── Zone cooldown ─────────────────────────────────────────────────────────────
 def save_visit_state():
     save_json(VISIT_FILE, visit_state)
 
 def has_active_trade(pair, zone_level):
-    """Check if there's an unresolved TRADE READY alert on this zone."""
     for a in alert_log:
         if a.get("pair") != pair:
             continue
@@ -170,7 +143,6 @@ def has_active_trade(pair, zone_level):
     return False
 
 def should_send_approaching(pair, zone_level):
-    """Allow APPROACHING if no active trade and last approaching was 2+ hours ago."""
     if has_active_trade(pair, zone_level):
         return False
     key = f"{pair}_{round(zone_level, 4)}"
@@ -183,7 +155,6 @@ def should_send_approaching(pair, zone_level):
     return True
 
 def should_send_trade_ready(pair, zone_level):
-    """Allow TRADE READY if no active trade on this zone."""
     return not has_active_trade(pair, zone_level)
 
 def record_approaching(pair, zone_level):
@@ -199,6 +170,7 @@ def record_trade_ready(pair, zone_level):
     state["trade_ready_at_utc"] = utc_str()
     visit_state[key] = state
     save_visit_state()
+
 
 # ── Zone fatigue ──────────────────────────────────────────────────────────────
 def count_zone_alerts(pair, zone_level, days=30):
@@ -218,6 +190,7 @@ def count_zone_alerts(pair, zone_level, days=30):
             pass
     return count
 
+
 # ── Market hours (IST) ────────────────────────────────────────────────────────
 def is_market_open():
     ist = ist_now()
@@ -228,6 +201,7 @@ def is_market_open():
     if wd == 4 and h >= 23 and m >= 30:
         return False, "Friday after 11:30 PM IST."
     return True, f"Open — {ist.strftime('%A %H:%M')} IST"
+
 
 # ── Session alignment check ──────────────────────────────────────────────────
 def is_in_session(pair_conf):
@@ -241,6 +215,7 @@ def is_in_session(pair_conf):
         return s <= h < e
     else:
         return h >= s or h < e
+
 
 # ── Data helpers ──────────────────────────────────────────────────────────────
 def clean_df(df):
@@ -264,18 +239,6 @@ def get_atr(df, period=14):
         return float(np.mean(trs[-period:]))
     except Exception:
         return None
-
-def compute_sl_buffer(pair_conf, atr_value):
-    """Dynamic SL buffer = spread + (multiplier × ATR14_H1).
-    Falls back to min_sl_pips if ATR unavailable."""
-    multiplier = config.get("scoring", {}).get("atr_buffer_multiplier", 0.2)
-    spread_price = spread_to_price(pair_conf)
-    if atr_value is not None and atr_value > 0:
-        buffer = spread_price + (multiplier * atr_value)
-    else:
-        buffer = min_sl_to_price(pair_conf)
-        print(f"    ATR unavailable for {pair_conf['name']}, using min_sl fallback: {buffer}")
-    return buffer
 
 def detect_zones_and_candles(symbol, min_touches):
     df1 = clean_df(yf.download(symbol, period="15d", interval="1h", progress=False))
@@ -309,6 +272,7 @@ def fetch_m15_data(symbol):
 def get_zone_label(zone_level, current_price):
     return "Demand" if zone_level < current_price else "Supply"
 
+
 # ── Macro news ────────────────────────────────────────────────────────────────
 def fetch_macro_news():
     headlines = []
@@ -341,310 +305,259 @@ def get_cached_macro_news():
     cache = load_json(MACRO_CACHE_FILE, {})
     return cache.get("news", "Macro news unavailable (cache miss).")
 
-def format_candles(df, label, n=40):
-    if df is None or df.empty:
-        return f"{label}: No data\n"
-    lines = [f"{label} (last {n} candles):"]
-    for i in range(max(0, len(df)-n), len(df)):
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PHASE 3: SLIM GEMINI PROMPT — TEXT FIELDS + NEWS SCORING ONLY
+# ══════════════════════════════════════════════════════════════════════════════
+
+def build_slim_gemini_prompt(result, pair_conf, macro_news, current_price,
+                              zone_level, zone_label):
+    """
+    Build a focused Gemini prompt that provides ONLY text fields and news scoring.
+    All pattern detection, scoring, and level computation is done by Python.
+    Gemini receives a structured briefing and returns ~10 JSON fields.
+    """
+    name      = pair_conf["name"]
+    pair_type = pair_conf.get("pair_type", "forex")
+    dp        = pair_conf.get("decimal_places", 5)
+    ist_time  = ist_now().strftime("%H:%M IST, %d %b %Y")
+    bias      = result["bias"]
+    score     = result["confidence_score"]
+    bd        = result["score_breakdown"]
+
+    # Format structure details for briefing
+    m15 = result.get("m15_structure_detail", {})
+    h1  = result.get("h1_structure_detail", {})
+    sweep = result.get("sweep_detail", {})
+    readiness = result.get("readiness_detail", {})
+
+    m15_line = "Not confirmed"
+    if m15.get("confirmed"):
+        ts_raw = m15.get("break_candle_ts", "")
         try:
-            ts  = df.index[i]
-            if hasattr(ts, 'tz_localize') and ts.tzinfo is None:
-                ts_ist = ts + timedelta(hours=5, minutes=30)
-            elif hasattr(ts, 'tz_convert'):
-                ts_ist = ts.tz_convert(None) + timedelta(hours=5, minutes=30)
+            ts_dt = pd.Timestamp(ts_raw)
+            if ts_dt.tzinfo is None:
+                ts_ist = ts_dt + timedelta(hours=5, minutes=30)
             else:
-                ts_ist = ts + timedelta(hours=5, minutes=30)
-            tss = ts_ist.strftime('%d %b %H:%M IST')
-            lines.append(f"{tss} O:{float(df['Open'].iloc[i]):.5f} "
-                         f"H:{float(df['High'].iloc[i]):.5f} "
-                         f"L:{float(df['Low'].iloc[i]):.5f} "
-                         f"C:{float(df['Close'].iloc[i]):.5f}")
+                ts_ist = ts_dt.tz_convert(None) + timedelta(hours=5, minutes=30)
+            ts_str = ts_ist.strftime("%d %b %H:%M IST")
         except Exception:
-            pass
-    return "\n".join(lines) + "\n"
+            ts_str = ts_raw
+        m15_line = (f"{m15['type'].upper()} {m15['direction']} "
+                    f"({m15['break_level']}) at {ts_str}, "
+                    f"broke {m15.get('swing_broken', 0):.{dp}f}")
 
-def _format_fvgs_for_prompt(fvgs, zone_level, pair_conf, max_show=5):
-    """Format Python-detected FVGs for Gemini prompt — near the zone only."""
-    if not fvgs:
-        return "  None detected on M15."
-    dp = pair_conf.get("decimal_places", 5)
-    prox = pair_conf.get("proximity_pct", 0.5) * 3  # wider window for context
-    nearby = [f for f in fvgs
-              if abs(((f['fvg_top'] + f['fvg_bottom']) / 2) - zone_level)
-              / zone_level * 100 < prox]
-    if not nearby:
-        nearby = fvgs[-max_show:]  # fallback: most recent
-    nearby = nearby[-max_show:]
-    lines = []
-    for f in nearby:
-        lines.append(f"  [{f['type'].upper()}] top={f['fvg_top']:.{dp}f} "
-                     f"bottom={f['fvg_bottom']:.{dp}f} "
-                     f"| candles: {f['c1_ts']} → {f['c3_ts']}")
-    return "\n".join(lines) if lines else "  None near zone."
+    h1_line = "Not confirmed"
+    if h1.get("confirmed"):
+        ts_raw = h1.get("break_candle_ts", "")
+        try:
+            ts_dt = pd.Timestamp(ts_raw)
+            if ts_dt.tzinfo is None:
+                ts_ist = ts_dt + timedelta(hours=5, minutes=30)
+            else:
+                ts_ist = ts_dt.tz_convert(None) + timedelta(hours=5, minutes=30)
+            ts_str = ts_ist.strftime("%d %b %H:%M IST")
+        except Exception:
+            ts_str = ts_raw
+        h1_line = (f"{h1['type'].upper()} {h1['direction']} "
+                   f"({h1['break_level']}) at {ts_str}")
 
+    sweep_line = "None detected"
+    if sweep.get("detected"):
+        label = "confirmed" if sweep["sweep_score"] >= 2.5 else "near-miss"
+        ts_raw = sweep.get("candle_ts", "")
+        try:
+            ts_dt = pd.Timestamp(ts_raw)
+            if ts_dt.tzinfo is None:
+                ts_ist = ts_dt + timedelta(hours=5, minutes=30)
+            else:
+                ts_ist = ts_dt.tz_convert(None) + timedelta(hours=5, minutes=30)
+            ts_str = ts_ist.strftime("%d %b %H:%M IST")
+        except Exception:
+            ts_str = ts_raw
+        sweep_line = (f"{label} ({sweep['method']}): "
+                      f"{sweep['sweep_type']} sweep at {sweep['sweep_price']:.{dp}f}, "
+                      f"level {sweep['level_swept']:.{dp}f} on {ts_str}")
 
-def _format_obs_for_prompt(obs, zone_level, pair_conf, max_show=5):
-    """Format Python-detected OBs for Gemini prompt — near the zone only."""
-    if not obs:
-        return "  None detected on M15."
-    dp = pair_conf.get("decimal_places", 5)
-    prox = pair_conf.get("proximity_pct", 0.5) * 3
-    nearby = [o for o in obs
-              if abs(((o['ob_top'] + o['ob_bottom']) / 2) - zone_level)
-              / zone_level * 100 < prox]
-    if not nearby:
-        nearby = obs[-max_show:]
-    nearby = nearby[-max_show:]
-    lines = []
-    for o in nearby:
-        lines.append(f"  [{o['type'].upper()} OB] top={o['ob_top']:.{dp}f} "
-                     f"bottom={o['ob_bottom']:.{dp}f} "
-                     f"body={o['ob_body_bottom']:.{dp}f}–{o['ob_body_top']:.{dp}f} "
-                     f"| candle: {o['ts']}")
-    return "\n".join(lines) if lines else "  None near zone."    
-# ── Gemini prompt ─────────────────────────────────────────────────────────────
-def build_zone_prompt(pair_conf, zone_level, zone_label, current_price,
-                      macro_news, df1, df2, fatigue_count, atr_value,
-                      python_fvgs=None, python_obs=None):
-    name        = pair_conf["name"]
-    pair_type   = pair_conf.get("pair_type", "forex")
-    dp          = pair_conf.get("decimal_places", 5)
-    min_conf    = pair_conf.get("min_confidence", 7)
-    structure_tf = pair_conf.get("structure_tf", ["H1"])
-    extra_gate  = pair_conf.get("extra_gate")
-    risk_dollar = config["account"]["balance"] * config["account"]["risk_percent"] / 100
-    scoring     = config.get("scoring", {})
-    ist_time    = ist_now().strftime("%H:%M IST, %d %b %Y")
-    atr_str     = f"{atr_value:.5f}" if atr_value else "unavailable"
+    trigger_line = readiness.get("reason", "No trigger on last closed candle")
+    if readiness.get("ready"):
+        ts_raw = readiness.get("trigger_candle_ts", "")
+        try:
+            ts_dt = pd.Timestamp(ts_raw)
+            if ts_dt.tzinfo is None:
+                ts_ist = ts_dt + timedelta(hours=5, minutes=30)
+            else:
+                ts_ist = ts_dt.tz_convert(None) + timedelta(hours=5, minutes=30)
+            ts_str = ts_ist.strftime("%d %b %H:%M IST")
+        except Exception:
+            ts_str = ts_raw
+        trigger_line = (f"CONFIRMED: {readiness.get('trigger_kind', '')} "
+                        f"on M15 at {ts_str}")
 
-    tf_rule = "M15 BOS or M15 CHoCH ONLY. H1 structure alone does NOT pass this gate. You MUST cite a specific M15 candle timestamp and price where BOS or CHoCH occurred."
-    extra_gate_text = ""
-    if extra_gate == "liquidity_swept_required":
-        extra_gate_text = (f"\nADDITIONAL HARD GATE FOR {name}: Liquidity MUST be swept before zone entry. "
-                           "If no liquidity sweep is visible in the candle data, set send_alert to false regardless of score.")
-    elif extra_gate == "macro_alignment_required":
-        extra_gate_text = (f"\nADDITIONAL HARD GATE FOR {name}: Macro context MUST align with technical bias. "
-                           "If DXY direction, safe-haven flows, or geopolitical context contradicts the trade direction, "
-                           "set send_alert to false. Gold is driven by macro first, technicals second.")
+    confluences_text = "\n".join(f"  - {c}" for c in result.get("confluences", []))
+    if not confluences_text:
+        confluences_text = "  (none)"
 
-    fatigue_thresh = scoring.get("zone_fatigue_threshold", 3)
-    if fatigue_count >= fatigue_thresh + 2:
-        fatigue_rule = f"Zone alerted {fatigue_count} times in 30 days. HEAVILY FATIGUED. Score zone_freshness as 0."
-    elif fatigue_count >= fatigue_thresh:
-        fatigue_rule = f"Zone alerted {fatigue_count} times in 30 days. FATIGUED. Score zone_freshness as 0."
+    missing_text = "\n".join(
+        f"  - {m['item']}: {m['reason']}"
+        for m in result.get("missing", []) if isinstance(m, dict))
+    if not missing_text:
+        missing_text = "  (none)"
+
+    pd_pct = result.get("premium_discount_pct", 50.0)
+    pd_valid = result.get("premium_discount_valid", False)
+    pd_line = f"{'Valid' if pd_valid else 'Invalid'} — price at {pd_pct}% of range"
+
+    fvg_line = "No FVG overlap"
+    if result.get("fvg_confirmed"):
+        fvg_line = (f"{result.get('fvg_type', '')} FVG "
+                    f"{result['fvg_bottom']:.{dp}f}–{result['fvg_top']:.{dp}f} "
+                    f"overlaps OB")
+
+    inv_above = result.get("invalidate_above")
+    inv_below = result.get("invalidate_below")
+    inv_line = ""
+    if inv_above:
+        inv_line = f"Invalidate above {inv_above:.{dp}f}"
+    elif inv_below:
+        inv_line = f"Invalidate below {inv_below:.{dp}f}"
     else:
-        fatigue_rule = f"Zone alerted {fatigue_count} times in 30 days. FRESH. Score zone_freshness as 1.0."
+        inv_line = "No invalidation level set"
 
-    nb_before = scoring.get("news_blackout_hours_before", 2)
-    nb_after  = scoring.get("news_blackout_hours_after", 1)
+    nb_before = config.get("scoring", {}).get("news_blackout_hours_before", 2)
+    nb_after  = config.get("scoring", {}).get("news_blackout_hours_after", 1)
 
-    return f"""You are an elite institutional SMC trader. Analyze this zone setup with extreme precision.
+    return f"""You are an elite SMC trading analyst. Python has completed all pattern detection and scoring.
+Your role: write concise, actionable text for trader alerts AND score news impact.
 
-PAIR: {name} ({pair_type}) | ZONE: {zone_label} at {zone_level} | PRICE NOW: {current_price}
-TIME: {ist_time}
-ACCOUNT: ${config["account"]["balance"]} | RISK: {config["account"]["risk_percent"]}% = ${risk_dollar:.0f}
-PRICE FORMAT: {dp} decimal places for this pair.
-ATR(14, H1): {atr_str}
+══════════════════════════════════════════════════════════
+SETUP BRIEFING
+══════════════════════════════════════════════════════════
+Pair: {name} ({pair_type}) | Bias: {bias} | Zone: {zone_label} at {zone_level:.{dp}f}
+Price now: {current_price:.{dp}f} | Time: {ist_time}
 
-CANDLE DATA:
-{format_candles(df1, "H1", n=20)}
-{format_candles(df2, "M15", n=40)}
+GATES (all passed by Python):
+  Structure (M15): {m15_line}
+  Structure (H1):  {h1_line}
+  Order Block: {result.get('ob_type', '')} OB at {result['ob_top']:.{dp}f}/{result['ob_bottom']:.{dp}f}
+  Risk/Reward: {result['rr_tp1']}:1 (TP1) / {result['rr_tp2']}:1 (TP2)
 
-MACRO HEADLINES:
+LEVELS:
+  Entry: {result['entry']:.{dp}f} ({result.get('entry_source', 'ob_body_midpoint')})
+  SL:    {result['sl']:.{dp}f} (OB wick extreme)
+  TP1:   {result['tp1']:.{dp}f} ({result.get('tp1_source', '')})
+  TP2:   {result['tp2']:.{dp}f} ({result.get('tp2_source', '')})
+
+SCORE: {score}/10 (Python-computed, news pending your input)
+  Liquidity Swept:    {bd.get('liquidity_swept', 0)}/2.5 — {sweep_line}
+  FVG Overlaps OB:    {bd.get('fvg_overlaps_ob', 0)}/2.0 — {fvg_line}
+  Premium/Discount:   {bd.get('premium_discount', 0)}/1.5 — {pd_line}
+  Multi-TF Alignment: {bd.get('multi_tf_alignment', 0)}/1.5
+  Zone Freshness:     {bd.get('zone_freshness', 0)}/1.0
+  Session Alignment:  {bd.get('session_alignment', 0)}/0.5
+  News Impact:        ?/1.0 ← YOU SCORE THIS
+
+ENTRY STATUS: {result.get('trigger_status', 'not_ready')}
+  {trigger_line}
+
+INVALIDATION: {inv_line}
+
+CONFLUENCES DETECTED:
+{confluences_text}
+
+MISSING:
+{missing_text}
+
+══════════════════════════════════════════════════════════
+MACRO HEADLINES (use for news scoring + macro fields)
+══════════════════════════════════════════════════════════
 {macro_news}
 
-═══════════════════════════════════════════════════════════════
-HARD GATES — ALL THREE MUST PASS OR SET send_alert TO false:
-═══════════════════════════════════════════════════════════════
-GATE 1 — STRUCTURE: {tf_rule}
-  You MUST cite the specific candle timestamp and price where BOS or CHoCH occurred.
-  If you cannot identify a specific candle, this gate FAILS.
+══════════════════════════════════════════════════════════
+YOUR TASK
+══════════════════════════════════════════════════════════
 
-GATE 2 — VALID ORDER BLOCK:
-Python has already detected the following valid, unmitigated OBs from M15 candle data.
-These are mathematically exact. Your job is to select the most relevant one near the zone.
+1. NEWS SCORING (binary):
+   - news_score = 1.0 if NO high-impact event within {nb_before} hours BEFORE or {nb_after} hour AFTER current time ({ist_time})
+   - news_score = 0.0 if ANY of these occur within that window: rate decisions, CPI, NFP, GDP, PMI,
+     OR geopolitical events (military conflict, sanctions, tariff escalation, invasion, embargo,
+     energy supply disruption, ceasefire negotiation breakdown)
+   - If scoring 0.0, you MUST name the specific event in news_flag
 
-PYTHON-DETECTED OBs (M15):
-{_format_obs_for_prompt(python_obs, zone_level, pair_conf)}
+2. GEO FLAG:
+   - geo_flag = true if ANY headline suggests geopolitical risk that could move {name}
+   - For forex: DXY-affecting events (tariffs, sanctions, trade wars)
+   - For indices: market-wide risk events
+   - For commodities: supply disruptions, safe-haven flows
 
-Select the OB nearest the zone and most aligned with bias. Return its exact ob_top and ob_bottom
-as provided above — do not modify these values. If no OB from this list suits the setup,
-set gate_ob to false and send_alert to false.
-  
-GATE 3 — RISK:REWARD: You MUST do this arithmetic explicitly before deciding:
-  entry = midpoint of OB candle body
-  sl = OB wick extreme (low for LONG, high for SHORT)
-  risk = abs(entry - sl)
-  reward_tp1 = abs(first_opposing_zone - entry)
-  rr = reward_tp1 / risk
-
-  Show your calculation in gate_rr like this: "entry=4693.10, sl=4721.20, risk=28.10, tp1=4684.00, reward=9.10, rr=0.32 → FAIL"
-  If rr < 2.0, this gate FAILS. Return short-form JSON immediately.
-
-  IMPORTANT: If your OB is wide (large risk), your TP1 must be proportionally far away.
-  A wide OB with a nearby TP1 will always fail this gate. Do not adjust your SL to manufacture RR.
-{extra_gate_text}
-
-═══════════════════════════════════════════════════════════════
-WEIGHTED SCORECARD — SCORE OUT OF 10 (minimum {min_conf} to send):
-═══════════════════════════════════════════════════════════════
-
-1. LIQUIDITY SWEPT (2.5 pts):
-   2.5 = Price clearly spiked beyond a prior swing high/low then reversed. Cite the sweep candle timestamp and wick price.
-   1.5 = Price approached but did not clearly exceed the prior swing extreme.
-   0   = No visible sweep. Prior swing extremes untested.
-
-2. FVG OVERLAPS OB (2.0 pts):
-Python has already detected the following valid FVGs from M15 candle data.
-These coordinates are mathematically exact from real OHLC values.
-
-PYTHON-DETECTED FVGs (M15):
-{_format_fvgs_for_prompt(python_fvgs, zone_level, pair_conf)}
-
-   2.0 = A FVG from the list above overlaps the selected OB. Return its exact fvg_top and
-         fvg_bottom from the list — do not modify these values.
-   0   = No FVG from the list overlaps the OB, or the list is empty.
-         Set fvg_top and fvg_bottom to 0. Do NOT invent coordinates.
-
-3. PREMIUM/DISCOUNT ZONE (1.5 pts):
-   1.5 = For SHORT: price is above the 50% mark of the recent range (premium). For LONG: below 50% (discount).
-   0   = Price is on the wrong side (buying in premium or selling in discount).
-   State the range high, low, midpoint, and current position.
-
-4. MULTI-TIMEFRAME ALIGNMENT (1.5 pts):
-   1.5 = Both H1 AND M15 show structural confirmation in the same direction.
-   0.5 = Only one timeframe confirms.
-   0   = Neither confirms or they conflict.
-
-5. ZONE FRESHNESS (1.0 pt): {fatigue_rule}
-
-6. NO HIGH-IMPACT NEWS (1.0 pt):
-   1.0 = No high-impact event within {nb_before} hours BEFORE or {nb_after} hour AFTER current time.
-   0   = A high-impact event falls within the blackout window.
-   HIGH-IMPACT EVENTS include: rate decisions, CPI, NFP, GDP, PMI, AND geopolitical events
-   (military conflict, sanctions, trade war escalation, tariff announcements, energy supply
-   disruptions, ceasefire negotiations, diplomatic breakdowns, invasion, retaliation, embargo).
-   If ANY of these are present, score 0. Cite the specific event.
-
-7. SESSION ALIGNMENT (0.5 pts):
-   0.5 = {name} is trading during its primary session window.
-   0   = Outside primary session.
-
-HARD SCORING RULES — VIOLATIONS WILL BE REJECTED:
-- NEVER score ANY item above its stated maximum. Session Alignment max is 0.5. Liquidity Swept max is 2.5. Etc.
-- If you score a partial value (e.g. 0.5 on Multi-TF Alignment), you MUST explain which timeframe confirmed and which did not.
-- confidence_score MUST equal the exact arithmetic sum of all 7 items above. Python will verify and reject mismatches.
-TOTAL POSSIBLE: 10.0 | MINIMUM TO SEND: {min_conf}
-
-═══════════════════════════════════════════════════════════════
-ENTRY, SL, TP RULES:
-═══════════════════════════════════════════════════════════════
-ENTRY: 50% midpoint of OB candle body. If FVG overlaps OB, use FVG edge (top for longs, bottom for shorts).
-SL: Place SL at OB wick extreme (low of OB candle for LONG, high for SHORT).
-  Python will add a dynamic volatility buffer on top of your SL. Do NOT add buffer yourself.
-  Just place SL at the exact OB wick extreme.
-TP1: Next significant opposing zone or liquidity pool. Must achieve 2:1 RR minimum.
-TP2: Second opposing zone beyond TP1. TP2 must be further from entry than TP1.
-PARTIAL CLOSE: Close 50% at TP1, move SL to breakeven, let remaining run to TP2.
-RR FORMULA — USE EXACTLY THIS:
-  risk = abs(entry - sl)
-  rr_tp1 = abs(tp1 - entry) / risk
-  rr_tp2 = abs(tp2 - entry) / risk
-  Both are measured from ENTRY, not from TP1. rr_tp2 MUST always be greater than rr_tp1.
-  If your numbers produce rr_tp2 <= rr_tp1, your TP2 placement is wrong. Fix it.
-
-═══════════════════════════════════════════════════════════════
-TRIGGER & ENTRY READINESS:
-═══════════════════════════════════════════════════════════════
-- entry_ready_now: Set to true ONLY if a trigger candle pattern is ALREADY confirmed on the
-  LATEST CLOSED candle (M15 or H1). This means the most recent closed candle shows:
-  - Bullish/bearish engulfing at the zone, OR
-  - CHoCH (change of character) at the zone, OR
-  - BOS (break of structure) confirming zone defense.
-  If the latest candle does NOT show a completed confirmation pattern, set entry_ready_now to false.
-  Do NOT set true based on the current forming candle — only closed candles count.
-- trigger_status: "ready" if entry_ready_now is true, "not_ready" if still waiting.
-- invalidate_above / invalidate_below: numeric price where setup is cancelled.
-- bias MUST be "LONG" or "SHORT". Never "WAIT". If the setup is not tradeable, set send_alert to false.
-
-THIS SYSTEM ONLY TRADES ZONE RETESTS (OB + FVG setups).
-NEVER suggest breakout entries, momentum entries, or trend-following entries.
-If current price action is a breakout without a valid zone retest, set send_alert to false.
+3. TEXT FIELDS — write from the perspective of a senior trader briefing a junior:
+   - confidence_reason: 1–2 sentences synthesizing WHY this setup is tradeable or risky.
+     Reference specific confluences and missing items from the data above.
+   - bias_reason: Max 12 words. Punchy. E.g. "M15 bullish BOS + demand zone retest + sweep confirmed"
+   - trigger: If entry_ready, describe the confirmed pattern with timestamp.
+     If not ready, describe exactly what candle pattern must form next.
+     Be specific: "Waiting for M15 bullish engulfing at {zone_level:.{dp}f} zone" not just "waiting for confirmation."
+   - invalid_if: One sentence. E.g. "M15 close below {result['sl']:.{dp}f} invalidates the OB and cancels the trade."
+   - macro_line1: Main macro driver for {name} RIGHT NOW. Be specific to the pair.
+   - macro_line2: Key upcoming event THIS WEEK that could affect {name}. If none, say "No major events scheduled."
+   - mindset: One sharp psychological trap specific to THIS trade. Not generic advice.
+     E.g. "Wide OB means SL is far — don't reduce position size mid-trade if price dips inside the OB body."
 
 Return ONLY raw JSON. No markdown. No code fences. No text outside the JSON.
 
-CRITICAL OUTPUT RULE: If ANY hard gate fails, return ONLY this short-form JSON and STOP:
 {{
-  "send_alert": false,
-  "gates_passed": false,
-  "gate_structure": "cite specific candle or false",
-  "gate_ob": "cite OB candle or false",
-  "gate_rr": "cite RR value or false",
-  "confidence_score": 0.0,
-  "confidence_reason": "one sentence why gates failed",
-  "bias": "LONG or SHORT"
-}}
-
-If ALL gates pass, return the full JSON:
-{{
-  "send_alert": true,
-  "gates_passed": true,
-  "gate_structure": "cite specific candle or false",
-  "gate_ob": "cite OB candle or false",
-  "gate_rr": "cite RR value or false",
-  "confidence_score": 0.0,
-  "score_breakdown": {{
-    "liquidity_swept": 0.0,
-    "fvg_overlaps_ob": 0.0,
-    "premium_discount": 0.0,
-    "multi_tf_alignment": 0.0,
-    "zone_freshness": 0.0,
-    "no_high_impact_news": 0.0,
-    "session_alignment": 0.0
-  }},
-  "confidence_reason": "one sentence",
-  "news_flag": "none or describe the event",
+  "confidence_reason": "",
+  "bias_reason": "",
+  "trigger": "",
+  "invalid_if": "",
+  "macro_line1": "",
+  "macro_line2": "",
+  "mindset": "",
+  "news_flag": "none",
   "geo_flag": false,
-  "bias": "LONG or SHORT",
-  "bias_reason": "max 12 words",
-
-  "entry": 0.0,
-  "entry_model": "limit",
-  "entry_ready_now": false,
-
-  "trigger_status": "not_ready or ready",
-  "trigger_tf": "M15 or H1",
-  "trigger_kind": "choch or bos or engulf or break_retest",
-  "trigger": "exact candle pattern needed — cite what the latest candle shows or what must happen next",
-
-  "invalidate_above": null,
-  "invalidate_below": null,
-  "invalid_if": "exact condition that cancels this trade",
-
-  "sl": 0.0,
-  "sl_note": "one sentence on SL logic — place at OB wick extreme, Python adds buffer",
-  "tp1": 0.0,
-  "tp2": 0.0,
-  "rr_tp1": "x.x",
-  "rr_tp2": "x.x",
-
-  "confluences": ["item1 — cite evidence", "item2 — cite evidence"],
-  "missing": [{{"item": "name", "reason": "why it matters"}}],
-  "macro_line1": "main macro driver right now",
-  "macro_line2": "key upcoming event this week",
-  "mindset": "one sharp psychological trap to avoid",
-
-  "ob_top": 0.0,
-  "ob_bottom": 0.0,
-  "ob_type": "bullish or bearish",
-  "ob_confirmed": true,
-  "fvg_top": 0.0,
-  "fvg_bottom": 0.0,
-  "fvg_type": "bullish or bearish",
-  "fvg_confirmed": true,
-  "lq_sweep_price": 0.0,
-  "chart_annotations": [{{"label": "short label", "price": 0.0, "status": "confirmed or missing"}}]
+  "news_score": 1.0
 }}"""
+
+
+def merge_gemini_text(result, gemini_data):
+    """
+    Merge Gemini's text fields and news scoring into the Python analysis result.
+    Modifies result dict in place.
+    Returns True if news score changed, False otherwise.
+    """
+    if not gemini_data:
+        return False
+
+    # Text fields — overwrite placeholders
+    text_fields = ["confidence_reason", "bias_reason", "trigger",
+                   "invalid_if", "macro_line1", "macro_line2", "mindset"]
+    for field in text_fields:
+        val = gemini_data.get(field)
+        if val and str(val).strip() and str(val).strip().lower() != "none":
+            result[field] = str(val).strip()
+
+    # News flag + geo flag
+    nf = gemini_data.get("news_flag")
+    if nf and str(nf).strip().lower() != "none":
+        result["news_flag"] = str(nf).strip()
+    result["geo_flag"] = bool(gemini_data.get("geo_flag", False))
+
+    # News scoring — override Python's placeholder 1.0
+    news_score_raw = float(gemini_data.get("news_score", 1.0))
+    # Clamp to valid values (0.0 or 1.0)
+    news_score = 1.0 if news_score_raw >= 0.5 else 0.0
+
+    old_news = result["score_breakdown"].get("no_high_impact_news", 1.0)
+    if abs(news_score - old_news) > 0.01:
+        result["score_breakdown"]["no_high_impact_news"] = news_score
+        result["confidence_score"] = round(
+            sum(float(v) for v in result["score_breakdown"].values()), 1)
+        print(f"    News score: {old_news} → {news_score} "
+              f"(total now {result['confidence_score']})")
+        return True
+
+    return False
+
 
 # ── Gemini call with retry ────────────────────────────────────────────────────
 def call_gemini(prompt, max_retries=2):
@@ -655,7 +568,7 @@ def call_gemini(prompt, max_retries=2):
             "thinkingConfig": {
                 "thinkingBudget": 0
             },
-            "maxOutputTokens": 2500
+            "maxOutputTokens": 1500
         }
     }
     for attempt in range(max_retries + 1):
@@ -684,218 +597,8 @@ def call_gemini(prompt, max_retries=2):
             return None, f"Gemini error: {str(e)[:100]}"
     return None, "Gemini failed after all retries"
 
-# ── Python post-validation ────────────────────────────────────────────────────
-def validate_gemini_response(data, pair_conf, zone_label, current_price, atr_value,
-                              python_fvgs=None, python_obs=None):
-    """
-    Validates Gemini's JSON response. Returns (is_valid, reason, buffer_applied).
-    Checks: gates, score math, SL sanity, bias sanity, ATR-based buffer.
-    """
-    name   = pair_conf["name"]
-    dp     = pair_conf.get("decimal_places", 5)
 
-    if not data.get("gates_passed", False):
-        return False, "Hard gates not passed", 0
-
-    bias = str(data.get("bias", "")).upper()
-    if bias not in ("LONG", "SHORT"):
-        return False, f"Bias is '{bias}' — must be LONG or SHORT", 0
-
-    # Clamp each score item to its maximum, recalculate
-    breakdown = data.get("score_breakdown", {})
-    clamped = False
-    for key in list(breakdown.keys()):
-        raw_val = float(breakdown[key])
-        max_val = SCORE_MAX.get(key, 0)
-        if max_val > 0 and raw_val > max_val:
-            print(f"    Score clamped: {key} was {raw_val}, max is {max_val}")
-            breakdown[key] = max_val
-            clamped = True
-    data["score_breakdown"] = breakdown
-    calc_sum = round(sum(float(v) for v in breakdown.values()), 1)
-    reported = float(data.get("confidence_score", 0))
-    if clamped or abs(calc_sum - reported) >= 0.3:
-        print(f"    Score corrected: Gemini said {reported}, clamped breakdown sums to {calc_sum}")
-        data["confidence_score"] = calc_sum
-
-    # Parse entry/SL/TP
-    try:
-        entry = float(str(data.get("entry", 0)).split("-")[0].strip() or 0)
-        sl    = float(data.get("sl", 0) or 0)
-        tp1   = float(data.get("tp1", 0) or 0)
-        if bias == "LONG" and sl >= entry:
-            return False, f"SL ({sl}) above entry ({entry}) for LONG", 0
-        if bias == "SHORT" and sl <= entry:
-            return False, f"SL ({sl}) below entry ({entry}) for SHORT", 0
-
-        # Python always calculates RR — never trust Gemini's numbers
-        risk = abs(entry - sl)
-        if risk > 0:
-            rr1 = abs(tp1 - entry) / risk
-            data["rr_tp1"] = f"{rr1:.2f}"
-            if rr1 < 2.0:
-                return False, f"Python hard-gate: RR is {rr1:.2f}:1 — minimum is 2.0:1. " \
-                      f"entry={entry}, sl={sl}, tp1={tp1}, risk={risk:.5f}", 0
-            try:
-                tp2 = float(data.get("tp2", 0) or 0)
-                if tp2 > 0:
-                    rr2 = abs(tp2 - entry) / risk
-                    data["rr_tp2"] = f"{rr2:.2f}"
-            except Exception:
-                pass
-    except Exception:
-        return False, "Could not parse entry/SL/TP1", 0
-
-    # ── FVG verification against Python-detected list ─────────────────────
-    fvg_pts = float(data.get("score_breakdown", {}).get("fvg_overlaps_ob", 0))
-    if fvg_pts > 0 and python_fvgs is not None:
-        g_top = float(data.get("fvg_top", 0) or 0)
-        g_bot = float(data.get("fvg_bottom", 0) or 0)
-        if g_top <= 0 or g_bot <= 0:
-            # Gemini claimed FVG but gave no coordinates
-            print(f"    FVG score claimed but coordinates empty — zeroing fvg_overlaps_ob")
-            data["score_breakdown"]["fvg_overlaps_ob"] = 0
-            data["fvg_confirmed"] = False
-        else:
-            matched = any(
-                abs(f["fvg_top"] - g_top) < 0.01 and abs(f["fvg_bottom"] - g_bot) < 0.01
-                for f in python_fvgs
-            )
-            if not matched:
-                print(f"    FVG coordinates ({g_top}, {g_bot}) not in Python-detected list — zeroing")
-                data["score_breakdown"]["fvg_overlaps_ob"] = 0
-                data["fvg_confirmed"] = False
-                data["fvg_top"] = 0
-                data["fvg_bottom"] = 0
-        data["confidence_score"] = round(
-            sum(float(v) for v in data["score_breakdown"].values()), 1)
-
-    # ── OB verification against Python-detected list ──────────────────────
-    if python_obs is not None:
-        g_ob_top = float(data.get("ob_top", 0) or 0)
-        g_ob_bot = float(data.get("ob_bottom", 0) or 0)
-        if g_ob_top <= 0 or g_ob_bot <= 0:
-            return False, "Gate 2 failed: OB coordinates missing from Gemini response", 0
-        matched_ob = any(
-            abs(o["ob_top"] - g_ob_top) < 0.01 and abs(o["ob_bottom"] - g_ob_bot) < 0.01
-            for o in python_obs
-        )
-        if not matched_ob:
-            return False, f"Gate 2 failed: OB ({g_ob_top}, {g_ob_bot}) not in Python-detected list — Gemini fabricated", 0
-    # SL widening removed — SL is taken as Gemini places it at OB wick extreme
-    buffer = 0
-
-    # Bias matches zone type
-    if "Demand" in zone_label and bias == "SHORT":
-        return False, "SHORT bias at Demand zone — contradictory", buffer
-    if "Supply" in zone_label and bias == "LONG":
-        return False, "LONG bias at Supply zone — contradictory", buffer
-
-    # Directional cleanup: null out invalidation fields that contradict the bias
-    # SHORT profits from price falling — invalidate_below is nonsensical
-    # LONG profits from price rising — invalidate_above is nonsensical
-    if bias == "SHORT" and data.get("invalidate_below") is not None:
-        print(f"    Nulled invalidate_below for SHORT (was {data['invalidate_below']})")
-        data["invalidate_below"] = None
-    if bias == "LONG" and data.get("invalidate_above") is not None:
-        print(f"    Nulled invalidate_above for LONG (was {data['invalidate_above']})")
-        data["invalidate_above"] = None
-
-    return True, "OK", buffer
-# ── FVG fallback verifier ─────────────────────────────────────────────────────
-def detect_fvgs(df):
-    """
-    Detect all FVGs using strict SMC arithmetic.
-    Bearish FVG: candle[i].Low > candle[i+2].High — gap between them.
-    Bullish FVG: candle[i].High < candle[i+2].Low — gap between them.
-    No approximation. Binary condition on exact OHLC values.
-    """
-    fvgs = []
-    if df is None or len(df) < 3:
-        return fvgs
-    for i in range(len(df) - 2):
-        try:
-            c1_h = float(df['High'].iloc[i])
-            c1_l = float(df['Low'].iloc[i])
-            c3_h = float(df['High'].iloc[i + 2])
-            c3_l = float(df['Low'].iloc[i + 2])
-            if c1_l > c3_h:  # Bearish FVG
-                fvgs.append({
-                    'type': 'bearish',
-                    'fvg_top':    round(c1_l, 6),
-                    'fvg_bottom': round(c3_h, 6),
-                    'c1_ts': str(df.index[i]),
-                    'c3_ts': str(df.index[i + 2]),
-                    'idx': i
-                })
-            elif c1_h < c3_l:  # Bullish FVG
-                fvgs.append({
-                    'type': 'bullish',
-                    'fvg_top':    round(c3_l, 6),
-                    'fvg_bottom': round(c1_h, 6),
-                    'c1_ts': str(df.index[i]),
-                    'c3_ts': str(df.index[i + 2]),
-                    'idx': i
-                })
-        except Exception:
-            continue
-    return fvgs
-
-
-def detect_obs(df, fvgs):
-    """
-    Detect OBs using strict SMC definition:
-    OB = last opposing candle before the impulse candle that created a given FVG.
-    Bearish OB: last bullish candle (close > open) before a bearish FVG.
-    Bullish OB: last bearish candle (close < open) before a bullish FVG.
-    Mitigated OBs (price fully closed through body) are excluded.
-    """
-    obs = []
-    seen_idx = set()
-    if df is None or len(df) == 0:
-        return obs
-    current_close = float(df['Close'].iloc[-1])
-
-    for fvg in fvgs:
-        fvg_idx  = fvg['idx']
-        fvg_type = fvg['type']
-        for j in range(fvg_idx, -1, -1):
-            try:
-                o = float(df['Open'].iloc[j])
-                c = float(df['Close'].iloc[j])
-                h = float(df['High'].iloc[j])
-                l = float(df['Low'].iloc[j])
-                is_opposing = (fvg_type == 'bearish' and c > o) or \
-                              (fvg_type == 'bullish' and c < o)
-                if not is_opposing:
-                    continue
-                if j in seen_idx:
-                    break
-                ob_body_top = max(o, c)
-                ob_body_bot = min(o, c)
-                # Mitigation check — if price already closed through body, OB is dead
-                if fvg_type == 'bearish' and current_close > ob_body_top:
-                    break
-                if fvg_type == 'bullish' and current_close < ob_body_bot:
-                    break
-                seen_idx.add(j)
-                obs.append({
-                    'type':            'bearish' if fvg_type == 'bearish' else 'bullish',
-                    'ob_top':          round(h, 6),
-                    'ob_bottom':       round(l, 6),
-                    'ob_body_top':     round(ob_body_top, 6),
-                    'ob_body_bottom':  round(ob_body_bot, 6),
-                    'ts':              str(df.index[j]),
-                    'idx':             j,
-                    'related_fvg_top':    fvg['fvg_top'],
-                    'related_fvg_bottom': fvg['fvg_bottom']
-                })
-                break
-            except Exception:
-                continue
-    return obs
-
-# ── Chart generation — clean, no volume, smart labels ─────────────────────────
+# ── Chart generation ──────────────────────────────────────────────────────────
 def generate_chart(df, title, levels, data, pair_conf):
     try:
         if df is None or df.empty:
@@ -911,7 +614,6 @@ def generate_chart(df, title, levels, data, pair_conf):
         for s in ax.spines.values():
             s.set_color('#2a2a3e')
 
-        # Draw candles
         for i, row in df_plot.iterrows():
             try:
                 o = float(row['Open']); h = float(row['High'])
@@ -929,7 +631,6 @@ def generate_chart(df, title, levels, data, pair_conf):
 
         n = len(df_plot)
 
-        # OB zone shading — uniform amber color regardless of direction
         ob_top    = float(data.get('ob_top', 0) or 0)
         ob_bottom = float(data.get('ob_bottom', 0) or 0)
         if ob_top > 0 and ob_bottom > 0 and abs(ob_top - ob_bottom) > 0:
@@ -942,7 +643,6 @@ def generate_chart(df, title, levels, data, pair_conf):
                 color=ob_color, fontsize=9, va='bottom', fontweight='bold', zorder=5,
                 bbox=dict(boxstyle='round,pad=0.15', facecolor='#131722', edgecolor=ob_color, alpha=0.9))
 
-        # FVG zone shading — purple with dashed border
         fvg_top    = float(data.get('fvg_top', 0) or 0)
         fvg_bottom = float(data.get('fvg_bottom', 0) or 0)
         if fvg_top > 0 and fvg_bottom > 0 and abs(fvg_top - fvg_bottom) > 0:
@@ -955,7 +655,6 @@ def generate_chart(df, title, levels, data, pair_conf):
                 color=fvg_color, fontsize=9, va='top', fontweight='bold', zorder=5,
                 bbox=dict(boxstyle='round,pad=0.15', facecolor='#131722', edgecolor=fvg_color, alpha=0.9))
 
-        # Liquidity sweep marker
         lq_price = float(data.get('lq_sweep_price', 0) or 0)
         if lq_price > 0:
             ax.plot(n-2, lq_price, marker='v', color='#F39C12', markersize=10, zorder=6)
@@ -972,7 +671,6 @@ def generate_chart(df, title, levels, data, pair_conf):
             'sl':      ('#e74c3c', '-',  1.5, 'SL'),
         }
 
-        # Collect all valid levels
         label_items = []
         for key, (color, style, width, lbl) in level_cfg.items():
             val = levels.get(key, 0)
@@ -984,10 +682,8 @@ def generate_chart(df, title, levels, data, pair_conf):
                 label_items.append({'price': price, 'label': lbl, 'color': color,
                                     'style': style, 'width': width})
 
-        # Sort by price ascending
         label_items.sort(key=lambda x: x['price'])
 
-        # Compute minimum spacing (3.5% of visible price range)
         all_prices = [li['price'] for li in label_items]
         if all_prices:
             price_range = max(all_prices) - min(all_prices)
@@ -997,19 +693,17 @@ def generate_chart(df, title, levels, data, pair_conf):
         else:
             min_spacing = 0
 
-        # Resolve overlaps by shifting display position
         display_positions = []
-        for i, item in enumerate(label_items):
+        for i_l, item in enumerate(label_items):
             display_y = item['price']
             for prev_y in display_positions:
                 if abs(display_y - prev_y) < min_spacing:
                     display_y = prev_y + min_spacing
             display_positions.append(display_y)
 
-        # Draw level lines and labels
-        for i, item in enumerate(label_items):
+        for i_l, item in enumerate(label_items):
             actual_price = item['price']
-            display_y    = display_positions[i]
+            display_y    = display_positions[i_l]
             color  = item['color']
             style  = item['style']
             width  = item['width']
@@ -1018,7 +712,6 @@ def generate_chart(df, title, levels, data, pair_conf):
             ax.axhline(y=actual_price, color=color, linestyle=style,
                        linewidth=width, alpha=0.85, zorder=4)
 
-            # If display position differs from actual, draw a thin connector
             if abs(display_y - actual_price) > min_spacing * 0.1:
                 ax.plot([n+0.5, n+2], [actual_price, display_y],
                         color=color, linewidth=0.6, alpha=0.4, zorder=4)
@@ -1295,10 +988,9 @@ def _build_missing_html(data):
     return miss_items
 
 
-# ── Invalidation email — references original alert ───────────────────────────
+# ── Invalidation email ────────────────────────────────────────────────────────
 def build_invalidation_email_html(alert, reason_text, pair_conf, current_price):
     ist_time = ist_now().strftime("%H:%M IST, %d %b %Y")
-    # Reference back to original alert
     orig_ist = alert.get("ist_time", "")
     orig_utc = alert.get("timestamp_utc", "")
     try:
@@ -1388,10 +1080,9 @@ def build_error_email_html(error_lines, pairs_ok):
 </div></body></html>"""
 
 
-# ── Log alert (TRADE READY only — APPROACHING goes to scan_log) ───────────────
+# ── Log alert ─────────────────────────────────────────────────────────────────
 def log_alert(pair, zone_level, zone_label, current_price, data, pair_conf,
-              alert_stage, atr_value, buffer_applied, fatigue_count):
-    # Check if an approaching was sent earlier for this zone
+              alert_stage, atr_value, fatigue_count):
     key = f"{pair}_{round(zone_level, 4)}"
     approaching_at = visit_state.get(key, {}).get("approaching_at_utc")
 
@@ -1408,6 +1099,7 @@ def log_alert(pair, zone_level, zone_label, current_price, data, pair_conf,
         "bias":               data.get("bias", ""),
         "entry":              data.get("entry", ""),
         "entry_model":        data.get("entry_model", ""),
+        "entry_source":       data.get("entry_source", ""),
         "entry_ready_now":    data.get("entry_ready_now", False),
         "trigger_status":     data.get("trigger_status", "not_ready"),
         "trigger_tf":         data.get("trigger_tf", ""),
@@ -1420,16 +1112,32 @@ def log_alert(pair, zone_level, zone_label, current_price, data, pair_conf,
         "tp1":                data.get("tp1", 0),
         "tp2":                data.get("tp2", 0),
         "rr_tp1":             data.get("rr_tp1", ""),
+        "rr_tp2":             data.get("rr_tp2", ""),
+        "tp1_source":         data.get("tp1_source", ""),
+        "tp2_source":         data.get("tp2_source", ""),
         "confidence_score":   data.get("confidence_score", 0),
+        "confidence_reason":  data.get("confidence_reason", ""),
         "score_breakdown":    data.get("score_breakdown", {}),
         "confluences":        data.get("confluences", []),
         "missing":            data.get("missing", []),
         "geo_flag":           data.get("geo_flag", False),
         "news_flag":          data.get("news_flag", "none"),
         "atr_h1":             round(atr_value, 6) if atr_value else None,
-        "buffer_applied":     round(buffer_applied, 6) if buffer_applied else None,
+        "buffer_applied":     0,   # SL widening removed — kept for backward compat
         "zone_tests_30d":     fatigue_count,
         "approaching_sent_at": approaching_at,
+        # smc_detector v2 fields
+        "m15_break_level":    data.get("m15_break_level", ""),
+        "sweep_score":        data.get("sweep_detail", {}).get("sweep_score", 0),
+        "sweep_method":       data.get("sweep_detail", {}).get("method", ""),
+        "ob_type":            data.get("ob_type", ""),
+        "ob_top":             data.get("ob_top", 0),
+        "ob_bottom":          data.get("ob_bottom", 0),
+        "fvg_confirmed":      data.get("fvg_confirmed", False),
+        "gate_structure":     data.get("gate_structure", ""),
+        "gate_ob":            data.get("gate_ob", ""),
+        "gate_rr":            data.get("gate_rr", ""),
+        # Outcome tracking
         "outcome":            "pending",
         "outcome_price":      None,
         "outcome_checked_at": None,
@@ -1439,6 +1147,7 @@ def log_alert(pair, zone_level, zone_label, current_price, data, pair_conf,
         "invalidation_email_sent": False
     })
     save_alert_log()
+
 
 # ── Send email ────────────────────────────────────────────────────────────────
 def send_email(subject, html_body, chart1_b64=None, chart2_b64=None):
@@ -1463,7 +1172,8 @@ def send_email(subject, html_body, chart1_b64=None, chart2_b64=None):
 def send_simple_email(subject, html_body):
     send_email(subject, html_body, None, None)
 
-# ── Entry-gated outcome check (aligned with weekly_review.py) ─────────────────
+
+# ── Entry-gated outcome check ────────────────────────────────────────────────
 def check_entry_gated_outcome(alert):
     pair   = alert.get('pair', '')
     symbol = next((p['symbol'] for p in config['pairs'] if p['name'] == pair), None)
@@ -1524,23 +1234,10 @@ def check_entry_gated_outcome(alert):
         return "pending", None
 
 
-# ── Job 2: Pure Python invalidation — ZERO Gemini calls ──────────────────────
+# ── Job 2: Pure Python invalidation ──────────────────────────────────────────
 def run_invalidation_checks(current_prices):
-    """
-    Checks ALL pending alerts for invalidation using pure Python price checks.
-    No Gemini calls. Uses current prices already fetched in Job 1.
-
-    CRITICAL: If entry price was reached AFTER the Trade Ready alert was sent,
-    the trade is LIVE. Invalidation is permanently skipped — the outcome checker
-    (SL vs TP1) handles live trades from here.
-
-    Checks (only if entry NOT yet filled):
-      1. Invalidation levels breached
-      2. 48-hour timeout (entry never reached)
-    """
     fired = 0
 
-    # Pre-fetch M15 data once per pair that has pending alerts
     pairs_with_pending = set()
     for alert in alert_log:
         if (alert.get("alert_type") == "zone"
@@ -1569,8 +1266,6 @@ def run_invalidation_checks(current_prices):
                 continue
             if alert.get("invalidation_email_sent"):
                 continue
-
-            # Already marked as filled on a previous scan — skip permanently
             if alert.get("entry_filled"):
                 continue
 
@@ -1585,7 +1280,7 @@ def run_invalidation_checks(current_prices):
 
             dp = pair_conf.get("decimal_places", 5)
 
-            # ── Check if entry was filled AFTER the Trade Ready alert ─────
+            # Check if entry was filled
             try:
                 entry_val = float(str(alert.get('entry', '0')).split('-')[0].strip() or 0)
                 bias_val  = str(alert.get('bias', '')).upper()
@@ -1610,12 +1305,8 @@ def run_invalidation_checks(current_prices):
             if alert.get("entry_filled"):
                 continue
 
-            # ── Entry NOT filled — run invalidation checks ────────────────
             reason = None
 
-            # Check 1: Invalidation levels breached (direction-aware)
-            # SHORT: only invalidate_above matters (price breaking UP = setup dead)
-            # LONG: only invalidate_below matters (price breaking DOWN = setup dead)
             bias_dir = str(alert.get("bias", "")).upper()
             inv_above = alert.get("invalidate_above")
             inv_below = alert.get("invalidate_below")
@@ -1624,7 +1315,6 @@ def run_invalidation_checks(current_prices):
             if inv_below and current_price < float(inv_below) and bias_dir != "SHORT":
                 reason = f"Price ({fmt_price(current_price, pair_conf)}) broke below invalidation level ({fmt_price(float(inv_below), pair_conf)})"
 
-            # Check 2: 48-hour timeout (entry never reached)
             if not reason:
                 try:
                     alert_time = datetime.strptime(alert['timestamp_utc'], "%Y-%m-%d %H:%M")
@@ -1652,11 +1342,13 @@ def run_invalidation_checks(current_prices):
 
     return fired
 
+
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 ist_start = ist_now().strftime("%H:%M IST, %d %b %Y")
-print(f"Alert engine started {ist_start} ({utc_str()} UTC)")
+print(f"Alert engine v2 started {ist_start} ({utc_str()} UTC)")
+print(f"  Python-first mode: smc_detector handles gates + scoring, Gemini handles text + news")
 
 run_errors    = []
 pairs_ok      = []
@@ -1679,6 +1371,8 @@ for pair_conf in config["pairs"]:
     prox        = pair_conf["proximity_pct"]
     min_touches = pair_conf.get("min_touches", 1)
     min_conf    = pair_conf.get("min_confidence", 7)
+    lookback    = config["zone_detection"]["swing_lookback"]
+    fatigue_thresh = config.get("scoring", {}).get("zone_fatigue_threshold", 3)
 
     print(f"  Scanning {name}...")
 
@@ -1691,10 +1385,7 @@ for pair_conf in config["pairs"]:
             run_errors.append(f"{name}: No market data returned for this pair.")
             continue
 
-        # Cache current price for Job 2 invalidation checks
         current_prices[name] = current_price
-
-        # Compute ATR for this pair
         atr_value = get_atr(df1) if df1 is not None else None
 
         if not zones:
@@ -1727,60 +1418,93 @@ for pair_conf in config["pairs"]:
             print(f"    ZONE HIT: {name} {zone_label} @ {zone_level:.{dp}f} "
                   f"dist:{dist_pct:.2f}% fatigue:{fatigue}")
 
-            python_fvgs = detect_fvgs(df2)
-            python_obs  = detect_obs(df2, python_fvgs)
-            print(f"    Python detected: {len(python_fvgs)} FVGs, {len(python_obs)} OBs on M15")
-
-            prompt = build_zone_prompt(
-                pair_conf,
-                round(zone_level, dp),
-                zone_label,
-                round(current_price, dp),
-                macro_news, df1, df2, fatigue, atr_value,
-                python_fvgs=python_fvgs,
-                python_obs=python_obs
+            # ══════════════════════════════════════════════════════════════
+            # PYTHON-FIRST ANALYSIS (smc_detector v2)
+            # ══════════════════════════════════════════════════════════════
+            result = smc_detector.run_analysis(
+                pair_conf=pair_conf,
+                df_h1=df1,
+                df_m15=df2,
+                zones=zones,
+                current_price=current_price,
+                zone_level=round(zone_level, dp),
+                zone_label=zone_label,
+                atr_value=atr_value,
+                fatigue_count=fatigue,
+                in_session=is_in_session(pair_conf),
+                fatigue_threshold=fatigue_thresh,
+                lookback=lookback
             )
 
-            data, error = call_gemini(prompt)
-
-            if error:
-                print(f"    {error}")
-                log_scan(name, "error", error, zone_level)
-                run_errors.append(f"{name}: {error}")
-                continue
-
-            # ── Python post-validation ────────────────────────────────────
-            is_valid, reason, buffer_applied = validate_gemini_response(
-                data, pair_conf, zone_label, current_price, atr_value,
-                python_fvgs=python_fvgs, python_obs=python_obs)
-
-            if not is_valid:
-                print(f"    {name} blocked by validation: {reason}")
-                log_scan(name, "rejected_validation", reason, zone_level)
-                continue
-
-            score = data.get("confidence_score", 0)
-
-            score = data.get("confidence_score", 0)
-
-            if not data.get("send_alert", False):
-                reason = data.get("confidence_reason", "Gemini rejected setup.")
-                log_scan(name, "rejected_gemini", reason, zone_level)
-                continue
-
-            if not data.get("gates_passed", False):
-                reason = f"Hard gates failed. {data.get('confidence_reason', '')}"
+            # ── Gate check ────────────────────────────────────────────────
+            if not result.get("gates_passed", False):
+                reason = result.get("confidence_reason", "Gates failed")
                 log_scan(name, "rejected_gates", reason, zone_level)
+                print(f"    Gates failed: {reason}")
                 continue
 
-            if score < min_conf:
-                reason = f"Score {score}/10 below {min_conf}. {data.get('confidence_reason', '')}"
-                log_scan(name, "rejected_low_score", reason, zone_level)
+            if not result.get("send_alert", False):
+                reason = result.get("confidence_reason", "Python rejected setup")
+                log_scan(name, "rejected_python", reason, zone_level)
+                print(f"    Python rejected: {reason}")
                 continue
+
+            score = result.get("confidence_score", 0)
+
+            # Pre-Gemini score check (news still at 1.0 placeholder)
+            # If score is already below threshold even with free news point, skip Gemini
+            if score < min_conf:
+                reason = f"Score {score}/10 below {min_conf} (pre-Gemini). {result.get('confidence_reason', '')}"
+                log_scan(name, "rejected_low_score", reason, zone_level)
+                print(f"    Score too low: {score}/10")
+                continue
+
+            # ══════════════════════════════════════════════════════════════
+            # GEMINI — TEXT FIELDS + NEWS SCORING ONLY
+            # ══════════════════════════════════════════════════════════════
+            gemini_called = False
+            if result.get("gemini_needed", True):
+                prompt = build_slim_gemini_prompt(
+                    result, pair_conf, macro_news,
+                    current_price, round(zone_level, dp), zone_label
+                )
+                gemini_data, error = call_gemini(prompt)
+
+                if error:
+                    print(f"    Gemini error (using Python defaults): {error}")
+                    # Alert proceeds with Python placeholders + news=1.0
+                else:
+                    gemini_called = True
+                    news_changed = merge_gemini_text(result, gemini_data)
+
+                    # Re-check score after news override
+                    if news_changed:
+                        score = result["confidence_score"]
+                        if score < min_conf:
+                            reason = (f"Score dropped to {score}/10 after Gemini news override "
+                                      f"(news_flag: {result.get('news_flag', 'none')})")
+                            log_scan(name, "rejected_news", reason, zone_level)
+                            print(f"    Rejected by news: {reason}")
+                            continue
+
+            # ── Extra gate: macro alignment (for commodity pairs like Gold) ──
+            extra_gate = pair_conf.get("extra_gate")
+            if extra_gate == "macro_alignment_required":
+                # If Gemini flagged geo risk contradicting bias, reject
+                if result.get("geo_flag", False):
+                    macro_line = result.get("macro_line1", "")
+                    bias = result.get("bias", "")
+                    # Conservative: geo flag + commodity = always flag, let Gemini's
+                    # confidence_reason guide the trader. Don't auto-reject.
+                    print(f"    ⚠ Macro gate: geo_flag=True for {name} ({bias}). "
+                          f"Alert proceeding — review macro context.")
+
+            print(f"    ✓ Analysis complete: {name} [{score}/10] "
+                  f"{'(Gemini OK)' if gemini_called else '(Python-only, Gemini failed)'}")
 
             # ── Determine email type: TRADE READY or APPROACHING ──────────
-            entry_ready = data.get("entry_ready_now", False)
-            trigger_ok  = str(data.get("trigger_status", "")).lower() == "ready"
+            entry_ready = result.get("entry_ready_now", False)
+            trigger_ok  = str(result.get("trigger_status", "")).lower() == "ready"
             is_trade_ready = entry_ready and trigger_ok
 
             if is_trade_ready:
@@ -1792,22 +1516,24 @@ for pair_conf in config["pairs"]:
 
                 levels = {
                     'zone': zone_level, 'current': current_price,
-                    'entry': data.get('entry', ''), 'sl': data.get('sl', 0),
-                    'tp1': data.get('tp1', 0), 'tp2': data.get('tp2', 0)
+                    'entry': result.get('entry', ''), 'sl': result.get('sl', 0),
+                    'tp1': result.get('tp1', 0), 'tp2': result.get('tp2', 0)
                 }
-                chart1 = generate_chart(df1, f"{name} — H1", levels, data, pair_conf)
-                chart2 = generate_chart(df2, f"{name} — M15", levels, data, pair_conf)
+                chart1 = generate_chart(df1, f"{name} — H1", levels, result, pair_conf)
+                chart2 = generate_chart(df2, f"{name} — M15", levels, result, pair_conf)
 
                 html = build_trade_ready_email_html(
-                    data, name, pair_conf, round(zone_level, dp),
+                    result, name, pair_conf, round(zone_level, dp),
                     zone_label, round(current_price, dp), chart1, chart2, fatigue
                 )
-                subject = f"[{score}/10] TRADE READY | {name} | {'SELL' if data.get('bias')=='SHORT' else 'BUY'} | {ist_now().strftime('%H:%M IST')}"
+                subject = (f"[{score}/10] TRADE READY | {name} | "
+                           f"{'SELL' if result.get('bias')=='SHORT' else 'BUY'} | "
+                           f"{ist_now().strftime('%H:%M IST')}")
                 send_email(subject, html, chart1, chart2)
 
                 log_alert(name, round(zone_level, dp), zone_label,
-                          round(current_price, dp), data, pair_conf,
-                          "trade_ready", atr_value, buffer_applied, fatigue)
+                          round(current_price, dp), result, pair_conf,
+                          "trade_ready", atr_value, fatigue)
                 log_scan(name, "trade_ready_sent",
                          f"Trade ready alert sent at score {score}/10.", zone_level)
                 record_trade_ready(name, zone_level)
@@ -1826,14 +1552,14 @@ for pair_conf in config["pairs"]:
 
                 levels = {
                     'zone': zone_level, 'current': current_price,
-                    'entry': data.get('entry', ''), 'sl': data.get('sl', 0),
-                    'tp1': data.get('tp1', 0), 'tp2': data.get('tp2', 0)
+                    'entry': result.get('entry', ''), 'sl': result.get('sl', 0),
+                    'tp1': result.get('tp1', 0), 'tp2': result.get('tp2', 0)
                 }
-                chart1 = generate_chart(df1, f"{name} — H1", levels, data, pair_conf)
-                chart2 = generate_chart(df2, f"{name} — M15", levels, data, pair_conf)
+                chart1 = generate_chart(df1, f"{name} — H1", levels, result, pair_conf)
+                chart2 = generate_chart(df2, f"{name} — M15", levels, result, pair_conf)
 
                 html = build_approaching_email_html(
-                    data, name, pair_conf, round(zone_level, dp),
+                    result, name, pair_conf, round(zone_level, dp),
                     zone_label, round(current_price, dp), chart1, chart2, fatigue
                 )
                 subject = f"APPROACHING | {name} | {zone_label} | {ist_now().strftime('%H:%M IST')}"
@@ -1843,12 +1569,13 @@ for pair_conf in config["pairs"]:
                          f"Approaching alert sent at score {score}/10.", zone_level)
                 record_approaching(name, zone_level)
                 log_alert(name, round(zone_level, dp), zone_label,
-                          round(current_price, dp), data, pair_conf,
-                          "approaching", atr_value, 0, fatigue)
+                          round(current_price, dp), result, pair_conf,
+                          "approaching", atr_value, fatigue)
 
                 approaching_fired += 1
                 zone_alerted = True
                 print(f"    → APPROACHING: {name} [{score}/10]")
+
         if zones_in_proximity == 0:
             log_scan(name, "zone_outside_proximity",
                      "Zones detected but none near current price.")
@@ -1888,4 +1615,4 @@ save_visit_state()
 
 total_actions = alerts_fired + inv_fired
 print(f"\nAlert log: {len(alert_log)} entries | Scan log: {len(scan_log)} entries")
-print(f"Scan complete. {alerts_fired} zone alert(s), {inv_fired} invalidation(s).")
+print(f"Scan complete. {alerts_fired} zone alert(s), {approaching_fired} approaching, {inv_fired} invalidation(s).")
