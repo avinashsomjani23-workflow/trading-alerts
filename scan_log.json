@@ -11553,5 +11553,45 @@
     "zone": null,
     "status": "zone_outside_proximity",
     "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "08 Apr 21:46 IST",
+    "time_utc": "2026-04-08 16:16",
+    "pair": "EURUSD",
+    "zone": 1.1711,
+    "status": "error",
+    "reason": "Gemini error (code 503): This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+  },
+  {
+    "time_ist": "08 Apr 21:46 IST",
+    "time_utc": "2026-04-08 16:16",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "08 Apr 21:46 IST",
+    "time_utc": "2026-04-08 16:16",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "08 Apr 21:46 IST",
+    "time_utc": "2026-04-08 16:16",
+    "pair": "NAS100",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "08 Apr 21:46 IST",
+    "time_utc": "2026-04-08 16:16",
+    "pair": "GOLD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
   }
 ]
