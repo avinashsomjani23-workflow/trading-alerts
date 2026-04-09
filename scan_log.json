@@ -12513,5 +12513,45 @@
     "zone": 4724.82507,
     "status": "rejected_low_score",
     "reason": "Score 5.5/10 below 7 (pre-Gemini). BOS bullish confirmed near zone"
+  },
+  {
+    "time_ist": "09 Apr 13:15 IST",
+    "time_utc": "2026-04-09 07:45",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "09 Apr 13:15 IST",
+    "time_utc": "2026-04-09 07:45",
+    "pair": "USDJPY",
+    "zone": 159.23102,
+    "status": "rejected_gates",
+    "reason": "M15 bos is bullish, need bearish for SHORT"
+  },
+  {
+    "time_ist": "09 Apr 13:15 IST",
+    "time_utc": "2026-04-09 07:45",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "09 Apr 13:15 IST",
+    "time_utc": "2026-04-09 07:45",
+    "pair": "NAS100",
+    "zone": 24926.5,
+    "status": "rejected_gates",
+    "reason": "M15 bos lacks displacement (body < 0.25 x ATR)"
+  },
+  {
+    "time_ist": "09 Apr 13:15 IST",
+    "time_utc": "2026-04-09 07:45",
+    "pair": "GOLD",
+    "zone": 4724.82507,
+    "status": "rejected_low_score",
+    "reason": "Score 5.5/10 below 7 (pre-Gemini). BOS bullish confirmed near zone"
   }
 ]
