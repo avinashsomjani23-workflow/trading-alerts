@@ -1,32 +1,37 @@
 """
-smc_detector.py — Pure Python SMC Pattern Detection Engine v2
-==============================================================
+smc_detector.py — Pure Python SMC Pattern Detection Engine v2.1
+================================================================
 Zero Gemini calls. Every function is deterministic and testable.
 Pair-type aware: forex, forex_jpy, index, commodity.
 
-v2 changes from v1:
-  - Strong Point / Weak Point tracking for iBOS vs BOS vs CHoCH
-  - Partial liquidity sweep scoring (2.5 / 1.5 / 0)
-  - M15 opposing OBs + FVGs as TP targets (H1 OB/FVG dropped entirely)
-  - Multi-TF scoring: 4-tier (1.5 / 1.0 / 0.5 / 0)
-  - Pair-type-aware proximity thresholds for sweeps
+v2.1 changes from v2:
+  - Structure-anchored OB detection (replaces FVG-anchored)
+  - detect_bos_choch_all — returns ALL breaks for scoring
+  - compute_capped_atr — prevents spike days inflating displacement
+  - New 8-item scorecard (session_alignment removed)
+  - FVG-in-zone independent scoring
+  - OB proximity filter via select_trade_ob
+  - Wider scan windows: swing lookback 15, BOS scan 15 candles
+  - Displacement fraction lowered to 0.15
 
 Functions:
     1.  get_swing_points          — swing high/low detection
     2.  _determine_trend          — HH/HL/LH/LL trend classification
     3.  _find_strong_weak_points  — Strong Point (ERL) and Weak Point
-    4.  detect_bos_choch          — BOS / CHoCH / iBOS with displacement
-    5.  detect_fvgs               — Fair Value Gaps with mitigation tracking
-    6.  get_unmitigated_fvgs      — filter helper
-    7.  detect_obs                — Order Blocks from FVG backward-walk
-    8.  detect_liquidity_sweep    — wick-rejection sweep (2.5 / 1.5 / 0)
-    9.  compute_premium_discount  — 60/40 equilibrium check
-    10. select_trade_ob           — pick best OB for zone + bias
-    11. compute_levels            — entry / SL / TP1 / TP2 / RR
-    12. check_entry_readiness     — engulfing or BOS/CHoCH trigger
-    13. compute_invalidation      — direction-aware invalidation levels
-    14. compute_score             — full weighted scorecard (news → Gemini)
-    15. run_analysis              — main orchestrator
+    4.  detect_bos_choch          — BOS / CHoCH / iBOS (single best)
+    5.  detect_bos_choch_all      — ALL confirmed breaks (for scoring)
+    6.  detect_fvgs               — Fair Value Gaps with mitigation tracking
+    7.  get_unmitigated_fvgs      — filter helper
+    8.  detect_obs_from_structure  — OB from structural break candle
+    9.  detect_liquidity_sweep    — wick-rejection sweep (2.5 / 1.5 / 0)
+    10. compute_premium_discount  — 60/40 equilibrium check
+    11. select_trade_ob           — validate OB proximity to zone
+    12. compute_levels            — entry / SL / TP1 / TP2 / RR
+    13. check_entry_readiness     — engulfing or BOS/CHoCH trigger
+    14. compute_invalidation      — direction-aware invalidation levels
+    15. compute_capped_atr        — ATR capped at median * 1.5
+    16. compute_score             — full weighted scorecard (news → Gemini)
+    17. run_analysis              — main orchestrator
 """
 
 import numpy as np
@@ -38,12 +43,10 @@ import pandas as pd
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # BOS/CHoCH displacement: breaking candle body must be >= this fraction of
-# H1 ATR(14). Filters doji and weak grinds.
-# 0.25 → EURUSD ATR 0.0040 needs ~10 pip body. NAS100 ATR 200 needs ~50 pts.
-DISPLACEMENT_ATR_FRACTION = 0.25
+# H1 ATR(14). Lowered from 0.25 to catch more valid breaks.
+DISPLACEMENT_ATR_FRACTION = 0.15
 
 # BOS tolerance: how far past the swing body extreme the close must be.
-# Prevents false breaks where close barely nicks the level.
 BOS_TOLERANCE = {
     "forex":     0.00010,   # 1 pip
     "forex_jpy": 0.010,     # 1 pip (JPY scale)
@@ -55,27 +58,24 @@ BOS_TOLERANCE = {
 SWEEP_WICK_BODY_RATIO = 1.5
 
 # Sweep: minimum body size as fraction of ATR (anti-doji guard).
-# When body ~ 0 the wick/body ratio explodes → false sweep.
 SWEEP_MIN_BODY_ATR = 0.10
 
 # Sweep: how many recent candles to check for sweep evidence.
 SWEEP_CANDLE_WINDOW = 3
 
 # Sweep: proximity threshold for near-miss scoring (1.5 pts).
-# Wick approached within this % of the liquidity level but did not pierce.
 SWEEP_PROXIMITY_PCT = {
-    "forex":     0.06,   # ~6.5 pips on EURUSD
-    "forex_jpy": 0.08,   # ~11.6 pips on USDJPY
-    "index":     0.12,   # ~23 pts on NAS100
-    "commodity": 0.10,   # ~$2.40 on Gold
+    "forex":     0.06,
+    "forex_jpy": 0.08,
+    "index":     0.12,
+    "commodity": 0.10,
 }
 
 # Premium/Discount: tolerance band around equilibrium.
-# 0.10 → LONG valid below 60 %, SHORT valid above 40 %.
 PD_TOLERANCE = 0.10
 
-# OB: max candles to walk backward from FVG origin.
-OB_MAX_WALK_BACK = 5
+# OB: max candles to walk backward from structural break candle.
+OB_MAX_WALK_BACK = 15
 
 # M15 analysis window (candles from end of DataFrame).
 FVG_M15_WINDOW = 100   # ~25 hours
@@ -114,7 +114,7 @@ def _dp(pair_conf):
 # 1. SWING POINT DETECTION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def get_swing_points(df, lookback=5):
+def get_swing_points(df, lookback=15):
     """
     Detect swing highs and swing lows from OHLC data.
 
@@ -125,7 +125,6 @@ def get_swing_points(df, lookback=5):
         {type, price, body_extreme, idx, ts}
 
     body_extreme = max(Open, Close) for highs, min(Open, Close) for lows.
-    Used for BOS body-break detection (not wick-break).
     """
     if df is None or len(df) < lookback * 2 + 1:
         return []
@@ -168,11 +167,6 @@ def get_swing_points(df, lookback=5):
 def _determine_trend(swings):
     """
     Classify trend from the last two swing highs and two swing lows.
-
-    bullish  = Higher High AND Higher Low  (HH + HL)
-    bearish  = Lower High  AND Lower Low   (LH + LL)
-    mixed    = anything else (range / transition)
-
     Returns: "bullish", "bearish", or "mixed"
     """
     sh = [s for s in swings if s["type"] == "high"]
@@ -198,21 +192,6 @@ def _determine_trend(swings):
 def _find_strong_weak_points(swings, trend):
     """
     Identify the External Range Liquidity boundaries.
-
-    Strong Point = origin of the last validated BOS.
-        Bullish: swing LOW between the second-to-last and last swing HIGH
-                 (the low that launched the move breaking the prior high).
-                 Breaking the Strong Point = CHoCH (trend reversal).
-
-        Bearish: swing HIGH between the second-to-last and last swing LOW.
-
-    Weak Point = the most recent extreme in the trend direction.
-        Bullish: most recent swing HIGH (breaking it = continuation BOS).
-        Bearish: most recent swing LOW.
-
-    Mixed / insufficient data: returns (None, None) — all breaks treated as
-    external (cannot determine internal range).
-
     Returns: (strong_point_dict, weak_point_dict) or (None, None)
     """
     sh = [s for s in swings if s["type"] == "high"]
@@ -246,30 +225,119 @@ def _find_strong_weak_points(swings, trend):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 4. BOS / CHoCH / iBOS DETECTION
+# SHARED: Build break targets
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def detect_bos_choch(df, pair_conf, atr_value=None, lookback=5):
+def _build_break_targets(swings, strong_point, weak_point, sh, sl, trend):
+    """Build target list for break detection. Used by both detect_bos_choch and detect_bos_choch_all."""
+    targets = []
+
+    if strong_point is not None and weak_point is not None:
+        if weak_point["type"] == "high":
+            targets.append({
+                "body_extreme": weak_point["body_extreme"],
+                "price": weak_point["price"],
+                "test": "above",
+                "break_type": "bos",
+                "direction": "bullish",
+                "break_level": "external",
+                "swing": weak_point
+            })
+        else:
+            targets.append({
+                "body_extreme": weak_point["body_extreme"],
+                "price": weak_point["price"],
+                "test": "below",
+                "break_type": "bos",
+                "direction": "bearish",
+                "break_level": "external",
+                "swing": weak_point
+            })
+
+        if strong_point["type"] == "low":
+            targets.append({
+                "body_extreme": strong_point["body_extreme"],
+                "price": strong_point["price"],
+                "test": "below",
+                "break_type": "choch",
+                "direction": "bearish",
+                "break_level": "external",
+                "swing": strong_point
+            })
+        else:
+            targets.append({
+                "body_extreme": strong_point["body_extreme"],
+                "price": strong_point["price"],
+                "test": "above",
+                "break_type": "choch",
+                "direction": "bullish",
+                "break_level": "external",
+                "swing": strong_point
+            })
+
+        sp_idx = strong_point["idx"]
+        wp_idx = weak_point["idx"]
+        lo_bound = min(sp_idx, wp_idx)
+        hi_bound = max(sp_idx, wp_idx)
+
+        for s in swings:
+            if s["idx"] <= lo_bound or s["idx"] >= hi_bound:
+                continue
+            if s is strong_point or s is weak_point:
+                continue
+            if s["type"] == "high":
+                targets.append({
+                    "body_extreme": s["body_extreme"],
+                    "price": s["price"],
+                    "test": "above",
+                    "break_type": "ibos",
+                    "direction": "bullish",
+                    "break_level": "internal",
+                    "swing": s
+                })
+            else:
+                targets.append({
+                    "body_extreme": s["body_extreme"],
+                    "price": s["price"],
+                    "test": "below",
+                    "break_type": "ibos",
+                    "direction": "bearish",
+                    "break_level": "internal",
+                    "swing": s
+                })
+    else:
+        for s in sh:
+            targets.append({
+                "body_extreme": s["body_extreme"],
+                "price": s["price"],
+                "test": "above",
+                "break_type": "bos",
+                "direction": "bullish",
+                "break_level": "external",
+                "swing": s
+            })
+        for s in sl:
+            targets.append({
+                "body_extreme": s["body_extreme"],
+                "price": s["price"],
+                "test": "below",
+                "break_type": "bos",
+                "direction": "bearish",
+                "break_level": "external",
+                "swing": s
+            })
+
+    return targets
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. BOS / CHoCH / iBOS DETECTION (single best)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def detect_bos_choch(df, pair_conf, atr_value=None, lookback=15):
     """
     Detect the most recent structural break on the given timeframe.
-
-    Method:
-      1. Find swing points → determine trend → find Strong/Weak Points
-      2. Scan last 5 CLOSED candles for a body close past a swing level
-         (body_extreme +/- pair-aware tolerance)
-      3. Classify:
-         - Close past Weak Point  → BOS   (continuation, external)
-         - Close past Strong Point → CHoCH (reversal, external)
-         - Close past internal swing → iBOS (internal)
-      4. Displacement: breaking candle body >= 0.25 x ATR
-
-    Priority: external breaks over internal.
-    Among same level, most recent candle wins.
-
-    Returns dict:
-        confirmed, type (bos/choch/ibos), direction (bullish/bearish),
-        break_level (external/internal), break_price, break_candle_ts,
-        break_candle_idx, swing_broken, has_displacement, reason
+    Scans last 15 closed candles. Priority: external > internal, most recent wins.
     """
     empty = {
         "confirmed": False, "type": None, "direction": None,
@@ -302,116 +370,15 @@ def detect_bos_choch(df, pair_conf, atr_value=None, lookback=5):
     O_arr = df['Open'].values.flatten().astype(float)
     n = len(df)
 
-    # ── Build target list with classification ─────────────────────────────
-    targets = []
-
-    if strong_point is not None and weak_point is not None:
-        # Weak Point (continuation)
-        if weak_point["type"] == "high":
-            targets.append({
-                "body_extreme": weak_point["body_extreme"],
-                "price": weak_point["price"],
-                "test": "above",
-                "break_type": "bos",
-                "direction": "bullish",
-                "break_level": "external",
-                "swing": weak_point
-            })
-        else:
-            targets.append({
-                "body_extreme": weak_point["body_extreme"],
-                "price": weak_point["price"],
-                "test": "below",
-                "break_type": "bos",
-                "direction": "bearish",
-                "break_level": "external",
-                "swing": weak_point
-            })
-
-        # Strong Point (reversal)
-        if strong_point["type"] == "low":
-            targets.append({
-                "body_extreme": strong_point["body_extreme"],
-                "price": strong_point["price"],
-                "test": "below",
-                "break_type": "choch",
-                "direction": "bearish",
-                "break_level": "external",
-                "swing": strong_point
-            })
-        else:
-            targets.append({
-                "body_extreme": strong_point["body_extreme"],
-                "price": strong_point["price"],
-                "test": "above",
-                "break_type": "choch",
-                "direction": "bullish",
-                "break_level": "external",
-                "swing": strong_point
-            })
-
-        # Internal swings (iBOS)
-        sp_idx = strong_point["idx"]
-        wp_idx = weak_point["idx"]
-        lo_bound = min(sp_idx, wp_idx)
-        hi_bound = max(sp_idx, wp_idx)
-
-        for s in swings:
-            if s["idx"] <= lo_bound or s["idx"] >= hi_bound:
-                continue
-            if s is strong_point or s is weak_point:
-                continue
-            if s["type"] == "high":
-                targets.append({
-                    "body_extreme": s["body_extreme"],
-                    "price": s["price"],
-                    "test": "above",
-                    "break_type": "ibos",
-                    "direction": "bullish",
-                    "break_level": "internal",
-                    "swing": s
-                })
-            else:
-                targets.append({
-                    "body_extreme": s["body_extreme"],
-                    "price": s["price"],
-                    "test": "below",
-                    "break_type": "ibos",
-                    "direction": "bearish",
-                    "break_level": "internal",
-                    "swing": s
-                })
-    else:
-        # Mixed / no SP-WP → every swing break is external
-        for s in sh:
-            targets.append({
-                "body_extreme": s["body_extreme"],
-                "price": s["price"],
-                "test": "above",
-                "break_type": "bos",
-                "direction": "bullish",
-                "break_level": "external",
-                "swing": s
-            })
-        for s in sl:
-            targets.append({
-                "body_extreme": s["body_extreme"],
-                "price": s["price"],
-                "test": "below",
-                "break_type": "bos",
-                "direction": "bearish",
-                "break_level": "external",
-                "swing": s
-            })
+    targets = _build_break_targets(swings, strong_point, weak_point, sh, sl, trend)
 
     if not targets:
         empty["reason"] = "No swing targets for break detection"
         return empty
 
-    # ── Scan last 5 closed candles ────────────────────────────────────────
     best = None
 
-    for i in range(n - 2, max(n - 7, -1), -1):
+    for i in range(n - 2, max(n - 17, -1), -1):
         body = abs(C_arr[i] - O_arr[i])
         has_disp = body >= disp_thresh if disp_thresh > 0 else True
 
@@ -459,27 +426,103 @@ def detect_bos_choch(df, pair_conf, atr_value=None, lookback=5):
     if best is not None:
         return best
 
-    empty["reason"] = "No structural break in last 5 closed candles"
+    empty["reason"] = "No structural break in last 15 closed candles"
     return empty
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 5. FVG DETECTION + DIRECTION-AWARE MITIGATION
+# 5. BOS / CHoCH — ALL BREAKS (for scoring)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def detect_bos_choch_all(df, pair_conf, atr_value=None, lookback=15):
+    """
+    Returns ALL confirmed structural breaks (with displacement) in the
+    last 15 closed candles. Used for scoring item 1 — determines if both
+    BOS and CHoCH are present for the given bias.
+    """
+    result = {
+        "has_bos_bullish": False,
+        "has_bos_bearish": False,
+        "has_choch_bullish": False,
+        "has_choch_bearish": False,
+        "all_breaks": []
+    }
+
+    if df is None or len(df) < lookback * 2 + 5:
+        return result
+
+    swings = get_swing_points(df, lookback)
+    sh = [s for s in swings if s["type"] == "high"]
+    sl = [s for s in swings if s["type"] == "low"]
+
+    if len(sh) < 2 or len(sl) < 2:
+        return result
+
+    trend = _determine_trend(swings)
+    strong_point, weak_point = _find_strong_weak_points(swings, trend)
+
+    tol = BOS_TOLERANCE.get(_pair_tol_key(pair_conf), 0.0001)
+    disp_thresh = (DISPLACEMENT_ATR_FRACTION * atr_value
+                   if atr_value and atr_value > 0 else 0)
+
+    C_arr = df['Close'].values.flatten().astype(float)
+    O_arr = df['Open'].values.flatten().astype(float)
+    n = len(df)
+
+    targets = _build_break_targets(swings, strong_point, weak_point, sh, sl, trend)
+
+    if not targets:
+        return result
+
+    all_breaks = []
+
+    for i in range(n - 2, max(n - 17, -1), -1):
+        body = abs(C_arr[i] - O_arr[i])
+        has_disp = body >= disp_thresh if disp_thresh > 0 else True
+
+        for t in targets:
+            if t["swing"]["idx"] >= i:
+                continue
+
+            broken = False
+            if t["test"] == "above" and C_arr[i] > t["body_extreme"] + tol:
+                broken = True
+            elif t["test"] == "below" and C_arr[i] < t["body_extreme"] - tol:
+                broken = True
+
+            if not broken or not has_disp:
+                continue
+
+            all_breaks.append({
+                "type": t["break_type"],
+                "direction": t["direction"],
+                "break_level": t["break_level"],
+                "break_price": float(C_arr[i]),
+                "break_candle_idx": i,
+                "swing_broken": t["price"]
+            })
+
+    for brk in all_breaks:
+        if brk["type"] == "bos" and brk["direction"] == "bullish":
+            result["has_bos_bullish"] = True
+        elif brk["type"] == "bos" and brk["direction"] == "bearish":
+            result["has_bos_bearish"] = True
+        elif brk["type"] == "choch" and brk["direction"] == "bullish":
+            result["has_choch_bullish"] = True
+        elif brk["type"] == "choch" and brk["direction"] == "bearish":
+            result["has_choch_bearish"] = True
+
+    result["all_breaks"] = all_breaks
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6. FVG DETECTION + DIRECTION-AWARE MITIGATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def detect_fvgs(df, window=None):
     """
     Detect Fair Value Gaps with direction-aware mitigation tracking.
-
-    Bullish FVG (gap UP):  candle[i].High < candle[i+2].Low
-        fvg_top    = candle[i+2].Low
-        fvg_bottom = candle[i].High
-        Mitigated when any later candle's Low drops INTO gap (<= fvg_top).
-
-    Bearish FVG (gap DOWN): candle[i].Low > candle[i+2].High
-        fvg_top    = candle[i].Low
-        fvg_bottom = candle[i+2].High
-        Mitigated when any later candle's High rises INTO gap (>= fvg_bottom).
     """
     fvgs = []
     if df is None or len(df) < 3:
@@ -492,7 +535,6 @@ def detect_fvgs(df, window=None):
     L = df['Low'].values.flatten().astype(float)
 
     for i in range(start, n - 2):
-        # Bearish FVG: gap down
         if L[i] > H[i + 2]:
             fvg = {
                 'type': 'bearish',
@@ -511,8 +553,6 @@ def detect_fvgs(df, window=None):
                     fvg['mitigated_at_ts'] = str(df.index[j])
                     break
             fvgs.append(fvg)
-
-        # Bullish FVG: gap up
         elif H[i] < L[i + 2]:
             fvg = {
                 'type': 'bullish',
@@ -541,101 +581,89 @@ def get_unmitigated_fvgs(fvgs):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 6. ORDER BLOCK DETECTION
+# 7. ORDER BLOCK DETECTION (structure-anchored)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def detect_obs(df, fvgs, max_walk_back=None):
+def detect_obs_from_structure(df, bos_choch_result, bias, pair_conf):
     """
-    Detect Order Blocks by walking backward from each FVG.
+    Find the OB by walking backward from the structural break candle.
 
-    OB = last opposing candle before the impulse that created the FVG.
-      Bearish FVG → last BULLISH candle = bearish OB (for SHORTs)
-      Bullish FVG → last BEARISH candle = bullish OB (for LONGs)
+    The OB = last opposing candle before the break.
+    For LONG bias: last bearish candle (Close < Open) → bullish OB
+    For SHORT bias: last bullish candle (Close > Open) → bearish OB
 
-    Mitigated OBs (current price closed through body) excluded.
-    Walk-back capped at OB_MAX_WALK_BACK.
+    Walk back up to OB_MAX_WALK_BACK (15) candles from break candle.
+
+    Mitigation check: if current price has closed through OB body, discard.
+
+    Returns OB dict or None.
     """
-    obs = []
-    if df is None or len(df) == 0 or not fvgs:
-        return obs
+    if not bos_choch_result or not bos_choch_result.get("confirmed"):
+        return None
 
-    max_wb = max_walk_back or OB_MAX_WALK_BACK
-    seen_idx = set()
-    current_close = float(df['Close'].iloc[-1])
+    if df is None or len(df) == 0:
+        return None
+
+    break_idx = bos_choch_result.get("break_candle_idx")
+    if break_idx is None or break_idx < 1:
+        return None
 
     O = df['Open'].values.flatten().astype(float)
     C = df['Close'].values.flatten().astype(float)
     H = df['High'].values.flatten().astype(float)
     L = df['Low'].values.flatten().astype(float)
+    current_close = float(C[-1])
 
-    for fvg in fvgs:
-        fvg_idx = fvg['idx']
-        fvg_type = fvg['type']
-        walk_end = max(fvg_idx - max_wb, -1)
+    if bias == "LONG":
+        ob_type = "bullish"
+    elif bias == "SHORT":
+        ob_type = "bearish"
+    else:
+        return None
 
-        for j in range(fvg_idx, walk_end, -1):
-            if j in seen_idx:
-                break
+    walk_end = max(break_idx - OB_MAX_WALK_BACK - 1, -1)
 
-            o, c, h, low = O[j], C[j], H[j], L[j]
-
-            if fvg_type == 'bearish':
-                is_opposing = c > o
-                ob_type = 'bearish'
-            else:
-                is_opposing = c < o
-                ob_type = 'bullish'
-
-            if not is_opposing:
-                continue
-
-            ob_body_top = max(o, c)
-            ob_body_bot = min(o, c)
-
-            if ob_type == 'bearish' and current_close > ob_body_top:
-                break
-            if ob_type == 'bullish' and current_close < ob_body_bot:
-                break
-
-            seen_idx.add(j)
-            obs.append({
-                'type': ob_type,
-                'ob_top': round(h, 6),
-                'ob_bottom': round(low, 6),
-                'ob_body_top': round(ob_body_top, 6),
-                'ob_body_bottom': round(ob_body_bot, 6),
-                'ts': str(df.index[j]),
-                'idx': j,
-                'related_fvg_top': fvg['fvg_top'],
-                'related_fvg_bottom': fvg['fvg_bottom'],
-                'fvg_mitigated': fvg.get('mitigated', False)
-            })
+    for j in range(break_idx - 1, walk_end, -1):
+        if j < 0:
             break
 
-    return obs
+        o, c, h, low = O[j], C[j], H[j], L[j]
+
+        if bias == "LONG" and c >= o:
+            continue
+        if bias == "SHORT" and c <= o:
+            continue
+
+        ob_body_top = max(o, c)
+        ob_body_bot = min(o, c)
+
+        if ob_type == "bullish" and current_close < ob_body_bot:
+            return None
+        if ob_type == "bearish" and current_close > ob_body_top:
+            return None
+
+        return {
+            "type": ob_type,
+            "ob_top": round(float(h), 6),
+            "ob_bottom": round(float(low), 6),
+            "ob_body_top": round(float(ob_body_top), 6),
+            "ob_body_bottom": round(float(ob_body_bot), 6),
+            "ts": str(df.index[j]),
+            "idx": j,
+            "has_fvg_overlap": False,
+            "source": "structure"
+        }
+
+    return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 7. LIQUIDITY SWEEP DETECTION (2.5 / 1.5 / 0)
+# 8. LIQUIDITY SWEEP DETECTION (2.5 / 1.5 / 0)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def detect_liquidity_sweep(df, swing_points, pair_conf, atr_value=None):
     """
     Detect liquidity sweeps with graded scoring.
-
-    CONFIRMED (2.5 pts):
-      Wick pierced PAST swing point, close back inside,
-      wick >= 1.5x body, body >= 10% ATR.
-
-    NEAR-MISS (1.5 pts):
-      Wick within proximity % of swing point (did NOT pierce),
-      close on correct side, wick >= 1.5x body, body >= 10% ATR.
-
-    MULTI-CANDLE (2.5 pts):
-      Any of last 3 candles wicked past level AND latest close back inside.
-
-    Returns: {detected, sweep_score, sweep_type, sweep_price, level_swept,
-              candle_ts, method}
     """
     result = {
         "detected": False, "sweep_score": 0.0, "sweep_type": None,
@@ -663,7 +691,6 @@ def detect_liquidity_sweep(df, swing_points, pair_conf, atr_value=None):
 
     best = result
 
-    # ── Single-candle sweeps ──────────────────────────────────────────────
     for i in range(n - 1, max(n - SWEEP_CANDLE_WINDOW - 1, -1), -1):
         raw_body = abs(C[i] - O[i])
         body = max(raw_body, min_body)
@@ -672,13 +699,10 @@ def detect_liquidity_sweep(df, swing_points, pair_conf, atr_value=None):
         reject_up = upper_wick >= body * SWEEP_WICK_BODY_RATIO
         reject_dn = lower_wick >= body * SWEEP_WICK_BODY_RATIO
 
-        # ── Swing HIGH sweeps ─────────────────────────────────────────
         for s in sh:
             if s["idx"] >= i:
                 continue
             level = s["price"]
-
-            # Confirmed: wick above level, close below
             if H[i] > level and C[i] < level and reject_up:
                 if best["sweep_score"] < 2.5:
                     best = {
@@ -689,8 +713,6 @@ def detect_liquidity_sweep(df, swing_points, pair_conf, atr_value=None):
                         "candle_ts": str(df.index[i]),
                         "method": "single_confirmed"
                     }
-
-            # Near-miss: wick approached but didn't pierce
             elif reject_up and best["sweep_score"] < 1.5:
                 distance = abs(H[i] - level)
                 threshold = level * prox_pct
@@ -705,13 +727,10 @@ def detect_liquidity_sweep(df, swing_points, pair_conf, atr_value=None):
                         "method": "single_near_miss"
                     }
 
-        # ── Swing LOW sweeps ──────────────────────────────────────────
         for s in sl:
             if s["idx"] >= i:
                 continue
             level = s["price"]
-
-            # Confirmed: wick below level, close above
             if L[i] < level and C[i] > level and reject_dn:
                 if best["sweep_score"] < 2.5:
                     best = {
@@ -722,8 +741,6 @@ def detect_liquidity_sweep(df, swing_points, pair_conf, atr_value=None):
                         "candle_ts": str(df.index[i]),
                         "method": "single_confirmed"
                     }
-
-            # Near-miss
             elif reject_dn and best["sweep_score"] < 1.5:
                 distance = abs(L[i] - level)
                 threshold = level * prox_pct
@@ -738,7 +755,6 @@ def detect_liquidity_sweep(df, swing_points, pair_conf, atr_value=None):
                         "method": "single_near_miss"
                     }
 
-    # ── Multi-candle sweep ────────────────────────────────────────────────
     if best["sweep_score"] < 2.5:
         latest_close = C[-1]
         for i in range(n - 1, max(n - SWEEP_CANDLE_WINDOW - 1, -1), -1):
@@ -773,16 +789,13 @@ def detect_liquidity_sweep(df, swing_points, pair_conf, atr_value=None):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 8. PREMIUM / DISCOUNT
+# 9. PREMIUM / DISCOUNT
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def compute_premium_discount(swing_points, current_price, bias):
     """
     Check if price is in the correct zone for the given bias.
-    Uses 60/40 split (10% tolerance) for institutional front-running.
-
-    LONG:  valid if price is below 60% of range
-    SHORT: valid if price is above 40% of range
+    Uses 60/40 split (10% tolerance).
     """
     sh = [s for s in swing_points if s["type"] == "high"]
     sl = [s for s in swing_points if s["type"] == "low"]
@@ -816,53 +829,41 @@ def compute_premium_discount(swing_points, current_price, bias):
         "range_high": range_high,
         "range_low": range_low,
         "equilibrium": eq,
-        "score": 1.5 if valid else 0.0
+        "score": 1.0 if valid else 0.0
     }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 9. SELECT BEST OB FOR ZONE
+# 10. SELECT / VALIDATE OB (proximity to zone)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def select_trade_ob(obs, zone_level, bias, pair_conf):
+def select_trade_ob(ob, zone_level, pair_conf):
     """
-    Pick the best OB for this zone and bias direction.
-    OB type must match bias (bullish OB → LONG, bearish OB → SHORT).
-    Closest to zone_level wins.
+    Validate the structure-anchored OB against the zone.
+    OB midpoint must be within proximity_pct * 2 of zone_level.
+    Returns ob if valid, None if too far or None input.
     """
-    matching = []
-    for ob in obs:
-        if bias == "LONG" and ob["type"] != "bullish":
-            continue
-        if bias == "SHORT" and ob["type"] != "bearish":
-            continue
-        matching.append(ob)
-
-    if not matching:
+    if ob is None:
         return None
 
-    matching.sort(key=lambda o: abs(
-        ((o["ob_top"] + o["ob_bottom"]) / 2) - zone_level))
-    return matching[0]
+    ob_mid = (ob["ob_top"] + ob["ob_bottom"]) / 2
+    max_dist_pct = pair_conf.get("proximity_pct", 0.3) * 2
+    dist_pct = abs(ob_mid - zone_level) / zone_level * 100
+
+    if dist_pct > max_dist_pct:
+        return None
+
+    return ob
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 10. COMPUTE ENTRY / SL / TP
+# 11. COMPUTE ENTRY / SL / TP
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def compute_levels(ob, fvgs, all_obs, zones, bias, current_price,
                    pair_conf, zone_level):
     """
-    Compute entry, SL, TP1, TP2.
-
-    ENTRY: OB body midpoint, or FVG edge if unmitigated FVG overlaps OB.
-    SL:    OB wick extreme (low for LONG, high for SHORT).
-    TP1:   Nearest OPPOSING structure:
-             1. H1 zone clusters  2. M15 opposing FVGs  3. M15 opposing OBs
-             4. Fallback 2.5R
-    TP2:   Next opposing structure beyond TP1, or fallback 4R.
-
-    Returns dict or None if risk is zero.
+    Compute entry, SL, TP1, TP2. Returns dict or None if risk is zero.
     """
     if ob is None:
         return None
@@ -870,7 +871,6 @@ def compute_levels(ob, fvgs, all_obs, zones, bias, current_price,
     dp = _dp(pair_conf)
     ob_body_mid = (ob["ob_body_top"] + ob["ob_body_bottom"]) / 2
 
-    # ── Entry ─────────────────────────────────────────────────────────────
     entry = ob_body_mid
     entry_source = "ob_body_midpoint"
 
@@ -885,7 +885,6 @@ def compute_levels(ob, fvgs, all_obs, zones, bias, current_price,
             entry_source = "fvg_edge"
             break
 
-    # ── SL ────────────────────────────────────────────────────────────────
     if bias == "LONG":
         sl = ob["ob_bottom"]
     else:
@@ -895,10 +894,8 @@ def compute_levels(ob, fvgs, all_obs, zones, bias, current_price,
     if risk <= 0:
         return None
 
-    # ── Collect opposing TP candidates ────────────────────────────────────
     candidates = []
 
-    # Source 1: H1 zone clusters
     if zones:
         for z_level, z_touches in zones:
             if (zone_level > 0
@@ -909,7 +906,6 @@ def compute_levels(ob, fvgs, all_obs, zones, bias, current_price,
             elif bias == "SHORT" and z_level < entry:
                 candidates.append((z_level, "h1_zone"))
 
-    # Source 2: M15 unmitigated OPPOSING FVGs
     for fvg in unmitigated:
         fvg_mid = (fvg["fvg_top"] + fvg["fvg_bottom"]) / 2
         if bias == "LONG" and fvg["type"] == "bearish" and fvg_mid > entry:
@@ -918,25 +914,22 @@ def compute_levels(ob, fvgs, all_obs, zones, bias, current_price,
               and fvg_mid < entry):
             candidates.append((fvg_mid, "m15_opposing_fvg"))
 
-    # Source 3: M15 opposing OBs
     if all_obs:
         for o in all_obs:
             if o is ob:
                 continue
-            ob_mid = (o["ob_top"] + o["ob_bottom"]) / 2
-            if bias == "LONG" and o["type"] == "bearish" and ob_mid > entry:
-                candidates.append((ob_mid, "m15_opposing_ob"))
+            o_mid = (o["ob_top"] + o["ob_bottom"]) / 2
+            if bias == "LONG" and o["type"] == "bearish" and o_mid > entry:
+                candidates.append((o_mid, "m15_opposing_ob"))
             elif (bias == "SHORT" and o["type"] == "bullish"
-                  and ob_mid < entry):
-                candidates.append((ob_mid, "m15_opposing_ob"))
+                  and o_mid < entry):
+                candidates.append((o_mid, "m15_opposing_ob"))
 
-    # ── Sort by proximity ─────────────────────────────────────────────────
     if bias == "LONG":
         candidates.sort(key=lambda c: c[0])
     else:
         candidates.sort(key=lambda c: c[0], reverse=True)
 
-    # ── Assign TP1, TP2 ──────────────────────────────────────────────────
     tp1, tp1_source = None, "none"
     tp2, tp2_source = None, "none"
 
@@ -947,7 +940,6 @@ def compute_levels(ob, fvgs, all_obs, zones, bias, current_price,
         tp2 = candidates[1][0]
         tp2_source = candidates[1][1]
 
-    # ── Fallbacks ─────────────────────────────────────────────────────────
     if tp1 is None:
         if bias == "LONG":
             tp1 = entry + (risk * TP1_FALLBACK_R)
@@ -989,19 +981,13 @@ def compute_levels(ob, fvgs, all_obs, zones, bias, current_price,
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 11. ENTRY READINESS
+# 12. ENTRY READINESS
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def check_entry_readiness(df, ob, zone_level, bias, pair_conf,
                           atr_value=None, bos_choch_result=None):
     """
     Check if the LATEST CLOSED candle shows a confirmation pattern.
-
-    Ready if ANY of:
-      1. BOS/CHoCH/iBOS in last 2 candles, direction matches bias
-      2. Engulfing on last closed candle, correct direction, body >= 20% ATR
-
-    Only closed candles. Current forming candle ignored.
     """
     result = {
         "ready": False, "trigger_kind": None,
@@ -1014,7 +1000,6 @@ def check_entry_readiness(df, ob, zone_level, bias, pair_conf,
 
     n = len(df)
 
-    # ── Check 1: Recent structural break ──────────────────────────────────
     if bos_choch_result and bos_choch_result.get("confirmed"):
         break_idx = bos_choch_result.get("break_candle_idx")
         if break_idx is not None and break_idx >= n - 3:
@@ -1030,7 +1015,6 @@ def check_entry_readiness(df, ob, zone_level, bias, pair_conf,
                     f"{btype.upper()} {bdir} confirmed near zone")
                 return result
 
-    # ── Check 2: Engulfing ────────────────────────────────────────────────
     O = df['Open'].values.flatten().astype(float)
     C = df['Close'].values.flatten().astype(float)
 
@@ -1072,17 +1056,11 @@ def check_entry_readiness(df, ob, zone_level, bias, pair_conf,
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 12. INVALIDATION LEVELS
+# 13. INVALIDATION LEVELS
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def compute_invalidation(ob, bias, pair_conf):
-    """
-    Direction-aware invalidation from OB extremes.
-
-    SHORT: invalidate_above = OB top
-    LONG:  invalidate_below = OB bottom
-    Opposite side always None.
-    """
+    """Direction-aware invalidation from OB extremes."""
     if ob is None:
         return {"invalidate_above": None, "invalidate_below": None}
 
@@ -1096,76 +1074,116 @@ def compute_invalidation(ob, bias, pair_conf):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 13. SCORECARD
+# 14. ATR WITH CAP
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def compute_score(analysis, fatigue_count, in_session, fatigue_threshold=3):
+def compute_capped_atr(df_h1, period=14):
     """
-    Weighted scorecard from Python-detected patterns.
+    Compute ATR(14) on H1 data, capped at median_atr * 1.5.
+    Prevents single spike days from inflating the ATR ruler.
+    Returns float or None.
+    """
+    if df_h1 is None or len(df_h1) < period + 1:
+        return None
 
-    Python (6 of 7 items, max 9.0):
-      1. liquidity_swept:      2.5 / 1.5 / 0
-      2. fvg_overlaps_ob:      2.0 / 0
-      3. premium_discount:     1.5 / 0
-      4. multi_tf_alignment:   1.5 / 1.0 / 0.5 / 0
-      5. zone_freshness:       1.0 / 0
-      6. session_alignment:    0.5 / 0
+    try:
+        highs = df_h1['High'].values.flatten().astype(float)
+        lows = df_h1['Low'].values.flatten().astype(float)
+        closes = df_h1['Close'].values.flatten().astype(float)
 
-    Gemini (1 item):
-      7. no_high_impact_news:  1.0 / 0 (default 1.0, Gemini overrides)
+        trs = []
+        for i in range(1, len(closes)):
+            tr = max(highs[i] - lows[i],
+                     abs(highs[i] - closes[i - 1]),
+                     abs(lows[i] - closes[i - 1]))
+            trs.append(tr)
 
-    multi_tf tiers:
-      1.5 = M15 external break + H1 same direction
-      1.0 = M15 iBOS + H1 same direction
-      0.5 = only one TF confirms
-      0.0 = neither confirms
+        if len(trs) < period:
+            return None
+
+        latest_atr = float(np.mean(trs[-period:]))
+
+        median_window = min(120, len(trs))
+        median_atr = float(np.median(trs[-median_window:]))
+
+        cap = median_atr * 1.5
+        capped = min(latest_atr, cap)
+
+        return capped
+    except Exception:
+        return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 15. SCORECARD
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_score(analysis, fatigue_count, fatigue_threshold=5):
+    """
+    Weighted scorecard — 8 items, max 10.0.
+    Session alignment removed. News placeholder = 1.0, Gemini overrides.
     """
     breakdown = {}
     bias = analysis.get("bias", "")
 
-    # 1. Liquidity swept (graded)
-    sweep = analysis.get("sweep", {})
-    breakdown["liquidity_swept"] = sweep.get("sweep_score", 0.0)
-
-    # 2. FVG overlaps OB
-    breakdown["fvg_overlaps_ob"] = (
-        2.0 if analysis.get("fvg_overlaps_ob", False) else 0.0)
-
-    # 3. Premium/Discount
-    pd = analysis.get("premium_discount", {})
-    breakdown["premium_discount"] = pd.get("score", 0.0)
-
-    # 4. Multi-TF alignment
-    m15 = analysis.get("m15_structure", {})
-    h1 = analysis.get("h1_structure", {})
-
-    m15_confirmed = (m15.get("confirmed", False) and
-                     ((bias == "LONG" and m15.get("direction") == "bullish")
-                      or (bias == "SHORT"
-                          and m15.get("direction") == "bearish")))
-    h1_confirmed = (h1.get("confirmed", False) and
-                    ((bias == "LONG" and h1.get("direction") == "bullish")
-                     or (bias == "SHORT"
-                         and h1.get("direction") == "bearish")))
-    m15_external = m15.get("break_level") == "external"
-
-    if m15_confirmed and m15_external and h1_confirmed:
-        breakdown["multi_tf_alignment"] = 1.5
-    elif m15_confirmed and h1_confirmed:
-        breakdown["multi_tf_alignment"] = 1.0
-    elif m15_confirmed or h1_confirmed:
-        breakdown["multi_tf_alignment"] = 0.5
+    # 1. Structure M15 — 2.5 max
+    bos_all = analysis.get("bos_choch_all", {})
+    has_bos = (bos_all.get("has_bos_bullish") if bias == "LONG"
+               else bos_all.get("has_bos_bearish"))
+    has_choch = (bos_all.get("has_choch_bullish") if bias == "LONG"
+                 else bos_all.get("has_choch_bearish"))
+    if has_bos and has_choch:
+        breakdown["structure_m15"] = 2.5
+    elif has_choch:
+        breakdown["structure_m15"] = 1.5
+    elif has_bos:
+        breakdown["structure_m15"] = 1.0
     else:
-        breakdown["multi_tf_alignment"] = 0.0
+        breakdown["structure_m15"] = 0.0
 
-    # 5. Zone freshness
-    breakdown["zone_freshness"] = (
-        0.0 if fatigue_count >= fatigue_threshold else 1.0)
+    # 2. OB near zone — 2.0 max
+    ob = analysis.get("ob")
+    ob_has_fvg = analysis.get("ob_has_fvg_overlap", False)
+    if ob is not None and ob_has_fvg:
+        breakdown["ob_near_zone"] = 2.0
+    elif ob is not None:
+        breakdown["ob_near_zone"] = 1.0
+    else:
+        breakdown["ob_near_zone"] = 0.0
 
-    # 6. Session alignment
-    breakdown["session_alignment"] = 0.5 if in_session else 0.0
+    # 3. FVG in zone — 1.0 max (simple existence check)
+    breakdown["fvg_in_zone"] = analysis.get("fvg_in_zone_score", 0.0)
 
-    # 7. News — placeholder, Gemini overrides
+    # 4. Liquidity sweep (bias-matched) — 1.5 max
+    sweep = analysis.get("sweep", {})
+    sweep_correct = False
+    if sweep.get("detected"):
+        if bias == "LONG" and sweep.get("sweep_type") == "low":
+            sweep_correct = True
+        elif bias == "SHORT" and sweep.get("sweep_type") == "high":
+            sweep_correct = True
+    if sweep_correct:
+        breakdown["liquidity_sweep"] = (1.5 if sweep["sweep_score"] >= 2.5
+                                        else 1.0)
+    else:
+        breakdown["liquidity_sweep"] = 0.0
+
+    # 5. Premium/Discount — 1.0 max
+    pd = analysis.get("premium_discount", {})
+    breakdown["premium_discount"] = 1.0 if pd.get("valid") else 0.0
+
+    # 6. H1 alignment — 0.5 max
+    h1 = analysis.get("h1_structure", {})
+    h1_correct = (h1.get("confirmed") and
+                  ((bias == "LONG" and h1.get("direction") == "bullish") or
+                   (bias == "SHORT" and h1.get("direction") == "bearish")))
+    breakdown["h1_alignment"] = 0.5 if h1_correct else 0.0
+
+    # 7. Zone freshness — 0.5 max
+    breakdown["zone_freshness"] = (0.0 if fatigue_count >= fatigue_threshold
+                                   else 0.5)
+
+    # 8. News — placeholder, Gemini overrides
     breakdown["no_high_impact_news"] = 1.0
 
     total = round(sum(breakdown.values()), 1)
@@ -1178,19 +1196,15 @@ def compute_score(analysis, fatigue_count, in_session, fatigue_threshold=3):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 14. MAIN ORCHESTRATOR
+# 16. MAIN ORCHESTRATOR
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def run_analysis(pair_conf, df_h1, df_m15, zones, current_price, zone_level,
-                 zone_label, atr_value, fatigue_count, in_session,
-                 fatigue_threshold=3, lookback=5):
+                 zone_label, atr_value, fatigue_count,
+                 fatigue_threshold=5, lookback=15):
     """
     Complete Python-side SMC analysis for one zone.
-
-    Flow: bias → gates → detectors → score → levels → readiness → result.
-
-    gemini_needed = True when gates pass and score meets threshold.
-    Gemini fills text fields + news scoring only.
+    in_session parameter removed — no session-based filtering.
     """
     dp = _dp(pair_conf)
     min_conf = pair_conf.get("min_confidence", 7)
@@ -1203,54 +1217,64 @@ def run_analysis(pair_conf, df_h1, df_m15, zones, current_price, zone_level,
     else:
         return _fail_result("Cannot determine bias from zone label")
 
-    # ══════════════════════════════════════════════════════════════════════
-    # GATE 1: Structure on M15
-    # ══════════════════════════════════════════════════════════════════════
-    m15_struct = detect_bos_choch(df_m15, pair_conf, atr_value, lookback)
-
-    if not m15_struct["confirmed"]:
-        return _gate_fail("structure", m15_struct["reason"], bias)
-
-    if bias == "LONG" and m15_struct["direction"] != "bullish":
-        return _gate_fail(
-            "structure",
-            f"M15 {m15_struct['type']} is {m15_struct['direction']}, "
-            f"need bullish for LONG",
-            bias)
-    if bias == "SHORT" and m15_struct["direction"] != "bearish":
-        return _gate_fail(
-            "structure",
-            f"M15 {m15_struct['type']} is {m15_struct['direction']}, "
-            f"need bearish for SHORT",
-            bias)
-
-    if not m15_struct["has_displacement"]:
-        return _gate_fail(
-            "structure",
-            f"M15 {m15_struct['type']} lacks displacement "
-            f"(body < {DISPLACEMENT_ATR_FRACTION} x ATR)",
-            bias)
-
-    gate_structure = (
-        f"M15 {m15_struct['type'].upper()} {m15_struct['direction']} "
-        f"({m15_struct['break_level']}) at "
-        f"{m15_struct['break_candle_ts']}, "
-        f"broke {m15_struct['swing_broken']:.{dp}f}")
+    # ── Capped ATR ────────────────────────────────────────────────────────
+    capped_atr = compute_capped_atr(df_h1)
+    if capped_atr is None:
+        capped_atr = atr_value
 
     # ══════════════════════════════════════════════════════════════════════
-    # GATE 2: Valid OB on M15
+    # STRUCTURE on M15 (not a hard gate — feeds OB detection)
     # ══════════════════════════════════════════════════════════════════════
+    m15_struct = detect_bos_choch(df_m15, pair_conf, capped_atr, lookback)
+
+    # Structure must be confirmed + bias-matching + displaced for OB anchoring.
+    # If any condition fails, OB detection gets an empty struct → returns None →
+    # levels = None → fails at RR/OB gate naturally.
+    struct_usable = (
+        m15_struct["confirmed"]
+        and m15_struct["has_displacement"]
+        and ((bias == "LONG" and m15_struct["direction"] == "bullish")
+             or (bias == "SHORT" and m15_struct["direction"] == "bearish"))
+    )
+
+    if struct_usable:
+        gate_structure = (
+            f"M15 {m15_struct['type'].upper()} {m15_struct['direction']} "
+            f"({m15_struct['break_level']}) at "
+            f"{m15_struct['break_candle_ts']}, "
+            f"broke {m15_struct['swing_broken']:.{dp}f}")
+    else:
+        gate_structure = (
+            f"No usable M15 structure: "
+            f"{m15_struct.get('reason', 'direction/displacement mismatch')}")
+    # ── All M15 breaks (for scoring) ─────────────────────────────────────
+    bos_all = detect_bos_choch_all(df_m15, pair_conf, capped_atr, lookback)
+
+    # ── M15 FVGs ──────────────────────────────────────────────────────────
     m15_fvgs = detect_fvgs(df_m15, FVG_M15_WINDOW)
-    m15_obs = detect_obs(df_m15, m15_fvgs, OB_MAX_WALK_BACK)
+    unmitigated_fvgs = get_unmitigated_fvgs(m15_fvgs)
 
-    ob = select_trade_ob(m15_obs, zone_level, bias, pair_conf)
+    # ══════════════════════════════════════════════════════════════════════
+    # OB from structure
+    # ══════════════════════════════════════════════════════════════════════
+    raw_ob = detect_obs_from_structure(
+        df_m15, m15_struct if struct_usable else {"confirmed": False},
+        bias, pair_conf)
+    ob = select_trade_ob(raw_ob, zone_level, pair_conf)
 
-    if ob is None:
-        return _gate_fail(
-            "ob",
-            f"No valid {bias} OB near zone {zone_level:.{dp}f} "
-            f"({len(m15_obs)} OBs detected, none match bias/zone)",
-            bias)
+    # ══════════════════════════════════════════════════════════════════════
+    # LEVELS (no OB → None → gate fail)
+    # ══════════════════════════════════════════════════════════════════════
+    levels = compute_levels(ob, m15_fvgs, [], zones, bias,
+                            current_price, pair_conf, zone_level)
+
+    if levels is None:
+        if ob is None:
+            return _gate_fail(
+                "ob",
+                f"No valid {bias} OB near zone {zone_level:.{dp}f}",
+                bias)
+        return _gate_fail("rr", "Could not compute levels (zero risk)", bias)
 
     gate_ob = (
         f"{ob['type']} OB at "
@@ -1258,20 +1282,12 @@ def run_analysis(pair_conf, df_h1, df_m15, zones, current_price, zone_level,
         f"candle {ob['ts']}")
 
     # ══════════════════════════════════════════════════════════════════════
-    # GATE 3: RR >= 2.0
+    # HARD GATE: RR >= 1.5
     # ══════════════════════════════════════════════════════════════════════
-    unmitigated_fvgs = get_unmitigated_fvgs(m15_fvgs)
-    levels = compute_levels(ob, m15_fvgs, m15_obs, zones, bias,
-                            current_price, pair_conf, zone_level)
-
-    if levels is None:
-        return _gate_fail("rr", "Could not compute levels (zero risk)",
-                          bias)
-
-    if levels["rr_tp1"] < 2.0:
+    if levels["rr_tp1"] < 1.5:
         return _gate_fail(
             "rr",
-            f"RR {levels['rr_tp1']:.2f}:1 < 2.0 | "
+            f"RR {levels['rr_tp1']:.2f}:1 < 1.5 | "
             f"entry={levels['entry']:.{dp}f} sl={levels['sl']:.{dp}f} "
             f"tp1={levels['tp1']:.{dp}f} risk={levels['risk']:.{dp}f}",
             bias)
@@ -1284,42 +1300,56 @@ def run_analysis(pair_conf, df_h1, df_m15, zones, current_price, zone_level,
     # ══════════════════════════════════════════════════════════════════════
     # ALL GATES PASSED
     # ══════════════════════════════════════════════════════════════════════
-    h1_struct = detect_bos_choch(df_h1, pair_conf, atr_value, lookback)
+
+    # ── FVG overlap on OB body ────────────────────────────────────────────
+    ob_has_fvg_overlap = False
+    matched_fvg = {"top": 0.0, "bot": 0.0, "type": ""}
+    if ob is not None:
+        for fvg in unmitigated_fvgs:
+            if (fvg["fvg_bottom"] <= ob["ob_body_top"]
+                    and fvg["fvg_top"] >= ob["ob_body_bottom"]):
+                ob_has_fvg_overlap = True
+                matched_fvg = {"top": fvg["fvg_top"],
+                               "bot": fvg["fvg_bottom"],
+                               "type": fvg["type"]}
+                break
+
+    # ── FVG in zone (independent — simple existence) ──────────────────────
+    fvg_in_zone_score = 0.0
+    prox_pct = pair_conf.get("proximity_pct", 0.3)
+    for fvg in m15_fvgs:
+        fvg_mid = (fvg["fvg_top"] + fvg["fvg_bottom"]) / 2
+        dist_pct = abs(fvg_mid - zone_level) / zone_level * 100
+        if dist_pct <= prox_pct:
+            fvg_in_zone_score = 1.0
+            break
+
+    # ── H1 structure ──────────────────────────────────────────────────────
+    h1_struct = detect_bos_choch(df_h1, pair_conf, capped_atr, lookback)
 
     m15_swings = get_swing_points(df_m15, lookback)
     h1_swings = get_swing_points(df_h1, lookback)
 
-    sweep = detect_liquidity_sweep(df_m15, m15_swings, pair_conf, atr_value)
+    sweep = detect_liquidity_sweep(df_m15, m15_swings, pair_conf, capped_atr)
     pd_result = compute_premium_discount(h1_swings, current_price, bias)
-
-    # FVG-OB overlap check
-    fvg_overlap = levels["entry_source"] == "fvg_edge"
-    matched_fvg = {"top": 0.0, "bot": 0.0, "type": ""}
-    for fvg in unmitigated_fvgs:
-        if (fvg["fvg_bottom"] <= ob["ob_top"]
-                and fvg["fvg_top"] >= ob["ob_bottom"]):
-            if not fvg_overlap:
-                fvg_overlap = True
-            matched_fvg = {"top": fvg["fvg_top"],
-                           "bot": fvg["fvg_bottom"],
-                           "type": fvg["type"]}
-            break
 
     # ── Score ─────────────────────────────────────────────────────────────
     score_result = compute_score(
         {
+            "bos_choch_all": bos_all,
+            "ob": ob,
+            "ob_has_fvg_overlap": ob_has_fvg_overlap,
+            "fvg_in_zone_score": fvg_in_zone_score,
             "sweep": sweep,
-            "fvg_overlaps_ob": fvg_overlap,
             "premium_discount": pd_result,
-            "m15_structure": m15_struct,
             "h1_structure": h1_struct,
             "bias": bias
         },
-        fatigue_count, in_session, fatigue_threshold)
+        fatigue_count, fatigue_threshold)
 
     # ── Entry readiness ───────────────────────────────────────────────────
     readiness = check_entry_readiness(
-        df_m15, ob, zone_level, bias, pair_conf, atr_value, m15_struct)
+        df_m15, ob, zone_level, bias, pair_conf, capped_atr, m15_struct)
 
     # ── Invalidation ─────────────────────────────────────────────────────
     inv = compute_invalidation(ob, bias, pair_conf)
@@ -1333,58 +1363,75 @@ def run_analysis(pair_conf, df_h1, df_m15, zones, current_price, zone_level,
             f"Liquidity swept ({label}): {sweep['sweep_type']} at "
             f"{sweep['level_swept']:.{dp}f}, "
             f"wick to {sweep['sweep_price']:.{dp}f}")
-    if fvg_overlap:
+    if ob_has_fvg_overlap:
         confluences.append(
-            f"FVG overlaps OB: {matched_fvg['type']} FVG "
+            f"FVG overlaps OB body: {matched_fvg['type']} FVG "
             f"{matched_fvg['bot']:.{dp}f}-{matched_fvg['top']:.{dp}f}")
+    if fvg_in_zone_score > 0:
+        confluences.append("FVG present in zone proximity")
     if pd_result["valid"]:
         confluences.append(
             f"Price in {'discount' if bias == 'LONG' else 'premium'} "
             f"({pd_result['position_pct']}% of range)")
-    mtf = score_result["breakdown"]["multi_tf_alignment"]
-    if mtf >= 1.5:
+
+    struct_score = score_result["breakdown"]["structure_m15"]
+    if struct_score >= 2.5:
         confluences.append(
-            f"Both H1 and M15 aligned "
+            f"Both BOS + CHoCH on M15 "
             f"(M15 {m15_struct['type']} {m15_struct['break_level']})")
-    elif mtf >= 1.0:
-        confluences.append("M15 iBOS + H1 aligned (internal pullback)")
-    elif mtf >= 0.5:
-        tf = "M15" if m15_struct["confirmed"] else "H1"
-        confluences.append(f"Single TF aligned ({tf})")
+    elif struct_score >= 1.5:
+        confluences.append(
+            f"M15 CHoCH confirmed ({m15_struct['direction']})")
+    elif struct_score >= 1.0:
+        confluences.append(
+            f"M15 BOS confirmed ({m15_struct['direction']})")
+
+    h1_score = score_result["breakdown"]["h1_alignment"]
+    if h1_score > 0:
+        confluences.append(
+            f"H1 aligned: {h1_struct['type']} {h1_struct['direction']}")
 
     # ── Missing ───────────────────────────────────────────────────────────
     missing = []
     if not sweep["detected"]:
         missing.append({
-            "item": "liquidity_swept",
+            "item": "liquidity_sweep",
             "reason": "No wick-rejection sweep of prior swing point"})
     elif sweep["sweep_score"] < 2.5:
         missing.append({
-            "item": "liquidity_swept_partial",
-            "reason": "Near-miss sweep — scored 1.5/2.5"})
-    if not fvg_overlap:
+            "item": "liquidity_sweep_partial",
+            "reason": "Near-miss sweep — scored 1.0/1.5"})
+    if not ob_has_fvg_overlap:
         missing.append({
-            "item": "fvg_overlaps_ob",
-            "reason": "No unmitigated FVG overlapping the selected OB"})
+            "item": "ob_fvg_overlap",
+            "reason": "No unmitigated FVG overlapping the OB body"})
+    if fvg_in_zone_score == 0:
+        missing.append({
+            "item": "fvg_in_zone",
+            "reason": "No FVG found within zone proximity"})
     if not pd_result["valid"]:
         side = "premium" if bias == "LONG" else "discount"
         missing.append({
             "item": "premium_discount",
             "reason": (f"Price at {pd_result['position_pct']}% "
                        f"of range ({side})")})
-    if mtf < 1.5:
-        if mtf >= 1.0:
+    if struct_score < 2.5:
+        if struct_score >= 1.5:
             missing.append({
-                "item": "multi_tf_alignment",
-                "reason": "M15 is iBOS (internal) — not full external"})
-        elif mtf >= 0.5:
+                "item": "structure_m15",
+                "reason": "Only CHoCH confirmed — no BOS yet"})
+        elif struct_score >= 1.0:
             missing.append({
-                "item": "multi_tf_alignment",
-                "reason": "H1 and M15 not both confirming"})
+                "item": "structure_m15",
+                "reason": "Only BOS confirmed — no CHoCH yet"})
         else:
             missing.append({
-                "item": "multi_tf_alignment",
-                "reason": "No structural alignment on either TF"})
+                "item": "structure_m15",
+                "reason": "No bias-matching BOS or CHoCH in last 15 candles"})
+    if h1_score == 0:
+        missing.append({
+            "item": "h1_alignment",
+            "reason": "H1 structure not confirming bias direction"})
     if score_result["breakdown"]["zone_freshness"] == 0:
         missing.append({
             "item": "zone_freshness",
@@ -1436,7 +1483,7 @@ def run_analysis(pair_conf, df_h1, df_m15, zones, current_price, zone_level,
         "fvg_top": matched_fvg["top"],
         "fvg_bottom": matched_fvg["bot"],
         "fvg_type": matched_fvg["type"],
-        "fvg_confirmed": fvg_overlap,
+        "fvg_confirmed": ob_has_fvg_overlap,
 
         "lq_sweep_price": sweep.get("sweep_price") or 0,
 
@@ -1451,7 +1498,6 @@ def run_analysis(pair_conf, df_h1, df_m15, zones, current_price, zone_level,
 
         "gemini_needed": True,
 
-        # Placeholder text — Gemini fills in Phase 3
         "confidence_reason": readiness.get("reason", ""),
         "bias_reason": "",
         "trigger": readiness.get("reason", ""),
