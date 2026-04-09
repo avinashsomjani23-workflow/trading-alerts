@@ -12793,5 +12793,45 @@
     "zone": null,
     "status": "zone_outside_proximity",
     "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "09 Apr 15:00 IST",
+    "time_utc": "2026-04-09 09:30",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "09 Apr 15:00 IST",
+    "time_utc": "2026-04-09 09:30",
+    "pair": "USDJPY",
+    "zone": 159.23102,
+    "status": "rejected_gates",
+    "reason": "No structural break in last 5 closed candles"
+  },
+  {
+    "time_ist": "09 Apr 15:00 IST",
+    "time_utc": "2026-04-09 09:30",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "09 Apr 15:00 IST",
+    "time_utc": "2026-04-09 09:30",
+    "pair": "NAS100",
+    "zone": 24926.5,
+    "status": "rejected_gates",
+    "reason": "M15 choch is bearish, need bullish for LONG"
+  },
+  {
+    "time_ist": "09 Apr 15:00 IST",
+    "time_utc": "2026-04-09 09:30",
+    "pair": "GOLD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
   }
 ]
