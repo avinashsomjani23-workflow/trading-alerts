@@ -264,6 +264,9 @@ def detect_zones_and_candles(symbol, min_touches):
         else:
             clusters.append([lvl])
     zones = [(float(np.mean(c)), len(c)) for c in clusters if len(c) >= min_touches]
+    # Discard zones more than 20% from current price (data corruption guard)
+    zones = [(z, t) for z, t in zones
+             if abs(z - current_price) / current_price <= 0.20]
     return zones, current_price, df1
 
 def fetch_m15_data(symbol):
@@ -449,12 +452,13 @@ LEVELS:
   TP2:   {result['tp2']:.{dp}f} ({result.get('tp2_source', '')})
 
 SCORE: {score}/10 (Python-computed, news pending your input)
-  Liquidity Swept:    {bd.get('liquidity_swept', 0)}/2.5 — {sweep_line}
-  FVG Overlaps OB:    {bd.get('fvg_overlaps_ob', 0)}/2.0 — {fvg_line}
-  Premium/Discount:   {bd.get('premium_discount', 0)}/1.5 — {pd_line}
-  Multi-TF Alignment: {bd.get('multi_tf_alignment', 0)}/1.5
-  Zone Freshness:     {bd.get('zone_freshness', 0)}/1.0
-  Session Alignment:  {bd.get('session_alignment', 0)}/0.5
+  Structure M15:      {bd.get('structure_m15', 0)}/2.5
+  OB Near Zone:       {bd.get('ob_near_zone', 0)}/2.0 — {fvg_line}
+  FVG In Zone:        {bd.get('fvg_in_zone', 0)}/1.0
+  Liquidity Sweep:    {bd.get('liquidity_sweep', 0)}/1.5 — {sweep_line}
+  Premium/Discount:   {bd.get('premium_discount', 0)}/1.0 — {pd_line}
+  H1 Alignment:       {bd.get('h1_alignment', 0)}/0.5
+  Zone Freshness:     {bd.get('zone_freshness', 0)}/0.5
   News Impact:        ?/1.0 ← YOU SCORE THIS
 
 ENTRY STATUS: {result.get('trigger_status', 'not_ready')}
@@ -546,6 +550,27 @@ def merge_gemini_text(result, gemini_data):
     news_score_raw = float(gemini_data.get("news_score", 1.0))
     # Clamp to valid values (0.0 or 1.0)
     news_score = 1.0 if news_score_raw >= 0.5 else 0.0
+
+    # Enforce per-item score caps (Gemini cannot inflate Python scores)
+    SCORE_CAPS = {
+        "structure_m15": 2.5,
+        "ob_near_zone": 2.0,
+        "fvg_in_zone": 1.0,
+        "liquidity_sweep": 1.5,
+        "premium_discount": 1.0,
+        "h1_alignment": 0.5,
+        "zone_freshness": 0.5,
+        "no_high_impact_news": 1.0
+    }
+    bd = result.get("score_breakdown", {})
+    clamped = False
+    for key, cap in SCORE_CAPS.items():
+        if key in bd and float(bd[key]) > cap:
+            bd[key] = cap
+            clamped = True
+    if clamped:
+        result["confidence_score"] = round(
+            sum(float(v) for v in bd.values()), 1)
 
     old_news = result["score_breakdown"].get("no_high_impact_news", 1.0)
     if abs(news_score - old_news) > 0.01:
@@ -948,13 +973,14 @@ def _build_scorecard_html(data, score, score_color):
     weights   = config.get("scoring", {}).get("confluences", {})
     conf_rows = ""
     conf_order = [
-        ("liquidity_swept",     "Liquidity Swept"),
-        ("fvg_overlaps_ob",     "FVG Overlaps OB"),
-        ("premium_discount",    "Premium/Discount Zone"),
-        ("multi_tf_alignment",  "Multi-TF Alignment"),
+        ("structure_m15",       "Structure M15"),
+        ("ob_near_zone",        "OB Near Zone"),
+        ("fvg_in_zone",         "FVG In Zone"),
+        ("liquidity_sweep",     "Liquidity Sweep"),
+        ("premium_discount",    "Premium/Discount"),
+        ("h1_alignment",        "H1 Alignment"),
         ("zone_freshness",      "Zone Freshness"),
         ("no_high_impact_news", "No High-Impact News"),
-        ("session_alignment",   "Session Alignment"),
     ]
     for key, label in conf_order:
         max_pts = weights.get(key, weights.get(key.replace("premium_discount", "premium_discount_zone"), 0))
@@ -1372,7 +1398,7 @@ for pair_conf in config["pairs"]:
     min_touches = pair_conf.get("min_touches", 1)
     min_conf    = pair_conf.get("min_confidence", 7)
     lookback    = config["zone_detection"]["swing_lookback"]
-    fatigue_thresh = config.get("scoring", {}).get("zone_fatigue_threshold", 3)
+    fatigue_thresh = config.get("scoring", {}).get("zone_fatigue_threshold", 5)
 
     print(f"  Scanning {name}...")
 
@@ -1431,7 +1457,6 @@ for pair_conf in config["pairs"]:
                 zone_label=zone_label,
                 atr_value=atr_value,
                 fatigue_count=fatigue,
-                in_session=is_in_session(pair_conf),
                 fatigue_threshold=fatigue_thresh,
                 lookback=lookback
             )
