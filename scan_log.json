@@ -12113,5 +12113,45 @@
     "zone": 4726.90007,
     "status": "rejected_gates",
     "reason": "No structural break in last 5 closed candles"
+  },
+  {
+    "time_ist": "09 Apr 10:45 IST",
+    "time_utc": "2026-04-09 05:15",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "09 Apr 10:45 IST",
+    "time_utc": "2026-04-09 05:15",
+    "pair": "USDJPY",
+    "zone": 159.23683,
+    "status": "rejected_gates",
+    "reason": "M15 bos is bullish, need bearish for SHORT"
+  },
+  {
+    "time_ist": "09 Apr 10:45 IST",
+    "time_utc": "2026-04-09 05:15",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "09 Apr 10:45 IST",
+    "time_utc": "2026-04-09 05:15",
+    "pair": "NAS100",
+    "zone": 24926.5,
+    "status": "rejected_gates",
+    "reason": "No structural break in last 5 closed candles"
+  },
+  {
+    "time_ist": "09 Apr 10:45 IST",
+    "time_utc": "2026-04-09 05:15",
+    "pair": "GOLD",
+    "zone": 4724.82507,
+    "status": "rejected_gates",
+    "reason": "M15 bos lacks displacement (body < 0.25 x ATR)"
   }
 ]
