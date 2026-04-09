@@ -11913,5 +11913,45 @@
     "zone": null,
     "status": "zone_outside_proximity",
     "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "09 Apr 09:31 IST",
+    "time_utc": "2026-04-09 04:01",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "09 Apr 09:31 IST",
+    "time_utc": "2026-04-09 04:01",
+    "pair": "USDJPY",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "09 Apr 09:31 IST",
+    "time_utc": "2026-04-09 04:01",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "09 Apr 09:31 IST",
+    "time_utc": "2026-04-09 04:01",
+    "pair": "NAS100",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "09 Apr 09:31 IST",
+    "time_utc": "2026-04-09 04:01",
+    "pair": "GOLD",
+    "zone": 4726.90007,
+    "status": "rejected_gates",
+    "reason": "No structural break in last 5 closed candles"
   }
 ]
