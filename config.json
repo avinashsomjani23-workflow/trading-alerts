@@ -78,29 +78,26 @@
     }
   ],
   "zone_detection": {
-    "swing_lookback": 5
+    "swing_lookback": 15
   },
   "scoring": {
-    "hard_gates": [
-      "structure_confirmed",
-      "valid_ob",
-      "rr_minimum_2"
-    ],
+    "hard_gates": ["rr_minimum_1.5"],
     "confluences": {
-      "liquidity_swept": 2.5,
-      "fvg_overlaps_ob": 2.0,
-      "premium_discount_zone": 1.5,
-      "multi_tf_alignment": 1.5,
-      "zone_freshness": 1.0,
-      "no_high_impact_news": 1.0,
-      "session_alignment": 0.5
+      "structure_m15": 2.5,
+      "ob_near_zone": 2.0,
+      "fvg_in_zone": 1.0,
+      "liquidity_sweep": 1.5,
+      "premium_discount_zone": 1.0,
+      "h1_alignment": 0.5,
+      "zone_freshness": 0.5,
+      "no_high_impact_news": 1.0
     },
     "min_score_to_send": 7,
     "max_score": 10.0,
     "atr_buffer_multiplier": 0.2,
     "news_blackout_hours_before": 2,
     "news_blackout_hours_after": 1,
-    "zone_fatigue_threshold": 3
+    "zone_fatigue_threshold": 5
   },
   "sessions": {
     "Asian":        {"utc_start": 0,  "utc_end": 8},
