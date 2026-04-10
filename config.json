@@ -17,7 +17,7 @@
       "decimal_places": 5,
       "spread_pips": 1,
       "primary_session": "London",
-      "structure_tf": ["H1"],
+      "structure_tf": ["H1", "M15"],
       "extra_gate": null
     },
     {
@@ -45,7 +45,7 @@
       "decimal_places": 5,
       "spread_pips": 1.5,
       "primary_session": "Asian",
-      "structure_tf": ["H1"],
+      "structure_tf": ["H1", "M15"],
       "extra_gate": null
     },
     {
@@ -73,7 +73,7 @@
       "decimal_places": 2,
       "spread_pips": 0.30,
       "primary_session": "London_NY",
-      "structure_tf": ["H1"],
+      "structure_tf": ["H1", "M15"],
       "extra_gate": "macro_alignment_required"
     }
   ],
