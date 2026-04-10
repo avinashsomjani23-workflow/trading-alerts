@@ -7688,5 +7688,90 @@
     "invalidation_email_sent": false,
     "entry_filled": true,
     "entry_filled_at": "2026-04-10 06:15"
+  },
+  {
+    "id": "NZDUSD_1775808128",
+    "alert_type": "zone",
+    "alert_stage": "trade_ready",
+    "pair": "NZDUSD",
+    "pair_type": "forex",
+    "timestamp_utc": "2026-04-10 08:02",
+    "ist_time": "13:32",
+    "zone_level": 0.58366,
+    "zone_label": "Supply",
+    "bias": "SHORT",
+    "entry": 0.584437,
+    "entry_model": "limit",
+    "entry_source": "ob_body_midpoint",
+    "entry_ready_now": true,
+    "trigger_status": "ready",
+    "trigger_tf": "M15",
+    "trigger_kind": "bos",
+    "trigger": "BOS bearish confirmed near zone",
+    "invalidate_above": 0.58459,
+    "invalidate_below": null,
+    "invalid_if": "",
+    "sl": 0.58459,
+    "tp1": 0.576368,
+    "tp2": 0.57103,
+    "rr_tp1": "52.56",
+    "rr_tp2": "87.34",
+    "tp1_source": "h1_zone",
+    "tp2_source": "h1_zone",
+    "confidence_score": 7.0,
+    "confidence_reason": "BOS bearish confirmed near zone",
+    "score_breakdown": {
+      "structure_m15": 1.0,
+      "ob_near_zone": 1.0,
+      "fvg_in_zone": 1.0,
+      "liquidity_sweep": 1.5,
+      "premium_discount": 1.0,
+      "h1_alignment": 0.0,
+      "zone_freshness": 0.5,
+      "no_high_impact_news": 1.0
+    },
+    "confluences": [
+      "Liquidity swept (confirmed): high at 0.58394, wick to 0.58435",
+      "FVG present in zone proximity",
+      "Price in premium (74.9% of range)",
+      "M15 BOS confirmed (bearish)"
+    ],
+    "missing": [
+      {
+        "item": "ob_fvg_overlap",
+        "reason": "No unmitigated FVG overlapping the OB body"
+      },
+      {
+        "item": "structure_m15",
+        "reason": "Only BOS confirmed \u2014 no CHoCH yet"
+      },
+      {
+        "item": "h1_alignment",
+        "reason": "H1 structure not confirming bias direction"
+      }
+    ],
+    "geo_flag": false,
+    "news_flag": "none",
+    "atr_h1": 0.000653,
+    "buffer_applied": 0,
+    "zone_tests_30d": 1,
+    "approaching_sent_at": null,
+    "m15_break_level": "external",
+    "sweep_score": 2.5,
+    "sweep_method": "multi_candle",
+    "ob_type": "bearish",
+    "ob_top": 0.58459,
+    "ob_bottom": 0.584283,
+    "fvg_confirmed": false,
+    "gate_structure": "M15 BOS bearish (external) at 2026-04-10 07:45:00+00:00, broke 0.58466",
+    "gate_ob": "bearish OB at 0.58459/0.58428, candle 2026-04-10 07:15:00+00:00",
+    "gate_rr": "RR=52.56:1 | entry=0.58444 sl=0.58459 tp1=0.57637",
+    "outcome": "pending",
+    "outcome_price": null,
+    "outcome_checked_at": null,
+    "entry_alert_sent": true,
+    "entry_alert_sent_at": "2026-04-10 08:02",
+    "entry_alert_price": 0.58363,
+    "invalidation_email_sent": false
   }
 ]
