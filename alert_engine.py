@@ -241,6 +241,7 @@ def get_atr(df, period=14):
         return None
 
 def detect_zones_and_candles(symbol, min_touches):
+    """Detect H1 zones from swing clustering."""
     df1 = clean_df(yf.download(symbol, period="15d", interval="1h", progress=False))
     if df1 is None:
         return [], None, None
@@ -271,6 +272,51 @@ def detect_zones_and_candles(symbol, min_touches):
 
 def fetch_m15_data(symbol):
     return clean_df(yf.download(symbol, period="5d", interval="15m", progress=False))
+
+def detect_m15_zones(df_m15, min_touches):
+    """Detect M15 zones from swing clustering. Same logic as H1 but on M15 data."""
+    if df_m15 is None or df_m15.empty:
+        return []
+    current_price = float(df_m15['Close'].iloc[-1])
+    lb    = config["zone_detection"]["swing_lookback"]
+    highs = df_m15['High'].values.flatten()
+    lows  = df_m15['Low'].values.flatten()
+    swing_points = []
+    for i in range(lb, len(highs) - lb):
+        if highs[i] == max(highs[i-lb:i+lb+1]):
+            swing_points.append(float(highs[i]))
+        if lows[i] == min(lows[i-lb:i+lb+1]):
+            swing_points.append(float(lows[i]))
+    if not swing_points:
+        return []
+    swing_points = sorted(swing_points)
+    clusters = [[swing_points[0]]]
+    for lvl in swing_points[1:]:
+        if (lvl - clusters[-1][-1]) / clusters[-1][-1] * 100 < 0.3:
+            clusters[-1].append(lvl)
+        else:
+            clusters.append([lvl])
+    zones = [(float(np.mean(c)), len(c)) for c in clusters if len(c) >= min_touches]
+    # Discard zones more than 20% from current price (data corruption guard)
+    zones = [(z, t) for z, t in zones
+             if abs(z - current_price) / current_price <= 0.20]
+    return zones
+
+def merge_zones(h1_zones, m15_zones):
+    """
+    Merge H1 and M15 zones. Dedup within 0.3% — H1 takes priority.
+    If an M15 zone is within 0.3% of any already-merged zone, skip it.
+    """
+    merged = list(h1_zones)
+    for m_level, m_touches in m15_zones:
+        is_dup = False
+        for existing_level, _ in merged:
+            if existing_level > 0 and abs(m_level - existing_level) / existing_level * 100 < 0.3:
+                is_dup = True
+                break
+        if not is_dup:
+            merged.append((m_level, m_touches))
+    return merged
 
 def get_zone_label(zone_level, current_price):
     return "Demand" if zone_level < current_price else "Supply"
@@ -1149,10 +1195,9 @@ def log_alert(pair, zone_level, zone_label, current_price, data, pair_conf,
         "geo_flag":           data.get("geo_flag", False),
         "news_flag":          data.get("news_flag", "none"),
         "atr_h1":             round(atr_value, 6) if atr_value else None,
-        "buffer_applied":     0,   # SL widening removed — kept for backward compat
+        "buffer_applied":     0,
         "zone_tests_30d":     fatigue_count,
         "approaching_sent_at": approaching_at,
-        # smc_detector v2 fields
         "m15_break_level":    data.get("m15_break_level", ""),
         "sweep_score":        data.get("sweep_detail", {}).get("sweep_score", 0),
         "sweep_method":       data.get("sweep_detail", {}).get("method", ""),
@@ -1163,7 +1208,6 @@ def log_alert(pair, zone_level, zone_label, current_price, data, pair_conf,
         "gate_structure":     data.get("gate_structure", ""),
         "gate_ob":            data.get("gate_ob", ""),
         "gate_rr":            data.get("gate_rr", ""),
-        # Outcome tracking
         "outcome":            "pending",
         "outcome_price":      None,
         "outcome_checked_at": None,
@@ -1373,8 +1417,11 @@ def run_invalidation_checks(current_prices):
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 ist_start = ist_now().strftime("%H:%M IST, %d %b %Y")
-print(f"Alert engine v2 started {ist_start} ({utc_str()} UTC)")
+print(f"Alert engine v2.2 started {ist_start} ({utc_str()} UTC)")
 print(f"  Python-first mode: smc_detector handles gates + scoring, Gemini handles text + news")
+print(f"  Config: swing_lookback={config['zone_detection']['swing_lookback']}, "
+      f"bos_scan_m15={config['zone_detection'].get('bos_scan_m15', 100)}, "
+      f"bos_scan_h1={config['zone_detection'].get('bos_scan_h1', 50)}")
 
 run_errors    = []
 pairs_ok      = []
@@ -1388,6 +1435,12 @@ if not market_open:
     print("  Exiting — market closed.")
     exit(0)
 
+# ── Config values ─────────────────────────────────────────────────────────────
+lookback       = config["zone_detection"]["swing_lookback"]
+bos_scan_m15   = config["zone_detection"].get("bos_scan_m15", 100)
+bos_scan_h1    = config["zone_detection"].get("bos_scan_h1", 50)
+atr_prox_mult  = config.get("scoring", {}).get("atr_proximity_multiplier", 1.5)
+
 # ── Job 1: Scan for new zone alerts ──────────────────────────────────────────
 macro_news = fetch_macro_news()
 
@@ -1397,13 +1450,13 @@ for pair_conf in config["pairs"]:
     prox        = pair_conf["proximity_pct"]
     min_touches = pair_conf.get("min_touches", 1)
     min_conf    = pair_conf.get("min_confidence", 7)
-    lookback    = config["zone_detection"]["swing_lookback"]
     fatigue_thresh = config.get("scoring", {}).get("zone_fatigue_threshold", 5)
 
     print(f"  Scanning {name}...")
 
     try:
-        zones, current_price, df1 = detect_zones_and_candles(symbol, min_touches)
+        # ── Fetch all data (sequential — yfinance is not thread-safe) ────
+        zones_h1, current_price, df1 = detect_zones_and_candles(symbol, min_touches)
 
         if current_price is None:
             print(f"    No data for {name}. Skipping.")
@@ -1414,10 +1467,31 @@ for pair_conf in config["pairs"]:
         current_prices[name] = current_price
         atr_value = get_atr(df1) if df1 is not None else None
 
+        df2 = fetch_m15_data(symbol)
+        if df2 is None:
+            print(f"    No M15 data for {name}. Skipping.")
+            log_scan(name, "error", "No M15 data returned.")
+            run_errors.append(f"{name}: No M15 data returned.")
+            continue
+
+        # ── M15 zones + merge with H1 ────────────────────────────────────
+        zones_m15 = detect_m15_zones(df2, min_touches)
+        zones = merge_zones(zones_h1, zones_m15)
+        print(f"    Zones: {len(zones_h1)} H1 + {len(zones_m15)} M15 → {len(zones)} merged")
+
         if not zones:
             log_scan(name, "no_zone_found", "No valid zones detected.")
             pairs_ok.append(name)
             continue
+
+        # ── ATR-scaled proximity ─────────────────────────────────────────
+        if atr_value and atr_value > 0 and current_price > 0:
+            atr_based_prox = atr_prox_mult * atr_value / current_price * 100
+            effective_prox = max(prox, atr_based_prox)
+            if effective_prox > prox:
+                print(f"    Proximity widened: {prox}% → {effective_prox:.3f}% (ATR-scaled)")
+        else:
+            effective_prox = prox
 
         zones_in_proximity = 0
         zone_alerted = False
@@ -1428,16 +1502,11 @@ for pair_conf in config["pairs"]:
                 break
 
             dist_pct = abs(current_price - zone_level) / zone_level * 100
-            if dist_pct > prox:
+            if dist_pct > effective_prox:
                 continue
 
             zones_in_proximity += 1
             zone_label = get_zone_label(zone_level, current_price)
-
-            df2 = fetch_m15_data(symbol)
-            if df2 is None:
-                log_scan(name, "error", "No M15 data.", zone_level)
-                continue
 
             fatigue = count_zone_alerts(name, zone_level)
             dp = pair_conf.get("decimal_places", 5)
@@ -1445,7 +1514,7 @@ for pair_conf in config["pairs"]:
                   f"dist:{dist_pct:.2f}% fatigue:{fatigue}")
 
             # ══════════════════════════════════════════════════════════════
-            # PYTHON-FIRST ANALYSIS (smc_detector v2)
+            # PYTHON-FIRST ANALYSIS (smc_detector v2.2)
             # ══════════════════════════════════════════════════════════════
             result = smc_detector.run_analysis(
                 pair_conf=pair_conf,
@@ -1458,7 +1527,9 @@ for pair_conf in config["pairs"]:
                 atr_value=atr_value,
                 fatigue_count=fatigue,
                 fatigue_threshold=fatigue_thresh,
-                lookback=lookback
+                lookback=lookback,
+                bos_scan_m15=bos_scan_m15,
+                bos_scan_h1=bos_scan_h1
             )
 
             # ── Gate check ────────────────────────────────────────────────
@@ -1515,12 +1586,9 @@ for pair_conf in config["pairs"]:
             # ── Extra gate: macro alignment (for commodity pairs like Gold) ──
             extra_gate = pair_conf.get("extra_gate")
             if extra_gate == "macro_alignment_required":
-                # If Gemini flagged geo risk contradicting bias, reject
                 if result.get("geo_flag", False):
                     macro_line = result.get("macro_line1", "")
                     bias = result.get("bias", "")
-                    # Conservative: geo flag + commodity = always flag, let Gemini's
-                    # confidence_reason guide the trader. Don't auto-reject.
                     print(f"    ⚠ Macro gate: geo_flag=True for {name} ({bias}). "
                           f"Alert proceeding — review macro context.")
 
