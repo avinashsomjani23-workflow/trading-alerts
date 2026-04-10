@@ -1,18 +1,16 @@
 """
-smc_detector.py — Pure Python SMC Pattern Detection Engine v2.1
+smc_detector.py — Pure Python SMC Pattern Detection Engine v2.2
 ================================================================
 Zero Gemini calls. Every function is deterministic and testable.
 Pair-type aware: forex, forex_jpy, index, commodity.
 
-v2.1 changes from v2:
-  - Structure-anchored OB detection (replaces FVG-anchored)
-  - detect_bos_choch_all — returns ALL breaks for scoring
-  - compute_capped_atr — prevents spike days inflating displacement
-  - New 8-item scorecard (session_alignment removed)
-  - FVG-in-zone independent scoring
-  - OB proximity filter via select_trade_ob
-  - Wider scan windows: swing lookback 15, BOS scan 15 candles
-  - Displacement fraction lowered to 0.15
+v2.2 changes from v2.1:
+  - BOS/CHoCH scan window now configurable via scan_window param (was hardcoded 15)
+    Default: 100 for M15 (~25h), 50 for H1 (~50h)
+  - select_trade_ob: range overlap replaces midpoint distance
+    OB range (ob_bottom to ob_top) must overlap zone band (zone ± prox%)
+  - Swing lookback default reduced from 15 to 4 (config-driven)
+  - run_analysis accepts bos_scan_m15 / bos_scan_h1 params
 
 Functions:
     1.  get_swing_points          — swing high/low detection
@@ -25,7 +23,7 @@ Functions:
     8.  detect_obs_from_structure  — OB from structural break candle
     9.  detect_liquidity_sweep    — wick-rejection sweep (2.5 / 1.5 / 0)
     10. compute_premium_discount  — 60/40 equilibrium check
-    11. select_trade_ob           — validate OB proximity to zone
+    11. select_trade_ob           — validate OB overlap with zone band
     12. compute_levels            — entry / SL / TP1 / TP2 / RR
     13. check_entry_readiness     — engulfing or BOS/CHoCH trigger
     14. compute_invalidation      — direction-aware invalidation levels
@@ -114,7 +112,7 @@ def _dp(pair_conf):
 # 1. SWING POINT DETECTION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def get_swing_points(df, lookback=15):
+def get_swing_points(df, lookback=4):
     """
     Detect swing highs and swing lows from OHLC data.
 
@@ -334,10 +332,13 @@ def _build_break_targets(swings, strong_point, weak_point, sh, sl, trend):
 # 4. BOS / CHoCH / iBOS DETECTION (single best)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def detect_bos_choch(df, pair_conf, atr_value=None, lookback=15):
+def detect_bos_choch(df, pair_conf, atr_value=None, lookback=4, scan_window=100):
     """
     Detect the most recent structural break on the given timeframe.
-    Scans last 15 closed candles. Priority: external > internal, most recent wins.
+    Scans last `scan_window` closed candles. Priority: external > internal,
+    most recent wins for same level.
+
+    scan_window: how many candles to scan backward (default 100 for M15, use 50 for H1).
     """
     empty = {
         "confirmed": False, "type": None, "direction": None,
@@ -378,7 +379,7 @@ def detect_bos_choch(df, pair_conf, atr_value=None, lookback=15):
 
     best = None
 
-    for i in range(n - 2, max(n - 17, -1), -1):
+    for i in range(n - 2, max(n - scan_window - 2, -1), -1):
         body = abs(C_arr[i] - O_arr[i])
         has_disp = body >= disp_thresh if disp_thresh > 0 else True
 
@@ -426,7 +427,7 @@ def detect_bos_choch(df, pair_conf, atr_value=None, lookback=15):
     if best is not None:
         return best
 
-    empty["reason"] = "No structural break in last 15 closed candles"
+    empty["reason"] = f"No structural break in last {scan_window} closed candles"
     return empty
 
 
@@ -434,11 +435,11 @@ def detect_bos_choch(df, pair_conf, atr_value=None, lookback=15):
 # 5. BOS / CHoCH — ALL BREAKS (for scoring)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def detect_bos_choch_all(df, pair_conf, atr_value=None, lookback=15):
+def detect_bos_choch_all(df, pair_conf, atr_value=None, lookback=4, scan_window=100):
     """
     Returns ALL confirmed structural breaks (with displacement) in the
-    last 15 closed candles. Used for scoring item 1 — determines if both
-    BOS and CHoCH are present for the given bias.
+    last `scan_window` closed candles. Used for scoring item 1 — determines
+    if both BOS and CHoCH are present for the given bias.
     """
     result = {
         "has_bos_bullish": False,
@@ -476,7 +477,7 @@ def detect_bos_choch_all(df, pair_conf, atr_value=None, lookback=15):
 
     all_breaks = []
 
-    for i in range(n - 2, max(n - 17, -1), -1):
+    for i in range(n - 2, max(n - scan_window - 2, -1), -1):
         body = abs(C_arr[i] - O_arr[i])
         has_disp = body >= disp_thresh if disp_thresh > 0 else True
 
@@ -834,23 +835,28 @@ def compute_premium_discount(swing_points, current_price, bias):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 10. SELECT / VALIDATE OB (proximity to zone)
+# 10. SELECT / VALIDATE OB (range overlap with zone band)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def select_trade_ob(ob, zone_level, pair_conf):
     """
-    Validate the structure-anchored OB against the zone.
-    OB midpoint must be within proximity_pct * 2 of zone_level.
-    Returns ob if valid, None if too far or None input.
+    Validate the structure-anchored OB against the zone using range overlap.
+
+    Zone band = zone_level ± proximity_pct%.
+    OB range  = ob_bottom to ob_top.
+    If these two ranges overlap at all → valid OB for this zone.
+
+    Returns ob if valid, None if no overlap or None input.
     """
     if ob is None:
         return None
 
-    ob_mid = (ob["ob_top"] + ob["ob_bottom"]) / 2
-    max_dist_pct = pair_conf.get("proximity_pct", 0.3) * 2
-    dist_pct = abs(ob_mid - zone_level) / zone_level * 100
+    prox_pct = pair_conf.get("proximity_pct", 0.3)
+    zone_top = zone_level * (1 + prox_pct / 100)
+    zone_bot = zone_level * (1 - prox_pct / 100)
 
-    if dist_pct > max_dist_pct:
+    # Ranges overlap if ob_top >= zone_bot AND ob_bottom <= zone_top
+    if ob["ob_top"] < zone_bot or ob["ob_bottom"] > zone_top:
         return None
 
     return ob
@@ -1201,10 +1207,11 @@ def compute_score(analysis, fatigue_count, fatigue_threshold=5):
 
 def run_analysis(pair_conf, df_h1, df_m15, zones, current_price, zone_level,
                  zone_label, atr_value, fatigue_count,
-                 fatigue_threshold=5, lookback=15):
+                 fatigue_threshold=5, lookback=4,
+                 bos_scan_m15=100, bos_scan_h1=50):
     """
     Complete Python-side SMC analysis for one zone.
-    in_session parameter removed — no session-based filtering.
+    bos_scan_m15 / bos_scan_h1: how many candles to scan for structural breaks.
     """
     dp = _dp(pair_conf)
     min_conf = pair_conf.get("min_confidence", 7)
@@ -1225,7 +1232,8 @@ def run_analysis(pair_conf, df_h1, df_m15, zones, current_price, zone_level,
     # ══════════════════════════════════════════════════════════════════════
     # STRUCTURE on M15 (not a hard gate — feeds OB detection)
     # ══════════════════════════════════════════════════════════════════════
-    m15_struct = detect_bos_choch(df_m15, pair_conf, capped_atr, lookback)
+    m15_struct = detect_bos_choch(df_m15, pair_conf, capped_atr, lookback,
+                                  scan_window=bos_scan_m15)
 
     # Structure must be confirmed + bias-matching + displaced for OB anchoring.
     # If any condition fails, OB detection gets an empty struct → returns None →
@@ -1248,7 +1256,8 @@ def run_analysis(pair_conf, df_h1, df_m15, zones, current_price, zone_level,
             f"No usable M15 structure: "
             f"{m15_struct.get('reason', 'direction/displacement mismatch')}")
     # ── All M15 breaks (for scoring) ─────────────────────────────────────
-    bos_all = detect_bos_choch_all(df_m15, pair_conf, capped_atr, lookback)
+    bos_all = detect_bos_choch_all(df_m15, pair_conf, capped_atr, lookback,
+                                    scan_window=bos_scan_m15)
 
     # ── M15 FVGs ──────────────────────────────────────────────────────────
     m15_fvgs = detect_fvgs(df_m15, FVG_M15_WINDOW)
@@ -1325,7 +1334,8 @@ def run_analysis(pair_conf, df_h1, df_m15, zones, current_price, zone_level,
             break
 
     # ── H1 structure ──────────────────────────────────────────────────────
-    h1_struct = detect_bos_choch(df_h1, pair_conf, capped_atr, lookback)
+    h1_struct = detect_bos_choch(df_h1, pair_conf, capped_atr, lookback,
+                                 scan_window=bos_scan_h1)
 
     m15_swings = get_swing_points(df_m15, lookback)
     h1_swings = get_swing_points(df_h1, lookback)
@@ -1427,7 +1437,7 @@ def run_analysis(pair_conf, df_h1, df_m15, zones, current_price, zone_level,
         else:
             missing.append({
                 "item": "structure_m15",
-                "reason": "No bias-matching BOS or CHoCH in last 15 candles"})
+                "reason": f"No bias-matching BOS or CHoCH in last {bos_scan_m15} candles"})
     if h1_score == 0:
         missing.append({
             "item": "h1_alignment",
