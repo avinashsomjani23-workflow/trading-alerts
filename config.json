@@ -78,7 +78,9 @@
     }
   ],
   "zone_detection": {
-    "swing_lookback": 15
+    "swing_lookback": 4,
+    "bos_scan_m15": 100,
+    "bos_scan_h1": 50
   },
   "scoring": {
     "hard_gates": ["rr_minimum_1.5"],
@@ -95,6 +97,7 @@
     "min_score_to_send": 7,
     "max_score": 10.0,
     "atr_buffer_multiplier": 0.2,
+    "atr_proximity_multiplier": 1.5,
     "news_blackout_hours_before": 2,
     "news_blackout_hours_after": 1,
     "zone_fatigue_threshold": 5
