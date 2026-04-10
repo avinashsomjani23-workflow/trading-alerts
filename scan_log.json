@@ -2238,5 +2238,45 @@
     "zone": null,
     "status": "zone_outside_proximity",
     "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "10 Apr 18:45 IST",
+    "time_utc": "2026-04-10 13:15",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "10 Apr 18:46 IST",
+    "time_utc": "2026-04-10 13:16",
+    "pair": "USDJPY",
+    "zone": 159.23664,
+    "status": "blocked_active_trade",
+    "reason": "Active trade on this zone \u2014 blocked."
+  },
+  {
+    "time_ist": "10 Apr 18:46 IST",
+    "time_utc": "2026-04-10 13:16",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "10 Apr 18:46 IST",
+    "time_utc": "2026-04-10 13:16",
+    "pair": "NAS100",
+    "zone": 25254.5,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 25254.50"
+  },
+  {
+    "time_ist": "10 Apr 18:46 IST",
+    "time_utc": "2026-04-10 13:16",
+    "pair": "GOLD",
+    "zone": 4824.29997,
+    "status": "rejected_gates",
+    "reason": "No valid SHORT OB near zone 4824.30"
   }
 ]
