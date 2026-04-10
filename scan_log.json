@@ -1494,5 +1494,53 @@
     "zone": 4756.1499,
     "status": "rejected_low_score",
     "reason": "Score 6.5/10 below 7 (pre-Gemini). BOS bullish confirmed near zone"
+  },
+  {
+    "time_ist": "10 Apr 14:31 IST",
+    "time_utc": "2026-04-10 09:01",
+    "pair": "EURUSD",
+    "zone": 1.16866,
+    "status": "rejected_low_score",
+    "reason": "Score 5.5/10 below 7 (pre-Gemini). IBOS bullish confirmed near zone"
+  },
+  {
+    "time_ist": "10 Apr 14:31 IST",
+    "time_utc": "2026-04-10 09:01",
+    "pair": "USDJPY",
+    "zone": 159.23409,
+    "status": "rejected_news",
+    "reason": "Score dropped to 6.5/10 after Gemini news override (news_flag: Iran war ceasefire negotiations)"
+  },
+  {
+    "time_ist": "10 Apr 14:31 IST",
+    "time_utc": "2026-04-10 09:01",
+    "pair": "NZDUSD",
+    "zone": 0.58366,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 0.58366"
+  },
+  {
+    "time_ist": "10 Apr 14:31 IST",
+    "time_utc": "2026-04-10 09:01",
+    "pair": "NAS100",
+    "zone": 25137.92568,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 25137.93"
+  },
+  {
+    "time_ist": "10 Apr 14:31 IST",
+    "time_utc": "2026-04-10 09:01",
+    "pair": "NAS100",
+    "zone": 25280.375,
+    "status": "rejected_low_score",
+    "reason": "Score 5.5/10 below 7 (pre-Gemini). No trigger pattern on last closed candle"
+  },
+  {
+    "time_ist": "10 Apr 14:31 IST",
+    "time_utc": "2026-04-10 09:01",
+    "pair": "GOLD",
+    "zone": 4756.1499,
+    "status": "rejected_gates",
+    "reason": "No valid SHORT OB near zone 4756.15"
   }
 ]

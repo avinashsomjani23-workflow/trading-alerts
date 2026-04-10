@@ -7857,6 +7857,8 @@
     "entry_alert_sent": true,
     "entry_alert_sent_at": "2026-04-10 08:31",
     "entry_alert_price": 25216.25,
-    "invalidation_email_sent": false
+    "invalidation_email_sent": false,
+    "entry_filled": true,
+    "entry_filled_at": "2026-04-10 08:45"
   }
 ]
