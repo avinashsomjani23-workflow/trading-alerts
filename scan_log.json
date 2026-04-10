@@ -2614,5 +2614,53 @@
     "zone": 4824.29997,
     "status": "rejected_gates",
     "reason": "No valid SHORT OB near zone 4824.30"
+  },
+  {
+    "time_ist": "10 Apr 20:45 IST",
+    "time_utc": "2026-04-10 15:15",
+    "pair": "EURUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "10 Apr 20:45 IST",
+    "time_utc": "2026-04-10 15:15",
+    "pair": "USDJPY",
+    "zone": 159.23664,
+    "status": "rejected_news",
+    "reason": "Score dropped to 6.0/10 after Gemini news override (news_flag: geopolitical event: Iran war ceasefire talks breakdown)"
+  },
+  {
+    "time_ist": "10 Apr 20:45 IST",
+    "time_utc": "2026-04-10 15:15",
+    "pair": "NZDUSD",
+    "zone": null,
+    "status": "zone_outside_proximity",
+    "reason": "Zones detected but none near current price."
+  },
+  {
+    "time_ist": "10 Apr 20:45 IST",
+    "time_utc": "2026-04-10 15:15",
+    "pair": "NAS100",
+    "zone": 25386.0,
+    "status": "rejected_gates",
+    "reason": "No valid SHORT OB near zone 25386.00"
+  },
+  {
+    "time_ist": "10 Apr 20:45 IST",
+    "time_utc": "2026-04-10 15:15",
+    "pair": "NAS100",
+    "zone": 25254.5,
+    "status": "rejected_low_score",
+    "reason": "Score 5.0/10 below 7 (pre-Gemini). BOS bullish confirmed near zone"
+  },
+  {
+    "time_ist": "10 Apr 20:45 IST",
+    "time_utc": "2026-04-10 15:15",
+    "pair": "GOLD",
+    "zone": 4824.29997,
+    "status": "rejected_gates",
+    "reason": "No valid SHORT OB near zone 4824.30"
   }
 ]
