@@ -1590,5 +1590,53 @@
     "zone": 4756.1499,
     "status": "rejected_gates",
     "reason": "No valid LONG OB near zone 4756.15"
+  },
+  {
+    "time_ist": "10 Apr 15:00 IST",
+    "time_utc": "2026-04-10 09:30",
+    "pair": "EURUSD",
+    "zone": 1.16866,
+    "status": "rejected_gates",
+    "reason": "RR 1.45:1 < 1.5 | entry=1.17014 sl=1.16891 tp1=1.17192 risk=0.00123"
+  },
+  {
+    "time_ist": "10 Apr 15:00 IST",
+    "time_utc": "2026-04-10 09:30",
+    "pair": "USDJPY",
+    "zone": 159.23409,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 159.234"
+  },
+  {
+    "time_ist": "10 Apr 15:00 IST",
+    "time_utc": "2026-04-10 09:30",
+    "pair": "NZDUSD",
+    "zone": 0.58366,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 0.58366"
+  },
+  {
+    "time_ist": "10 Apr 15:00 IST",
+    "time_utc": "2026-04-10 09:30",
+    "pair": "NAS100",
+    "zone": 25280.375,
+    "status": "rejected_gates",
+    "reason": "No valid SHORT OB near zone 25280.38"
+  },
+  {
+    "time_ist": "10 Apr 15:00 IST",
+    "time_utc": "2026-04-10 09:30",
+    "pair": "NAS100",
+    "zone": 25139.63158,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 25139.63"
+  },
+  {
+    "time_ist": "10 Apr 15:00 IST",
+    "time_utc": "2026-04-10 09:30",
+    "pair": "GOLD",
+    "zone": 4756.1499,
+    "status": "rejected_low_score",
+    "reason": "Score 6.5/10 below 7 (pre-Gemini). BOS bullish confirmed near zone"
   }
 ]
