@@ -2854,5 +2854,53 @@
     "zone": 4755.0,
     "status": "rejected_gates",
     "reason": "No valid LONG OB near zone 4755.00"
+  },
+  {
+    "time_ist": "10 Apr 22:01 IST",
+    "time_utc": "2026-04-10 16:31",
+    "pair": "EURUSD",
+    "zone": 1.16901,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 1.16901"
+  },
+  {
+    "time_ist": "10 Apr 22:01 IST",
+    "time_utc": "2026-04-10 16:31",
+    "pair": "USDJPY",
+    "zone": 159.2297,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 159.230"
+  },
+  {
+    "time_ist": "10 Apr 22:01 IST",
+    "time_utc": "2026-04-10 16:31",
+    "pair": "NZDUSD",
+    "zone": 0.58373,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 0.58373"
+  },
+  {
+    "time_ist": "10 Apr 22:01 IST",
+    "time_utc": "2026-04-10 16:31",
+    "pair": "NAS100",
+    "zone": 25254.5,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 25254.50"
+  },
+  {
+    "time_ist": "10 Apr 22:01 IST",
+    "time_utc": "2026-04-10 16:31",
+    "pair": "NAS100",
+    "zone": 25389.5,
+    "status": "rejected_gates",
+    "reason": "RR 1.05:1 < 1.5 | entry=25314.50 sl=25371.75 tp1=25254.50 risk=57.25"
+  },
+  {
+    "time_ist": "10 Apr 22:01 IST",
+    "time_utc": "2026-04-10 16:31",
+    "pair": "GOLD",
+    "zone": 4755.0,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 4755.00"
   }
 ]
