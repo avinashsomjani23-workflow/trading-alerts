@@ -7772,7 +7772,9 @@
     "entry_alert_sent": true,
     "entry_alert_sent_at": "2026-04-10 08:02",
     "entry_alert_price": 0.58363,
-    "invalidation_email_sent": false
+    "invalidation_email_sent": false,
+    "entry_filled": true,
+    "entry_filled_at": "2026-04-10 10:15"
   },
   {
     "id": "NAS100_1775809915",
