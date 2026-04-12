@@ -73,16 +73,14 @@ PAIRS_CONFIG = {
         "name": "XAUUSD",
         "type": "commodity",
         "timeframes": {
-            "H1": {"lookback": 5, "period": "15d", "interval": "1h"},
-            "H4": {"lookback": 5, "period": "60d", "interval": "4h"}
+            "H1": {"lookback": 5, "period": "15d", "interval": "1h"}
         }
     },
     "NQ=F": {
         "name": "NAS100",
         "type": "index",
         "timeframes": {
-            "H1": {"lookback": 6, "period": "15d", "interval": "1h"},
-            "H4": {"lookback": 6, "period": "60d", "interval": "4h"}
+            "H1": {"lookback": 6, "period": "15d", "interval": "1h"}
         }
     }
 }
