@@ -102,23 +102,61 @@ def detect_smc_radar(df, lookback):
 
     return {"active_unmitigated_obs": pristine_obs}
 
+def send_summary_email(payload):
+    """Safely dispatches the 2-hour Phase 1 Summary."""
+    try:
+        subject = f"Phase 1 Scout Summary — {datetime.utcnow().strftime('%H:%M')} UTC"
+        lines = ["SMC Radar (Phase 1) Active Order Blocks:\n" + "="*40]
+        total_obs = 0
+        for pair, obs in payload.items():
+            lines.append(f"{pair}: {len(obs)} pristine OB(s) mapped.")
+            total_obs += len(obs)
+        lines.append("="*40)
+        lines.append(f"Total active zones being tracked by Phase 2: {total_obs}")
+        body = "\n".join(lines)
+
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_CONFIG['sender'][0]
+        msg['To'] = ", ".join(EMAIL_CONFIG['recipient'])
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+
+        with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
+            server.starttls()
+            server.login(EMAIL_CONFIG['sender'][0], EMAIL_CONFIG['password'])
+            server.sendmail(EMAIL_CONFIG['sender'][0], EMAIL_CONFIG['recipient'], msg.as_string())
+        logging.info("2-Hour Summary Email dispatched successfully.")
+    except Exception as e:
+        logging.error(f"Summary email failed (System continued safely): {e}")
+
 def run_radar():
     print(f"Running Phase 1 Scout (smc_radar) at {datetime.utcnow().strftime('%H:%M')} UTC")
     export_payload = {}
-    for pair in config_master["pairs"]:
-        ticker, name, lookback = pair["symbol"], pair["name"], 4
+    
+    for pair in PAIRS_CONFIG.values():
+        ticker, name = pair.get("symbol", ""), pair["name"]
+        lookback = 4
         if name in ["NZDUSD", "XAUUSD"]: lookback = 5
         elif name == "NAS100": lookback = 6
         
-        df = fetch_data(ticker, pair["map_tf"], "15d")
+        # Pull map_tf from your config_master (H1)
+        map_tf = next((p["map_tf"] for p in config_master["pairs"] if p["name"] == name), "1h")
+        
+        df = fetch_data(ticker, map_tf, "15d")
         if df is not None:
             result = detect_smc_radar(df, lookback)
             export_payload[name] = result["active_unmitigated_obs"]
             print(f"  Mapped {len(result['active_unmitigated_obs'])} pristine OBs for {name}")
 
+    # 1. Save JSON first to protect Phase 2
     with open("active_obs.json", "w") as f:
         json.dump(export_payload, f, indent=2)
     print("Phase 1 Complete. Saved to active_obs.json.")
+
+    # 2. Fire Email safely
+    run_time = datetime.utcnow()
+    if run_time.hour % 2 == 0:
+        send_summary_email(export_payload)
 
 if __name__ == "__main__":
     run_radar()
