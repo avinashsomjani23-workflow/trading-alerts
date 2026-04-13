@@ -1,8 +1,8 @@
 {
   "EURUSD": [
     {
-      "bos_idx": 26,
-      "ob_idx": 23,
+      "bos_idx": 25,
+      "ob_idx": 22,
       "direction": "bullish",
       "bos_tag": "CHoCH+BOS",
       "high": 1.1526048183441162,
@@ -16,12 +16,12 @@
         "fvg_bottom": 1.1526048183441162,
         "touches_ob": true
       },
-      "dist_to_price": 0.01657557487487793,
+      "dist_to_price": 0.01725947856903076,
       "direction_label": "Demand"
     },
     {
-      "bos_idx": 52,
-      "ob_idx": 51,
+      "bos_idx": 51,
+      "ob_idx": 50,
       "direction": "bullish",
       "bos_tag": "CHoCH+BOS",
       "high": 1.1548677682876587,
@@ -35,12 +35,12 @@
         "fvg_bottom": 1.1548677682876587,
         "touches_ob": true
       },
-      "dist_to_price": 0.01431262493133545,
+      "dist_to_price": 0.014996528625488281,
       "direction_label": "Demand"
     },
     {
-      "bos_idx": 61,
-      "ob_idx": 54,
+      "bos_idx": 60,
+      "ob_idx": 53,
       "direction": "bullish",
       "bos_tag": "continuation_BOS",
       "high": 1.1566041707992554,
@@ -54,12 +54,12 @@
         "fvg_bottom": 1.1568717956542969,
         "touches_ob": false
       },
-      "dist_to_price": 0.01257622241973877,
+      "dist_to_price": 0.013260126113891602,
       "direction_label": "Demand"
     },
     {
-      "bos_idx": 63,
-      "ob_idx": 62,
+      "bos_idx": 62,
+      "ob_idx": 61,
       "direction": "bullish",
       "bos_tag": "continuation_BOS",
       "high": 1.1586142778396606,
@@ -73,12 +73,12 @@
         "fvg_bottom": 1.1586142778396606,
         "touches_ob": true
       },
-      "dist_to_price": 0.010566115379333496,
+      "dist_to_price": 0.011250019073486328,
       "direction_label": "Demand"
     },
     {
-      "bos_idx": 138,
-      "ob_idx": 134,
+      "bos_idx": 137,
+      "ob_idx": 133,
       "direction": "bearish",
       "bos_tag": "CHoCH+BOS",
       "high": 1.17384672164917,
@@ -92,14 +92,14 @@
         "fvg_bottom": 1.1728830337524414,
         "touches_ob": true
       },
-      "dist_to_price": 0.003152608871459961,
+      "dist_to_price": 0.002468705177307129,
       "direction_label": "Supply"
     }
   ],
   "USDJPY": [
     {
-      "bos_idx": 67,
-      "ob_idx": 63,
+      "bos_idx": 66,
+      "ob_idx": 62,
       "direction": "bearish",
       "bos_tag": "CHoCH+BOS",
       "high": 159.86599731445312,
@@ -113,12 +113,12 @@
         "fvg_bottom": 159.49600219726562,
         "touches_ob": true
       },
-      "dist_to_price": 0.010009765625,
+      "dist_to_price": 0.0120086669921875,
       "direction_label": "Supply"
     },
     {
-      "bos_idx": 93,
-      "ob_idx": 88,
+      "bos_idx": 92,
+      "ob_idx": 87,
       "direction": "bullish",
       "bos_tag": "continuation_BOS",
       "high": 158.7949981689453,
@@ -132,12 +132,12 @@
         "fvg_bottom": 158.58200073242188,
         "touches_ob": true
       },
-      "dist_to_price": 0.8849945068359375,
+      "dist_to_price": 0.88299560546875,
       "direction_label": "Demand"
     },
     {
-      "bos_idx": 122,
-      "ob_idx": 120,
+      "bos_idx": 121,
+      "ob_idx": 119,
       "direction": "bullish",
       "bos_tag": "continuation_BOS",
       "high": 159.1750030517578,
@@ -151,12 +151,12 @@
         "fvg_bottom": 159.1750030517578,
         "touches_ob": true
       },
-      "dist_to_price": 0.5049896240234375,
+      "dist_to_price": 0.50299072265625,
       "direction_label": "Demand"
     },
     {
-      "bos_idx": 138,
-      "ob_idx": 137,
+      "bos_idx": 137,
+      "ob_idx": 136,
       "direction": "bullish",
       "bos_tag": "continuation_BOS",
       "high": 159.31900024414062,
@@ -170,14 +170,14 @@
         "fvg_bottom": 159.31900024414062,
         "touches_ob": true
       },
-      "dist_to_price": 0.360992431640625,
+      "dist_to_price": 0.3589935302734375,
       "direction_label": "Demand"
     }
   ],
   "NZDUSD": [
     {
-      "bos_idx": 63,
-      "ob_idx": 62,
+      "bos_idx": 62,
+      "ob_idx": 61,
       "direction": "bullish",
       "bos_tag": "CHoCH+BOS",
       "high": 0.571493923664093,
@@ -191,12 +191,12 @@
         "fvg_bottom": 0.571493923664093,
         "touches_ob": true
       },
-      "dist_to_price": 0.011698484420776367,
+      "dist_to_price": 0.012004733085632324,
       "direction_label": "Demand"
     },
     {
-      "bos_idx": 138,
-      "ob_idx": 134,
+      "bos_idx": 137,
+      "ob_idx": 133,
       "direction": "bearish",
       "bos_tag": "CHoCH+BOS",
       "high": 0.5849663615226746,
@@ -210,14 +210,14 @@
         "fvg_bottom": 0.5837711691856384,
         "touches_ob": true
       },
-      "dist_to_price": 0.000578761100769043,
+      "dist_to_price": 0.00027251243591308594,
       "direction_label": "Supply"
     }
   ],
   "USDCHF": [
     {
-      "bos_idx": 28,
-      "ob_idx": 22,
+      "bos_idx": 27,
+      "ob_idx": 21,
       "direction": "bearish",
       "bos_tag": "CHoCH+BOS",
       "high": 0.801829993724823,
@@ -231,12 +231,12 @@
         "fvg_bottom": 0.8004699945449829,
         "touches_ob": true
       },
-      "dist_to_price": 0.010990023612976074,
+      "dist_to_price": 0.01109999418258667,
       "direction_label": "Supply"
     },
     {
-      "bos_idx": 65,
-      "ob_idx": 63,
+      "bos_idx": 64,
+      "ob_idx": 62,
       "direction": "bearish",
       "bos_tag": "CHoCH+BOS",
       "high": 0.799560010433197,
@@ -250,12 +250,12 @@
         "fvg_bottom": 0.7970399856567383,
         "touches_ob": true
       },
-      "dist_to_price": 0.008580029010772705,
+      "dist_to_price": 0.0086899995803833,
       "direction_label": "Supply"
     },
     {
-      "bos_idx": 138,
-      "ob_idx": 137,
+      "bos_idx": 137,
+      "ob_idx": 136,
       "direction": "bullish",
       "bos_tag": "CHoCH+BOS",
       "high": 0.7893099784851074,
@@ -269,7 +269,7 @@
         "fvg_bottom": 0.7893099784851074,
         "touches_ob": true
       },
-      "dist_to_price": 0.0007500052452087402,
+      "dist_to_price": 0.0006400346755981445,
       "direction_label": "Demand"
     }
   ],
@@ -290,7 +290,7 @@
         "fvg_bottom": 24238.25,
         "touches_ob": true
       },
-      "dist_to_price": 882.0,
+      "dist_to_price": 887.5,
       "direction_label": "Demand"
     },
     {
@@ -309,7 +309,7 @@
         "fvg_bottom": 24928.25,
         "touches_ob": true
       },
-      "dist_to_price": 138.75,
+      "dist_to_price": 133.25,
       "direction_label": "Supply"
     }
   ],
@@ -330,7 +330,7 @@
         "fvg_bottom": 4665.2001953125,
         "touches_ob": true
       },
-      "dist_to_price": 35.80029296875,
+      "dist_to_price": 30.10009765625,
       "direction_label": "Supply"
     }
   ]
