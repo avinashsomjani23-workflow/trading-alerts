@@ -133,16 +133,13 @@ def run_radar():
     print(f"Running Phase 1 Scout (smc_radar) at {datetime.utcnow().strftime('%H:%M')} UTC")
     export_payload = {}
     
-    for pair in PAIRS_CONFIG.values():
-        ticker, name = pair.get("symbol", ""), pair["name"]
+    for pair in config_master["pairs"]:
+        ticker, name = pair["symbol"], pair["name"]
         lookback = 4
-        if name in ["NZDUSD", "XAUUSD"]: lookback = 5
+        if name in ["NZDUSD", "GOLD"]: lookback = 5
         elif name == "NAS100": lookback = 6
         
-        # Pull map_tf from your config_master (H1)
-        map_tf = next((p["map_tf"] for p in config_master["pairs"] if p["name"] == name), "1h")
-        
-        df = fetch_data(ticker, map_tf, "15d")
+        df = fetch_data(ticker, pair["map_tf"], "15d")
         if df is not None:
             result = detect_smc_radar(df, lookback)
             export_payload[name] = result["active_unmitigated_obs"]
