@@ -46,7 +46,19 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, df_radar):
 
     swings = get_swing_points(df_radar, lookback=10)
     tp_targets = [s['price'] for s in swings if (bias == "LONG" and s['type'] == 'high' and s['price'] > ob_prox) or (bias == "SHORT" and s['type'] == 'low' and s['price'] < ob_prox)]
-    tp_targets.sort(reverse=(bias == "LONG"))
+    # 3. TP Mapping (Internal Liquidity) - FIXED SORTING
+    swings = get_swing_points(df_trigger, lookback=10)
+    tp_targets = []
+    for s in swings:
+        if bias == "LONG" and s['type'] == 'high' and s['price'] > ob_prox:
+            tp_targets.append(s['price'])
+        elif bias == "SHORT" and s['type'] == 'low' and s['price'] < ob_prox:
+            tp_targets.append(s['price'])
+    
+    if bias == "LONG":
+        tp_targets.sort() # Ascending: Closest target above entry is first
+    else:
+        tp_targets.sort(reverse=True) # Descending: Closest target below entry is first
 
     entry_model = pair_conf.get("pair_type", "forex")
     final_entry, final_rr, entry_source, tp1 = None, 0.0, "", None
