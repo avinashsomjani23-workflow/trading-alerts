@@ -37,8 +37,8 @@ def get_atr(df, period=14):
     try:
         highs, lows, closes = df['High'].values.astype(float), df['Low'].values.astype(float), df['Close'].values.astype(float)
         trs = [max(highs[i]-lows[i], abs(highs[i]-closes[i-1]), abs(lows[i]-closes[i-1])) for i in range(1, len(closes))]
-        if len(trs) < period: return None
         import numpy as np
+        if len(trs) < period: return None
         return float(np.mean(trs[-period:]))
     except Exception: return None
 
@@ -103,7 +103,7 @@ def call_gemini_flash(prompt, max_retries=2):
                 continue
     return None
 
-def generate_chart(df, title, levels, ob, pair_conf):
+def generate_chart(df, title, levels, ob, pair_conf, fvg_data, sweep_price):
     try:
         if df is None or df.empty: return None
         dp = pair_conf.get("decimal_places", 5)
@@ -122,11 +122,29 @@ def generate_chart(df, title, levels, ob, pair_conf):
             ax.add_patch(patches.Rectangle((i-0.4), min(o,c), 0.8, body, facecolor=col_c, linewidth=0, alpha=0.95, zorder=3))
 
         n = len(df_plot)
+        
+        # 1. Dotted Reference Zone
+        proximal = float(ob.get('proximal_line', 0))
+        distal = float(ob.get('distal_line', 0))
+        if proximal > 0 and distal > 0:
+            ax.add_patch(patches.Rectangle((0, min(proximal, distal)), n+5, abs(proximal-distal), fill=False, edgecolor='#aaaaaa', linestyle=':', linewidth=1.5, zorder=2))
+
+        # 2. Light Purple OB
         ob_top, ob_bottom = float(ob.get('ob_high', 0)), float(ob.get('ob_low', 0))
         if ob_top > 0 and ob_bottom > 0:
-            ob_color = '#9b59b6' # Light Purple for OB
-            ax.add_patch(patches.Rectangle((0, ob_bottom), n+5, ob_top - ob_bottom, facecolor=ob_color, alpha=0.15, zorder=1))
-            
+            ax.add_patch(patches.Rectangle((0, ob_bottom), n+5, ob_top - ob_bottom, facecolor='#9b59b6', alpha=0.15, zorder=1))
+
+        # 3. Light Green FVG
+        if fvg_data and fvg_data.get('exists'):
+            fvg_top, fvg_bottom = float(fvg_data.get('fvg_top', 0)), float(fvg_data.get('fvg_bottom', 0))
+            if fvg_top > 0 and fvg_bottom > 0:
+                ax.add_patch(patches.Rectangle((0, fvg_bottom), n+5, fvg_top - fvg_bottom, facecolor='#2ecc71', alpha=0.15, zorder=1))
+
+        # 4. Sweep "X"
+        if sweep_price:
+            ax.scatter([n-2], [sweep_price], color='red', marker='x', s=100, linewidth=2, zorder=5)
+            ax.text(n-2, sweep_price, " SWEEP", color='red', fontsize=8, va='bottom')
+
         level_cfg = {'tp1': ('#27ae60', '-', 1.5, 'TP1'), 'entry': ('#e67e22', '-', 1.5, 'ENTRY'), 'sl': ('#e74c3c', '-', 1.5, 'SL')}
         for key, (color, style, width, lbl) in level_cfg.items():
             price = float(levels.get(key, 0))
@@ -233,7 +251,6 @@ if __name__ == "__main__":
                     print(f"  [X] {name} {levels['reason']}. Aborted.")
                     continue
 
-                # --- GEMINI EXECUTION ---
                 print(f"  [*] Fetching Macro News & Calling Gemini for {name}...")
                 news = fetch_macro_news(name)
                 gemini_prompt = build_gemini_prompt(name, bias, news)
@@ -254,7 +271,8 @@ if __name__ == "__main__":
                 }
 
                 if entry_model == "limit":
-                    chart1 = generate_chart(df_trigger, f"{name} — {radar_interval}", levels, ob, pair_conf)
+                    sweep_price = score_res.get('sweep_price')
+                    chart1 = generate_chart(df_trigger, f"{name} — {radar_interval}", levels, ob, pair_conf, fvg_data, sweep_price)
                     html = build_trade_email(trade_data, name, pair_conf, chart1)
                     print(f"  [✓] TRADE READY (FOREX): {name} | Entry: {levels['entry']} | R:R: {levels['rr']}")
                     send_email(f"TRADE READY | {name} | {'SELL' if bias=='SHORT' else 'BUY'}", html, chart1)
