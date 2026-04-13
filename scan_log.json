@@ -3982,5 +3982,61 @@
     "zone": 4725.08341,
     "status": "rejected_gates",
     "reason": "No valid LONG OB near zone 4725.08"
+  },
+  {
+    "time_ist": "13 Apr 13:15 IST",
+    "time_utc": "2026-04-13 07:45",
+    "pair": "EURUSD",
+    "zone": 1.16917,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 1.16917"
+  },
+  {
+    "time_ist": "13 Apr 13:15 IST",
+    "time_utc": "2026-04-13 07:45",
+    "pair": "USDJPY",
+    "zone": 159.25702,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 159.257"
+  },
+  {
+    "time_ist": "13 Apr 13:15 IST",
+    "time_utc": "2026-04-13 07:45",
+    "pair": "NZDUSD",
+    "zone": 0.5836,
+    "status": "rejected_low_score",
+    "reason": "Score 6.0/10 below 7 (pre-Gemini). CHOCH bullish confirmed near zone"
+  },
+  {
+    "time_ist": "13 Apr 13:15 IST",
+    "time_utc": "2026-04-13 07:45",
+    "pair": "NAS100",
+    "zone": 25059.0,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 25059.00"
+  },
+  {
+    "time_ist": "13 Apr 13:15 IST",
+    "time_utc": "2026-04-13 07:45",
+    "pair": "NAS100",
+    "zone": 25152.55319,
+    "status": "rejected_gates",
+    "reason": "No valid SHORT OB near zone 25152.55"
+  },
+  {
+    "time_ist": "13 Apr 13:15 IST",
+    "time_utc": "2026-04-13 07:45",
+    "pair": "GOLD",
+    "zone": 4755.0,
+    "status": "rejected_gates",
+    "reason": "No valid SHORT OB near zone 4755.00"
+  },
+  {
+    "time_ist": "13 Apr 13:15 IST",
+    "time_utc": "2026-04-13 07:45",
+    "pair": "GOLD",
+    "zone": 4725.08341,
+    "status": "rejected_gates",
+    "reason": "No valid LONG OB near zone 4725.08"
   }
 ]
