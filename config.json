@@ -12,6 +12,7 @@
       "pair_type": "forex",
       "entry_model": "limit",
       "map_tf": "1h",
+      "radar_tf": "15m",
       "trigger_tf": "15m",
       "atr_multiplier": 1.5,
       "min_confidence": 7.0,
@@ -19,11 +20,12 @@
       "spread_pips": 2.0
     },
     {
-      "symbol": "USDJPY=X",
+      "symbol": "JPY=X",
       "name": "USDJPY",
       "pair_type": "forex",
       "entry_model": "limit",
       "map_tf": "1h",
+      "radar_tf": "15m",
       "trigger_tf": "15m",
       "atr_multiplier": 1.5,
       "min_confidence": 7.0,
@@ -36,6 +38,7 @@
       "pair_type": "forex",
       "entry_model": "limit",
       "map_tf": "1h",
+      "radar_tf": "15m",
       "trigger_tf": "15m",
       "atr_multiplier": 1.5,
       "min_confidence": 7.0,
@@ -48,6 +51,7 @@
       "pair_type": "forex",
       "entry_model": "limit",
       "map_tf": "1h",
+      "radar_tf": "15m",
       "trigger_tf": "15m",
       "atr_multiplier": 1.5,
       "min_confidence": 7.0,
@@ -60,6 +64,7 @@
       "pair_type": "index",
       "entry_model": "ltf_choch",
       "map_tf": "1h",
+      "radar_tf": "15m",
       "trigger_tf": "5m",
       "atr_multiplier": 2.5,
       "min_confidence": 7.0,
@@ -72,11 +77,31 @@
       "pair_type": "commodity",
       "entry_model": "ltf_choch",
       "map_tf": "1h",
+      "radar_tf": "15m",
       "trigger_tf": "5m",
       "atr_multiplier": 2.0,
       "min_confidence": 7.0,
       "decimal_places": 2,
       "spread_pips": 0.50
     }
-  ]
+  ],
+  "zone_detection": {
+    "swing_lookback": 4,
+    "bos_scan_m15": 100,
+    "bos_scan_h1": 50
+  },
+  "scoring": {
+    "hard_gates": ["rr_minimum_1.5"],
+    "news_blackout_hours_before": 2,
+    "news_blackout_hours_after": 1,
+    "zone_fatigue_threshold": 5
+  },
+  "sessions": {
+    "Asian":        {"utc_start": 0,  "utc_end": 8},
+    "London":       {"utc_start": 7,  "utc_end": 16},
+    "New_York":     {"utc_start": 13, "utc_end": 22},
+    "Asian_London": {"utc_start": 0,  "utc_end": 16},
+    "London_NY":    {"utc_start": 7,  "utc_end": 22},
+    "any":          {"utc_start": 0,  "utc_end": 24}
+  }
 }
