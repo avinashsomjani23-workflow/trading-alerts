@@ -14,6 +14,14 @@ logging.basicConfig(filename="smc_radar.log", level=logging.INFO, format="%(asct
 with open("config.json") as f:
     config_master = json.load(f)
 
+EMAIL_CONFIG = {
+    "sender":      ["avinash.somjani23@gmail.com"],
+    "recipient":   ["avinash.somjani23@gmail.com", "fernandesbrezhnev@gmail.com"],
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port":   587,
+    "password":    os.environ.get("GMAIL_APP_PASSWORD")
+}
+
 def fetch_data(ticker, interval, period):
     df = yf.download(ticker, period=period, interval=interval, progress=False)
     if df.empty: return None
@@ -26,9 +34,8 @@ def is_valid_ob_candle(open_p, close_p, high_p, low_p):
     if rng == 0: return False
     return body > (rng * 0.15)
 
-def detect_smc_radar(df, config):
+def detect_smc_radar(df, lookback):
     n = len(df)
-
     O = df['Open'].values
     C = df['Close'].values
     H = df['High'].values
@@ -39,10 +46,8 @@ def detect_smc_radar(df, config):
         window_highs = H[i - lookback: i + lookback + 1]
         window_lows  = L[i - lookback: i + lookback + 1]
 
-        if H[i] == max(window_highs):
-            swings.append({'type': 'high', 'idx': i, 'price': float(H[i])})
-        elif L[i] == min(window_lows):
-            swings.append({'type': 'low',  'idx': i, 'price': float(L[i])})
+        if H[i] == max(window_highs): swings.append({'type': 'high', 'idx': i, 'price': float(H[i])})
+        elif L[i] == min(window_lows): swings.append({'type': 'low',  'idx': i, 'price': float(L[i])})
 
     swings = sorted(swings, key=lambda x: x['idx'])
 
@@ -66,11 +71,9 @@ def detect_smc_radar(df, config):
         bos_type     = None
 
         if C[i] > sh['price'] and C[i - 1] <= sh['price']:
-            bos_detected = True
-            bos_type     = 'bullish'
+            bos_detected = True; bos_type = 'bullish'
         elif C[i] < sl['price'] and C[i - 1] >= sl['price']:
-            bos_detected = True
-            bos_type     = 'bearish'
+            bos_detected = True; bos_type = 'bearish'
 
         if bos_detected:
             bos_tag = 'CHoCH+BOS' if (trend_state is None or trend_state != bos_type) else 'continuation_BOS'
@@ -80,13 +83,11 @@ def detect_smc_radar(df, config):
             ob_idx = -1
             impulse_start_idx = sl['idx'] if bos_type == 'bullish' else sh['idx']
 
-            if impulse_start_idx >= i:
-                continue
+            if impulse_start_idx >= i: continue
 
             leg_bodies = [abs(C[k] - O[k]) for k in range(impulse_start_idx, i + 1)]
             median_leg_body = float(np.median(leg_bodies)) if leg_bodies else 0.0001
-            if median_leg_body == 0:
-                median_leg_body = 0.0001
+            if median_leg_body == 0: median_leg_body = 0.0001
 
             for j in range(i - 1, impulse_start_idx - 1, -1):
                 if (bos_type == 'bullish' and C[j] < O[j]) or (bos_type == 'bearish' and C[j] > O[j]):
@@ -96,36 +97,36 @@ def detect_smc_radar(df, config):
                             ob_idx = j
                             break
 
-            if ob_idx == -1:
-                continue
+            if ob_idx == -1: continue
 
             ob_high = float(H[ob_idx])
             ob_low  = float(L[ob_idx])
 
             fvg_valid  = False
+            fvg_top = None
+            fvg_bottom = None
             window_end = min(ob_idx + 6, n)
 
-            # FVG must immediately follow the OB we just locked
             for k in range(ob_idx, window_end - 2):
                 if bos_type == 'bullish' and H[k] < L[k + 2]:
                     fvg_valid = True
+                    fvg_top = float(L[k + 2])
+                    fvg_bottom = float(H[k])
                     break
                 elif bos_type == 'bearish' and L[k] > H[k + 2]:
                     fvg_valid = True
+                    fvg_top = float(H[k])
+                    fvg_bottom = float(L[k + 2])
                     break
 
             if not fvg_valid: continue
 
             active_obs.append({
-                'bos_idx':      i,
-                'ob_idx':       ob_idx,
-                'direction':    bos_type,
-                'bos_tag':      bos_tag,
-                'high':         ob_high,
-                'low':          ob_low,
-                'mean':         float((ob_high + ob_low) / 2),
+                'bos_idx': i, 'ob_idx': ob_idx, 'direction': bos_type, 'bos_tag': bos_tag,
+                'high': ob_high, 'low': ob_low, 'mean': float((ob_high + ob_low) / 2),
                 'proximal_line': ob_high if bos_type == 'bullish' else ob_low,
-                'distal_line':   ob_low  if bos_type == 'bullish' else ob_high
+                'distal_line': ob_low if bos_type == 'bullish' else ob_high,
+                'fvg': {'exists': True, 'fvg_top': fvg_top, 'fvg_bottom': fvg_bottom}
             })
 
     pristine_obs  = []
@@ -136,28 +137,28 @@ def detect_smc_radar(df, config):
         for m in range(ob['ob_idx'] + 2, n):
             if (ob['direction'] == 'bullish' and C[m] < ob['distal_line']) or \
                (ob['direction'] == 'bearish' and C[m] > ob['distal_line']):
-                mitigated = True
-                break
+                mitigated = True; break
 
         if not mitigated:
             dist = abs(current_price - ob['proximal_line'])
             pristine_obs.append({
-                "direction":     "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)",
-                "bos_tag":       ob['bos_tag'],
+                "direction": "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)",
+                "bos_tag": ob['bos_tag'],
                 "proximal_line": round(ob['proximal_line'], 5),
-                "distal_line":   round(ob['distal_line'],   5),
+                "distal_line": round(ob['distal_line'], 5),
                 "dist_to_price": round(dist, 5),
-                "ob_high":       round(ob['high'],  5),
-                "ob_low":        round(ob['low'],   5),
-                "ob_mean":       round(ob['mean'],  5)
+                "ob_high": round(ob['high'], 5),
+                "ob_low": round(ob['low'], 5),
+                "ob_mean": round(ob['mean'], 5),
+                "fvg": ob['fvg']
             })
 
     return {
         "current_price": round(current_price, 5),
         "active_unmitigated_obs": pristine_obs
     }
+
 def send_summary_email(payload):
-    """Safely dispatches the 2-hour Phase 1 Summary."""
     try:
         subject = f"Phase 1 Scout Summary — {datetime.utcnow().strftime('%H:%M')} UTC"
         lines = ["SMC Radar (Phase 1) Active Order Blocks:\n" + "="*40]
@@ -189,9 +190,7 @@ def run_radar():
     
     for pair in config_master["pairs"]:
         ticker, name = pair["symbol"], pair["name"]
-        lookback = 4
-        if name in ["NZDUSD", "GOLD"]: lookback = 5
-        elif name == "NAS100": lookback = 6
+        lookback = 5 if name in ["NZDUSD", "GOLD"] else 6 if name == "NAS100" else 4
         
         df = fetch_data(ticker, pair["map_tf"], "15d")
         if df is not None:
@@ -199,12 +198,10 @@ def run_radar():
             export_payload[name] = result["active_unmitigated_obs"]
             print(f"  Mapped {len(result['active_unmitigated_obs'])} pristine OBs for {name}")
 
-    # 1. Save JSON first to protect Phase 2
     with open("active_obs.json", "w") as f:
         json.dump(export_payload, f, indent=2)
     print("Phase 1 Complete. Saved to active_obs.json.")
 
-    # 2. Fire Email safely
     run_time = datetime.utcnow()
     if run_time.hour % 2 == 0:
         send_summary_email(export_payload)
