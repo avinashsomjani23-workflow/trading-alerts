@@ -115,7 +115,78 @@ def send_email(subject, html_body, chart1_b64=None):
                 server.sendmail(GMAIL_ADDRESS, recipient, msg.as_string())
             print(f"    Sent to {recipient}")
         except Exception as e: print(f"    Failed to send email: {e}")
+import xml.etree.ElementTree as ET # Required for parsing RSS news
 
+def fetch_macro_news(pair_name):
+    """
+    Your original news fetcher. (Using a standard ForexLive/Investing RSS fallback here).
+    If you have your specific old code, replace the URL/Parsing inside this function.
+    """
+    try:
+        # Example using a generic high-impact forex news RSS feed
+        url = "https://www.forexlive.com/feed/news" 
+        r = requests.get(url, timeout=10)
+        root = ET.fromstring(r.content)
+        
+        headlines = []
+        # Grab the latest 10 news headlines
+        for item in root.findall('.//item')[:10]:
+            title = item.find('title').text
+            headlines.append(f"- {title}")
+            
+        return "\n".join(headlines)
+    except Exception as e:
+        print(f"News fetch failed: {e}")
+        return "Could not fetch latest news."
+
+def build_gemini_prompt(pair, bias, news_headlines):
+    return f"""
+    You are a strict Risk Management AI for an algorithmic trading desk.
+    DO NOT analyze the chart. DO NOT calculate math. DO NOT offer trading advice.
+    
+    TRADE DETAILS: Pair: {pair} | Direction: {bias}
+    
+    RECENT NEWS HEADLINES (Last 24 Hours):
+    {news_headlines}
+    
+    TASK: Analyze headlines for high-impact, Tier-1 economic events (e.g., CPI, NFP, Central Bank) affecting the {pair} currencies. 
+    
+    OUTPUT FORMAT (Valid JSON ONLY):
+    {{
+        "high_impact_news_detected": true/false,
+        "macro_score": <float 0.0 to 1.0. 1.0=Safe, 0.0=Extreme volatility imminent>,
+        "macro_summary": "<Exactly 2 sentences summarizing the news risk.>"
+    }}
+    """
+
+def call_gemini_flash(prompt, max_retries=2):
+    """Executes Gemini 2.5 Flash strictly via JSON."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
+    body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "temperature": 0.15,  # Sweet spot for safe JSON + natural phrasing
+            "maxOutputTokens": 250
+        }
+    }
+    for attempt in range(max_retries + 1):
+        try:
+            r = requests.post(url, json=body, timeout=20)
+            result = r.json()
+            if "candidates" not in result:
+                if attempt < max_retries:
+                    time.sleep(5)
+                    continue
+                return None
+            
+            raw_text = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+            return json.loads(raw_text)
+        except Exception:
+            if attempt < max_retries:
+                time.sleep(3)
+                continue
+    return None
 if __name__ == "__main__":
     print(f"Phase 2 Engine started {datetime.utcnow().strftime('%H:%M')} UTC")
     
@@ -161,6 +232,42 @@ if __name__ == "__main__":
                 elif entry_model == "ltf_choch":
                     watch_state[f"{name}_{ob_proximal}"] = {"pair": name, "bias": bias, "score": result['confidence_score'], "levels": result}
                     print(f"  [>] LOGGED FOR PHASE 3 (CHoCH): {name} approaching {ob_proximal}")
+# ... (Inside your Phase 2 for-loop over the active zones) ...
+            
+            # Step 3: Risk Math & Entry Cascade
+            levels = smc_detector.compute_dynamic_levels(pair_conf, bias, ob, fvg_data, current_price, df_trigger)
+            
+            if not levels['valid']:
+                print(f"  [X] {name} {levels['reason']}. Aborted.")
+                continue
 
+            # ─────────────────────────────────────────────────────────────
+            # STEP 4: GEMINI MACRO ANALYSIS (Paste this block here)
+            # ─────────────────────────────────────────────────────────────
+            print(f"  [*] Fetching Macro News & Calling Gemini for {name}...")
+            news = fetch_macro_news(name)
+            gemini_prompt = build_gemini_prompt(name, bias, news)
+            gemini_risk = call_gemini_flash(gemini_prompt)
+            
+            # Failsafe if API crashes, so your trade isn't missed
+            if not gemini_risk:
+                gemini_risk = {
+                    "high_impact_news_detected": False,
+                    "macro_score": 1.0,
+                    "macro_summary": "Gemini API failed. Defaulting to safe macro conditions."
+                }
+            
+            # Apply Gemini's score to your Python Scorecard
+            final_score = round(score_res['total'] + gemini_risk['macro_score'], 1)
+            # ─────────────────────────────────────────────────────────────
+
+            trade_data = {
+                "pair": name,
+                "bias": bias,
+                "score": final_score, # Updated with Gemini's score
+                "macro_summary": gemini_risk["macro_summary"], # To be injected into your HTML email
+                "levels": levels,
+                "ob": ob
+            }
     save_json("active_watch_state.json", watch_state)
     print("Phase 2 complete.")
