@@ -27,7 +27,6 @@ def is_valid_ob_candle(open_p, close_p, high_p, low_p):
     return body > (rng * 0.15)
 
 def detect_smc_radar(df, config):
-    lookback = config["lookback"]
     n = len(df)
 
     O = df['Open'].values
