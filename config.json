@@ -10,104 +10,73 @@
       "symbol": "EURUSD=X",
       "name": "EURUSD",
       "pair_type": "forex",
-      "proximity_pct": 0.3,
-      "min_touches": 1,
-      "min_confidence": 7,
-      "min_sl_pips": 15,
+      "entry_model": "limit",
+      "map_tf": "1h",
+      "trigger_tf": "15m",
+      "atr_multiplier": 1.5,
+      "min_confidence": 7.0,
       "decimal_places": 5,
-      "spread_pips": 1,
-      "primary_session": "London",
-      "structure_tf": ["H1", "M15"],
-      "extra_gate": null
+      "spread_pips": 2.0
     },
     {
       "symbol": "USDJPY=X",
       "name": "USDJPY",
       "pair_type": "forex",
-      "proximity_pct": 0.3,
-      "min_touches": 1,
-      "min_confidence": 7,
-      "min_sl_pips": 20,
+      "entry_model": "limit",
+      "map_tf": "1h",
+      "trigger_tf": "15m",
+      "atr_multiplier": 1.5,
+      "min_confidence": 7.0,
       "decimal_places": 3,
-      "spread_pips": 1,
-      "primary_session": "Asian_London",
-      "structure_tf": ["H1", "M15"],
-      "extra_gate": null
+      "spread_pips": 2.0
     },
     {
       "symbol": "NZDUSD=X",
       "name": "NZDUSD",
       "pair_type": "forex",
-      "proximity_pct": 0.3,
-      "min_touches": 1,
-      "min_confidence": 7,
-      "min_sl_pips": 15,
+      "entry_model": "limit",
+      "map_tf": "1h",
+      "trigger_tf": "15m",
+      "atr_multiplier": 1.5,
+      "min_confidence": 7.0,
       "decimal_places": 5,
-      "spread_pips": 1.5,
-      "primary_session": "Asian",
-      "structure_tf": ["H1", "M15"],
-      "extra_gate": null
+      "spread_pips": 4.0
+    },
+    {
+      "symbol": "CHF=X",
+      "name": "USDCHF",
+      "pair_type": "forex",
+      "entry_model": "limit",
+      "map_tf": "1h",
+      "trigger_tf": "15m",
+      "atr_multiplier": 1.5,
+      "min_confidence": 7.0,
+      "decimal_places": 5,
+      "spread_pips": 2.0
     },
     {
       "symbol": "NQ=F",
       "name": "NAS100",
       "pair_type": "index",
-      "proximity_pct": 0.5,
-      "min_touches": 1,
-      "min_confidence": 7,
-      "min_sl_pips": 40,
+      "entry_model": "ltf_choch",
+      "map_tf": "1h",
+      "trigger_tf": "5m",
+      "atr_multiplier": 2.5,
+      "min_confidence": 7.0,
       "decimal_places": 2,
-      "spread_pips": 2,
-      "primary_session": "New_York",
-      "structure_tf": ["H1", "M15"],
-      "extra_gate": null
+      "spread_pips": 2.0
     },
     {
       "symbol": "GC=F",
       "name": "GOLD",
       "pair_type": "commodity",
-      "proximity_pct": 0.5,
-      "min_touches": 1,
-      "min_confidence": 7,
-      "min_sl_pips": 5.0,
+      "entry_model": "ltf_choch",
+      "map_tf": "1h",
+      "trigger_tf": "5m",
+      "atr_multiplier": 2.0,
+      "min_confidence": 7.0,
       "decimal_places": 2,
-      "spread_pips": 0.30,
-      "primary_session": "London_NY",
-      "structure_tf": ["H1", "M15"],
-      "extra_gate": "macro_alignment_required"
+      "spread_pips": 0.50
     }
-  ],
-  "zone_detection": {
-    "swing_lookback": 4,
-    "bos_scan_m15": 100,
-    "bos_scan_h1": 50
-  },
-  "scoring": {
-    "hard_gates": ["rr_minimum_1.5"],
-    "confluences": {
-      "structure_m15": 2.5,
-      "ob_near_zone": 2.0,
-      "fvg_in_zone": 1.0,
-      "liquidity_sweep": 1.5,
-      "premium_discount_zone": 1.0,
-      "h1_alignment": 0.5,
-      "zone_freshness": 0.5,
-      "no_high_impact_news": 1.0
-    },
-    "min_score_to_send": 7,
-    "max_score": 10.0,
-    "atr_buffer_multiplier": 0.2,
-    "atr_proximity_multiplier": 1.5,
-    "news_blackout_hours_before": 2,
-    "news_blackout_hours_after": 1,
-    "zone_fatigue_threshold": 5
-  },
-  "sessions": {
-    "Asian":        {"utc_start": 0,  "utc_end": 8},
-    "London":       {"utc_start": 7,  "utc_end": 16},
-    "New_York":     {"utc_start": 13, "utc_end": 22},
-    "Asian_London": {"utc_start": 0,  "utc_end": 16},
-    "London_NY":    {"utc_start": 7,  "utc_end": 22},
-    "any":          {"utc_start": 0,  "utc_end": 24}
-  }
+  ]
 }
