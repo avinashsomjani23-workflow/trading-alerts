@@ -1,27 +1,27 @@
-"""
-smc_detector.py — v3.0 (Strict SMC Execution Engine)
-Handles: Step 3 Risk Math, Dynamic Entry Shifting, and 10-Point Scorecard
-"""
 import numpy as np
 
 def _dp(pair_conf): return pair_conf.get("decimal_places", 5)
 
 def get_swing_points(df, lookback=4):
     if df is None or len(df) < lookback * 2 + 1: return []
-    H, L = df['High'].values.astype(float), df['Low'].values.astype(float)
+    H = df['High'].values.astype(float)
+    L = df['Low'].values.astype(float)
     swings = []
     for i in range(lookback, len(H) - lookback):
-        if H[i] == max(H[i - lookback: i + lookback + 1]): swings.append({"type": "high", "price": float(H[i]), "idx": i, "ts": df.index[i]})
-        if L[i] == min(L[i - lookback: i + lookback + 1]): swings.append({"type": "low", "price": float(L[i]), "idx": i, "ts": df.index[i]})
+        if H[i] == max(H[i - lookback: i + lookback + 1]):
+            swings.append({"type": "high", "price": float(H[i]), "idx": i, "ts": df.index[i]})
+        if L[i] == min(L[i - lookback: i + lookback + 1]):
+            swings.append({"type": "low", "price": float(L[i]), "idx": i, "ts": df.index[i]})
     return sorted(swings, key=lambda s: s["idx"])
 
-def detect_sweep_decay(df_radar, swings, current_idx):
-    score, sweep_detail = 0.0, {"detected": False, "price": 0.0}
-    H, L = df_radar['High'].values.astype(float), df_radar['Low'].values.astype(float)
-    C = df_radar['Close'].values.astype(float)
-    current_ts = df_radar.index[current_idx]
+def detect_sweep_decay(df, swings, current_idx):
+    score = 0.0
+    sweep_price = None
+    H, L = df['High'].values, df['Low'].values
+    O, C = df['Open'].values, df['Close'].values
+    current_ts = df.index[current_idx]
     
-    for i in range(max(0, current_idx - 5), current_idx + 1):
+    for i in range(max(0, current_idx - 3), current_idx + 1):
         for s in swings:
             if s['idx'] >= i: continue
             hours_old = (current_ts - s['ts']).total_seconds() / 3600
@@ -29,24 +29,35 @@ def detect_sweep_decay(df_radar, swings, current_idx):
             
             if s['type'] == 'low' and L[i] < s['price'] and C[i] > s['price']:
                 pts = 2.5 if hours_old <= 24 else 1.5
-                if pts > score: score, sweep_detail = pts, {"detected": True, "price": float(L[i]), "level": s['price']}
+                if pts > score:
+                    score = pts
+                    sweep_price = float(L[i])
             elif s['type'] == 'high' and H[i] > s['price'] and C[i] < s['price']:
                 pts = 2.5 if hours_old <= 24 else 1.5
-                if pts > score: score, sweep_detail = pts, {"detected": True, "price": float(H[i]), "level": s['price']}
-    return score, sweep_detail
+                if pts > score:
+                    score = pts
+                    sweep_price = float(H[i])
+    return score, sweep_price
 
-def compute_dynamic_levels(pair_conf, bias, ob, fvg, df_radar):
+def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     dp = _dp(pair_conf)
     spread = pair_conf.get("spread_pips", 0)
-    spread_val = spread * 0.0001 if dp == 5 else spread * 0.01 if dp == 3 else spread
+    if dp == 5: spread_val = spread * 0.0001
+    elif dp == 3: spread_val = spread * 0.01
+    else: spread_val = spread
 
-    sl = float(ob['distal_line']) - spread_val if bias == "LONG" else float(ob['distal_line']) + spread_val
-    ob_prox, ob_mean = float(ob['proximal_line']), float(ob['mean'])
-    fvg_prox = float(fvg['fvg_top']) if (fvg and fvg.get('exists') and bias == "LONG") else float(fvg['fvg_bottom']) if (fvg and fvg.get('exists') and bias == "SHORT") else None
+    ob_top = float(ob.get('ob_high', ob.get('high', 0)))
+    ob_bottom = float(ob.get('ob_low', ob.get('low', 0)))
 
-    swings = get_swing_points(df_radar, lookback=10)
-    tp_targets = [s['price'] for s in swings if (bias == "LONG" and s['type'] == 'high' and s['price'] > ob_prox) or (bias == "SHORT" and s['type'] == 'low' and s['price'] < ob_prox)]
-    # 3. TP Mapping (Internal Liquidity) - FIXED SORTING
+    if bias == "LONG": sl = ob_bottom - spread_val
+    else: sl = ob_top + spread_val
+
+    ob_prox = ob_top if bias == "LONG" else ob_bottom
+    ob_mean = (ob_top + ob_bottom) / 2.0
+    fvg_prox = None
+    if fvg and fvg.get('exists'):
+        fvg_prox = float(fvg['fvg_top']) if bias == "LONG" else float(fvg['fvg_bottom'])
+
     swings = get_swing_points(df_trigger, lookback=10)
     tp_targets = []
     for s in swings:
@@ -55,10 +66,8 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, df_radar):
         elif bias == "SHORT" and s['type'] == 'low' and s['price'] < ob_prox:
             tp_targets.append(s['price'])
     
-    if bias == "LONG":
-        tp_targets.sort() # Ascending: Closest target above entry is first
-    else:
-        tp_targets.sort(reverse=True) # Descending: Closest target below entry is first
+    if bias == "LONG": tp_targets.sort()
+    else: tp_targets.sort(reverse=True)
 
     entry_model = pair_conf.get("pair_type", "forex")
     final_entry, final_rr, entry_source, tp1 = None, 0.0, "", None
@@ -72,62 +81,65 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, df_radar):
         return 2.0, entry_test + (risk * 2.0) if bias == "LONG" else entry_test - (risk * 2.0)
 
     if entry_model == "forex":
-        attempts = [(fvg_prox, "FVG Proximal Edge")] if fvg_prox else []
-        attempts.extend([(ob_prox, "OB Proximal Line"), (ob_mean, "OB 50% Mean Threshold")])
+        attempts = []
+        if fvg_prox: attempts.append((fvg_prox, "FVG Proximal"))
+        attempts.append((ob_prox, "OB Proximal"))
+        attempts.append((ob_mean, "OB 50% Mean"))
+        
         for price, name in attempts:
             rr, tp_val = check_rr(price)
-            if rr >= 1.5: final_entry, entry_source, final_rr, tp1 = price, name, rr, tp_val; break
+            if rr >= 1.5:
+                final_entry, entry_source, final_rr, tp1 = price, name, rr, tp_val
+                break
     elif entry_model == "commodity":
-        final_entry, entry_source = ob_mean, "OB 50% Mean Threshold"
+        final_entry, entry_source = ob_mean, "OB 50% Mean"
         final_rr, tp1 = check_rr(final_entry)
     elif entry_model == "index":
-        final_entry, entry_source = ob_prox, "OB Proximal Line"
+        final_entry, entry_source = ob_prox, "OB Proximal"
         final_rr, tp1 = check_rr(final_entry)
 
-    if final_entry is None or final_rr < 1.5: return {"valid": False, "reason": "R:R < 1.5 on all entry cascade attempts"}
-    
-    tp2 = final_entry + (abs(final_entry - sl) * 4.0) if bias == "LONG" else final_entry - (abs(final_entry - sl) * 4.0)
-    return {"valid": True, "entry": round(final_entry, dp), "sl": round(sl, dp), "tp1": round(tp1, dp), "tp2": round(tp2, dp), "rr_tp1": round(final_rr, 2), "rr_tp2": 4.0, "entry_source": entry_source}
+    if final_entry is None or final_rr < 1.5:
+        return {"valid": False, "reason": "R:R < 1.5 on all cascade attempts"}
 
-def run_phase2_analysis(pair_conf, bias, df_h1, df_radar, ob, current_price, fatigue_count):
-    bd = {}
-    fvg = ob.get("fvg", {"exists": False})
-    
-    # 1. Structure (Reading exact tag from Phase 1)
-    tag = ob.get('bos_tag', 'continuation_BOS')
-    bd["structure"] = 2.5 if tag == 'CHoCH+BOS' else 1.5 if tag == 'continuation_BOS' else 1.0
-    
-    # 2. Sweep Decay
-    swings = get_swing_points(df_h1, lookback=4)
-    sweep_score, sweep_detail = detect_sweep_decay(df_radar, swings, len(df_radar)-1)
-    bd["liquidity_sweep"] = sweep_score
-    
-    # 3. OB + FVG Overlap
-    bd["ob_fvg_overlap"] = 1.5 if fvg.get('touches_ob', False) else 1.0 if fvg.get('exists') else 0.0
-
-    # 4. Freshness
-    ob_idx = ob.get('ob_idx', 0)
-    is_fresh = True
-    for i in range(ob_idx + 3, len(df_h1) - 1):
-        if (bias == "LONG" and df_h1['Low'].iloc[i] <= ob['high']) or (bias == "SHORT" and df_h1['High'].iloc[i] >= ob['low']):
-            is_fresh = False; break
-    bd["zone_freshness"] = 0.5 if is_fresh else 0.0
-
-    # 5. Premium/Discount
-    eq = (df_h1['High'].max() + df_h1['Low'].max()) / 2.0
-    bd["premium_discount"] = 1.0 if (bias == "LONG" and current_price <= eq) or (bias == "SHORT" and current_price >= eq) else 0.0
-
-    # 6. Macro News (Placeholder)
-    bd["no_high_impact_news"] = 1.0 
-
-    total_score = round(sum(bd.values()), 1)
-    levels = compute_dynamic_levels(pair_conf, bias, ob, fvg, df_radar)
+    risk = abs(final_entry - sl)
+    tp2 = final_entry + (risk * 4.0) if bias == "LONG" else final_entry - (risk * 4.0)
 
     return {
-        "send_alert": levels['valid'] and total_score >= pair_conf["min_confidence"],
-        "bias": bias, "confidence_score": total_score, "score_breakdown": bd,
-        "entry": levels.get('entry', 0), "sl": levels.get('sl', 0), "tp1": levels.get('tp1', 0), "tp2": levels.get('tp2', 0),
-        "rr_tp1": levels.get('rr_tp1', 0), "entry_source": levels.get('entry_source', ""),
-        "confidence_reason": "Score and R:R pass." if levels['valid'] else levels.get('reason', 'Failed'),
-        "ob": ob
+        "valid": True, "entry": round(final_entry, dp), "sl": round(sl, dp), 
+        "tp1": round(tp1, dp), "tp2": round(tp2, dp), 
+        "rr": round(final_rr, 2), "entry_source": entry_source
     }
+
+def run_scorecard(bias, df_h1, ob, fvg, current_price):
+    score = 0.0
+    bd = {}
+    swings = get_swing_points(df_h1, lookback=5)
+    bd["structure"] = 1.5 
+    
+    sweep_score, sweep_price = detect_sweep_decay(df_h1, swings, len(df_h1)-1)
+    bd["sweep"] = sweep_score
+    
+    if fvg and fvg.get('exists'):
+        bd["fvg"] = 1.5 if fvg.get('touches_ob', False) else 1.0
+    else: bd["fvg"] = 0.0
+
+    is_fresh = True
+    ob_top = float(ob.get('ob_high', ob.get('high', 0)))
+    ob_bottom = float(ob.get('ob_low', ob.get('low', 0)))
+    for i in range(len(df_h1) - 5, len(df_h1) - 1): 
+        if bias == "LONG" and df_h1['Low'].iloc[i] <= ob_top:
+            is_fresh = False; break
+        elif bias == "SHORT" and df_h1['High'].iloc[i] >= ob_bottom:
+            is_fresh = False; break
+    bd["freshness"] = 0.5 if is_fresh else 0.0
+
+    eq = (df_h1['High'].max() + df_h1['Low'].max()) / 2.0
+    if bias == "LONG" and current_price <= eq: bd["pd"] = 1.0
+    elif bias == "SHORT" and current_price >= eq: bd["pd"] = 1.0
+    else: bd["pd"] = 0.0
+
+    bd["killzone"] = 1.0 
+    bd["macro"] = 1.0
+
+    total_score = sum(bd.values())
+    return {"total": round(total_score, 1), "breakdown": bd, "sweep_price": sweep_price}
