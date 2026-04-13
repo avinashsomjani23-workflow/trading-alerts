@@ -85,23 +85,10 @@
       "spread_pips": 0.50
     }
   ],
-  "zone_detection": {
-    "swing_lookback": 4,
-    "bos_scan_m15": 100,
-    "bos_scan_h1": 50
-  },
   "scoring": {
     "hard_gates": ["rr_minimum_1.5"],
     "news_blackout_hours_before": 2,
     "news_blackout_hours_after": 1,
     "zone_fatigue_threshold": 5
-  },
-  "sessions": {
-    "Asian":        {"utc_start": 0,  "utc_end": 8},
-    "London":       {"utc_start": 7,  "utc_end": 16},
-    "New_York":     {"utc_start": 13, "utc_end": 22},
-    "Asian_London": {"utc_start": 0,  "utc_end": 16},
-    "London_NY":    {"utc_start": 7,  "utc_end": 22},
-    "any":          {"utc_start": 0,  "utc_end": 24}
   }
 }
