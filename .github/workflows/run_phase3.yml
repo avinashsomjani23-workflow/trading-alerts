@@ -1,0 +1,22 @@
+name: P3_Trigger
+on: [workflow_dispatch]
+jobs:
+  run-p3:
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install yfinance pandas
+      - env:
+          GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python phase3_engine.py
+      - run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git pull --rebase origin main || true
+          git add active_watch_state.json || true
+          git diff --staged --quiet || git commit -m "P3 Update [skip ci]"
+          git push origin HEAD:main || true
