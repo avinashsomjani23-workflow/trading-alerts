@@ -119,7 +119,7 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
 
     return {"valid": True, "entry": round(final_entry, dp), "sl": round(sl, dp), "tp1": round(tp1, dp), "tp2": round(tp2, dp), "rr": round(final_rr, 2), "entry_source": entry_source}
 
-def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=None):
+def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=None, macro_score=1.0):
     bos_tag = ob.get('bos_tag', 'BOS')
     if bos_tag == 'CHoCH':
         bd = {"structure": 2.5}
