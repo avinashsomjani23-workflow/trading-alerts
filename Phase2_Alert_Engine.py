@@ -201,7 +201,7 @@ if __name__ == "__main__":
             if not fvg_data['exists']:
                 fvg_data = ob.get("fvg", {"exists": False})  # Fall back to H1 FVG from radar
                 phase2_sent = load_phase2_sent()
-                score_res = smc_detector.run_scorecard(bias, df_h1, ob, fvg_data, current_price)
+                score_res = smc_detector.run_scorecard(bias, df_h1, ob, fvg_data, current_price, pair_conf, df_trigger)
                 if score_res['total'] < pair_conf["min_confidence"]: continue
                     
                 levels = smc_detector.compute_dynamic_levels(pair_conf, bias, ob, fvg_data, current_price, df_trigger)
