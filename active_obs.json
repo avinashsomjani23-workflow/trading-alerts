@@ -3,24 +3,9 @@
     {
       "direction": "Bullish (Demand)",
       "bos_tag": "CHoCH+BOS",
-      "proximal_line": 1.1526,
-      "distal_line": 1.15207,
-      "dist_to_price": 0.02221,
-      "ob_high": 1.1526,
-      "ob_low": 1.15207,
-      "ob_mean": 1.15234,
-      "fvg": {
-        "exists": true,
-        "fvg_top": 1.1527377367019653,
-        "fvg_bottom": 1.1526048183441162
-      }
-    },
-    {
-      "direction": "Bullish (Demand)",
-      "bos_tag": "CHoCH+BOS",
       "proximal_line": 1.15487,
       "distal_line": 1.15407,
-      "dist_to_price": 0.01994,
+      "dist_to_price": 0.0216,
       "ob_high": 1.15487,
       "ob_low": 1.15407,
       "ob_mean": 1.15447,
@@ -35,7 +20,7 @@
       "bos_tag": "continuation_BOS",
       "proximal_line": 1.15487,
       "distal_line": 1.15407,
-      "dist_to_price": 0.01994,
+      "dist_to_price": 0.0216,
       "ob_high": 1.15487,
       "ob_low": 1.15407,
       "ob_mean": 1.15447,
@@ -50,7 +35,7 @@
       "bos_tag": "continuation_BOS",
       "proximal_line": 1.15861,
       "distal_line": 1.15754,
-      "dist_to_price": 0.0162,
+      "dist_to_price": 0.01786,
       "ob_high": 1.15861,
       "ob_low": 1.15754,
       "ob_mean": 1.15808,
@@ -67,7 +52,7 @@
       "bos_tag": "CHoCH+BOS",
       "proximal_line": 159.69,
       "distal_line": 159.866,
-      "dist_to_price": 0.347,
+      "dist_to_price": 0.56601,
       "ob_high": 159.866,
       "ob_low": 159.69,
       "ob_mean": 159.778,
@@ -82,7 +67,7 @@
       "bos_tag": "continuation_BOS",
       "proximal_line": 159.175,
       "distal_line": 159.10899,
-      "dist_to_price": 0.168,
+      "dist_to_price": 0.05101,
       "ob_high": 159.175,
       "ob_low": 159.10899,
       "ob_mean": 159.142,
@@ -93,26 +78,11 @@
       }
     },
     {
-      "direction": "Bullish (Demand)",
-      "bos_tag": "continuation_BOS",
-      "proximal_line": 159.319,
-      "distal_line": 159.22501,
-      "dist_to_price": 0.024,
-      "ob_high": 159.319,
-      "ob_low": 159.22501,
-      "ob_mean": 159.272,
-      "fvg": {
-        "exists": true,
-        "fvg_top": 159.66000366210938,
-        "fvg_bottom": 159.31900024414062
-      }
-    },
-    {
       "direction": "Bearish (Supply)",
       "bos_tag": "continuation_BOS",
       "proximal_line": 159.567,
       "distal_line": 159.754,
-      "dist_to_price": 0.224,
+      "dist_to_price": 0.44301,
       "ob_high": 159.754,
       "ob_low": 159.567,
       "ob_mean": 159.6605,
@@ -129,7 +99,7 @@
       "bos_tag": "CHoCH+BOS",
       "proximal_line": 0.57149,
       "distal_line": 0.57071,
-      "dist_to_price": 0.01515,
+      "dist_to_price": 0.01512,
       "ob_high": 0.57149,
       "ob_low": 0.57071,
       "ob_mean": 0.5711,
@@ -144,7 +114,7 @@
       "bos_tag": "continuation_BOS",
       "proximal_line": 0.5848,
       "distal_line": 0.58401,
-      "dist_to_price": 0.00185,
+      "dist_to_price": 0.00182,
       "ob_high": 0.5848,
       "ob_low": 0.58401,
       "ob_mean": 0.5844,
@@ -159,24 +129,9 @@
     {
       "direction": "Bearish (Supply)",
       "bos_tag": "CHoCH+BOS",
-      "proximal_line": 0.80105,
-      "distal_line": 0.80183,
-      "dist_to_price": 0.01685,
-      "ob_high": 0.80183,
-      "ob_low": 0.80105,
-      "ob_mean": 0.80144,
-      "fvg": {
-        "exists": true,
-        "fvg_top": 0.801829993724823,
-        "fvg_bottom": 0.8004699945449829
-      }
-    },
-    {
-      "direction": "Bearish (Supply)",
-      "bos_tag": "CHoCH+BOS",
       "proximal_line": 0.79864,
       "distal_line": 0.79956,
-      "dist_to_price": 0.01444,
+      "dist_to_price": 0.01504,
       "ob_high": 0.79956,
       "ob_low": 0.79864,
       "ob_mean": 0.7991,
@@ -193,7 +148,7 @@
       "bos_tag": "CHoCH+BOS",
       "proximal_line": 24238.25,
       "distal_line": 24076.75,
-      "dist_to_price": 1169.0,
+      "dist_to_price": 1346.5,
       "ob_high": 24238.25,
       "ob_low": 24076.75,
       "ob_mean": 24157.5,
@@ -208,7 +163,7 @@
       "bos_tag": "CHoCH+BOS",
       "proximal_line": 25355.0,
       "distal_line": 25296.5,
-      "dist_to_price": 52.25,
+      "dist_to_price": 229.75,
       "ob_high": 25355.0,
       "ob_low": 25296.5,
       "ob_mean": 25325.75,
@@ -225,7 +180,7 @@
       "bos_tag": "CHoCH+BOS",
       "proximal_line": 4775.1001,
       "distal_line": 4797.7002,
-      "dist_to_price": 23.30029,
+      "dist_to_price": 18.3999,
       "ob_high": 4797.7002,
       "ob_low": 4775.1001,
       "ob_mean": 4786.40015,
@@ -233,6 +188,21 @@
         "exists": true,
         "fvg_top": 4794.60009765625,
         "fvg_bottom": 4665.2001953125
+      }
+    },
+    {
+      "direction": "Bullish (Demand)",
+      "bos_tag": "CHoCH+BOS",
+      "proximal_line": 4743.1001,
+      "distal_line": 4722.5,
+      "dist_to_price": 50.3999,
+      "ob_high": 4743.1001,
+      "ob_low": 4722.5,
+      "ob_mean": 4732.80005,
+      "fvg": {
+        "exists": true,
+        "fvg_top": 4748.39990234375,
+        "fvg_bottom": 4743.10009765625
       }
     }
   ]
