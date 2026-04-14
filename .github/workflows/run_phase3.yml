@@ -8,8 +8,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - run: pip install yfinance pandas
+      # Added matplotlib, numpy, and requests to support M5 charting and math
+      - run: pip install yfinance pandas numpy matplotlib requests
       - env:
+          GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
           GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python phase3_engine.py
