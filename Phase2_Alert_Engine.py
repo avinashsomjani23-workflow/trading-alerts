@@ -211,21 +211,5 @@ if __name__ == "__main__":
                     new_watch_state[watch_id] = trade_data
                     print(f"  [>] LOGGED FOR PHASE 3: {name}")
 
-    # --- PHASE 3: M5 CHoCH Sniper Loop ---
-    for watch_id, trade_data in watch_state.items():
-        name = trade_data["pair"]
-        pair_conf = next((p for p in config["pairs"] if p["name"] == name), None)
-        if not pair_conf: continue
-        
-        df_m5 = clean_df(yf.download(pair_conf["symbol"], period="2d", interval="5m", progress=False))
-        if df_m5 is not None:
-            bounds = {'max': max(trade_data['ob']['proximal_line'], trade_data['ob']['distal_line']), 'min': min(trade_data['ob']['proximal_line'], trade_data['ob']['distal_line'])}
-            if smc_detector.detect_ltf_choch(df_m5, trade_data["bias"], bounds):
-                chart = generate_chart(df_m5, f"{name} M5 SNIPER CHoCH", trade_data["levels"], trade_data["ob"], pair_conf, None, None)
-                send_email(f"TRADE READY (M5 SNIPER) | {name} | {trade_data['bias']} | {get_ist_now().strftime('%H:%M IST')}", build_trade_email(trade_data, name, pair_conf, chart), chart)
-                print(f"  [🎯] M5 SNIPER TRIGGERED: {name}")
-            else:
-                new_watch_state[watch_id] = trade_data # Keep watching
-
     save_json("active_watch_state.json", new_watch_state)
     print("Execution complete.")
