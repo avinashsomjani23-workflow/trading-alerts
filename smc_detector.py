@@ -21,7 +21,7 @@ def detect_sweep_decay(df, swings, current_idx):
     score, sweep_price = 0.0, None
     H, L, C = df['High'].values, df['Low'].values, df['Close'].values
     current_ts = df.index[current_idx]
-    for i in range(max(0, current_idx - 3), current_idx + 1):
+    for i in range(max(0, current_idx - 8), current_idx + 1):
         for s in swings:
             if s['idx'] >= i: continue
             hours_old = (current_ts - s['ts']).total_seconds() / 3600
