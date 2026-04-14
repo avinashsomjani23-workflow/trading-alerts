@@ -14,7 +14,7 @@ jobs:
           GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           ALERT_EMAIL:        ${{ secrets.ALERT_EMAIL }}
-        run: python alert_engine.py
+        run: python Phase2_Alert_Engine.py
       - run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
