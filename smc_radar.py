@@ -120,12 +120,16 @@ def detect_smc_radar(df, lookback):
             for k in range(c2_idx, max_c5_idx):
                 if k + 2 >= n: break
                 if bos_type == 'bullish' and H[k] < L[k + 2]:
-                    fvg_valid = True
                     fvg_top, fvg_bottom = float(L[k + 2]), float(H[k])
+                    filled = any(L[m] <= fvg_bottom for m in range(k + 3, n))
+                    if not filled:
+                        fvg_valid = True
                     break
                 elif bos_type == 'bearish' and L[k] > H[k + 2]:
-                    fvg_valid = True
-                    fvg_top, fvg_bottom = float(H[k]), float(L[k + 2])
+                    fvg_top, fvg_bottom = float(L[k]), float(H[k + 2])
+                    filled = any(H[m] >= fvg_top for m in range(k + 3, n))
+                    if not filled:
+                        fvg_valid = True
                     break
 
             active_obs.append({
