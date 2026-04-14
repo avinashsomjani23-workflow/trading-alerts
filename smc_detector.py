@@ -34,11 +34,24 @@ def detect_sweep_decay(df, swings, current_idx):
                 if pts > score: score, sweep_price = pts, float(H[i])
     return score, sweep_price
 def detect_fvg_in_zone(df, bias, zone_top, zone_bottom):
-    """Find the most recent unmitigated FVG within a price zone."""
     if df is None or len(df) < 5:
         return {"exists": False, "fvg_top": None, "fvg_bottom": None}
-    H, L, C = df['High'].values, df['Low'].values, df['Close'].values
+    H, L = df['High'].values.astype(float), df['Low'].values.astype(float)
     n = len(df)
+    for k in range(n - 3, max(0, n - 30), -1):
+        if bias == "LONG" and H[k] < L[k + 2]:
+            ft, fb = float(L[k + 2]), float(H[k])
+            if fb > zone_top or ft < zone_bottom: continue
+            filled = any(L[m] <= fb for m in range(k + 3, n))
+            if not filled:
+                return {"exists": True, "fvg_top": ft, "fvg_bottom": fb}
+        elif bias == "SHORT" and L[k] > H[k + 2]:
+            ft, fb = float(L[k]), float(H[k + 2])
+            if fb > zone_top or ft < zone_bottom: continue
+            filled = any(H[m] >= ft for m in range(k + 3, n))
+            if not filled:
+                return {"exists": True, "fvg_top": ft, "fvg_bottom": fb}
+    return {"exists": False, "fvg_top": None, "fvg_bottom": None}
     
     # Walk backward to find most recent FVG
     for k in range(n - 3, max(0, n - 30), -1):
