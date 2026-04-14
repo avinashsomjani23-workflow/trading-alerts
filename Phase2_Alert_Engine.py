@@ -195,7 +195,11 @@ if __name__ == "__main__":
         for ob in pair_obs:
             if abs(current_price - float(ob['proximal_line'])) <= (pair_conf["atr_multiplier"] * h1_atr):
                 bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
-                fvg_data = ob.get("fvg", {"exists": False})
+                zone_top = max(float(ob['proximal_line']), float(ob['distal_line']))
+                zone_bottom = min(float(ob['proximal_line']), float(ob['distal_line']))
+                fvg_data = smc_detector.detect_fvg_in_zone(df_trigger, bias, zone_top, zone_bottom)
+                if not fvg_data['exists']:
+                    fvg_data = ob.get("fvg", {"exists": False})
                 
                 # Gemini FIRST — so macro score feeds into scorecard
                 gemini_risk = call_gemini_flash(name, bias, fetch_macro_news(name))
