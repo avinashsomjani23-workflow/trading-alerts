@@ -73,7 +73,7 @@ def call_gemini_flash(pair, bias, news_headlines):
     }}
     """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
-    body = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0.15}}
+    body = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0.15, "thinkingConfig": {"thinkingBudget": 0}}}
     for _ in range(3):
         try:
             r = requests.post(url, json=body, timeout=20).json()
