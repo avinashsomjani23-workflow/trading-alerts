@@ -38,7 +38,7 @@ def generate_m5_chart(df, title, levels, ob, pair_conf):
             col_c = '#26a69a' if c >= o else '#ef5350'
             ax.plot([i,i], [l,h], color=col_c, linewidth=1.5, zorder=2)
             body = abs(c-o) or (h-l) * 0.02
-            ax.add_patch(patches.Rectangle((i-0.4), min(o,c), 0.8, body, facecolor=col_c, linewidth=0, alpha=0.95, zorder=3))
+            ax.add_patch(patches.Rectangle((i-0.4, min(o,c)), 0.8, body, facecolor=col_c, linewidth=0, alpha=0.95, zorder=3))
 
         n = len(df_plot)
         proximal, distal = float(ob.get('proximal_line', 0)), float(ob.get('distal_line', 0))
