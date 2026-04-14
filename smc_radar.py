@@ -169,6 +169,7 @@ def detect_smc_radar(df, lookback):
 
 def generate_h1_chart(df, title, ob, dp, pair_conf):
     try:
+        df_plot = df.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(60).copy().reset_index(drop=True)
         df_plot = df.tail(60).copy().reset_index(drop=True)
         fig, ax = plt.subplots(1, 1, figsize=(12, 5.5), facecolor='#131722')
         ax.set_facecolor('#131722')
@@ -179,7 +180,7 @@ def generate_h1_chart(df, title, ob, dp, pair_conf):
             col_c = '#26a69a' if c >= o else '#ef5350'
             ax.plot([i,i], [l,h], color=col_c, linewidth=1.5, zorder=2)
             body = abs(c-o) or (h-l) * 0.02
-            ax.add_patch(patches.Rectangle((i-0.4), min(o,c), 0.8, body, facecolor=col_c, linewidth=0, alpha=0.95, zorder=3))
+            ax.add_patch(patches.Rectangle((i - 0.4, min(o, c)), 0.8, body, facecolor=col_c, linewidth=0, alpha=0.95, zorder=3))
 
         n = len(df_plot)
         proximal, distal = float(ob['proximal_line']), float(ob['distal_line'])
@@ -229,7 +230,7 @@ def send_master_digest(html_blocks, attachments):
     msg = MIMEMultipart("related")
     msg['From'] = EMAIL_CONFIG['sender'][0]
     msg['To'] = ", ".join(EMAIL_CONFIG['recipient'])
-    msg['Subject'] = f"Scout Master Digest | {len(attachments)} Active Zones | {ist_time}"
+    msg['Subject'] = f"Scout Master Digest | {len(html_blocks)} Active Zones | {ist_time}"
     
     msg.attach(MIMEText(master_html, 'html'))
     
@@ -244,6 +245,9 @@ def send_master_digest(html_blocks, attachments):
 
 def run_radar():
     ist_now = get_ist_now()
+    if ist_now.hour < 9:
+    print(f"Blackout period active. Scan suppressed until 09:00 IST.")
+    return
     print(f"Running Phase 1 Scout at {ist_now.strftime('%H:%M')} IST")
     
     export_payload = {}
@@ -271,6 +275,18 @@ def run_radar():
                 
                 if last_sent and last_sent > cutoff_time:
                     spam_count += 1
+                    dir_text = "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)"
+                    last_sent_ist = datetime.fromisoformat(last_sent).strftime('%d %b %Y, %H:%M IST')
+                    repeat_block = f"""
+                    <div style="margin-bottom:20px;padding:12px;background:#f0f4f8;border-left:4px solid #95a5a6;border-radius:4px;">
+                        <p style="margin:0;font-size:13px;color:#555;">
+                            <b>{name} | {dir_text}</b> &nbsp;|&nbsp; 
+                            Proximal {ob['proximal_line']:.{dp}f} &nbsp;|&nbsp; Distal {ob['distal_line']:.{dp}f}<br/>
+                            <span style="color:#888;">Zone alert shared at {last_sent_ist}. No new chart — zone unchanged.</span>
+                        </p>
+                    </div>
+                    """
+                    html_blocks.append(repeat_block)
                     continue
                 
                 # Generate specific CID for this chart so Gmail doesn't mix them up
