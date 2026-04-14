@@ -33,7 +33,39 @@ def detect_sweep_decay(df, swings, current_idx):
                 pts = 2.5 if hours_old <= 24 else 1.5
                 if pts > score: score, sweep_price = pts, float(H[i])
     return score, sweep_price
-
+def detect_fvg_in_zone(df, bias, zone_top, zone_bottom):
+    """Find the most recent unmitigated FVG within a price zone."""
+    if df is None or len(df) < 5:
+        return {"exists": False, "fvg_top": None, "fvg_bottom": None}
+    H, L, C = df['High'].values, df['Low'].values, df['Close'].values
+    n = len(df)
+    
+    # Walk backward to find most recent FVG
+    for k in range(n - 3, max(0, n - 30), -1):
+        if bias == "LONG" and H[k] < L[k + 2]:
+            ft, fb = float(L[k + 2]), float(H[k])
+            # FVG must overlap with the OB zone
+            if fb > zone_top or ft < zone_bottom: continue
+            # Check if filled by any candle after it
+            filled = False
+            for m in range(k + 3, n):
+                if L[m] <= ft:
+                    filled = True
+                    break
+            if not filled:
+                return {"exists": True, "fvg_top": ft, "fvg_bottom": fb}
+        elif bias == "SHORT" and L[k] > H[k + 2]:
+            ft, fb = float(L[k]), float(H[k + 2])
+            if fb > zone_top or ft < zone_bottom: continue
+            filled = False
+            for m in range(k + 3, n):
+                if H[m] >= fb:
+                    filled = True
+                    break
+            if not filled:
+                return {"exists": True, "fvg_top": ft, "fvg_bottom": fb}
+    
+    return {"exists": False, "fvg_top": None, "fvg_bottom": None}
 def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     dp = _dp(pair_conf)
     spread_val = pair_conf.get("spread_pips", 2) * (0.0001 if dp == 5 else 0.01)
