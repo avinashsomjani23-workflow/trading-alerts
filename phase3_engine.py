@@ -136,6 +136,9 @@ def run_phase3():
         if smc_detector.detect_ltf_choch(df_m5, bias, bounds):
             print(f"  [✓] LTF TRIGGER FIRED: {pair_name} M5 CHoCH detected!")
             levels = smc_detector.compute_dynamic_levels(pair_conf, bias, ob, ob.get('fvg', {}), current_close, df_m5)
+            zone_top = max(proximal, distal)
+            zone_bottom = min(proximal, distal)
+            m5_fvg = smc_detector.detect_fvg_in_zone(df_m5, bias, zone_top, zone_bottom)
         if not levels['valid']: continue
             dp = pair_conf.get("decimal_places", 5)
             
