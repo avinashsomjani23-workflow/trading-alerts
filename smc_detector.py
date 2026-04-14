@@ -106,7 +106,7 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price):
         elif bias == "SHORT" and df_h1['High'].iloc[i] >= ob_bottom: is_fresh = False; break
     bd["freshness"] = 0.5 if is_fresh else 0.0
 
-    eq = (df_h1['High'].max() + df_h1['Low'].max()) / 2.0
+    eq = (df_h1['High'].max() + df_h1['Low'].min()) / 2.0
     bd["pd"] = 1.0 if (bias == "LONG" and current_price <= eq) or (bias == "SHORT" and current_price >= eq) else 0.0
     bd["killzone"], bd["macro"] = 1.0, 1.0
 
