@@ -13,7 +13,11 @@ import base64
 from io import BytesIO
 import xml.etree.ElementTree as ET
 import smc_detector
+with open("config.json") as f: config = json.load(f)
 
+GEMINI_KEY    = os.environ.get("GEMINI_API_KEY", "dummy")
+GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "dummy@gmail.com")
+GMAIL_PASS    = os.environ.get("GMAIL_APP_PASSWORD", "dummy")
 def load_phase2_sent():
     try:
         with open("phase2_sent.json") as f: return json.load(f)
@@ -21,11 +25,6 @@ def load_phase2_sent():
 
 def save_phase2_sent(data):
     with open("phase2_sent.json", "w") as f: json.dump(data, f, indent=2)
-with open("config.json") as f: config = json.load(f)
-
-GEMINI_KEY    = os.environ.get("GEMINI_API_KEY", "dummy")
-GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "dummy@gmail.com")
-GMAIL_PASS    = os.environ.get("GMAIL_APP_PASSWORD", "dummy")
 
 def get_ist_now(): return datetime.utcnow() + timedelta(hours=5, minutes=30)
 def load_json(path, default):
