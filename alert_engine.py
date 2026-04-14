@@ -153,6 +153,7 @@ def send_email(subject, html_body, chart_b64):
         if chart_b64:
             img = MIMEImage(base64.b64decode(chart_b64))
             img.add_header("Content-ID", "<chart_m15>")
+            img.add_header("Content-Disposition", "inline", filename="chart_m15.png") # ADD THIS LINE
             msg.attach(img)
         try:
             with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
