@@ -139,30 +139,32 @@ def run_phase3():
             zone_top = max(proximal, distal)
             zone_bottom = min(proximal, distal)
             m5_fvg = smc_detector.detect_fvg_in_zone(df_m5, bias, zone_top, zone_bottom)
-        if not levels['valid']: continue
-                dp = pair_conf.get("decimal_places", 5)
-            
-            chart_b64 = generate_m5_chart(df_m5, f"{pair_name} M5 SNIPER TRIGGER", levels, ob, pair_conf)
-            
-            html_body = f"""<html><body style="font-family:Arial;background:#f0f2f5;padding:12px;">
-            <div style="max-width:620px;margin:auto;background:white;border-radius:14px;overflow:hidden;">
-                <div style="background:#1a1a2e;padding:16px 20px;">
-                    <h2 style="color:white;margin:0;">TRADE READY (M5 SNIPER): {pair_name}</h2>
-                    <p style="color:#8899bb;margin:4px 0 0;font-size:11px;">{ist_now.strftime('%H:%M IST')}</p>
+        if not levels['valid']: 
+            continue
+        
+        dp = pair_conf.get("decimal_places", 5)
+        
+        chart_b64 = generate_m5_chart(df_m5, f"{pair_name} M5 SNIPER TRIGGER", levels, ob, pair_conf)
+        
+        html_body = f"""<html><body style="font-family:Arial;background:#f0f2f5;padding:12px;">
+        <div style="max-width:620px;margin:auto;background:white;border-radius:14px;overflow:hidden;">
+            <div style="background:#1a1a2e;padding:16px 20px;">
+                <h2 style="color:white;margin:0;">TRADE READY (M5 SNIPER): {pair_name}</h2>
+                <p style="color:#8899bb;margin:4px 0 0;font-size:11px;">{ist_now.strftime('%H:%M IST')}</p>
+            </div>
+            <div style="padding:16px 20px;">
+                <div style="background:#27ae60;padding:16px 20px;border-radius:10px;margin-bottom:16px;">
+                    <p style="color:white;font-size:16px;font-weight:bold;margin:0;">{'SELL' if bias=='SHORT' else 'BUY'} MARKET/LIMIT at {levels.get('entry', proximal):,.{dp}f}</p>
+                    <p style="color:white;margin:4px 0 0;">SL: {levels.get('sl', distal):,.{dp}f} &nbsp;|&nbsp; TP1: {levels.get('tp1', 0):,.{dp}f}</p>
                 </div>
-                <div style="padding:16px 20px;">
-                    <div style="background:#27ae60;padding:16px 20px;border-radius:10px;margin-bottom:16px;">
-                        <p style="color:white;font-size:16px;font-weight:bold;margin:0;">{'SELL' if bias=='SHORT' else 'BUY'} MARKET/LIMIT at {levels.get('entry', proximal):,.{dp}f}</p>
-                        <p style="color:white;margin:4px 0 0;">SL: {levels.get('sl', distal):,.{dp}f} &nbsp;|&nbsp; TP1: {levels.get('tp1', 0):,.{dp}f}</p>
-                    </div>
-                    <p style="font-size:13px;background:#f8f9fa;padding:10px;border-left:4px solid #27ae60;"><b>Logic Translation:</b> M5 Change of Character (CHoCH) detected strictly inside the Higher Timeframe Order Block constraints. Stop-loss remains protected beyond the distal line.</p>
-                    <img src="cid:chart_m5" style="width:100%;border-radius:8px;margin-bottom:12px;" />
-                    <p><b>Macro Context:</b> {data.get('macro_summary', 'N/A')}</p>
-                </div>
-            </div></body></html>"""
-            
-            send_html_email(f"TRADE READY (M5 SNIPER) | {pair_name} | {bias}", html_body, chart_b64)
-            keys_to_delete.append(key)
+                <p style="font-size:13px;background:#f8f9fa;padding:10px;border-left:4px solid #27ae60;"><b>Logic Translation:</b> M5 Change of Character (CHoCH) detected strictly inside the Higher Timeframe Order Block constraints. Stop-loss remains protected beyond the distal line.</p>
+                <img src="cid:chart_m5" style="width:100%;border-radius:8px;margin-bottom:12px;" />
+                <p><b>Macro Context:</b> {data.get('macro_summary', 'N/A')}</p>
+            </div>
+        </div></body></html>"""
+        
+        send_html_email(f"TRADE READY (M5 SNIPER) | {pair_name} | {bias}", html_body, chart_b64)
+        keys_to_delete.append(key)
 
     for k in keys_to_delete: del watch_state[k]
     with open("active_watch_state.json", "w") as f: json.dump(watch_state, f, indent=2)
