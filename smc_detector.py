@@ -119,21 +119,35 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
 
     return {"valid": True, "entry": round(final_entry, dp), "sl": round(sl, dp), "tp1": round(tp1, dp), "tp2": round(tp2, dp), "rr": round(final_rr, 2), "entry_source": entry_source}
 
-def run_scorecard(bias, df_h1, ob, fvg, current_price):
+def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=None):
     bos_tag = ob.get('bos_tag', 'BOS')
     if bos_tag == 'CHoCH':
         bd = {"structure": 2.5}
     else:
         bd = {"structure": 1.5}
-    swings = get_swing_points(df_h1, lookback=5)
     
-    sweep_score, sweep_price = detect_sweep_decay(df_h1, swings, len(df_h1)-1)
-    bd["sweep"] = sweep_score
+    # H1 sweep
+    swings_h1 = get_swing_points(df_h1, lookback=5)
+    h1_sweep_score, h1_sweep_price = detect_sweep_decay(df_h1, swings_h1, len(df_h1)-1)
     
-    # C2-C5 FVG Scoring (Does not invalidate if missing)
+    # M15 sweep (if data provided)
+    m15_sweep_score, m15_sweep_price = 0.0, None
+    if df_m15 is not None:
+        swings_m15 = get_swing_points(df_m15, lookback=4)
+        m15_sweep_score, m15_sweep_price = detect_sweep_decay(df_m15, swings_m15, len(df_m15)-1)
+    
+    # Take the best sweep from either timeframe
+    if m15_sweep_score > h1_sweep_score:
+        bd["sweep"] = m15_sweep_score
+        sweep_price = m15_sweep_price
+    else:
+        bd["sweep"] = h1_sweep_score
+        sweep_price = h1_sweep_price
+    
     if fvg and fvg.get('exists'):
         bd["fvg"] = 1.5 if fvg.get('touches_ob', False) else 1.0
-    else: bd["fvg"] = 0.0
+    else:
+        bd["fvg"] = 0.0
 
     is_fresh = True
     ob_top, ob_bottom = float(ob.get('proximal_line', 0)), float(ob.get('distal_line', 0))
@@ -144,10 +158,29 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price):
 
     eq = (df_h1['High'].max() + df_h1['Low'].min()) / 2.0
     bd["pd"] = 1.0 if (bias == "LONG" and current_price <= eq) or (bias == "SHORT" and current_price >= eq) else 0.0
-    bd["killzone"], bd["macro"] = 1.0, 1.0
+    
+    # Killzone — pair-aware
+    from datetime import datetime, timedelta
+    ist_hour = (datetime.utcnow() + timedelta(hours=5, minutes=30)).hour
+    pair_type = "forex"
+    if pair_conf:
+        pair_type = pair_conf.get("pair_type", "forex")
+    
+    kz_hit = False
+    if pair_type == "forex":
+        # London: 12:30-15:30 IST, NY: 18:00-21:00 IST
+        kz_hit = (12 <= ist_hour <= 15) or (18 <= ist_hour <= 21)
+    elif pair_type == "index":
+        # NAS100: US session 19:00-01:30 IST (pre-market + regular)
+        kz_hit = (19 <= ist_hour <= 23) or (0 <= ist_hour <= 1)
+    elif pair_type == "commodity":
+        # Gold: London 12:30-15:30 IST + NY 18:00-21:00 IST
+        kz_hit = (12 <= ist_hour <= 15) or (18 <= ist_hour <= 21)
+    bd["killzone"] = 1.0 if kz_hit else 0.0
+    
+    bd["macro"] = 0.0  # Added by Phase 2 from Gemini response
 
     return {"total": round(sum(bd.values()), 1), "breakdown": bd, "sweep_price": sweep_price}
-
 # Phase 3 CHoCH Extractor
 def detect_ltf_choch(df_m5, bias, bounds):
     # Strictly isolates CHoCH within H1/M15 distal boundaries
