@@ -195,7 +195,11 @@ if __name__ == "__main__":
         for ob in pair_obs:
             if abs(current_price - float(ob['proximal_line'])) <= (pair_conf["atr_multiplier"] * h1_atr):
                 bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
-                fvg_data = ob.get("fvg", {"exists": False})
+                zone_top = max(float(ob['proximal_line']), float(ob['distal_line']))
+                zone_bottom = min(float(ob['proximal_line']), float(ob['distal_line']))
+                fvg_data = smc_detector.detect_fvg_in_zone(df_trigger, bias, zone_top, zone_bottom)
+            if not fvg_data['exists']:
+                fvg_data = ob.get("fvg", {"exists": False})  # Fall back to H1 FVG from radar
                 phase2_sent = load_phase2_sent()
                 score_res = smc_detector.run_scorecard(bias, df_h1, ob, fvg_data, current_price)
                 if score_res['total'] < pair_conf["min_confidence"]: continue
