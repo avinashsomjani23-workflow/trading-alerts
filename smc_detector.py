@@ -88,7 +88,11 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     return {"valid": True, "entry": round(final_entry, dp), "sl": round(sl, dp), "tp1": round(tp1, dp), "tp2": round(tp2, dp), "rr": round(final_rr, 2), "entry_source": entry_source}
 
 def run_scorecard(bias, df_h1, ob, fvg, current_price):
-    bd = {"structure": 1.5} # Base score for structure presence
+    bos_tag = ob.get('bos_tag', 'BOS')
+    if bos_tag == 'CHoCH':
+        bd = {"structure": 2.5}
+    else:
+        bd = {"structure": 1.5}
     swings = get_swing_points(df_h1, lookback=5)
     
     sweep_score, sweep_price = detect_sweep_decay(df_h1, swings, len(df_h1)-1)
