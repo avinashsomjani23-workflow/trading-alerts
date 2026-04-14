@@ -168,17 +168,14 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     
     kz_hit = False
     if pair_type == "forex":
-        # London: 12:30-15:30 IST, NY: 18:00-21:00 IST
         kz_hit = (12 <= ist_hour <= 15) or (18 <= ist_hour <= 21)
     elif pair_type == "index":
-        # NAS100: US session 19:00-01:30 IST (pre-market + regular)
         kz_hit = (19 <= ist_hour <= 23) or (0 <= ist_hour <= 1)
     elif pair_type == "commodity":
-        # Gold: London 12:30-15:30 IST + NY 18:00-21:00 IST
         kz_hit = (12 <= ist_hour <= 15) or (18 <= ist_hour <= 21)
     bd["killzone"] = 1.0 if kz_hit else 0.0
     
-    bd["macro"] = 0.0  # Added by Phase 2 from Gemini response
+    bd["macro"] = macro_score
 
     return {"total": round(sum(bd.values()), 1), "breakdown": bd, "sweep_price": sweep_price}
 # Phase 3 CHoCH Extractor
