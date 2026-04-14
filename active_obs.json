@@ -1,194 +1,254 @@
 {
   "EURUSD": [
     {
-      "direction": "Bullish (Demand)",
-      "bos_tag": "CHoCH+BOS",
-      "proximal_line": 1.15487,
-      "distal_line": 1.15407,
-      "dist_to_price": 0.02188,
-      "ob_high": 1.15487,
-      "ob_low": 1.15407,
-      "ob_mean": 1.15447,
+      "bos_idx": 31,
+      "ob_idx": 30,
+      "direction": "bullish",
+      "bos_tag": "CHoCH",
+      "high": 1.1548677682876587,
+      "low": 1.154068112373352,
+      "mean": 1.1544679403305054,
+      "proximal_line": 1.1548677682876587,
+      "distal_line": 1.154068112373352,
+      "median_leg_body": 0.00039947032928466797,
+      "ob_body": 0.00013327598571777344,
       "fvg": {
-        "exists": true,
-        "fvg_top": 1.1566041707992554,
-        "fvg_bottom": 1.1548677682876587
-      }
+        "exists": false,
+        "fvg_top": null,
+        "fvg_bottom": null
+      },
+      "touches": 0,
+      "status": "Pristine"
     },
     {
-      "direction": "Bullish (Demand)",
-      "bos_tag": "continuation_BOS",
-      "proximal_line": 1.15487,
-      "distal_line": 1.15407,
-      "dist_to_price": 0.02188,
-      "ob_high": 1.15487,
-      "ob_low": 1.15407,
-      "ob_mean": 1.15447,
+      "bos_idx": 40,
+      "ob_idx": 30,
+      "direction": "bullish",
+      "bos_tag": "BOS",
+      "high": 1.1548677682876587,
+      "low": 1.154068112373352,
+      "mean": 1.1544679403305054,
+      "proximal_line": 1.1548677682876587,
+      "distal_line": 1.154068112373352,
+      "median_leg_body": 0.000466763973236084,
+      "ob_body": 0.00013327598571777344,
       "fvg": {
-        "exists": true,
-        "fvg_top": 1.1566041707992554,
-        "fvg_bottom": 1.1548677682876587
-      }
+        "exists": false,
+        "fvg_top": null,
+        "fvg_bottom": null
+      },
+      "touches": 0,
+      "status": "Pristine"
     },
     {
-      "direction": "Bullish (Demand)",
-      "bos_tag": "continuation_BOS",
-      "proximal_line": 1.15861,
-      "distal_line": 1.15754,
-      "dist_to_price": 0.01813,
-      "ob_high": 1.15861,
-      "ob_low": 1.15754,
-      "ob_mean": 1.15808,
+      "bos_idx": 42,
+      "ob_idx": 41,
+      "direction": "bullish",
+      "bos_tag": "BOS",
+      "high": 1.1586142778396606,
+      "low": 1.1575413942337036,
+      "mean": 1.1580778360366821,
+      "proximal_line": 1.1586142778396606,
+      "distal_line": 1.1575413942337036,
+      "median_leg_body": 0.0004672408103942871,
+      "ob_body": 0.00040221214294433594,
       "fvg": {
         "exists": true,
-        "fvg_top": 1.15968918800354,
-        "fvg_bottom": 1.1586142778396606
-      }
+        "fvg_top": 1.1667250394821167,
+        "fvg_bottom": 1.1607661247253418
+      },
+      "touches": 0,
+      "status": "Pristine"
     }
   ],
   "USDJPY": [
     {
-      "direction": "Bearish (Supply)",
-      "bos_tag": "CHoCH+BOS",
-      "proximal_line": 159.69,
-      "distal_line": 159.866,
-      "dist_to_price": 0.45801,
-      "ob_high": 159.866,
-      "ob_low": 159.69,
-      "ob_mean": 159.778,
+      "bos_idx": 134,
+      "ob_idx": 133,
+      "direction": "bearish",
+      "bos_tag": "BOS",
+      "high": 159.75399780273438,
+      "low": 159.56700134277344,
+      "mean": 159.6604995727539,
+      "proximal_line": 159.56700134277344,
+      "distal_line": 159.75399780273438,
+      "median_leg_body": 0.1720123291015625,
+      "ob_body": 0.1720123291015625,
       "fvg": {
         "exists": true,
-        "fvg_top": 159.86599731445312,
-        "fvg_bottom": 159.49600219726562
-      }
-    },
-    {
-      "direction": "Bearish (Supply)",
-      "bos_tag": "continuation_BOS",
-      "proximal_line": 159.567,
-      "distal_line": 159.754,
-      "dist_to_price": 0.33501,
-      "ob_high": 159.754,
-      "ob_low": 159.567,
-      "ob_mean": 159.6605,
-      "fvg": {
-        "exists": true,
-        "fvg_top": 159.75399780273438,
-        "fvg_bottom": 159.3560028076172
-      }
+        "fvg_top": 159.78700256347656,
+        "fvg_bottom": 159.28799438476562
+      },
+      "touches": 0,
+      "status": "Pristine"
     }
   ],
   "NZDUSD": [
     {
-      "direction": "Bullish (Demand)",
-      "bos_tag": "CHoCH+BOS",
-      "proximal_line": 0.57149,
-      "distal_line": 0.57071,
-      "dist_to_price": 0.01626,
-      "ob_high": 0.57149,
-      "ob_low": 0.57071,
-      "ob_mean": 0.5711,
+      "bos_idx": 42,
+      "ob_idx": 41,
+      "direction": "bullish",
+      "bos_tag": "CHoCH",
+      "high": 0.571493923664093,
+      "low": 0.570711076259613,
+      "mean": 0.571102499961853,
+      "proximal_line": 0.571493923664093,
+      "distal_line": 0.570711076259613,
+      "median_leg_body": 0.0004559755325317383,
+      "ob_body": 0.0006195902824401855,
       "fvg": {
         "exists": true,
-        "fvg_top": 0.572573721408844,
-        "fvg_bottom": 0.571493923664093
-      }
+        "fvg_top": 0.5740198493003845,
+        "fvg_bottom": 0.5734602212905884
+      },
+      "touches": 0,
+      "status": "Pristine"
     },
     {
-      "direction": "Bullish (Demand)",
-      "bos_tag": "continuation_BOS",
-      "proximal_line": 0.5848,
-      "distal_line": 0.58401,
-      "dist_to_price": 0.00296,
-      "ob_high": 0.5848,
-      "ob_low": 0.58401,
-      "ob_mean": 0.5844,
+      "bos_idx": 134,
+      "ob_idx": 133,
+      "direction": "bullish",
+      "bos_tag": "BOS",
+      "high": 0.5847952961921692,
+      "low": 0.5840098261833191,
+      "mean": 0.5844025611877441,
+      "proximal_line": 0.5847952961921692,
+      "distal_line": 0.5840098261833191,
+      "median_leg_body": 0.0008845925331115723,
+      "ob_body": 0.0005807876586914062,
       "fvg": {
         "exists": true,
-        "fvg_top": 0.5859260559082031,
-        "fvg_bottom": 0.5847952961921692
-      }
+        "fvg_top": 0.5864070653915405,
+        "fvg_bottom": 0.586029052734375
+      },
+      "touches": 0,
+      "status": "Pristine"
+    },
+    {
+      "bos_idx": 148,
+      "ob_idx": 143,
+      "direction": "bullish",
+      "bos_tag": "BOS",
+      "high": 0.5868889093399048,
+      "low": 0.5858917236328125,
+      "mean": 0.5863903164863586,
+      "proximal_line": 0.5868889093399048,
+      "distal_line": 0.5858917236328125,
+      "median_leg_body": 0.0005680322647094727,
+      "ob_body": 0.0008938312530517578,
+      "fvg": {
+        "exists": true,
+        "fvg_top": 0.5867855548858643,
+        "fvg_bottom": 0.5863383412361145
+      },
+      "touches": 2,
+      "status": "Tested (2 touches)"
     }
   ],
   "USDCHF": [
     {
-      "direction": "Bearish (Supply)",
-      "bos_tag": "CHoCH+BOS",
-      "proximal_line": 0.79864,
-      "distal_line": 0.79956,
-      "dist_to_price": 0.01535,
-      "ob_high": 0.79956,
-      "ob_low": 0.79864,
-      "ob_mean": 0.7991,
+      "bos_idx": 44,
+      "ob_idx": 42,
+      "direction": "bearish",
+      "bos_tag": "CHoCH",
+      "high": 0.799560010433197,
+      "low": 0.7986400127410889,
+      "mean": 0.7991000115871429,
+      "proximal_line": 0.7986400127410889,
+      "distal_line": 0.799560010433197,
+      "median_leg_body": 0.0003300309181213379,
+      "ob_body": 0.000299990177154541,
       "fvg": {
         "exists": true,
-        "fvg_top": 0.799560010433197,
-        "fvg_bottom": 0.7970399856567383
-      }
+        "fvg_top": 0.7998800277709961,
+        "fvg_bottom": 0.7903199791908264
+      },
+      "touches": 1,
+      "status": "Tested (1 touches)"
+    },
+    {
+      "bos_idx": 148,
+      "ob_idx": 147,
+      "direction": "bearish",
+      "bos_tag": "BOS",
+      "high": 0.7836199998855591,
+      "low": 0.7828500270843506,
+      "mean": 0.7832350134849548,
+      "proximal_line": 0.7828500270843506,
+      "distal_line": 0.7836199998855591,
+      "median_leg_body": 0.00014001131057739258,
+      "ob_body": 0.00014001131057739258,
+      "fvg": {
+        "exists": false,
+        "fvg_top": null,
+        "fvg_bottom": null
+      },
+      "touches": 0,
+      "status": "Pristine"
     }
   ],
   "NAS100": [
     {
-      "direction": "Bullish (Demand)",
-      "bos_tag": "CHoCH+BOS",
+      "bos_idx": 50,
+      "ob_idx": 47,
+      "direction": "bullish",
+      "bos_tag": "CHoCH",
+      "high": 24238.25,
+      "low": 24076.75,
+      "mean": 24157.5,
       "proximal_line": 24238.25,
       "distal_line": 24076.75,
-      "dist_to_price": 1330.75,
-      "ob_high": 24238.25,
-      "ob_low": 24076.75,
-      "ob_mean": 24157.5,
+      "median_leg_body": 99.25,
+      "ob_body": 124.0,
       "fvg": {
         "exists": true,
-        "fvg_top": 24345.75,
-        "fvg_bottom": 24238.25
-      }
+        "fvg_top": 24913.5,
+        "fvg_bottom": 24451.5
+      },
+      "touches": 0,
+      "status": "Pristine"
     },
     {
-      "direction": "Bullish (Demand)",
-      "bos_tag": "CHoCH+BOS",
+      "bos_idx": 137,
+      "ob_idx": 136,
+      "direction": "bullish",
+      "bos_tag": "CHoCH",
+      "high": 25355.0,
+      "low": 25296.5,
+      "mean": 25325.75,
       "proximal_line": 25355.0,
       "distal_line": 25296.5,
-      "dist_to_price": 214.0,
-      "ob_high": 25355.0,
-      "ob_low": 25296.5,
-      "ob_mean": 25325.75,
+      "median_leg_body": 78.5,
+      "ob_body": 42.5,
       "fvg": {
         "exists": true,
-        "fvg_top": 25396.75,
-        "fvg_bottom": 25355.0
-      }
+        "fvg_top": 25533.5,
+        "fvg_bottom": 25454.5
+      },
+      "touches": 0,
+      "status": "Pristine"
     }
   ],
   "GOLD": [
     {
-      "direction": "Bearish (Supply)",
-      "bos_tag": "CHoCH+BOS",
-      "proximal_line": 4775.1001,
-      "distal_line": 4797.7002,
-      "dist_to_price": 13.8999,
-      "ob_high": 4797.7002,
-      "ob_low": 4775.1001,
-      "ob_mean": 4786.40015,
-      "fvg": {
-        "exists": true,
-        "fvg_top": 4794.60009765625,
-        "fvg_bottom": 4665.2001953125
-      }
-    },
-    {
-      "direction": "Bullish (Demand)",
-      "bos_tag": "CHoCH+BOS",
-      "proximal_line": 4743.1001,
+      "bos_idx": 140,
+      "ob_idx": 136,
+      "direction": "bullish",
+      "bos_tag": "CHoCH",
+      "high": 4743.10009765625,
+      "low": 4722.5,
+      "mean": 4732.800048828125,
+      "proximal_line": 4743.10009765625,
       "distal_line": 4722.5,
-      "dist_to_price": 45.8999,
-      "ob_high": 4743.1001,
-      "ob_low": 4722.5,
-      "ob_mean": 4732.80005,
+      "median_leg_body": 5.7001953125,
+      "ob_body": 5.7001953125,
       "fvg": {
-        "exists": true,
-        "fvg_top": 4748.39990234375,
-        "fvg_bottom": 4743.10009765625
-      }
+        "exists": false,
+        "fvg_top": null,
+        "fvg_bottom": null
+      },
+      "touches": 0,
+      "status": "Pristine"
     }
   ]
 }
