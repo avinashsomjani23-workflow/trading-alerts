@@ -113,7 +113,6 @@ def detect_smc_radar(df, lookback):
 
             ob_high, ob_low = float(H[ob_idx]), float(L[ob_idx])
             
-            # Strict C2-C5 FVG Window
             fvg_valid, fvg_top, fvg_bottom = False, None, None
             c2_idx = ob_idx + 1
             max_c5_idx = min(ob_idx + 4, n - 1)
@@ -143,27 +142,20 @@ def detect_smc_radar(df, lookback):
         mitigated = False
         touches = 0
         
-        # Walk forward from the OB to current price
         for m in range(ob['ob_idx'] + 2, n):
             if ob['direction'] == 'bullish':
-                # 1. Dead? (Body CLOSES below distal line)
                 if C[m] < ob['distal_line']:
                     mitigated = True
                     break
-                # 2. Touched? (Wick PIERCES proximal line)
                 elif L[m] <= ob['proximal_line']:
                     touches += 1
-            
             elif ob['direction'] == 'bearish':
-                # 1. Dead? (Body CLOSES above distal line)
                 if C[m] > ob['distal_line']:
                     mitigated = True
                     break
-                # 2. Touched? (Wick PIERCES proximal line)
                 elif H[m] >= ob['proximal_line']:
                     touches += 1
             
-            # 3. Exhaustion Dead? (More than 3 touches kills the zone)
             if touches > 3:
                 mitigated = True
                 break
@@ -198,7 +190,6 @@ def generate_h1_chart(df, title, ob, dp, pair_conf):
             ft, fb = float(ob['fvg']['fvg_top']), float(ob['fvg']['fvg_bottom'])
             ax.add_patch(patches.Rectangle((0, fb), n+5, ft - fb, facecolor='#2ecc71', alpha=0.15, zorder=1))
 
-        # Dynamic Scaling based on pip value
         pip_val = pair_conf.get("spread_pips", 2) * (0.0001 if dp == 5 else 0.01)
         padding = pip_val * 10 
         ax.set_ylim(min(proximal, distal) - padding, max(proximal, distal) + padding)
@@ -216,36 +207,40 @@ def generate_h1_chart(df, title, ob, dp, pair_conf):
     except Exception as e:
         print(f"Chart err: {e}"); return None
 
-def send_scout_email(pair, ob, dp, chart_b64, pair_conf):
+def send_master_digest(html_blocks, attachments):
     ist_time = get_ist_now().strftime('%H:%M IST')
-    dir_text = "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)"
-    status_label = f"<span style='color:{'#27ae60' if ob['touches'] == 0 else '#e67e22'};'><b>{ob['status']}</b></span>"
     
-    # Logic Translation
-    fvg_text = f"A 3-candle FVG confirmed the displacement between {ob['fvg']['fvg_bottom']:.{dp}f} and {ob['fvg']['fvg_top']:.{dp}f}." if ob['fvg']['exists'] else "No immediate FVG detected in the C2-C5 window."
-    explanation = f"<b>Methodology:</b> A {ob['bos_tag']} was detected. We walked backward from the impulse leg (median body size: {ob['median_leg_body']:.{dp}f}) to find the accumulation candle. The opposing candle body ({ob['ob_body']:.{dp}f}) strictly satisfied the &lt; 2.0x rule. {fvg_text}<br><br><b>Zone Status:</b> {status_label}"
-
-    html = f"""<html><body style="font-family:Arial;background:#f0f2f5;padding:12px;">
-    <div style="max-width:620px;margin:auto;background:white;border-radius:10px;padding:20px;">
-        <h3 style="margin:0;">Phase 1 Scout | {pair} | {dir_text}</h3>
-        <p style="color:#555;font-size:12px;">Scanned at {ist_time}</p>
-        <p style="font-size:14px;background:#f8f9fa;padding:10px;border-left:4px solid #9b59b6;">{explanation}</p>
-        <p style="font-size:12px;"><b>Zone:</b> {ob['proximal_line']:.{dp}f} to {ob['distal_line']:.{dp}f}</p>
-        <img src="cid:chart_h1" style="width:100%;border-radius:8px;margin-top:10px;" />
+    # Wrap all the individual blocks into one master HTML template
+    blocks_joined = "".join(html_blocks)
+    master_html = f"""<html><body style="font-family:Arial;background:#eef2f7;padding:20px;">
+    <div style="max-width:650px;margin:auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.05);">
+        <div style="background:#1a1a2e;padding:20px;text-align:center;">
+            <h2 style="color:white;margin:0;font-size:20px;letter-spacing:1px;">PHASE 1 SCOUT DIGEST</h2>
+            <p style="color:#8899bb;margin:5px 0 0;font-size:12px;">Market Map updated at {ist_time}</p>
+        </div>
+        <div style="padding:20px;">
+            {blocks_joined}
+        </div>
+        <div style="background:#f8f9fa;padding:15px;text-align:center;border-top:1px solid #e1e5eb;">
+            <p style="color:#888;font-size:11px;margin:0;">SMC Alert Engine v2.0 • Institutional Order Flow</p>
+        </div>
     </div></body></html>"""
 
     msg = MIMEMultipart("related")
-    msg['From'], msg['To'], msg['Subject'] = EMAIL_CONFIG['sender'][0], ", ".join(EMAIL_CONFIG['recipient']), f"Scout | {pair} | {dir_text} | {ist_time}"
-    msg.attach(MIMEText(html, 'html'))
-    if chart_b64:
-        img = MIMEImage(base64.b64decode(chart_b64))
-        img.add_header("Content-ID", "<chart_h1>")
+    msg['From'] = EMAIL_CONFIG['sender'][0]
+    msg['To'] = ", ".join(EMAIL_CONFIG['recipient'])
+    msg['Subject'] = f"Scout Master Digest | {len(attachments)} Active Zones | {ist_time}"
+    
+    msg.attach(MIMEText(master_html, 'html'))
+    
+    for img in attachments:
         msg.attach(img)
     
     with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
         server.starttls()
         server.login(EMAIL_CONFIG['sender'][0], EMAIL_CONFIG['password'])
         server.sendmail(EMAIL_CONFIG['sender'][0], EMAIL_CONFIG['recipient'], msg.as_string())
+    print(f"Master Digest email dispatched successfully with {len(attachments)} charts.")
 
 def run_radar():
     ist_now = get_ist_now()
@@ -255,6 +250,11 @@ def run_radar():
     audit_log = load_audit_log()
     cutoff_time = get_last_9am_ist().isoformat()
     spam_count = 0
+    
+    # Shopping Cart for the digest email
+    html_blocks = []
+    attachments = []
+    chart_counter = 0
 
     for pair in config_master["pairs"]:
         ticker, name, dp = pair["symbol"], pair["name"], pair.get("decimal_places", 5)
@@ -269,15 +269,48 @@ def run_radar():
                 zone_id = f"{name}_{ob['direction']}_{round(ob['proximal_line'], dp)}"
                 last_sent = audit_log.get(zone_id)
                 
-                # Check if it was sent TODAY (after the most recent 9 AM IST)
                 if last_sent and last_sent > cutoff_time:
                     spam_count += 1
                     continue
                 
+                # Generate specific CID for this chart so Gmail doesn't mix them up
+                cid = f"chart_{name}_{chart_counter}"
                 chart_b64 = generate_h1_chart(df, f"{name} H1 POI", ob, dp, pair)
-                send_scout_email(name, ob, dp, chart_b64, pair)
+                
+                dir_text = "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)"
+                status_color = '#27ae60' if ob['touches'] == 0 else '#e67e22'
+                
+                fvg_text = f"A 3-candle FVG confirmed the displacement between {ob['fvg']['fvg_bottom']:.{dp}f} and {ob['fvg']['fvg_top']:.{dp}f}." if ob['fvg']['exists'] else "No immediate FVG detected in the C2-C5 window."
+                
+                # Build the HTML block for this specific pair
+                block_html = f"""
+                <div style="margin-bottom:30px;padding-bottom:20px;border-bottom:2px dashed #e1e5eb;">
+                    <h3 style="margin:0 0 10px 0;color:#2c3e50;">{name} | {dir_text}</h3>
+                    <div style="background:#f8f9fa;padding:12px;border-left:4px solid #9b59b6;border-radius:4px;margin-bottom:12px;">
+                        <p style="font-size:13px;margin:0 0 8px 0;color:#444;line-height:1.4;"><b>Methodology:</b> A {ob['bos_tag']} was detected. We walked backward from the impulse leg (median body size: {ob['median_leg_body']:.{dp}f}) to find the accumulation candle. The opposing candle body ({ob['ob_body']:.{dp}f}) strictly satisfied the &lt; 2.0x rule. {fvg_text}</p>
+                        <p style="font-size:13px;margin:0;color:#444;"><b>Zone Status:</b> <span style="color:{status_color};font-weight:bold;">{ob['status']}</span></p>
+                    </div>
+                    <p style="font-size:12px;color:#666;margin:0 0 10px 0;"><b>Levels:</b> Proximal {ob['proximal_line']:.{dp}f} &nbsp;|&nbsp; Distal {ob['distal_line']:.{dp}f}</p>
+                    <img src="cid:{cid}" style="width:100%;max-width:600px;border-radius:6px;border:1px solid #ddd;" />
+                </div>
+                """
+                html_blocks.append(block_html)
+                
+                if chart_b64:
+                    img = MIMEImage(base64.b64decode(chart_b64))
+                    img.add_header("Content-ID", f"<{cid}>")
+                    img.add_header("Content-Disposition", "inline", filename=f"{cid}.png")
+                    attachments.append(img)
+                
                 audit_log[zone_id] = ist_now.isoformat()
-                print(f"  Alerted fresh H1 zone for {name}")
+                chart_counter += 1
+                print(f"  Packaged fresh H1 zone for {name}")
+
+    # Only send the email if the cart isn't empty
+    if html_blocks:
+        send_master_digest(html_blocks, attachments)
+    else:
+        print("  No new zones to email. Master Digest skipped.")
 
     save_audit_log(audit_log)
     with open("active_obs.json", "w") as f: json.dump(export_payload, f, indent=2)
