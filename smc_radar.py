@@ -246,8 +246,8 @@ def send_master_digest(html_blocks, attachments):
 def run_radar():
     ist_now = get_ist_now()
     if ist_now.hour < 9:
-    print(f"Blackout period active. Scan suppressed until 09:00 IST.")
-    return
+        print(f"Blackout period active. Scan suppressed until 09:00 IST.")
+        return
     print(f"Running Phase 1 Scout at {ist_now.strftime('%H:%M')} IST")
     
     export_payload = {}
