@@ -187,7 +187,7 @@ if __name__ == "__main__":
         
         for ob in pair_obs:
             if abs(current_price - float(ob['proximal_line'])) <= (pair_conf["atr_multiplier"] * h1_atr):
-                bias = "LONG" if "Demand" in ob['direction'] else "SHORT"
+                bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
                 fvg_data = ob.get("fvg", {"exists": False})
                 
                 score_res = smc_detector.run_scorecard(bias, df_h1, ob, fvg_data, current_price)
