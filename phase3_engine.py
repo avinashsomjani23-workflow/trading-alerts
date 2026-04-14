@@ -24,7 +24,7 @@ def get_ist_now():
 def generate_m5_chart(df, title, levels, ob, pair_conf):
     try:
         dp = pair_conf.get("decimal_places", 5)
-        # 1. STRIP NaNs HERE
+        # 1. STRIP NaNs HERE TO PREVENT CRASHES ON NQ=F / GC=F
         df_plot = df.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(60).copy().reset_index(drop=True)
         fig, ax = plt.subplots(1, 1, figsize=(12, 5.5), facecolor='#131722')
         ax.set_facecolor('#131722')
