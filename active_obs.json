@@ -181,7 +181,7 @@
       "fvg": {
         "exists": true,
         "fvg_top": 0.7836999893188477,
-        "fvg_bottom": 0.781059980392456
+        "fvg_bottom": 0.7809600234031677
       },
       "touches": 0,
       "status": "Pristine"
@@ -238,7 +238,7 @@
       "mean": 25584.875,
       "proximal_line": 25598.25,
       "distal_line": 25571.5,
-      "median_leg_body": 19.0,
+      "median_leg_body": 20.125,
       "ob_body": 19.25,
       "fvg": {
         "exists": true,
