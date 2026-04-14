@@ -135,7 +135,8 @@ def run_phase3():
         # Check for the M5 CHoCH
         if smc_detector.detect_ltf_choch(df_m5, bias, bounds):
             print(f"  [✓] LTF TRIGGER FIRED: {pair_name} M5 CHoCH detected!")
-            levels = data.get("levels", {})
+            levels = smc_detector.compute_dynamic_levels(pair_conf, bias, ob, ob.get('fvg', {}), current_close, df_m5)
+        if not levels['valid']: continue
             dp = pair_conf.get("decimal_places", 5)
             
             chart_b64 = generate_m5_chart(df_m5, f"{pair_name} M5 SNIPER TRIGGER", levels, ob, pair_conf)
