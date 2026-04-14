@@ -77,13 +77,17 @@ def call_gemini_flash(pair, bias, news_headlines):
 def generate_chart(df, title, levels, ob, pair_conf, fvg_data, sweep_price):
     try:
         dp = pair_conf.get("decimal_places", 5)
-        df_plot = df.tail(60).copy().reset_index(drop=True)
+        # 1. STRIP NaNs HERE
+        df_plot = df.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(60).copy().reset_index(drop=True)
         fig, ax = plt.subplots(1, 1, figsize=(12, 5.5), facecolor='#131722')
         ax.set_facecolor('#131722')
         for s in ax.spines.values(): s.set_color('#2a2a3e')
 
         for i, row in df_plot.iterrows():
             o, h, l, c = float(row['Open']), float(row['High']), float(row['Low']), float(row['Close'])
+            # 2. DOUBLE CHECK FOR NaNs HERE
+            import numpy as np
+            if any(np.isnan(v) for v in [o, h, l, c]): continue
             col_c = '#26a69a' if c >= o else '#ef5350'
             ax.plot([i,i], [l,h], color=col_c, linewidth=1.5, zorder=2)
             body = abs(c-o) or (h-l) * 0.02
