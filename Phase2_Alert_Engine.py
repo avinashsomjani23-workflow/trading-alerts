@@ -195,20 +195,19 @@ if __name__ == "__main__":
         for ob in pair_obs:
             if abs(current_price - float(ob['proximal_line'])) <= (pair_conf["atr_multiplier"] * h1_atr):
                 bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
-                zone_top = max(float(ob['proximal_line']), float(ob['distal_line']))
-                zone_bottom = min(float(ob['proximal_line']), float(ob['distal_line']))
-                fvg_data = smc_detector.detect_fvg_in_zone(df_trigger, bias, zone_top, zone_bottom)
-            if not fvg_data['exists']:
-                fvg_data = ob.get("fvg", {"exists": False})  # Fall back to H1 FVG from radar
-                phase2_sent = load_phase2_sent()
-                score_res = smc_detector.run_scorecard(bias, df_h1, ob, fvg_data, current_price, pair_conf, df_trigger)
+                fvg_data = ob.get("fvg", {"exists": False})
+                
+                # Gemini FIRST — so macro score feeds into scorecard
+                gemini_risk = call_gemini_flash(name, bias, fetch_macro_news(name))
+                macro_score = gemini_risk.get('macro_score', 1.0)
+                
+                score_res = smc_detector.run_scorecard(bias, df_h1, ob, fvg_data, current_price, pair_conf, df_trigger, macro_score)
                 if score_res['total'] < pair_conf["min_confidence"]: continue
                     
                 levels = smc_detector.compute_dynamic_levels(pair_conf, bias, ob, fvg_data, current_price, df_trigger)
                 if not levels['valid']: continue
 
-                gemini_risk = call_gemini_flash(name, bias, fetch_macro_news(name))
-                trade_data = {"pair": name, "bias": bias, "score": round(score_res['total'] + gemini_risk['macro_score'], 1), "macro_summary": gemini_risk["macro_summary"], "levels": levels, "ob": ob}
+                trade_data = {"pair": name, "bias": bias, "score": score_res['total'], "macro_summary": gemini_risk["macro_summary"], "levels": levels, "ob": ob}
 
                 if entry_model == "limit":
                     chart = generate_chart(df_trigger, f"{name} M15 LIMIT", levels, ob, pair_conf, fvg_data, score_res.get('sweep_price'))
