@@ -140,7 +140,7 @@ def run_phase3():
             zone_bottom = min(proximal, distal)
             m5_fvg = smc_detector.detect_fvg_in_zone(df_m5, bias, zone_top, zone_bottom)
         if not levels['valid']: continue
-            dp = pair_conf.get("decimal_places", 5)
+                dp = pair_conf.get("decimal_places", 5)
             
             chart_b64 = generate_m5_chart(df_m5, f"{pair_name} M5 SNIPER TRIGGER", levels, ob, pair_conf)
             
