@@ -219,12 +219,13 @@ if __name__ == "__main__":
                     print(f"  [✓] TRADE READY (FOREX): {name}")
                 elif entry_model == "ltf_choch":
                     zone_id = f"{name}_{bias}_{ob['proximal_line']}"
-                if zone_id in phase2_sent:
-                print(f"  [—] Already sent: {zone_id}")
-                continue
-                # ... existing send logic ...
-                phase2_sent[zone_id] = get_ist_now().isoformat()
-                save_phase2_sent(phase2_sent)
+                    if zone_id in phase2_sent:
+                        print(f"  [—] Already sent: {zone_id}")
+                        continue
+                    
+                    phase2_sent[zone_id] = get_ist_now().isoformat()
+                    save_phase2_sent(phase2_sent)
+                    
                     watch_id = f"{name}_{ob['proximal_line']}"
                     if watch_id not in watch_state:
                         chart = generate_chart(df_trigger, f"{name} M15 APPROACHING", levels, ob, pair_conf, fvg_data, None)
