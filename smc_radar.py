@@ -115,7 +115,7 @@ def detect_smc_radar(df, lookback):
             
             fvg_valid, fvg_top, fvg_bottom = False, None, None
             c2_idx = ob_idx + 1
-            max_c5_idx = min(ob_idx + 4, n - 1)
+            max_c5_idx = min(ob_idx + 5, i + 1, n - 1)
             
             for k in range(c2_idx, max_c5_idx):
                 if k + 2 >= n: break
