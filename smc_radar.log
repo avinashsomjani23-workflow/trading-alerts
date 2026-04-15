@@ -8,3 +8,14 @@
 2026-04-15 08:32:38,709 — INFO — Digest sent: 6 zones, 6 new, 0 updated, 0 unchanged.
 2026-04-15 10:32:42,360 — INFO — Digest sent: 8 zones, 8 new, 0 updated, 0 unchanged.
 2026-04-15 12:32:43,100 — INFO — Digest sent: 9 zones, 9 new, 0 updated, 0 unchanged.
+2026-04-15 13:32:48,689 — ERROR — Failed to get ticker 'EURUSD=X' reason: Failed to perform, curl: (28) Connection timed out after 10002 milliseconds. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+2026-04-15 13:33:18,838 — ERROR — $EURUSD=X: possibly delisted; no price data found  (period=15d)
+2026-04-15 13:33:18,844 — ERROR — 
+1 Failed download:
+2026-04-15 13:33:18,844 — ERROR — ['EURUSD=X']: possibly delisted; no price data found  (period=15d)
+2026-04-15 13:33:18,847 — WARNING — No data for EURUSD. Skipped.
+2026-04-15 13:33:28,851 — ERROR — Failed to get ticker 'JPY=X' reason: Failed to perform, curl: (28) Operation timed out after 10002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+2026-04-15 13:34:27,553 — ERROR — 
+1 Failed download:
+2026-04-15 13:34:27,553 — ERROR — ['JPY=X']: Timeout('Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+2026-04-15 13:34:27,555 — WARNING — No data for USDJPY. Skipped.
