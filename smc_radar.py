@@ -205,39 +205,36 @@ def detect_smc_radar(df, lookback):
         ob_high = float(H[ob_idx])
         ob_low  = float(L[ob_idx])
 
-        # FVG detection — store candle indices for chart positioning
+       # FVG detection — full impulse leg, store candle indices for chart positioning
         fvg_valid = False
         fvg_top = fvg_bottom = None
         fvg_c1_idx = fvg_c3_idx = None
-        c2_idx = ob_idx + 1
-        max_c5_idx = min(ob_idx + 5, i + 1, n - 1)
 
-        for k in range(c2_idx, max_c5_idx):
+        for k in range(impulse_start_idx, i - 1):
             if k + 2 >= n:
                 break
             if bos_type == 'bullish' and H[k] < L[k + 2]:
                 fvg_top    = float(L[k + 2])
                 fvg_bottom = float(H[k])
-                filled = any(L[m] <= fvg_bottom for m in range(k + 3, n))
-                if not filled:
-                    fvg_valid   = True
-                    fvg_c1_idx  = k
-                    fvg_c3_idx  = k + 2
+                if not any(L[m] <= fvg_bottom for m in range(k + 3, n)):
+                    fvg_valid  = True
+                    fvg_c1_idx = k
+                    fvg_c3_idx = k + 2
                 break
             elif bos_type == 'bearish' and L[k] > H[k + 2]:
                 fvg_top    = float(L[k])
                 fvg_bottom = float(H[k + 2])
-                filled = any(H[m] >= fvg_top for m in range(k + 3, n))
-                if not filled:
-                    fvg_valid   = True
-                    fvg_c1_idx  = k
-                    fvg_c3_idx  = k + 2
+                if not any(H[m] >= fvg_top for m in range(k + 3, n)):
+                    fvg_valid  = True
+                    fvg_c1_idx = k
+                    fvg_c3_idx = k + 2
                 break
 
         active_obs.append({
-            'bos_idx':         i,
-            'bos_swing_price': bos_swing_price,
-            'ob_idx':          ob_idx,
+            'bos_idx':           i,
+            'bos_swing_price':   bos_swing_price,
+            'impulse_start_idx': impulse_start_idx,
+            'ob_idx':            ob_idx,
             'direction':       bos_type,
             'bos_tag':         bos_tag,
             'high':            ob_high,
@@ -282,7 +279,18 @@ def detect_smc_radar(df, lookback):
             ob['status']  = 'Pristine' if touches == 0 else f'Tested ({touches}x)'
             tracked_obs.append(ob)
 
-    return {"current_price": float(C[-1]), "active_unmitigated_obs": tracked_obs}
+    # Latest OB per bias; same-leg fallback only
+    latest, filtered = {}, []
+    for ob in sorted(tracked_obs, key=lambda x: x['bos_idx'], reverse=True):
+        d = ob['direction']
+        if d not in latest:
+            latest[d] = ob
+            filtered.append(ob)
+        elif ob['impulse_start_idx'] == latest[d]['impulse_start_idx']:
+            # Same impulse leg — valid fallback candidate, keep it
+            filtered.append(ob)
+            break  # only one fallback per bias
+    return {"current_price": float(C[-1]), "active_unmitigated_obs": filtered}
 
 # ---------------------------------------------------------------------------
 # CHART GENERATION
@@ -305,10 +313,8 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
         n_full  = len(full_df)
         ob_abs  = ob['ob_idx']
 
-        # Window: 40 candles back from end, but must include OB candle
-        window_start = max(0, n_full - 40)
-        if ob_abs < window_start:
-            window_start = max(0, ob_abs - 5)   # 5 candles of left-context before OB
+        # Window: 15 candles before OB + 15 after, always centred on OB
+        window_start = max(0, ob_abs - 15)
         window_start = min(window_start, n_full - 1)
 
         df_plot = full_df.iloc[window_start:].copy().reset_index(drop=True)
