@@ -33,25 +33,26 @@ def detect_sweep_decay(df, swings, current_idx):
                 pts = 2.5 if hours_old <= 24 else 1.5
                 if pts > score: score, sweep_price = pts, float(H[i])
     return score, sweep_price
-def detect_fvg_in_zone(df, bias, zone_top, zone_bottom):
+def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, impulse_start=None, bos_idx=None):
     if df is None or len(df) < 5:
         return {"exists": False, "fvg_top": None, "fvg_bottom": None}
     H, L = df['High'].values.astype(float), df['Low'].values.astype(float)
     n = len(df)
-    for k in range(n - 3, max(0, n - 30), -1):
+    scan_start = impulse_start if impulse_start is not None else max(0, n - 30)
+    scan_end   = min(bos_idx - 1 if bos_idx is not None else n - 3, n - 3)
+    for k in range(scan_start, scan_end + 1):
+        if k + 2 >= n: break
         if bias == "LONG" and H[k] < L[k + 2]:
             ft, fb = float(L[k + 2]), float(H[k])
             if fb > zone_top or ft < zone_bottom: continue
-            filled = any(L[m] <= fb for m in range(k + 3, n))
-            if not filled:
+            if not any(L[m] <= fb for m in range(k + 3, n)):
                 return {"exists": True, "fvg_top": ft, "fvg_bottom": fb}
         elif bias == "SHORT" and L[k] > H[k + 2]:
             ft, fb = float(L[k]), float(H[k + 2])
             if fb > zone_top or ft < zone_bottom: continue
-            filled = any(H[m] >= ft for m in range(k + 3, n))
-            if not filled:
+            if not any(H[m] >= ft for m in range(k + 3, n)):
                 return {"exists": True, "fvg_top": ft, "fvg_bottom": fb}
-    return {"exists": False, "fvg_top": None, "fvg_bottom": None}    
+    return {"exists": False, "fvg_top": None, "fvg_bottom": None}
 def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     dp = _dp(pair_conf)
     spread_val = pair_conf.get("spread_pips", 2) * (0.0001 if dp == 5 else 0.01)
