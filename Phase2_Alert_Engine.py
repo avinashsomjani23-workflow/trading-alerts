@@ -522,7 +522,14 @@ if __name__ == "__main__":
                 "alert_ist": ist_now.isoformat()
             }
 
-            if entry_model == "limit":
+           if entry_model == "limit":
+                zone_id = f"{name}_{bias}_{proximal}"
+                if zone_id in phase2_sent:
+                    print(f"  [-] {name}: already alerted (dedup). Skipping.")
+                    continue
+
+                phase2_sent[zone_id] = ist_now.isoformat()
+
                 h1_chart = generate_h1_chart(df_h1, ob, pair_conf, f"{name} H1 - {bias} zone context")
                 m15_chart = generate_m15_chart(
                     df_m15, f"{name} M15 - Approach and entry",
@@ -538,7 +545,6 @@ if __name__ == "__main__":
                     html, h1_chart, m15_chart
                 )
                 print(f"  [OK] TRADE READY (FOREX): {name}")
-
             elif entry_model == "ltf_choch":
                 zone_id = f"{name}_{bias}_{proximal}"
                 watch_id = f"{name}_{proximal}"
