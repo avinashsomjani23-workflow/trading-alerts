@@ -69,7 +69,9 @@
       "atr_multiplier": 2.5,
       "min_confidence": 7.0,
       "decimal_places": 2,
-      "spread_pips": 2.0
+      "spread_pips": 2.0,
+      "invalidation_atr_multiplier": 0.3,
+      "invalidation_time_hours": 24
     },
     {
       "symbol": "GC=F",
@@ -82,7 +84,9 @@
       "atr_multiplier": 2.0,
       "min_confidence": 7.0,
       "decimal_places": 2,
-      "spread_pips": 0.50
+      "spread_pips": 0.50,
+      "invalidation_atr_multiplier": 0.3,
+      "invalidation_time_hours": 24
     }
   ],
   "scoring": {
