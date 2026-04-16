@@ -522,7 +522,7 @@ if __name__ == "__main__":
                 "alert_ist": ist_now.isoformat()
             }
 
-           if entry_model == "limit":
+            if entry_model == "limit":
                 zone_id = f"{name}_{bias}_{proximal}"
                 if zone_id in phase2_sent:
                     print(f"  [-] {name}: already alerted (dedup). Skipping.")
