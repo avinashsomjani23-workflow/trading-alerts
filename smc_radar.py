@@ -115,6 +115,30 @@ def detect_zone_changes(ob, stored, dp):
     return changes
 
 # ---------------------------------------------------------------------------
+# ZONE REFERENCE ID
+# Prefix map: pair name → 3-char prefix. Counter stored in zone_state per pair.
+# Resets daily (counters keyed separately, not in per-zone list).
+# ---------------------------------------------------------------------------
+
+ZONE_ID_PREFIX = {
+    "EURUSD": "EUR", "USDJPY": "JPY", "NZDUSD": "NZD",
+    "USDCHF": "CHF", "NAS100": "NAS", "GOLD":   "XAU"
+}
+
+def get_next_zone_id(zone_state, name):
+    counter_key = f"__counter_{name}__"
+    current = zone_state.get(counter_key, 0) + 1
+    zone_state[counter_key] = current
+    prefix = ZONE_ID_PREFIX.get(name, name[:3].upper())
+    return f"{prefix}{current:02d}"
+
+def reset_daily_counters(zone_state, names):
+    """Call once per run before processing zones. Resets counters for new day."""
+    for name in names:
+        counter_key = f"__counter_{name}__"
+        zone_state[counter_key] = 0
+
+# ---------------------------------------------------------------------------
 # DATA FETCH
 # ---------------------------------------------------------------------------
 
@@ -596,6 +620,9 @@ def build_summary_table_html(all_zones_for_table, dp_map):
 
         rows += f"""
         <tr style="background:{row_bg};border-bottom:1px solid #2a2a3e;">
+          <td style="padding:6px 8px;color:#888;font-size:11px;font-family:monospace;white-space:nowrap;">
+            {z.get('zone_id','—')}
+          </td>
           <td style="padding:6px 8px;font-weight:bold;color:#eee;font-size:12px;white-space:nowrap;">
             {name}{new_badge}
           </td>
@@ -618,6 +645,7 @@ def build_summary_table_html(all_zones_for_table, dp_map):
       <table style="width:100%;border-collapse:collapse;background:#1a1a2e;border-radius:6px;overflow:hidden;">
         <thead>
           <tr style="background:#0d0d1a;">
+            <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">ID</th>
             <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Pair</th>
             <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Bias</th>
             <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Prox / Dist</th>
@@ -630,7 +658,7 @@ def build_summary_table_html(all_zones_for_table, dp_map):
       </table>
     </div>"""
 
-def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp):
+def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_id="—"):
     """Full detail card for a new zone — includes chart and Gemini narrative."""
     direction  = "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)"
     dir_color  = '#27ae60' if ob['direction'] == 'bullish' else '#e74c3c'
@@ -657,6 +685,7 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp):
       <div style="display:flex;justify-content:space-between;align-items:flex-start;
                   margin-bottom:10px;flex-wrap:wrap;gap:6px;">
         <div>
+          <span style="font-size:10px;color:#888;font-family:monospace;margin-right:6px;">{zone_id}</span>
           <span style="font-size:14px;font-weight:bold;color:#eee;">{name}</span>
           <span style="font-size:12px;color:{dir_color};margin-left:8px;">{direction}</span>
           <span style="background:#27ae60;color:#fff;font-size:9px;padding:2px 6px;
@@ -686,30 +715,37 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp):
       {chart_html}
     </div>"""
 
-def build_changed_zone_html(stored_zone, changes, name, dp):
-    """Compact update block for a zone that changed since last email."""
+def build_changed_zone_html(stored_zone, changes, name, dp, cid=None):
+    """Update block for a changed zone — includes H1 chart."""
     direction = "Bullish" if stored_zone['direction'] == 'bullish' else "Bearish"
     dir_color = '#27ae60' if stored_zone['direction'] == 'bullish' else '#e74c3c'
     change_items = "".join(
-        f'<li style="margin:2px 0;">{c}</li>' for c in changes
+        f'<li style="margin:3px 0;color:#e0c080;">{c}</li>' for c in changes
+    )
+    zone_id = stored_zone.get('zone_id', '—')
+    chart_html = (
+        f'<img src="cid:{cid}" style="width:100%;max-width:600px;border-radius:6px;'
+        f'border:1px solid #2a2a3e;display:block;margin-top:10px;" />'
+        if cid else ''
     )
     return f"""
-    <div style="margin-bottom:10px;padding:10px 12px;background:#2d2a1a;
-                border-left:4px solid #e67e22;border-radius:4px;">
-      <div style="margin-bottom:4px;">
+    <div style="margin-bottom:16px;padding:12px 14px;background:#2d2a1a;
+                border-left:4px solid #e67e22;border-radius:6px;">
+      <div style="margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:10px;color:#888;font-family:monospace;">{zone_id}</span>
         <span style="font-size:12px;font-weight:bold;color:#eee;">{name}</span>
-        <span style="font-size:11px;color:{dir_color};margin-left:8px;">{direction}</span>
+        <span style="font-size:11px;color:{dir_color};">{direction}</span>
         <span style="background:#e67e22;color:#fff;font-size:9px;padding:1px 5px;
-                     border-radius:3px;margin-left:6px;">UPDATE</span>
-        <span style="font-size:11px;color:#888;margin-left:8px;font-family:monospace;">
+                     border-radius:3px;">UPDATE</span>
+        <span style="font-size:11px;color:#888;font-family:monospace;">
           {stored_zone['proximal']:.{dp}f} / {stored_zone['distal']:.{dp}f}
         </span>
       </div>
-      <ul style="margin:0;padding-left:16px;color:#e0c080;font-size:11px;">
+      <ul style="margin:0;padding-left:16px;font-size:11px;line-height:1.7;">
         {change_items}
       </ul>
+      {chart_html}
     </div>"""
-
 def build_repeat_zone_html(stored_zone, name, dp):
     """Single-line reference for unchanged existing zones — no chart."""
     direction = "Bullish" if stored_zone['direction'] == 'bullish' else "Bearish"
@@ -717,6 +753,7 @@ def build_repeat_zone_html(stored_zone, name, dp):
     return f"""
     <div style="margin-bottom:6px;padding:7px 10px;background:#111827;
                 border-left:3px solid #2a2a3e;border-radius:3px;">
+      <span style="font-size:10px;color:#666;font-family:monospace;margin-right:6px;">{stored_zone.get('zone_id','—')}</span>
       <span style="font-size:11px;font-weight:bold;color:#aaa;">{name}</span>
       <span style="font-size:11px;color:{dir_color};margin-left:6px;">{direction}</span>
       <span style="font-size:11px;color:#666;margin-left:6px;font-family:monospace;">
@@ -831,6 +868,12 @@ def run_radar():
 
     day_start    = get_day_start_ist()    # daily slate boundary
     zone_state   = load_zone_state()      # {pair_name: [zone_dicts]}
+
+    # Reset zone ID counters on new day (clears __counter_PAIR__ keys)
+    if not zone_state.get("__day__") or zone_state.get("__day__") != day_start:
+        reset_daily_counters(zone_state, [p['name'] for p in config_master['pairs']])
+        zone_state["__day__"] = day_start
+
     export_payload = {}
 
     # dp lookup map for HTML builders
@@ -880,7 +923,9 @@ def run_radar():
             if matched_idx is None:
                 # ---- BRAND NEW ZONE ----
                 first_seen_label = ist_now.strftime('%H:%M IST')
+                zone_id = get_next_zone_id(zone_state, name)
                 new_stored = {
+                    "zone_id":        zone_id,
                     "proximal":       ob['proximal_line'],
                     "distal":         ob['distal_line'],
                     "direction":      ob['direction'],
@@ -896,7 +941,7 @@ def run_radar():
 
                 # Table row data
                 all_zones_for_table.append({
-                    "name": name, "direction": ob['direction'],
+                    "name": name, "zone_id": zone_id, "direction": ob['direction'],
                     "proximal": ob['proximal_line'], "distal": ob['distal_line'],
                     "bos_tag": ob['bos_tag'], "status": ob['status'],
                     "fvg_valid": ob['fvg']['exists'],
@@ -910,7 +955,7 @@ def run_radar():
                     chart_b64 = generate_h1_chart(df, ob, dp, name, ist_ts_full)
 
                     new_zone_cards.append(
-                        build_new_zone_card_html(ob, name, dp, narrative, cid, ist_ts_full)
+                        build_new_zone_card_html(ob, name, dp, narrative, cid, ist_ts_full, zone_id)
                     )
 
                     if chart_b64:
@@ -938,7 +983,7 @@ def run_radar():
                 is_changed = len(changes) > 0
 
                 all_zones_for_table.append({
-                    "name": name, "direction": ob['direction'],
+                    "name": name, "zone_id": sz.get("zone_id", "—"), "direction": ob['direction'],
                     "proximal": ob['proximal_line'], "distal": ob['distal_line'],
                     "bos_tag": ob['bos_tag'], "status": ob['status'],
                     "fvg_valid": ob['fvg']['exists'],
@@ -949,9 +994,18 @@ def run_radar():
                 if send_email_this_run:
                     if is_changed:
                         sz["changes"].extend(changes)
+                        upd_cid   = f"chart_{name}_upd_{chart_counter}"
+                        upd_chart = generate_h1_chart(df, ob, dp, name, ist_ts_full)
                         changed_zone_blocks.append(
-                            build_changed_zone_html(sz, changes, name, dp)
+                            build_changed_zone_html(sz, changes, name, dp, upd_cid)
                         )
+                        if upd_chart:
+                            img_mime = MIMEImage(base64.b64decode(upd_chart))
+                            img_mime.add_header("Content-ID", f"<{upd_cid}>")
+                            img_mime.add_header("Content-Disposition", "inline",
+                                                filename=f"{upd_cid}.png")
+                            attachments.append(img_mime)
+                            chart_counter += 1
                         print(f"  UPDATED zone: {name} — {changes}")
                     else:
                         repeat_zone_lines.append(
