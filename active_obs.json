@@ -2,18 +2,18 @@
   "EURUSD": [],
   "USDJPY": [
     {
-      "bos_idx": 143,
-      "bos_swing_price": 158.74000549316406,
-      "impulse_start_idx": 135,
-      "ob_idx": 137,
+      "bos_idx": 84,
+      "bos_swing_price": 159.55299377441406,
+      "impulse_start_idx": 80,
+      "ob_idx": 83,
       "direction": "bearish",
       "bos_tag": "BOS",
-      "high": 159.03399658203125,
-      "low": 158.9250030517578,
-      "proximal_line": 158.9250030517578,
-      "distal_line": 159.03399658203125,
-      "median_leg_body": 0.0619964599609375,
-      "ob_body": 0.0659942626953125,
+      "high": 159.75399780273438,
+      "low": 159.56700134277344,
+      "proximal_line": 159.56700134277344,
+      "distal_line": 159.75399780273438,
+      "median_leg_body": 0.1720123291015625,
+      "ob_body": 0.1720123291015625,
       "fvg": {
         "exists": false,
         "fvg_top": null,
@@ -21,39 +21,16 @@
         "c1_idx": null,
         "c3_idx": null
       },
-      "touches": 3,
-      "status": "Tested (3x)"
-    },
-    {
-      "bos_idx": 141,
-      "bos_swing_price": 158.74000549316406,
-      "impulse_start_idx": 135,
-      "ob_idx": 137,
-      "direction": "bearish",
-      "bos_tag": "CHoCH",
-      "high": 159.03399658203125,
-      "low": 158.9250030517578,
-      "proximal_line": 158.9250030517578,
-      "distal_line": 159.03399658203125,
-      "median_leg_body": 0.0619964599609375,
-      "ob_body": 0.0659942626953125,
-      "fvg": {
-        "exists": false,
-        "fvg_top": null,
-        "fvg_bottom": null,
-        "c1_idx": null,
-        "c3_idx": null
-      },
-      "touches": 3,
-      "status": "Tested (3x)"
+      "touches": 0,
+      "status": "Pristine"
     }
   ],
   "NZDUSD": [
     {
-      "bos_idx": 99,
+      "bos_idx": 98,
       "bos_swing_price": 0.5875095129013062,
-      "impulse_start_idx": 94,
-      "ob_idx": 94,
+      "impulse_start_idx": 93,
+      "ob_idx": 93,
       "direction": "bullish",
       "bos_tag": "BOS",
       "high": 0.5868889093399048,
@@ -66,8 +43,8 @@
         "exists": true,
         "fvg_top": 0.5867855548858643,
         "fvg_bottom": 0.5863383412361145,
-        "c1_idx": 95,
-        "c3_idx": 97
+        "c1_idx": 94,
+        "c3_idx": 96
       },
       "touches": 2,
       "status": "Tested (2x)"
@@ -75,35 +52,35 @@
   ],
   "USDCHF": [
     {
-      "bos_idx": 99,
-      "bos_swing_price": 0.7825700044631958,
-      "impulse_start_idx": 95,
-      "ob_idx": 98,
-      "direction": "bearish",
-      "bos_tag": "BOS",
-      "high": 0.7836199998855591,
-      "low": 0.7828500270843506,
-      "proximal_line": 0.7828500270843506,
-      "distal_line": 0.7836199998855591,
-      "median_leg_body": 0.00014001131057739258,
-      "ob_body": 0.00014001131057739258,
+      "bos_idx": 149,
+      "bos_swing_price": 0.7828099727630615,
+      "impulse_start_idx": 143,
+      "ob_idx": 146,
+      "direction": "bullish",
+      "bos_tag": "CHoCH",
+      "high": 0.7815600037574768,
+      "low": 0.7806900143623352,
+      "proximal_line": 0.7815600037574768,
+      "distal_line": 0.7806900143623352,
+      "median_leg_body": 0.00039005279541015625,
+      "ob_body": 0.00039005279541015625,
       "fvg": {
-        "exists": false,
-        "fvg_top": null,
-        "fvg_bottom": null,
-        "c1_idx": null,
-        "c3_idx": null
+        "exists": true,
+        "fvg_top": 0.7818599939346313,
+        "fvg_bottom": 0.7815600037574768,
+        "c1_idx": 146,
+        "c3_idx": 148
       },
-      "touches": 3,
-      "status": "Tested (3x)"
+      "touches": 0,
+      "status": "Pristine"
     }
   ],
   "NAS100": [
     {
-      "bos_idx": 131,
+      "bos_idx": 130,
       "bos_swing_price": 26058.0,
-      "impulse_start_idx": 128,
-      "ob_idx": 130,
+      "impulse_start_idx": 127,
+      "ob_idx": 129,
       "direction": "bullish",
       "bos_tag": "BOS",
       "high": 26007.25,
@@ -125,10 +102,10 @@
   ],
   "GOLD": [
     {
-      "bos_idx": 141,
+      "bos_idx": 140,
       "bos_swing_price": 4854.60009765625,
-      "impulse_start_idx": 133,
-      "ob_idx": 138,
+      "impulse_start_idx": 132,
+      "ob_idx": 137,
       "direction": "bullish",
       "bos_tag": "BOS",
       "high": 4819.39990234375,
@@ -141,8 +118,8 @@
         "exists": true,
         "fvg_top": 4829.2001953125,
         "fvg_bottom": 4819.39990234375,
-        "c1_idx": 138,
-        "c3_idx": 140
+        "c1_idx": 137,
+        "c3_idx": 139
       },
       "touches": 0,
       "status": "Pristine"
