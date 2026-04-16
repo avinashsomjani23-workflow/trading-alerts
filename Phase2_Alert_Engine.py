@@ -546,8 +546,8 @@ if __name__ == "__main__":
                 )
                 print(f"  [OK] TRADE READY (FOREX): {name}")
             elif entry_model == "ltf_choch":
-                zone_id = f"{name}_{bias}_{proximal}"
-                watch_id = f"{name}_{proximal}"
+                zone_id = f"{name}_{bias}_{round(proximal, dp)}"
+                watch_id = f"{name}_{round(proximal, dp)}"
 
                 if zone_id in phase2_sent:
                     # Already alerted. Refresh watch_state but preserve original alert timestamp.
