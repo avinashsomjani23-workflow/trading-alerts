@@ -59,11 +59,13 @@
       "direction": "bullish",
       "bos_tag": "CHoCH",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "21:02 IST",
-      "touches": 1,
+      "last_seen_ist": "22:02 IST",
+      "touches": 2,
       "fvg_valid": false,
-      "status": "Tested (1x)",
-      "changes": []
+      "status": "Tested (2x)",
+      "changes": [
+        "New touch detected (+1). Status now: Tested (2x)."
+      ]
     }
   ],
   "NZDUSD": [
@@ -87,7 +89,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "21:02 IST",
-      "last_seen_ist": "21:02 IST",
+      "last_seen_ist": "22:02 IST",
       "touches": 2,
       "fvg_valid": true,
       "status": "Tested (2x)",
@@ -128,7 +130,7 @@
       "direction": "bullish",
       "bos_tag": "CHoCH",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "21:02 IST",
+      "last_seen_ist": "22:02 IST",
       "touches": 0,
       "fvg_valid": true,
       "status": "Pristine",
@@ -142,7 +144,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "21:02 IST",
+      "last_seen_ist": "22:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -169,7 +171,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "21:02 IST",
-      "last_seen_ist": "21:02 IST",
+      "last_seen_ist": "22:02 IST",
       "touches": 2,
       "fvg_valid": false,
       "status": "Tested (2x)",
@@ -183,7 +185,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "21:02 IST",
+      "last_seen_ist": "22:02 IST",
       "touches": 1,
       "fvg_valid": false,
       "status": "Tested (1x)",
