@@ -20,10 +20,10 @@
       "direction": "bearish",
       "bos_tag": "CHoCH",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "20:02 IST",
-      "touches": 1,
+      "last_seen_ist": "21:02 IST",
+      "touches": 3,
       "fvg_valid": false,
-      "status": "Tested (1x)",
+      "status": "Tested (3x)",
       "changes": []
     }
   ],
@@ -46,7 +46,7 @@
       "direction": "bearish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "20:02 IST",
+      "last_seen_ist": "21:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -59,7 +59,7 @@
       "direction": "bullish",
       "bos_tag": "CHoCH",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "20:02 IST",
+      "last_seen_ist": "21:02 IST",
       "touches": 1,
       "fvg_valid": false,
       "status": "Tested (1x)",
@@ -87,7 +87,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "21:02 IST",
-      "last_seen_ist": "20:02 IST",
+      "last_seen_ist": "21:02 IST",
       "touches": 2,
       "fvg_valid": true,
       "status": "Tested (2x)",
@@ -128,7 +128,7 @@
       "direction": "bullish",
       "bos_tag": "CHoCH",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "20:02 IST",
+      "last_seen_ist": "21:02 IST",
       "touches": 0,
       "fvg_valid": true,
       "status": "Pristine",
@@ -142,7 +142,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "20:02 IST",
+      "last_seen_ist": "21:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -161,6 +161,19 @@
       "fvg_valid": true,
       "status": "Tested (1x)",
       "changes": []
+    },
+    {
+      "zone_id": "NAS02",
+      "proximal": 26432.5,
+      "distal": 26392.75,
+      "direction": "bullish",
+      "bos_tag": "BOS",
+      "first_seen_ist": "21:02 IST",
+      "last_seen_ist": "21:02 IST",
+      "touches": 2,
+      "fvg_valid": false,
+      "status": "Tested (2x)",
+      "changes": []
     }
   ],
   "GOLD": [
@@ -170,10 +183,10 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "10:02 IST",
-      "touches": 0,
-      "fvg_valid": true,
-      "status": "Pristine",
+      "last_seen_ist": "21:02 IST",
+      "touches": 1,
+      "fvg_valid": false,
+      "status": "Tested (1x)",
       "changes": []
     },
     {
@@ -194,7 +207,7 @@
   "__counter_USDJPY__": 6,
   "__counter_NZDUSD__": 0,
   "__counter_USDCHF__": 9,
-  "__counter_NAS100__": 1,
+  "__counter_NAS100__": 2,
   "__counter_GOLD__": 11,
   "__day__": "2026-04-16T09:00:00"
 }
