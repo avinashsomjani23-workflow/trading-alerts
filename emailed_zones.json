@@ -12,7 +12,20 @@
   "GOLD_bullish_4743.1": "2026-04-14T12:30:11.571090",
   "NAS100_bullish_25598.25": "2026-04-14T13:02:31.932611",
   "GOLD_bullish_4800.2": "2026-04-14T20:02:33.599360",
-  "EURUSD": [],
+  "EURUSD": [
+    {
+      "proximal": 1.1811953783035278,
+      "distal": 1.1800801753997803,
+      "direction": "bullish",
+      "bos_tag": "BOS",
+      "first_seen_ist": "09:02 IST",
+      "last_seen_ist": "09:02 IST",
+      "touches": 0,
+      "fvg_valid": true,
+      "status": "Pristine",
+      "changes": []
+    }
+  ],
   "USDJPY": [
     {
       "proximal": 158.93699645996094,
@@ -37,6 +50,18 @@
       "fvg_valid": false,
       "status": "Pristine",
       "changes": []
+    },
+    {
+      "proximal": 158.9250030517578,
+      "distal": 159.03399658203125,
+      "direction": "bearish",
+      "bos_tag": "BOS",
+      "first_seen_ist": "09:02 IST",
+      "last_seen_ist": "09:02 IST",
+      "touches": 1,
+      "fvg_valid": false,
+      "status": "Tested (1x)",
+      "changes": []
     }
   ],
   "NZDUSD": [
@@ -60,7 +85,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "21:02 IST",
-      "last_seen_ist": "21:02 IST",
+      "last_seen_ist": "09:02 IST",
       "touches": 2,
       "fvg_valid": true,
       "status": "Tested (2x)",
@@ -91,6 +116,18 @@
       "fvg_valid": false,
       "status": "Tested (2x)",
       "changes": []
+    },
+    {
+      "proximal": 0.7808499932289124,
+      "distal": 0.7816299796104431,
+      "direction": "bearish",
+      "bos_tag": "CHoCH",
+      "first_seen_ist": "09:02 IST",
+      "last_seen_ist": "09:02 IST",
+      "touches": 0,
+      "fvg_valid": false,
+      "status": "Pristine",
+      "changes": []
     }
   ],
   "NAS100": [
@@ -100,7 +137,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "23:02 IST",
+      "last_seen_ist": "09:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -129,6 +166,18 @@
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
       "last_seen_ist": "23:02 IST",
+      "touches": 0,
+      "fvg_valid": true,
+      "status": "Pristine",
+      "changes": []
+    },
+    {
+      "proximal": 4819.39990234375,
+      "distal": 4810.5,
+      "direction": "bullish",
+      "bos_tag": "BOS",
+      "first_seen_ist": "09:02 IST",
+      "last_seen_ist": "09:02 IST",
       "touches": 0,
       "fvg_valid": true,
       "status": "Pristine",
