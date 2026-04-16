@@ -38,7 +38,7 @@ def get_swing_points(df, lookback=4, bounds=None):
     return sorted(swings, key=lambda s: s["idx"])
 
 
-def detect_sweep_decay(df, swings, current_idx):
+def detect_sweep_decay(df, swings, current_idx, bias=None):
     score, sweep_price = 0.0, None
     H, L, C = df['High'].values, df['Low'].values, df['Close'].values
     current_ts = df.index[current_idx]
@@ -50,10 +50,14 @@ def detect_sweep_decay(df, swings, current_idx):
             if hours_old > 72:
                 continue
             if s['type'] == 'low' and L[i] < s['price'] and C[i] > s['price']:
+                if bias is not None and bias != 'LONG':
+                    continue
                 pts = 2.5 if hours_old <= 24 else 1.5
                 if pts > score:
                     score, sweep_price = pts, float(L[i])
             elif s['type'] == 'high' and H[i] > s['price'] and C[i] < s['price']:
+                if bias is not None and bias != 'SHORT':
+                    continue
                 pts = 2.5 if hours_old <= 24 else 1.5
                 if pts > score:
                     score, sweep_price = pts, float(H[i])
@@ -172,12 +176,12 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
 
     # Sweep — take the best of H1 / M15
     swings_h1 = get_swing_points(df_h1, lookback=5)
-    h1_sweep_score, h1_sweep_price = detect_sweep_decay(df_h1, swings_h1, len(df_h1) - 1)
+    h1_sweep_score, h1_sweep_price = detect_sweep_decay(df_h1, swings_h1, len(df_h1) - 1, bias)
 
     m15_sweep_score, m15_sweep_price = 0.0, None
     if df_m15 is not None and len(df_m15) > 20:
         swings_m15 = get_swing_points(df_m15, lookback=4)
-        m15_sweep_score, m15_sweep_price = detect_sweep_decay(df_m15, swings_m15, len(df_m15) - 1)
+        m15_sweep_score, m15_sweep_price = detect_sweep_decay(df_m15, swings_m15, len(df_m15) - 1, bias)
 
     if m15_sweep_score > h1_sweep_score:
         bd["sweep"], sweep_price, sweep_tf = m15_sweep_score, m15_sweep_price, "M15"
