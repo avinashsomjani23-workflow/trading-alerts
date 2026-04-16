@@ -523,7 +523,7 @@ if __name__ == "__main__":
             }
 
             if entry_model == "limit":
-                zone_id = f"{name}_{bias}_{proximal}"
+                zone_id = f"{name}_{bias}_{round(proximal, dp)}"
                 if zone_id in phase2_sent:
                     print(f"  [-] {name}: already alerted (dedup). Skipping.")
                     continue
