@@ -229,31 +229,35 @@ def detect_smc_radar(df, lookback):
         ob_high = float(H[ob_idx])
         ob_low  = float(L[ob_idx])
 
-       # FVG detection — full impulse leg, store candle indices for chart positioning
+      # FVG detection — scan from OB candle forward to BOS candle
+        # ob_idx is C1 candidate; we want the first UNFILLED gap at or after the OB
         fvg_valid = False
         fvg_top = fvg_bottom = None
         fvg_c1_idx = fvg_c3_idx = None
 
-        for k in range(impulse_start_idx, i - 1):
+        for k in range(ob_idx, i - 1):
             if k + 2 >= n:
                 break
             if bos_type == 'bullish' and H[k] < L[k + 2]:
-                fvg_top    = float(L[k + 2])
-                fvg_bottom = float(H[k])
-                if not any(L[m] <= fvg_bottom for m in range(k + 3, n)):
+                ft = float(L[k + 2])
+                fb = float(H[k])
+                if not any(L[m] <= fb for m in range(k + 3, n)):
                     fvg_valid  = True
+                    fvg_top    = ft
+                    fvg_bottom = fb
                     fvg_c1_idx = k
                     fvg_c3_idx = k + 2
-                break
+                    break
             elif bos_type == 'bearish' and L[k] > H[k + 2]:
-                fvg_top    = float(L[k])
-                fvg_bottom = float(H[k + 2])
-                if not any(H[m] >= fvg_top for m in range(k + 3, n)):
+                ft = float(L[k])
+                fb = float(H[k + 2])
+                if not any(H[m] >= ft for m in range(k + 3, n)):
                     fvg_valid  = True
+                    fvg_top    = ft
+                    fvg_bottom = fb
                     fvg_c1_idx = k
                     fvg_c3_idx = k + 2
-                break
-
+                    break
         active_obs.append({
             'bos_idx':           i,
             'bos_swing_price':   bos_swing_price,
