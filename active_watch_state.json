@@ -1,1 +1,52 @@
-{}
+{
+  "GOLD_4819.39990234375": {
+    "pair": "GOLD",
+    "bias": "LONG",
+    "score": 7.5,
+    "breakdown": {
+      "structure": 1.5,
+      "sweep": 2.5,
+      "fvg": 1.0,
+      "freshness": 0.5,
+      "pd": 0.0,
+      "killzone": 1.0,
+      "macro": 1.0
+    },
+    "sweep_price": 4858.60009765625,
+    "sweep_tf": "H1",
+    "macro_summary": "No Tier-1 economic events directly impacting GOLD are reported for today. The current news environment does not present immediate high-impact macro risks for GOLD.",
+    "levels": {
+      "valid": true,
+      "entry": 4819.4,
+      "sl": 4810.49,
+      "tp1": 4854.6,
+      "tp2": 4855.02,
+      "rr": 3.95,
+      "entry_source": "OB Proximal Limit"
+    },
+    "ob": {
+      "bos_idx": 143,
+      "bos_swing_price": 4854.60009765625,
+      "impulse_start_idx": 135,
+      "ob_idx": 140,
+      "direction": "bullish",
+      "bos_tag": "BOS",
+      "high": 4819.39990234375,
+      "low": 4810.5,
+      "proximal_line": 4819.39990234375,
+      "distal_line": 4810.5,
+      "median_leg_body": 9.30029296875,
+      "ob_body": 4.80029296875,
+      "fvg": {
+        "exists": true,
+        "fvg_top": 4829.2001953125,
+        "fvg_bottom": 4819.39990234375,
+        "c1_idx": 140,
+        "c3_idx": 142
+      },
+      "touches": 0,
+      "status": "Pristine"
+    },
+    "alert_ist": "2026-04-16T12:17:28.873758"
+  }
+}
