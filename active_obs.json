@@ -123,10 +123,10 @@
   ],
   "NAS100": [
     {
-      "bos_idx": 110,
+      "bos_idx": 109,
       "bos_swing_price": 26058.0,
-      "impulse_start_idx": 107,
-      "ob_idx": 109,
+      "impulse_start_idx": 106,
+      "ob_idx": 108,
       "direction": "bullish",
       "bos_tag": "BOS",
       "high": 26007.25,
@@ -148,10 +148,10 @@
   ],
   "GOLD": [
     {
-      "bos_idx": 88,
+      "bos_idx": 87,
       "bos_swing_price": 4820.39990234375,
-      "impulse_start_idx": 84,
-      "ob_idx": 86,
+      "impulse_start_idx": 83,
+      "ob_idx": 85,
       "direction": "bullish",
       "bos_tag": "BOS",
       "high": 4800.2001953125,
