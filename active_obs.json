@@ -2,10 +2,10 @@
   "EURUSD": [],
   "USDJPY": [
     {
-      "bos_idx": 142,
+      "bos_idx": 141,
       "bos_swing_price": 159.30499267578125,
-      "impulse_start_idx": 140,
-      "ob_idx": 140,
+      "impulse_start_idx": 139,
+      "ob_idx": 139,
       "direction": "bullish",
       "bos_tag": "BOS",
       "high": 159.13999938964844,
@@ -18,17 +18,17 @@
         "exists": true,
         "fvg_top": 159.16799926757812,
         "fvg_bottom": 159.13999938964844,
-        "c1_idx": 140,
-        "c3_idx": 142
+        "c1_idx": 139,
+        "c3_idx": 141
       },
       "touches": 0,
       "status": "Pristine"
     },
     {
-      "bos_idx": 62,
+      "bos_idx": 61,
       "bos_swing_price": 159.55299377441406,
-      "impulse_start_idx": 58,
-      "ob_idx": 61,
+      "impulse_start_idx": 57,
+      "ob_idx": 60,
       "direction": "bearish",
       "bos_tag": "BOS",
       "high": 159.75399780273438,
@@ -50,33 +50,10 @@
   ],
   "NZDUSD": [
     {
-      "bos_idx": 148,
-      "bos_swing_price": 0.5884429812431335,
-      "impulse_start_idx": 134,
-      "ob_idx": 147,
-      "direction": "bearish",
-      "bos_tag": "BOS",
-      "high": 0.5891710519790649,
-      "low": 0.5888240933418274,
-      "proximal_line": 0.5888240933418274,
-      "distal_line": 0.5891710519790649,
-      "median_leg_body": 0.00024259090423583984,
-      "ob_body": 0.00010412931442260742,
-      "fvg": {
-        "exists": false,
-        "fvg_top": null,
-        "fvg_bottom": null,
-        "c1_idx": null,
-        "c3_idx": null
-      },
-      "touches": 0,
-      "status": "Pristine"
-    },
-    {
-      "bos_idx": 76,
+      "bos_idx": 75,
       "bos_swing_price": 0.5875095129013062,
-      "impulse_start_idx": 71,
-      "ob_idx": 71,
+      "impulse_start_idx": 70,
+      "ob_idx": 70,
       "direction": "bullish",
       "bos_tag": "BOS",
       "high": 0.5868889093399048,
@@ -89,8 +66,8 @@
         "exists": true,
         "fvg_top": 0.5867855548858643,
         "fvg_bottom": 0.5863383412361145,
-        "c1_idx": 72,
-        "c3_idx": 74
+        "c1_idx": 71,
+        "c3_idx": 73
       },
       "touches": 2,
       "status": "Tested (2x)"
@@ -98,10 +75,10 @@
   ],
   "USDCHF": [
     {
-      "bos_idx": 127,
+      "bos_idx": 126,
       "bos_swing_price": 0.7828099727630615,
-      "impulse_start_idx": 121,
-      "ob_idx": 124,
+      "impulse_start_idx": 120,
+      "ob_idx": 123,
       "direction": "bullish",
       "bos_tag": "CHoCH",
       "high": 0.7815600037574768,
@@ -114,8 +91,8 @@
         "exists": true,
         "fvg_top": 0.7818599939346313,
         "fvg_bottom": 0.7815600037574768,
-        "c1_idx": 124,
-        "c3_idx": 126
+        "c1_idx": 123,
+        "c3_idx": 125
       },
       "touches": 0,
       "status": "Pristine"
@@ -123,10 +100,10 @@
   ],
   "NAS100": [
     {
-      "bos_idx": 109,
+      "bos_idx": 108,
       "bos_swing_price": 26058.0,
-      "impulse_start_idx": 106,
-      "ob_idx": 108,
+      "impulse_start_idx": 105,
+      "ob_idx": 107,
       "direction": "bullish",
       "bos_tag": "BOS",
       "high": 26007.25,
@@ -148,27 +125,27 @@
   ],
   "GOLD": [
     {
-      "bos_idx": 87,
-      "bos_swing_price": 4820.39990234375,
-      "impulse_start_idx": 83,
-      "ob_idx": 85,
+      "bos_idx": 68,
+      "bos_swing_price": 4762.5,
+      "impulse_start_idx": 64,
+      "ob_idx": 64,
       "direction": "bullish",
-      "bos_tag": "BOS",
-      "high": 4800.2001953125,
-      "low": 4784.2001953125,
-      "proximal_line": 4800.2001953125,
-      "distal_line": 4784.2001953125,
-      "median_leg_body": 8.89990234375,
-      "ob_body": 3.80029296875,
+      "bos_tag": "CHoCH",
+      "high": 4743.10009765625,
+      "low": 4722.5,
+      "proximal_line": 4743.10009765625,
+      "distal_line": 4722.5,
+      "median_leg_body": 5.7001953125,
+      "ob_body": 5.7001953125,
       "fvg": {
-        "exists": false,
-        "fvg_top": null,
-        "fvg_bottom": null,
-        "c1_idx": null,
-        "c3_idx": null
+        "exists": true,
+        "fvg_top": 4748.39990234375,
+        "fvg_bottom": 4743.10009765625,
+        "c1_idx": 64,
+        "c3_idx": 66
       },
-      "touches": 3,
-      "status": "Tested (3x)"
+      "touches": 0,
+      "status": "Pristine"
     }
   ]
 }
