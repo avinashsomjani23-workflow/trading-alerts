@@ -473,6 +473,7 @@ if __name__ == "__main__":
             continue
 
         for ob in pair_obs:
+            dp = pair_conf.get("decimal_places", 5)
             proximal = float(ob['proximal_line'])
             if abs(current_price - proximal) > (pair_conf["atr_multiplier"] * h1_atr):
                 continue
