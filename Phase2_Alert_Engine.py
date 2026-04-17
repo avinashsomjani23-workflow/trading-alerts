@@ -447,6 +447,46 @@ if __name__ == "__main__":
     phase2_sent = load_json("phase2_sent.json", {})
     new_watch_state = dict(watch_state)
 
+    # --- Purge expired dedup keys (trading-day-aware) ---
+    EXPIRY_TRADING_DAYS = {
+        "forex": 5,
+        "index": 3,
+        "commodity": 3
+    }
+    pair_type_map = {p["name"]: p.get("pair_type", "forex") for p in config["pairs"]}
+
+    def count_trading_days(from_dt, to_dt):
+        """Count weekdays (Mon-Fri) between two datetimes."""
+        days = 0
+        current = from_dt.date()
+        end = to_dt.date()
+        while current < end:
+            if current.weekday() < 5:  # Mon=0, Fri=4
+                days += 1
+            current += timedelta(days=1)
+        return days
+
+    keys_to_purge = []
+    for key, alerted_iso in phase2_sent.items():
+        # Key format: PAIRNAME_BIAS_PRICE e.g. EURUSD_LONG_1.08450
+        parts = key.split("_")
+        if len(parts) < 3:
+            continue
+        pair_name = parts[0]
+        ptype = pair_type_map.get(pair_name, "forex")
+        max_trading_days = EXPIRY_TRADING_DAYS.get(ptype, 5)
+        try:
+            alerted_dt = datetime.fromisoformat(alerted_iso)
+        except Exception:
+            continue
+        if count_trading_days(alerted_dt, ist_now) >= max_trading_days:
+            keys_to_purge.append(key)
+
+    for k in keys_to_purge:
+        del phase2_sent[k]
+    if keys_to_purge:
+        print(f"  [PURGE] Removed {len(keys_to_purge)} expired dedup keys: {keys_to_purge}")
+
     balance = config["account"]["balance"]
     risk_pct = config["account"]["risk_percent"]
     dollar_risk = balance * (risk_pct / 100.0)
