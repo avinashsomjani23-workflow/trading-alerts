@@ -591,21 +591,16 @@ def _fallback_narrative(ob, name, dp, current_price):
 # ---------------------------------------------------------------------------
 
 def build_summary_table_html(all_zones_for_table, dp_map):
-    """
-    Builds the top-level summary table: one row per zone, all pairs.
-    Columns: Pair | Bias | Levels | Status | FVG | Since
-    """
     rows = ""
     for z in all_zones_for_table:
         name      = z['name']
         dp        = dp_map[name]
-        direction = "▲ Bullish" if z['direction'] == 'bullish' else "▼ Bearish"
+        direction = "&#9650; Bullish" if z['direction'] == 'bullish' else "&#9660; Bearish"
         dir_color = '#27ae60'   if z['direction'] == 'bullish' else '#e74c3c'
         status    = z['status']
         stat_col  = '#27ae60'   if 'Pristine' in status else '#e67e22'
-        fvg_cell  = "✓" if z['fvg_valid'] else "–"
+        fvg_cell  = "&#10003;" if z['fvg_valid'] else "&ndash;"
         fvg_col   = '#27ae60' if z['fvg_valid'] else '#888'
-        since     = z['first_seen_ist']
         tag_badge = (
             f"<span style='background:#00bcd4;color:#000;font-size:9px;"
             f"padding:1px 4px;border-radius:3px;font-weight:bold;'>{z['bos_tag']}</span>"
@@ -613,32 +608,28 @@ def build_summary_table_html(all_zones_for_table, dp_map):
             f"<span style='background:#ff9800;color:#000;font-size:9px;"
             f"padding:1px 4px;border-radius:3px;font-weight:bold;'>{z['bos_tag']}</span>"
         )
-        is_new    = z.get('is_new', False)
+        is_new     = z.get('is_new', False)
         is_changed = z.get('is_changed', False)
-        row_bg    = '#1e3a2f' if is_new else ('#2d2a1a' if is_changed else 'transparent')
-        new_badge = ""
+        row_bg     = '#1e3a2f' if is_new else ('#2d2a1a' if is_changed else 'transparent')
+        new_badge  = ""
         if is_new:
             new_badge = "<span style='background:#27ae60;color:#fff;font-size:9px;padding:1px 4px;border-radius:3px;margin-left:4px;'>NEW</span>"
         elif is_changed:
             new_badge = "<span style='background:#e67e22;color:#fff;font-size:9px;padding:1px 4px;border-radius:3px;margin-left:4px;'>UPD</span>"
 
+        zone_label = f"<span style='color:#555;font-size:10px;font-family:monospace;'>{z.get('zone_id','&mdash;')}&nbsp;</span>"
+
         rows += f"""
         <tr style="background:{row_bg};border-bottom:1px solid #2a2a3e;">
-          <td style="padding:6px 8px;color:#888;font-size:11px;font-family:monospace;white-space:nowrap;">
-            {z.get('zone_id','—')}
-          </td>
           <td style="padding:6px 8px;font-weight:bold;color:#eee;font-size:12px;white-space:nowrap;">
-            {name}{new_badge}
+            {zone_label}{name}{new_badge}
           </td>
           <td style="padding:6px 8px;color:{dir_color};font-size:12px;white-space:nowrap;">
-            {direction} {tag_badge}
-          </td>
-          <td style="padding:6px 8px;color:#ccc;font-size:11px;font-family:monospace;white-space:nowrap;">
-            {z['proximal']:.{dp}f} / {z['distal']:.{dp}f}
+            {direction}&nbsp;{tag_badge}
           </td>
           <td style="padding:6px 8px;color:{stat_col};font-size:11px;white-space:nowrap;">{status}</td>
           <td style="padding:6px 8px;color:{fvg_col};font-size:12px;text-align:center;">{fvg_cell}</td>
-          <td style="padding:6px 8px;color:#888;font-size:10px;white-space:nowrap;">{since}</td>
+          <td style="padding:6px 8px;color:#888;font-size:10px;white-space:nowrap;">{z['first_seen_ist']}</td>
         </tr>"""
 
     return f"""
@@ -649,10 +640,8 @@ def build_summary_table_html(all_zones_for_table, dp_map):
       <table style="width:100%;border-collapse:collapse;background:#1a1a2e;border-radius:6px;overflow:hidden;">
         <thead>
           <tr style="background:#0d0d1a;">
-            <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">ID</th>
             <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Pair</th>
             <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Bias</th>
-            <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Prox / Dist</th>
             <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Status</th>
             <th style="padding:7px 8px;text-align:center;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">FVG</th>
             <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">First Seen</th>
@@ -661,7 +650,6 @@ def build_summary_table_html(all_zones_for_table, dp_map):
         <tbody>{rows}</tbody>
       </table>
     </div>"""
-
 def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_id="—"):
     """Full detail card for a new zone — includes chart and Gemini narrative."""
     direction  = "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)"
