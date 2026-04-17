@@ -14,7 +14,7 @@
     },
     "sweep_price": 4785.89990234375,
     "sweep_tf": "H1",
-    "macro_summary": "There are no Tier-1 economic events directly affecting GOLD identified in the provided news. The current macro environment appears safe for GOLD based on the given information.",
+    "macro_summary": "There are no Tier-1 economic events directly affecting GOLD identified in the provided news. The current macro environment appears safe from immediate high-impact economic data releases for GOLD.",
     "levels": {
       "valid": true,
       "entry": 4800.2,
@@ -47,6 +47,6 @@
       "touches": 3,
       "status": "Tested (3x)"
     },
-    "alert_ist": "2026-04-17T13:17:27.405679"
+    "alert_ist": "2026-04-17T13:32:33.274953"
   }
 }
