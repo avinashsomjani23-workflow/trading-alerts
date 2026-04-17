@@ -2,12 +2,12 @@
   "GOLD_4800.2": {
     "pair": "GOLD",
     "bias": "LONG",
-    "score": 7.5,
+    "score": 7.0,
     "breakdown": {
       "structure": 1.5,
       "sweep": 2.5,
       "fvg": 1.0,
-      "freshness": 0.5,
+      "freshness": 0.0,
       "pd": 0.0,
       "killzone": 1.0,
       "macro": 1.0
@@ -19,16 +19,16 @@
       "valid": true,
       "entry": 4800.2,
       "sl": 4784.2,
-      "tp1": 4846.2,
+      "tp1": 4827.2,
       "tp2": 4864.22,
-      "rr": 2.87,
+      "rr": 1.69,
       "entry_source": "OB Proximal Limit"
     },
     "ob": {
-      "bos_idx": 88,
+      "bos_idx": 87,
       "bos_swing_price": 4820.39990234375,
-      "impulse_start_idx": 84,
-      "ob_idx": 86,
+      "impulse_start_idx": 83,
+      "ob_idx": 85,
       "direction": "bullish",
       "bos_tag": "BOS",
       "high": 4800.2001953125,
@@ -47,6 +47,6 @@
       "touches": 3,
       "status": "Tested (3x)"
     },
-    "alert_ist": "2026-04-17T12:36:17.989961"
+    "alert_ist": "2026-04-17T13:17:27.405679"
   }
 }
