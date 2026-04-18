@@ -39,3 +39,27 @@
 2026-04-17 14:32:39,417 — INFO — Digest sent: 7 zones, 6 new, 0 updated, 1 unchanged.
 2026-04-17 16:32:40,445 — INFO — Digest sent: 7 zones, 0 new, 0 updated, 7 unchanged.
 2026-04-18 09:08:49,256 — INFO — Digest sent: 6 zones, 0 new, 0 updated, 6 unchanged.
+2026-04-18 14:14:15,638 — WARNING — Retry 1/2 for EURUSD=X 1h: stale data (age 17.24h, limit 2.0h). Waiting 1s.
+2026-04-18 14:14:16,740 — WARNING — Retry 2/2 for EURUSD=X 1h: stale data (age 17.24h, limit 2.0h). Waiting 2s.
+2026-04-18 14:14:18,828 — WARNING — Fetch failed after retries: EURUSD=X 1h: stale data (age 17.24h, limit 2.0h)
+2026-04-18 14:14:18,828 — WARNING — No data for EURUSD. Skipped.
+2026-04-18 14:14:19,011 — WARNING — Retry 1/2 for JPY=X 1h: stale data (age 18.24h, limit 2.0h). Waiting 1s.
+2026-04-18 14:14:20,106 — WARNING — Retry 2/2 for JPY=X 1h: stale data (age 18.24h, limit 2.0h). Waiting 2s.
+2026-04-18 14:14:22,200 — WARNING — Fetch failed after retries: JPY=X 1h: stale data (age 18.24h, limit 2.0h)
+2026-04-18 14:14:22,201 — WARNING — No data for USDJPY. Skipped.
+2026-04-18 14:14:22,326 — WARNING — Retry 1/2 for NZDUSD=X 1h: stale data (age 17.24h, limit 2.0h). Waiting 1s.
+2026-04-18 14:14:23,412 — WARNING — Retry 2/2 for NZDUSD=X 1h: stale data (age 17.24h, limit 2.0h). Waiting 2s.
+2026-04-18 14:14:25,502 — WARNING — Fetch failed after retries: NZDUSD=X 1h: stale data (age 17.24h, limit 2.0h)
+2026-04-18 14:14:25,503 — WARNING — No data for NZDUSD. Skipped.
+2026-04-18 14:14:25,652 — WARNING — Retry 1/2 for CHF=X 1h: stale data (age 17.24h, limit 2.0h). Waiting 1s.
+2026-04-18 14:14:26,747 — WARNING — Retry 2/2 for CHF=X 1h: stale data (age 17.24h, limit 2.0h). Waiting 2s.
+2026-04-18 14:14:28,824 — WARNING — Fetch failed after retries: CHF=X 1h: stale data (age 17.24h, limit 2.0h)
+2026-04-18 14:14:28,825 — WARNING — No data for USDCHF. Skipped.
+2026-04-18 14:14:28,975 — WARNING — Retry 1/2 for NQ=F 1h: stale data (age 18.24h, limit 2.0h). Waiting 1s.
+2026-04-18 14:14:30,065 — WARNING — Retry 2/2 for NQ=F 1h: stale data (age 18.24h, limit 2.0h). Waiting 2s.
+2026-04-18 14:14:32,153 — WARNING — Fetch failed after retries: NQ=F 1h: stale data (age 18.24h, limit 2.0h)
+2026-04-18 14:14:32,154 — WARNING — No data for NAS100. Skipped.
+2026-04-18 14:14:32,281 — WARNING — Retry 1/2 for GC=F 1h: stale data (age 18.24h, limit 2.0h). Waiting 1s.
+2026-04-18 14:14:33,369 — WARNING — Retry 2/2 for GC=F 1h: stale data (age 18.24h, limit 2.0h). Waiting 2s.
+2026-04-18 14:14:35,451 — WARNING — Fetch failed after retries: GC=F 1h: stale data (age 18.24h, limit 2.0h)
+2026-04-18 14:14:35,452 — WARNING — No data for GOLD. Skipped.
