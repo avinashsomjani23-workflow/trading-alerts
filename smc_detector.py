@@ -23,6 +23,93 @@ def compute_atr(df, period=14):
     return float(np.mean(trs[-period:]))
 
 
+def get_dealing_range(ob, df_h1, h1_atr):
+    """
+    Compute the dealing range for an OB using its impulse leg.
+
+    Primary range: swing low → swing high (bullish) or swing high → swing low (bearish).
+    If narrower than 1x H1 ATR, expand outward via nearest swing pair.
+
+    Returns dict: valid, range_high, range_low, equilibrium, source.
+    """
+    if h1_atr is None or h1_atr == 0:
+        return {"valid": False, "source": "no_atr"}
+
+    bos_swing = float(ob.get('bos_swing_price', 0))
+    impulse_price = float(ob.get('impulse_start_price', 0))
+
+    if bos_swing == 0 or impulse_price == 0:
+        return {"valid": False, "source": "missing_data"}
+
+    direction = ob.get('direction', 'bullish')
+
+    if direction == 'bullish':
+        range_high = bos_swing
+        range_low = impulse_price
+    else:
+        range_high = impulse_price
+        range_low = bos_swing
+
+    if range_high <= range_low:
+        range_high, range_low = range_low, range_high
+
+    width = range_high - range_low
+
+    if width >= h1_atr:
+        eq = (range_high + range_low) / 2.0
+        return {
+            "valid": True,
+            "range_high": range_high,
+            "range_low": range_low,
+            "equilibrium": eq,
+            "source": "impulse_leg"
+        }
+
+    # --- Expansion: walk H1 swings outward ---
+    swings = get_swing_points(df_h1, lookback=5)
+    if not swings:
+        return {"valid": False, "source": "no_swings"}
+
+    outer_highs = sorted(
+        [s['price'] for s in swings if s['type'] == 'high' and s['price'] > range_high]
+    )
+    outer_lows = sorted(
+        [s['price'] for s in swings if s['type'] == 'low' and s['price'] < range_low],
+        reverse=True
+    )
+
+    # Option A: expand high only
+    for oh in outer_highs:
+        if (oh - range_low) >= h1_atr:
+            eq = (oh + range_low) / 2.0
+            return {
+                "valid": True, "range_high": oh, "range_low": range_low,
+                "equilibrium": eq, "source": "expanded_high"
+            }
+
+    # Option B: expand low only
+    for ol in outer_lows:
+        if (range_high - ol) >= h1_atr:
+            eq = (range_high + ol) / 2.0
+            return {
+                "valid": True, "range_high": range_high, "range_low": ol,
+                "equilibrium": eq, "source": "expanded_low"
+            }
+
+    # Option C: expand both (nearest outer high + nearest outer low)
+    if outer_highs and outer_lows:
+        best_high = outer_highs[0]
+        best_low = outer_lows[0]
+        if (best_high - best_low) >= h1_atr:
+            eq = (best_high + best_low) / 2.0
+            return {
+                "valid": True, "range_high": best_high, "range_low": best_low,
+                "equilibrium": eq, "source": "expanded_both"
+            }
+
+    return {"valid": False, "source": "too_narrow"}
+
+
 def get_swing_points(df, lookback=4, bounds=None):
     if df is None or len(df) < lookback * 2 + 1:
         return []
@@ -36,6 +123,39 @@ def get_swing_points(df, lookback=4, bounds=None):
         if L[i] == min(L[i - lookback: i + lookback + 1]):
             swings.append({"type": "low", "price": float(L[i]), "idx": i, "ts": df.index[i]})
     return sorted(swings, key=lambda s: s["idx"])
+
+
+def stack_labels(labels, pair_conf):
+    """
+    Prevent label overlap on charts by offsetting prices that are too close.
+
+    labels: list of (price, text, color) tuples.
+    Returns: list of (adjusted_price, text, color) tuples, sorted by price.
+    """
+    if not labels:
+        return labels
+
+    dp = _dp(pair_conf)
+    pair_type = pair_conf.get("pair_type", "forex")
+
+    thresholds = {
+        "forex": 0.00030 if dp == 5 else 0.030,
+        "index": 15.0,
+        "commodity": 2.0
+    }
+    min_gap = thresholds.get(pair_type, 0.00030)
+
+    sorted_labels = sorted(labels, key=lambda x: x[0])
+    adjusted = [sorted_labels[0]]
+
+    for i in range(1, len(sorted_labels)):
+        price, text, color = sorted_labels[i]
+        prev_price = adjusted[-1][0]
+        if abs(price - prev_price) < min_gap:
+            price = prev_price + min_gap
+        adjusted.append((price, text, color))
+
+    return adjusted
 
 
 def detect_sweep_decay(df, swings, current_idx, bias=None):
@@ -159,20 +279,25 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
 def _killzone_hit(ist_hour, pair_type):
     """Widened session windows (hour-level precision)."""
     if pair_type == "forex":
-        # London 12:30-16:30 IST + NY 18:30-00:30 IST
         return (12 <= ist_hour <= 16) or (ist_hour >= 18) or (ist_hour == 0)
     if pair_type == "index":
-        # US cash 19:00-01:30 IST
         return (ist_hour >= 19) or (ist_hour <= 1)
     if pair_type == "commodity":
-        # Gold follows London/NY
         return (12 <= ist_hour <= 16) or (ist_hour >= 18) or (ist_hour == 0)
     return False
 
 
 def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=None, macro_score=1.0):
     bos_tag = ob.get('bos_tag', 'BOS')
-    bd = {"structure": 2.5 if bos_tag == 'CHoCH' else 1.5}
+
+    # Structure — pair-aware BOS sequence penalty
+    if bos_tag == 'CHoCH':
+        bd = {"structure": 2.5}
+    else:
+        bos_seq = ob.get('bos_sequence_count', 1)
+        pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
+        caution_threshold = {'forex': 3, 'index': 5, 'commodity': 4}.get(pair_type, 3)
+        bd = {"structure": 1.0 if bos_seq >= caution_threshold else 1.5}
 
     # Sweep — take the best of H1 / M15
     swings_h1 = get_swing_points(df_h1, lookback=5)
@@ -207,10 +332,25 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
             break
     bd["freshness"] = 0.5 if is_fresh else 0.0
 
-    # Premium / Discount
-    eq = (df_h1['High'].max() + df_h1['Low'].min()) / 2.0
-    pd_hit = (bias == "LONG" and current_price <= eq) or (bias == "SHORT" and current_price >= eq)
-    bd["pd"] = 1.0 if pd_hit else 0.0
+    # Premium / Discount — impulse-leg dealing range, 30/70 band scoring
+    h1_atr_val = compute_atr(df_h1)
+    dr = get_dealing_range(ob, df_h1, h1_atr_val)
+    if dr["valid"]:
+        rng_width = dr["range_high"] - dr["range_low"]
+        if rng_width > 0:
+            position = (current_price - dr["range_low"]) / rng_width
+            if bias == "LONG" and position <= 0.30:
+                bd["pd"] = 1.0
+            elif bias == "SHORT" and position >= 0.70:
+                bd["pd"] = 1.0
+            else:
+                bd["pd"] = 0.0
+        else:
+            bd["pd"] = 0.0
+    else:
+        bd["pd"] = 0.0
+        dr = {"valid": False, "range_high": 0, "range_low": 0, "equilibrium": 0,
+              "source": dr.get("source", "unknown")}
 
     # Killzone — widened, pair-aware
     ist_hour = (datetime.utcnow() + timedelta(hours=5, minutes=30)).hour
@@ -223,21 +363,28 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         "total": round(sum(bd.values()), 1),
         "breakdown": bd,
         "sweep_price": sweep_price,
-        "sweep_tf": sweep_tf
+        "sweep_tf": sweep_tf,
+        "dealing_range": dr
     }
 
 
-def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_conf):
+def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_conf,
+                            dealing_range=None, fvg_source=None):
     """Return list of (label, score, max_score, status, explanation) for email rendering."""
     dp = _dp(pair_conf)
     rows = []
 
-    # 1. Structure
+    # 1. Structure — pair-aware BOS sequence
     s = breakdown.get("structure", 0)
+    bos_seq = ob.get('bos_sequence_count', 1)
     if s >= 2.5:
         rows.append(("Structure", s, 2.5, "ok", "Trend has shifted in our favor (CHoCH confirmed)."))
     elif s >= 1.5:
-        rows.append(("Structure", s, 2.5, "warn", "Trend continuation confirmed (BOS), but no fresh shift."))
+        rows.append(("Structure", s, 2.5, "warn",
+                      f"Trend continuation (BOS #{bos_seq} since CHoCH)."))
+    elif s >= 1.0:
+        rows.append(("Structure", s, 2.5, "fail",
+                      f"Late trend continuation (BOS #{bos_seq} since CHoCH) — trend may be exhausted."))
     else:
         rows.append(("Structure", s, 2.5, "fail", "No confirmed BOS or CHoCH."))
 
@@ -246,7 +393,7 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     if s >= 2.5 and sweep_price is not None:
         rows.append((
             "Liquidity Sweep", s, 2.5, "ok",
-            f"Price pierced a recent level and reversed — smart money grabbed stop-losses before reversing "
+            f"Price pierced a recent level and reversed — smart money grabbed stop-losses "
             f"({sweep_tf} sweep at {sweep_price:.{dp}f})."
         ))
     elif s >= 1.5 and sweep_price is not None:
@@ -258,42 +405,58 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     else:
         rows.append(("Liquidity Sweep", s, 2.5, "fail", "No recent stop-hunt sweep detected near the zone."))
 
-    # 3. FVG
+    # 3. FVG — with source label
     s = breakdown.get("fvg", 0)
+    src_label = f"{fvg_source} " if fvg_source else ""
     if s >= 1.5:
-        rows.append(("FVG", s, 1.5, "ok", "Fair Value Gap overlaps the Order Block — strong displacement confluence."))
+        rows.append(("FVG", s, 1.5, "ok",
+                      f"{src_label}FVG overlaps the Order Block — strong displacement confluence."))
     elif s >= 1.0:
-        rows.append(("FVG", s, 1.5, "warn", "FVG exists inside the zone but does not overlap the OB."))
+        rows.append(("FVG", s, 1.5, "warn",
+                      f"{src_label}FVG exists inside the zone but does not overlap the OB."))
     else:
         rows.append(("FVG", s, 1.5, "fail", "No unmitigated FVG inside the zone."))
 
-    # 4. Freshness
+    # 4. Freshness — based on H1 candle proximity, not touch count
     s = breakdown.get("freshness", 0)
-    touches = ob.get("touches", 0)
     if s >= 0.5:
-        rows.append(("Freshness", s, 0.5, "ok", "Zone is pristine — not touched yet."))
+        rows.append(("Freshness", s, 0.5, "ok",
+                      "Zone is untouched in last 5 H1 candles — first-touch entry."))
     else:
-        rows.append((
-            "Freshness", s, 0.5, "warn",
-            f"Zone has been tested {touches}x already — reaction may be weaker."
-        ))
+        rows.append(("Freshness", s, 0.5, "warn",
+                      "Price has been near this zone in the last 5 H1 candles — not a first-touch setup."))
 
-    # 5. Premium / Discount
+    # 5. Premium / Discount — with dealing range details
     s = breakdown.get("pd", 0)
+    dr_src = ""
+    if dealing_range and dealing_range.get("valid"):
+        dr_src = (f" (range: {dealing_range['range_low']:.{dp}f}"
+                  f"–{dealing_range['range_high']:.{dp}f},"
+                  f" EQ: {dealing_range['equilibrium']:.{dp}f})")
+        if dealing_range.get("source", "").startswith("expanded"):
+            dr_src += " [expanded]"
+
     if s >= 1.0:
         if bias == "LONG":
-            rows.append(("Premium / Discount", s, 1.0, "ok", "Price is in discount — good area to buy."))
+            rows.append(("Premium / Discount", s, 1.0, "ok",
+                          f"Price is in deep discount (bottom 30% of dealing range).{dr_src}"))
         else:
-            rows.append(("Premium / Discount", s, 1.0, "ok", "Price is in premium — good area to sell."))
+            rows.append(("Premium / Discount", s, 1.0, "ok",
+                          f"Price is in deep premium (top 30% of dealing range).{dr_src}"))
+    elif dealing_range and not dealing_range.get("valid"):
+        rows.append(("Premium / Discount", s, 1.0, "warn",
+                      "Dealing range too narrow to score. Neutral."))
     else:
-        rows.append(("Premium / Discount", s, 1.0, "fail", "Price is on the wrong side of equilibrium."))
+        rows.append(("Premium / Discount", s, 1.0, "fail",
+                      f"Price is not in the optimal 30% zone of the dealing range.{dr_src}"))
 
     # 6. Killzone
     s = breakdown.get("killzone", 0)
     if s >= 1.0:
         rows.append(("Killzone", s, 1.0, "ok", "Inside active trading window."))
     else:
-        rows.append(("Killzone", s, 1.0, "fail", "Outside main trading window — lower volume, weaker follow-through expected."))
+        rows.append(("Killzone", s, 1.0, "fail",
+                      "Outside main trading window — lower volume expected."))
 
     # 7. Macro / News
     s = breakdown.get("macro", 0)
@@ -306,7 +469,7 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
 
 
 def detect_ltf_choch(df_m5, bias, bounds):
-    """Detect M5 CHoCH strictly inside HTF zone bounds. Returns dict with fired flag and level."""
+    """Detect M5 CHoCH strictly inside HTF zone bounds."""
     swings = get_swing_points(df_m5, lookback=3, bounds=bounds)
     if len(swings) < 2:
         return {"fired": False, "level": None}
@@ -325,7 +488,7 @@ def detect_ltf_choch(df_m5, bias, bounds):
 
 
 def check_opposite_bos(df_h1, bias, since_ts=None):
-    """True if H1 printed a BOS in the opposite direction since `since_ts` (naive IST datetime)."""
+    """True if H1 printed a BOS in the opposite direction since `since_ts`."""
     if df_h1 is None or len(df_h1) < 10:
         return False
 
