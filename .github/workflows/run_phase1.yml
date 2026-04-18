@@ -10,12 +10,14 @@ jobs:
         with: { python-version: '3.11' }
       - run: pip install yfinance pandas numpy matplotlib google-generativeai
       - env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python smc_radar.py
       - run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git pull --rebase origin main || true
-          git add active_obs.json emailed_zones.json smc_radar.log || true
+          git add active_obs.json emailed_zones.json smc_radar.log yfinance_stale_log.json || true
           git diff --staged --quiet || git commit -m "P1 Update [skip ci]"
           git push origin HEAD:main || true
