@@ -169,7 +169,7 @@ def _fig_to_b64(fig):
     return b64
 
 
-def generate_h1_chart(df_h1, ob, pair_conf, title):
+def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=None):
     try:
         dp = pair_conf.get("decimal_places", 5)
         df_plot = df_h1.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(80).copy().reset_index(drop=True)
@@ -184,6 +184,7 @@ def generate_h1_chart(df_h1, ob, pair_conf, title):
         distal = float(ob.get('distal_line', 0))
         zone_hi, zone_lo = max(proximal, distal), min(proximal, distal)
 
+        # --- Zone band ---
         if zone_hi > 0 and zone_lo > 0:
             ax.add_patch(patches.Rectangle(
                 (0, zone_lo), n + 5, zone_hi - zone_lo,
@@ -193,34 +194,108 @@ def generate_h1_chart(df_h1, ob, pair_conf, title):
                 (0, zone_lo), n + 5, zone_hi - zone_lo,
                 fill=False, edgecolor='#bb8fce', linestyle=':', linewidth=1.5, zorder=2
             ))
-            ax.text(n + 1, proximal, f" P {proximal:.{dp}f}", color='#bb8fce', fontsize=8, va='center', zorder=5)
-            ax.text(n + 1, distal, f" D {distal:.{dp}f}", color='#bb8fce', fontsize=8, va='center', zorder=5)
 
+        # --- BOS/CHoCH line ---
         bos_price = float(ob.get('bos_swing_price', 0))
         bos_tag = ob.get('bos_tag', 'BOS')
         if bos_price > 0:
             bos_color = '#00bcd4' if bos_tag == 'BOS' else '#ff9800'
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
-            ax.text(n + 1, bos_price, f" {bos_tag} {bos_price:.{dp}f}",
-                    color=bos_color, fontsize=8, va='center', fontweight='bold', zorder=5)
 
+        # --- FVG with border and label ---
         fvg = ob.get('fvg', {}) or {}
         if fvg.get('exists'):
             ft, fb = float(fvg.get('fvg_top', 0)), float(fvg.get('fvg_bottom', 0))
             if ft > 0 and fb > 0:
                 ax.add_patch(patches.Rectangle(
                     (0, fb), n + 5, ft - fb,
-                    facecolor='#27ae60', alpha=0.2, zorder=1
+                    facecolor='#27ae60', alpha=0.15, zorder=1
                 ))
+                ax.add_patch(patches.Rectangle(
+                    (0, fb), n + 5, ft - fb,
+                    fill=False, edgecolor='#2ecc71', linestyle='--', linewidth=1.0, zorder=2
+                ))
+                ax.text(0.5, ft, ' H1 FVG', color='#2ecc71', fontsize=8, va='bottom', zorder=5)
 
+        # --- Dealing range band + equilibrium ---
+        if dealing_range and dealing_range.get('valid'):
+            dr_hi = float(dealing_range['range_high'])
+            dr_lo = float(dealing_range['range_low'])
+            dr_eq = float(dealing_range['equilibrium'])
+            y_min_candle = float(df_plot['Low'].min())
+            y_max_candle = float(df_plot['High'].max())
+            candle_range = y_max_candle - y_min_candle
+            # Only draw full band if it doesn't dwarf the candle range (< 3x)
+            if candle_range > 0 and (dr_hi - dr_lo) < candle_range * 3:
+                ax.add_patch(patches.Rectangle(
+                    (0, dr_lo), n + 5, dr_hi - dr_lo,
+                    facecolor='#3498db', alpha=0.06, zorder=0
+                ))
+                ax.add_patch(patches.Rectangle(
+                    (0, dr_lo), n + 5, dr_hi - dr_lo,
+                    fill=False, edgecolor='#5dade2', linestyle='-.', linewidth=0.8, zorder=1
+                ))
+            # EQ line always drawn
+            ax.axhline(y=dr_eq, color='#5dade2', linewidth=0.9, linestyle='-.', alpha=0.6, zorder=2)
+
+        # --- Entry / SL lines (Phase 2 only, when levels provided) ---
+        if levels and levels.get('valid', True):
+            entry_p = float(levels.get('entry', 0))
+            sl_p = float(levels.get('sl', 0))
+            if entry_p > 0:
+                ax.axhline(y=entry_p, color='#e67e22', linewidth=1.0, linestyle='--', alpha=0.8, zorder=3)
+            if sl_p > 0:
+                ax.axhline(y=sl_p, color='#e74c3c', linewidth=1.0, linestyle='--', alpha=0.8, zorder=3)
+
+        # --- Current price line ---
         current = float(df_plot['Close'].iloc[-1])
         ax.axhline(y=current, color='#ffffff', linewidth=0.8, linestyle='-', alpha=0.5, zorder=2)
-        ax.text(n + 1, current, f" {current:.{dp}f}", color='#ffffff', fontsize=8, va='center', zorder=5)
 
+        # --- Labels with stacking ---
+        raw_labels = []
+        if zone_hi > 0:
+            raw_labels.append((proximal, f" P {proximal:.{dp}f}", '#bb8fce'))
+            raw_labels.append((distal, f" D {distal:.{dp}f}", '#bb8fce'))
+        if bos_price > 0:
+            raw_labels.append((bos_price, f" {bos_tag} {bos_price:.{dp}f}", bos_color))
+        raw_labels.append((current, f" {current:.{dp}f}", '#ffffff'))
+        if dealing_range and dealing_range.get('valid'):
+            raw_labels.append((dr_eq, f" EQ {dr_eq:.{dp}f}", '#5dade2'))
+        if levels and levels.get('valid', True):
+            entry_p = float(levels.get('entry', 0))
+            sl_p = float(levels.get('sl', 0))
+            tp1_p = float(levels.get('tp1', 0))
+            if entry_p > 0:
+                raw_labels.append((entry_p, f" ENTRY {entry_p:.{dp}f}", '#e67e22'))
+            if sl_p > 0:
+                raw_labels.append((sl_p, f" SL {sl_p:.{dp}f}", '#e74c3c'))
+            if tp1_p > 0:
+                raw_labels.append((tp1_p, f" TP1 {tp1_p:.{dp}f}", '#27ae60'))
+
+        stacked = smc_detector.stack_labels(raw_labels, pair_conf)
+        for adj_price, text, color in stacked:
+            weight = 'bold' if any(k in text for k in ['ENTRY', 'SL', 'TP1', 'BOS', 'CHoCH']) else 'normal'
+            ax.text(n + 1, adj_price, text, color=color, fontsize=8, va='center',
+                    fontweight=weight, zorder=5)
+
+        # --- Y-axis range ---
         y_min, y_max = float(df_plot['Low'].min()), float(df_plot['High'].max())
+        # Include SL, entry, zone in range
+        for val in [zone_lo, zone_hi]:
+            if val > 0:
+                y_min = min(y_min, val)
+                y_max = max(y_max, val)
+        if levels and levels.get('valid', True):
+            sl_p = float(levels.get('sl', 0))
+            entry_p = float(levels.get('entry', 0))
+            if sl_p > 0:
+                y_min = min(y_min, sl_p)
+            if entry_p > 0:
+                y_max = max(y_max, entry_p)
+        # TP1 as edge arrow only (don't stretch Y-axis)
         pad = (y_max - y_min) * 0.08
         ax.set_ylim(y_min - pad, y_max + pad)
-        ax.set_xlim(-1, n + 10)
+        ax.set_xlim(-1, n + 14)
         ax.set_title(title, color='#dddddd', fontsize=11, pad=8, loc='left')
         ax.tick_params(colors='#888', labelsize=8)
         ax.yaxis.tick_right()
@@ -233,7 +308,8 @@ def generate_h1_chart(df_h1, ob, pair_conf, title):
         return None
 
 
-def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_price):
+def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_price,
+                       dealing_range=None):
     try:
         dp = pair_conf.get("decimal_places", 5)
         df_plot = df_m15.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(60).copy().reset_index(drop=True)
@@ -248,6 +324,7 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
         distal = float(ob.get('distal_line', 0))
         zone_hi, zone_lo = max(proximal, distal), min(proximal, distal)
 
+        # --- Zone band ---
         if zone_hi > 0 and zone_lo > 0:
             ax.add_patch(patches.Rectangle(
                 (0, zone_lo), n + 5, zone_hi - zone_lo,
@@ -258,41 +335,96 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
                 fill=False, edgecolor='#bb8fce', linestyle=':', linewidth=1.5, zorder=2
             ))
 
+        # --- Dealing range EQ line only ---
+        if dealing_range and dealing_range.get('valid'):
+            dr_eq = float(dealing_range['equilibrium'])
+            ax.axhline(y=dr_eq, color='#5dade2', linewidth=0.9, linestyle='-.', alpha=0.6, zorder=2)
+
+        # --- FVG with border and corrected label ---
         if fvg_data and fvg_data.get('exists'):
             ft, fb = float(fvg_data.get('fvg_top', 0)), float(fvg_data.get('fvg_bottom', 0))
             if ft > 0 and fb > 0:
                 ax.add_patch(patches.Rectangle(
                     (0, fb), n + 5, ft - fb,
-                    facecolor='#27ae60', alpha=0.2, zorder=1
+                    facecolor='#27ae60', alpha=0.10, zorder=1
                 ))
-                ax.text(0.5, ft, ' FVG', color='#2ecc71', fontsize=8, va='bottom', zorder=5)
+                ax.add_patch(patches.Rectangle(
+                    (0, fb), n + 5, ft - fb,
+                    fill=False, edgecolor='#2ecc71', linestyle='--', linewidth=1.0, zorder=2
+                ))
+                ax.text(0.5, ft, ' M15 FVG', color='#2ecc71', fontsize=8, va='bottom', zorder=5)
 
+        # --- Sweep marker ---
         if sweep_price is not None:
             ax.scatter([n - 2], [sweep_price], color='#ff5370', marker='x', s=120, linewidth=2, zorder=5)
             ax.text(n - 2, sweep_price, ' sweep', color='#ff5370', fontsize=8, va='bottom', zorder=5)
 
-        level_styles = {
-            'tp1': ('#27ae60', 'TP1'),
-            'entry': ('#e67e22', 'ENTRY'),
-            'sl': ('#e74c3c', 'SL')
-        }
-        for key, (color, lbl) in level_styles.items():
-            price = float(levels.get(key, 0))
-            if price > 0:
-                ax.axhline(y=price, color=color, linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
-                ax.text(n + 1, price, f" {lbl} {price:.{dp}f}",
-                        color=color, fontsize=8, va='center', fontweight='bold', zorder=5)
+        # --- BOS/CHoCH line ---
+        bos_price = float(ob.get('bos_swing_price', 0))
+        bos_tag = ob.get('bos_tag', 'BOS')
+        bos_color = '#00bcd4' if bos_tag == 'BOS' else '#ff9800'
+        if bos_price > 0:
+            ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
 
-        y_min, y_max = float(df_plot['Low'].min()), float(df_plot['High'].max())
+        # --- Entry / SL lines ---
+        entry_p = float(levels.get('entry', 0))
         sl_p = float(levels.get('sl', 0))
-        tp1_p = float(levels.get('tp1', 0))
+        if entry_p > 0:
+            ax.axhline(y=entry_p, color='#e67e22', linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
+        if sl_p > 0:
+            ax.axhline(y=sl_p, color='#e74c3c', linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
+
+        # --- Current price line ---
+        current = float(df_plot['Close'].iloc[-1])
+        ax.axhline(y=current, color='#ffffff', linewidth=0.8, linestyle='-', alpha=0.5, zorder=2)
+
+        # --- Labels with stacking ---
+        raw_labels = []
+        raw_labels.append((current, f" {current:.{dp}f}", '#ffffff'))
+        if bos_price > 0:
+            raw_labels.append((bos_price, f" {bos_tag} {bos_price:.{dp}f}", bos_color))
+        if entry_p > 0:
+            raw_labels.append((entry_p, f" ENTRY {entry_p:.{dp}f}", '#e67e22'))
+        if sl_p > 0:
+            raw_labels.append((sl_p, f" SL {sl_p:.{dp}f}", '#e74c3c'))
+        if dealing_range and dealing_range.get('valid'):
+            dr_eq = float(dealing_range['equilibrium'])
+            raw_labels.append((dr_eq, f" EQ {dr_eq:.{dp}f}", '#5dade2'))
+
+        stacked = smc_detector.stack_labels(raw_labels, pair_conf)
+        for adj_price, text, color in stacked:
+            weight = 'bold' if any(k in text for k in ['ENTRY', 'SL', 'BOS', 'CHoCH', 'EQ']) else 'normal'
+            ax.text(n + 1, adj_price, text, color=color, fontsize=8, va='center',
+                    fontweight=weight, zorder=5)
+
+        # --- Y-axis: candle range + SL + entry + zone. TP1 as edge arrow only ---
+        y_min, y_max = float(df_plot['Low'].min()), float(df_plot['High'].max())
         if sl_p > 0:
             y_min = min(y_min, sl_p)
-        if tp1_p > 0:
-            y_max = max(y_max, tp1_p)
+        if entry_p > 0:
+            y_max = max(y_max, entry_p)
+            y_min = min(y_min, entry_p)
+        y_min = min(y_min, zone_lo)
+        y_max = max(y_max, zone_hi)
         pad = (y_max - y_min) * 0.08
         ax.set_ylim(y_min - pad, y_max + pad)
-        ax.set_xlim(-1, n + 10)
+
+        # TP1 as edge arrow if outside visible range
+        tp1_p = float(levels.get('tp1', 0))
+        if tp1_p > 0:
+            y_lo, y_hi = ax.get_ylim()
+            if tp1_p > y_hi:
+                ax.text(n + 1, y_hi - pad * 0.3, f" \u2191 TP1 {tp1_p:.{dp}f}",
+                        color='#27ae60', fontsize=8, va='top', fontweight='bold', zorder=5)
+            elif tp1_p < y_lo:
+                ax.text(n + 1, y_lo + pad * 0.3, f" \u2193 TP1 {tp1_p:.{dp}f}",
+                        color='#27ae60', fontsize=8, va='bottom', fontweight='bold', zorder=5)
+            else:
+                ax.axhline(y=tp1_p, color='#27ae60', linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
+                ax.text(n + 1, tp1_p, f" TP1 {tp1_p:.{dp}f}",
+                        color='#27ae60', fontsize=8, va='center', fontweight='bold', zorder=5)
+
+        ax.set_xlim(-1, n + 14)
         ax.set_title(title, color='#dddddd', fontsize=11, pad=8, loc='left')
         ax.tick_params(colors='#888', labelsize=8)
         ax.yaxis.tick_right()
@@ -495,6 +627,7 @@ if __name__ == "__main__":
     for pair_conf in config["pairs"]:
         symbol = pair_conf["symbol"]
         name = pair_conf["name"]
+        dp = pair_conf.get("decimal_places", 5)
         entry_model = pair_conf.get("entry_model", "limit")
         pair_obs = active_obs.get(name, [])
         if not pair_obs:
@@ -513,7 +646,6 @@ if __name__ == "__main__":
             continue
 
         for ob in pair_obs:
-            dp = pair_conf.get("decimal_places", 5)
             proximal = float(ob['proximal_line'])
             if abs(current_price - proximal) > (pair_conf["atr_multiplier"] * h1_atr):
                 continue
@@ -522,9 +654,13 @@ if __name__ == "__main__":
             zone_top = max(proximal, float(ob['distal_line']))
             zone_bottom = min(proximal, float(ob['distal_line']))
 
+            # FVG: try M15 first, fall back to H1 from OB data. Track source.
             fvg_data = smc_detector.detect_fvg_in_zone(df_m15, bias, zone_top, zone_bottom)
-            if not fvg_data['exists']:
+            if fvg_data['exists']:
+                fvg_source = "M15"
+            else:
                 fvg_data = ob.get("fvg", {"exists": False})
+                fvg_source = "H1" if fvg_data.get('exists') else None
 
             gemini_risk = call_gemini_flash(name, bias, fetch_macro_news(name))
             macro_score = gemini_risk.get('macro_score', 1.0)
@@ -541,7 +677,8 @@ if __name__ == "__main__":
 
             scorecard_rows = smc_detector.generate_scorecard_rows(
                 bias, score_res['breakdown'], ob,
-                score_res.get('sweep_price'), score_res.get('sweep_tf', 'H1'), pair_conf
+                score_res.get('sweep_price'), score_res.get('sweep_tf', 'H1'), pair_conf,
+                score_res.get('dealing_range'), fvg_source
             )
 
             distance = abs(current_price - proximal)
@@ -563,6 +700,8 @@ if __name__ == "__main__":
                 "alert_ist": ist_now.isoformat()
             }
 
+            dr = score_res.get('dealing_range')
+
             if entry_model == "limit":
                 zone_id = f"{name}_{bias}_{round(proximal, dp)}"
                 if zone_id in phase2_sent:
@@ -571,10 +710,11 @@ if __name__ == "__main__":
 
                 phase2_sent[zone_id] = ist_now.isoformat()
 
-                h1_chart = generate_h1_chart(df_h1, ob, pair_conf, f"{name} H1 - {bias} zone context")
+                h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
+                                             f"{name} H1 - {bias} zone context", levels, dr)
                 m15_chart = generate_m15_chart(
                     df_m15, f"{name} M15 - Approach and entry",
-                    levels, ob, pair_conf, fvg_data, score_res.get('sweep_price')
+                    levels, ob, pair_conf, fvg_data, score_res.get('sweep_price'), dr
                 )
                 html = build_trade_email(
                     trade_data, name, pair_conf, "TRADE READY",
@@ -591,7 +731,6 @@ if __name__ == "__main__":
                 watch_id = f"{name}_{round(proximal, dp)}"
 
                 if zone_id in phase2_sent:
-                    # Already alerted. Refresh watch_state but preserve original alert timestamp.
                     if watch_id in new_watch_state:
                         trade_data["alert_ist"] = new_watch_state[watch_id].get(
                             "alert_ist", ist_now.isoformat()
@@ -600,10 +739,11 @@ if __name__ == "__main__":
                     continue
 
                 phase2_sent[zone_id] = ist_now.isoformat()
-                h1_chart = generate_h1_chart(df_h1, ob, pair_conf, f"{name} H1 - {bias} zone context")
+                h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
+                                             f"{name} H1 - {bias} zone context", levels, dr)
                 m15_chart = generate_m15_chart(
                     df_m15, f"{name} M15 - Approach",
-                    levels, ob, pair_conf, fvg_data, score_res.get('sweep_price')
+                    levels, ob, pair_conf, fvg_data, score_res.get('sweep_price'), dr
                 )
                 html = build_trade_email(
                     trade_data, name, pair_conf, "APPROACHING",
