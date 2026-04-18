@@ -125,6 +125,58 @@ def get_swing_points(df, lookback=4, bounds=None):
     return sorted(swings, key=lambda s: s["idx"])
 
 
+def compute_bos_sequence_count(df_h1, lookback=4):
+    """
+    Count how many consecutive BOS events have printed since the last CHoCH on H1.
+    Returns the count for the most recent directional trend.
+
+    Used by Phase 2 to ensure BOS sequence scoring is always derived from the
+    latest H1 data, not a potentially stale count from active_obs.json.
+
+    Returns dict: {'count': int, 'trend': 'bullish'|'bearish'|None}
+    """
+    if df_h1 is None or len(df_h1) < lookback * 2 + 2:
+        return {'count': 1, 'trend': None}
+
+    C = df_h1['Close'].values.astype(float)
+    n = len(df_h1)
+    swings = get_swing_points(df_h1, lookback=lookback)
+
+    trend_state = None
+    bos_seq_counter = 0
+
+    for i in range(lookback + 1, n):
+        past_swings = [s for s in swings if s['idx'] < i]
+        if len(past_swings) < 2:
+            continue
+        latest_high = [s for s in past_swings if s['type'] == 'high']
+        latest_low = [s for s in past_swings if s['type'] == 'low']
+        if not latest_high or not latest_low:
+            continue
+
+        sh, sl = latest_high[-1], latest_low[-1]
+        bos_detected, bos_type = False, None
+
+        if C[i] > sh['price'] and C[i - 1] <= sh['price']:
+            bos_detected, bos_type = True, 'bullish'
+        elif C[i] < sl['price'] and C[i - 1] >= sl['price']:
+            bos_detected, bos_type = True, 'bearish'
+
+        if not bos_detected:
+            continue
+
+        if trend_state is None or trend_state != bos_type:
+            # CHoCH — reset counter
+            bos_seq_counter = 0
+        else:
+            # BOS continuation
+            bos_seq_counter += 1
+        trend_state = bos_type
+
+    # Counter stored zero-indexed (0 = first BOS after CHoCH). Return 1-indexed.
+    return {'count': max(1, bos_seq_counter + 1), 'trend': trend_state}
+
+
 def stack_labels(labels, pair_conf):
     """
     Prevent label overlap on charts by offsetting prices that are too close.
@@ -332,19 +384,37 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
             break
     bd["freshness"] = 0.5 if is_fresh else 0.0
 
-    # Premium / Discount — impulse-leg dealing range, 30/70 band scoring
+    # Premium / Discount — graded scoring on impulse-leg dealing range.
+    # LONG wants price in bottom of range (discount):
+    #   position <= 0.30  → 1.0 (deep discount)
+    #   0.30 < position <= 0.45 → 0.5 (discount, not deep)
+    #   position > 0.45 → 0.0 (not in discount)
+    # SHORT wants price in top of range (premium):
+    #   position >= 0.70  → 1.0 (deep premium)
+    #   0.55 <= position < 0.70 → 0.5 (premium, not deep)
+    #   position < 0.55 → 0.0 (not in premium)
+    # `pd_position` stored in breakdown so scorecard row can show exact percentage.
     h1_atr_val = compute_atr(df_h1)
     dr = get_dealing_range(ob, df_h1, h1_atr_val)
+    pd_position = None
     if dr["valid"]:
         rng_width = dr["range_high"] - dr["range_low"]
         if rng_width > 0:
-            position = (current_price - dr["range_low"]) / rng_width
-            if bias == "LONG" and position <= 0.30:
-                bd["pd"] = 1.0
-            elif bias == "SHORT" and position >= 0.70:
-                bd["pd"] = 1.0
-            else:
-                bd["pd"] = 0.0
+            pd_position = (current_price - dr["range_low"]) / rng_width
+            if bias == "LONG":
+                if pd_position <= 0.30:
+                    bd["pd"] = 1.0
+                elif pd_position <= 0.45:
+                    bd["pd"] = 0.5
+                else:
+                    bd["pd"] = 0.0
+            else:  # SHORT
+                if pd_position >= 0.70:
+                    bd["pd"] = 1.0
+                elif pd_position >= 0.55:
+                    bd["pd"] = 0.5
+                else:
+                    bd["pd"] = 0.0
         else:
             bd["pd"] = 0.0
     else:
@@ -352,7 +422,8 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         dr = {"valid": False, "range_high": 0, "range_low": 0, "equilibrium": 0,
               "source": dr.get("source", "unknown")}
 
-    # Killzone — widened, pair-aware
+    # Killzone — IST-based (hardcoded IST clock hours; no DST drift needed since
+    # windows are defined in local IST and IST has no DST).
     ist_hour = (datetime.utcnow() + timedelta(hours=5, minutes=30)).hour
     pair_type = pair_conf.get("pair_type", "forex") if pair_conf else "forex"
     bd["killzone"] = 1.0 if _killzone_hit(ist_hour, pair_type) else 0.0
@@ -364,12 +435,13 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         "breakdown": bd,
         "sweep_price": sweep_price,
         "sweep_tf": sweep_tf,
-        "dealing_range": dr
+        "dealing_range": dr,
+        "pd_position": pd_position
     }
 
 
 def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_conf,
-                            dealing_range=None, fvg_source=None):
+                            dealing_range=None, fvg_source=None, pd_position=None):
     """Return list of (label, score, max_score, status, explanation) for email rendering."""
     dp = _dp(pair_conf)
     rows = []
@@ -405,7 +477,7 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     else:
         rows.append(("Liquidity Sweep", s, 2.5, "fail", "No recent stop-hunt sweep detected near the zone."))
 
-    # 3. FVG — with source label
+    # 3. FVG — with source label (M15 / H1)
     s = breakdown.get("fvg", 0)
     src_label = f"{fvg_source} " if fvg_source else ""
     if s >= 1.5:
@@ -426,7 +498,7 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         rows.append(("Freshness", s, 0.5, "warn",
                       "Price has been near this zone in the last 5 H1 candles — not a first-touch setup."))
 
-    # 5. Premium / Discount — with dealing range details
+    # 5. Premium / Discount — graded, with exact percentage and dealing range details
     s = breakdown.get("pd", 0)
     dr_src = ""
     if dealing_range and dealing_range.get("valid"):
@@ -436,19 +508,31 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         if dealing_range.get("source", "").startswith("expanded"):
             dr_src += " [expanded]"
 
-    if s >= 1.0:
-        if bias == "LONG":
-            rows.append(("Premium / Discount", s, 1.0, "ok",
-                          f"Price is in deep discount (bottom 30% of dealing range).{dr_src}"))
-        else:
-            rows.append(("Premium / Discount", s, 1.0, "ok",
-                          f"Price is in deep premium (top 30% of dealing range).{dr_src}"))
-    elif dealing_range and not dealing_range.get("valid"):
+    pd_pct_str = f"{pd_position * 100:.0f}%" if pd_position is not None else "n/a"
+
+    if not dealing_range or not dealing_range.get("valid"):
         rows.append(("Premium / Discount", s, 1.0, "warn",
                       "Dealing range too narrow to score. Neutral."))
-    else:
-        rows.append(("Premium / Discount", s, 1.0, "fail",
-                      f"Price is not in the optimal 30% zone of the dealing range.{dr_src}"))
+    elif bias == "LONG":
+        if s >= 1.0:
+            rows.append(("Premium / Discount", s, 1.0, "ok",
+                          f"Price at {pd_pct_str} of dealing range (deep discount).{dr_src}"))
+        elif s >= 0.5:
+            rows.append(("Premium / Discount", s, 1.0, "warn",
+                          f"Price at {pd_pct_str} of dealing range (discount, not deep).{dr_src}"))
+        else:
+            rows.append(("Premium / Discount", s, 1.0, "fail",
+                          f"Price at {pd_pct_str} of dealing range (above equilibrium — not optimal for LONG).{dr_src}"))
+    else:  # SHORT
+        if s >= 1.0:
+            rows.append(("Premium / Discount", s, 1.0, "ok",
+                          f"Price at {pd_pct_str} of dealing range (deep premium).{dr_src}"))
+        elif s >= 0.5:
+            rows.append(("Premium / Discount", s, 1.0, "warn",
+                          f"Price at {pd_pct_str} of dealing range (premium, not deep).{dr_src}"))
+        else:
+            rows.append(("Premium / Discount", s, 1.0, "fail",
+                          f"Price at {pd_pct_str} of dealing range (below equilibrium — not optimal for SHORT).{dr_src}"))
 
     # 6. Killzone
     s = breakdown.get("killzone", 0)
@@ -469,21 +553,59 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
 
 
 def detect_ltf_choch(df_m5, bias, bounds):
-    """Detect M5 CHoCH strictly inside HTF zone bounds."""
-    swings = get_swing_points(df_m5, lookback=3, bounds=bounds)
+    """
+    Detect M5 CHoCH where the BREAK LEVEL is near the HTF zone.
+
+    Old behavior (dropped): required the M5 swing to sit *inside* the zone.
+    This failed on tight zones (NAS100/GOLD) where M5 swings formed just outside.
+
+    New behavior:
+    - Scan M5 swings across the full window (no bounds filter).
+    - For LONG: the most recent swing high that gets broken must sit inside the zone
+      OR within 1x M5 ATR above the zone's top.
+    - For SHORT: the most recent swing low that gets broken must sit inside the zone
+      OR within 1x M5 ATR below the zone's bottom.
+    - Break = current close crosses the swing level and previous close was on the other side.
+    """
+    if df_m5 is None or len(df_m5) < 10:
+        return {"fired": False, "level": None}
+
+    # Swings across full window — no bounds filter
+    swings = get_swing_points(df_m5, lookback=3)
     if len(swings) < 2:
         return {"fired": False, "level": None}
 
     C = df_m5['Close'].values
-    latest_high = [s for s in swings if s['type'] == 'high']
-    latest_low = [s for s in swings if s['type'] == 'low']
+    m5_atr = compute_atr(df_m5) or 0.0
 
-    if bias == 'LONG' and latest_high:
-        if C[-1] > latest_high[-1]['price'] and C[-2] <= latest_high[-1]['price']:
-            return {"fired": True, "level": float(latest_high[-1]['price'])}
-    elif bias == 'SHORT' and latest_low:
-        if C[-1] < latest_low[-1]['price'] and C[-2] >= latest_low[-1]['price']:
-            return {"fired": True, "level": float(latest_low[-1]['price'])}
+    # Grace band: 1x M5 ATR above (LONG) or below (SHORT) the zone
+    zone_max = bounds['max']
+    zone_min = bounds['min']
+
+    if bias == 'LONG':
+        long_grace_top = zone_max + m5_atr
+        # Latest swing high whose PRICE sits inside zone OR within grace above it
+        eligible_highs = [
+            s for s in swings
+            if s['type'] == 'high' and zone_min <= s['price'] <= long_grace_top
+        ]
+        if not eligible_highs:
+            return {"fired": False, "level": None}
+        latest = eligible_highs[-1]
+        if C[-1] > latest['price'] and C[-2] <= latest['price']:
+            return {"fired": True, "level": float(latest['price'])}
+    elif bias == 'SHORT':
+        short_grace_bottom = zone_min - m5_atr
+        eligible_lows = [
+            s for s in swings
+            if s['type'] == 'low' and short_grace_bottom <= s['price'] <= zone_max
+        ]
+        if not eligible_lows:
+            return {"fired": False, "level": None}
+        latest = eligible_lows[-1]
+        if C[-1] < latest['price'] and C[-2] >= latest['price']:
+            return {"fired": True, "level": float(latest['price'])}
+
     return {"fired": False, "level": None}
 
 
