@@ -127,10 +127,8 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
             ax.scatter([n - 2], [sweep_price], color='#ff5370', marker='x', s=120, linewidth=2, zorder=5)
             ax.text(n - 2, sweep_price, ' sweep', color='#ff5370', fontsize=8, va='bottom', zorder=5)
 
-        # Execution levels
+        # Execution levels — draw lines, collect labels for stacking
         level_styles = {
-            'tp1': ('#27ae60', 'TP1'),
-            'tp2': ('#1abc9c', 'TP2'),
             'entry': ('#e67e22', 'ENTRY'),
             'sl': ('#e74c3c', 'SL')
         }
@@ -138,20 +136,55 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
             price = float(levels.get(key, 0))
             if price > 0:
                 ax.axhline(y=price, color=color, linestyle='-', linewidth=1.3, alpha=0.9, zorder=4)
-                ax.text(n + 1, price, f" {lbl} {price:.{dp}f}",
-                        color=color, fontsize=8, va='center', fontweight='bold', zorder=5)
+
+        # Collect all labels for stacking
+        raw_labels = []
+        for key, (color, lbl) in level_styles.items():
+            price = float(levels.get(key, 0))
+            if price > 0:
+                raw_labels.append((price, f" {lbl} {price:.{dp}f}", color))
+        if choch_level is not None and choch_level > 0:
+            raw_labels.append((choch_level, f" M5 CHoCH {choch_level:.{dp}f}", '#ff9800'))
+        # TP1/TP2 added as labels only (lines drawn separately below)
+        for tp_key, tp_color, tp_lbl in [('tp1', '#27ae60', 'TP1'), ('tp2', '#1abc9c', 'TP2')]:
+            tp_p = float(levels.get(tp_key, 0))
+            if tp_p > 0:
+                raw_labels.append((tp_p, f" {tp_lbl} {tp_p:.{dp}f}", tp_color))
+
+        stacked = smc_detector.stack_labels(raw_labels, pair_conf)
+        for adj_price, text, color in stacked:
+            ax.text(n + 1, adj_price, text, color=color, fontsize=8,
+                    va='center', fontweight='bold', zorder=5)
 
         y_min = float(df_plot['Low'].min())
         y_max = float(df_plot['High'].max())
         sl_p = float(levels.get('sl', 0))
-        tp2_p = float(levels.get('tp2', 0))
+        entry_p = float(levels.get('entry', 0))
         if sl_p > 0:
             y_min = min(y_min, sl_p)
-        if tp2_p > 0:
-            y_max = max(y_max, tp2_p)
+        if entry_p > 0:
+            y_max = max(y_max, entry_p)
+            y_min = min(y_min, entry_p)
+        y_min = min(y_min, zone_lo)
+        y_max = max(y_max, zone_hi)
         pad = (y_max - y_min) * 0.08
         ax.set_ylim(y_min - pad, y_max + pad)
-        ax.set_xlim(-1, n + 12)
+
+        # TP1/TP2 lines: draw only if within visible range, else edge arrow
+        for tp_key, tp_color, tp_lbl in [('tp1', '#27ae60', 'TP1'), ('tp2', '#1abc9c', 'TP2')]:
+            tp_p = float(levels.get(tp_key, 0))
+            if tp_p > 0:
+                y_lo, y_hi = ax.get_ylim()
+                if y_lo <= tp_p <= y_hi:
+                    ax.axhline(y=tp_p, color=tp_color, linestyle='-', linewidth=1.3, alpha=0.9, zorder=4)
+                elif tp_p > y_hi:
+                    ax.text(n + 1, y_hi - pad * 0.3, f" \u2191 {tp_lbl} {tp_p:.{dp}f}",
+                            color=tp_color, fontsize=8, va='top', fontweight='bold', zorder=5)
+                elif tp_p < y_lo:
+                    ax.text(n + 1, y_lo + pad * 0.3, f" \u2193 {tp_lbl} {tp_p:.{dp}f}",
+                            color=tp_color, fontsize=8, va='bottom', fontweight='bold', zorder=5)
+
+        ax.set_xlim(-1, n + 14)
         ax.set_title(title, color='#dddddd', fontsize=11, pad=8, loc='left')
         ax.tick_params(colors='#888', labelsize=8)
         ax.yaxis.tick_right()
