@@ -23,7 +23,7 @@ with open("config.json") as f:
     config = json.load(f)
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "dummy")
-GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "dummy@gmail.com")
+GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "avinash.somjani23@gmail.com")
 GMAIL_PASS = os.environ.get("GMAIL_APP_PASSWORD", "dummy")
 
 
@@ -44,8 +44,11 @@ def load_json(path, default):
 
 
 def save_json(path, data):
-    with open(path, "w") as f:
+    """Atomic save: write to temp file then rename."""
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
+    os.replace(tmp, path)
 
 
 def clean_df(df):
@@ -80,6 +83,127 @@ def atr_distance_label(distance, atr, tf_label="M15"):
     if ratio < 3:
         return f"Price is {ratio:.1f}x {tf_label} ATR away (2-3 candles)."
     return f"Price is {ratio:.1f}x {tf_label} ATR away — still distant."
+
+
+# ---------------------------------------------------------------------------
+# Fetch with retry + staleness check (B3, B5)
+# ---------------------------------------------------------------------------
+
+# Staleness thresholds in hours. If latest candle is older than this, data is
+# considered stale and fetch is skipped (after retries).
+STALENESS_HOURS = {
+    "1h": 2.0,
+    "15m": 0.75,
+    "5m": 0.30
+}
+
+
+def _check_staleness(df, interval):
+    """Return (is_stale, age_hours). age_hours is None if df is empty."""
+    if df is None or df.empty:
+        return True, None
+    try:
+        last_ts = df.index[-1]
+        if hasattr(last_ts, 'tz_convert') and last_ts.tzinfo is not None:
+            last_utc = last_ts.tz_convert('UTC').tz_localize(None).to_pydatetime()
+        elif hasattr(last_ts, 'to_pydatetime'):
+            last_utc = last_ts.to_pydatetime()
+            if last_utc.tzinfo is not None:
+                last_utc = last_utc.replace(tzinfo=None)
+        else:
+            last_utc = last_ts
+
+        age_hours = (datetime.utcnow() - last_utc).total_seconds() / 3600
+        max_age = STALENESS_HOURS.get(interval, 2.0)
+        return age_hours > max_age, age_hours
+    except Exception:
+        return False, None  # Can't determine — don't block
+
+
+def fetch_with_retry(symbol, period, interval, retries=2):
+    """
+    Fetch yfinance data with retry + staleness check.
+    Returns cleaned df on success, None on persistent failure/staleness.
+    Logs staleness skips to yfinance_stale_log.json for weekly review.
+    """
+    last_error = None
+    last_age = None
+
+    for attempt in range(retries + 1):
+        try:
+            raw = yf.download(symbol, period=period, interval=interval,
+                              progress=False, timeout=20)
+            df = clean_df(raw)
+            is_stale, age_hours = _check_staleness(df, interval)
+
+            if df is not None and not is_stale:
+                return df
+
+            last_age = age_hours
+            if is_stale:
+                last_error = f"stale data (age {age_hours:.2f}h, limit {STALENESS_HOURS.get(interval, 2.0)}h)"
+            else:
+                last_error = "empty dataframe"
+        except Exception as e:
+            last_error = str(e)
+
+        if attempt < retries:
+            wait = 2 ** attempt  # 1s, 2s
+            print(f"  [RETRY {attempt + 1}/{retries}] {symbol} {interval}: {last_error}. Waiting {wait}s.")
+            time.sleep(wait)
+
+    # All retries exhausted — log and return None
+    print(f"  [SKIP] {symbol} {interval}: {last_error}")
+    _log_stale_skip(symbol, interval, last_error, last_age)
+    return None
+
+
+def _log_stale_skip(symbol, interval, reason, age_hours):
+    """Log fetch failures for weekly review."""
+    try:
+        log = load_json("yfinance_stale_log.json", [])
+        log.append({
+            "ts": get_ist_now().isoformat(),
+            "symbol": symbol,
+            "interval": interval,
+            "reason": reason,
+            "age_hours": round(age_hours, 2) if age_hours is not None else None
+        })
+        # Keep only last 200 entries
+        log = log[-200:]
+        save_json("yfinance_stale_log.json", log)
+    except Exception as e:
+        print(f"  [LOG ERR] stale log: {e}")
+
+
+def _log_gemini_failure(pair, reason):
+    """Log Gemini API failures for weekly review (B1)."""
+    try:
+        log = load_json("gemini_failure_log.json", [])
+        log.append({
+            "ts": get_ist_now().isoformat(),
+            "pair": pair,
+            "reason": reason
+        })
+        log = log[-200:]
+        save_json("gemini_failure_log.json", log)
+    except Exception as e:
+        print(f"  [LOG ERR] gemini log: {e}")
+
+
+def _log_chart_failure(pair, chart_type):
+    """Log chart render failures for weekly review (B8)."""
+    try:
+        log = load_json("chart_failure_log.json", [])
+        log.append({
+            "ts": get_ist_now().isoformat(),
+            "pair": pair,
+            "chart_type": chart_type
+        })
+        log = log[-200:]
+        save_json("chart_failure_log.json", log)
+    except Exception as e:
+        print(f"  [LOG ERR] chart log: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -124,14 +248,20 @@ def call_gemini_flash(pair, bias, news_headlines):
             "thinkingConfig": {"thinkingBudget": 0}
         }
     }
-    for _ in range(3):
+    last_err = "unknown"
+    for attempt in range(3):
         try:
             r = requests.post(url, json=body, timeout=20).json()
             if "candidates" in r:
                 return json.loads(r["candidates"][0]["content"]["parts"][0]["text"].strip())
-        except Exception:
+            last_err = f"no candidates field, attempt {attempt + 1}"
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {str(e)[:80]}"
             time.sleep(3)
-    return {"macro_score": 1.0, "macro_summary": "Gemini API failed. Defaulting to safe."}
+
+    # All attempts failed — log and default to safe-permissive
+    _log_gemini_failure(pair, last_err)
+    return {"macro_score": 1.0, "macro_summary": "Gemini API unavailable. Defaulting to safe (manual macro check recommended)."}
 
 
 # ---------------------------------------------------------------------------
@@ -198,8 +328,8 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         # --- BOS/CHoCH line ---
         bos_price = float(ob.get('bos_swing_price', 0))
         bos_tag = ob.get('bos_tag', 'BOS')
+        bos_color = '#00bcd4' if bos_tag == 'BOS' else '#ff9800'
         if bos_price > 0:
-            bos_color = '#00bcd4' if bos_tag == 'BOS' else '#ff9800'
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
 
         # --- FVG with border and label ---
@@ -218,6 +348,7 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                 ax.text(0.5, ft, ' H1 FVG', color='#2ecc71', fontsize=8, va='bottom', zorder=5)
 
         # --- Dealing range band + equilibrium ---
+        dr_eq = None
         if dealing_range and dealing_range.get('valid'):
             dr_hi = float(dealing_range['range_high'])
             dr_lo = float(dealing_range['range_low'])
@@ -239,9 +370,13 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             ax.axhline(y=dr_eq, color='#5dade2', linewidth=0.9, linestyle='-.', alpha=0.6, zorder=2)
 
         # --- Entry / SL lines (Phase 2 only, when levels provided) ---
+        entry_p = 0
+        sl_p = 0
+        tp1_p = 0
         if levels and levels.get('valid', True):
             entry_p = float(levels.get('entry', 0))
             sl_p = float(levels.get('sl', 0))
+            tp1_p = float(levels.get('tp1', 0))
             if entry_p > 0:
                 ax.axhline(y=entry_p, color='#e67e22', linewidth=1.0, linestyle='--', alpha=0.8, zorder=3)
             if sl_p > 0:
@@ -259,18 +394,14 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         if bos_price > 0:
             raw_labels.append((bos_price, f" {bos_tag} {bos_price:.{dp}f}", bos_color))
         raw_labels.append((current, f" {current:.{dp}f}", '#ffffff'))
-        if dealing_range and dealing_range.get('valid'):
+        if dr_eq is not None:
             raw_labels.append((dr_eq, f" EQ {dr_eq:.{dp}f}", '#5dade2'))
-        if levels and levels.get('valid', True):
-            entry_p = float(levels.get('entry', 0))
-            sl_p = float(levels.get('sl', 0))
-            tp1_p = float(levels.get('tp1', 0))
-            if entry_p > 0:
-                raw_labels.append((entry_p, f" ENTRY {entry_p:.{dp}f}", '#e67e22'))
-            if sl_p > 0:
-                raw_labels.append((sl_p, f" SL {sl_p:.{dp}f}", '#e74c3c'))
-            if tp1_p > 0:
-                raw_labels.append((tp1_p, f" TP1 {tp1_p:.{dp}f}", '#27ae60'))
+        if entry_p > 0:
+            raw_labels.append((entry_p, f" ENTRY {entry_p:.{dp}f}", '#e67e22'))
+        if sl_p > 0:
+            raw_labels.append((sl_p, f" SL {sl_p:.{dp}f}", '#e74c3c'))
+        if tp1_p > 0:
+            raw_labels.append((tp1_p, f" TP1 {tp1_p:.{dp}f}", '#27ae60'))
 
         stacked = smc_detector.stack_labels(raw_labels, pair_conf)
         for adj_price, text, color in stacked:
@@ -280,19 +411,14 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
 
         # --- Y-axis range ---
         y_min, y_max = float(df_plot['Low'].min()), float(df_plot['High'].max())
-        # Include SL, entry, zone in range
         for val in [zone_lo, zone_hi]:
             if val > 0:
                 y_min = min(y_min, val)
                 y_max = max(y_max, val)
-        if levels and levels.get('valid', True):
-            sl_p = float(levels.get('sl', 0))
-            entry_p = float(levels.get('entry', 0))
-            if sl_p > 0:
-                y_min = min(y_min, sl_p)
-            if entry_p > 0:
-                y_max = max(y_max, entry_p)
-        # TP1 as edge arrow only (don't stretch Y-axis)
+        if sl_p > 0:
+            y_min = min(y_min, sl_p)
+        if entry_p > 0:
+            y_max = max(y_max, entry_p)
         pad = (y_max - y_min) * 0.08
         ax.set_ylim(y_min - pad, y_max + pad)
         ax.set_xlim(-1, n + 14)
@@ -466,7 +592,8 @@ def build_scorecard_html(rows, total):
 
 
 def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_score,
-                      atr_label, distance_str, dollar_risk_str):
+                      atr_label, distance_str, dollar_risk_str,
+                      h1_chart_ok=True, m15_chart_ok=True):
     dp = pair_conf.get("decimal_places", 5)
     bias = data.get("bias", "-")
     ist_time = get_ist_now().strftime('%H:%M IST')
@@ -521,6 +648,17 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         / Distal {ob.get('distal_line', 0):.{dp}f}
     </div>"""
 
+    # Chart blocks with fallback banner (B8)
+    if h1_chart_ok:
+        h1_chart_block = '<img src="cid:chart_h1" style="width:100%;border-radius:6px;margin-bottom:12px;" />'
+    else:
+        h1_chart_block = '<div style="padding:10px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:12px;margin-bottom:12px;">&#9888; H1 chart failed to render for this alert. Check GitHub Actions logs.</div>'
+
+    if m15_chart_ok:
+        m15_chart_block = '<img src="cid:chart_m15" style="width:100%;border-radius:6px;margin-bottom:12px;" />'
+    else:
+        m15_chart_block = '<div style="padding:10px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:12px;margin-bottom:12px;">&#9888; M15 chart failed to render for this alert. Check GitHub Actions logs.</div>'
+
     return f"""<html><body style="font-family:Arial,sans-serif;background:#0d0d1a;padding:12px;margin:0;">
     <div style="max-width:650px;margin:auto;background:#13131f;border-radius:14px;overflow:hidden;">
         <div style="background:#1a1a2e;padding:14px 18px;">
@@ -533,9 +671,9 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             {context_html}
             {scorecard_html}
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">H1 Context</div>
-            <img src="cid:chart_h1" style="width:100%;border-radius:6px;margin-bottom:12px;" />
+            {h1_chart_block}
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">M15 Approach</div>
-            <img src="cid:chart_m15" style="width:100%;border-radius:6px;margin-bottom:12px;" />
+            {m15_chart_block}
             <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #888;border-radius:4px;font-size:12px;color:#bbb;line-height:1.5;">
                 <b style="color:#eee;">Macro Context:</b> {data.get('macro_summary', 'N/A')}
             </div>
@@ -618,6 +756,8 @@ if __name__ == "__main__":
         del phase2_sent[k]
     if keys_to_purge:
         print(f"  [PURGE] Removed {len(keys_to_purge)} expired dedup keys: {keys_to_purge}")
+        # B4: Save immediately after purge to survive mid-scan crashes
+        save_json("phase2_sent.json", phase2_sent)
 
     balance = config["account"]["balance"]
     risk_pct = config["account"]["risk_percent"]
@@ -634,9 +774,10 @@ if __name__ == "__main__":
             continue
 
         radar_tf = pair_conf.get("radar_tf", "15m")
-        df_m15 = clean_df(yf.download(symbol, period="5d", interval=radar_tf, progress=False))
-        df_h1 = clean_df(yf.download(symbol, period="15d", interval="1h", progress=False))
+        df_m15 = fetch_with_retry(symbol, "5d", radar_tf)
+        df_h1 = fetch_with_retry(symbol, "15d", "1h")
         if df_m15 is None or df_h1 is None:
+            print(f"  [SKIP] {name}: data unavailable after retries")
             continue
 
         current_price = float(df_m15['Close'].iloc[-1])
@@ -644,6 +785,10 @@ if __name__ == "__main__":
         m15_atr = smc_detector.compute_atr(df_m15)
         if not h1_atr:
             continue
+
+        # A2: Always compute BOS sequence count from fresh H1 data.
+        # This overrides the count stored in active_obs.json (which may be stale).
+        bos_counter = smc_detector.compute_bos_sequence_count(df_h1, lookback=4)
 
         for ob in pair_obs:
             proximal = float(ob['proximal_line'])
@@ -653,6 +798,13 @@ if __name__ == "__main__":
             bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
             zone_top = max(proximal, float(ob['distal_line']))
             zone_bottom = min(proximal, float(ob['distal_line']))
+
+            # A2: Inject fresh BOS count into ob before scoring.
+            # Only applies when trend direction matches the ob's direction.
+            ob_direction = ob.get('direction', 'bullish')
+            if bos_counter['trend'] == ob_direction:
+                ob['bos_sequence_count'] = bos_counter['count']
+            # If trend doesn't match or is None, leave whatever was in active_obs.json as-is.
 
             # FVG: try M15 first, fall back to H1 from OB data. Track source.
             fvg_data = smc_detector.detect_fvg_in_zone(df_m15, bias, zone_top, zone_bottom)
@@ -675,10 +827,11 @@ if __name__ == "__main__":
             if not levels['valid']:
                 continue
 
+            # B2: Pass fvg_source, dealing_range, pd_position into scorecard rows
             scorecard_rows = smc_detector.generate_scorecard_rows(
                 bias, score_res['breakdown'], ob,
                 score_res.get('sweep_price'), score_res.get('sweep_tf', 'H1'), pair_conf,
-                score_res.get('dealing_range'), fvg_source
+                score_res.get('dealing_range'), fvg_source, score_res.get('pd_position')
             )
 
             distance = abs(current_price - proximal)
@@ -710,16 +863,27 @@ if __name__ == "__main__":
 
                 phase2_sent[zone_id] = ist_now.isoformat()
 
+                # B2: Pass levels and dr to H1 chart
                 h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
                                              f"{name} H1 - {bias} zone context", levels, dr)
                 m15_chart = generate_m15_chart(
                     df_m15, f"{name} M15 - Approach and entry",
                     levels, ob, pair_conf, fvg_data, score_res.get('sweep_price'), dr
                 )
+
+                # B8: Track chart rendering success for email banner
+                h1_ok = h1_chart is not None
+                m15_ok = m15_chart is not None
+                if not h1_ok:
+                    _log_chart_failure(name, "h1_phase2_limit")
+                if not m15_ok:
+                    _log_chart_failure(name, "m15_phase2_limit")
+
                 html = build_trade_email(
                     trade_data, name, pair_conf, "TRADE READY",
                     scorecard_rows, score_res['total'],
-                    atr_label, distance_str, dollar_risk_str
+                    atr_label, distance_str, dollar_risk_str,
+                    h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
                 send_email(
                     f"TRADE READY | {name} | {bias} | {ist_now.strftime('%H:%M IST')}",
@@ -731,6 +895,7 @@ if __name__ == "__main__":
                 watch_id = f"{name}_{round(proximal, dp)}"
 
                 if zone_id in phase2_sent:
+                    # Already alerted. Refresh watch_state but preserve original alert timestamp.
                     if watch_id in new_watch_state:
                         trade_data["alert_ist"] = new_watch_state[watch_id].get(
                             "alert_ist", ist_now.isoformat()
@@ -739,16 +904,28 @@ if __name__ == "__main__":
                     continue
 
                 phase2_sent[zone_id] = ist_now.isoformat()
+
+                # B2: Pass levels and dr to H1 chart
                 h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
                                              f"{name} H1 - {bias} zone context", levels, dr)
                 m15_chart = generate_m15_chart(
                     df_m15, f"{name} M15 - Approach",
                     levels, ob, pair_conf, fvg_data, score_res.get('sweep_price'), dr
                 )
+
+                # B8: Track chart rendering success
+                h1_ok = h1_chart is not None
+                m15_ok = m15_chart is not None
+                if not h1_ok:
+                    _log_chart_failure(name, "h1_phase2_ltf")
+                if not m15_ok:
+                    _log_chart_failure(name, "m15_phase2_ltf")
+
                 html = build_trade_email(
                     trade_data, name, pair_conf, "APPROACHING",
                     scorecard_rows, score_res['total'],
-                    atr_label, distance_str, dollar_risk_str
+                    atr_label, distance_str, dollar_risk_str,
+                    h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
                 send_email(
                     f"APPROACHING | {name} | {bias} | {ist_now.strftime('%H:%M IST')}",
