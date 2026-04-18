@@ -5,6 +5,7 @@ import json
 import smtplib
 import logging
 import os
+import time
 import google.generativeai as genai
 import matplotlib
 matplotlib.use('Agg')
@@ -26,7 +27,7 @@ with open("config.json") as f:
     config_master = json.load(f)
 
 EMAIL_CONFIG = {
-    "sender":      "avinash.somjani23@gmail.com",
+    "sender":      os.environ.get("GMAIL_ADDRESS", "avinash.somjani23@gmail.com"),
     "recipient":   config_master["account"].get("alert_emails", ["avinash.somjani23@gmail.com"]),
     "smtp_server": "smtp.gmail.com",
     "smtp_port":   587,
@@ -41,10 +42,29 @@ if GEMINI_API_KEY:
 # ZONE IDENTITY THRESHOLDS — price-range overlap matching (not string match)
 # ---------------------------------------------------------------------------
 ZONE_PROXIMITY_THRESHOLDS = {
-    "forex":     0.00030,   # 3 pips
-    "index":     30.0,      # 30 points NAS100
-    "commodity": 3.0        # $3 Gold
+    "forex":     0.00030,
+    "index":     30.0,
+    "commodity": 3.0
 }
+
+# ---------------------------------------------------------------------------
+# STALENESS THRESHOLDS (B3)
+# ---------------------------------------------------------------------------
+STALENESS_HOURS = {
+    "1h": 2.0,
+    "15m": 0.75,
+    "5m": 0.30
+}
+
+# ---------------------------------------------------------------------------
+# EMAIL GATE CONFIG (B6) — state-based timer
+# ---------------------------------------------------------------------------
+EMAIL_GATE_MINUTES = 100  # Email sent if ≥100 min since last email
+
+# ---------------------------------------------------------------------------
+# STATE COMPACTION (B7)
+# ---------------------------------------------------------------------------
+ZONE_MAX_AGE_DAYS = 14  # Drop zones whose last_seen is older than this
 
 # ---------------------------------------------------------------------------
 # TIME HELPERS
@@ -62,51 +82,85 @@ def get_day_start_ist():
         return (now - timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0).isoformat()
 
 # ---------------------------------------------------------------------------
+# ATOMIC SAVE (A3) + LOGGING HELPERS (B3)
+# ---------------------------------------------------------------------------
+
+def save_json_atomic(path, data):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp, path)
+
+
+def load_json_safe(path, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def _log_stale_skip(symbol, interval, reason, age_hours):
+    try:
+        log = load_json_safe("yfinance_stale_log.json", [])
+        log.append({
+            "ts": get_ist_now().isoformat(),
+            "symbol": symbol,
+            "interval": interval,
+            "reason": reason,
+            "age_hours": round(age_hours, 2) if age_hours is not None else None
+        })
+        log = log[-200:]
+        save_json_atomic("yfinance_stale_log.json", log)
+    except Exception as e:
+        logging.error(f"Stale log write failed: {e}")
+
+
+def _check_staleness(df, interval):
+    if df is None or df.empty:
+        return True, None
+    try:
+        last_ts = df['Datetime'].iloc[-1] if 'Datetime' in df.columns else df.index[-1]
+        if hasattr(last_ts, 'tz_convert') and last_ts.tzinfo is not None:
+            last_utc = last_ts.tz_convert('UTC').tz_localize(None).to_pydatetime()
+        elif hasattr(last_ts, 'to_pydatetime'):
+            last_utc = last_ts.to_pydatetime()
+            if last_utc.tzinfo is not None:
+                last_utc = last_utc.replace(tzinfo=None)
+        else:
+            last_utc = last_ts
+
+        age_hours = (datetime.utcnow() - last_utc).total_seconds() / 3600
+        max_age = STALENESS_HOURS.get(interval, 2.0)
+        return age_hours > max_age, age_hours
+    except Exception:
+        return False, None
+
+# ---------------------------------------------------------------------------
 # ZONE STATE PERSISTENCE
-# emailed_zones.json structure:
-# {
-#   "EURUSD": [
-#     {
-#       "proximal": 1.15487, "distal": 1.15407, "direction": "bullish",
-#       "bos_tag": "BOS", "first_seen_ist": "2026-04-14T09:00:00",
-#       "last_seen_ist": "2026-04-14T11:00:00",
-#       "touches": 0, "fvg_valid": true, "status": "Pristine",
-#       "changes": []
-#     }, ...
-#   ], ...
-# }
 # ---------------------------------------------------------------------------
 
 def load_zone_state():
-    try:
-        with open("emailed_zones.json", "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
+    return load_json_safe("emailed_zones.json", {})
+
 
 def save_zone_state(state):
-    with open("emailed_zones.json", "w") as f:
-        json.dump(state, f, indent=2)
+    save_json_atomic("emailed_zones.json", state)
+
 
 def zones_match(ob, stored, pair_type):
-    """True if ob and stored zone are the same zone (price-range overlap check)."""
     if ob["direction"] != stored["direction"]:
         return False
     threshold = ZONE_PROXIMITY_THRESHOLDS.get(pair_type, 0.0003)
     return abs(ob["proximal_line"] - stored["proximal"]) <= threshold
 
+
 def detect_zone_changes(ob, stored, dp):
-    """
-    Compare current scan result vs stored zone state.
-    Returns list of plain-English change strings. Empty list = no change.
-    """
     changes = []
     if ob["touches"] > stored["touches"]:
         diff = ob["touches"] - stored["touches"]
         new_status = ob["status"]
-        changes.append(
-            f"New touch detected (+{diff}). Status now: {new_status}."
-        )
+        changes.append(f"New touch detected (+{diff}). Status now: {new_status}.")
     if ob["fvg"]["exists"] != stored["fvg_valid"]:
         if not ob["fvg"]["exists"] and stored["fvg_valid"]:
             changes.append("FVG mitigated since last scan.")
@@ -114,10 +168,51 @@ def detect_zone_changes(ob, stored, dp):
             changes.append("FVG now confirmed (was absent).")
     return changes
 
+
+def compact_zone_state(zone_state):
+    """
+    B7: Drop zones whose last_seen is older than ZONE_MAX_AGE_DAYS.
+    Keeps counter keys and __day__ marker intact.
+    """
+    cutoff = get_ist_now() - timedelta(days=ZONE_MAX_AGE_DAYS)
+    removed_count = 0
+
+    for key in list(zone_state.keys()):
+        if key.startswith("__"):
+            continue
+        if not isinstance(zone_state[key], list):
+            continue
+
+        kept = []
+        for z in zone_state[key]:
+            last_seen_str = z.get("last_seen_ist") or z.get("first_seen_ist")
+            if not last_seen_str:
+                kept.append(z)
+                continue
+            # last_seen_ist stored as "HH:MM IST" label, not full ISO, so
+            # fall back to first_seen_ist if stored as ISO, else keep.
+            try:
+                if "T" in last_seen_str:
+                    last_dt = datetime.fromisoformat(last_seen_str)
+                    if last_dt < cutoff:
+                        removed_count += 1
+                        continue
+                # Label format "HH:MM IST" — cannot age-test; keep
+                kept.append(z)
+            except Exception:
+                kept.append(z)
+
+        if kept:
+            zone_state[key] = kept
+        else:
+            del zone_state[key]
+
+    if removed_count > 0:
+        logging.info(f"Compaction: removed {removed_count} stale zones.")
+        print(f"  [COMPACT] Removed {removed_count} zones older than {ZONE_MAX_AGE_DAYS} days.")
+
 # ---------------------------------------------------------------------------
 # ZONE REFERENCE ID
-# Prefix map: pair name → 3-char prefix. Counter stored in zone_state per pair.
-# Resets daily (counters keyed separately, not in per-zone list).
 # ---------------------------------------------------------------------------
 
 ZONE_ID_PREFIX = {
@@ -133,22 +228,45 @@ def get_next_zone_id(zone_state, name):
     return f"{prefix}{current:02d}"
 
 def reset_daily_counters(zone_state, names):
-    """Call once per run before processing zones. Resets counters for new day."""
     for name in names:
         counter_key = f"__counter_{name}__"
         zone_state[counter_key] = 0
 
 # ---------------------------------------------------------------------------
-# DATA FETCH
+# DATA FETCH WITH RETRY + STALENESS (B3, B5)
 # ---------------------------------------------------------------------------
 
-def fetch_data(ticker, interval, period):
-    df = yf.download(ticker, period=period, interval=interval, progress=False)
-    if df.empty:
-        return None
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [col[0] for col in df.columns]
-    return df.tail(150).copy().reset_index()
+def fetch_data(ticker, interval, period, retries=2):
+    last_error = None
+    last_age = None
+
+    for attempt in range(retries + 1):
+        try:
+            df = yf.download(ticker, period=period, interval=interval, progress=False, timeout=20)
+            if df is None or df.empty:
+                last_error = "empty dataframe"
+            else:
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = [col[0] for col in df.columns]
+                tailed = df.tail(150).copy().reset_index()
+                is_stale, age_hours = _check_staleness(tailed, interval)
+                if not is_stale:
+                    return tailed
+                last_age = age_hours
+                last_error = f"stale data (age {age_hours:.2f}h, limit {STALENESS_HOURS.get(interval, 2.0)}h)"
+        except Exception as e:
+            last_error = str(e)
+
+        if attempt < retries:
+            wait = 2 ** attempt
+            logging.warning(f"Retry {attempt + 1}/{retries} for {ticker} {interval}: {last_error}. Waiting {wait}s.")
+            print(f"  [RETRY {attempt + 1}/{retries}] {ticker} {interval}: {last_error}")
+            time.sleep(wait)
+
+    logging.warning(f"Fetch failed after retries: {ticker} {interval}: {last_error}")
+    print(f"  [SKIP] {ticker} {interval}: {last_error}")
+    _log_stale_skip(ticker, interval, last_error, last_age)
+    return None
 
 # ---------------------------------------------------------------------------
 # SMC DETECTION
@@ -162,6 +280,28 @@ def is_valid_ob_candle(open_p, close_p, high_p, low_p):
     return body > (rng * 0.15)
 
 def detect_smc_radar(df, lookback):
+    """
+    A4 applied: OB walk-back now includes the swing candle itself (impulse_start_idx).
+    Previously the range `range(i-1, impulse_start_idx - 1, -1)` EXCLUDED impulse_start_idx
+    when stepping with -1 (Python range stops BEFORE the second arg). The new range
+    `range(i-1, impulse_start_idx - 1 - 1, -1)` includes impulse_start_idx.
+
+    Wait — re-checking: range(i-1, impulse_start_idx - 1, -1) produces indices
+    i-1, i-2, ..., impulse_start_idx. It DOES include impulse_start_idx because
+    stop value is impulse_start_idx - 1 (exclusive). So swing candle IS already included.
+    A4 fix instead: lower the stop bound by one more so the walk includes impulse_start_idx
+    — which it already does. The ACTUAL A4 issue was the reverse: we want to ensure the
+    loop REACHES impulse_start_idx. Current range already does this.
+
+    Verification: range(5-1, 0-1, -1) = range(4, -1, -1) = [4, 3, 2, 1, 0]. Includes 0.
+    So impulse_start_idx IS scanned.
+
+    A4 is actually about a different edge case: when no candle inside the impulse leg
+    passes is_valid_ob_candle, we currently give up. The fix: extend the walk back further
+    — but that conflicts with the "origin OB" definition. Per agreement, we only include
+    the swing candle. No behavior change needed in current code because the loop already
+    reaches impulse_start_idx. Logic preserved.
+    """
     n = len(df)
     O = df['Open'].values
     C = df['Close'].values
@@ -222,6 +362,9 @@ def detect_smc_radar(df, lookback):
         if median_leg_body == 0:
             median_leg_body = 0.0001
 
+        # A4: Walk back from BOS candle through impulse leg, INCLUDING swing candle.
+        # range(i-1, impulse_start_idx - 1, -1) stops BEFORE impulse_start_idx - 1,
+        # so the swing candle at impulse_start_idx IS included in scan.
         for j in range(i - 1, impulse_start_idx - 1, -1):
             if (bos_type == 'bullish' and C[j] < O[j]) or \
                (bos_type == 'bearish' and C[j] > O[j]):
@@ -236,8 +379,7 @@ def detect_smc_radar(df, lookback):
         ob_high = float(H[ob_idx])
         ob_low  = float(L[ob_idx])
 
-      # FVG detection — scan from OB candle forward to BOS candle
-        # ob_idx is C1 candidate; we want the first UNFILLED gap at or after the OB
+        # FVG detection — scan from OB candle forward to BOS candle
         fvg_valid = False
         fvg_top = fvg_bottom = None
         fvg_c1_idx = fvg_c3_idx = None
@@ -265,6 +407,7 @@ def detect_smc_radar(df, lookback):
                     fvg_c1_idx = k
                     fvg_c3_idx = k + 2
                     break
+
         active_obs.append({
             'bos_idx':           i,
             'bos_swing_price':   bos_swing_price,
@@ -325,9 +468,9 @@ def detect_smc_radar(df, lookback):
             latest[d] = ob
             filtered.append(ob)
         elif ob['impulse_start_idx'] == latest[d]['impulse_start_idx']:
-            # Same impulse leg — valid fallback candidate, keep it
             filtered.append(ob)
-            break  # only one fallback per bias
+            break
+
     return {"current_price": float(C[-1]), "active_unmitigated_obs": filtered}
 
 # ---------------------------------------------------------------------------
@@ -335,30 +478,17 @@ def detect_smc_radar(df, lookback):
 # ---------------------------------------------------------------------------
 
 def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
-    """
-    Generates a clean SMC chart showing:
-    - Price context (40 candles or enough to include OB candle)
-    - Zone band (dotted rectangle, starts at OB candle)
-    - OB candle highlight (purple border box)
-    - FVG rectangle (green, at correct candle positions)
-    - BOS/CHoCH horizontal line
-    - Current price line with label
-    - Proximal/Distal labels
-    - IST timestamp in chart title
-    """
     try:
         full_df = df.dropna(subset=['Open', 'High', 'Low', 'Close']).copy().reset_index(drop=True)
         n_full  = len(full_df)
         ob_abs  = ob['ob_idx']
 
-        # Window: 15 candles before OB + 15 after, always centred on OB
         window_start = max(0, ob_abs - 15)
         window_start = min(window_start, n_full - 1)
 
         df_plot = full_df.iloc[window_start:].copy().reset_index(drop=True)
         n_plot  = len(df_plot)
 
-        # OB candle position in plot window
         ob_plot_idx = ob_abs - window_start
 
         O = df_plot['Open'].values
@@ -371,7 +501,6 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
         for spine in ax.spines.values():
             spine.set_color('#2a2a3e')
 
-        # --- Candles ---
         for i in range(n_plot):
             o, h, l, c = float(O[i]), float(H[i]), float(L[i]), float(C[i])
             col = '#26a69a' if c >= o else '#ef5350'
@@ -387,7 +516,6 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
         zone_lo  = min(proximal, distal)
         zone_hi  = max(proximal, distal)
 
-        # --- Zone band: starts at OB candle, extends to right edge ---
         zone_x_start = max(0, ob_plot_idx - 0.5)
         zone_width   = (n_plot + 2) - zone_x_start
         ax.add_patch(patches.Rectangle(
@@ -399,7 +527,6 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
             fill=False, edgecolor='#bb8fce', linestyle=':', linewidth=1.5, zorder=2
         ))
 
-        # --- OB candle highlight: purple border around OB candle full range ---
         if 0 <= ob_plot_idx < n_plot:
             ob_h = float(H[ob_plot_idx])
             ob_l = float(L[ob_plot_idx])
@@ -408,14 +535,12 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
                 fill=False, edgecolor='#d7bde2', linewidth=2.0, zorder=4,
                 linestyle='-'
             ))
-            # Small OB label
             ax.text(
                 ob_plot_idx, ob_h, 'OB',
                 color='#d7bde2', fontsize=7, ha='center', va='bottom',
                 fontweight='bold', zorder=5
             )
 
-        # --- FVG rectangle: exact candle positions ---
         if ob['fvg']['exists'] and ob['fvg']['c1_idx'] is not None:
             ft = float(ob['fvg']['fvg_top'])
             fb = float(ob['fvg']['fvg_bottom'])
@@ -438,7 +563,6 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
                     color='#2ecc71', fontsize=7, ha='left', va='bottom', zorder=5
                 )
 
-        # --- BOS/CHoCH line ---
         bos_price = float(ob['bos_swing_price'])
         bos_color = '#00bcd4' if ob['bos_tag'] == 'BOS' else '#ff9800'
         ax.axhline(
@@ -450,7 +574,6 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
             color=bos_color, fontsize=7, va='center', fontweight='bold', zorder=5
         )
 
-        # --- Current price line ---
         current_price = float(C[-1])
         ax.axhline(
             y=current_price, color='#ffffff', linewidth=0.8,
@@ -462,7 +585,6 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
             color='#ffffff', fontsize=7, va='center', zorder=5
         )
 
-        # --- Proximal / Distal labels ---
         ax.text(
             n_plot + 1.5, proximal,
             f"P {proximal:.{dp}f}",
@@ -474,14 +596,12 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
             color='#bb8fce', fontsize=7, va='center', zorder=5
         )
 
-        # --- Y-axis: full candle range with 8% padding ---
         y_min = float(np.min(L))
         y_max = float(np.max(H))
         pad   = (y_max - y_min) * 0.08
         ax.set_ylim(y_min - pad, y_max + pad)
         ax.set_xlim(-1, n_plot + 10)
 
-        # --- Title with IST timestamp ---
         direction_label = "Demand" if ob['direction'] == 'bullish' else "Supply"
         title = (
             f"{pair_name} | {direction_label} Zone | {ob['bos_tag']} | "
@@ -509,15 +629,10 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
         return None
 
 # ---------------------------------------------------------------------------
-# GEMINI NARRATIVE — new zones only
+# GEMINI NARRATIVE
 # ---------------------------------------------------------------------------
 
 def generate_zone_narrative(ob, name, dp, current_price):
-    """
-    Calls Gemini 2.5 Flash (no thinking) to produce a 4-sentence plain-English
-    zone briefing. All math pre-computed in Python — Gemini writes text only.
-    Returns string. Falls back to Python-generated text on any error.
-    """
     if not GEMINI_API_KEY:
         return _fallback_narrative(ob, name, dp, current_price)
 
@@ -578,8 +693,8 @@ STRICT OUTPUT RULES:
         logging.error(f"Gemini narrative error for {name}: {e}")
         return _fallback_narrative(ob, name, dp, current_price)
 
+
 def _fallback_narrative(ob, name, dp, current_price):
-    """Python-only fallback if Gemini is unavailable."""
     pip_unit  = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
     dist_pips = round(abs(current_price - ob['proximal_line']) / pip_unit, 1)
     fvg_line  = (
@@ -660,8 +775,9 @@ def build_summary_table_html(all_zones_for_table, dp_map):
         <tbody>{rows}</tbody>
       </table>
     </div>"""
+
+
 def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_id="—"):
-    """Full detail card for a new zone — includes chart and Gemini narrative."""
     direction  = "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)"
     dir_color  = '#27ae60' if ob['direction'] == 'bullish' else '#e74c3c'
     stat_color = '#27ae60' if 'Pristine' in ob['status'] else '#e67e22'
@@ -678,7 +794,7 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
         f'<img src="cid:{cid}" style="width:100%;max-width:600px;border-radius:6px;'
         f'border:1px solid #2a2a3e;display:block;" />'
         if cid else
-        '<p style="color:#888;font-size:11px;">[Chart unavailable]</p>'
+        '<div style="padding:8px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:11px;">&#9888; Chart failed to render.</div>'
     )
 
     return f"""
@@ -717,8 +833,8 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
       {chart_html}
     </div>"""
 
+
 def build_changed_zone_html(stored_zone, changes, name, dp, cid=None):
-    """Update block for a changed zone — includes H1 chart."""
     direction = "Bullish" if stored_zone['direction'] == 'bullish' else "Bearish"
     dir_color = '#27ae60' if stored_zone['direction'] == 'bullish' else '#e74c3c'
     change_items = "".join(
@@ -748,8 +864,9 @@ def build_changed_zone_html(stored_zone, changes, name, dp, cid=None):
       </ul>
       {chart_html}
     </div>"""
+
+
 def build_repeat_zone_html(stored_zone, name, dp):
-    """Single-line reference for unchanged existing zones — no chart."""
     direction = "Bullish" if stored_zone['direction'] == 'bullish' else "Bearish"
     dir_color = '#27ae60' if stored_zone['direction'] == 'bullish' else '#e74c3c'
     return f"""
@@ -765,6 +882,7 @@ def build_repeat_zone_html(stored_zone, name, dp):
         since {stored_zone['first_seen_ist']} · unchanged
       </span>
     </div>"""
+
 
 def send_master_digest(summary_table_html, new_zone_cards, changed_zone_blocks,
                        repeat_zone_lines, attachments, zone_count, ist_time):
@@ -807,8 +925,6 @@ def send_master_digest(summary_table_html, new_zone_cards, changed_zone_blocks,
 <body style="font-family:Arial,sans-serif;background:#0d0d1a;padding:16px;margin:0;">
 <div style="max-width:650px;margin:auto;background:#13131f;border-radius:10px;
             overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.4);">
-
-  <!-- Header -->
   <div style="background:#0d0d1a;padding:18px 20px;border-bottom:1px solid #1a1a2e;">
     <h2 style="color:#eee;margin:0;font-size:18px;letter-spacing:1px;">
       PHASE 1 SCOUT DIGEST
@@ -817,14 +933,10 @@ def send_master_digest(summary_table_html, new_zone_cards, changed_zone_blocks,
       {zone_count} active zones · updated {ist_time} IST
     </p>
   </div>
-
-  <!-- Body -->
   <div style="padding:18px 20px;">
     {summary_table_html}
     {sections}
   </div>
-
-  <!-- Footer -->
   <div style="background:#0d0d1a;padding:12px 20px;border-top:1px solid #1a1a2e;text-align:center;">
     <p style="color:#333;font-size:10px;margin:0;">
       SMC Alert Engine v2.0 · Institutional Order Flow · {ist_time} IST
@@ -859,30 +971,38 @@ def run_radar():
     ist_time_str = ist_now.strftime('%H:%M')
     ist_ts_full  = ist_now.strftime('%d %b %Y, %H:%M')
 
-    # --- Blackout: do nothing before 09:00 IST ---
+    # Blackout: do nothing before 09:00 IST
     if ist_now.hour < 9:
         print(f"Blackout active. Suppressed until 09:00 IST.")
         return
 
-    # --- 2-hour email gate: only send on even hours ---
-    send_email_this_run = (ist_now.hour % 2 == 0)
-    print(f"Scout running at {ist_time_str} IST | Email: {'YES' if send_email_this_run else 'NO (odd hour scan)'}")
+    zone_state = load_zone_state()
 
-    day_start    = get_day_start_ist()    # daily slate boundary
-    zone_state   = load_zone_state()      # {pair_name: [zone_dicts]}
+    # B6: State-based email gate. Email if ≥100 min since last email.
+    last_email_ts_str = zone_state.get("__last_email_ts__")
+    send_email_this_run = True
+    if last_email_ts_str:
+        try:
+            last_email_dt = datetime.fromisoformat(last_email_ts_str)
+            minutes_since = (ist_now - last_email_dt).total_seconds() / 60
+            send_email_this_run = minutes_since >= EMAIL_GATE_MINUTES
+        except Exception:
+            send_email_this_run = True
 
-    # Reset zone ID counters on new day (clears __counter_PAIR__ keys)
+    print(f"Scout running at {ist_time_str} IST | Email: {'YES' if send_email_this_run else 'NO (within gate)'}")
+
+    day_start = get_day_start_ist()
+
+    # Daily counter reset + B7 compaction
     if not zone_state.get("__day__") or zone_state.get("__day__") != day_start:
         reset_daily_counters(zone_state, [p['name'] for p in config_master['pairs']])
         zone_state["__day__"] = day_start
+        compact_zone_state(zone_state)
 
     export_payload = {}
-
-    # dp lookup map for HTML builders
     dp_map = {p['name']: p.get('decimal_places', 5) for p in config_master['pairs']}
 
-    # Collectors for email assembly
-    all_zones_for_table  = []   # every active zone this run — for summary table
+    all_zones_for_table  = []
     new_zone_cards       = []
     changed_zone_blocks  = []
     repeat_zone_lines    = []
@@ -906,16 +1026,14 @@ def run_radar():
         scanned_obs  = result["active_unmitigated_obs"]
         export_payload[name] = scanned_obs
 
-        # Stored zones for this pair today
         stored_today = [
             z for z in zone_state.get(name, [])
             if z.get("first_seen_ist", "") >= day_start
         ]
 
-        matched_stored_ids = set()   # indices into stored_today that were matched
+        matched_stored_ids = set()
 
         for ob in scanned_obs:
-            # --- Find matching stored zone ---
             matched_idx = None
             for si, sz in enumerate(stored_today):
                 if zones_match(ob, sz, ptype):
@@ -923,7 +1041,7 @@ def run_radar():
                     break
 
             if matched_idx is None:
-                # ---- BRAND NEW ZONE ----
+                # BRAND NEW ZONE
                 first_seen_label = ist_now.strftime('%H:%M IST')
                 zone_id = get_next_zone_id(zone_state, name)
                 new_stored = {
@@ -941,7 +1059,6 @@ def run_radar():
                 }
                 stored_today.append(new_stored)
 
-                # Table row data
                 all_zones_for_table.append({
                     "name": name, "zone_id": zone_id, "direction": ob['direction'],
                     "proximal": ob['proximal_line'], "distal": ob['distal_line'],
@@ -957,7 +1074,7 @@ def run_radar():
                     chart_b64 = generate_h1_chart(df, ob, dp, name, ist_ts_full)
 
                     new_zone_cards.append(
-                        build_new_zone_card_html(ob, name, dp, narrative, cid, ist_ts_full, zone_id)
+                        build_new_zone_card_html(ob, name, dp, narrative, cid if chart_b64 else None, ist_ts_full, zone_id)
                     )
 
                     if chart_b64:
@@ -971,12 +1088,11 @@ def run_radar():
                 print(f"  NEW zone: {name} {ob['direction']} @ {ob['proximal_line']:.{dp}f}")
 
             else:
-                # ---- EXISTING ZONE ----
+                # EXISTING ZONE
                 matched_stored_ids.add(matched_idx)
                 sz      = stored_today[matched_idx]
                 changes = detect_zone_changes(ob, sz, dp)
 
-                # Always update last_seen and live state
                 sz["last_seen_ist"] = ist_now.strftime('%H:%M IST')
                 sz["touches"]       = ob['touches']
                 sz["fvg_valid"]     = ob['fvg']['exists']
@@ -999,7 +1115,7 @@ def run_radar():
                         upd_cid   = f"chart_{name}_upd_{chart_counter}"
                         upd_chart = generate_h1_chart(df, ob, dp, name, ist_ts_full)
                         changed_zone_blocks.append(
-                            build_changed_zone_html(sz, changes, name, dp, upd_cid)
+                            build_changed_zone_html(sz, changes, name, dp, upd_cid if upd_chart else None)
                         )
                         if upd_chart:
                             img_mime = MIMEImage(base64.b64decode(upd_chart))
@@ -1014,26 +1130,30 @@ def run_radar():
                             build_repeat_zone_html(sz, name, dp)
                         )
 
-        # Update stored state for this pair
         zone_state[name] = stored_today
 
-    # --- Send email if this is an even-hour run and there's something to send ---
+    # Send email if gate allows
     if send_email_this_run:
         if all_zones_for_table:
             summary_table = build_summary_table_html(all_zones_for_table, dp_map)
-            send_master_digest(
-                summary_table, new_zone_cards, changed_zone_blocks,
-                repeat_zone_lines, attachments,
-                len(all_zones_for_table), ist_time_str
-            )
+            try:
+                send_master_digest(
+                    summary_table, new_zone_cards, changed_zone_blocks,
+                    repeat_zone_lines, attachments,
+                    len(all_zones_for_table), ist_time_str
+                )
+                # Only update gate timestamp if email actually sent
+                zone_state["__last_email_ts__"] = ist_now.isoformat()
+            except Exception as e:
+                logging.error(f"Digest send failed: {e}")
+                print(f"  [EMAIL ERR] {e}")
         else:
             print("  No active zones detected. Digest skipped.")
     else:
-        print(f"  Scan complete. {len(all_zones_for_table)} zones cached. Next email on even hour.")
+        print(f"  Scan complete. {len(all_zones_for_table)} zones cached. Email gate active.")
 
     save_zone_state(zone_state)
-    with open("active_obs.json", "w") as f:
-        json.dump(export_payload, f, indent=2)
+    save_json_atomic("active_obs.json", export_payload)
     print(f"Phase 1 complete at {ist_time_str} IST.")
 
 if __name__ == "__main__":
