@@ -180,6 +180,8 @@ def detect_smc_radar(df, lookback):
     swings = sorted(swings, key=lambda x: x['idx'])
     active_obs = []
     trend_state = None
+    bos_seq_counter = 0
+    last_choch_idx = None
 
     for i in range(lookback + 1, n):
         past_swings = [s for s in swings if s['idx'] < i]
@@ -202,6 +204,11 @@ def detect_smc_radar(df, lookback):
             continue
 
         bos_tag = 'CHoCH' if (trend_state is None or trend_state != bos_type) else 'BOS'
+        if bos_tag == 'CHoCH':
+            bos_seq_counter = 0
+            last_choch_idx = i
+        else:
+            bos_seq_counter += 1
         trend_state = bos_type
         bos_swing_price = sh['price'] if bos_type == 'bullish' else sl['price']
 
@@ -262,6 +269,9 @@ def detect_smc_radar(df, lookback):
             'bos_idx':           i,
             'bos_swing_price':   bos_swing_price,
             'impulse_start_idx': impulse_start_idx,
+            'impulse_start_price': float(L[impulse_start_idx]) if bos_type == 'bullish' else float(H[impulse_start_idx]),
+            'bos_sequence_count': bos_seq_counter,
+            'last_choch_idx':    last_choch_idx,
             'ob_idx':            ob_idx,
             'direction':       bos_type,
             'bos_tag':         bos_tag,
