@@ -4,6 +4,7 @@ import numpy as np
 import json
 import os
 import smtplib
+import time
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -19,7 +20,7 @@ import smc_detector
 with open("config.json") as f:
     config = json.load(f)
 
-GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "dummy@gmail.com")
+GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "avinash.somjani23@gmail.com")
 GMAIL_PASS = os.environ.get("GMAIL_APP_PASSWORD", "dummy")
 
 
@@ -49,8 +50,11 @@ def load_json(path, default):
 
 
 def save_json(path, data):
-    with open(path, "w") as f:
+    """Atomic save: write to temp file then rename."""
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
+    os.replace(tmp, path)
 
 
 def clean_df(df):
@@ -59,6 +63,102 @@ def clean_df(df):
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = [col[0] for col in df.columns]
     return df
+
+
+# ---------------------------------------------------------------------------
+# Fetch with retry + staleness check (B3, B5)
+# ---------------------------------------------------------------------------
+
+STALENESS_HOURS = {
+    "1h": 2.0,
+    "15m": 0.75,
+    "5m": 0.30
+}
+
+
+def _check_staleness(df, interval):
+    """Return (is_stale, age_hours). age_hours None if df empty."""
+    if df is None or df.empty:
+        return True, None
+    try:
+        last_ts = df.index[-1]
+        if hasattr(last_ts, 'tz_convert') and last_ts.tzinfo is not None:
+            last_utc = last_ts.tz_convert('UTC').tz_localize(None).to_pydatetime()
+        elif hasattr(last_ts, 'to_pydatetime'):
+            last_utc = last_ts.to_pydatetime()
+            if last_utc.tzinfo is not None:
+                last_utc = last_utc.replace(tzinfo=None)
+        else:
+            last_utc = last_ts
+
+        age_hours = (datetime.utcnow() - last_utc).total_seconds() / 3600
+        max_age = STALENESS_HOURS.get(interval, 2.0)
+        return age_hours > max_age, age_hours
+    except Exception:
+        return False, None
+
+
+def _log_stale_skip(symbol, interval, reason, age_hours):
+    try:
+        log = load_json("yfinance_stale_log.json", [])
+        log.append({
+            "ts": get_ist_now().isoformat(),
+            "symbol": symbol,
+            "interval": interval,
+            "reason": reason,
+            "age_hours": round(age_hours, 2) if age_hours is not None else None
+        })
+        log = log[-200:]
+        save_json("yfinance_stale_log.json", log)
+    except Exception as e:
+        print(f"  [LOG ERR] stale log: {e}")
+
+
+def _log_chart_failure(pair, chart_type):
+    try:
+        log = load_json("chart_failure_log.json", [])
+        log.append({
+            "ts": get_ist_now().isoformat(),
+            "pair": pair,
+            "chart_type": chart_type
+        })
+        log = log[-200:]
+        save_json("chart_failure_log.json", log)
+    except Exception as e:
+        print(f"  [LOG ERR] chart log: {e}")
+
+
+def fetch_with_retry(symbol, period, interval, retries=2):
+    """Fetch yfinance data with retry + staleness check."""
+    last_error = None
+    last_age = None
+
+    for attempt in range(retries + 1):
+        try:
+            raw = yf.download(symbol, period=period, interval=interval,
+                              progress=False, timeout=20)
+            df = clean_df(raw)
+            is_stale, age_hours = _check_staleness(df, interval)
+
+            if df is not None and not is_stale:
+                return df
+
+            last_age = age_hours
+            if is_stale:
+                last_error = f"stale data (age {age_hours:.2f}h, limit {STALENESS_HOURS.get(interval, 2.0)}h)"
+            else:
+                last_error = "empty dataframe"
+        except Exception as e:
+            last_error = str(e)
+
+        if attempt < retries:
+            wait = 2 ** attempt
+            print(f"  [RETRY {attempt + 1}/{retries}] {symbol} {interval}: {last_error}. Waiting {wait}s.")
+            time.sleep(wait)
+
+    print(f"  [SKIP] {symbol} {interval}: {last_error}")
+    _log_stale_skip(symbol, interval, last_error, last_age)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +245,6 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
                 raw_labels.append((price, f" {lbl} {price:.{dp}f}", color))
         if choch_level is not None and choch_level > 0:
             raw_labels.append((choch_level, f" M5 CHoCH {choch_level:.{dp}f}", '#ff9800'))
-        # TP1/TP2 added as labels only (lines drawn separately below)
         for tp_key, tp_color, tp_lbl in [('tp1', '#27ae60', 'TP1'), ('tp2', '#1abc9c', 'TP2')]:
             tp_p = float(levels.get(tp_key, 0))
             if tp_p > 0:
@@ -170,7 +269,6 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
         pad = (y_max - y_min) * 0.08
         ax.set_ylim(y_min - pad, y_max + pad)
 
-        # TP1/TP2 lines: draw only if within visible range, else edge arrow
         for tp_key, tp_color, tp_lbl in [('tp1', '#27ae60', 'TP1'), ('tp2', '#1abc9c', 'TP2')]:
             tp_p = float(levels.get(tp_key, 0))
             if tp_p > 0:
@@ -254,7 +352,8 @@ def build_invalidation_email(pair, bias, reason, reason_detail, ob, levels, aler
     </div></body></html>"""
 
 
-def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, ist_now, dollar_risk_str, macro_summary):
+def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, ist_now,
+                       dollar_risk_str, macro_summary, chart_ok=True):
     dp = pair_conf.get("decimal_places", 5)
     ist_str = ist_now.strftime('%H:%M IST')
     action_word = "SELL" if bias == "SHORT" else "BUY"
@@ -266,6 +365,12 @@ def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, 
     choch_line = ""
     if choch_level:
         choch_line = f"<br>M5 CHoCH level: {choch_level:.{dp}f}"
+
+    # B8: chart fallback banner
+    if chart_ok:
+        chart_block = '<img src="cid:chart_m5" style="width:100%;border-radius:6px;margin-bottom:12px;" />'
+    else:
+        chart_block = '<div style="padding:10px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:12px;margin-bottom:12px;">&#9888; M5 chart failed to render. Trade data above is valid; check GitHub Actions logs.</div>'
 
     return f"""<html><body style="font-family:Arial,sans-serif;background:#0d0d1a;padding:12px;margin:0;">
     <div style="max-width:650px;margin:auto;background:#13131f;border-radius:14px;overflow:hidden;">
@@ -288,7 +393,7 @@ def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, 
                 M5 CHoCH confirmed inside H1 zone bounds.{choch_line}{fvg_line}
             </div>
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">M5 Execution Chart</div>
-            <img src="cid:chart_m5" style="width:100%;border-radius:6px;margin-bottom:12px;" />
+            {chart_block}
             <div style="padding:10px 12px;background:#0d0d1a;border-left:3px solid #888;border-radius:4px;font-size:12px;color:#bbb;line-height:1.5;">
                 <b style="color:#eee;">Macro Context:</b> {macro_summary or 'N/A'}
             </div>
@@ -303,6 +408,14 @@ def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, 
 def check_invalidation(bias, current_close, distal, m5_atr, pair_conf, alert_ts, ist_now, df_h1):
     """Return (reason, detail) tuple if invalidated, else (None, None)."""
     dp = pair_conf.get("decimal_places", 5)
+
+    # B9: Corrupt state — timestamp missing/unparseable → force invalidation.
+    # Prevents watch entries from persisting forever if their timestamps get corrupted.
+    if alert_ts is None:
+        return (
+            "Corrupt state",
+            "Alert timestamp missing or unparseable. Forcing invalidation to prevent stuck watch entry."
+        )
 
     # 1. ATR-buffered distal breach (with naive fallback if ATR unavailable)
     atr_buffer = pair_conf.get("invalidation_atr_multiplier", 0.3)
@@ -325,14 +438,13 @@ def check_invalidation(bias, current_close, distal, m5_atr, pair_conf, alert_ts,
             return ("Distal breached (naive)", f"M5 closed at {current_close:.{dp}f} above distal {distal:.{dp}f}. ATR buffer unavailable.")
 
     # 2. Time expiry
-    if alert_ts:
-        max_hrs = pair_conf.get("invalidation_time_hours", 24)
-        age_hrs = (ist_now - alert_ts).total_seconds() / 3600
-        if age_hrs > max_hrs:
-            return ("Time expiry", f"Setup has been active {round(age_hrs,1)} hours without trigger (limit: {max_hrs}h).")
+    max_hrs = pair_conf.get("invalidation_time_hours", 24)
+    age_hrs = (ist_now - alert_ts).total_seconds() / 3600
+    if age_hrs > max_hrs:
+        return ("Time expiry", f"Setup has been active {round(age_hrs,1)} hours without trigger (limit: {max_hrs}h).")
 
     # 3. Opposite H1 BOS
-    if alert_ts and df_h1 is not None and smc_detector.check_opposite_bos(df_h1, bias, since_ts=alert_ts):
+    if df_h1 is not None and smc_detector.check_opposite_bos(df_h1, bias, since_ts=alert_ts):
         return (
             "Opposite H1 structure shift",
             "H1 printed a Break of Structure in the opposite direction since the alert fired. The setup's foundation is broken."
@@ -377,16 +489,16 @@ def run_phase3():
         distal = float(ob.get("distal_line", 0))
 
         trigger_tf = pair_conf.get("trigger_tf", "5m")
-        df_m5 = clean_df(yf.download(pair_conf["symbol"], period="3d", interval=trigger_tf, progress=False))
+        df_m5 = fetch_with_retry(pair_conf["symbol"], "3d", trigger_tf)
         if df_m5 is None or df_m5.empty:
-            print(f"  [!] {pair_name}: no M5 data")
+            print(f"  [!] {pair_name}: no M5 data after retries")
             continue
 
         current_close = float(df_m5['Close'].iloc[-1])
         m5_atr = smc_detector.compute_atr(df_m5)
 
-        # Fetch H1 once for opposite-BOS check (also reused if invalidated)
-        df_h1 = clean_df(yf.download(pair_conf["symbol"], period="10d", interval="1h", progress=False))
+        # Fetch H1 once for opposite-BOS check
+        df_h1 = fetch_with_retry(pair_conf["symbol"], "10d", "1h")
 
         # Invalidation first
         inv_reason, inv_detail = check_invalidation(
@@ -410,7 +522,7 @@ def run_phase3():
             print(f"  [-] {pair_name}: waiting for tap of proximal ({proximal:.{dp}f})")
             continue
 
-        # M5 CHoCH inside zone bounds
+        # M5 CHoCH inside zone bounds (A1: grace band logic in smc_detector)
         bounds = {'max': max(proximal, distal), 'min': min(proximal, distal)}
         choch_res = smc_detector.detect_ltf_choch(df_m5, bias, bounds)
 
@@ -439,9 +551,13 @@ def run_phase3():
             df_m5, f"{pair_name} M5 - Sniper Trigger",
             fresh_levels, ob, pair_conf, m5_fvg, choch_level, m5_sweep_price
         )
+        chart_ok = chart_b64 is not None
+        if not chart_ok:
+            _log_chart_failure(pair_name, "m5_phase3_trigger")
+
         html = build_trigger_email(
             pair_name, bias, ob, fresh_levels, m5_fvg, choch_level, pair_conf,
-            ist_now, dollar_risk_str, data.get("macro_summary")
+            ist_now, dollar_risk_str, data.get("macro_summary"), chart_ok=chart_ok
         )
         send_email(f"TRADE READY (M5 SNIPER) | {pair_name} | {bias}", html, chart_b64)
         keys_to_delete.append(key)
