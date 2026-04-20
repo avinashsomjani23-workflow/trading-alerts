@@ -147,3 +147,4 @@
 2026-04-20 14:32:36,739 — ERROR — Gemini narrative error for NZDUSD: module 'google.generativeai.types' has no attribute 'ThinkingConfig'
 2026-04-20 14:32:37,507 — ERROR — Gemini narrative error for GOLD: module 'google.generativeai.types' has no attribute 'ThinkingConfig'
 2026-04-20 14:32:39,370 — INFO — Digest sent: 4 zones, 2 new, 0 updated, 2 unchanged.
+2026-04-20 16:32:37,287 — INFO — Digest sent: 4 zones, 0 new, 0 updated, 4 unchanged.
