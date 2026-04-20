@@ -110,5 +110,47 @@
     "interval": "1h",
     "reason": "stale data (age 6.55h, limit 2.0h)",
     "age_hours": 6.55
+  },
+  {
+    "ts": "2026-04-20T15:02:44.402424",
+    "symbol": "EURUSD=X",
+    "interval": "1h",
+    "reason": "stale data (age 3.55h, limit 2.0h)",
+    "age_hours": 3.55
+  },
+  {
+    "ts": "2026-04-20T15:02:48.146972",
+    "symbol": "JPY=X",
+    "interval": "1h",
+    "reason": "stale data (age 3.55h, limit 2.0h)",
+    "age_hours": 3.55
+  },
+  {
+    "ts": "2026-04-20T15:02:51.845468",
+    "symbol": "NZDUSD=X",
+    "interval": "1h",
+    "reason": "stale data (age 3.55h, limit 2.0h)",
+    "age_hours": 3.55
+  },
+  {
+    "ts": "2026-04-20T15:02:55.530831",
+    "symbol": "CHF=X",
+    "interval": "1h",
+    "reason": "stale data (age 3.55h, limit 2.0h)",
+    "age_hours": 3.55
+  },
+  {
+    "ts": "2026-04-20T15:02:59.318451",
+    "symbol": "NQ=F",
+    "interval": "1h",
+    "reason": "stale data (age 3.55h, limit 2.0h)",
+    "age_hours": 3.55
+  },
+  {
+    "ts": "2026-04-20T15:03:03.122222",
+    "symbol": "GC=F",
+    "interval": "1h",
+    "reason": "stale data (age 7.55h, limit 2.0h)",
+    "age_hours": 7.55
   }
 ]
