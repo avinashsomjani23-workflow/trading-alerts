@@ -82,3 +82,10 @@
 2026-04-20 06:32:43,124 — WARNING — Retry 2/2 for GC=F 1h: stale data (age 4.55h, limit 2.0h). Waiting 2s.
 2026-04-20 06:32:45,267 — WARNING — Fetch failed after retries: GC=F 1h: stale data (age 4.55h, limit 2.0h)
 2026-04-20 06:32:45,267 — WARNING — No data for GOLD. Skipped.
+2026-04-20 07:32:36,145 — ERROR — Gemini narrative error for NZDUSD: module 'google.generativeai.types' has no attribute 'ThinkingConfig'
+2026-04-20 07:32:36,322 — ERROR — Gemini narrative error for NZDUSD: module 'google.generativeai.types' has no attribute 'ThinkingConfig'
+2026-04-20 07:32:37,101 — WARNING — Retry 1/2 for GC=F 1h: stale data (age 5.54h, limit 2.0h). Waiting 1s.
+2026-04-20 07:32:38,222 — WARNING — Retry 2/2 for GC=F 1h: stale data (age 5.54h, limit 2.0h). Waiting 2s.
+2026-04-20 07:32:40,337 — WARNING — Fetch failed after retries: GC=F 1h: stale data (age 5.54h, limit 2.0h)
+2026-04-20 07:32:40,338 — WARNING — No data for GOLD. Skipped.
+2026-04-20 07:32:41,726 — INFO — Digest sent: 4 zones, 2 new, 0 updated, 2 unchanged.
