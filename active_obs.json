@@ -2,13 +2,13 @@
   "EURUSD": [],
   "USDJPY": [
     {
-      "bos_idx": 125,
+      "bos_idx": 124,
       "bos_swing_price": 158.99899291992188,
-      "impulse_start_idx": 118,
+      "impulse_start_idx": 117,
       "impulse_start_price": 159.5290069580078,
       "bos_sequence_count": 0,
-      "last_choch_idx": 125,
-      "ob_idx": 124,
+      "last_choch_idx": 124,
+      "ob_idx": 123,
       "direction": "bearish",
       "bos_tag": "CHoCH",
       "high": 159.22500610351562,
@@ -30,13 +30,13 @@
   ],
   "NZDUSD": [
     {
-      "bos_idx": 32,
+      "bos_idx": 31,
       "bos_swing_price": 0.5842486619949341,
-      "impulse_start_idx": 28,
+      "impulse_start_idx": 27,
       "impulse_start_price": 0.5818012952804565,
       "bos_sequence_count": 1,
-      "last_choch_idx": 30,
-      "ob_idx": 31,
+      "last_choch_idx": 29,
+      "ob_idx": 30,
       "direction": "bullish",
       "bos_tag": "BOS",
       "high": 0.5847952961921692,
@@ -59,13 +59,13 @@
   "USDCHF": [],
   "NAS100": [
     {
-      "bos_idx": 123,
+      "bos_idx": 122,
       "bos_swing_price": 26564.0,
-      "impulse_start_idx": 117,
+      "impulse_start_idx": 116,
       "impulse_start_price": 26440.0,
       "bos_sequence_count": 4,
-      "last_choch_idx": 36,
-      "ob_idx": 122,
+      "last_choch_idx": 35,
+      "ob_idx": 121,
       "direction": "bullish",
       "bos_tag": "BOS",
       "high": 26547.0,
@@ -87,13 +87,13 @@
   ],
   "GOLD": [
     {
-      "bos_idx": 43,
+      "bos_idx": 42,
       "bos_swing_price": 4762.5,
-      "impulse_start_idx": 39,
+      "impulse_start_idx": 38,
       "impulse_start_price": 4722.5,
       "bos_sequence_count": 0,
-      "last_choch_idx": 43,
-      "ob_idx": 39,
+      "last_choch_idx": 42,
+      "ob_idx": 38,
       "direction": "bullish",
       "bos_tag": "CHoCH",
       "high": 4743.10009765625,
@@ -106,8 +106,8 @@
         "exists": true,
         "fvg_top": 4748.39990234375,
         "fvg_bottom": 4743.10009765625,
-        "c1_idx": 39,
-        "c3_idx": 41
+        "c1_idx": 38,
+        "c3_idx": 40
       },
       "touches": 0,
       "status": "Pristine"
