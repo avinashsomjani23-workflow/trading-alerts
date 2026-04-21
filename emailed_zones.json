@@ -87,7 +87,7 @@
       "direction": "bearish",
       "bos_tag": "CHoCH",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "10:02 IST",
+      "last_seen_ist": "11:02 IST",
       "touches": 2,
       "fvg_valid": false,
       "status": "Tested (2x)",
@@ -96,13 +96,13 @@
       ]
     },
     {
-      "zone_id": "JPY02",
+      "zone_id": "JPY03",
       "proximal": 158.80099487304688,
       "distal": 158.6840057373047,
       "direction": "bullish",
       "bos_tag": "CHoCH",
-      "first_seen_ist": "10:02 IST",
-      "last_seen_ist": "10:02 IST",
+      "first_seen_ist": "11:02 IST",
+      "last_seen_ist": "11:02 IST",
       "touches": 1,
       "fvg_valid": true,
       "status": "Tested (1x)",
@@ -163,13 +163,13 @@
       "changes": []
     },
     {
-      "zone_id": "NZD02",
+      "zone_id": "NZD03",
       "proximal": 0.5893446803092957,
       "distal": 0.5886161923408508,
       "direction": "bullish",
       "bos_tag": "CHoCH",
-      "first_seen_ist": "10:02 IST",
-      "last_seen_ist": "10:02 IST",
+      "first_seen_ist": "11:02 IST",
+      "last_seen_ist": "11:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -282,6 +282,19 @@
       "fvg_valid": false,
       "status": "Pristine",
       "changes": []
+    },
+    {
+      "zone_id": "NAS01",
+      "proximal": 26837.25,
+      "distal": 26807.25,
+      "direction": "bullish",
+      "bos_tag": "BOS",
+      "first_seen_ist": "11:02 IST",
+      "last_seen_ist": "11:02 IST",
+      "touches": 2,
+      "fvg_valid": false,
+      "status": "Tested (2x)",
+      "changes": []
     }
   ],
   "GOLD": [
@@ -332,7 +345,7 @@
       "direction": "bullish",
       "bos_tag": "CHoCH",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "10:02 IST",
+      "last_seen_ist": "11:02 IST",
       "touches": 0,
       "fvg_valid": true,
       "status": "Pristine",
@@ -340,11 +353,11 @@
     }
   ],
   "__counter_EURUSD__": 0,
-  "__counter_USDJPY__": 2,
-  "__counter_NZDUSD__": 2,
+  "__counter_USDJPY__": 3,
+  "__counter_NZDUSD__": 3,
   "__counter_USDCHF__": 0,
-  "__counter_NAS100__": 0,
+  "__counter_NAS100__": 1,
   "__counter_GOLD__": 0,
   "__day__": "2026-04-21T09:00:00",
-  "__last_email_ts__": "2026-04-21T09:02:34.036135"
+  "__last_email_ts__": "2026-04-21T11:02:33.879469"
 }
