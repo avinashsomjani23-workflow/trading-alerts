@@ -856,7 +856,8 @@ if __name__ == "__main__":
             dr = score_res.get('dealing_range')
 
             if entry_model == "limit":
-                zone_id = f"{name}_{bias}_{round(proximal, dp)}"
+                key_dp = max(0, dp - 2)
+                zone_id = f"{name}_{bias}_{round(proximal, key_dp)}"
                 if zone_id in phase2_sent:
                     print(f"  [-] {name}: already alerted (dedup). Skipping.")
                     continue
@@ -891,7 +892,8 @@ if __name__ == "__main__":
                 )
                 print(f"  [OK] TRADE READY (FOREX): {name}")
             elif entry_model == "ltf_choch":
-                zone_id = f"{name}_{bias}_{round(proximal, dp)}"
+                key_dp = max(0, dp - 2)
+                zone_id = f"{name}_{bias}_{round(proximal, key_dp)}"
                 watch_id = f"{name}_{round(proximal, dp)}"
 
                 if zone_id in phase2_sent:
