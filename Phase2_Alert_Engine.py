@@ -717,6 +717,15 @@ if __name__ == "__main__":
     phase2_sent = load_json("phase2_sent.json", {})
     new_watch_state = dict(watch_state)
 
+    # Dedup + cooldown constants
+    COOLDOWN_HOURS = 4  # Hard block on second alert for same (pair, bias) within this window
+
+    # Cooldown registry lives inside phase2_sent.json under a reserved meta-key.
+    # Structure: phase2_sent["__cooldown__"] = { "NZDUSD_SHORT": "2026-04-21T23:19:00", ... }
+    if "__cooldown__" not in phase2_sent or not isinstance(phase2_sent.get("__cooldown__"), dict):
+        phase2_sent["__cooldown__"] = {}
+    cooldown_map = phase2_sent["__cooldown__"]
+
     # --- Purge expired dedup keys (trading-day-aware) ---
     EXPIRY_TRADING_DAYS = {
         "forex": 5,
@@ -738,13 +747,19 @@ if __name__ == "__main__":
 
     keys_to_purge = []
     for key, alerted_iso in phase2_sent.items():
-        # Key format: PAIRNAME_BIAS_PRICE e.g. EURUSD_LONG_1.08450
+        # Skip meta-keys (reserved, leading __)
+        if key.startswith("__"):
+            continue
+        # Key format (new): PAIRNAME_BIAS_BOSTAG_PRICE  e.g. EURUSD_LONG_CHoCH_1.08450
+        # Key format (legacy): PAIRNAME_BIAS_PRICE e.g. EURUSD_LONG_1.08450
         parts = key.split("_")
         if len(parts) < 3:
             continue
         pair_name = parts[0]
         ptype = pair_type_map.get(pair_name, "forex")
         max_trading_days = EXPIRY_TRADING_DAYS.get(ptype, 5)
+        if not isinstance(alerted_iso, str):
+            continue
         try:
             alerted_dt = datetime.fromisoformat(alerted_iso)
         except Exception:
@@ -754,8 +769,24 @@ if __name__ == "__main__":
 
     for k in keys_to_purge:
         del phase2_sent[k]
-    if keys_to_purge:
-        print(f"  [PURGE] Removed {len(keys_to_purge)} expired dedup keys: {keys_to_purge}")
+
+    # Purge expired cooldown entries (older than COOLDOWN_HOURS)
+    cooldown_keys_to_purge = []
+    for cd_key, cd_iso in cooldown_map.items():
+        try:
+            cd_dt = datetime.fromisoformat(cd_iso)
+            if (ist_now - cd_dt).total_seconds() / 3600 >= COOLDOWN_HOURS:
+                cooldown_keys_to_purge.append(cd_key)
+        except Exception:
+            cooldown_keys_to_purge.append(cd_key)  # Corrupt → drop
+    for cdk in cooldown_keys_to_purge:
+        del cooldown_map[cdk]
+
+    if keys_to_purge or cooldown_keys_to_purge:
+        if keys_to_purge:
+            print(f"  [PURGE] Removed {len(keys_to_purge)} expired dedup keys: {keys_to_purge}")
+        if cooldown_keys_to_purge:
+            print(f"  [PURGE] Removed {len(cooldown_keys_to_purge)} expired cooldowns: {cooldown_keys_to_purge}")
         # B4: Save immediately after purge to survive mid-scan crashes
         save_json("phase2_sent.json", phase2_sent)
 
@@ -856,13 +887,36 @@ if __name__ == "__main__":
             dr = score_res.get('dealing_range')
 
             if entry_model == "limit":
-                key_dp = max(0, dp - 2)
-                zone_id = f"{name}_{bias}_{round(proximal, key_dp)}"
+                # Structural dedup key: uses BOS swing price (stable across scans)
+                # instead of OB proximal (which drifts as Phase 1 reselects OB candle).
+                bos_swing_px = float(ob.get('bos_swing_price', proximal))
+                bos_tag = ob.get('bos_tag', 'BOS')
+                key_dp = max(0, dp - 1)
+                zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}"
+                pair_bias_key = f"{name}_{bias}"
+
+                # Layer 1: structural dedup
                 if zone_id in phase2_sent:
-                    print(f"  [-] {name}: already alerted (dedup). Skipping.")
+                    print(f"  [-] {name}: already alerted (structural dedup). Skipping.")
                     continue
 
+                # Layer 2: 4-hour cooldown per (pair, bias)
+                cd_iso = cooldown_map.get(pair_bias_key)
+                if cd_iso:
+                    try:
+                        cd_dt = datetime.fromisoformat(cd_iso)
+                        hrs_since = (ist_now - cd_dt).total_seconds() / 3600
+                        if hrs_since < COOLDOWN_HOURS:
+                            print(f"  [-] {name} {bias}: cooldown active ({hrs_since:.1f}h of {COOLDOWN_HOURS}h). Skipping.")
+                            continue
+                    except Exception:
+                        pass  # Corrupt timestamp — treat as expired, fall through
+
+                # Register key and cooldown BEFORE send, save immediately.
+                # This ensures that if send crashes, we don't re-alert on next run.
                 phase2_sent[zone_id] = ist_now.isoformat()
+                cooldown_map[pair_bias_key] = ist_now.isoformat()
+                save_json("phase2_sent.json", phase2_sent)
 
                 # B2: Pass levels and dr to H1 chart
                 h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
@@ -892,12 +946,15 @@ if __name__ == "__main__":
                 )
                 print(f"  [OK] TRADE READY (FOREX): {name}")
             elif entry_model == "ltf_choch":
-                key_dp = max(0, dp - 2)
-                zone_id = f"{name}_{bias}_{round(proximal, key_dp)}"
+                bos_swing_px = float(ob.get('bos_swing_price', proximal))
+                bos_tag = ob.get('bos_tag', 'BOS')
+                key_dp = max(0, dp - 1)
+                zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}"
+                pair_bias_key = f"{name}_{bias}"
                 watch_id = f"{name}_{round(proximal, dp)}"
 
+                # Layer 1: structural dedup — refresh watch but don't re-email
                 if zone_id in phase2_sent:
-                    # Already alerted. Refresh watch_state but preserve original alert timestamp.
                     if watch_id in new_watch_state:
                         trade_data["alert_ist"] = new_watch_state[watch_id].get(
                             "alert_ist", ist_now.isoformat()
@@ -905,7 +962,27 @@ if __name__ == "__main__":
                     new_watch_state[watch_id] = trade_data
                     continue
 
+                # Layer 2: 4-hour cooldown per (pair, bias)
+                cd_iso = cooldown_map.get(pair_bias_key)
+                if cd_iso:
+                    try:
+                        cd_dt = datetime.fromisoformat(cd_iso)
+                        hrs_since = (ist_now - cd_dt).total_seconds() / 3600
+                        if hrs_since < COOLDOWN_HOURS:
+                            print(f"  [-] {name} {bias}: cooldown active ({hrs_since:.1f}h of {COOLDOWN_HOURS}h). Skipping APPROACHING alert.")
+                            # Still refresh watch_state so Phase 3 keeps monitoring if zone was previously logged
+                            if watch_id in new_watch_state:
+                                trade_data["alert_ist"] = new_watch_state[watch_id].get(
+                                    "alert_ist", ist_now.isoformat()
+                                )
+                                new_watch_state[watch_id] = trade_data
+                            continue
+                    except Exception:
+                        pass
+
                 phase2_sent[zone_id] = ist_now.isoformat()
+                cooldown_map[pair_bias_key] = ist_now.isoformat()
+                save_json("phase2_sent.json", phase2_sent)
 
                 # B2: Pass levels and dr to H1 chart
                 h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
