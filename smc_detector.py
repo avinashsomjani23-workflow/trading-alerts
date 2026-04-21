@@ -23,91 +23,94 @@ def compute_atr(df, period=14):
     return float(np.mean(trs[-period:]))
 
 
-def get_dealing_range(ob, df_h1, h1_atr):
-    """
-    Compute the dealing range for an OB using its impulse leg.
+# ---------------------------------------------------------------------------
+# Dealing range lookback per pair type (in H1 candles).
+# Veteran-calibrated: forex ~3 trading days, indices ~2, commodities ~4.
+# ---------------------------------------------------------------------------
+DEALING_RANGE_LOOKBACK_H1 = {
+    "forex": 72,
+    "index": 48,
+    "commodity": 96
+}
 
-    Primary range: swing low → swing high (bullish) or swing high → swing low (bearish).
-    If narrower than 1x H1 ATR, expand outward via nearest swing pair.
+
+def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
+    """
+    Compute the dealing range using the most recent HTF swing high and swing low
+    within a pair-aware lookback window on H1.
+
+    This is what a veteran does on a chart: scroll back a few days, identify the
+    highest swing high and lowest swing low that enclose current price, and use
+    that as the dealing range. Range is recomputed each scan (not frozen at OB
+    creation) so it stays fresh as structure evolves.
+
+    If current price sits outside the detected range, the range is extended to
+    include current_price ± 0.5x ATR so pd_position stays within [0, 1].
+
+    Signature keeps backward-compatible defaults: if pair_conf or current_price
+    are not passed, falls back to window-min/max of last 72 candles.
 
     Returns dict: valid, range_high, range_low, equilibrium, source.
     """
+    if df_h1 is None or len(df_h1) < 20:
+        return {"valid": False, "source": "insufficient_data"}
     if h1_atr is None or h1_atr == 0:
         return {"valid": False, "source": "no_atr"}
 
-    bos_swing = float(ob.get('bos_swing_price', 0))
-    impulse_price = float(ob.get('impulse_start_price', 0))
+    # Pair-aware lookback window
+    pair_type = pair_conf.get("pair_type", "forex") if pair_conf else "forex"
+    lookback = DEALING_RANGE_LOOKBACK_H1.get(pair_type, 72)
+    lookback = min(lookback, len(df_h1))
 
-    if bos_swing == 0 or impulse_price == 0:
-        return {"valid": False, "source": "missing_data"}
+    df_window = df_h1.tail(lookback)
 
-    direction = ob.get('direction', 'bullish')
+    # Find fractal swings within the window. Use a copy with reset index so
+    # get_swing_points returns indices local to the window.
+    df_window_reset = df_window.reset_index(drop=True)
+    swings = get_swing_points(df_window_reset, lookback=5)
 
-    if direction == 'bullish':
-        range_high = bos_swing
-        range_low = impulse_price
+    if swings:
+        highs = [s['price'] for s in swings if s['type'] == 'high']
+        lows = [s['price'] for s in swings if s['type'] == 'low']
+        if highs and lows:
+            range_high = max(highs)
+            range_low = min(lows)
+            source = "swings_window"
+        else:
+            # Only one side has swings — fall back to window extremes
+            range_high = float(df_window['High'].max())
+            range_low = float(df_window['Low'].min())
+            source = "window_extremes_partial"
     else:
-        range_high = impulse_price
-        range_low = bos_swing
+        # No swings detected at all — use window extremes
+        range_high = float(df_window['High'].max())
+        range_low = float(df_window['Low'].min())
+        source = "window_extremes"
 
+    # Safety: ensure range is positive-width
     if range_high <= range_low:
-        range_high, range_low = range_low, range_high
+        return {"valid": False, "source": "degenerate_range"}
 
-    width = range_high - range_low
+    # If current price sits outside the range, extend to include it with a
+    # half-ATR buffer. This keeps pd_position math sane and represents "range
+    # just broke — redraw from the new extreme" in veteran terms.
+    if current_price is not None:
+        buf = 0.5 * h1_atr
+        if current_price > range_high:
+            range_high = current_price + buf
+            source = source + "+extended_high"
+        elif current_price < range_low:
+            range_low = current_price - buf
+            source = source + "+extended_low"
 
-    if width >= h1_atr:
-        eq = (range_high + range_low) / 2.0
-        return {
-            "valid": True,
-            "range_high": range_high,
-            "range_low": range_low,
-            "equilibrium": eq,
-            "source": "impulse_leg"
-        }
-
-    # --- Expansion: walk H1 swings outward ---
-    swings = get_swing_points(df_h1, lookback=5)
-    if not swings:
-        return {"valid": False, "source": "no_swings"}
-
-    outer_highs = sorted(
-        [s['price'] for s in swings if s['type'] == 'high' and s['price'] > range_high]
-    )
-    outer_lows = sorted(
-        [s['price'] for s in swings if s['type'] == 'low' and s['price'] < range_low],
-        reverse=True
-    )
-
-    # Option A: expand high only
-    for oh in outer_highs:
-        if (oh - range_low) >= h1_atr:
-            eq = (oh + range_low) / 2.0
-            return {
-                "valid": True, "range_high": oh, "range_low": range_low,
-                "equilibrium": eq, "source": "expanded_high"
-            }
-
-    # Option B: expand low only
-    for ol in outer_lows:
-        if (range_high - ol) >= h1_atr:
-            eq = (range_high + ol) / 2.0
-            return {
-                "valid": True, "range_high": range_high, "range_low": ol,
-                "equilibrium": eq, "source": "expanded_low"
-            }
-
-    # Option C: expand both (nearest outer high + nearest outer low)
-    if outer_highs and outer_lows:
-        best_high = outer_highs[0]
-        best_low = outer_lows[0]
-        if (best_high - best_low) >= h1_atr:
-            eq = (best_high + best_low) / 2.0
-            return {
-                "valid": True, "range_high": best_high, "range_low": best_low,
-                "equilibrium": eq, "source": "expanded_both"
-            }
-
-    return {"valid": False, "source": "too_narrow"}
+    eq = (range_high + range_low) / 2.0
+    return {
+        "valid": True,
+        "range_high": range_high,
+        "range_low": range_low,
+        "equilibrium": eq,
+        "source": source
+    }
 
 
 def get_swing_points(df, lookback=4, bounds=None):
@@ -314,6 +317,26 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     if final_entry is None or final_rr < 1.5:
         return {"valid": False, "reason": "R:R < 1.5 on all cascade attempts"}
 
+    # Entry-side validation (forex limit orders only).
+    # A BUY LIMIT must sit at or below current price; a SELL LIMIT at or above.
+    # If the cascade picked an entry on the wrong side of price, price has already
+    # moved through the zone — skip the alert rather than chase.
+    # Small tolerance = 0.5x spread to avoid false fails on rounding / tick noise.
+    if entry_model == "forex":
+        tolerance = 0.5 * spread_val
+        if bias == "LONG" and final_entry > current_price + tolerance:
+            return {
+                "valid": False,
+                "reason": (f"Entry {round(final_entry, dp)} is above current price "
+                           f"{round(current_price, dp)} — LONG limit would chase price.")
+            }
+        if bias == "SHORT" and final_entry < current_price - tolerance:
+            return {
+                "valid": False,
+                "reason": (f"Entry {round(final_entry, dp)} is below current price "
+                           f"{round(current_price, dp)} — SHORT limit would chase price.")
+            }
+
     risk = abs(final_entry - sl)
     tp2 = final_entry + (risk * 4.0) if bias == "LONG" else final_entry - (risk * 4.0)
 
@@ -395,7 +418,8 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     #   position < 0.55 → 0.0 (not in premium)
     # `pd_position` stored in breakdown so scorecard row can show exact percentage.
     h1_atr_val = compute_atr(df_h1)
-    dr = get_dealing_range(ob, df_h1, h1_atr_val)
+    dr = get_dealing_range(ob, df_h1, h1_atr_val,
+                           pair_conf=pair_conf, current_price=current_price)
     pd_position = None
     if dr["valid"]:
         rng_width = dr["range_high"] - dr["range_low"]
@@ -505,8 +529,9 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         dr_src = (f" (range: {dealing_range['range_low']:.{dp}f}"
                   f"–{dealing_range['range_high']:.{dp}f},"
                   f" EQ: {dealing_range['equilibrium']:.{dp}f})")
-        if dealing_range.get("source", "").startswith("expanded"):
-            dr_src += " [expanded]"
+        src_val = dealing_range.get("source", "")
+        if "extended" in src_val:
+            dr_src += " [range extended to include current price]"
 
     pd_pct_str = f"{pd_position * 100:.0f}%" if pd_position is not None else "n/a"
 
