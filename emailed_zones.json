@@ -38,6 +38,19 @@
       "fvg_valid": false,
       "status": "Tested (1x)",
       "changes": []
+    },
+    {
+      "zone_id": "EUR01",
+      "proximal": 1.1764705181121826,
+      "distal": 1.1773016452789307,
+      "direction": "bearish",
+      "bos_tag": "BOS",
+      "first_seen_ist": "21:02 IST",
+      "last_seen_ist": "21:02 IST",
+      "touches": 0,
+      "fvg_valid": false,
+      "status": "Pristine",
+      "changes": []
     }
   ],
   "USDJPY": [
@@ -102,7 +115,20 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "20:02 IST",
+      "last_seen_ist": "21:02 IST",
+      "touches": 0,
+      "fvg_valid": false,
+      "status": "Pristine",
+      "changes": []
+    },
+    {
+      "zone_id": "JPY15",
+      "proximal": 159.1959991455078,
+      "distal": 159.00799560546875,
+      "direction": "bullish",
+      "bos_tag": "BOS",
+      "first_seen_ist": "21:02 IST",
+      "last_seen_ist": "21:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -169,7 +195,7 @@
       "direction": "bullish",
       "bos_tag": "CHoCH",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "20:02 IST",
+      "last_seen_ist": "21:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -277,10 +303,23 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "20:02 IST",
+      "last_seen_ist": "21:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
+      "changes": []
+    },
+    {
+      "zone_id": "NAS06",
+      "proximal": 26834.5,
+      "distal": 26882.5,
+      "direction": "bearish",
+      "bos_tag": "CHoCH",
+      "first_seen_ist": "21:02 IST",
+      "last_seen_ist": "21:02 IST",
+      "touches": 3,
+      "fvg_valid": false,
+      "status": "Tested (3x)",
       "changes": []
     }
   ],
@@ -332,19 +371,22 @@
       "direction": "bullish",
       "bos_tag": "CHoCH",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "20:02 IST",
-      "touches": 0,
-      "fvg_valid": true,
-      "status": "Pristine",
-      "changes": []
+      "last_seen_ist": "21:02 IST",
+      "touches": 1,
+      "fvg_valid": false,
+      "status": "Tested (1x)",
+      "changes": [
+        "New touch detected (+1). Status now: Tested (1x).",
+        "FVG mitigated since last scan."
+      ]
     }
   ],
-  "__counter_EURUSD__": 0,
-  "__counter_USDJPY__": 14,
+  "__counter_EURUSD__": 1,
+  "__counter_USDJPY__": 15,
   "__counter_NZDUSD__": 12,
   "__counter_USDCHF__": 0,
-  "__counter_NAS100__": 5,
+  "__counter_NAS100__": 6,
   "__counter_GOLD__": 0,
   "__day__": "2026-04-21T09:00:00",
-  "__last_email_ts__": "2026-04-21T19:02:36.417241"
+  "__last_email_ts__": "2026-04-21T21:02:34.473506"
 }
