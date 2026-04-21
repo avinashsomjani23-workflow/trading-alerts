@@ -167,3 +167,6 @@
 2026-04-21 11:32:33,754 — ERROR — Gemini narrative error for NZDUSD: module 'google.generativeai.types' has no attribute 'ThinkingConfig'
 2026-04-21 11:32:34,163 — ERROR — Gemini narrative error for NAS100: module 'google.generativeai.types' has no attribute 'ThinkingConfig'
 2026-04-21 11:32:36,494 — INFO — Digest sent: 5 zones, 3 new, 0 updated, 2 unchanged.
+2026-04-21 13:32:37,000 — ERROR — Gemini narrative error for USDJPY: module 'google.generativeai.types' has no attribute 'ThinkingConfig'
+2026-04-21 13:32:37,296 — ERROR — Gemini narrative error for NZDUSD: module 'google.generativeai.types' has no attribute 'ThinkingConfig'
+2026-04-21 13:32:40,945 — INFO — Digest sent: 4 zones, 2 new, 0 updated, 2 unchanged.
