@@ -46,7 +46,7 @@
       "direction": "bearish",
       "bos_tag": "BOS",
       "first_seen_ist": "21:02 IST",
-      "last_seen_ist": "11:02 IST",
+      "last_seen_ist": "12:02 IST",
       "touches": 1,
       "fvg_valid": false,
       "status": "Tested (1x)",
@@ -117,7 +117,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "21:02 IST",
+      "last_seen_ist": "12:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -138,19 +138,6 @@
         "New touch detected (+2). Status now: Tested (2x).",
         "New touch detected (+1). Status now: Tested (3x)."
       ]
-    },
-    {
-      "zone_id": "JPY01",
-      "proximal": 159.32400512695312,
-      "distal": 159.4010009765625,
-      "direction": "bearish",
-      "bos_tag": "CHoCH",
-      "first_seen_ist": "11:02 IST",
-      "last_seen_ist": "11:02 IST",
-      "touches": 1,
-      "fvg_valid": false,
-      "status": "Tested (1x)",
-      "changes": []
     }
   ],
   "NZDUSD": [
@@ -336,7 +323,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "11:02 IST",
+      "last_seen_ist": "12:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -420,7 +407,7 @@
       "direction": "bearish",
       "bos_tag": "BOS",
       "first_seen_ist": "22:02 IST",
-      "last_seen_ist": "11:02 IST",
+      "last_seen_ist": "12:02 IST",
       "touches": 2,
       "fvg_valid": false,
       "status": "Tested (2x)",
