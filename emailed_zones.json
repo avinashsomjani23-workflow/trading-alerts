@@ -62,7 +62,7 @@
       "bos_tag": "BOS",
       "first_seen_ist": "18:02 IST",
       "first_seen_iso": "2026-04-22T18:02:34.625774",
-      "last_seen_ist": "18:02 IST",
+      "last_seen_ist": "19:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -131,7 +131,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "18:02 IST",
+      "last_seen_ist": "19:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -257,11 +257,13 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "23:02 IST",
-      "touches": 2,
-      "fvg_valid": false,
-      "status": "Tested (2x)",
-      "changes": []
+      "last_seen_ist": "19:02 IST",
+      "touches": 0,
+      "fvg_valid": true,
+      "status": "Pristine",
+      "changes": [
+        "FVG now confirmed (was absent)."
+      ]
     },
     {
       "proximal": 0.7828500270843506,
@@ -351,7 +353,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "18:02 IST",
+      "last_seen_ist": "19:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -435,7 +437,7 @@
       "direction": "bearish",
       "bos_tag": "BOS",
       "first_seen_ist": "22:02 IST",
-      "last_seen_ist": "18:02 IST",
+      "last_seen_ist": "19:02 IST",
       "touches": 2,
       "fvg_valid": false,
       "status": "Tested (2x)",
@@ -451,5 +453,5 @@
   "__counter_NAS100__": 0,
   "__counter_GOLD__": 0,
   "__day__": "2026-04-22T09:00:00",
-  "__last_email_ts__": "2026-04-22T17:19:04.206441"
+  "__last_email_ts__": "2026-04-22T19:02:35.409959"
 }
