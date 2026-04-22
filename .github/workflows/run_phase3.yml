@@ -22,20 +22,27 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          FILES="active_watch_state.json yfinance_stale_log.json chart_failure_log.json"
+          ALL_FILES="alert_log.json scan_log.json system_status.json zone_visit_state.json active_watch_state.json phase2_sent.json yfinance_stale_log.json gemini_failure_log.json chart_failure_log.json"
 
-          mkdir -p /tmp/p3_writes
+          # Keep only files that actually exist on disk
+          FILES=""
+          for f in $ALL_FILES; do
+            if [ -f "$f" ]; then FILES="$FILES $f"; fi
+          done
+          echo "Files to commit: $FILES"
+
+          mkdir -p /tmp/p2_writes
           for f in $FILES; do
-            if [ -f "$f" ]; then cp "$f" "/tmp/p3_writes/$f"; fi
+            cp "$f" "/tmp/p2_writes/$f"
           done
 
           git fetch origin main
           git reset --hard origin/main
           for f in $FILES; do
-            if [ -f "/tmp/p3_writes/$f" ]; then cp "/tmp/p3_writes/$f" "$f"; fi
+            cp "/tmp/p2_writes/$f" "$f"
           done
 
-          git add $FILES || true
+          git add $FILES
           if git diff --staged --quiet; then
             echo "No changes to commit."
             exit 0
