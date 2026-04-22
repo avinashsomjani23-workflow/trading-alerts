@@ -18,5 +18,10 @@
     "ts": "2026-04-22T16:02:32.638649",
     "pair": "EURUSD",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-04-22T19:17:36.442208",
+    "pair": "USDJPY",
+    "reason": "no candidates field, attempt 3"
   }
 ]
