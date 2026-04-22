@@ -53,6 +53,20 @@
       "changes": [
         "New touch detected (+1). Status now: Tested (1x)."
       ]
+    },
+    {
+      "zone_id": "EUR01",
+      "proximal": 1.1749500036239624,
+      "distal": 1.1756407022476196,
+      "direction": "bearish",
+      "bos_tag": "BOS",
+      "first_seen_ist": "18:02 IST",
+      "first_seen_iso": "2026-04-22T18:02:34.625774",
+      "last_seen_ist": "18:02 IST",
+      "touches": 0,
+      "fvg_valid": false,
+      "status": "Pristine",
+      "changes": []
     }
   ],
   "USDJPY": [
@@ -117,7 +131,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "17:19 IST",
+      "last_seen_ist": "18:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -337,7 +351,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "17:19 IST",
+      "last_seen_ist": "18:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -421,7 +435,7 @@
       "direction": "bearish",
       "bos_tag": "BOS",
       "first_seen_ist": "22:02 IST",
-      "last_seen_ist": "17:19 IST",
+      "last_seen_ist": "18:02 IST",
       "touches": 2,
       "fvg_valid": false,
       "status": "Tested (2x)",
@@ -430,7 +444,7 @@
       ]
     }
   ],
-  "__counter_EURUSD__": 0,
+  "__counter_EURUSD__": 1,
   "__counter_USDJPY__": 3,
   "__counter_NZDUSD__": 2,
   "__counter_USDCHF__": 0,
