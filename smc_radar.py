@@ -429,10 +429,15 @@ def detect_smc_radar(df, lookback):
                 'fvg_top':    fvg_top,
                 'fvg_bottom': fvg_bottom,
                 'c1_idx':     fvg_c1_idx,
-                'c3_idx':     fvg_c3_idx
+                'c3_idx':     fvg_c3_idx,
+                # Ghost coords preserved regardless of mitigation status
+                'ghost_top':    fvg_top,
+                'ghost_bottom': fvg_bottom,
+                'ghost_c1_idx': fvg_c1_idx,
+                'ghost_c3_idx': fvg_c3_idx,
+                'was_detected': fvg_c1_idx is not None
             }
         })
-
     # Mitigation + touch tracking
     tracked_obs = []
     for ob in active_obs:
@@ -541,7 +546,10 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
                 fontweight='bold', zorder=5
             )
 
-        if ob['fvg']['exists'] and ob['fvg']['c1_idx'] is not None:
+        fvg_active    = ob['fvg']['exists'] and ob['fvg']['c1_idx'] is not None
+        fvg_ghost     = (not ob['fvg']['exists']) and ob['fvg'].get('was_detected') and ob['fvg'].get('ghost_c1_idx') is not None
+
+        if fvg_active:
             ft = float(ob['fvg']['fvg_top'])
             fb = float(ob['fvg']['fvg_bottom'])
             fvg_c1_plot = ob['fvg']['c1_idx'] - window_start
@@ -562,7 +570,27 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
                     fvg_c1_plot, ft, 'FVG',
                     color='#2ecc71', fontsize=7, ha='left', va='bottom', zorder=5
                 )
-
+        elif fvg_ghost:
+            ft = float(ob['fvg']['ghost_top'])
+            fb = float(ob['fvg']['ghost_bottom'])
+            fvg_c1_plot = ob['fvg']['ghost_c1_idx'] - window_start
+            fvg_c3_plot = ob['fvg']['ghost_c3_idx'] - window_start
+            if 0 <= fvg_c1_plot < n_plot:
+                fvg_x_start = fvg_c1_plot - 0.4
+                fvg_width   = (fvg_c3_plot + 0.4) - fvg_x_start
+                ax.add_patch(patches.Rectangle(
+                    (fvg_x_start, fb), fvg_width, ft - fb,
+                    facecolor='#888888', alpha=0.10, zorder=1
+                ))
+                ax.add_patch(patches.Rectangle(
+                    (fvg_x_start, fb), fvg_width, ft - fb,
+                    fill=False, edgecolor='#888888', linewidth=1.0,
+                    linestyle=':', zorder=2
+                ))
+                ax.text(
+                    fvg_c1_plot, ft, 'FVG ✓',
+                    color='#888888', fontsize=7, ha='left', va='bottom', zorder=5
+                )
         bos_price = float(ob['bos_swing_price'])
         bos_color = '#00bcd4' if ob['bos_tag'] == 'BOS' else '#ff9800'
         ax.axhline(
@@ -1028,7 +1056,7 @@ def run_radar():
 
         stored_today = [
             z for z in zone_state.get(name, [])
-            if z.get("first_seen_ist", "") >= day_start
+            if z.get("first_seen_iso", z.get("first_seen_ist", "")) >= day_start
         ]
 
         matched_stored_ids = set()
