@@ -6,6 +6,8 @@ jobs:
     permissions: { contents: write }
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
       - run: pip install yfinance requests numpy matplotlib pandas
@@ -15,13 +17,52 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           ALERT_EMAIL:        ${{ secrets.ALERT_EMAIL }}
         run: python Phase2_Alert_Engine.py
-      - run: |
+      - name: Commit state files
+        run: |
+          set -e
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add -A
-          git stash push -m "local writes" || true
-          git pull --rebase origin main || true
-          git stash pop || true
-          git add alert_log.json scan_log.json system_status.json zone_visit_state.json active_watch_state.json phase2_sent.json yfinance_stale_log.json gemini_failure_log.json chart_failure_log.json || true
-          git diff --staged --quiet || git commit -m "P2 Update [skip ci]"
-          git push origin HEAD:main || true
+
+          FILES="alert_log.json scan_log.json system_status.json zone_visit_state.json active_watch_state.json phase2_sent.json yfinance_stale_log.json gemini_failure_log.json chart_failure_log.json"
+
+          mkdir -p /tmp/p2_writes
+          for f in $FILES; do
+            if [ -f "$f" ]; then cp "$f" "/tmp/p2_writes/$f"; fi
+          done
+
+          git fetch origin main
+          git reset --hard origin/main
+          for f in $FILES; do
+            if [ -f "/tmp/p2_writes/$f" ]; then cp "/tmp/p2_writes/$f" "$f"; fi
+          done
+
+          git add $FILES || true
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "P2 Update [skip ci]"
+
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "Push succeeded on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected. Rebasing and retrying (attempt $i)."
+            git fetch origin main
+            git reset --hard origin/main
+            for f in $FILES; do
+              if [ -f "/tmp/p2_writes/$f" ]; then cp "/tmp/p2_writes/$f" "$f"; fi
+            done
+            git add $FILES || true
+            if git diff --staged --quiet; then
+              echo "Nothing to commit after rebase."
+              exit 0
+            fi
+            git commit -m "P2 Update [skip ci]"
+            sleep 2
+          done
+
+          echo "Push failed after 5 attempts."
+          exit 1
