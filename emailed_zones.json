@@ -62,11 +62,13 @@
       "bos_tag": "BOS",
       "first_seen_ist": "18:02 IST",
       "first_seen_iso": "2026-04-22T18:02:34.625774",
-      "last_seen_ist": "22:02 IST",
+      "last_seen_ist": "23:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
       "changes": [
+        "FVG now confirmed (was absent).",
+        "FVG mitigated since last scan.",
         "FVG now confirmed (was absent).",
         "FVG mitigated since last scan."
       ]
@@ -164,7 +166,7 @@
       "bos_tag": "BOS",
       "first_seen_ist": "21:02 IST",
       "first_seen_iso": "2026-04-22T21:02:46.067747",
-      "last_seen_ist": "22:02 IST",
+      "last_seen_ist": "23:02 IST",
       "touches": 1,
       "fvg_valid": false,
       "status": "Tested (1x)",
@@ -274,7 +276,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "22:02 IST",
+      "last_seen_ist": "23:02 IST",
       "touches": 0,
       "fvg_valid": true,
       "status": "Pristine",
@@ -330,7 +332,7 @@
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
       "first_seen_iso": "2026-04-22T20:02:36.592104",
-      "last_seen_ist": "22:02 IST",
+      "last_seen_ist": "23:02 IST",
       "touches": 1,
       "fvg_valid": false,
       "status": "Tested (1x)",
@@ -413,7 +415,7 @@
       "bos_tag": "CHoCH",
       "first_seen_ist": "20:02 IST",
       "first_seen_iso": "2026-04-22T20:02:36.592104",
-      "last_seen_ist": "22:02 IST",
+      "last_seen_ist": "23:02 IST",
       "touches": 1,
       "fvg_valid": false,
       "status": "Tested (1x)",
@@ -484,7 +486,7 @@
       "direction": "bearish",
       "bos_tag": "BOS",
       "first_seen_ist": "22:02 IST",
-      "last_seen_ist": "22:02 IST",
+      "last_seen_ist": "23:02 IST",
       "touches": 2,
       "fvg_valid": false,
       "status": "Tested (2x)",
@@ -500,5 +502,5 @@
   "__counter_NAS100__": 1,
   "__counter_GOLD__": 0,
   "__day__": "2026-04-22T09:00:00",
-  "__last_email_ts__": "2026-04-22T21:02:46.067747"
+  "__last_email_ts__": "2026-04-22T23:02:34.048786"
 }
