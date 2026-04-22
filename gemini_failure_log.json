@@ -28,5 +28,10 @@
     "ts": "2026-04-22T20:17:45.670008",
     "pair": "USDCHF",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-04-22T20:32:44.667502",
+    "pair": "NAS100",
+    "reason": "no candidates field, attempt 3"
   }
 ]
