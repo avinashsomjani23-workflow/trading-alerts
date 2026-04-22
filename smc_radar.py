@@ -1043,19 +1043,21 @@ def run_radar():
             if matched_idx is None:
                 # BRAND NEW ZONE
                 first_seen_label = ist_now.strftime('%H:%M IST')
+                first_seen_iso   = ist_now.isoformat()
                 zone_id = get_next_zone_id(zone_state, name)
                 new_stored = {
-                    "zone_id":        zone_id,
-                    "proximal":       ob['proximal_line'],
-                    "distal":         ob['distal_line'],
-                    "direction":      ob['direction'],
-                    "bos_tag":        ob['bos_tag'],
-                    "first_seen_ist": first_seen_label,
-                    "last_seen_ist":  first_seen_label,
-                    "touches":        ob['touches'],
-                    "fvg_valid":      ob['fvg']['exists'],
-                    "status":         ob['status'],
-                    "changes":        []
+                    "zone_id":          zone_id,
+                    "proximal":         ob['proximal_line'],
+                    "distal":           ob['distal_line'],
+                    "direction":        ob['direction'],
+                    "bos_tag":          ob['bos_tag'],
+                    "first_seen_ist":   first_seen_label,
+                    "first_seen_iso":   first_seen_iso,
+                    "last_seen_ist":    first_seen_label,
+                    "touches":          ob['touches'],
+                    "fvg_valid":        ob['fvg']['exists'],
+                    "status":           ob['status'],
+                    "changes":          []
                 }
                 stored_today.append(new_stored)
 
