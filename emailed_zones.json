@@ -46,7 +46,7 @@
       "direction": "bearish",
       "bos_tag": "BOS",
       "first_seen_ist": "21:02 IST",
-      "last_seen_ist": "23:02 IST",
+      "last_seen_ist": "09:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -128,11 +128,13 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "21:02 IST",
-      "last_seen_ist": "23:02 IST",
-      "touches": 0,
+      "last_seen_ist": "09:02 IST",
+      "touches": 2,
       "fvg_valid": false,
-      "status": "Pristine",
-      "changes": []
+      "status": "Tested (2x)",
+      "changes": [
+        "New touch detected (+2). Status now: Tested (2x)."
+      ]
     }
   ],
   "NZDUSD": [
@@ -318,7 +320,7 @@
       "direction": "bullish",
       "bos_tag": "BOS",
       "first_seen_ist": "20:02 IST",
-      "last_seen_ist": "23:02 IST",
+      "last_seen_ist": "09:02 IST",
       "touches": 0,
       "fvg_valid": false,
       "status": "Pristine",
@@ -402,19 +404,21 @@
       "direction": "bearish",
       "bos_tag": "BOS",
       "first_seen_ist": "22:02 IST",
-      "last_seen_ist": "23:02 IST",
+      "last_seen_ist": "09:02 IST",
       "touches": 2,
-      "fvg_valid": true,
+      "fvg_valid": false,
       "status": "Tested (2x)",
-      "changes": []
+      "changes": [
+        "FVG mitigated since last scan."
+      ]
     }
   ],
-  "__counter_EURUSD__": 1,
-  "__counter_USDJPY__": 15,
-  "__counter_NZDUSD__": 13,
+  "__counter_EURUSD__": 0,
+  "__counter_USDJPY__": 0,
+  "__counter_NZDUSD__": 0,
   "__counter_USDCHF__": 0,
-  "__counter_NAS100__": 6,
-  "__counter_GOLD__": 1,
-  "__day__": "2026-04-21T09:00:00",
-  "__last_email_ts__": "2026-04-21T23:02:37.764974"
+  "__counter_NAS100__": 0,
+  "__counter_GOLD__": 0,
+  "__day__": "2026-04-22T09:00:00",
+  "__last_email_ts__": "2026-04-22T09:02:35.253019"
 }
