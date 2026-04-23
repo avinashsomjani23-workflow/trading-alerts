@@ -140,22 +140,22 @@
   ],
   "NAS100": [
     {
-      "bos_idx": 55,
-      "bos_swing_price": 26564.0,
-      "impulse_start_idx": 49,
-      "impulse_start_price": 26440.0,
+      "bos_idx": 149,
+      "bos_swing_price": 27136.0,
+      "impulse_start_idx": 134,
+      "impulse_start_price": 26848.0,
       "bos_sequence_count": 1,
-      "last_choch_idx": 36,
-      "ob_idx": 54,
-      "ob_timestamp": "2026-04-17T10:00:00+00:00",
+      "last_choch_idx": 125,
+      "ob_idx": 146,
+      "ob_timestamp": "2026-04-23T12:00:00+00:00",
       "direction": "bullish",
       "bos_tag": "BOS",
-      "high": 26547.0,
-      "low": 26505.5,
-      "proximal_line": 26547.0,
-      "distal_line": 26505.5,
-      "median_leg_body": 18.25,
-      "ob_body": 10.5,
+      "high": 27079.75,
+      "low": 26956.75,
+      "proximal_line": 27079.75,
+      "distal_line": 26956.75,
+      "median_leg_body": 39.875,
+      "ob_body": 23.25,
       "fvg": {
         "exists": false,
         "fvg_top": null,
@@ -169,8 +169,8 @@
         "ghost_c3_idx": null,
         "mitigated_at_idx": null
       },
-      "touches": 0,
-      "status": "Pristine"
+      "touches": 1,
+      "status": "Tested (1x)"
     }
   ],
   "GOLD": [
