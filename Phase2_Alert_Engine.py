@@ -382,9 +382,35 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             if sl_p > 0:
                 ax.axhline(y=sl_p, color='#e74c3c', linewidth=1.0, linestyle='--', alpha=0.8, zorder=3)
 
+       # NEW
         # --- Current price line ---
         current = float(df_plot['Close'].iloc[-1])
         ax.axhline(y=current, color='#ffffff', linewidth=0.8, linestyle='-', alpha=0.5, zorder=2)
+
+        # --- OB candle highlight (white outline rectangle) ---
+        ob_ts_iso = ob.get('ob_timestamp')
+        if ob_ts_iso:
+            # Locate OB candle in the full (un-tailed) H1 df first
+            abs_idx, found = smc_detector.locate_ob_candle_idx(df_h1, ob_ts_iso)
+            if found:
+                # Tail window used above is df_h1.tail(80); figure out local idx
+                tail_n = 80
+                full_n = len(df_h1)
+                window_start = max(0, full_n - tail_n)
+                if abs_idx >= window_start:
+                    local_idx = abs_idx - window_start
+                    if 0 <= local_idx < n:
+                        ob_c_h = float(df_plot['High'].iloc[local_idx])
+                        ob_c_l = float(df_plot['Low'].iloc[local_idx])
+                        ax.add_patch(patches.Rectangle(
+                            (local_idx - 0.5, ob_c_l), 1.0, ob_c_h - ob_c_l,
+                            fill=False, edgecolor='#ffffff', linewidth=1.5, zorder=5
+                        ))
+                else:
+                    # OB off the visible window — indicator at left edge
+                    ax.text(0.5, float(df_plot['High'].max()),
+                            '← OB off-chart',
+                            color='#ffffff', fontsize=8, ha='left', va='top', zorder=5)
 
         # --- Labels with stacking ---
         raw_labels = []
@@ -500,9 +526,32 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
         if sl_p > 0:
             ax.axhline(y=sl_p, color='#e74c3c', linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
 
+        # NEW
         # --- Current price line ---
         current = float(df_plot['Close'].iloc[-1])
         ax.axhline(y=current, color='#ffffff', linewidth=0.8, linestyle='-', alpha=0.5, zorder=2)
+
+        # --- OB candle highlight on M15 chart ---
+        ob_ts_iso = ob.get('ob_timestamp')
+        if ob_ts_iso:
+            abs_idx, found = smc_detector.locate_ob_candle_idx(df_m15, ob_ts_iso)
+            if found:
+                tail_n = 60
+                full_n = len(df_m15)
+                window_start = max(0, full_n - tail_n)
+                if abs_idx >= window_start:
+                    local_idx = abs_idx - window_start
+                    if 0 <= local_idx < n:
+                        ob_c_h = float(df_plot['High'].iloc[local_idx])
+                        ob_c_l = float(df_plot['Low'].iloc[local_idx])
+                        ax.add_patch(patches.Rectangle(
+                            (local_idx - 0.5, ob_c_l), 1.0, ob_c_h - ob_c_l,
+                            fill=False, edgecolor='#ffffff', linewidth=1.5, zorder=5
+                        ))
+                else:
+                    ax.text(0.5, float(df_plot['High'].max()),
+                            '← OB off-chart',
+                            color='#ffffff', fontsize=8, ha='left', va='top', zorder=5)
 
         # --- Labels with stacking ---
         raw_labels = []
@@ -591,18 +640,20 @@ def build_scorecard_html(rows, total):
     </div>"""
 
 
+# NEW
 def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_score,
-                      atr_label, distance_str, dollar_risk_str,
+                      atr_label, distance_str, dollar_risk_str, scan_start_ist,
                       h1_chart_ok=True, m15_chart_ok=True):
     dp = pair_conf.get("decimal_places", 5)
     bias = data.get("bias", "-")
-    ist_time = get_ist_now().strftime('%H:%M IST')
+    sent_ist = get_ist_now().strftime('%H:%M IST')
+    scan_ist = scan_start_ist.strftime('%H:%M IST')
+    ist_time = f"Scanned {scan_ist} · Sent {sent_ist}"
     ob = data.get('ob', {})
     levels = data.get('levels', {})
-    fresh = "Pristine" if ob.get('touches', 0) == 0 else f"Tested {ob.get('touches', 0)}x"
+    # Freshness display handled by scorecard row alone; no separate context line.
     bos_tag = ob.get('bos_tag', 'BOS')
     entry_model = pair_conf.get('entry_model', 'limit')
-
     if entry_model == "limit":
         action_word = "SELL LIMIT" if bias == "SHORT" else "BUY LIMIT"
         action_block = f"""
@@ -643,7 +694,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
 
     context_html = f"""
     <div style="margin-bottom:12px;font-size:11px;color:#888;">
-        <b style="color:#aaa;">Zone:</b> {bos_tag} &nbsp;&middot;&nbsp; {fresh}
+        <b style="color:#aaa;">Zone:</b> {bos_tag}
         &nbsp;&middot;&nbsp; Proximal {ob.get('proximal_line', 0):.{dp}f}
         / Distal {ob.get('distal_line', 0):.{dp}f}
     </div>"""
@@ -708,8 +759,10 @@ def send_email(subject, html_body, h1_chart_b64, m15_chart_b64):
 # Main
 # ---------------------------------------------------------------------------
 
+# NEW
 if __name__ == "__main__":
     ist_now = get_ist_now()
+    scan_start_ts = ist_now  # Captured at scan start; separate from per-alert send time.
     print(f"Phase 2 Engine started {ist_now.strftime('%H:%M')} IST")
 
     active_obs = load_json("active_obs.json", {})
@@ -817,34 +870,96 @@ if __name__ == "__main__":
         if not h1_atr:
             continue
 
+        # NEW
         # A2: Always compute BOS sequence count from fresh H1 data.
-        # This overrides the count stored in active_obs.json (which may be stale).
         bos_counter = smc_detector.compute_bos_sequence_count(df_h1, lookback=4)
 
+        # Round 2: Phase 2 re-validates each zone against fresh H1 and then
+        # selects a single candidate per pair. Flow:
+        #   1. Proximity gate (as before).
+        #   2. Re-validation: opposite H1 BOS since OB formed -> zone dead.
+        #   3. Per-pair single-alert: pick zone closest to current price whose
+        #      direction matches current H1 trend. If no trend or no match,
+        #      skip this pair this scan.
+
+        surviving_obs = []
         for ob in pair_obs:
             proximal = float(ob['proximal_line'])
+            # 1. Proximity gate
             if abs(current_price - proximal) > (pair_conf["atr_multiplier"] * h1_atr):
                 continue
 
             bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
+
+            # 2. Re-validation via opposite-BOS check on fresh H1.
+            # ob_timestamp is IST-naive ISO string; convert to UTC-naive for the call.
+            ob_ts_iso = ob.get('ob_timestamp')
+            since_utc = None
+            if ob_ts_iso:
+                try:
+                    ob_ts_parsed = datetime.fromisoformat(ob_ts_iso)
+                    if ob_ts_parsed.tzinfo is not None:
+                        # tz-aware input -> UTC-naive
+                        since_utc = datetime.utcfromtimestamp(ob_ts_parsed.timestamp())
+                    else:
+                        # Naive input. yfinance timestamps come back naive-UTC by default,
+                        # so we treat naive as UTC. No 5h30m subtraction.
+                        since_utc = ob_ts_parsed
+                except Exception:
+                    since_utc = None
+
+            if smc_detector.check_opposite_bos(df_h1, bias, since_ts=since_utc):
+                print(f"  [X] {name} {bias}: zone invalidated by opposite H1 BOS since OB formed. Skipping.")
+                continue
+
+            surviving_obs.append(ob)
+
+        if not surviving_obs:
+            continue
+
+        # 3. Per-pair single-alert: pick nearest-to-price zone that matches
+        # current H1 trend direction. If trend is None or no zone matches, skip.
+        current_trend = bos_counter.get('trend')  # 'bullish' | 'bearish' | None
+        if current_trend is None:
+            print(f"  [-] {name}: H1 trend ambiguous. Skipping pair this scan.")
+            continue
+
+        matching_obs = [o for o in surviving_obs if o.get('direction') == current_trend]
+        if not matching_obs:
+            print(f"  [-] {name}: no surviving zone matches current H1 trend ({current_trend}). Skipping.")
+            continue
+
+        # Nearest-to-price wins
+        matching_obs.sort(key=lambda o: abs(current_price - float(o['proximal_line'])))
+        selected_ob = matching_obs[0]
+
+        # Inject fresh BOS count onto selected zone
+        if bos_counter['trend'] == selected_ob.get('direction'):
+            selected_ob['bos_sequence_count'] = bos_counter['count']
+
+        # Now score and alert only the selected zone
+        for ob in [selected_ob]:
+            proximal = float(ob['proximal_line'])
+            bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
             zone_top = max(proximal, float(ob['distal_line']))
             zone_bottom = min(proximal, float(ob['distal_line']))
 
-            # A2: Inject fresh BOS count into ob before scoring.
-            # Only applies when trend direction matches the ob's direction.
-            ob_direction = ob.get('direction', 'bullish')
-            if bos_counter['trend'] == ob_direction:
-                ob['bos_sequence_count'] = bos_counter['count']
-            # If trend doesn't match or is None, leave whatever was in active_obs.json as-is.
-
+            # NEW
             # FVG: try M15 first, fall back to H1 from OB data. Track source.
-            fvg_data = smc_detector.detect_fvg_in_zone(df_m15, bias, zone_top, zone_bottom)
+            # atr_floor gates out microscopic gaps (noise). Pair-type-aware.
+            ptype = pair_conf.get("pair_type", "forex")
+            fvg_floor_mult = smc_detector.FVG_NOISE_FLOOR_MULT.get(ptype, 0.20)
+            m15_atr_for_fvg = m15_atr if m15_atr else 0.0
+            atr_floor_m15 = fvg_floor_mult * m15_atr_for_fvg
+
+            fvg_data = smc_detector.detect_fvg_in_zone(
+                df_m15, bias, zone_top, zone_bottom, atr_floor_m15
+            )
             if fvg_data['exists']:
                 fvg_source = "M15"
             else:
                 fvg_data = ob.get("fvg", {"exists": False})
                 fvg_source = "H1" if fvg_data.get('exists') else None
-
             gemini_risk = call_gemini_flash(name, bias, fetch_macro_news(name))
             macro_score = gemini_risk.get('macro_score', 1.0)
 
@@ -934,10 +1049,11 @@ if __name__ == "__main__":
                 if not m15_ok:
                     _log_chart_failure(name, "m15_phase2_limit")
 
+                # NEW
                 html = build_trade_email(
                     trade_data, name, pair_conf, "TRADE READY",
                     scorecard_rows, score_res['total'],
-                    atr_label, distance_str, dollar_risk_str,
+                    atr_label, distance_str, dollar_risk_str, scan_start_ts,
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
                 send_email(
@@ -1000,10 +1116,11 @@ if __name__ == "__main__":
                 if not m15_ok:
                     _log_chart_failure(name, "m15_phase2_ltf")
 
+                # NEW
                 html = build_trade_email(
                     trade_data, name, pair_conf, "APPROACHING",
                     scorecard_rows, score_res['total'],
-                    atr_label, distance_str, dollar_risk_str,
+                    atr_label, distance_str, dollar_risk_str, scan_start_ts,
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
                 send_email(
