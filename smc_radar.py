@@ -388,36 +388,26 @@ def detect_smc_radar(df, lookback):
         ob_high = float(H[ob_idx])
         ob_low  = float(L[ob_idx])
 
-        # FVG detection — scan from OB candle forward to BOS candle
-        fvg_valid = False
-        fvg_top = fvg_bottom = None
-        fvg_c1_idx = fvg_c3_idx = None
+        # FVG detection — leg-bounded via smc_detector (uniform across phases).
+        # Window: OB candle to BOS candle + 1 (catches displacement gaps on/just-after BOS).
+        # Walks BACKWARD → first unmitigated FVG closest to BOS wins.
+        # If candidate is filled, returns ghost data for grey-box rendering.
+        ob_high_for_fvg = ob_high
+        ob_low_for_fvg  = ob_low
+        bias_label      = "LONG" if bos_type == 'bullish' else "SHORT"
+        h1_atr_for_fvg  = h1_atr_for_leg if h1_atr_for_leg else 0.0
+        fvg_floor_mult  = smc_detector.FVG_NOISE_FLOOR_MULT.get("forex", 0.20)
+        # NOTE: pair_type is known to the caller in run_radar; we use the OB's
+        # own high/low as the zone overlap window, and let Phase 1's caller
+        # apply pair-type-aware floor below. For this helper we use H1 ATR
+        # with a neutral 0.20 floor — safe across all pairs on H1.
+        atr_floor_h1    = fvg_floor_mult * h1_atr_for_fvg
 
-        for k in range(ob_idx, i - 1):
-            if k + 2 >= n:
-                break
-            if bos_type == 'bullish' and H[k] < L[k + 2]:
-                ft = float(L[k + 2])
-                fb = float(H[k])
-                if not any(L[m] <= fb for m in range(k + 3, n)):
-                    fvg_valid  = True
-                    fvg_top    = ft
-                    fvg_bottom = fb
-                    fvg_c1_idx = k
-                    fvg_c3_idx = k + 2
-                    break
-            elif bos_type == 'bearish' and L[k] > H[k + 2]:
-                ft = float(L[k])
-                fb = float(H[k + 2])
-                if not any(H[m] >= ft for m in range(k + 3, n)):
-                    fvg_valid  = True
-                    fvg_top    = ft
-                    fvg_bottom = fb
-                    fvg_c1_idx = k
-                    fvg_c3_idx = k + 2
-                    break
+        fvg_result = smc_detector.detect_fvg_in_zone(
+            df, bias_label, ob_high_for_fvg, ob_low_for_fvg, atr_floor_h1,
+            leg_start_idx=ob_idx, leg_end_idx=i
+        )
 
-        # NEW
         # Absolute timestamp of the OB candle — required by Phase 2/3 to locate
         # the OB candle in their own dataframes (ob_idx is not portable across phases).
         try:
@@ -433,6 +423,21 @@ def detect_smc_radar(df, lookback):
                 ob_timestamp_str = str(ob_ts_raw)
         except Exception:
             ob_timestamp_str = None
+
+        # Build fvg dict — green (pristine), grey (ghost/mitigated), or absent.
+        fvg_dict = {
+            'exists':       fvg_result.get('exists', False),
+            'fvg_top':      fvg_result.get('fvg_top'),
+            'fvg_bottom':   fvg_result.get('fvg_bottom'),
+            'c1_idx':       fvg_result.get('c1_idx'),
+            'c3_idx':       fvg_result.get('c3_idx'),
+            'was_detected': fvg_result.get('was_detected', False),
+            'ghost_top':    fvg_result.get('ghost_top'),
+            'ghost_bottom': fvg_result.get('ghost_bottom'),
+            'ghost_c1_idx': fvg_result.get('ghost_c1_idx'),
+            'ghost_c3_idx': fvg_result.get('ghost_c3_idx'),
+            'mitigated_at_idx': fvg_result.get('mitigated_at_idx')
+        }
 
         active_obs.append({
             'bos_idx':           i,
@@ -451,13 +456,7 @@ def detect_smc_radar(df, lookback):
             'distal_line':     ob_low  if bos_type == 'bullish' else ob_high,
             'median_leg_body': median_leg_body,
             'ob_body':         abs(C[ob_idx] - O[ob_idx]),
-            'fvg': {
-                'exists':     fvg_valid,
-                'fvg_top':    fvg_top,
-                'fvg_bottom': fvg_bottom,
-                'c1_idx':     fvg_c1_idx,
-                'c3_idx':     fvg_c3_idx
-            }
+            'fvg': fvg_dict
         })
     # Mitigation + touch tracking
     tracked_obs = []
@@ -486,7 +485,7 @@ def detect_smc_radar(df, lookback):
             ob['status']  = 'Pristine' if touches == 0 else f'Tested ({touches}x)'
             tracked_obs.append(ob)
 
-    # Latest OB per bias; same-leg fallback only
+    # Latest OB per bias; same-leg fallback only.
     latest, filtered = {}, []
     for ob in sorted(tracked_obs, key=lambda x: x['bos_idx'], reverse=True):
         d = ob['direction']
@@ -496,6 +495,52 @@ def detect_smc_radar(df, lookback):
         elif ob['impulse_start_idx'] == latest[d]['impulse_start_idx']:
             filtered.append(ob)
             break
+
+    # Same-leg dedupe: if two OBs in `filtered` share a direction AND their
+    # proximal lines sit within the pair-type proximity threshold, they are
+    # the same visual zone. Keep the one with an unmitigated FVG; if tied,
+    # keep the one with the higher bos_idx (freshest structure).
+    # NOTE: proximity_threshold is resolved in the caller (run_radar) via
+    # pair_type — here we pass the threshold via ob['_dedupe_thresh'] which
+    # the caller injects. If absent, we fall back to forex default.
+    def _dedupe_same_leg(obs):
+        if len(obs) < 2:
+            return obs
+        by_dir = {}
+        for o in obs:
+            by_dir.setdefault(o['direction'], []).append(o)
+        kept = []
+        for direction, group in by_dir.items():
+            if len(group) == 1:
+                kept.extend(group)
+                continue
+            group_sorted = sorted(group, key=lambda x: x['bos_idx'], reverse=True)
+            survivors = []
+            for cand in group_sorted:
+                is_dup = False
+                thresh = cand.get('_dedupe_thresh', 0.00030)
+                for surv in survivors:
+                    if abs(cand['proximal_line'] - surv['proximal_line']) <= thresh:
+                        # Duplicate. Prefer the one with unmitigated FVG.
+                        cand_has_fvg = cand['fvg'].get('exists', False)
+                        surv_has_fvg = surv['fvg'].get('exists', False)
+                        if cand_has_fvg and not surv_has_fvg:
+                            # Replace survivor with cand.
+                            survivors.remove(surv)
+                            survivors.append(cand)
+                        # else: keep current survivor (freshest by bos_idx).
+                        is_dup = True
+                        break
+                if not is_dup:
+                    survivors.append(cand)
+            kept.extend(survivors)
+        return kept
+
+    filtered = _dedupe_same_leg(filtered)
+
+    # Strip the private dedupe hint before returning.
+    for o in filtered:
+        o.pop('_dedupe_thresh', None)
 
     return {"current_price": float(C[-1]), "active_unmitigated_obs": filtered}
 
@@ -773,8 +818,15 @@ def build_summary_table_html(all_zones_for_table, dp_map):
         dir_color = '#27ae60'   if z['direction'] == 'bullish' else '#e74c3c'
         status    = z['status']
         stat_col  = '#27ae60'   if 'Pristine' in status else '#e67e22'
-        fvg_cell  = "&#10003;" if z['fvg_valid'] else "&ndash;"
-        fvg_col   = '#27ae60' if z['fvg_valid'] else '#888'
+        if z['fvg_valid']:
+            fvg_cell = "&#10003;"
+            fvg_col  = '#27ae60'
+        elif z.get('fvg_ghost'):
+            fvg_cell = "&#9675;"   # empty circle = ghost
+            fvg_col  = '#888888'
+        else:
+            fvg_cell = "&ndash;"
+            fvg_col  = '#888'
         tag_badge = (
             f"<span style='background:#00bcd4;color:#000;font-size:9px;"
             f"padding:1px 4px;border-radius:3px;font-weight:bold;'>{z['bos_tag']}</span>"
@@ -830,12 +882,20 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
     direction  = "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)"
     dir_color  = '#27ae60' if ob['direction'] == 'bullish' else '#e74c3c'
     stat_color = '#27ae60' if 'Pristine' in ob['status'] else '#e67e22'
-    fvg_line   = (
-        f"FVG: <span style='color:#2ecc71;'>✓ {ob['fvg']['fvg_bottom']:.{dp}f} – "
-        f"{ob['fvg']['fvg_top']:.{dp}f}</span>"
-        if ob['fvg']['exists']
-        else "FVG: <span style='color:#888;'>None</span>"
-    )
+    if ob['fvg'].get('exists'):
+        fvg_line = (
+            f"FVG: <span style='color:#2ecc71;'>✓ {ob['fvg']['fvg_bottom']:.{dp}f} – "
+            f"{ob['fvg']['fvg_top']:.{dp}f}</span>"
+        )
+    elif ob['fvg'].get('was_detected'):
+        gb = ob['fvg'].get('ghost_bottom')
+        gt = ob['fvg'].get('ghost_top')
+        fvg_line = (
+            f"FVG: <span style='color:#888;'>✗ Mitigated "
+            f"({gb:.{dp}f} – {gt:.{dp}f})</span>"
+        )
+    else:
+        fvg_line = "FVG: <span style='color:#888;'>None</span>"
     pip_unit  = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
     zone_pips = round(abs(ob['proximal_line'] - ob['distal_line']) / pip_unit, 1)
 
@@ -1015,6 +1075,51 @@ def send_master_digest(summary_table_html, new_zone_cards, changed_zone_blocks,
 # MAIN RUNNER
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# STATELESS EMAIL GATE (replaces emailed_zones.json)
+# ---------------------------------------------------------------------------
+EMAIL_GATE_FILE = "email_gate.json"
+
+# Pair-type-aware same-leg OB dedupe thresholds.
+# Matches ZONE_PROXIMITY_THRESHOLDS semantic but applied intra-scan
+# between two OB candidates from the same leg.
+OB_DEDUPE_THRESHOLDS = {
+    "forex":     0.00030,   # 3 pips
+    "index":     10.0,      # 10 points on NAS100
+    "commodity": 1.0        # $1 on GOLD
+}
+
+
+def load_email_gate():
+    return load_json_safe(EMAIL_GATE_FILE, {})
+
+
+def save_email_gate(gate):
+    save_json_atomic(EMAIL_GATE_FILE, gate)
+
+
+def append_audit_log(zones_this_scan, ist_now):
+    """
+    Append-only audit log for weekly review.
+    Writes one JSON object per scan to zone_audit_log.jsonl.
+    Runtime logic NEVER reads this file. Weekly review reads it only.
+    """
+    try:
+        entry = {
+            "ts_iso": ist_now.isoformat(),
+            "ts_label": ist_now.strftime('%d %b %Y, %H:%M IST'),
+            "zones": zones_this_scan
+        }
+        with open("zone_audit_log.jsonl", "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception as e:
+        logging.error(f"Audit log write failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# MAIN RUNNER — STATELESS
+# ---------------------------------------------------------------------------
+
 def run_radar():
     ist_now      = get_ist_now()
     ist_time_str = ist_now.strftime('%H:%M')
@@ -1025,10 +1130,9 @@ def run_radar():
         print(f"Blackout active. Suppressed until 09:00 IST.")
         return
 
-    zone_state = load_zone_state()
-
-    # B6: State-based email gate. Email if ≥100 min since last email.
-    last_email_ts_str = zone_state.get("__last_email_ts__")
+    # Email gate — only persisted state across runs.
+    gate = load_email_gate()
+    last_email_ts_str = gate.get("last_email_ts")
     send_email_this_run = True
     if last_email_ts_str:
         try:
@@ -1040,23 +1144,23 @@ def run_radar():
 
     print(f"Scout running at {ist_time_str} IST | Email: {'YES' if send_email_this_run else 'NO (within gate)'}")
 
-    day_start = get_day_start_ist()
-
-    # Daily counter reset + B7 compaction
-    if not zone_state.get("__day__") or zone_state.get("__day__") != day_start:
-        reset_daily_counters(zone_state, [p['name'] for p in config_master['pairs']])
-        zone_state["__day__"] = day_start
-        compact_zone_state(zone_state)
-
     export_payload = {}
     dp_map = {p['name']: p.get('decimal_places', 5) for p in config_master['pairs']}
 
-    all_zones_for_table  = []
-    new_zone_cards       = []
-    changed_zone_blocks  = []
-    repeat_zone_lines    = []
-    attachments          = []
-    chart_counter        = 0
+    # Stateless: every scan builds its own fresh zone list from scratch.
+    all_zones_for_table = []
+    zone_cards          = []
+    attachments         = []
+    chart_counter       = 0
+    audit_rows          = []
+
+    # Per-scan zone ID counters (reset every scan — stateless).
+    per_scan_counters = {}
+
+    def _next_id(pair_name):
+        per_scan_counters[pair_name] = per_scan_counters.get(pair_name, 0) + 1
+        prefix = ZONE_ID_PREFIX.get(pair_name, pair_name[:3].upper())
+        return f"{prefix}{per_scan_counters[pair_name]:02d}"
 
     for pair in config_master["pairs"]:
         ticker   = pair["symbol"]
@@ -1070,118 +1174,96 @@ def run_radar():
             logging.warning(f"No data for {name}. Skipped.")
             continue
 
-        result       = detect_smc_radar(df, lookback)
+        result        = detect_smc_radar(df, lookback)
         current_price = result["current_price"]
-        scanned_obs  = result["active_unmitigated_obs"]
+        scanned_obs   = result["active_unmitigated_obs"]
+
+        # Inject pair-type-aware dedupe threshold for same-leg dedupe.
+        # detect_smc_radar already ran — but we re-dedupe here with pair-aware
+        # thresholds since detect_smc_radar used the default. Idempotent.
+        dedupe_thresh = OB_DEDUPE_THRESHOLDS.get(ptype, 0.00030)
+        if len(scanned_obs) > 1:
+            by_dir = {}
+            for o in scanned_obs:
+                by_dir.setdefault(o['direction'], []).append(o)
+            re_filtered = []
+            for direction, group in by_dir.items():
+                if len(group) == 1:
+                    re_filtered.extend(group)
+                    continue
+                group_sorted = sorted(group, key=lambda x: x['bos_idx'], reverse=True)
+                survivors = []
+                for cand in group_sorted:
+                    is_dup = False
+                    for surv in survivors:
+                        if abs(cand['proximal_line'] - surv['proximal_line']) <= dedupe_thresh:
+                            cand_has_fvg = cand['fvg'].get('exists', False)
+                            surv_has_fvg = surv['fvg'].get('exists', False)
+                            if cand_has_fvg and not surv_has_fvg:
+                                survivors.remove(surv)
+                                survivors.append(cand)
+                            is_dup = True
+                            break
+                    if not is_dup:
+                        survivors.append(cand)
+                re_filtered.extend(survivors)
+            scanned_obs = re_filtered
+
         export_payload[name] = scanned_obs
 
-        stored_today = [
-            z for z in zone_state.get(name, [])
-            if z.get("first_seen_iso", z.get("first_seen_ist", "")) >= day_start
-        ]
-
-        matched_stored_ids = set()
-
         for ob in scanned_obs:
-            matched_idx = None
-            for si, sz in enumerate(stored_today):
-                if zones_match(ob, sz, ptype):
-                    matched_idx = si
-                    break
+            zone_id = _next_id(name)
+            first_seen_label = ist_now.strftime('%H:%M IST')
 
-            if matched_idx is None:
-                # BRAND NEW ZONE
-                first_seen_label = ist_now.strftime('%H:%M IST')
-                first_seen_iso   = ist_now.isoformat()
-                zone_id = get_next_zone_id(zone_state, name)
-                new_stored = {
-                    "zone_id":          zone_id,
-                    "proximal":         ob['proximal_line'],
-                    "distal":           ob['distal_line'],
-                    "direction":        ob['direction'],
-                    "bos_tag":          ob['bos_tag'],
-                    "first_seen_ist":   first_seen_label,
-                    "first_seen_iso":   first_seen_iso,
-                    "last_seen_ist":    first_seen_label,
-                    "touches":          ob['touches'],
-                    "fvg_valid":        ob['fvg']['exists'],
-                    "status":           ob['status'],
-                    "changes":          []
-                }
-                stored_today.append(new_stored)
+            all_zones_for_table.append({
+                "name": name, "zone_id": zone_id, "direction": ob['direction'],
+                "proximal": ob['proximal_line'], "distal": ob['distal_line'],
+                "bos_tag": ob['bos_tag'], "status": ob['status'],
+                "fvg_valid": ob['fvg'].get('exists', False),
+                "fvg_ghost": (not ob['fvg'].get('exists', False))
+                              and ob['fvg'].get('was_detected', False),
+                "first_seen_ist": first_seen_label,
+                "is_new": False, "is_changed": False
+            })
 
-                all_zones_for_table.append({
-                    "name": name, "zone_id": zone_id, "direction": ob['direction'],
-                    "proximal": ob['proximal_line'], "distal": ob['distal_line'],
-                    "bos_tag": ob['bos_tag'], "status": ob['status'],
-                    "fvg_valid": ob['fvg']['exists'],
-                    "first_seen_ist": first_seen_label,
-                    "is_new": True, "is_changed": False
-                })
+            audit_rows.append({
+                "zone_id": zone_id, "pair": name,
+                "direction": ob['direction'], "bos_tag": ob['bos_tag'],
+                "proximal": ob['proximal_line'], "distal": ob['distal_line'],
+                "status": ob['status'], "touches": ob.get('touches', 0),
+                "fvg_exists": ob['fvg'].get('exists', False),
+                "fvg_was_detected": ob['fvg'].get('was_detected', False),
+                "current_price": current_price
+            })
 
-                if send_email_this_run:
-                    narrative = generate_zone_narrative(ob, name, dp, current_price)
-                    cid       = f"chart_{name}_{chart_counter}"
-                    chart_b64 = generate_h1_chart(df, ob, dp, name, ist_ts_full)
+            if send_email_this_run:
+                narrative = generate_zone_narrative(ob, name, dp, current_price)
+                cid       = f"chart_{name}_{chart_counter}"
+                chart_b64 = generate_h1_chart(df, ob, dp, name, ist_ts_full)
 
-                    new_zone_cards.append(
-                        build_new_zone_card_html(ob, name, dp, narrative, cid if chart_b64 else None, ist_ts_full, zone_id)
+                zone_cards.append(
+                    build_new_zone_card_html(
+                        ob, name, dp, narrative,
+                        cid if chart_b64 else None,
+                        ist_ts_full, zone_id
                     )
+                )
 
-                    if chart_b64:
-                        img_mime = MIMEImage(base64.b64decode(chart_b64))
-                        img_mime.add_header("Content-ID", f"<{cid}>")
-                        img_mime.add_header("Content-Disposition", "inline",
-                                            filename=f"{cid}.png")
-                        attachments.append(img_mime)
-                        chart_counter += 1
+                if chart_b64:
+                    img_mime = MIMEImage(base64.b64decode(chart_b64))
+                    img_mime.add_header("Content-ID", f"<{cid}>")
+                    img_mime.add_header("Content-Disposition", "inline",
+                                        filename=f"{cid}.png")
+                    attachments.append(img_mime)
+                    chart_counter += 1
 
-                print(f"  NEW zone: {name} {ob['direction']} @ {ob['proximal_line']:.{dp}f}")
+            print(f"  Zone: {name} {zone_id} {ob['direction']} @ {ob['proximal_line']:.{dp}f} "
+                  f"| FVG: {'✓' if ob['fvg'].get('exists') else ('ghost' if ob['fvg'].get('was_detected') else '—')} "
+                  f"| Status: {ob['status']}")
 
-            else:
-                # EXISTING ZONE
-                matched_stored_ids.add(matched_idx)
-                sz      = stored_today[matched_idx]
-                changes = detect_zone_changes(ob, sz, dp)
-
-                sz["last_seen_ist"] = ist_now.strftime('%H:%M IST')
-                sz["touches"]       = ob['touches']
-                sz["fvg_valid"]     = ob['fvg']['exists']
-                sz["status"]        = ob['status']
-
-                is_changed = len(changes) > 0
-
-                all_zones_for_table.append({
-                    "name": name, "zone_id": sz.get("zone_id", "—"), "direction": ob['direction'],
-                    "proximal": ob['proximal_line'], "distal": ob['distal_line'],
-                    "bos_tag": ob['bos_tag'], "status": ob['status'],
-                    "fvg_valid": ob['fvg']['exists'],
-                    "first_seen_ist": sz['first_seen_ist'],
-                    "is_new": False, "is_changed": is_changed
-                })
-
-                if send_email_this_run:
-                    if is_changed:
-                        sz["changes"].extend(changes)
-                        upd_cid   = f"chart_{name}_upd_{chart_counter}"
-                        upd_chart = generate_h1_chart(df, ob, dp, name, ist_ts_full)
-                        changed_zone_blocks.append(
-                            build_changed_zone_html(sz, changes, name, dp, upd_cid if upd_chart else None)
-                        )
-                        if upd_chart:
-                            img_mime = MIMEImage(base64.b64decode(upd_chart))
-                            img_mime.add_header("Content-ID", f"<{upd_cid}>")
-                            img_mime.add_header("Content-Disposition", "inline",
-                                                filename=f"{upd_cid}.png")
-                            attachments.append(img_mime)
-                            chart_counter += 1
-                        print(f"  UPDATED zone: {name} — {changes}")
-                    else:
-                        repeat_zone_lines.append(
-                            build_repeat_zone_html(sz, name, dp)
-                        )
-
-        zone_state[name] = stored_today
+    # Always write audit log (used by weekly review only).
+    if audit_rows:
+        append_audit_log(audit_rows, ist_now)
 
     # Send email if gate allows
     if send_email_this_run:
@@ -1189,12 +1271,11 @@ def run_radar():
             summary_table = build_summary_table_html(all_zones_for_table, dp_map)
             try:
                 send_master_digest(
-                    summary_table, new_zone_cards, changed_zone_blocks,
-                    repeat_zone_lines, attachments,
-                    len(all_zones_for_table), ist_time_str
+                    summary_table, zone_cards, [], [],
+                    attachments, len(all_zones_for_table), ist_time_str
                 )
-                # Only update gate timestamp if email actually sent
-                zone_state["__last_email_ts__"] = ist_now.isoformat()
+                gate["last_email_ts"] = ist_now.isoformat()
+                save_email_gate(gate)
             except Exception as e:
                 logging.error(f"Digest send failed: {e}")
                 print(f"  [EMAIL ERR] {e}")
@@ -1203,7 +1284,6 @@ def run_radar():
     else:
         print(f"  Scan complete. {len(all_zones_for_table)} zones cached. Email gate active.")
 
-    save_zone_state(zone_state)
     save_json_atomic("active_obs.json", export_payload)
     print(f"Phase 1 complete at {ist_time_str} IST.")
 
