@@ -27,11 +27,52 @@ def compute_atr(df, period=14):
 # Dealing range lookback per pair type (in H1 candles).
 # Veteran-calibrated: forex ~3 trading days, indices ~2, commodities ~4.
 # ---------------------------------------------------------------------------
+# NEW
 DEALING_RANGE_LOOKBACK_H1 = {
     "forex": 72,
     "index": 48,
     "commodity": 96
 }
+
+# ---------------------------------------------------------------------------
+# FVG noise floor multipliers (pair-type aware).
+# Applied to the TF's ATR — e.g. M15 ATR for Phase 2 M15 FVG, M5 ATR for Phase 3.
+# ---------------------------------------------------------------------------
+FVG_NOISE_FLOOR_MULT = {
+    "forex":     0.20,
+    "index":     0.30,
+    "commodity": 0.30
+}
+
+# ---------------------------------------------------------------------------
+# Minimum leg-size thresholds for H1 structure events (ATR multiples).
+# Applied as net price displacement from prior opposite swing to break close.
+# Uniform across Phase 1 emission and Phase 2 re-validation.
+# ---------------------------------------------------------------------------
+LEG_SIZE_MIN_ATR = {
+    "CHoCH": 0.8,
+    "BOS":   0.6
+}
+
+
+def validate_leg_distance(swing_price, break_close, atr, threshold_mult):
+    """
+    Was the net price displacement from the prior opposite swing to the break
+    close at least `threshold_mult * atr`?
+
+    Measures absolute distance only. Distance-based (not candle-based): a move
+    that covers the threshold in 1 candle or 5 candles both qualify.
+
+    Returns True if displacement meets threshold, False otherwise (including
+    when atr is missing — fail-closed; we don't emit structure events on
+    data we can't measure).
+    """
+    if atr is None or atr <= 0:
+        return False
+    if threshold_mult is None or threshold_mult <= 0:
+        return False
+    distance = abs(break_close - swing_price)
+    return distance >= (threshold_mult * atr)
 
 
 def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
@@ -128,13 +169,15 @@ def get_swing_points(df, lookback=4, bounds=None):
     return sorted(swings, key=lambda s: s["idx"])
 
 
+# NEW
 def compute_bos_sequence_count(df_h1, lookback=4):
     """
     Count how many consecutive BOS events have printed since the last CHoCH on H1.
     Returns the count for the most recent directional trend.
 
-    Used by Phase 2 to ensure BOS sequence scoring is always derived from the
-    latest H1 data, not a potentially stale count from active_obs.json.
+    Applies leg-size filter uniformly with Phase 1's detect_smc_radar. A break
+    below threshold is treated as a non-event (state not updated). This keeps
+    the returned trend consistent with what Phase 1 would emit.
 
     Returns dict: {'count': int, 'trend': 'bullish'|'bearish'|None}
     """
@@ -144,6 +187,8 @@ def compute_bos_sequence_count(df_h1, lookback=4):
     C = df_h1['Close'].values.astype(float)
     n = len(df_h1)
     swings = get_swing_points(df_h1, lookback=lookback)
+
+    h1_atr = compute_atr(df_h1)
 
     trend_state = None
     bos_seq_counter = 0
@@ -168,17 +213,21 @@ def compute_bos_sequence_count(df_h1, lookback=4):
         if not bos_detected:
             continue
 
+        # Leg-size filter — match Phase 1 detect_smc_radar thresholds.
+        provisional_tag = 'CHoCH' if (trend_state is None or trend_state != bos_type) else 'BOS'
+        threshold_mult = LEG_SIZE_MIN_ATR.get(provisional_tag, 0.6)
+        prior_opposite_swing_price = sl['price'] if bos_type == 'bullish' else sh['price']
+
+        if not validate_leg_distance(prior_opposite_swing_price, C[i], h1_atr, threshold_mult):
+            continue
+
         if trend_state is None or trend_state != bos_type:
-            # CHoCH — reset counter
             bos_seq_counter = 0
         else:
-            # BOS continuation
             bos_seq_counter += 1
         trend_state = bos_type
 
-    # Counter stored zero-indexed (0 = first BOS after CHoCH). Return 1-indexed.
     return {'count': max(1, bos_seq_counter + 1), 'trend': trend_state}
-
 
 def stack_labels(labels, pair_conf):
     """
@@ -239,26 +288,54 @@ def detect_sweep_decay(df, swings, current_idx, bias=None):
     return score, sweep_price
 
 
-def detect_fvg_in_zone(df, bias, zone_top, zone_bottom):
+# NEW
+def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor):
+    """
+    Walk backward from newest candle. The FIRST 3-candle FVG pattern that is
+    (a) inside the zone band AND (b) wider than atr_floor is THE candidate.
+    Fill-check is applied to that candidate only. If filled -> return exists=False.
+    Do NOT walk further back.
+
+    atr_floor is REQUIRED (no default) to force callers to compute and pass it.
+    Typical values:
+      forex:     0.20 * M15 ATR
+      index:     0.30 * M15 ATR
+      commodity: 0.30 * M15 ATR
+    Phase 3 M5 callers: use same multipliers against M5 ATR.
+    """
     if df is None or len(df) < 5:
+        return {"exists": False, "fvg_top": None, "fvg_bottom": None}
+    if atr_floor is None or atr_floor <= 0:
         return {"exists": False, "fvg_top": None, "fvg_bottom": None}
     H, L = df['High'].values.astype(float), df['Low'].values.astype(float)
     n = len(df)
+
     for k in range(n - 3, max(0, n - 30), -1):
         if bias == "LONG" and H[k] < L[k + 2]:
             ft, fb = float(L[k + 2]), float(H[k])
+            # Zone overlap gate
             if fb > zone_top or ft < zone_bottom:
                 continue
+            # Noise floor gate
+            if (ft - fb) < atr_floor:
+                continue
+            # FIRST qualifying candidate — apply fill check here, do not walk further.
             filled = any(L[m] <= fb for m in range(k + 3, n))
-            if not filled:
-                return {"exists": True, "fvg_top": ft, "fvg_bottom": fb}
+            if filled:
+                return {"exists": False, "fvg_top": None, "fvg_bottom": None}
+            return {"exists": True, "fvg_top": ft, "fvg_bottom": fb}
+
         elif bias == "SHORT" and L[k] > H[k + 2]:
             ft, fb = float(L[k]), float(H[k + 2])
             if fb > zone_top or ft < zone_bottom:
                 continue
+            if (ft - fb) < atr_floor:
+                continue
             filled = any(H[m] >= ft for m in range(k + 3, n))
-            if not filled:
-                return {"exists": True, "fvg_top": ft, "fvg_bottom": fb}
+            if filled:
+                return {"exists": False, "fvg_top": None, "fvg_bottom": None}
+            return {"exists": True, "fvg_top": ft, "fvg_bottom": fb}
+
     return {"exists": False, "fvg_top": None, "fvg_bottom": None}
 
 
@@ -394,18 +471,18 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     else:
         bd["fvg"] = 0.0
 
-    # Freshness — has zone been retouched on H1 in last 5 candles?
-    is_fresh = True
-    ob_top = float(ob.get('proximal_line', 0))
-    ob_bottom = float(ob.get('distal_line', 0))
-    for i in range(max(0, len(df_h1) - 5), len(df_h1) - 1):
-        if bias == "LONG" and df_h1['Low'].iloc[i] <= ob_top:
-            is_fresh = False
-            break
-        if bias == "SHORT" and df_h1['High'].iloc[i] >= ob_bottom:
-            is_fresh = False
-            break
-    bd["freshness"] = 0.5 if is_fresh else 0.0
+    # NEW
+    # Freshness — driven by Phase 1's lifetime touch counter on the OB.
+    # 0 touches -> 0.5 (pristine, full credit)
+    # 1-2 touches -> 0.25 (partial mitigation)
+    # 3+ touches -> 0.0 (fatigued)
+    touches = int(ob.get('touches', 0))
+    if touches == 0:
+        bd["freshness"] = 0.5
+    elif touches <= 2:
+        bd["freshness"] = 0.25
+    else:
+        bd["freshness"] = 0.0
 
     # Premium / Discount — graded scoring on impulse-leg dealing range.
     # LONG wants price in bottom of range (discount):
@@ -513,14 +590,19 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     else:
         rows.append(("FVG", s, 1.5, "fail", "No unmitigated FVG inside the zone."))
 
-    # 4. Freshness — based on H1 candle proximity, not touch count
+    # NEW
+    # 4. Freshness — driven by lifetime touch counter from Phase 1.
     s = breakdown.get("freshness", 0)
-    if s >= 0.5:
+    touches = int(ob.get('touches', 0))
+    if touches == 0:
         rows.append(("Freshness", s, 0.5, "ok",
-                      "Zone is untouched in last 5 H1 candles — first-touch entry."))
-    else:
+                     "Pristine — zone untouched since it was formed."))
+    elif touches <= 2:
         rows.append(("Freshness", s, 0.5, "warn",
-                      "Price has been near this zone in the last 5 H1 candles — not a first-touch setup."))
+                     f"Tested {touches}x since formation — partial mitigation."))
+    else:
+        rows.append(("Freshness", s, 0.5, "fail",
+                     f"Tested {touches}x since formation — zone fatigued."))
 
     # 5. Premium / Discount — graded, with exact percentage and dealing range details
     s = breakdown.get("pd", 0)
@@ -634,8 +716,20 @@ def detect_ltf_choch(df_m5, bias, bounds):
     return {"fired": False, "level": None}
 
 
+# NEW (use this — simplified, no dead helper)
 def check_opposite_bos(df_h1, bias, since_ts=None):
-    """True if H1 printed a BOS in the opposite direction since `since_ts`."""
+    """
+    Return True if H1 printed a BOS in the opposite direction to `bias` since
+    `since_ts`, AND that BOS passed the 0.6x H1 ATR leg-size filter.
+
+    `since_ts` must be UTC-naive (no timezone info) OR tz-aware. Naive datetimes
+    are treated as UTC. Callers holding IST datetimes must subtract 5h30m before
+    passing. This is a breaking change from prior behavior (which silently
+    subtracted 5h30m internally). All callers updated accordingly.
+
+    The leg-size filter prevents micro counter-swings from invalidating a
+    valid zone. Uses BOS threshold (0.6x H1 ATR).
+    """
     if df_h1 is None or len(df_h1) < 10:
         return False
 
@@ -644,15 +738,29 @@ def check_opposite_bos(df_h1, bias, since_ts=None):
     n = len(df_h1)
     start_idx = max(1, n - 24)
 
+    h1_atr = compute_atr(df_h1)
+
+    # Normalize since_ts to UTC-naive
+    since_utc = None
     if since_ts is not None:
         try:
-            since_utc = since_ts - timedelta(hours=5, minutes=30)
+            if hasattr(since_ts, 'tzinfo') and since_ts.tzinfo is not None:
+                since_utc = datetime.utcfromtimestamp(since_ts.timestamp())
+            else:
+                since_utc = since_ts  # naive assumed UTC
+        except Exception:
+            since_utc = None
+
+    if since_utc is not None:
+        try:
             for i in range(n):
                 ts = df_h1.index[i]
-                if hasattr(ts, 'tz') and ts.tz is not None:
+                if hasattr(ts, 'tz_convert') and ts.tzinfo is not None:
                     ts_cmp = ts.tz_convert('UTC').tz_localize(None).to_pydatetime()
                 elif hasattr(ts, 'to_pydatetime'):
                     ts_cmp = ts.to_pydatetime()
+                    if ts_cmp.tzinfo is not None:
+                        ts_cmp = ts_cmp.replace(tzinfo=None)
                 else:
                     ts_cmp = ts
                 if ts_cmp >= since_utc:
@@ -661,15 +769,62 @@ def check_opposite_bos(df_h1, bias, since_ts=None):
         except Exception:
             start_idx = max(1, n - 24)
 
+    threshold_mult = LEG_SIZE_MIN_ATR.get("BOS", 0.6)
+
     for i in range(start_idx, n):
         past_swings = [s for s in swings if s['idx'] < i]
         latest_high = [s for s in past_swings if s['type'] == 'high']
         latest_low = [s for s in past_swings if s['type'] == 'low']
 
         if bias == "LONG" and latest_low:
-            if C[i] < latest_low[-1]['price'] and C[i - 1] >= latest_low[-1]['price']:
-                return True
+            swing_px = latest_low[-1]['price']
+            if C[i] < swing_px and C[i - 1] >= swing_px:
+                if validate_leg_distance(swing_px, C[i], h1_atr, threshold_mult):
+                    return True
         elif bias == "SHORT" and latest_high:
-            if C[i] > latest_high[-1]['price'] and C[i - 1] <= latest_high[-1]['price']:
-                return True
+            swing_px = latest_high[-1]['price']
+            if C[i] > swing_px and C[i - 1] <= swing_px:
+                if validate_leg_distance(swing_px, C[i], h1_atr, threshold_mult):
+                    return True
+
     return False
+
+
+def locate_ob_candle_idx(df, ob_timestamp_iso):
+    """
+    Find the OB candle's positional index in `df` using its absolute timestamp.
+    Returns: (idx, on_chart)
+      idx: integer index into df (0 <= idx < len(df)), or 0 if off-chart/not found.
+      on_chart: True if the timestamp is within df's time range, False if earlier.
+
+    Caller then clips idx against its chart-visible window (e.g. tail(50)) to
+    decide whether to draw the rectangle at its true position or at the left edge.
+    """
+    if df is None or len(df) == 0 or not ob_timestamp_iso:
+        return 0, False
+
+    try:
+        target = datetime.fromisoformat(ob_timestamp_iso)
+        if target.tzinfo is not None:
+            target = target.astimezone(None).replace(tzinfo=None)
+    except Exception:
+        return 0, False
+
+    # Build a list of naive-UTC datetimes from df's index
+    try:
+        for i in range(len(df) - 1, -1, -1):
+            ts = df.index[i]
+            if hasattr(ts, 'tz_convert') and ts.tzinfo is not None:
+                ts_cmp = ts.tz_convert('UTC').tz_localize(None).to_pydatetime()
+            elif hasattr(ts, 'to_pydatetime'):
+                ts_cmp = ts.to_pydatetime()
+                if ts_cmp.tzinfo is not None:
+                    ts_cmp = ts_cmp.replace(tzinfo=None)
+            else:
+                ts_cmp = ts
+            # Match when candle's open time equals (or is just before) target
+            if ts_cmp <= target:
+                return i, True
+        return 0, False
+    except Exception:
+        return 0, False
