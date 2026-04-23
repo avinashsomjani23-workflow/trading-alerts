@@ -756,6 +756,205 @@ def send_email(subject, html_body, h1_chart_b64, m15_chart_b64):
 
 
 # ---------------------------------------------------------------------------
+# Heartbeat
+# ---------------------------------------------------------------------------
+
+HEARTBEAT_INTERVAL_HOURS = 3
+HEARTBEAT_WINDOW_HOURS = 3  # Window to count recent failures for rules 2, 3, 6
+
+
+def _count_recent_log_entries(log_path, window_hours, ist_now):
+    """Count entries in a log file whose 'ts' is within the last `window_hours`."""
+    try:
+        entries = load_json(log_path, [])
+        if not isinstance(entries, list):
+            return 0
+        cutoff = ist_now - timedelta(hours=window_hours)
+        count = 0
+        for e in entries:
+            ts_str = e.get("ts") if isinstance(e, dict) else None
+            if not ts_str:
+                continue
+            try:
+                ts = datetime.fromisoformat(ts_str)
+                if ts >= cutoff:
+                    count += 1
+            except Exception:
+                continue
+        return count
+    except Exception:
+        return 0
+
+
+def _get_active_obs_mtime_hours(ist_now):
+    """Return hours since active_obs.json was last modified. None if missing."""
+    try:
+        if not os.path.exists("active_obs.json"):
+            return None
+        mtime_utc = datetime.utcfromtimestamp(os.path.getmtime("active_obs.json"))
+        mtime_ist = mtime_utc + timedelta(hours=5, minutes=30)
+        return (ist_now - mtime_ist).total_seconds() / 3600
+    except Exception:
+        return None
+
+
+def _is_weekday_market_hours(ist_now):
+    """Rough check: weekday and not deep weekend. FX runs Mon-Fri IST."""
+    # Monday=0 ... Sunday=6. Forex is closed Sat 03:30 IST through Mon 03:30 IST roughly.
+    wd = ist_now.weekday()
+    if wd < 5:  # Mon-Fri
+        return True
+    if wd == 6 and ist_now.hour >= 4:  # Sunday after ~04:00 IST markets reopen
+        return True
+    return False
+
+
+def collect_heartbeat_diagnostics(ist_now, active_obs):
+    """Return dict with issues list and context fields."""
+    issues = []
+
+    # Rule 1: P1 stale during market hours
+    ob_age_hrs = _get_active_obs_mtime_hours(ist_now)
+    if _is_weekday_market_hours(ist_now):
+        if ob_age_hrs is None:
+            issues.append({
+                "title": "active_obs.json is missing",
+                "action": "Check P1 Actions tab for last successful run."
+            })
+        elif ob_age_hrs > 3:
+            issues.append({
+                "title": f"P1 has not updated active_obs.json in {ob_age_hrs:.1f} hours",
+                "action": "Check P1 Actions tab for last successful run."
+            })
+
+    # Rule 2: Gemini failures in window
+    gemini_fails = _count_recent_log_entries(
+        "gemini_failure_log.json", HEARTBEAT_WINDOW_HOURS, ist_now
+    )
+    if gemini_fails >= 3:
+        issues.append({
+            "title": f"{gemini_fails} Gemini API failures in last {HEARTBEAT_WINDOW_HOURS}h",
+            "action": "Check gemini_failure_log.json — likely rate limit or key issue."
+        })
+
+    # Rule 3: yfinance stale skips in window
+    yf_stale = _count_recent_log_entries(
+        "yfinance_stale_log.json", HEARTBEAT_WINDOW_HOURS, ist_now
+    )
+    if yf_stale >= 3:
+        issues.append({
+            "title": f"{yf_stale} yfinance stale/failed fetches in last {HEARTBEAT_WINDOW_HOURS}h",
+            "action": "Check yfinance_stale_log.json. If persistent, yfinance may be rate-limiting."
+        })
+
+    # Rule 5: active_obs empty
+    ob_count = 0
+    if isinstance(active_obs, dict):
+        for pair_list in active_obs.values():
+            if isinstance(pair_list, list):
+                ob_count += len(pair_list)
+    if ob_count == 0:
+        issues.append({
+            "title": "active_obs.json has zero zones across all pairs",
+            "action": "Verify P1 is detecting structure. Check smc_radar.log in last P1 run."
+        })
+
+    # Rule 6: Chart failures in window
+    chart_fails = _count_recent_log_entries(
+        "chart_failure_log.json", HEARTBEAT_WINDOW_HOURS, ist_now
+    )
+    if chart_fails > 5:
+        issues.append({
+            "title": f"{chart_fails} chart render failures in last {HEARTBEAT_WINDOW_HOURS}h",
+            "action": "Check chart_failure_log.json. Charts failing silently; emails still send with banner."
+        })
+
+    return {
+        "issues": issues,
+        "ob_count": ob_count,
+        "ob_age_hrs": ob_age_hrs,
+        "gemini_fails": gemini_fails,
+        "yf_stale": yf_stale,
+        "chart_fails": chart_fails,
+    }
+
+
+def build_heartbeat_email_html(diag, ist_now):
+    """Return (subject, html_body)."""
+    issues = diag["issues"]
+    ts_str = ist_now.strftime("%H:%M IST, %d %b")
+
+    if not issues:
+        subject = f"P2 HEARTBEAT | {ts_str} | ✅ ALL CLEAR"
+        body_inner = f"""
+            <div style="padding:14px;background:#1b3a1b;border-left:4px solid #26a69a;border-radius:4px;color:#eee;font-size:14px;line-height:1.6;">
+                <b style="color:#26a69a;font-size:15px;">✅ All systems green.</b><br>
+                Phase 2 is scanning on schedule. No errors in last {HEARTBEAT_WINDOW_HOURS}h.<br>
+                Active zones across all pairs: <b>{diag['ob_count']}</b>.
+            </div>
+            <div style="padding:10px 12px;margin-top:12px;background:#0d0d1a;border-left:3px solid #555;border-radius:4px;font-size:12px;color:#aaa;line-height:1.5;">
+                <b style="color:#ccc;">FYI:</b>
+                P1 last updated active_obs.json {diag['ob_age_hrs']:.1f}h ago.
+                Gemini failures: {diag['gemini_fails']}. yfinance stale: {diag['yf_stale']}. Chart failures: {diag['chart_fails']}.
+            </div>
+        """
+    else:
+        n = len(issues)
+        subject = f"P2 HEARTBEAT | {ts_str} | ⚠️ {n} ISSUE{'S' if n > 1 else ''}"
+        issue_blocks = ""
+        for i, iss in enumerate(issues, 1):
+            issue_blocks += f"""
+            <div style="padding:12px 14px;margin-bottom:10px;background:#3a1b1b;border-left:4px solid #ef5350;border-radius:4px;color:#eee;font-size:14px;line-height:1.6;">
+                <b style="color:#ef5350;">⚠️ ISSUE {i}:</b> {iss['title']}<br>
+                <span style="color:#ffb74d;">→ ACTION:</span> {iss['action']}
+            </div>
+            """
+        body_inner = issue_blocks + f"""
+            <div style="padding:10px 12px;margin-top:12px;background:#0d0d1a;border-left:3px solid #555;border-radius:4px;font-size:12px;color:#aaa;line-height:1.5;">
+                <b style="color:#ccc;">Context:</b>
+                Active zones: {diag['ob_count']}.
+                P1 last update: {diag['ob_age_hrs']:.1f}h ago.{'' if diag['ob_age_hrs'] is not None else ' (unknown)'}
+                Gemini fails (3h): {diag['gemini_fails']}. yfinance stale (3h): {diag['yf_stale']}. Chart fails (3h): {diag['chart_fails']}.
+            </div>
+        """
+
+    html = f"""<html><body style="background:#131722;font-family:Arial,sans-serif;padding:20px;">
+        <div style="max-width:640px;margin:auto;background:#1e222d;padding:20px;border-radius:8px;">
+            <div style="color:#eee;font-size:16px;font-weight:bold;margin-bottom:14px;letter-spacing:0.5px;">
+                Phase 2 Heartbeat — {ts_str}
+            </div>
+            {body_inner}
+        </div>
+    </body></html>"""
+    return subject, html
+
+
+def send_heartbeat_if_due(ist_now, active_obs):
+    """Check timestamp gate, run diagnostics, send email if due. Never raises."""
+    try:
+        hb_state = load_json("heartbeat_state.json", {})
+        last_iso = hb_state.get("last_sent_ist")
+        if last_iso:
+            try:
+                last_dt = datetime.fromisoformat(last_iso)
+                hrs_since = (ist_now - last_dt).total_seconds() / 3600
+                if hrs_since < HEARTBEAT_INTERVAL_HOURS:
+                    return
+            except Exception:
+                pass  # Corrupt timestamp -> treat as due
+
+        diag = collect_heartbeat_diagnostics(ist_now, active_obs)
+        subject, html = build_heartbeat_email_html(diag, ist_now)
+        send_email(subject, html, None, None)
+
+        hb_state["last_sent_ist"] = ist_now.isoformat()
+        save_json("heartbeat_state.json", hb_state)
+        print(f"  [HEARTBEAT] Sent. Issues: {len(diag['issues'])}. OB count: {diag['ob_count']}.")
+    except Exception as e:
+        print(f"  [HEARTBEAT ERR] {e}")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -1134,3 +1333,6 @@ if __name__ == "__main__":
     save_json("phase2_sent.json", phase2_sent)
     save_json("active_watch_state.json", new_watch_state)
     print("Phase 2 complete.")
+
+    # Heartbeat — runs after main scan is fully saved. Wrapped in try/except.
+    send_heartbeat_if_due(ist_now, active_obs)
