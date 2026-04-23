@@ -222,10 +222,33 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
             ax.text(n + 1, choch_level, f" M5 CHoCH {choch_level:.{dp}f}",
                     color='#ff9800', fontsize=8, va='center', fontweight='bold', zorder=5)
 
+        # NEW
         # M5 sweep marker
         if sweep_price is not None:
             ax.scatter([n - 2], [sweep_price], color='#ff5370', marker='x', s=120, linewidth=2, zorder=5)
             ax.text(n - 2, sweep_price, ' sweep', color='#ff5370', fontsize=8, va='bottom', zorder=5)
+
+        # OB candle highlight on M5 chart
+        ob_ts_iso = ob.get('ob_timestamp')
+        if ob_ts_iso:
+            abs_idx, found = smc_detector.locate_ob_candle_idx(df_m5, ob_ts_iso)
+            if found:
+                tail_n = 80
+                full_n = len(df_m5)
+                window_start = max(0, full_n - tail_n)
+                if abs_idx >= window_start:
+                    local_idx = abs_idx - window_start
+                    if 0 <= local_idx < n:
+                        ob_c_h = float(df_plot['High'].iloc[local_idx])
+                        ob_c_l = float(df_plot['Low'].iloc[local_idx])
+                        ax.add_patch(patches.Rectangle(
+                            (local_idx - 0.5, ob_c_l), 1.0, ob_c_h - ob_c_l,
+                            fill=False, edgecolor='#ffffff', linewidth=1.5, zorder=5
+                        ))
+                else:
+                    ax.text(0.5, float(df_plot['High'].max()),
+                            '← OB off-chart',
+                            color='#ffffff', fontsize=8, ha='left', va='top', zorder=5)
 
         # Execution levels — draw lines, collect labels for stacking
         level_styles = {
@@ -322,10 +345,11 @@ def send_email(subject, html_body, chart_b64=None):
         except Exception as e:
             print(f"Email failed: {e}")
 
-
-def build_invalidation_email(pair, bias, reason, reason_detail, ob, levels, alert_ts, ist_now, pair_conf):
+def build_invalidation_email(pair, bias, reason, reason_detail, ob, levels, alert_ts, ist_now, pair_conf, scan_start_ist):
     dp = pair_conf.get("decimal_places", 5)
-    ist_str = ist_now.strftime('%H:%M IST')
+    sent_ist = get_ist_now().strftime('%H:%M IST')
+    scan_ist = scan_start_ist.strftime('%H:%M IST')
+    ist_str = f"Scanned {scan_ist} · Sent {sent_ist}"
     age_hrs = 0
     if alert_ts:
         age_hrs = round((ist_now - alert_ts).total_seconds() / 3600, 1)
@@ -352,10 +376,13 @@ def build_invalidation_email(pair, bias, reason, reason_detail, ob, levels, aler
     </div></body></html>"""
 
 
+# NEW
 def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, ist_now,
-                       dollar_risk_str, macro_summary, chart_ok=True):
+                       dollar_risk_str, macro_summary, scan_start_ist, chart_ok=True):
     dp = pair_conf.get("decimal_places", 5)
-    ist_str = ist_now.strftime('%H:%M IST')
+    sent_ist = get_ist_now().strftime('%H:%M IST')
+    scan_ist = scan_start_ist.strftime('%H:%M IST')
+    ist_str = f"Scanned {scan_ist} · Sent {sent_ist}"
     action_word = "SELL" if bias == "SHORT" else "BUY"
 
     fvg_line = ""
@@ -443,8 +470,11 @@ def check_invalidation(bias, current_close, distal, m5_atr, pair_conf, alert_ts,
     if age_hrs > max_hrs:
         return ("Time expiry", f"Setup has been active {round(age_hrs,1)} hours without trigger (limit: {max_hrs}h).")
 
-    # 3. Opposite H1 BOS
-    if df_h1 is not None and smc_detector.check_opposite_bos(df_h1, bias, since_ts=alert_ts):
+    # NEW
+    # 3. Opposite H1 BOS. check_opposite_bos now expects UTC-naive since_ts.
+    # alert_ts is IST-naive (parsed from ist timestamps) -> subtract 5h30m.
+    since_utc = alert_ts - timedelta(hours=5, minutes=30) if alert_ts else None
+    if df_h1 is not None and smc_detector.check_opposite_bos(df_h1, bias, since_ts=since_utc):
         return (
             "Opposite H1 structure shift",
             "H1 printed a Break of Structure in the opposite direction since the alert fired. The setup's foundation is broken."
@@ -457,8 +487,10 @@ def check_invalidation(bias, current_close, distal, m5_atr, pair_conf, alert_ts,
 # Main
 # ---------------------------------------------------------------------------
 
+# NEW
 def run_phase3():
     ist_now = get_ist_now()
+    scan_start_ts = ist_now  # Scan start; per-alert send time re-captured at email build.
     print(f"Phase 3 (M5 Trigger) started at {ist_now.strftime('%H:%M')} IST")
 
     watch_state = load_json("active_watch_state.json", {})
@@ -508,7 +540,7 @@ def run_phase3():
         if inv_reason:
             print(f"  [X] {pair_name} INVALIDATED: {inv_reason}")
             html_inv = build_invalidation_email(
-                pair_name, bias, inv_reason, inv_detail, ob, levels, alert_ts, ist_now, pair_conf
+                pair_name, bias, inv_reason, inv_detail, ob, levels, alert_ts, ist_now, pair_conf, scan_start_ts
             )
             send_email(f"INVALIDATED | {pair_name} | {bias}", html_inv)
             keys_to_delete.append(key)
@@ -554,10 +586,10 @@ def run_phase3():
         chart_ok = chart_b64 is not None
         if not chart_ok:
             _log_chart_failure(pair_name, "m5_phase3_trigger")
-
+            
         html = build_trigger_email(
             pair_name, bias, ob, fresh_levels, m5_fvg, choch_level, pair_conf,
-            ist_now, dollar_risk_str, data.get("macro_summary"), chart_ok=chart_ok
+            ist_now, dollar_risk_str, data.get("macro_summary"), scan_start_ts, chart_ok=chart_ok
         )
         send_email(f"TRADE READY (M5 SNIPER) | {pair_name} | {bias}", html, chart_b64)
         keys_to_delete.append(key)
