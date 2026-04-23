@@ -565,15 +565,26 @@ def run_phase3():
         choch_level = choch_res.get("level")
         print(f"  [OK] LTF TRIGGER: {pair_name} M5 CHoCH at {choch_level:.{dp}f}")
 
-        # M5 confluences for chart
+        # NEW
+        # M5 FVG stays: provides chart context and lets compute_dynamic_levels
+        # anchor entry precisely on the OB candle. It does NOT gate email on its
+        # own — email gating is RR-only (fresh_levels['valid']). If OB Proximal
+        # fallback yields RR >= 1.5, the alert fires regardless of M5 FVG.
+        # M5 sweep dropped entirely per design (no M5 confluences beyond FVG).
         zone_top = max(proximal, distal)
         zone_bottom = min(proximal, distal)
-        m5_fvg = smc_detector.detect_fvg_in_zone(df_m5, bias, zone_top, zone_bottom)
 
-        swings_m5 = smc_detector.get_swing_points(df_m5, lookback=3)
-        _, m5_sweep_price = smc_detector.detect_sweep_decay(df_m5, swings_m5, len(df_m5) - 1)
+        ptype = pair_conf.get("pair_type", "forex")
+        fvg_floor_mult = smc_detector.FVG_NOISE_FLOOR_MULT.get(ptype, 0.20)
+        m5_atr_for_fvg = m5_atr if m5_atr else 0.0
+        atr_floor_m5 = fvg_floor_mult * m5_atr_for_fvg
 
-        # Recompute levels with fresh M5 FVG
+        m5_fvg = smc_detector.detect_fvg_in_zone(
+            df_m5, bias, zone_top, zone_bottom, atr_floor_m5
+        )
+        m5_sweep_price = None  # M5 sweep not used on chart or in levels.
+
+        # Recompute levels with fresh M5 FVG — entry must land on the OB candle.
         fresh_levels = smc_detector.compute_dynamic_levels(pair_conf, bias, ob, m5_fvg, current_close, df_m5)
         if not fresh_levels['valid']:
             print(f"  [!] {pair_name}: CHoCH fired but RR invalid. Skipping.")
