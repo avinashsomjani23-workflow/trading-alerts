@@ -477,7 +477,7 @@ def detect_smc_radar(df, lookback):
                     break
                 elif H[m] >= ob['proximal_line']:
                     touches += 1
-            if touches > 3:
+            if touches >= 3:
                 mitigated = True
                 break
 
