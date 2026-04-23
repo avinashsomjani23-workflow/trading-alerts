@@ -140,13 +140,13 @@
   ],
   "NAS100": [
     {
-      "bos_idx": 53,
+      "bos_idx": 52,
       "bos_swing_price": 26564.0,
-      "impulse_start_idx": 47,
+      "impulse_start_idx": 46,
       "impulse_start_price": 26440.0,
       "bos_sequence_count": 1,
-      "last_choch_idx": 34,
-      "ob_idx": 52,
+      "last_choch_idx": 33,
+      "ob_idx": 51,
       "ob_timestamp": "2026-04-17T10:00:00+00:00",
       "direction": "bullish",
       "bos_tag": "BOS",
@@ -175,22 +175,22 @@
   ],
   "GOLD": [
     {
-      "bos_idx": 149,
-      "bos_swing_price": 4700.0,
-      "impulse_start_idx": 144,
-      "impulse_start_price": 4761.7001953125,
-      "bos_sequence_count": 3,
-      "last_choch_idx": 68,
-      "ob_idx": 148,
-      "ob_timestamp": "2026-04-23T16:00:00+00:00",
+      "bos_idx": 101,
+      "bos_swing_price": 4752.0,
+      "impulse_start_idx": 83,
+      "impulse_start_price": 4854.7998046875,
+      "bos_sequence_count": 1,
+      "last_choch_idx": 67,
+      "ob_idx": 96,
+      "ob_timestamp": "2026-04-21T11:00:00+00:00",
       "direction": "bearish",
       "bos_tag": "BOS",
-      "high": 4754.10009765625,
-      "low": 4732.5,
-      "proximal_line": 4732.5,
-      "distal_line": 4754.10009765625,
-      "median_leg_body": 14.85009765625,
-      "ob_body": 12.19970703125,
+      "high": 4818.0,
+      "low": 4794.2998046875,
+      "proximal_line": 4794.2998046875,
+      "distal_line": 4818.0,
+      "median_leg_body": 6.10009765625,
+      "ob_body": 5.0,
       "fvg": {
         "exists": false,
         "fvg_top": null,
@@ -204,8 +204,8 @@
         "ghost_c3_idx": null,
         "mitigated_at_idx": null
       },
-      "touches": 0,
-      "status": "Pristine"
+      "touches": 2,
+      "status": "Tested (2x)"
     }
   ]
 }
