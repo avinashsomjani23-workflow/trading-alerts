@@ -7,6 +7,7 @@ import logging
 import os
 import time
 import google.generativeai as genai
+import smc_detector
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -279,28 +280,18 @@ def is_valid_ob_candle(open_p, close_p, high_p, low_p):
         return False
     return body > (rng * 0.15)
 
+# NEW
 def detect_smc_radar(df, lookback):
     """
-    A4 applied: OB walk-back now includes the swing candle itself (impulse_start_idx).
-    Previously the range `range(i-1, impulse_start_idx - 1, -1)` EXCLUDED impulse_start_idx
-    when stepping with -1 (Python range stops BEFORE the second arg). The new range
-    `range(i-1, impulse_start_idx - 1 - 1, -1)` includes impulse_start_idx.
-
-    Wait — re-checking: range(i-1, impulse_start_idx - 1, -1) produces indices
-    i-1, i-2, ..., impulse_start_idx. It DOES include impulse_start_idx because
-    stop value is impulse_start_idx - 1 (exclusive). So swing candle IS already included.
-    A4 fix instead: lower the stop bound by one more so the walk includes impulse_start_idx
-    — which it already does. The ACTUAL A4 issue was the reverse: we want to ensure the
-    loop REACHES impulse_start_idx. Current range already does this.
-
+    A4 applied: OB walk-back includes the swing candle itself (impulse_start_idx).
     Verification: range(5-1, 0-1, -1) = range(4, -1, -1) = [4, 3, 2, 1, 0]. Includes 0.
-    So impulse_start_idx IS scanned.
 
-    A4 is actually about a different edge case: when no candle inside the impulse leg
-    passes is_valid_ob_candle, we currently give up. The fix: extend the walk back further
-    — but that conflicts with the "origin OB" definition. Per agreement, we only include
-    the swing candle. No behavior change needed in current code because the loop already
-    reaches impulse_start_idx. Logic preserved.
+    Leg-size filter (Round 2): a break is only emitted as a structure event
+    (CHoCH or BOS) if the net price displacement from the prior opposite swing
+    to the break candle's close is at least LEG_SIZE_MIN_ATR * H1 ATR. Breaks
+    below threshold are treated as non-events: no zone emitted, trend_state and
+    bos_seq_counter are not updated. This filters micro-swing noise in ranging
+    markets without rejecting large multi-candle moves.
     """
     n = len(df)
     O = df['Open'].values
@@ -308,6 +299,8 @@ def detect_smc_radar(df, lookback):
     H = df['High'].values
     L = df['Low'].values
 
+    # H1 ATR for leg-size threshold. Computed once per scan.
+    h1_atr_for_leg = smc_detector.compute_atr(df)
     swings = []
     for i in range(lookback, n - lookback):
         window_highs = H[i - lookback: i + lookback + 1]
@@ -332,6 +325,7 @@ def detect_smc_radar(df, lookback):
         if not latest_high or not latest_low:
             continue
 
+        # NEW
         sh, sl = latest_high[-1], latest_low[-1]
         bos_detected, bos_type = False, None
 
@@ -343,7 +337,23 @@ def detect_smc_radar(df, lookback):
         if not bos_detected:
             continue
 
-        bos_tag = 'CHoCH' if (trend_state is None or trend_state != bos_type) else 'BOS'
+        # Provisional classification — tells us which threshold to apply.
+        provisional_tag = 'CHoCH' if (trend_state is None or trend_state != bos_type) else 'BOS'
+        threshold_mult = smc_detector.LEG_SIZE_MIN_ATR.get(provisional_tag, 0.6)
+
+        # Prior opposite swing that this break flipped:
+        # bullish break -> swung off the prior low (sl['price'])
+        # bearish break -> swung off the prior high (sh['price'])
+        prior_opposite_swing_price = sl['price'] if bos_type == 'bullish' else sh['price']
+
+        if not smc_detector.validate_leg_distance(
+            prior_opposite_swing_price, C[i], h1_atr_for_leg, threshold_mult
+        ):
+            # Leg too small — treat as non-event. Do NOT update state.
+            continue
+
+        # Passed leg-size filter. Now commit state.
+        bos_tag = provisional_tag
         if bos_tag == 'CHoCH':
             bos_seq_counter = 0
             last_choch_idx = i
@@ -351,7 +361,6 @@ def detect_smc_radar(df, lookback):
             bos_seq_counter += 1
         trend_state = bos_type
         bos_swing_price = sh['price'] if bos_type == 'bullish' else sl['price']
-
         ob_idx = -1
         impulse_start_idx = sl['idx'] if bos_type == 'bullish' else sh['idx']
         if impulse_start_idx >= i:
@@ -408,6 +417,23 @@ def detect_smc_radar(df, lookback):
                     fvg_c3_idx = k + 2
                     break
 
+        # NEW
+        # Absolute timestamp of the OB candle — required by Phase 2/3 to locate
+        # the OB candle in their own dataframes (ob_idx is not portable across phases).
+        try:
+            if 'Datetime' in df.columns:
+                ob_ts_raw = df['Datetime'].iloc[ob_idx]
+            elif 'Date' in df.columns:
+                ob_ts_raw = df['Date'].iloc[ob_idx]
+            else:
+                ob_ts_raw = df.index[ob_idx]
+            if hasattr(ob_ts_raw, 'isoformat'):
+                ob_timestamp_str = ob_ts_raw.isoformat()
+            else:
+                ob_timestamp_str = str(ob_ts_raw)
+        except Exception:
+            ob_timestamp_str = None
+
         active_obs.append({
             'bos_idx':           i,
             'bos_swing_price':   bos_swing_price,
@@ -416,6 +442,7 @@ def detect_smc_radar(df, lookback):
             'bos_sequence_count': bos_seq_counter,
             'last_choch_idx':    last_choch_idx,
             'ob_idx':            ob_idx,
+            'ob_timestamp':      ob_timestamp_str,
             'direction':       bos_type,
             'bos_tag':         bos_tag,
             'high':            ob_high,
@@ -429,13 +456,7 @@ def detect_smc_radar(df, lookback):
                 'fvg_top':    fvg_top,
                 'fvg_bottom': fvg_bottom,
                 'c1_idx':     fvg_c1_idx,
-                'c3_idx':     fvg_c3_idx,
-                # Ghost coords preserved regardless of mitigation status
-                'ghost_top':    fvg_top,
-                'ghost_bottom': fvg_bottom,
-                'ghost_c1_idx': fvg_c1_idx,
-                'ghost_c3_idx': fvg_c3_idx,
-                'was_detected': fvg_c1_idx is not None
+                'c3_idx':     fvg_c3_idx
             }
         })
     # Mitigation + touch tracking
