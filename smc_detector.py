@@ -289,41 +289,95 @@ def detect_sweep_decay(df, swings, current_idx, bias=None):
 
 
 # NEW
-def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor):
+def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
+                       leg_start_idx=None, leg_end_idx=None):
     """
-    Walk backward from newest candle. The FIRST 3-candle FVG pattern that is
-    (a) inside the zone band AND (b) wider than atr_floor is THE candidate.
-    Fill-check is applied to that candidate only. If filled -> return exists=False.
-    Do NOT walk further back.
+    Find the most relevant 3-candle FVG.
 
-    atr_floor is REQUIRED (no default) to force callers to compute and pass it.
+    Two modes:
+      (A) Leg-bounded mode (leg_start_idx + leg_end_idx both provided):
+          Used by Phase 1 H1 detection. Walk BACKWARD from (leg_end_idx + 1)
+          down to leg_start_idx, searching for an FVG whose C1 falls inside
+          that range. This enforces that the FVG is part of the same
+          impulse leg that created the OB. Scan extends ONE candle past BOS
+          (leg_end_idx + 1 as C3) to catch displacement gaps formed on the
+          BOS candle itself.
+
+      (B) Unbounded mode (legacy):
+          Used by Phase 2 (M15) and Phase 3 (M5) when no leg bounds are
+          available. Walks backward from newest candle over the last 30 bars.
+          Retained for backward compatibility.
+
+    Return shape:
+      - Unmitigated candidate found -> {"exists": True, "fvg_top": ft,
+        "fvg_bottom": fb, "c1_idx": k, "c3_idx": k+2, "was_detected": True}
+      - Candidate found but filled  -> {"exists": False, "fvg_top": None,
+        "fvg_bottom": None, "was_detected": True, "ghost_top": ft,
+        "ghost_bottom": fb, "ghost_c1_idx": k, "ghost_c3_idx": k+2,
+        "mitigated_at_idx": m}
+      - Nothing qualifying          -> {"exists": False, "fvg_top": None,
+        "fvg_bottom": None, "was_detected": False}
+
+    atr_floor gates out microscopic gaps (required, must be > 0).
     Typical values:
-      forex:     0.20 * M15 ATR
-      index:     0.30 * M15 ATR
-      commodity: 0.30 * M15 ATR
-    Phase 3 M5 callers: use same multipliers against M5 ATR.
+      forex:     0.20 * TF ATR
+      index:     0.30 * TF ATR
+      commodity: 0.30 * TF ATR
     """
+    _empty = {"exists": False, "fvg_top": None, "fvg_bottom": None,
+              "was_detected": False}
+
     if df is None or len(df) < 5:
-        return {"exists": False, "fvg_top": None, "fvg_bottom": None}
+        return _empty
     if atr_floor is None or atr_floor <= 0:
-        return {"exists": False, "fvg_top": None, "fvg_bottom": None}
+        return _empty
+
     H, L = df['High'].values.astype(float), df['Low'].values.astype(float)
     n = len(df)
 
-    for k in range(n - 3, max(0, n - 30), -1):
+    # Determine scan range
+    if leg_start_idx is not None and leg_end_idx is not None:
+        # Leg-bounded: C1 can range from leg_start_idx up to (leg_end_idx - 1),
+        # so C3 (= C1 + 2) ranges from (leg_start_idx + 2) up to (leg_end_idx + 1).
+        # Walk BACKWARD to prefer freshest FVG near BOS.
+        k_hi = min(leg_end_idx - 1, n - 3)
+        k_lo = max(leg_start_idx, 0)
+        if k_hi < k_lo:
+            return _empty
+        scan_range = range(k_hi, k_lo - 1, -1)
+    else:
+        # Unbounded legacy: last 30 bars, backward.
+        scan_range = range(n - 3, max(0, n - 30), -1)
+
+    for k in scan_range:
+        if k + 2 >= n or k < 0:
+            continue
+
         if bias == "LONG" and H[k] < L[k + 2]:
             ft, fb = float(L[k + 2]), float(H[k])
-            # Zone overlap gate
             if fb > zone_top or ft < zone_bottom:
                 continue
-            # Noise floor gate
             if (ft - fb) < atr_floor:
                 continue
-            # FIRST qualifying candidate — apply fill check here, do not walk further.
-            filled = any(L[m] <= fb for m in range(k + 3, n))
-            if filled:
-                return {"exists": False, "fvg_top": None, "fvg_bottom": None}
-            return {"exists": True, "fvg_top": ft, "fvg_bottom": fb}
+            # First qualifying candidate. Check fill.
+            fill_idx = None
+            for m in range(k + 3, n):
+                if L[m] <= fb:
+                    fill_idx = m
+                    break
+            if fill_idx is not None:
+                return {
+                    "exists": False, "fvg_top": None, "fvg_bottom": None,
+                    "was_detected": True,
+                    "ghost_top": ft, "ghost_bottom": fb,
+                    "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
+                    "mitigated_at_idx": fill_idx
+                }
+            return {
+                "exists": True, "fvg_top": ft, "fvg_bottom": fb,
+                "c1_idx": k, "c3_idx": k + 2,
+                "was_detected": True
+            }
 
         elif bias == "SHORT" and L[k] > H[k + 2]:
             ft, fb = float(L[k]), float(H[k + 2])
@@ -331,13 +385,26 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor):
                 continue
             if (ft - fb) < atr_floor:
                 continue
-            filled = any(H[m] >= ft for m in range(k + 3, n))
-            if filled:
-                return {"exists": False, "fvg_top": None, "fvg_bottom": None}
-            return {"exists": True, "fvg_top": ft, "fvg_bottom": fb}
+            fill_idx = None
+            for m in range(k + 3, n):
+                if H[m] >= ft:
+                    fill_idx = m
+                    break
+            if fill_idx is not None:
+                return {
+                    "exists": False, "fvg_top": None, "fvg_bottom": None,
+                    "was_detected": True,
+                    "ghost_top": ft, "ghost_bottom": fb,
+                    "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
+                    "mitigated_at_idx": fill_idx
+                }
+            return {
+                "exists": True, "fvg_top": ft, "fvg_bottom": fb,
+                "c1_idx": k, "c3_idx": k + 2,
+                "was_detected": True
+            }
 
-    return {"exists": False, "fvg_top": None, "fvg_bottom": None}
-
+    return _empty
 
 def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     dp = _dp(pair_conf)
