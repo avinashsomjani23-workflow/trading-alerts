@@ -8,15 +8,57 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Check if watch state has work to do
+        id: gate
+        run: |
+          set -e
+          if [ ! -f active_watch_state.json ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "active_watch_state.json missing. Skipping."
+            exit 0
+          fi
+          # Count non-meta keys using python3 (pre-installed on ubuntu-latest)
+          COUNT=$(python3 -c "
+          import json, sys
+          try:
+              with open('active_watch_state.json') as f:
+                  d = json.load(f)
+              if not isinstance(d, dict):
+                  print('bad'); sys.exit(0)
+              print(len([k for k in d.keys() if not k.startswith('__')]))
+          except Exception:
+              print('bad')
+          ")
+          if [ "$COUNT" = "bad" ]; then
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Watch state unreadable. Falling through to full Python run for diagnosis."
+          elif [ "$COUNT" = "0" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Watch state empty. Skipping Python env setup and run."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Watch state has $COUNT entries. Proceeding with full run."
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.gate.outputs.skip != 'true'
         with: { python-version: '3.11' }
-      - run: pip install yfinance pandas numpy matplotlib requests
-      - env:
+
+      - name: Install deps
+        if: steps.gate.outputs.skip != 'true'
+        run: pip install yfinance pandas numpy matplotlib requests
+
+      - name: Run Phase 3
+        if: steps.gate.outputs.skip != 'true'
+        env:
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
           GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python phase3_engine.py
+
       - name: Commit state files
+        if: steps.gate.outputs.skip != 'true'
         run: |
           set -e
           git config --local user.email "action@github.com"
@@ -24,22 +66,21 @@ jobs:
 
           ALL_FILES="alert_log.json scan_log.json system_status.json zone_visit_state.json active_watch_state.json phase2_sent.json yfinance_stale_log.json gemini_failure_log.json chart_failure_log.json"
 
-          # Keep only files that actually exist on disk
           FILES=""
           for f in $ALL_FILES; do
             if [ -f "$f" ]; then FILES="$FILES $f"; fi
           done
           echo "Files to commit: $FILES"
 
-          mkdir -p /tmp/p2_writes
+          mkdir -p /tmp/p3_writes
           for f in $FILES; do
-            cp "$f" "/tmp/p2_writes/$f"
+            cp "$f" "/tmp/p3_writes/$f"
           done
 
           git fetch origin main
           git reset --hard origin/main
           for f in $FILES; do
-            cp "/tmp/p2_writes/$f" "$f"
+            cp "/tmp/p3_writes/$f" "$f"
           done
 
           git add $FILES
