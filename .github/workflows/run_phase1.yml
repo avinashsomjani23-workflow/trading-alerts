@@ -22,7 +22,7 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          ALL_FILES="alert_log.json scan_log.json system_status.json zone_visit_state.json active_watch_state.json phase2_sent.json yfinance_stale_log.json gemini_failure_log.json chart_failure_log.json emailed_zones.json active_obs.json"
+          ALL_FILES="alert_log.json scan_log.json system_status.json zone_visit_state.json active_watch_state.json phase2_sent.json yfinance_stale_log.json gemini_failure_log.json chart_failure_log.json emailed_zones.json active_obs.json email_gate.json"
           # Keep only files that actually exist on disk
           FILES=""
           for f in $ALL_FILES; do
