@@ -1,1 +1,62 @@
-{}
+{
+  "NAS100_27079.75": {
+    "pair": "NAS100",
+    "bias": "LONG",
+    "score": 7.2,
+    "breakdown": {
+      "structure": 1.5,
+      "sweep": 2.5,
+      "fvg": 1.0,
+      "freshness": 0.25,
+      "pd": 0.0,
+      "killzone": 1.0,
+      "macro": 1.0
+    },
+    "sweep_price": 26965.0,
+    "sweep_tf": "M15",
+    "macro_summary": "No Tier-1 economic events directly impacting NAS100 were detected in the recent news. The current macroeconomic environment appears stable for this asset based on the provided information.",
+    "levels": {
+      "valid": true,
+      "entry": 27079.75,
+      "sl": 26956.73,
+      "tp1": 27325.79,
+      "tp2": 27571.83,
+      "rr": 2.0,
+      "entry_source": "OB Proximal Limit"
+    },
+    "ob": {
+      "bos_idx": 149,
+      "bos_swing_price": 27136.0,
+      "impulse_start_idx": 134,
+      "impulse_start_price": 26848.0,
+      "bos_sequence_count": 1,
+      "last_choch_idx": 125,
+      "ob_idx": 146,
+      "ob_timestamp": "2026-04-23T12:00:00+00:00",
+      "direction": "bullish",
+      "bos_tag": "BOS",
+      "high": 27079.75,
+      "low": 26956.75,
+      "proximal_line": 27079.75,
+      "distal_line": 26956.75,
+      "median_leg_body": 39.875,
+      "ob_body": 23.25,
+      "fvg": {
+        "exists": false,
+        "fvg_top": null,
+        "fvg_bottom": null,
+        "c1_idx": null,
+        "c3_idx": null,
+        "was_detected": false,
+        "ghost_top": null,
+        "ghost_bottom": null,
+        "ghost_c1_idx": null,
+        "ghost_c3_idx": null,
+        "mitigated_at_idx": null
+      },
+      "touches": 1,
+      "status": "Tested (1x)"
+    },
+    "alert_ist": "2026-04-23T21:17:28.239679"
+  }
+}
