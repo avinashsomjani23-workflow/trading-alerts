@@ -884,9 +884,17 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
     direction  = "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)"
     dir_color  = '#27ae60' if ob['direction'] == 'bullish' else '#e74c3c'
     stat_color = '#27ae60' if 'Pristine' in ob['status'] else '#e67e22'
-    if ob['fvg'].get('exists'):
+    mit = ob['fvg'].get('mitigation', 'none')
+    if ob['fvg'].get('exists') and mit == 'partial':
+        # Partial — price crossed proximal but not distal. Light green.
         fvg_line = (
-            f"FVG: <span style='color:#2ecc71;'>✓ {ob['fvg']['fvg_bottom']:.{dp}f} – "
+            f"FVG: <span style='color:#7ed67e;'>◐ Partial "
+            f"{ob['fvg']['fvg_bottom']:.{dp}f} – {ob['fvg']['fvg_top']:.{dp}f}</span>"
+        )
+    elif ob['fvg'].get('exists'):
+        # Pristine — untouched. Dark green.
+        fvg_line = (
+            f"FVG: <span style='color:#27ae60;'>✓ {ob['fvg']['fvg_bottom']:.{dp}f} – "
             f"{ob['fvg']['fvg_top']:.{dp}f}</span>"
         )
     elif ob['fvg'].get('was_detected'):
@@ -1210,7 +1218,23 @@ def run_radar():
                         survivors.append(cand)
                 re_filtered.extend(survivors)
             scanned_obs = re_filtered
-
+            
+        # Proximity filter — drop zones further than 4× H1 ATR from current price.
+        # Gives ~4 hours of price-movement heads-up before zone is reachable.
+        # Pair-agnostic multiplier because ATR is already pair-scaled.
+        h1_atr_proximity = smc_detector.compute_atr(df)
+        if h1_atr_proximity and h1_atr_proximity > 0:
+            proximity_cap = 4.0 * h1_atr_proximity
+            before_count = len(scanned_obs)
+            scanned_obs = [
+                o for o in scanned_obs
+                if abs(current_price - float(o['proximal_line'])) <= proximity_cap
+            ]
+            dropped = before_count - len(scanned_obs)
+            if dropped > 0:
+                print(f"  [PROX] {name}: dropped {dropped} distant zones "
+                      f"(beyond {proximity_cap:.{dp}f}).")
+                
         export_payload[name] = scanned_obs
 
         for ob in scanned_obs:
