@@ -37,42 +37,7 @@
   ],
   "USDJPY": [],
   "NZDUSD": [],
-  "USDCHF": [
-    {
-      "bos_idx": 106,
-      "bos_swing_price": 0.7825899720191956,
-      "impulse_start_idx": 97,
-      "impulse_start_price": 0.7791600227355957,
-      "bos_sequence_count": 3,
-      "last_choch_idx": 75,
-      "ob_idx": 105,
-      "ob_timestamp": "2026-04-22T13:00:00+00:00",
-      "direction": "bullish",
-      "bos_tag": "BOS",
-      "high": 0.783050000667572,
-      "low": 0.7816699743270874,
-      "proximal_line": 0.783050000667572,
-      "distal_line": 0.7816699743270874,
-      "median_leg_body": 0.0008449852466583252,
-      "ob_body": 0.0008499622344970703,
-      "fvg": {
-        "exists": false,
-        "fvg_top": null,
-        "fvg_bottom": null,
-        "c1_idx": null,
-        "c3_idx": null,
-        "was_detected": false,
-        "mitigation": "none",
-        "ghost_top": null,
-        "ghost_bottom": null,
-        "ghost_c1_idx": null,
-        "ghost_c3_idx": null,
-        "mitigated_at_idx": null
-      },
-      "touches": 2,
-      "status": "Tested (2x)"
-    }
-  ],
+  "USDCHF": [],
   "NAS100": [],
   "GOLD": []
 }
