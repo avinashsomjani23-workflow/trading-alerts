@@ -14,7 +14,7 @@
       "map_tf": "1h",
       "radar_tf": "15m",
       "trigger_tf": "15m",
-      "atr_multiplier": 1.5,
+      "atr_multiplier": 2.0,
       "min_confidence": 7.0,
       "decimal_places": 5,
       "spread_pips": 2.0
@@ -27,7 +27,7 @@
       "map_tf": "1h",
       "radar_tf": "15m",
       "trigger_tf": "15m",
-      "atr_multiplier": 1.5,
+      "atr_multiplier": 2.0,
       "min_confidence": 7.0,
       "decimal_places": 3,
       "spread_pips": 2.0
@@ -40,7 +40,7 @@
       "map_tf": "1h",
       "radar_tf": "15m",
       "trigger_tf": "15m",
-      "atr_multiplier": 1.5,
+      "atr_multiplier": 2.0,
       "min_confidence": 7.0,
       "decimal_places": 5,
       "spread_pips": 4.0
@@ -53,7 +53,7 @@
       "map_tf": "1h",
       "radar_tf": "15m",
       "trigger_tf": "15m",
-      "atr_multiplier": 1.5,
+      "atr_multiplier": 2.0,
       "min_confidence": 7.0,
       "decimal_places": 5,
       "spread_pips": 2.0
@@ -81,7 +81,7 @@
       "map_tf": "1h",
       "radar_tf": "15m",
       "trigger_tf": "5m",
-      "atr_multiplier": 2.0,
+      "atr_multiplier": 2.5,
       "min_confidence": 7.0,
       "decimal_places": 2,
       "spread_pips": 0.50,
