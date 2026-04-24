@@ -138,6 +138,41 @@
       "status": "Pristine"
     }
   ],
+  "NAS100": [
+    {
+      "bos_idx": 45,
+      "bos_swing_price": 26564.0,
+      "impulse_start_idx": 39,
+      "impulse_start_price": 26440.0,
+      "bos_sequence_count": 1,
+      "last_choch_idx": 26,
+      "ob_idx": 44,
+      "ob_timestamp": "2026-04-17T10:00:00+00:00",
+      "direction": "bullish",
+      "bos_tag": "BOS",
+      "high": 26547.0,
+      "low": 26505.5,
+      "proximal_line": 26547.0,
+      "distal_line": 26505.5,
+      "median_leg_body": 18.25,
+      "ob_body": 10.5,
+      "fvg": {
+        "exists": false,
+        "fvg_top": null,
+        "fvg_bottom": null,
+        "c1_idx": null,
+        "c3_idx": null,
+        "was_detected": false,
+        "ghost_top": null,
+        "ghost_bottom": null,
+        "ghost_c1_idx": null,
+        "ghost_c3_idx": null,
+        "mitigated_at_idx": null
+      },
+      "touches": 0,
+      "status": "Pristine"
+    }
+  ],
   "GOLD": [
     {
       "bos_idx": 94,
