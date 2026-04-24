@@ -58,5 +58,10 @@
     "ts": "2026-04-24T18:32:33.974759",
     "pair": "USDJPY",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-04-24T19:17:38.219733",
+    "pair": "NAS100",
+    "reason": "no candidates field, attempt 3"
   }
 ]
