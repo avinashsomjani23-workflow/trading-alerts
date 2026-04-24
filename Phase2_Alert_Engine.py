@@ -337,15 +337,20 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         if fvg.get('exists'):
             ft, fb = float(fvg.get('fvg_top', 0)), float(fvg.get('fvg_bottom', 0))
             if ft > 0 and fb > 0:
+                mit = fvg.get('mitigation', 'pristine')
+                if mit == 'partial':
+                    face_col, edge_col, label = '#a8e6a1', '#7ed67e', ' H1 FVG ◐'
+                else:
+                    face_col, edge_col, label = '#27ae60', '#2ecc71', ' H1 FVG'
                 ax.add_patch(patches.Rectangle(
                     (0, fb), n + 5, ft - fb,
-                    facecolor='#27ae60', alpha=0.15, zorder=1
+                    facecolor=face_col, alpha=0.15, zorder=1
                 ))
                 ax.add_patch(patches.Rectangle(
                     (0, fb), n + 5, ft - fb,
-                    fill=False, edgecolor='#2ecc71', linestyle='--', linewidth=1.0, zorder=2
+                    fill=False, edgecolor=edge_col, linestyle='--', linewidth=1.0, zorder=2
                 ))
-                ax.text(0.5, ft, ' H1 FVG', color='#2ecc71', fontsize=8, va='bottom', zorder=5)
+                ax.text(0.5, ft, label, color=edge_col, fontsize=8, va='bottom', zorder=5)
 
         # --- Dealing range band + equilibrium ---
         dr_eq = None
