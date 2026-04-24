@@ -69,41 +69,7 @@
       "status": "Pristine"
     }
   ],
-  "NZDUSD": [
-    {
-      "bos_idx": 149,
-      "bos_swing_price": 0.5844193696975708,
-      "impulse_start_idx": 130,
-      "impulse_start_price": 0.589414119720459,
-      "bos_sequence_count": 4,
-      "last_choch_idx": 124,
-      "ob_idx": 147,
-      "ob_timestamp": "2026-04-24T01:00:00+00:00",
-      "direction": "bearish",
-      "bos_tag": "BOS",
-      "high": 0.5863039493560791,
-      "low": 0.5858917236328125,
-      "proximal_line": 0.5858917236328125,
-      "distal_line": 0.5863039493560791,
-      "median_leg_body": 0.000501096248626709,
-      "ob_body": 0.00017178058624267578,
-      "fvg": {
-        "exists": true,
-        "fvg_top": 0.5858917236328125,
-        "fvg_bottom": 0.5851374864578247,
-        "c1_idx": 147,
-        "c3_idx": 149,
-        "was_detected": true,
-        "ghost_top": null,
-        "ghost_bottom": null,
-        "ghost_c1_idx": null,
-        "ghost_c3_idx": null,
-        "mitigated_at_idx": null
-      },
-      "touches": 0,
-      "status": "Pristine"
-    }
-  ],
+  "NZDUSD": [],
   "USDCHF": [
     {
       "bos_idx": 112,
