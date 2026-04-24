@@ -73,41 +73,6 @@
       "status": "Tested (2x)"
     }
   ],
-  "NAS100": [
-    {
-      "bos_idx": 149,
-      "bos_swing_price": 27135.75,
-      "impulse_start_idx": 135,
-      "impulse_start_price": 26681.75,
-      "bos_sequence_count": 1,
-      "last_choch_idx": 109,
-      "ob_idx": 147,
-      "ob_timestamp": "2026-04-24T06:00:00+00:00",
-      "direction": "bullish",
-      "bos_tag": "BOS",
-      "high": 27099.25,
-      "low": 27066.75,
-      "proximal_line": 27099.25,
-      "distal_line": 27066.75,
-      "median_leg_body": 34.75,
-      "ob_body": 11.25,
-      "fvg": {
-        "exists": false,
-        "fvg_top": null,
-        "fvg_bottom": null,
-        "c1_idx": null,
-        "c3_idx": null,
-        "was_detected": false,
-        "mitigation": "none",
-        "ghost_top": null,
-        "ghost_bottom": null,
-        "ghost_c1_idx": null,
-        "ghost_c3_idx": null,
-        "mitigated_at_idx": null
-      },
-      "touches": 1,
-      "status": "Tested (1x)"
-    }
-  ],
+  "NAS100": [],
   "GOLD": []
 }
