@@ -38,20 +38,25 @@ DEALING_RANGE_LOOKBACK_H1 = {
 # FVG noise floor multipliers (pair-type aware).
 # Applied to the TF's ATR — e.g. M15 ATR for Phase 2 M15 FVG, M5 ATR for Phase 3.
 # ---------------------------------------------------------------------------
+# FVG noise floor multipliers (pair-type aware, TF-agnostic).
+# Multiplier applies to whatever TF ATR the caller passes in:
+#   Phase 1 -> H1 ATR  |  Phase 2 -> M15 ATR  |  Phase 3 -> M5 ATR
 FVG_NOISE_FLOOR_MULT = {
-    "forex":     0.20,
-    "index":     0.30,
-    "commodity": 0.30
+    "forex":     0.08,
+    "index":     0.12,
+    "commodity": 0.12
 }
 
 # ---------------------------------------------------------------------------
 # Minimum leg-size thresholds for H1 structure events (ATR multiples).
 # Applied as net price displacement from prior opposite swing to break close.
 # Uniform across Phase 1 emission and Phase 2 re-validation.
+# Loosened aggressively to surface recent continuation BOS. Downstream
+# scoring + PD-array confluence filters the noise.
 # ---------------------------------------------------------------------------
 LEG_SIZE_MIN_ATR = {
-    "CHoCH": 0.8,
-    "BOS":   0.6
+    "CHoCH": 0.35,
+    "BOS":   0.20
 }
 
 
@@ -289,64 +294,59 @@ def detect_sweep_decay(df, swings, current_idx, bias=None):
 
 
 # NEW
+# NEW
 def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
                        leg_start_idx=None, leg_end_idx=None):
     """
     Find the most relevant 3-candle FVG.
 
-    Two modes:
-      (A) Leg-bounded mode (leg_start_idx + leg_end_idx both provided):
-          Used by Phase 1 H1 detection. Walk BACKWARD from (leg_end_idx + 1)
-          down to leg_start_idx, searching for an FVG whose C1 falls inside
-          that range. This enforces that the FVG is part of the same
-          impulse leg that created the OB. Scan extends ONE candle past BOS
-          (leg_end_idx + 1 as C3) to catch displacement gaps formed on the
-          BOS candle itself.
+    Mitigation states:
+      - 'pristine' : price has NOT touched FVG proximal since formation.
+      - 'partial'  : price touched proximal but NOT distal. Full score.
+      - 'full'     : price touched distal (wick tag is enough). Zero score.
 
-      (B) Unbounded mode (legacy):
-          Used by Phase 2 (M15) and Phase 3 (M5) when no leg bounds are
-          available. Walks backward from newest candle over the last 30 bars.
-          Retained for backward compatibility.
+    Proximal / Distal by bias:
+      LONG  FVG: proximal = fvg_top    | distal = fvg_bottom
+      SHORT FVG: proximal = fvg_bottom | distal = fvg_top
+
+    Touch-based (no close required):
+      LONG  full mitigation -> any L[m] <= fvg_bottom
+      LONG  partial         -> any L[m] <= fvg_top (but no full-mit yet)
+      SHORT full mitigation -> any H[m] >= fvg_top
+      SHORT partial         -> any H[m] >= fvg_bottom (but no full-mit yet)
 
     Return shape:
-      - Unmitigated candidate found -> {"exists": True, "fvg_top": ft,
-        "fvg_bottom": fb, "c1_idx": k, "c3_idx": k+2, "was_detected": True}
-      - Candidate found but filled  -> {"exists": False, "fvg_top": None,
-        "fvg_bottom": None, "was_detected": True, "ghost_top": ft,
-        "ghost_bottom": fb, "ghost_c1_idx": k, "ghost_c3_idx": k+2,
-        "mitigated_at_idx": m}
-      - Nothing qualifying          -> {"exists": False, "fvg_top": None,
-        "fvg_bottom": None, "was_detected": False}
-
-    atr_floor gates out microscopic gaps (required, must be > 0).
-    Typical values:
-      forex:     0.20 * TF ATR
-      index:     0.30 * TF ATR
-      commodity: 0.30 * TF ATR
+      Pristine/partial -> {"exists": True, "fvg_top": ft, "fvg_bottom": fb,
+                           "c1_idx": k, "c3_idx": k+2,
+                           "mitigation": "pristine" | "partial",
+                           "was_detected": True}
+      Full mitigation  -> {"exists": False, "fvg_top": None, "fvg_bottom": None,
+                           "was_detected": True, "mitigation": "full",
+                           "ghost_top": ft, "ghost_bottom": fb,
+                           "ghost_c1_idx": k, "ghost_c3_idx": k+2,
+                           "mitigated_at_idx": m}
+      Nothing          -> {"exists": False, "fvg_top": None, "fvg_bottom": None,
+                           "was_detected": False, "mitigation": "none"}
     """
     _empty = {"exists": False, "fvg_top": None, "fvg_bottom": None,
-              "was_detected": False}
+              "was_detected": False, "mitigation": "none"}
 
     if df is None or len(df) < 5:
         return _empty
     if atr_floor is None or atr_floor <= 0:
         return _empty
 
-    H, L = df['High'].values.astype(float), df['Low'].values.astype(float)
+    H = df['High'].values.astype(float)
+    L = df['Low'].values.astype(float)
     n = len(df)
 
-    # Determine scan range
     if leg_start_idx is not None and leg_end_idx is not None:
-        # Leg-bounded: C1 can range from leg_start_idx up to (leg_end_idx - 1),
-        # so C3 (= C1 + 2) ranges from (leg_start_idx + 2) up to (leg_end_idx + 1).
-        # Walk BACKWARD to prefer freshest FVG near BOS.
         k_hi = min(leg_end_idx - 1, n - 3)
         k_lo = max(leg_start_idx, 0)
         if k_hi < k_lo:
             return _empty
         scan_range = range(k_hi, k_lo - 1, -1)
     else:
-        # Unbounded legacy: last 30 bars, backward.
         scan_range = range(n - 3, max(0, n - 30), -1)
 
     for k in scan_range:
@@ -359,23 +359,27 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
                 continue
             if (ft - fb) < atr_floor:
                 continue
-            # First qualifying candidate. Check fill.
-            fill_idx = None
+            # LONG: proximal = ft, distal = fb. Touch-based mitigation.
+            full_fill_idx = None
+            partial_hit = False
             for m in range(k + 3, n):
                 if L[m] <= fb:
-                    fill_idx = m
+                    full_fill_idx = m
                     break
-            if fill_idx is not None:
+                if L[m] <= ft:
+                    partial_hit = True
+            if full_fill_idx is not None:
                 return {
                     "exists": False, "fvg_top": None, "fvg_bottom": None,
-                    "was_detected": True,
+                    "was_detected": True, "mitigation": "full",
                     "ghost_top": ft, "ghost_bottom": fb,
                     "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
-                    "mitigated_at_idx": fill_idx
+                    "mitigated_at_idx": full_fill_idx
                 }
             return {
                 "exists": True, "fvg_top": ft, "fvg_bottom": fb,
                 "c1_idx": k, "c3_idx": k + 2,
+                "mitigation": "partial" if partial_hit else "pristine",
                 "was_detected": True
             }
 
@@ -385,27 +389,31 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
                 continue
             if (ft - fb) < atr_floor:
                 continue
-            fill_idx = None
+            # SHORT: proximal = fb, distal = ft. Touch-based mitigation.
+            full_fill_idx = None
+            partial_hit = False
             for m in range(k + 3, n):
                 if H[m] >= ft:
-                    fill_idx = m
+                    full_fill_idx = m
                     break
-            if fill_idx is not None:
+                if H[m] >= fb:
+                    partial_hit = True
+            if full_fill_idx is not None:
                 return {
                     "exists": False, "fvg_top": None, "fvg_bottom": None,
-                    "was_detected": True,
+                    "was_detected": True, "mitigation": "full",
                     "ghost_top": ft, "ghost_bottom": fb,
                     "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
-                    "mitigated_at_idx": fill_idx
+                    "mitigated_at_idx": full_fill_idx
                 }
             return {
                 "exists": True, "fvg_top": ft, "fvg_bottom": fb,
                 "c1_idx": k, "c3_idx": k + 2,
+                "mitigation": "partial" if partial_hit else "pristine",
                 "was_detected": True
             }
 
     return _empty
-
 def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     dp = _dp(pair_conf)
     spread_val = pair_conf.get("spread_pips", 2) * (0.0001 if dp == 5 else 0.01)
@@ -533,6 +541,8 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         bd["sweep"], sweep_price, sweep_tf = h1_sweep_score, h1_sweep_price, "H1"
 
     # FVG
+    # Partial mitigation and pristine both score full (fvg['exists'] is True for both).
+    # Only full mitigation or absent FVG scores 0 (exists: False).
     if fvg and fvg.get('exists'):
         bd["fvg"] = 1.5 if fvg.get('touches_ob', False) else 1.0
     else:
