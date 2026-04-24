@@ -210,11 +210,16 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
         if m5_fvg and m5_fvg.get('exists'):
             ft, fb = float(m5_fvg.get('fvg_top', 0)), float(m5_fvg.get('fvg_bottom', 0))
             if ft > 0 and fb > 0:
+                mit = m5_fvg.get('mitigation', 'pristine')
+                if mit == 'partial':
+                    face_col, edge_col, label = '#a8e6a1', '#7ed67e', ' M5 FVG ◐'
+                else:
+                    face_col, edge_col, label = '#27ae60', '#2ecc71', ' M5 FVG'
                 ax.add_patch(patches.Rectangle(
                     (0, fb), n + 5, ft - fb,
-                    facecolor='#27ae60', alpha=0.25, zorder=1
+                    facecolor=face_col, alpha=0.25, zorder=1
                 ))
-                ax.text(1, ft, ' M5 FVG', color='#2ecc71', fontsize=8, va='bottom', zorder=5)
+                ax.text(1, ft, label, color=edge_col, fontsize=8, va='bottom', zorder=5)
 
         # M5 CHoCH level
         if choch_level is not None and choch_level > 0:
