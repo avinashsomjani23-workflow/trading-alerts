@@ -24,7 +24,7 @@
         "c1_idx": 146,
         "c3_idx": 148,
         "was_detected": true,
-        "mitigation": "pristine",
+        "mitigation": "partial",
         "ghost_top": null,
         "ghost_bottom": null,
         "ghost_c1_idx": null,
