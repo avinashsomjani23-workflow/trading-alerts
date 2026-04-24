@@ -616,6 +616,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
 
         fvg_active    = ob['fvg']['exists'] and ob['fvg']['c1_idx'] is not None
         fvg_ghost     = (not ob['fvg']['exists']) and ob['fvg'].get('was_detected') and ob['fvg'].get('ghost_c1_idx') is not None
+        fvg_partial   = fvg_active and ob['fvg'].get('mitigation') == 'partial'
 
         if fvg_active:
             ft = float(ob['fvg']['fvg_top'])
@@ -625,18 +626,23 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
             if 0 <= fvg_c1_plot < n_plot:
                 fvg_x_start = fvg_c1_plot - 0.4
                 fvg_width   = (fvg_c3_plot + 0.4) - fvg_x_start
+                # Partial -> light green. Pristine -> dark green.
+                if fvg_partial:
+                    face_col, edge_col, label = '#a8e6a1', '#7ed67e', 'FVG ◐'
+                else:
+                    face_col, edge_col, label = '#27ae60', '#2ecc71', 'FVG'
                 ax.add_patch(patches.Rectangle(
                     (fvg_x_start, fb), fvg_width, ft - fb,
-                    facecolor='#27ae60', alpha=0.25, zorder=1
+                    facecolor=face_col, alpha=0.25, zorder=1
                 ))
                 ax.add_patch(patches.Rectangle(
                     (fvg_x_start, fb), fvg_width, ft - fb,
-                    fill=False, edgecolor='#2ecc71', linewidth=1.0,
+                    fill=False, edgecolor=edge_col, linewidth=1.0,
                     linestyle='--', zorder=2
                 ))
                 ax.text(
-                    fvg_c1_plot, ft, 'FVG',
-                    color='#2ecc71', fontsize=7, ha='left', va='bottom', zorder=5
+                    fvg_c1_plot, ft, label,
+                    color=edge_col, fontsize=7, ha='left', va='bottom', zorder=5
                 )
         elif fvg_ghost:
             ft = float(ob['fvg']['ghost_top'])
@@ -656,7 +662,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
                     linestyle=':', zorder=2
                 ))
                 ax.text(
-                    fvg_c1_plot, ft, 'FVG ✓',
+                    fvg_c1_plot, ft, 'FVG ✗',
                     color='#888888', fontsize=7, ha='left', va='bottom', zorder=5
                 )
         bos_price = float(ob['bos_swing_price'])
@@ -738,12 +744,22 @@ def generate_zone_narrative(ob, name, dp, current_price):
     pip_unit     = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
     zone_pips    = round(abs(proximal - distal) / pip_unit, 1)
     dist_pips    = round(abs(current_price - proximal) / pip_unit, 1)
-    fvg_status   = (
-        f"confirmed FVG between {ob['fvg']['fvg_bottom']:.{dp}f} "
-        f"and {ob['fvg']['fvg_top']:.{dp}f}"
-        if ob['fvg']['exists']
-        else "no FVG present"
-    )
+    if ob['fvg'].get('exists'):
+        mit = ob['fvg'].get('mitigation', 'pristine')
+        if mit == 'partial':
+            fvg_status = (
+                f"partially mitigated FVG between {ob['fvg']['fvg_bottom']:.{dp}f} "
+                f"and {ob['fvg']['fvg_top']:.{dp}f} (price tagged proximal, distal intact)"
+            )
+        else:
+            fvg_status = (
+                f"pristine FVG between {ob['fvg']['fvg_bottom']:.{dp}f} "
+                f"and {ob['fvg']['fvg_top']:.{dp}f}"
+            )
+    elif ob['fvg'].get('was_detected'):
+        fvg_status = "FVG fully mitigated — zone relies on OB alone"
+    else:
+        fvg_status = "no FVG present"
     ratio        = round(ob['ob_body'] / ob['median_leg_body'], 2) if ob['median_leg_body'] > 0 else 0
 
     prompt = f"""You are a veteran SMC (Smart Money Concepts) prop trader writing a zone briefing for another experienced SMC trader.
@@ -793,11 +809,22 @@ STRICT OUTPUT RULES:
 def _fallback_narrative(ob, name, dp, current_price):
     pip_unit  = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
     dist_pips = round(abs(current_price - ob['proximal_line']) / pip_unit, 1)
-    fvg_line  = (
-        f"FVG confirmed between {ob['fvg']['fvg_bottom']:.{dp}f}–{ob['fvg']['fvg_top']:.{dp}f}, adding displacement confluence."
-        if ob['fvg']['exists']
-        else "No FVG present — zone relies on OB alone for confluence."
-    )
+    if ob['fvg'].get('exists'):
+        mit = ob['fvg'].get('mitigation', 'pristine')
+        if mit == 'partial':
+            fvg_line = (
+                f"FVG partially mitigated between {ob['fvg']['fvg_bottom']:.{dp}f}–{ob['fvg']['fvg_top']:.{dp}f} "
+                f"— proximal tagged, distal still intact."
+            )
+        else:
+            fvg_line = (
+                f"FVG confirmed between {ob['fvg']['fvg_bottom']:.{dp}f}–{ob['fvg']['fvg_top']:.{dp}f}, "
+                f"adding displacement confluence."
+            )
+    elif ob['fvg'].get('was_detected'):
+        fvg_line = "FVG fully mitigated — zone relies on OB alone for confluence."
+    else:
+        fvg_line = "No FVG present — zone relies on OB alone for confluence."
     return (
         f"{ob['bos_tag']} confirmed the {ob['direction']} shift; this OB marks the last institutional "
         f"accumulation before the break. "
@@ -820,11 +847,14 @@ def build_summary_table_html(all_zones_for_table, dp_map):
         dir_color = '#27ae60'   if z['direction'] == 'bullish' else '#e74c3c'
         status    = z['status']
         stat_col  = '#27ae60'   if 'Pristine' in status else '#e67e22'
-        if z['fvg_valid']:
+        if z['fvg_valid'] and z.get('fvg_mitigation') == 'partial':
+            fvg_cell = "&#9680;"   # half-filled circle = partial
+            fvg_col  = '#7ed67e'   # light green
+        elif z['fvg_valid']:
             fvg_cell = "&#10003;"
             fvg_col  = '#27ae60'
         elif z.get('fvg_ghost'):
-            fvg_cell = "&#9675;"   # empty circle = ghost
+            fvg_cell = "&#9675;"   # empty circle = fully mitigated ghost
             fvg_col  = '#888888'
         else:
             fvg_cell = "&ndash;"
@@ -1248,6 +1278,7 @@ def run_radar():
                 "fvg_valid": ob['fvg'].get('exists', False),
                 "fvg_ghost": (not ob['fvg'].get('exists', False))
                               and ob['fvg'].get('was_detected', False),
+                "fvg_mitigation": ob['fvg'].get('mitigation', 'none'),
                 "first_seen_ist": first_seen_label,
                 "is_new": False, "is_changed": False
             })
