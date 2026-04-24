@@ -378,7 +378,7 @@ def detect_smc_radar(df, lookback):
             if (bos_type == 'bullish' and C[j] < O[j]) or \
                (bos_type == 'bearish' and C[j] > O[j]):
                 if is_valid_ob_candle(O[j], C[j], H[j], L[j]):
-                    if abs(C[j] - O[j]) <= (2.0 * median_leg_body):
+                    if abs(C[j] - O[j]) <= (1.5 * median_leg_body):
                         ob_idx = j
                         break
 
@@ -424,7 +424,8 @@ def detect_smc_radar(df, lookback):
         except Exception:
             ob_timestamp_str = None
 
-        # Build fvg dict — green (pristine), grey (ghost/mitigated), or absent.
+        # Build fvg dict — pristine (dark green), partial (light green),
+        # full (grey/ghost), or absent.
         fvg_dict = {
             'exists':       fvg_result.get('exists', False),
             'fvg_top':      fvg_result.get('fvg_top'),
@@ -432,6 +433,7 @@ def detect_smc_radar(df, lookback):
             'c1_idx':       fvg_result.get('c1_idx'),
             'c3_idx':       fvg_result.get('c3_idx'),
             'was_detected': fvg_result.get('was_detected', False),
+            'mitigation':   fvg_result.get('mitigation', 'none'),
             'ghost_top':    fvg_result.get('ghost_top'),
             'ghost_bottom': fvg_result.get('ghost_bottom'),
             'ghost_c1_idx': fvg_result.get('ghost_c1_idx'),
