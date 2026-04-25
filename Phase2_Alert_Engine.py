@@ -337,12 +337,29 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
 
         # --- FVG: outline middle (displacement) candle only, slightly wider for mitigation visibility ---
+        # Cross-phase safety: resolve c1 candle position via timestamp (c1_idx
+        # from Phase 1 is NOT portable to Phase 2's fresh dataframe).
         fvg = ob.get('fvg', {}) or {}
         if fvg.get('exists'):
             ft, fb = float(fvg.get('fvg_top', 0)), float(fvg.get('fvg_bottom', 0))
-            c1_idx = fvg.get('c1_idx')
-            if ft > 0 and fb > 0 and c1_idx is not None:
-                mid_abs = int(c1_idx) + 1  # displacement candle (middle of c1-c2-c3)
+            c1_ts = fvg.get('c1_timestamp')
+            c1_resolved = None
+            if c1_ts:
+                idx_c1, found_c1 = smc_detector.locate_ob_candle_idx(df_h1, c1_ts)
+                if found_c1:
+                    c1_resolved = idx_c1
+            if c1_resolved is None:
+                # Legacy fallback (only valid same-run; Phase 2 with no timestamp
+                # means the ob predates this fix — outline likely off but harmless).
+                c1_idx_legacy = fvg.get('c1_idx')
+                if c1_idx_legacy is not None:
+                    try:
+                        c1_resolved = int(c1_idx_legacy)
+                    except Exception:
+                        c1_resolved = None
+
+            if ft > 0 and fb > 0 and c1_resolved is not None:
+                mid_abs = c1_resolved + 1  # displacement candle (middle of c1-c2-c3)
                 mid_local = mid_abs - window_start
                 if 0 <= mid_local < n:
                     mit = fvg.get('mitigation', 'pristine')
@@ -360,7 +377,6 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                         (fvg_x_start, fb), fvg_width, ft - fb,
                         fill=False, edgecolor=edge_col, linestyle='--', linewidth=1.0, zorder=2
                     ))
-
         # --- Dealing range band + equilibrium ---
         dr_eq = None
         if dealing_range and dealing_range.get('valid'):
