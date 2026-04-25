@@ -865,17 +865,20 @@ def check_opposite_bos(df_h1, bias, since_ts=None):
                     return True
 
     return False
-
 def compute_h1_break_candle_span(df_h1, ob, h1_atr):
     """
     Return (start_idx, end_idx) of consecutive H1 candles from the first
     structural break candle through the candle that satisfies the ATR-based
     break threshold. Inclusive on both ends. Max 3 candles.
 
-    A pure VISUAL helper — does not touch trading logic. Reads the same
-    bos_idx, bos_swing_price, bos_tag, direction already stored on `ob`.
+    A pure VISUAL helper — does not touch trading logic. Reads bos_timestamp
+    (preferred) or bos_idx (fallback for same-run charts only) from `ob`.
 
-    The candle at bos_idx is always the qualifying break candle (Phase 1
+    Cross-phase safety: Phase 1's bos_idx is NOT portable to Phase 2 because
+    the rolling yfinance window shifts the df start point. We resolve the
+    BOS candle's current position via bos_timestamp using locate_ob_candle_idx.
+
+    The resolved BOS candle is always the qualifying break candle (Phase 1
     only commits state when the ATR threshold is met). We walk backward up
     to 2 candles to capture earlier closes that crossed the swing but did
     not yet meet ATR threshold — those are the "almost broke" candles the
@@ -886,26 +889,43 @@ def compute_h1_break_candle_span(df_h1, ob, h1_atr):
     """
     if df_h1 is None or len(df_h1) == 0:
         return (None, None)
-    bos_idx = ob.get('bos_idx')
     swing_price = ob.get('bos_swing_price')
     direction = ob.get('direction')
-    if bos_idx is None or swing_price is None or direction not in ('bullish', 'bearish'):
+    if swing_price is None or direction not in ('bullish', 'bearish'):
         return (None, None)
     try:
-        bos_idx = int(bos_idx)
         swing_price = float(swing_price)
     except Exception:
         return (None, None)
-    if bos_idx < 0 or bos_idx >= len(df_h1):
-        return (None, None)
+
+    # Prefer timestamp lookup (cross-phase safe). Fall back to bos_idx only
+    # if no timestamp is stored (e.g. legacy ob entries from before this fix).
+    bos_ts = ob.get('bos_timestamp')
+    resolved_idx = None
+    if bos_ts:
+        idx, found = locate_ob_candle_idx(df_h1, bos_ts)
+        if found:
+            resolved_idx = idx
+    if resolved_idx is None:
+        # Fallback: use bos_idx (only safe in the same run that emitted ob).
+        bos_idx = ob.get('bos_idx')
+        if bos_idx is None:
+            return (None, None)
+        try:
+            bos_idx = int(bos_idx)
+        except Exception:
+            return (None, None)
+        if bos_idx < 0 or bos_idx >= len(df_h1):
+            return (None, None)
+        resolved_idx = bos_idx
 
     C = df_h1['Close'].values
-    start_idx = bos_idx
+    start_idx = resolved_idx
     # Walk back at most 2 candles. Include candles whose Close crossed swing
     # in the break direction (these are early-cross candles that didn't yet
     # hit ATR threshold but are part of the visual break sequence).
     for k in range(1, 3):
-        j = bos_idx - k
+        j = resolved_idx - k
         if j < 0:
             break
         try:
@@ -918,7 +938,8 @@ def compute_h1_break_candle_span(df_h1, ob, h1_atr):
             start_idx = j
         else:
             break
-    return (start_idx, bos_idx)
+    return (start_idx, resolved_idx)
+    
 def locate_ob_candle_idx(df, ob_timestamp_iso):
     """
     Find the OB candle's positional index in `df` using its absolute timestamp.
