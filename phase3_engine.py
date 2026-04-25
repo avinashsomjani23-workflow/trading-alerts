@@ -190,6 +190,10 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
                 facecolor=col, linewidth=0, alpha=0.9, zorder=3
             ))
 
+        tail_n = 80
+        full_n = len(df_m5)
+        window_start = max(0, full_n - tail_n)
+
         proximal = float(ob.get('proximal_line', 0))
         distal = float(ob.get('distal_line', 0))
         zone_hi, zone_lo = max(proximal, distal), min(proximal, distal)
@@ -204,89 +208,68 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
                 (0, zone_lo), n + 5, zone_hi - zone_lo,
                 fill=False, edgecolor='#bb8fce', linestyle=':', linewidth=1.5, zorder=2
             ))
-            ax.text(1, zone_hi, ' H1 Zone', color='#bb8fce', fontsize=8, va='bottom', zorder=5)
 
-        # M5 FVG overlay
+        # --- M5 FVG: outline middle (displacement) candle only, slightly wider for mitigation visibility ---
         if m5_fvg and m5_fvg.get('exists'):
             ft, fb = float(m5_fvg.get('fvg_top', 0)), float(m5_fvg.get('fvg_bottom', 0))
-            if ft > 0 and fb > 0:
-                mit = m5_fvg.get('mitigation', 'pristine')
-                if mit == 'partial':
-                    face_col, edge_col, label = '#a8e6a1', '#7ed67e', ' M5 FVG ◐'
-                else:
-                    face_col, edge_col, label = '#27ae60', '#2ecc71', ' M5 FVG'
-                ax.add_patch(patches.Rectangle(
-                    (0, fb), n + 5, ft - fb,
-                    facecolor=face_col, alpha=0.25, zorder=1
-                ))
-                ax.text(1, ft, label, color=edge_col, fontsize=8, va='bottom', zorder=5)
+            c1_idx = m5_fvg.get('c1_idx')
+            if ft > 0 and fb > 0 and c1_idx is not None:
+                mid_abs = int(c1_idx) + 1
+                mid_local = mid_abs - window_start
+                if 0 <= mid_local < n:
+                    mit = m5_fvg.get('mitigation', 'pristine')
+                    if mit == 'partial':
+                        face_col, edge_col = '#a8e6a1', '#7ed67e'
+                    else:
+                        face_col, edge_col = '#27ae60', '#2ecc71'
+                    fvg_x_start = mid_local - 0.6
+                    fvg_width = 1.8 + 1.2
+                    ax.add_patch(patches.Rectangle(
+                        (fvg_x_start, fb), fvg_width, ft - fb,
+                        facecolor=face_col, alpha=0.25, zorder=1
+                    ))
+                    ax.add_patch(patches.Rectangle(
+                        (fvg_x_start, fb), fvg_width, ft - fb,
+                        fill=False, edgecolor=edge_col, linestyle='--', linewidth=1.0, zorder=2
+                    ))
 
-        # M5 CHoCH level
+        # M5 CHoCH horizontal line
         if choch_level is not None and choch_level > 0:
             ax.axhline(y=choch_level, color='#ff9800', linestyle='--', linewidth=1.0, alpha=0.85, zorder=3)
-            ax.text(n + 1, choch_level, f" M5 CHoCH {choch_level:.{dp}f}",
-                    color='#ff9800', fontsize=8, va='center', fontweight='bold', zorder=5)
 
-        # NEW
-        # M5 sweep marker
+        # M5 sweep marker (X only, no text)
         if sweep_price is not None:
             ax.scatter([n - 2], [sweep_price], color='#ff5370', marker='x', s=120, linewidth=2, zorder=5)
-            ax.text(n - 2, sweep_price, ' sweep', color='#ff5370', fontsize=8, va='bottom', zorder=5)
 
-        # OB candle highlight on M5 chart
+        # OB candle outline (white)
         ob_ts_iso = ob.get('ob_timestamp')
         if ob_ts_iso:
             abs_idx, found = smc_detector.locate_ob_candle_idx(df_m5, ob_ts_iso)
-            if found:
-                tail_n = 80
-                full_n = len(df_m5)
-                window_start = max(0, full_n - tail_n)
-                if abs_idx >= window_start:
-                    local_idx = abs_idx - window_start
-                    if 0 <= local_idx < n:
-                        ob_c_h = float(df_plot['High'].iloc[local_idx])
-                        ob_c_l = float(df_plot['Low'].iloc[local_idx])
-                        ax.add_patch(patches.Rectangle(
-                            (local_idx - 0.5, ob_c_l), 1.0, ob_c_h - ob_c_l,
-                            fill=False, edgecolor='#ffffff', linewidth=1.5, zorder=5
-                        ))
-                else:
-                    ax.text(0.5, float(df_plot['High'].max()),
-                            '← OB off-chart',
-                            color='#ffffff', fontsize=8, ha='left', va='top', zorder=5)
+            if found and abs_idx >= window_start:
+                local_idx = abs_idx - window_start
+                if 0 <= local_idx < n:
+                    ob_c_h = float(df_plot['High'].iloc[local_idx])
+                    ob_c_l = float(df_plot['Low'].iloc[local_idx])
+                    ax.add_patch(patches.Rectangle(
+                        (local_idx - 0.5, ob_c_l), 1.0, ob_c_h - ob_c_l,
+                        fill=False, edgecolor='#ffffff', linewidth=1.5, zorder=5
+                    ))
 
-        # Execution levels — draw lines, collect labels for stacking
-        level_styles = {
-            'entry': ('#e67e22', 'ENTRY'),
-            'sl': ('#e74c3c', 'SL')
-        }
-        for key, (color, lbl) in level_styles.items():
-            price = float(levels.get(key, 0))
-            if price > 0:
-                ax.axhline(y=price, color=color, linestyle='-', linewidth=1.3, alpha=0.9, zorder=4)
-
-        # Collect all labels for stacking
-        raw_labels = []
-        for key, (color, lbl) in level_styles.items():
-            price = float(levels.get(key, 0))
-            if price > 0:
-                raw_labels.append((price, f" {lbl} {price:.{dp}f}", color))
-        if choch_level is not None and choch_level > 0:
-            raw_labels.append((choch_level, f" M5 CHoCH {choch_level:.{dp}f}", '#ff9800'))
-        for tp_key, tp_color, tp_lbl in [('tp1', '#27ae60', 'TP1'), ('tp2', '#1abc9c', 'TP2')]:
-            tp_p = float(levels.get(tp_key, 0))
-            if tp_p > 0:
-                raw_labels.append((tp_p, f" {tp_lbl} {tp_p:.{dp}f}", tp_color))
-
-        stacked = smc_detector.stack_labels(raw_labels, pair_conf)
-        for adj_price, text, color in stacked:
-            ax.text(n + 1, adj_price, text, color=color, fontsize=8,
-                    va='center', fontweight='bold', zorder=5)
-
-        y_min = float(df_plot['Low'].min())
-        y_max = float(df_plot['High'].max())
+        # Execution lines: ENTRY, SL
         sl_p = float(levels.get('sl', 0))
         entry_p = float(levels.get('entry', 0))
+        if entry_p > 0:
+            ax.axhline(y=entry_p, color='#e67e22', linestyle='-', linewidth=1.3, alpha=0.9, zorder=4)
+        if sl_p > 0:
+            ax.axhline(y=sl_p, color='#e74c3c', linestyle='-', linewidth=1.3, alpha=0.9, zorder=4)
+
+        # Current price line
+        current = float(df_plot['Close'].iloc[-1])
+        ax.axhline(y=current, color='#ffffff', linewidth=0.8, linestyle='-', alpha=0.5, zorder=2)
+
+        # --- Y-axis range ---
+        y_min = float(df_plot['Low'].min())
+        y_max = float(df_plot['High'].max())
         if sl_p > 0:
             y_min = min(y_min, sl_p)
         if entry_p > 0:
@@ -297,22 +280,50 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
         pad = (y_max - y_min) * 0.08
         ax.set_ylim(y_min - pad, y_max + pad)
 
-        for tp_key, tp_color, tp_lbl in [('tp1', '#27ae60', 'TP1'), ('tp2', '#1abc9c', 'TP2')]:
+        # --- Right-edge tags: ENTRY, SL, TP1, TP2 (numbers only, colour-matched) ---
+        right_labels = []
+        if entry_p > 0:
+            right_labels.append((entry_p, f" {entry_p:.{dp}f}", '#e67e22'))
+        if sl_p > 0:
+            right_labels.append((sl_p, f" {sl_p:.{dp}f}", '#e74c3c'))
+
+        for tp_key, tp_color in [('tp1', '#27ae60'), ('tp2', '#1abc9c')]:
             tp_p = float(levels.get(tp_key, 0))
             if tp_p > 0:
                 y_lo, y_hi = ax.get_ylim()
                 if y_lo <= tp_p <= y_hi:
                     ax.axhline(y=tp_p, color=tp_color, linestyle='-', linewidth=1.3, alpha=0.9, zorder=4)
+                    right_labels.append((tp_p, f" {tp_p:.{dp}f}", tp_color))
                 elif tp_p > y_hi:
-                    ax.text(n + 1, y_hi - pad * 0.3, f" \u2191 {tp_lbl} {tp_p:.{dp}f}",
-                            color=tp_color, fontsize=8, va='top', fontweight='bold', zorder=5)
+                    ax.text(n + 1, y_hi - pad * 0.3, f" \u2191 {tp_p:.{dp}f}",
+                            color=tp_color, fontsize=10, va='top', fontweight='bold', zorder=5)
                 elif tp_p < y_lo:
-                    ax.text(n + 1, y_lo + pad * 0.3, f" \u2193 {tp_lbl} {tp_p:.{dp}f}",
-                            color=tp_color, fontsize=8, va='bottom', fontweight='bold', zorder=5)
+                    ax.text(n + 1, y_lo + pad * 0.3, f" \u2193 {tp_p:.{dp}f}",
+                            color=tp_color, fontsize=10, va='bottom', fontweight='bold', zorder=5)
+
+        right_stacked = smc_detector.stack_labels(right_labels, pair_conf)
+        for adj_price, text, color in right_stacked:
+            ax.text(n + 1, adj_price, text, color=color, fontsize=10,
+                    va='center', fontweight='bold', zorder=5)
+
+        # --- Mid-chart tags: proximal, distal, CHoCH, current (numbers only, colour-matched) ---
+        mid_x = n / 2.0
+        mid_labels = []
+        if zone_hi > 0:
+            mid_labels.append((proximal, f"{proximal:.{dp}f}", '#bb8fce'))
+            mid_labels.append((distal, f"{distal:.{dp}f}", '#bb8fce'))
+        if choch_level is not None and choch_level > 0:
+            mid_labels.append((float(choch_level), f"{float(choch_level):.{dp}f}", '#ff9800'))
+        mid_labels.append((current, f"{current:.{dp}f}", '#ffffff'))
+        mid_stacked = smc_detector.stack_labels(mid_labels, pair_conf)
+        for adj_price, text, color in mid_stacked:
+            ax.text(mid_x, adj_price, text, color=color, fontsize=10, va='center',
+                    ha='center', fontweight='bold', zorder=5,
+                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
 
         ax.set_xlim(-1, n + 14)
         ax.set_title(title, color='#dddddd', fontsize=11, pad=8, loc='left')
-        ax.tick_params(colors='#888', labelsize=8)
+        ax.tick_params(colors='#888', labelsize=9)
         ax.yaxis.tick_right()
         ax.set_xticks([])
         plt.tight_layout(pad=0.5)
@@ -327,7 +338,6 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
         print(f"M5 chart error: {e}")
         plt.close('all')
         return None
-
 
 # ---------------------------------------------------------------------------
 # Email senders + builders
@@ -381,7 +391,30 @@ def build_invalidation_email(pair, bias, reason, reason_detail, ob, levels, aler
     </div></body></html>"""
 
 
-# NEW
+def _chart_legend_html():
+    """Colour-code legend rendered below M5 chart. Cosmetic only."""
+    items = [
+        ('#bb8fce', 'H1 zone band (proximal/distal)'),
+        ('#2ecc71', 'M5 FVG (displacement)'),
+        ('#ff9800', 'M5 CHoCH level'),
+        ('#ffffff', 'OB candle / current price'),
+        ('#e67e22', 'Entry'),
+        ('#e74c3c', 'Stop loss'),
+        ('#27ae60', 'TP1'),
+        ('#1abc9c', 'TP2'),
+        ('#ff5370', 'Sweep (X marker)'),
+    ]
+    rows = "".join(
+        f'<span style="display:inline-block;margin:2px 10px 2px 0;font-size:11px;color:#bbb;">'
+        f'<span style="display:inline-block;width:10px;height:10px;background:{c};'
+        f'border-radius:2px;vertical-align:middle;margin-right:5px;"></span>{txt}</span>'
+        for c, txt in items
+    )
+    return (
+        f'<div style="margin:4px 0 12px 0;padding:8px 10px;background:#0d0d1a;'
+        f'border-radius:4px;line-height:1.8;">{rows}</div>'
+    )
+    
 def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, ist_now,
                        dollar_risk_str, macro_summary, scan_start_ist, chart_ok=True):
     dp = pair_conf.get("decimal_places", 5)
@@ -426,6 +459,7 @@ def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, 
             </div>
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">M5 Execution Chart</div>
             {chart_block}
+            {_chart_legend_html()}
             <div style="padding:10px 12px;background:#0d0d1a;border-left:3px solid #888;border-radius:4px;font-size:12px;color:#bbb;line-height:1.5;">
                 <b style="color:#eee;">Macro Context:</b> {macro_summary or 'N/A'}
             </div>
