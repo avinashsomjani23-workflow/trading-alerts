@@ -408,21 +408,33 @@ def detect_smc_radar(df, lookback):
             leg_start_idx=ob_idx, leg_end_idx=i
         )
 
-        # Absolute timestamp of the OB candle — required by Phase 2/3 to locate
-        # the OB candle in their own dataframes (ob_idx is not portable across phases).
-        try:
-            if 'Datetime' in df.columns:
-                ob_ts_raw = df['Datetime'].iloc[ob_idx]
-            elif 'Date' in df.columns:
-                ob_ts_raw = df['Date'].iloc[ob_idx]
-            else:
-                ob_ts_raw = df.index[ob_idx]
-            if hasattr(ob_ts_raw, 'isoformat'):
-                ob_timestamp_str = ob_ts_raw.isoformat()
-            else:
-                ob_timestamp_str = str(ob_ts_raw)
-        except Exception:
-            ob_timestamp_str = None
+        # Absolute timestamp helpers — used by Phase 2/3 to locate candles in
+        # their own dataframes, since integer indices (ob_idx, bos_idx, c1_idx)
+        # are NOT portable across phases (rolling yfinance window shifts the
+        # df start point between scans).
+        def _ts_for_idx(idx_val):
+            if idx_val is None:
+                return None
+            try:
+                idx_val = int(idx_val)
+                if idx_val < 0 or idx_val >= len(df):
+                    return None
+                if 'Datetime' in df.columns:
+                    raw = df['Datetime'].iloc[idx_val]
+                elif 'Date' in df.columns:
+                    raw = df['Date'].iloc[idx_val]
+                else:
+                    raw = df.index[idx_val]
+                if hasattr(raw, 'isoformat'):
+                    return raw.isoformat()
+                return str(raw)
+            except Exception:
+                return None
+
+        ob_timestamp_str = _ts_for_idx(ob_idx)
+        bos_timestamp_str = _ts_for_idx(i)
+        fvg_c1_ts_str = _ts_for_idx(fvg_result.get('c1_idx'))
+        ghost_c1_ts_str = _ts_for_idx(fvg_result.get('ghost_c1_idx'))
 
         # Build fvg dict — pristine (dark green), partial (light green),
         # full (grey/ghost), or absent.
@@ -432,17 +444,20 @@ def detect_smc_radar(df, lookback):
             'fvg_bottom':   fvg_result.get('fvg_bottom'),
             'c1_idx':       fvg_result.get('c1_idx'),
             'c3_idx':       fvg_result.get('c3_idx'),
+            'c1_timestamp': fvg_c1_ts_str,
             'was_detected': fvg_result.get('was_detected', False),
             'mitigation':   fvg_result.get('mitigation', 'none'),
             'ghost_top':    fvg_result.get('ghost_top'),
             'ghost_bottom': fvg_result.get('ghost_bottom'),
             'ghost_c1_idx': fvg_result.get('ghost_c1_idx'),
             'ghost_c3_idx': fvg_result.get('ghost_c3_idx'),
+            'ghost_c1_timestamp': ghost_c1_ts_str,
             'mitigated_at_idx': fvg_result.get('mitigated_at_idx')
         }
 
         active_obs.append({
             'bos_idx':           i,
+            'bos_timestamp':     bos_timestamp_str,
             'bos_swing_price':   bos_swing_price,
             'impulse_start_idx': impulse_start_idx,
             'impulse_start_price': float(L[impulse_start_idx]) if bos_type == 'bullish' else float(H[impulse_start_idx]),
