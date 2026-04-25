@@ -589,6 +589,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
         zone_lo  = min(proximal, distal)
         zone_hi  = max(proximal, distal)
 
+        # --- Zone band ---
         zone_x_start = max(0, ob_plot_idx - 0.5)
         zone_width   = (n_plot + 2) - zone_x_start
         ax.add_patch(patches.Rectangle(
@@ -600,6 +601,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
             fill=False, edgecolor='#bb8fce', linestyle=':', linewidth=1.5, zorder=2
         ))
 
+        # --- OB candle outline (light purple, no text label) ---
         if 0 <= ob_plot_idx < n_plot:
             ob_h = float(H[ob_plot_idx])
             ob_l = float(L[ob_plot_idx])
@@ -608,29 +610,24 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
                 fill=False, edgecolor='#d7bde2', linewidth=2.0, zorder=4,
                 linestyle='-'
             ))
-            ax.text(
-                ob_plot_idx, ob_h, 'OB',
-                color='#d7bde2', fontsize=7, ha='center', va='bottom',
-                fontweight='bold', zorder=5
-            )
 
-        fvg_active    = ob['fvg']['exists'] and ob['fvg']['c1_idx'] is not None
-        fvg_ghost     = (not ob['fvg']['exists']) and ob['fvg'].get('was_detected') and ob['fvg'].get('ghost_c1_idx') is not None
-        fvg_partial   = fvg_active and ob['fvg'].get('mitigation') == 'partial'
+        # --- FVG: outline middle (displacement) candle only, slightly wider for mitigation visibility ---
+        fvg_active = ob['fvg']['exists'] and ob['fvg']['c1_idx'] is not None
+        fvg_ghost  = (not ob['fvg']['exists']) and ob['fvg'].get('was_detected') and ob['fvg'].get('ghost_c1_idx') is not None
+        fvg_partial = fvg_active and ob['fvg'].get('mitigation') == 'partial'
 
         if fvg_active:
             ft = float(ob['fvg']['fvg_top'])
             fb = float(ob['fvg']['fvg_bottom'])
-            fvg_c1_plot = ob['fvg']['c1_idx'] - window_start
-            fvg_c3_plot = ob['fvg']['c3_idx'] - window_start
-            if 0 <= fvg_c1_plot < n_plot:
-                fvg_x_start = fvg_c1_plot - 0.4
-                fvg_width   = (fvg_c3_plot + 0.4) - fvg_x_start
-                # Partial -> light green. Pristine -> dark green.
+            mid_abs = ob['fvg']['c1_idx'] + 1
+            mid_local = mid_abs - window_start
+            if 0 <= mid_local < n_plot:
                 if fvg_partial:
-                    face_col, edge_col, label = '#a8e6a1', '#7ed67e', 'FVG ◐'
+                    face_col, edge_col = '#a8e6a1', '#7ed67e'
                 else:
-                    face_col, edge_col, label = '#27ae60', '#2ecc71', 'FVG'
+                    face_col, edge_col = '#27ae60', '#2ecc71'
+                fvg_x_start = mid_local - 0.6
+                fvg_width   = 1.8 + 1.2
                 ax.add_patch(patches.Rectangle(
                     (fvg_x_start, fb), fvg_width, ft - fb,
                     facecolor=face_col, alpha=0.25, zorder=1
@@ -640,18 +637,14 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
                     fill=False, edgecolor=edge_col, linewidth=1.0,
                     linestyle='--', zorder=2
                 ))
-                ax.text(
-                    fvg_c1_plot, ft, label,
-                    color=edge_col, fontsize=7, ha='left', va='bottom', zorder=5
-                )
         elif fvg_ghost:
             ft = float(ob['fvg']['ghost_top'])
             fb = float(ob['fvg']['ghost_bottom'])
-            fvg_c1_plot = ob['fvg']['ghost_c1_idx'] - window_start
-            fvg_c3_plot = ob['fvg']['ghost_c3_idx'] - window_start
-            if 0 <= fvg_c1_plot < n_plot:
-                fvg_x_start = fvg_c1_plot - 0.4
-                fvg_width   = (fvg_c3_plot + 0.4) - fvg_x_start
+            mid_abs = ob['fvg']['ghost_c1_idx'] + 1
+            mid_local = mid_abs - window_start
+            if 0 <= mid_local < n_plot:
+                fvg_x_start = mid_local - 0.6
+                fvg_width   = 1.8 + 1.2
                 ax.add_patch(patches.Rectangle(
                     (fvg_x_start, fb), fvg_width, ft - fb,
                     facecolor='#888888', alpha=0.10, zorder=1
@@ -661,42 +654,60 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
                     fill=False, edgecolor='#888888', linewidth=1.0,
                     linestyle=':', zorder=2
                 ))
-                ax.text(
-                    fvg_c1_plot, ft, 'FVG ✗',
-                    color='#888888', fontsize=7, ha='left', va='bottom', zorder=5
-                )
+
+        # --- BOS/CHoCH horizontal line ---
         bos_price = float(ob['bos_swing_price'])
         bos_color = '#00bcd4' if ob['bos_tag'] == 'BOS' else '#ff9800'
         ax.axhline(
             y=bos_price, color=bos_color, linewidth=0.8,
             linestyle='--', alpha=0.7, zorder=2
         )
-        ax.text(
-            n_plot + 1.5, bos_price, ob['bos_tag'],
-            color=bos_color, fontsize=7, va='center', fontweight='bold', zorder=5
-        )
 
+        # --- BOS/CHoCH break candle outline ---
+        br_start, br_end = smc_detector.compute_h1_break_candle_span(full_df, ob, None)
+        if br_start is not None and br_end is not None:
+            for abs_i in range(br_start, br_end + 1):
+                if abs_i < window_start:
+                    continue
+                local_i = abs_i - window_start
+                if 0 <= local_i < n_plot:
+                    c_h = float(H[local_i])
+                    c_l = float(L[local_i])
+                    ax.add_patch(patches.Rectangle(
+                        (local_i - 0.5, c_l), 1.0, c_h - c_l,
+                        fill=False, edgecolor=bos_color, linewidth=1.5, zorder=5
+                    ))
+
+        # --- Current price line ---
         current_price = float(C[-1])
         ax.axhline(
             y=current_price, color='#ffffff', linewidth=0.8,
             linestyle='-', alpha=0.5, zorder=2
         )
-        ax.text(
-            n_plot + 1.5, current_price,
-            f"{current_price:.{dp}f}",
-            color='#ffffff', fontsize=7, va='center', zorder=5
-        )
 
-        ax.text(
-            n_plot + 1.5, proximal,
-            f"P {proximal:.{dp}f}",
-            color='#bb8fce', fontsize=7, va='center', zorder=5
-        )
-        ax.text(
-            n_plot + 1.5, distal,
-            f"D {distal:.{dp}f}",
-            color='#bb8fce', fontsize=7, va='center', zorder=5
-        )
+        # --- Mid-chart tags: proximal, distal, BOS/CHoCH, current (numbers only, colour-matched) ---
+        # Build pair_conf shim for stack_labels (it needs decimal_places + pair_type).
+        pair_type_guess = "forex"
+        if dp == 3:
+            pair_type_guess = "forex"  # JPY-style
+        elif dp == 0 or dp == 1:
+            pair_type_guess = "index"
+        elif dp == 2:
+            pair_type_guess = "commodity"
+        pair_conf_shim = {"decimal_places": dp, "pair_type": pair_type_guess}
+
+        mid_x = n_plot / 2.0
+        mid_labels = [
+            (proximal, f"{proximal:.{dp}f}", '#bb8fce'),
+            (distal, f"{distal:.{dp}f}", '#bb8fce'),
+            (bos_price, f"{bos_price:.{dp}f}", bos_color),
+            (current_price, f"{current_price:.{dp}f}", '#ffffff'),
+        ]
+        mid_stacked = smc_detector.stack_labels(mid_labels, pair_conf_shim)
+        for adj_price, text, color in mid_stacked:
+            ax.text(mid_x, adj_price, text, color=color, fontsize=10, va='center',
+                    ha='center', fontweight='bold', zorder=5,
+                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
 
         y_min = float(np.min(L))
         y_max = float(np.max(H))
@@ -710,7 +721,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
             f"{ob['status']}   —   {ist_timestamp} IST"
         )
         ax.set_title(title, color='#dddddd', fontsize=10, pad=8, loc='left')
-        ax.tick_params(colors='#888', labelsize=8)
+        ax.tick_params(colors='#888', labelsize=9)
         ax.yaxis.tick_right()
         ax.set_xticks([])
 
@@ -909,7 +920,27 @@ def build_summary_table_html(all_zones_for_table, dp_map):
       </table>
     </div>"""
 
-
+def _phase1_chart_legend_html(bos_tag="BOS"):
+    """Colour-code legend rendered below H1 zone chart in Phase 1 digest. Cosmetic only."""
+    bos_color = '#00bcd4' if bos_tag == 'BOS' else '#ff9800'
+    items = [
+        ('#bb8fce', 'Zone band (proximal/distal)'),
+        ('#d7bde2', 'OB candle outline'),
+        ('#2ecc71', 'FVG (displacement)'),
+        ('#888888', 'FVG mitigated (ghost)'),
+        (bos_color, f'{bos_tag} break candle / level'),
+        ('#ffffff', 'Current price'),
+    ]
+    rows = "".join(
+        f'<span style="display:inline-block;margin:2px 10px 2px 0;font-size:11px;color:#bbb;">'
+        f'<span style="display:inline-block;width:10px;height:10px;background:{c};'
+        f'border-radius:2px;vertical-align:middle;margin-right:5px;"></span>{txt}</span>'
+        for c, txt in items
+    )
+    return (
+        f'<div style="margin:8px 0 0 0;padding:8px 10px;background:#0d0d1a;'
+        f'border-radius:4px;line-height:1.8;">{rows}</div>'
+    )
 def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_id="—"):
     direction  = "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)"
     dir_color  = '#27ae60' if ob['direction'] == 'bullish' else '#e74c3c'
@@ -945,6 +976,7 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
         if cid else
         '<div style="padding:8px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:11px;">&#9888; Chart failed to render.</div>'
     )
+    legend_html = _phase1_chart_legend_html(ob.get('bos_tag', 'BOS'))
 
     return f"""
     <div style="margin-bottom:28px;padding:16px;background:#1a1a2e;border-radius:8px;
@@ -980,6 +1012,7 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
         {narrative}
       </p>
       {chart_html}
+      {legend_html}
     </div>"""
 
 
