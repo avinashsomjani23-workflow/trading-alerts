@@ -310,6 +310,10 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         fig, ax = _base_canvas()
         _draw_candles(ax, df_plot)
 
+        tail_n = 80
+        full_n = len(df_h1)
+        window_start = max(0, full_n - tail_n)
+
         proximal = float(ob.get('proximal_line', 0))
         distal = float(ob.get('distal_line', 0))
         zone_hi, zone_lo = max(proximal, distal), min(proximal, distal)
@@ -325,32 +329,37 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                 fill=False, edgecolor='#bb8fce', linestyle=':', linewidth=1.5, zorder=2
             ))
 
-        # --- BOS/CHoCH line ---
+        # --- BOS/CHoCH horizontal line ---
         bos_price = float(ob.get('bos_swing_price', 0))
         bos_tag = ob.get('bos_tag', 'BOS')
         bos_color = '#00bcd4' if bos_tag == 'BOS' else '#ff9800'
         if bos_price > 0:
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
 
-        # --- FVG with border and label ---
+        # --- FVG: outline middle (displacement) candle only, slightly wider for mitigation visibility ---
         fvg = ob.get('fvg', {}) or {}
         if fvg.get('exists'):
             ft, fb = float(fvg.get('fvg_top', 0)), float(fvg.get('fvg_bottom', 0))
-            if ft > 0 and fb > 0:
-                mit = fvg.get('mitigation', 'pristine')
-                if mit == 'partial':
-                    face_col, edge_col, label = '#a8e6a1', '#7ed67e', ' H1 FVG ◐'
-                else:
-                    face_col, edge_col, label = '#27ae60', '#2ecc71', ' H1 FVG'
-                ax.add_patch(patches.Rectangle(
-                    (0, fb), n + 5, ft - fb,
-                    facecolor=face_col, alpha=0.15, zorder=1
-                ))
-                ax.add_patch(patches.Rectangle(
-                    (0, fb), n + 5, ft - fb,
-                    fill=False, edgecolor=edge_col, linestyle='--', linewidth=1.0, zorder=2
-                ))
-                ax.text(0.5, ft, label, color=edge_col, fontsize=8, va='bottom', zorder=5)
+            c1_idx = fvg.get('c1_idx')
+            if ft > 0 and fb > 0 and c1_idx is not None:
+                mid_abs = int(c1_idx) + 1  # displacement candle (middle of c1-c2-c3)
+                mid_local = mid_abs - window_start
+                if 0 <= mid_local < n:
+                    mit = fvg.get('mitigation', 'pristine')
+                    if mit == 'partial':
+                        face_col, edge_col = '#a8e6a1', '#7ed67e'
+                    else:
+                        face_col, edge_col = '#27ae60', '#2ecc71'
+                    fvg_x_start = mid_local - 0.6
+                    fvg_width = 1.8 + 1.2  # 1.8 candle widths + extra right-side mitigation visibility
+                    ax.add_patch(patches.Rectangle(
+                        (fvg_x_start, fb), fvg_width, ft - fb,
+                        facecolor=face_col, alpha=0.15, zorder=1
+                    ))
+                    ax.add_patch(patches.Rectangle(
+                        (fvg_x_start, fb), fvg_width, ft - fb,
+                        fill=False, edgecolor=edge_col, linestyle='--', linewidth=1.0, zorder=2
+                    ))
 
         # --- Dealing range band + equilibrium ---
         dr_eq = None
@@ -361,7 +370,6 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             y_min_candle = float(df_plot['Low'].min())
             y_max_candle = float(df_plot['High'].max())
             candle_range = y_max_candle - y_min_candle
-            # Only draw full band if it doesn't dwarf the candle range (< 3x)
             if candle_range > 0 and (dr_hi - dr_lo) < candle_range * 3:
                 ax.add_patch(patches.Rectangle(
                     (0, dr_lo), n + 5, dr_hi - dr_lo,
@@ -371,10 +379,9 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                     (0, dr_lo), n + 5, dr_hi - dr_lo,
                     fill=False, edgecolor='#5dade2', linestyle='-.', linewidth=0.8, zorder=1
                 ))
-            # EQ line always drawn
             ax.axhline(y=dr_eq, color='#5dade2', linewidth=0.9, linestyle='-.', alpha=0.6, zorder=2)
 
-        # --- Entry / SL lines (Phase 2 only, when levels provided) ---
+        # --- Entry / SL horizontal lines ---
         entry_p = 0
         sl_p = 0
         tp1_p = 0
@@ -387,58 +394,68 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             if sl_p > 0:
                 ax.axhline(y=sl_p, color='#e74c3c', linewidth=1.0, linestyle='--', alpha=0.8, zorder=3)
 
-       # NEW
         # --- Current price line ---
         current = float(df_plot['Close'].iloc[-1])
         ax.axhline(y=current, color='#ffffff', linewidth=0.8, linestyle='-', alpha=0.5, zorder=2)
 
-        # --- OB candle highlight (white outline rectangle) ---
+        # --- OB candle outline (white) ---
         ob_ts_iso = ob.get('ob_timestamp')
         if ob_ts_iso:
-            # Locate OB candle in the full (un-tailed) H1 df first
             abs_idx, found = smc_detector.locate_ob_candle_idx(df_h1, ob_ts_iso)
-            if found:
-                # Tail window used above is df_h1.tail(80); figure out local idx
-                tail_n = 80
-                full_n = len(df_h1)
-                window_start = max(0, full_n - tail_n)
-                if abs_idx >= window_start:
-                    local_idx = abs_idx - window_start
-                    if 0 <= local_idx < n:
-                        ob_c_h = float(df_plot['High'].iloc[local_idx])
-                        ob_c_l = float(df_plot['Low'].iloc[local_idx])
-                        ax.add_patch(patches.Rectangle(
-                            (local_idx - 0.5, ob_c_l), 1.0, ob_c_h - ob_c_l,
-                            fill=False, edgecolor='#ffffff', linewidth=1.5, zorder=5
-                        ))
-                else:
-                    # OB off the visible window — indicator at left edge
-                    ax.text(0.5, float(df_plot['High'].max()),
-                            '← OB off-chart',
-                            color='#ffffff', fontsize=8, ha='left', va='top', zorder=5)
+            if found and abs_idx >= window_start:
+                local_idx = abs_idx - window_start
+                if 0 <= local_idx < n:
+                    ob_c_h = float(df_plot['High'].iloc[local_idx])
+                    ob_c_l = float(df_plot['Low'].iloc[local_idx])
+                    ax.add_patch(patches.Rectangle(
+                        (local_idx - 0.5, ob_c_l), 1.0, ob_c_h - ob_c_l,
+                        fill=False, edgecolor='#ffffff', linewidth=1.5, zorder=5
+                    ))
 
-        # --- Labels with stacking ---
-        raw_labels = []
-        if zone_hi > 0:
-            raw_labels.append((proximal, f" P {proximal:.{dp}f}", '#bb8fce'))
-            raw_labels.append((distal, f" D {distal:.{dp}f}", '#bb8fce'))
-        if bos_price > 0:
-            raw_labels.append((bos_price, f" {bos_tag} {bos_price:.{dp}f}", bos_color))
-        raw_labels.append((current, f" {current:.{dp}f}", '#ffffff'))
-        if dr_eq is not None:
-            raw_labels.append((dr_eq, f" EQ {dr_eq:.{dp}f}", '#5dade2'))
+        # --- BOS/CHoCH break candle outline (cyan or orange) ---
+        br_start, br_end = smc_detector.compute_h1_break_candle_span(df_h1, ob, None)
+        if br_start is not None and br_end is not None:
+            for abs_i in range(br_start, br_end + 1):
+                if abs_i < window_start:
+                    continue
+                local_i = abs_i - window_start
+                if 0 <= local_i < n:
+                    c_h = float(df_plot['High'].iloc[local_i])
+                    c_l = float(df_plot['Low'].iloc[local_i])
+                    ax.add_patch(patches.Rectangle(
+                        (local_i - 0.5, c_l), 1.0, c_h - c_l,
+                        fill=False, edgecolor=bos_color, linewidth=1.5, zorder=5
+                    ))
+
+        # --- Right-edge tags: ENTRY, SL, TP1 only (numbers only, colour-matched) ---
+        right_labels = []
         if entry_p > 0:
-            raw_labels.append((entry_p, f" ENTRY {entry_p:.{dp}f}", '#e67e22'))
+            right_labels.append((entry_p, f" {entry_p:.{dp}f}", '#e67e22'))
         if sl_p > 0:
-            raw_labels.append((sl_p, f" SL {sl_p:.{dp}f}", '#e74c3c'))
+            right_labels.append((sl_p, f" {sl_p:.{dp}f}", '#e74c3c'))
         if tp1_p > 0:
-            raw_labels.append((tp1_p, f" TP1 {tp1_p:.{dp}f}", '#27ae60'))
+            right_labels.append((tp1_p, f" {tp1_p:.{dp}f}", '#27ae60'))
+        right_stacked = smc_detector.stack_labels(right_labels, pair_conf)
+        for adj_price, text, color in right_stacked:
+            ax.text(n + 1, adj_price, text, color=color, fontsize=10, va='center',
+                    fontweight='bold', zorder=5)
 
-        stacked = smc_detector.stack_labels(raw_labels, pair_conf)
-        for adj_price, text, color in stacked:
-            weight = 'bold' if any(k in text for k in ['ENTRY', 'SL', 'TP1', 'BOS', 'CHoCH']) else 'normal'
-            ax.text(n + 1, adj_price, text, color=color, fontsize=8, va='center',
-                    fontweight=weight, zorder=5)
+        # --- Mid-chart tags: proximal, distal, BOS/CHoCH, current, EQ (numbers only, colour-matched) ---
+        mid_x = n / 2.0
+        mid_labels = []
+        if zone_hi > 0:
+            mid_labels.append((proximal, f"{proximal:.{dp}f}", '#bb8fce'))
+            mid_labels.append((distal, f"{distal:.{dp}f}", '#bb8fce'))
+        if bos_price > 0:
+            mid_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_color))
+        mid_labels.append((current, f"{current:.{dp}f}", '#ffffff'))
+        if dr_eq is not None:
+            mid_labels.append((dr_eq, f"{dr_eq:.{dp}f}", '#5dade2'))
+        mid_stacked = smc_detector.stack_labels(mid_labels, pair_conf)
+        for adj_price, text, color in mid_stacked:
+            ax.text(mid_x, adj_price, text, color=color, fontsize=10, va='center',
+                    ha='center', fontweight='bold', zorder=5,
+                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
 
         # --- Y-axis range ---
         y_min, y_max = float(df_plot['Low'].min()), float(df_plot['High'].max())
@@ -454,7 +471,7 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         ax.set_ylim(y_min - pad, y_max + pad)
         ax.set_xlim(-1, n + 14)
         ax.set_title(title, color='#dddddd', fontsize=11, pad=8, loc='left')
-        ax.tick_params(colors='#888', labelsize=8)
+        ax.tick_params(colors='#888', labelsize=9)
         ax.yaxis.tick_right()
         ax.set_xticks([])
         plt.tight_layout(pad=0.5)
@@ -463,8 +480,7 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         print(f"H1 chart error: {e}")
         plt.close('all')
         return None
-
-
+        
 def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_price,
                        dealing_range=None):
     try:
@@ -476,6 +492,10 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
 
         fig, ax = _base_canvas()
         _draw_candles(ax, df_plot)
+
+        tail_n = 60
+        full_n = len(df_m15)
+        window_start = max(0, full_n - tail_n)
 
         proximal = float(ob.get('proximal_line', 0))
         distal = float(ob.get('distal_line', 0))
@@ -493,37 +513,42 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
             ))
 
         # --- Dealing range EQ line only ---
+        dr_eq = None
         if dealing_range and dealing_range.get('valid'):
             dr_eq = float(dealing_range['equilibrium'])
             ax.axhline(y=dr_eq, color='#5dade2', linewidth=0.9, linestyle='-.', alpha=0.6, zorder=2)
 
-        # --- FVG with border and corrected label ---
+        # --- FVG: outline middle (displacement) candle only, slightly wider for mitigation visibility ---
         if fvg_data and fvg_data.get('exists'):
             ft, fb = float(fvg_data.get('fvg_top', 0)), float(fvg_data.get('fvg_bottom', 0))
-            if ft > 0 and fb > 0:
-                ax.add_patch(patches.Rectangle(
-                    (0, fb), n + 5, ft - fb,
-                    facecolor='#27ae60', alpha=0.10, zorder=1
-                ))
-                ax.add_patch(patches.Rectangle(
-                    (0, fb), n + 5, ft - fb,
-                    fill=False, edgecolor='#2ecc71', linestyle='--', linewidth=1.0, zorder=2
-                ))
-                ax.text(0.5, ft, ' M15 FVG', color='#2ecc71', fontsize=8, va='bottom', zorder=5)
+            c1_idx = fvg_data.get('c1_idx')
+            if ft > 0 and fb > 0 and c1_idx is not None:
+                mid_abs = int(c1_idx) + 1
+                mid_local = mid_abs - window_start
+                if 0 <= mid_local < n:
+                    fvg_x_start = mid_local - 0.6
+                    fvg_width = 1.8 + 1.2
+                    ax.add_patch(patches.Rectangle(
+                        (fvg_x_start, fb), fvg_width, ft - fb,
+                        facecolor='#27ae60', alpha=0.10, zorder=1
+                    ))
+                    ax.add_patch(patches.Rectangle(
+                        (fvg_x_start, fb), fvg_width, ft - fb,
+                        fill=False, edgecolor='#2ecc71', linestyle='--', linewidth=1.0, zorder=2
+                    ))
 
-        # --- Sweep marker ---
+        # --- Sweep marker (X only, no text) ---
         if sweep_price is not None:
             ax.scatter([n - 2], [sweep_price], color='#ff5370', marker='x', s=120, linewidth=2, zorder=5)
-            ax.text(n - 2, sweep_price, ' sweep', color='#ff5370', fontsize=8, va='bottom', zorder=5)
 
-        # --- BOS/CHoCH line ---
+        # --- BOS/CHoCH horizontal line ---
         bos_price = float(ob.get('bos_swing_price', 0))
         bos_tag = ob.get('bos_tag', 'BOS')
         bos_color = '#00bcd4' if bos_tag == 'BOS' else '#ff9800'
         if bos_price > 0:
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
 
-        # --- Entry / SL lines ---
+        # --- Entry / SL horizontal lines ---
         entry_p = float(levels.get('entry', 0))
         sl_p = float(levels.get('sl', 0))
         if entry_p > 0:
@@ -531,53 +556,33 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
         if sl_p > 0:
             ax.axhline(y=sl_p, color='#e74c3c', linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
 
-        # NEW
         # --- Current price line ---
         current = float(df_plot['Close'].iloc[-1])
         ax.axhline(y=current, color='#ffffff', linewidth=0.8, linestyle='-', alpha=0.5, zorder=2)
 
-        # --- OB candle highlight on M15 chart ---
+        # --- OB candle outline (white) ---
         ob_ts_iso = ob.get('ob_timestamp')
         if ob_ts_iso:
             abs_idx, found = smc_detector.locate_ob_candle_idx(df_m15, ob_ts_iso)
-            if found:
-                tail_n = 60
-                full_n = len(df_m15)
-                window_start = max(0, full_n - tail_n)
-                if abs_idx >= window_start:
-                    local_idx = abs_idx - window_start
-                    if 0 <= local_idx < n:
-                        ob_c_h = float(df_plot['High'].iloc[local_idx])
-                        ob_c_l = float(df_plot['Low'].iloc[local_idx])
-                        ax.add_patch(patches.Rectangle(
-                            (local_idx - 0.5, ob_c_l), 1.0, ob_c_h - ob_c_l,
-                            fill=False, edgecolor='#ffffff', linewidth=1.5, zorder=5
-                        ))
-                else:
-                    ax.text(0.5, float(df_plot['High'].max()),
-                            '← OB off-chart',
-                            color='#ffffff', fontsize=8, ha='left', va='top', zorder=5)
+            if found and abs_idx >= window_start:
+                local_idx = abs_idx - window_start
+                if 0 <= local_idx < n:
+                    ob_c_h = float(df_plot['High'].iloc[local_idx])
+                    ob_c_l = float(df_plot['Low'].iloc[local_idx])
+                    ax.add_patch(patches.Rectangle(
+                        (local_idx - 0.5, ob_c_l), 1.0, ob_c_h - ob_c_l,
+                        fill=False, edgecolor='#ffffff', linewidth=1.5, zorder=5
+                    ))
 
-        # --- Labels with stacking ---
-        raw_labels = []
-        raw_labels.append((current, f" {current:.{dp}f}", '#ffffff'))
-        if bos_price > 0:
-            raw_labels.append((bos_price, f" {bos_tag} {bos_price:.{dp}f}", bos_color))
+        # --- Right-edge tags: ENTRY, SL, TP1 only (numbers only, colour-matched) ---
+        tp1_p = float(levels.get('tp1', 0))
+        right_labels = []
         if entry_p > 0:
-            raw_labels.append((entry_p, f" ENTRY {entry_p:.{dp}f}", '#e67e22'))
+            right_labels.append((entry_p, f" {entry_p:.{dp}f}", '#e67e22'))
         if sl_p > 0:
-            raw_labels.append((sl_p, f" SL {sl_p:.{dp}f}", '#e74c3c'))
-        if dealing_range and dealing_range.get('valid'):
-            dr_eq = float(dealing_range['equilibrium'])
-            raw_labels.append((dr_eq, f" EQ {dr_eq:.{dp}f}", '#5dade2'))
+            right_labels.append((sl_p, f" {sl_p:.{dp}f}", '#e74c3c'))
 
-        stacked = smc_detector.stack_labels(raw_labels, pair_conf)
-        for adj_price, text, color in stacked:
-            weight = 'bold' if any(k in text for k in ['ENTRY', 'SL', 'BOS', 'CHoCH', 'EQ']) else 'normal'
-            ax.text(n + 1, adj_price, text, color=color, fontsize=8, va='center',
-                    fontweight=weight, zorder=5)
-
-        # --- Y-axis: candle range + SL + entry + zone. TP1 as edge arrow only ---
+        # --- Y-axis: candle range + SL + entry + zone. ---
         y_min, y_max = float(df_plot['Low'].min()), float(df_plot['High'].max())
         if sl_p > 0:
             y_min = min(y_min, sl_p)
@@ -589,24 +594,44 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
         pad = (y_max - y_min) * 0.08
         ax.set_ylim(y_min - pad, y_max + pad)
 
-        # TP1 as edge arrow if outside visible range
-        tp1_p = float(levels.get('tp1', 0))
+        # TP1: line if visible, arrow if outside
         if tp1_p > 0:
             y_lo, y_hi = ax.get_ylim()
             if tp1_p > y_hi:
-                ax.text(n + 1, y_hi - pad * 0.3, f" \u2191 TP1 {tp1_p:.{dp}f}",
-                        color='#27ae60', fontsize=8, va='top', fontweight='bold', zorder=5)
+                ax.text(n + 1, y_hi - pad * 0.3, f" \u2191 {tp1_p:.{dp}f}",
+                        color='#27ae60', fontsize=10, va='top', fontweight='bold', zorder=5)
             elif tp1_p < y_lo:
-                ax.text(n + 1, y_lo + pad * 0.3, f" \u2193 TP1 {tp1_p:.{dp}f}",
-                        color='#27ae60', fontsize=8, va='bottom', fontweight='bold', zorder=5)
+                ax.text(n + 1, y_lo + pad * 0.3, f" \u2193 {tp1_p:.{dp}f}",
+                        color='#27ae60', fontsize=10, va='bottom', fontweight='bold', zorder=5)
             else:
                 ax.axhline(y=tp1_p, color='#27ae60', linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
-                ax.text(n + 1, tp1_p, f" TP1 {tp1_p:.{dp}f}",
-                        color='#27ae60', fontsize=8, va='center', fontweight='bold', zorder=5)
+                right_labels.append((tp1_p, f" {tp1_p:.{dp}f}", '#27ae60'))
+
+        right_stacked = smc_detector.stack_labels(right_labels, pair_conf)
+        for adj_price, text, color in right_stacked:
+            ax.text(n + 1, adj_price, text, color=color, fontsize=10, va='center',
+                    fontweight='bold', zorder=5)
+
+        # --- Mid-chart tags: proximal, distal, BOS/CHoCH, current, EQ ---
+        mid_x = n / 2.0
+        mid_labels = []
+        if zone_hi > 0:
+            mid_labels.append((proximal, f"{proximal:.{dp}f}", '#bb8fce'))
+            mid_labels.append((distal, f"{distal:.{dp}f}", '#bb8fce'))
+        if bos_price > 0:
+            mid_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_color))
+        mid_labels.append((current, f"{current:.{dp}f}", '#ffffff'))
+        if dr_eq is not None:
+            mid_labels.append((dr_eq, f"{dr_eq:.{dp}f}", '#5dade2'))
+        mid_stacked = smc_detector.stack_labels(mid_labels, pair_conf)
+        for adj_price, text, color in mid_stacked:
+            ax.text(mid_x, adj_price, text, color=color, fontsize=10, va='center',
+                    ha='center', fontweight='bold', zorder=5,
+                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
 
         ax.set_xlim(-1, n + 14)
         ax.set_title(title, color='#dddddd', fontsize=11, pad=8, loc='left')
-        ax.tick_params(colors='#888', labelsize=8)
+        ax.tick_params(colors='#888', labelsize=9)
         ax.yaxis.tick_right()
         ax.set_xticks([])
         plt.tight_layout(pad=0.5)
@@ -645,7 +670,31 @@ def build_scorecard_html(rows, total):
     </div>"""
 
 
-# NEW
+def _chart_legend_html(bos_tag="BOS"):
+    """Colour-code legend rendered below each chart. Cosmetic only."""
+    bos_color = '#00bcd4' if bos_tag == 'BOS' else '#ff9800'
+    bos_label = bos_tag
+    items = [
+        ('#bb8fce', 'Zone band (proximal/distal)'),
+        ('#2ecc71', 'FVG (displacement)'),
+        (bos_color, f'{bos_label} break candle / level'),
+        ('#ffffff', 'OB candle / current price'),
+        ('#e67e22', 'Entry'),
+        ('#e74c3c', 'Stop loss'),
+        ('#27ae60', 'TP1'),
+        ('#5dade2', 'Equilibrium (50% of range)'),
+        ('#ff5370', 'Sweep (X marker)'),
+    ]
+    rows = "".join(
+        f'<span style="display:inline-block;margin:2px 10px 2px 0;font-size:11px;color:#bbb;">'
+        f'<span style="display:inline-block;width:10px;height:10px;background:{c};'
+        f'border-radius:2px;vertical-align:middle;margin-right:5px;"></span>{txt}</span>'
+        for c, txt in items
+    )
+    return (
+        f'<div style="margin:4px 0 12px 0;padding:8px 10px;background:#0d0d1a;'
+        f'border-radius:4px;line-height:1.8;">{rows}</div>'
+    )
 def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_score,
                       atr_label, distance_str, dollar_risk_str, scan_start_ist,
                       h1_chart_ok=True, m15_chart_ok=True):
@@ -728,8 +777,10 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             {scorecard_html}
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">H1 Context</div>
             {h1_chart_block}
+            {_chart_legend_html(bos_tag)}
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">M15 Approach</div>
             {m15_chart_block}
+            {_chart_legend_html(bos_tag)}
             <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #888;border-radius:4px;font-size:12px;color:#bbb;line-height:1.5;">
                 <b style="color:#eee;">Macro Context:</b> {data.get('macro_summary', 'N/A')}
             </div>
