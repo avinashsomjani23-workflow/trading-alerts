@@ -215,5 +215,19 @@
     "interval": "1h",
     "reason": "stale data (age 17.52h, limit 2.0h)",
     "age_hours": 17.52
+  },
+  {
+    "ts": "2026-04-25T19:02:44.228349",
+    "symbol": "NQ=F",
+    "interval": "5m",
+    "reason": "stale data (age 16.63h, limit 0.3h)",
+    "age_hours": 16.63
+  },
+  {
+    "ts": "2026-04-25T19:02:47.572880",
+    "symbol": "GC=F",
+    "interval": "5m",
+    "reason": "stale data (age 16.63h, limit 0.3h)",
+    "age_hours": 16.63
   }
 ]
