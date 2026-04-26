@@ -281,7 +281,7 @@ def is_valid_ob_candle(open_p, close_p, high_p, low_p):
     return body > (rng * 0.15)
 
 # NEW
-def detect_smc_radar(df, lookback):
+def detect_smc_radar(df, lookback, pair_type="forex"):
     """
     A4 applied: OB walk-back includes the swing candle itself (impulse_start_idx).
     Verification: range(5-1, 0-1, -1) = range(4, -1, -1) = [4, 3, 2, 1, 0]. Includes 0.
@@ -436,7 +436,7 @@ def detect_smc_radar(df, lookback):
         fvg_c1_ts_str = _ts_for_idx(fvg_result.get('c1_idx'))
         ghost_c1_ts_str = _ts_for_idx(fvg_result.get('ghost_c1_idx'))
 
-        # Build fvg dict — pristine (dark green), partial (light green),
+       # Build fvg dict — pristine (dark green), partial (light green),
         # full (grey/ghost), or absent.
         fvg_dict = {
             'exists':       fvg_result.get('exists', False),
@@ -444,20 +444,34 @@ def detect_smc_radar(df, lookback):
             'fvg_bottom':   fvg_result.get('fvg_bottom'),
             'c1_idx':       fvg_result.get('c1_idx'),
             'c3_idx':       fvg_result.get('c3_idx'),
-            'c1_timestamp': fvg_c1_ts_str,
             'was_detected': fvg_result.get('was_detected', False),
             'mitigation':   fvg_result.get('mitigation', 'none'),
             'ghost_top':    fvg_result.get('ghost_top'),
             'ghost_bottom': fvg_result.get('ghost_bottom'),
             'ghost_c1_idx': fvg_result.get('ghost_c1_idx'),
             'ghost_c3_idx': fvg_result.get('ghost_c3_idx'),
-            'ghost_c1_timestamp': ghost_c1_ts_str,
             'mitigated_at_idx': fvg_result.get('mitigated_at_idx')
+        }
+
+        # Phase 1 sweep observation — display-only badge for the email card.
+        # Phase 2 ignores this field and re-grades from scratch on fresh data.
+        # We grade against H1 swings within 72 trading hours BEFORE the OB candle.
+        sweep_obs_swings = swings  # Phase 1's H1 swings (already in scope)
+        sweep_obs = smc_detector.grade_sweep(
+            df, sweep_obs_swings, ob_idx, bias_label,
+            h1_atr_for_leg, pair_type, tf_label="H1"
+        )
+        sweep_observed = {
+            'exists': sweep_obs['score'] > 0.0,
+            'tier':   sweep_obs['tier'],
+            'price':  sweep_obs['price'],
+            'tf':     sweep_obs['tf'],
+            'score':  sweep_obs['score'],
+            'hours_before_ob': sweep_obs['hours_before_anchor']
         }
 
         active_obs.append({
             'bos_idx':           i,
-            'bos_timestamp':     bos_timestamp_str,
             'bos_swing_price':   bos_swing_price,
             'impulse_start_idx': impulse_start_idx,
             'impulse_start_price': float(L[impulse_start_idx]) if bos_type == 'bullish' else float(H[impulse_start_idx]),
@@ -473,7 +487,8 @@ def detect_smc_radar(df, lookback):
             'distal_line':     ob_low  if bos_type == 'bullish' else ob_high,
             'median_leg_body': median_leg_body,
             'ob_body':         abs(C[ob_idx] - O[ob_idx]),
-            'fvg': fvg_dict
+            'fvg': fvg_dict,
+            'sweep_observed': sweep_observed
         })
     # Mitigation + touch tracking
     tracked_obs = []
@@ -982,6 +997,21 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
         )
     else:
         fvg_line = "FVG: <span style='color:#888;'>None</span>"
+
+    # Sweep observation badge (display-only; Phase 2 re-grades independently)
+    sweep_obs = ob.get('sweep_observed', {}) or {}
+    if sweep_obs.get('exists'):
+        tier = sweep_obs.get('tier', 'weak')
+        tier_color = {'textbook': '#27ae60', 'decent': '#e67e22', 'weak': '#888'}.get(tier, '#888')
+        tier_emoji = {'textbook': '🎯', 'decent': '◐', 'weak': '·'}.get(tier, '·')
+        sweep_line = (
+            f"Sweep: <span style='color:{tier_color};'>"
+            f"{tier_emoji} {tier.title()} ({sweep_obs.get('tf', 'H1')} "
+            f"@ {sweep_obs.get('price', 0):.{dp}f})</span>"
+        )
+    else:
+        sweep_line = "Sweep: <span style='color:#888;'>None observed</span>"
+
     pip_unit  = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
     zone_pips = round(abs(ob['proximal_line'] - ob['distal_line']) / pip_unit, 1)
 
@@ -1021,6 +1051,7 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
           <b>Status</b> {ob['status']}
         </span>
         <span style="font-size:11px;color:#aaa;">{fvg_line}</span>
+        <span style="font-size:11px;color:#aaa;">{sweep_line}</span>
       </div>
       <p style="font-size:12px;color:#bbb;line-height:1.6;margin:0 0 12px 0;
                 border-left:3px solid #2a2a3e;padding-left:10px;">
@@ -1262,7 +1293,7 @@ def run_radar():
             logging.warning(f"No data for {name}. Skipped.")
             continue
 
-        result        = detect_smc_radar(df, lookback)
+        result        = detect_smc_radar(df, lookback, pair_type=ptype)
         current_price = result["current_price"]
         scanned_obs   = result["active_unmitigated_obs"]
 
