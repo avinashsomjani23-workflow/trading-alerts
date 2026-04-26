@@ -59,6 +59,38 @@ LEG_SIZE_MIN_ATR = {
     "BOS":   0.20
 }
 
+# ---------------------------------------------------------------------------
+# Liquidity sweep — pair-aware tolerance for "equal highs / equal lows" detection.
+# Two prior swings (out of last 3 same-type swings near the swept swing) are
+# considered "equal" if they sit within this multiple of the TF's own ATR.
+# Forex: tighter — pairs respect levels precisely.
+# Index/commodity: looser — wider noise around levels.
+# ---------------------------------------------------------------------------
+SWEEP_EQUAL_LEVEL_TOLERANCE_ATR = {
+    "forex":     0.15,
+    "index":     0.25,
+    "commodity": 0.25
+}
+
+# Sweep recency cap — sweeps older than this (relative to the OB candle) are
+# market-memory stale and excluded entirely. Counted in TRADING hours only
+# (Mon-Fri, weekends excluded). 72h ≈ 3 trading days.
+SWEEP_RECENCY_TRADING_HOURS = 72
+
+# Sweep observation window for Phase 1 (display-only badge). Same 72 trading-hour
+# rule applied during OB construction. Kept as a separate constant so Phase 1
+# observation logic is decoupled from Phase 2 grading.
+PHASE1_SWEEP_OBS_TRADING_HOURS = 72
+
+# Scoring caps for the redesigned sweep score. Sums to 2.0 by construction.
+SWEEP_SCORE_BASE_MAX        = 1.0   # presence (wick + close-back, bias-aligned, within recency)
+SWEEP_SCORE_EQUAL_LEVEL_MAX = 0.5   # 0 / 0.25 / 0.5 for 0 / 1 / 2 prior matches in last 3 swings
+SWEEP_SCORE_REJECTION_MAX   = 0.5   # 0 / 0.25 / 0.5 for wick:body ratio < 1 / 1-2 / > 2
+
+# When both H1 and M15 sweeps are detected, M15 only outranks H1 if it scores
+# at least this multiple of the H1 score. Mitigates M15 noise outvoting H1 signal.
+SWEEP_M15_OVER_H1_BUFFER = 1.10
+
 
 def validate_leg_distance(swing_price, break_close, atr, threshold_mult):
     """
@@ -78,6 +110,43 @@ def validate_leg_distance(swing_price, break_close, atr, threshold_mult):
         return False
     distance = abs(break_close - swing_price)
     return distance >= (threshold_mult * atr)
+
+
+def trading_hours_between(ts_earlier, ts_later):
+    """
+    Count Mon–Fri hours between two timestamps. Both treated as naive UTC.
+    Weekends excluded entirely (Saturday + Sunday do not contribute hours).
+
+    A best-effort approximation: walks day-by-day, counts 24h for each weekday
+    fully covered, plus partial-day fractions for the start/end days.
+
+    Returns float hours. Returns None on bad input.
+    """
+    if ts_earlier is None or ts_later is None:
+        return None
+    if ts_later < ts_earlier:
+        return None
+    try:
+        # Strip tz if present, treat as UTC-naive
+        if hasattr(ts_earlier, 'tzinfo') and ts_earlier.tzinfo is not None:
+            ts_earlier = ts_earlier.replace(tzinfo=None)
+        if hasattr(ts_later, 'tzinfo') and ts_later.tzinfo is not None:
+            ts_later = ts_later.replace(tzinfo=None)
+
+        total_hours = 0.0
+        cursor = ts_earlier
+        while cursor < ts_later:
+            day_start = cursor.replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end   = day_start + timedelta(days=1)
+            slice_end = min(day_end, ts_later)
+            # weekday(): Mon=0 .. Sun=6 -> include 0..4 only
+            if cursor.weekday() < 5:
+                seconds = (slice_end - cursor).total_seconds()
+                total_hours += seconds / 3600.0
+            cursor = day_end
+        return total_hours
+    except Exception:
+        return None
 
 
 def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
@@ -267,30 +336,252 @@ def stack_labels(labels, pair_conf):
     return adjusted
 
 
-def detect_sweep_decay(df, swings, current_idx, bias=None):
-    score, sweep_price = 0.0, None
-    H, L, C = df['High'].values, df['Low'].values, df['Close'].values
-    current_ts = df.index[current_idx]
-    for i in range(max(0, current_idx - 8), current_idx + 1):
+def _equal_levels_score(swept_swing, all_swings, pair_type, tf_atr):
+    """
+    Score the 'equal highs/lows' confluence around the swept swing.
+
+    Look at the last 3 swings of the SAME type (highs for SHORT, lows for LONG)
+    that occurred at or before the swept swing's idx. Of the OTHER 2 (excluding
+    the swept swing itself), count how many sit within the pair-aware tolerance
+    of the swept swing's price.
+
+    Returns:
+      (score, match_count)  where score in {0.0, 0.25, 0.5}
+                            and match_count in {0, 1, 2}.
+    """
+    if not swept_swing or not all_swings or tf_atr is None or tf_atr <= 0:
+        return 0.0, 0
+    tol_mult = SWEEP_EQUAL_LEVEL_TOLERANCE_ATR.get(pair_type, 0.25)
+    tolerance = tol_mult * tf_atr
+
+    same_type = [s for s in all_swings
+                 if s['type'] == swept_swing['type'] and s['idx'] <= swept_swing['idx']]
+    same_type.sort(key=lambda x: x['idx'], reverse=True)
+    last_three = same_type[:3]
+    others = [s for s in last_three if s['idx'] != swept_swing['idx']]
+
+    anchor_price = swept_swing['price']
+    matches = sum(1 for s in others if abs(s['price'] - anchor_price) <= tolerance)
+    matches = min(matches, 2)  # cap (can never exceed 2 by construction; defensive)
+
+    if matches == 0:
+        return 0.0, 0
+    if matches == 1:
+        return 0.25, 1
+    return 0.5, 2
+
+
+def _rejection_score(df, sweep_idx, swept_type, tf_atr):
+    """
+    Score the rejection quality of the sweep candle.
+
+    For a bullish sweep (LONG, swept a low):
+        wick = min(open, close) - low  (lower wick)
+    For a bearish sweep (SHORT, swept a high):
+        wick = high - max(open, close) (upper wick)
+    body = abs(close - open)
+    ratio = wick / max(body, 0.0001 * tf_atr)  -- epsilon prevents doji div-by-zero
+
+    Tiers:
+      ratio < 1.0       -> 0.0
+      1.0 <= ratio < 2.0-> 0.25
+      ratio >= 2.0      -> 0.5
+
+    Returns: (score, ratio_value)
+    """
+    if df is None or sweep_idx < 0 or sweep_idx >= len(df):
+        return 0.0, 0.0
+    if tf_atr is None or tf_atr <= 0:
+        return 0.0, 0.0
+    O = float(df['Open'].iloc[sweep_idx])
+    C = float(df['Close'].iloc[sweep_idx])
+    H = float(df['High'].iloc[sweep_idx])
+    L = float(df['Low'].iloc[sweep_idx])
+    body = abs(C - O)
+    epsilon = 0.0001 * tf_atr
+    if swept_type == 'low':       # bullish sweep -> lower wick matters
+        wick = min(O, C) - L
+    else:                         # 'high' -> bearish sweep -> upper wick
+        wick = H - max(O, C)
+    if wick < 0:
+        wick = 0.0
+    ratio = wick / max(body, epsilon)
+    if ratio < 1.0:
+        return 0.0, ratio
+    if ratio < 2.0:
+        return 0.25, ratio
+    return 0.5, ratio
+
+
+def grade_sweep(df, swings, anchor_idx, bias, tf_atr, pair_type, tf_label):
+    """
+    Find and grade the best liquidity sweep that occurred BEFORE the anchor
+    candle (typically the OB candle's index) on this TF.
+
+    Detection (unchanged from prior logic):
+      - Bullish sweep (LONG): candle's L pierces a prior swing low AND
+        candle's C closes back above that swing low.
+      - Bearish sweep (SHORT): candle's H pierces a prior swing high AND
+        candle's C closes back below that swing high.
+
+    Recency: sweep candle must be within SWEEP_RECENCY_TRADING_HOURS trading
+    hours BEFORE the anchor candle. Trading hours = Mon-Fri, weekends excluded.
+
+    Best-of selection: among all qualifying sweeps, the one with the HIGHEST
+    final score wins. Ties broken by recency (more recent wins).
+
+    Score = base (1.0) + equal_levels (0..0.5) + rejection (0..0.5). Max 2.0.
+
+    Returns dict:
+      {
+        'score': float (0..2.0),
+        'tier':  'textbook' | 'decent' | 'weak' | 'none',
+        'price': float | None,   # the swept swing's price (the level)
+        'sweep_idx': int | None,
+        'tf': tf_label,
+        'components': {
+            'base': 1.0 | 0.0,
+            'equal_levels': float, 'equal_levels_matches': int,
+            'rejection': float, 'wick_body_ratio': float,
+        },
+        'hours_before_anchor': float | None,   # trading-hours
+      }
+    """
+    none_result = {
+        'score': 0.0, 'tier': 'none', 'price': None, 'sweep_idx': None,
+        'tf': tf_label,
+        'components': {
+            'base': 0.0,
+            'equal_levels': 0.0, 'equal_levels_matches': 0,
+            'rejection': 0.0, 'wick_body_ratio': 0.0,
+        },
+        'hours_before_anchor': None
+    }
+    if df is None or len(df) < 5 or anchor_idx is None or anchor_idx <= 0:
+        return none_result
+    if bias not in ('LONG', 'SHORT'):
+        return none_result
+    if tf_atr is None or tf_atr <= 0:
+        return none_result
+    if not swings:
+        return none_result
+
+    # Bound search: only candles strictly before anchor_idx
+    upper = min(anchor_idx, len(df))
+    H = df['High'].values
+    L = df['Low'].values
+    C = df['Close'].values
+
+    anchor_ts = df.index[anchor_idx] if anchor_idx < len(df) else df.index[-1]
+    # Normalize anchor_ts to naive datetime
+    if hasattr(anchor_ts, 'to_pydatetime'):
+        anchor_dt = anchor_ts.to_pydatetime()
+    else:
+        anchor_dt = anchor_ts
+    if hasattr(anchor_dt, 'tzinfo') and anchor_dt.tzinfo is not None:
+        anchor_dt = anchor_dt.replace(tzinfo=None)
+
+    best = None  # tuple: (score, hours_before, payload_dict)
+
+    for i in range(0, upper):
+        cand_ts = df.index[i]
+        if hasattr(cand_ts, 'to_pydatetime'):
+            cand_dt = cand_ts.to_pydatetime()
+        else:
+            cand_dt = cand_ts
+        if hasattr(cand_dt, 'tzinfo') and cand_dt.tzinfo is not None:
+            cand_dt = cand_dt.replace(tzinfo=None)
+
+        hrs_before = trading_hours_between(cand_dt, anchor_dt)
+        if hrs_before is None or hrs_before > SWEEP_RECENCY_TRADING_HOURS:
+            continue
+
         for s in swings:
             if s['idx'] >= i:
                 continue
-            hours_old = (current_ts - s['ts']).total_seconds() / 3600
-            if hours_old > 72:
+            if bias == 'LONG' and s['type'] == 'low':
+                if L[i] < s['price'] and C[i] > s['price']:
+                    swept = s
+                    swept_type = 'low'
+                else:
+                    continue
+            elif bias == 'SHORT' and s['type'] == 'high':
+                if H[i] > s['price'] and C[i] < s['price']:
+                    swept = s
+                    swept_type = 'high'
+                else:
+                    continue
+            else:
                 continue
-            if s['type'] == 'low' and L[i] < s['price'] and C[i] > s['price']:
-                if bias is not None and bias != 'LONG':
-                    continue
-                pts = 2.5 if hours_old <= 24 else 1.5
-                if pts > score:
-                    score, sweep_price = pts, float(L[i])
-            elif s['type'] == 'high' and H[i] > s['price'] and C[i] < s['price']:
-                if bias is not None and bias != 'SHORT':
-                    continue
-                pts = 2.5 if hours_old <= 24 else 1.5
-                if pts > score:
-                    score, sweep_price = pts, float(H[i])
-    return score, sweep_price
+
+            # Score components
+            base = SWEEP_SCORE_BASE_MAX
+            eq_score, eq_matches = _equal_levels_score(swept, swings, pair_type, tf_atr)
+            rej_score, wb_ratio  = _rejection_score(df, i, swept_type, tf_atr)
+            total = base + eq_score + rej_score
+
+            payload = {
+                'score': round(total, 3),
+                'tier':  _sweep_tier(total),
+                'price': float(swept['price']),
+                'sweep_idx': i,
+                'tf': tf_label,
+                'components': {
+                    'base': base,
+                    'equal_levels': eq_score,
+                    'equal_levels_matches': eq_matches,
+                    'rejection': rej_score,
+                    'wick_body_ratio': round(wb_ratio, 2),
+                },
+                'hours_before_anchor': round(hrs_before, 1),
+            }
+
+            if best is None:
+                best = (total, hrs_before, payload)
+            else:
+                # Higher score wins; tie -> more recent (smaller hrs_before)
+                if total > best[0] or (total == best[0] and hrs_before < best[1]):
+                    best = (total, hrs_before, payload)
+
+    if best is None:
+        return none_result
+    return best[2]
+
+
+def _sweep_tier(score):
+    """Classify final sweep score into a label for narration."""
+    if score >= 1.75:
+        return 'textbook'
+    if score >= 1.25:
+        return 'decent'
+    if score > 0.0:
+        return 'weak'
+    return 'none'
+
+
+def select_best_sweep(h1_result, m15_result):
+    """
+    Choose between H1 and M15 sweep results applying the M15-over-H1 buffer.
+
+    Rules:
+      - If neither has a score, return the H1 'none' shape.
+      - If only one has a score, return that one.
+      - If both have a score, M15 wins ONLY when m15_score > h1_score * BUFFER.
+        Otherwise H1 wins (default to higher TF).
+
+    Returns the chosen sweep dict.
+    """
+    h1_score  = h1_result.get('score', 0.0) if h1_result else 0.0
+    m15_score = m15_result.get('score', 0.0) if m15_result else 0.0
+    if h1_score == 0.0 and m15_score == 0.0:
+        return h1_result if h1_result else m15_result
+    if h1_score == 0.0:
+        return m15_result
+    if m15_score == 0.0:
+        return h1_result
+    if m15_score > h1_score * SWEEP_M15_OVER_H1_BUFFER:
+        return m15_result
+    return h1_result
 
 
 # NEW
@@ -516,29 +807,62 @@ def _killzone_hit(ist_hour, pair_type):
 
 def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=None, macro_score=1.0):
     bos_tag = ob.get('bos_tag', 'BOS')
+    pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
 
     # Structure — pair-aware BOS sequence penalty
     if bos_tag == 'CHoCH':
         bd = {"structure": 2.5}
     else:
         bos_seq = ob.get('bos_sequence_count', 1)
-        pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
         caution_threshold = {'forex': 3, 'index': 5, 'commodity': 4}.get(pair_type, 3)
         bd = {"structure": 1.0 if bos_seq >= caution_threshold else 1.5}
 
-    # Sweep — take the best of H1 / M15
+    # ------------------------------------------------------------------
+    # Sweep — graded score (0..2.0). Anchored to the OB candle, not to
+    # current price. Phase 2 re-grades from scratch each scan.
+    # ------------------------------------------------------------------
+    h1_atr_for_sweep = compute_atr(df_h1)
+
+    # Locate OB candle index in df_h1 via its absolute timestamp.
+    ob_ts_iso = ob.get('ob_timestamp')
+    ob_idx_h1 = None
+    if ob_ts_iso:
+        idx_found, on_chart = locate_ob_candle_idx(df_h1, ob_ts_iso)
+        if on_chart:
+            ob_idx_h1 = idx_found
+    if ob_idx_h1 is None:
+        # Fallback: cannot find OB on H1 -> grade against latest candle.
+        # This degrades gracefully (still pre-current-candle) but is rare.
+        ob_idx_h1 = max(1, len(df_h1) - 1)
+
     swings_h1 = get_swing_points(df_h1, lookback=5)
-    h1_sweep_score, h1_sweep_price = detect_sweep_decay(df_h1, swings_h1, len(df_h1) - 1, bias)
+    h1_sweep = grade_sweep(df_h1, swings_h1, ob_idx_h1, bias, h1_atr_for_sweep,
+                           pair_type, tf_label="H1")
 
-    m15_sweep_score, m15_sweep_price = 0.0, None
+    # M15: locate OB candle on M15 too. If OB lies before df_m15 starts (older
+    # than the M15 window), skip M15 sweep grading entirely — H1 carries it.
+    m15_sweep = {
+        'score': 0.0, 'tier': 'none', 'price': None, 'sweep_idx': None, 'tf': 'M15',
+        'components': {'base': 0.0, 'equal_levels': 0.0, 'equal_levels_matches': 0,
+                       'rejection': 0.0, 'wick_body_ratio': 0.0},
+        'hours_before_anchor': None
+    }
     if df_m15 is not None and len(df_m15) > 20:
-        swings_m15 = get_swing_points(df_m15, lookback=4)
-        m15_sweep_score, m15_sweep_price = detect_sweep_decay(df_m15, swings_m15, len(df_m15) - 1, bias)
+        m15_atr_for_sweep = compute_atr(df_m15)
+        ob_idx_m15 = None
+        if ob_ts_iso:
+            idx_found_m15, on_chart_m15 = locate_ob_candle_idx(df_m15, ob_ts_iso)
+            if on_chart_m15:
+                ob_idx_m15 = idx_found_m15
+        if ob_idx_m15 is not None and m15_atr_for_sweep:
+            swings_m15 = get_swing_points(df_m15, lookback=4)
+            m15_sweep = grade_sweep(df_m15, swings_m15, ob_idx_m15, bias,
+                                    m15_atr_for_sweep, pair_type, tf_label="M15")
 
-    if m15_sweep_score > h1_sweep_score:
-        bd["sweep"], sweep_price, sweep_tf = m15_sweep_score, m15_sweep_price, "M15"
-    else:
-        bd["sweep"], sweep_price, sweep_tf = h1_sweep_score, h1_sweep_price, "H1"
+    chosen_sweep = select_best_sweep(h1_sweep, m15_sweep)
+    bd["sweep"]  = chosen_sweep['score']
+    sweep_price  = chosen_sweep['price']
+    sweep_tf     = chosen_sweep['tf']
 
     # FVG
     # Partial mitigation and pristine both score full (fvg['exists'] is True for both).
@@ -561,16 +885,17 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     else:
         bd["freshness"] = 0.0
 
-    # Premium / Discount — graded scoring on impulse-leg dealing range.
-    # LONG wants price in bottom of range (discount):
-    #   position <= 0.30  → 1.0 (deep discount)
-    #   0.30 < position <= 0.45 → 0.5 (discount, not deep)
-    #   position > 0.45 → 0.0 (not in discount)
-    # SHORT wants price in top of range (premium):
-    #   position >= 0.70  → 1.0 (deep premium)
-    #   0.55 <= position < 0.70 → 0.5 (premium, not deep)
-    #   position < 0.55 → 0.0 (not in premium)
-    # `pd_position` stored in breakdown so scorecard row can show exact percentage.
+    # Premium / Discount — graded scoring on impulse-leg dealing range. Now max 1.5.
+    # LONG wants price deep in discount:
+    #   position <= 0.25 -> 1.5 (very deep discount)
+    #   0.25 < position <= 0.35 -> 1.0 (deep discount)
+    #   0.35 < position <= 0.45 -> 0.5 (mid discount)
+    #   position > 0.45 -> 0.0 (above equilibrium, fail)
+    # SHORT wants price deep in premium:
+    #   position >= 0.75 -> 1.5 (very deep premium)
+    #   0.65 <= position < 0.75 -> 1.0 (deep premium)
+    #   0.55 <= position < 0.65 -> 0.5 (mid premium)
+    #   position < 0.55 -> 0.0 (below equilibrium, fail)
     h1_atr_val = compute_atr(df_h1)
     dr = get_dealing_range(ob, df_h1, h1_atr_val,
                            pair_conf=pair_conf, current_price=current_price)
@@ -580,14 +905,18 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         if rng_width > 0:
             pd_position = (current_price - dr["range_low"]) / rng_width
             if bias == "LONG":
-                if pd_position <= 0.30:
+                if pd_position <= 0.25:
+                    bd["pd"] = 1.5
+                elif pd_position <= 0.35:
                     bd["pd"] = 1.0
                 elif pd_position <= 0.45:
                     bd["pd"] = 0.5
                 else:
                     bd["pd"] = 0.0
             else:  # SHORT
-                if pd_position >= 0.70:
+                if pd_position >= 0.75:
+                    bd["pd"] = 1.5
+                elif pd_position >= 0.65:
                     bd["pd"] = 1.0
                 elif pd_position >= 0.55:
                     bd["pd"] = 0.5
@@ -603,7 +932,6 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     # Killzone — IST-based (hardcoded IST clock hours; no DST drift needed since
     # windows are defined in local IST and IST has no DST).
     ist_hour = (datetime.utcnow() + timedelta(hours=5, minutes=30)).hour
-    pair_type = pair_conf.get("pair_type", "forex") if pair_conf else "forex"
     bd["killzone"] = 1.0 if _killzone_hit(ist_hour, pair_type) else 0.0
 
     bd["macro"] = macro_score
@@ -613,14 +941,25 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         "breakdown": bd,
         "sweep_price": sweep_price,
         "sweep_tf": sweep_tf,
+        "sweep_tier": chosen_sweep['tier'],
+        "sweep_components": chosen_sweep['components'],
+        "sweep_hours_before_ob": chosen_sweep['hours_before_anchor'],
         "dealing_range": dr,
         "pd_position": pd_position
     }
 
 
 def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_conf,
-                            dealing_range=None, fvg_source=None, pd_position=None):
-    """Return list of (label, score, max_score, status, explanation) for email rendering."""
+                            dealing_range=None, fvg_source=None, pd_position=None,
+                            sweep_tier=None, sweep_components=None,
+                            sweep_hours_before_ob=None):
+    """
+    Return list of (label, score, max_score, status, explanation) for email rendering.
+
+    New scorecard maxima:
+      Structure 2.5 | Sweep 2.0 | FVG 1.5 | Freshness 0.5 | PD 1.5 | Killzone 1.0 | Macro 1.0
+      TOTAL 10.0
+    """
     dp = _dp(pair_conf)
     rows = []
 
@@ -638,22 +977,31 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     else:
         rows.append(("Structure", s, 2.5, "fail", "No confirmed BOS or CHoCH."))
 
-    # 2. Liquidity Sweep
+    # 2. Liquidity Sweep — graded (0..2.0), tiered narration
     s = breakdown.get("sweep", 0)
-    if s >= 2.5 and sweep_price is not None:
-        rows.append((
-            "Liquidity Sweep", s, 2.5, "ok",
-            f"Price pierced a recent level and reversed — smart money grabbed stop-losses "
-            f"({sweep_tf} sweep at {sweep_price:.{dp}f})."
-        ))
-    elif s >= 1.5 and sweep_price is not None:
-        rows.append((
-            "Liquidity Sweep", s, 2.5, "warn",
-            f"Sweep happened but is older than 24h — signal is weaker "
-            f"({sweep_tf} sweep at {sweep_price:.{dp}f})."
-        ))
+    comps = sweep_components or {}
+    eq_matches = comps.get('equal_levels_matches', 0)
+    wb_ratio   = comps.get('wick_body_ratio', 0.0)
+    hrs_str    = (f"{sweep_hours_before_ob:.0f}h before OB"
+                  if sweep_hours_before_ob is not None else "")
+    if sweep_tier == 'textbook' and sweep_price is not None:
+        detail = (f"{sweep_tf} sweep at {sweep_price:.{dp}f}, {hrs_str}. "
+                  f"{eq_matches} equal level(s) matched · wick:body {wb_ratio:.1f}.")
+        rows.append(("Liquidity Sweep", s, 2.0, "ok",
+                     "Textbook stop-hunt — strong institutional fingerprint. " + detail))
+    elif sweep_tier == 'decent' and sweep_price is not None:
+        detail = (f"{sweep_tf} sweep at {sweep_price:.{dp}f}, {hrs_str}. "
+                  f"{eq_matches} equal level(s) matched · wick:body {wb_ratio:.1f}.")
+        rows.append(("Liquidity Sweep", s, 2.0, "warn",
+                     "Sweep present with partial confluence. " + detail))
+    elif sweep_tier == 'weak' and sweep_price is not None:
+        detail = (f"{sweep_tf} sweep at {sweep_price:.{dp}f}, {hrs_str}. "
+                  f"No equal levels · wick:body {wb_ratio:.1f}.")
+        rows.append(("Liquidity Sweep", s, 2.0, "fail",
+                     "Sweep happened but lacks quality confluences. " + detail))
     else:
-        rows.append(("Liquidity Sweep", s, 2.5, "fail", "No recent stop-hunt sweep detected near the zone."))
+        rows.append(("Liquidity Sweep", s, 2.0, "fail",
+                     "No qualifying sweep within 72 trading hours before the OB."))
 
     # 3. FVG — with source label (M15 / H1)
     s = breakdown.get("fvg", 0)
@@ -667,7 +1015,6 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     else:
         rows.append(("FVG", s, 1.5, "fail", "No unmitigated FVG inside the zone."))
 
-    # NEW
     # 4. Freshness — driven by lifetime touch counter from Phase 1.
     s = breakdown.get("freshness", 0)
     touches = int(ob.get('touches', 0))
@@ -681,7 +1028,7 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         rows.append(("Freshness", s, 0.5, "fail",
                      f"Tested {touches}x since formation — zone fatigued."))
 
-    # 5. Premium / Discount — graded, with exact percentage and dealing range details
+    # 5. Premium / Discount — 4-tier graded scoring (0 / 0.5 / 1.0 / 1.5)
     s = breakdown.get("pd", 0)
     dr_src = ""
     if dealing_range and dealing_range.get("valid"):
@@ -695,27 +1042,33 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     pd_pct_str = f"{pd_position * 100:.0f}%" if pd_position is not None else "n/a"
 
     if not dealing_range or not dealing_range.get("valid"):
-        rows.append(("Premium / Discount", s, 1.0, "warn",
+        rows.append(("Premium / Discount", s, 1.5, "warn",
                       "Dealing range too narrow to score. Neutral."))
     elif bias == "LONG":
-        if s >= 1.0:
-            rows.append(("Premium / Discount", s, 1.0, "ok",
+        if s >= 1.5:
+            rows.append(("Premium / Discount", s, 1.5, "ok",
+                          f"Price at {pd_pct_str} of dealing range (very deep discount).{dr_src}"))
+        elif s >= 1.0:
+            rows.append(("Premium / Discount", s, 1.5, "ok",
                           f"Price at {pd_pct_str} of dealing range (deep discount).{dr_src}"))
         elif s >= 0.5:
-            rows.append(("Premium / Discount", s, 1.0, "warn",
-                          f"Price at {pd_pct_str} of dealing range (discount, not deep).{dr_src}"))
+            rows.append(("Premium / Discount", s, 1.5, "warn",
+                          f"Price at {pd_pct_str} of dealing range (mid discount).{dr_src}"))
         else:
-            rows.append(("Premium / Discount", s, 1.0, "fail",
+            rows.append(("Premium / Discount", s, 1.5, "fail",
                           f"Price at {pd_pct_str} of dealing range (above equilibrium — not optimal for LONG).{dr_src}"))
     else:  # SHORT
-        if s >= 1.0:
-            rows.append(("Premium / Discount", s, 1.0, "ok",
+        if s >= 1.5:
+            rows.append(("Premium / Discount", s, 1.5, "ok",
+                          f"Price at {pd_pct_str} of dealing range (very deep premium).{dr_src}"))
+        elif s >= 1.0:
+            rows.append(("Premium / Discount", s, 1.5, "ok",
                           f"Price at {pd_pct_str} of dealing range (deep premium).{dr_src}"))
         elif s >= 0.5:
-            rows.append(("Premium / Discount", s, 1.0, "warn",
-                          f"Price at {pd_pct_str} of dealing range (premium, not deep).{dr_src}"))
+            rows.append(("Premium / Discount", s, 1.5, "warn",
+                          f"Price at {pd_pct_str} of dealing range (mid premium).{dr_src}"))
         else:
-            rows.append(("Premium / Discount", s, 1.0, "fail",
+            rows.append(("Premium / Discount", s, 1.5, "fail",
                           f"Price at {pd_pct_str} of dealing range (below equilibrium — not optimal for SHORT).{dr_src}"))
 
     # 6. Killzone
@@ -734,7 +1087,6 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         rows.append(("Macro / News", s, 1.0, "fail", "High-impact news imminent — risk of whipsaw."))
 
     return rows
-
 
 def detect_ltf_choch(df_m5, bias, bounds):
     """
