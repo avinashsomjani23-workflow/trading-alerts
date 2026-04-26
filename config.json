@@ -15,7 +15,7 @@
       "radar_tf": "15m",
       "trigger_tf": "15m",
       "atr_multiplier": 2.0,
-      "min_confidence": 7.0,
+      "min_confidence": 6.0,
       "decimal_places": 5,
       "spread_pips": 2.0
     },
@@ -28,7 +28,7 @@
       "radar_tf": "15m",
       "trigger_tf": "15m",
       "atr_multiplier": 2.0,
-      "min_confidence": 7.0,
+      "min_confidence": 6.0,
       "decimal_places": 3,
       "spread_pips": 2.0
     },
@@ -41,7 +41,7 @@
       "radar_tf": "15m",
       "trigger_tf": "15m",
       "atr_multiplier": 2.0,
-      "min_confidence": 7.0,
+      "min_confidence": 6.0,
       "decimal_places": 5,
       "spread_pips": 4.0
     },
@@ -54,7 +54,7 @@
       "radar_tf": "15m",
       "trigger_tf": "15m",
       "atr_multiplier": 2.0,
-      "min_confidence": 7.0,
+      "min_confidence": 6.0,
       "decimal_places": 5,
       "spread_pips": 2.0
     },
@@ -67,7 +67,7 @@
       "radar_tf": "15m",
       "trigger_tf": "5m",
       "atr_multiplier": 2.5,
-      "min_confidence": 7.0,
+      "min_confidence": 6.0,
       "decimal_places": 2,
       "spread_pips": 2.0,
       "invalidation_atr_multiplier": 0.3,
@@ -82,7 +82,7 @@
       "radar_tf": "15m",
       "trigger_tf": "5m",
       "atr_multiplier": 2.5,
-      "min_confidence": 7.0,
+      "min_confidence": 6.0,
       "decimal_places": 2,
       "spread_pips": 0.50,
       "invalidation_atr_multiplier": 0.3,
