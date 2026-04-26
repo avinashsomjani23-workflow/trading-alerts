@@ -1244,11 +1244,15 @@ if __name__ == "__main__":
             if not levels['valid']:
                 continue
 
-            # B2: Pass fvg_source, dealing_range, pd_position into scorecard rows
+            # B2: Pass fvg_source, dealing_range, pd_position, plus new sweep
+            # tier + components + age into scorecard rows for richer narration.
             scorecard_rows = smc_detector.generate_scorecard_rows(
                 bias, score_res['breakdown'], ob,
                 score_res.get('sweep_price'), score_res.get('sweep_tf', 'H1'), pair_conf,
-                score_res.get('dealing_range'), fvg_source, score_res.get('pd_position')
+                score_res.get('dealing_range'), fvg_source, score_res.get('pd_position'),
+                sweep_tier=score_res.get('sweep_tier'),
+                sweep_components=score_res.get('sweep_components'),
+                sweep_hours_before_ob=score_res.get('sweep_hours_before_ob')
             )
 
             distance = abs(current_price - proximal)
@@ -1264,10 +1268,14 @@ if __name__ == "__main__":
                 "breakdown": score_res['breakdown'],
                 "sweep_price": score_res.get('sweep_price'),
                 "sweep_tf": score_res.get('sweep_tf', 'H1'),
+                "sweep_tier": score_res.get('sweep_tier'),
+                "sweep_components": score_res.get('sweep_components'),
+                "sweep_hours_before_ob": score_res.get('sweep_hours_before_ob'),
                 "macro_summary": gemini_risk.get("macro_summary", ""),
                 "levels": levels,
                 "ob": ob,
-                "alert_ist": ist_now.isoformat()
+                "alert_ist": ist_now.isoformat(),
+                "scorecard_version": "v2"
             }
 
             dr = score_res.get('dealing_range')
