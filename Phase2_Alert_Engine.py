@@ -1039,7 +1039,11 @@ if __name__ == "__main__":
     active_obs = load_json("active_obs.json", {})
     watch_state = load_json("active_watch_state.json", {})
     phase2_sent = load_json("phase2_sent.json", {})
-    new_watch_state = dict(watch_state)
+    # CONCURRENCY FIX: track only keys this run touches (writes).
+    # Reads still go against watch_state (original snapshot). At save time we
+    # re-read disk and merge our writes on top — so we don't overwrite changes
+    # made by a concurrent P3 run that may have removed keys.
+    watch_writes = {}
 
     # Dedup + cooldown constants
     COOLDOWN_HOURS = 4  # Hard block on second alert for same (pair, bias) within this window
@@ -1350,11 +1354,11 @@ if __name__ == "__main__":
 
                 # Layer 1: structural dedup — refresh watch but don't re-email
                 if zone_id in phase2_sent:
-                    if watch_id in new_watch_state:
-                        trade_data["alert_ist"] = new_watch_state[watch_id].get(
+                    if watch_id in watch_state:
+                        trade_data["alert_ist"] = watch_state[watch_id].get(
                             "alert_ist", ist_now.isoformat()
                         )
-                    new_watch_state[watch_id] = trade_data
+                    watch_writes[watch_id] = trade_data
                     continue
 
                 # Layer 2: 4-hour cooldown per (pair, bias)
@@ -1366,11 +1370,11 @@ if __name__ == "__main__":
                         if hrs_since < COOLDOWN_HOURS:
                             print(f"  [-] {name} {bias}: cooldown active ({hrs_since:.1f}h of {COOLDOWN_HOURS}h). Skipping APPROACHING alert.")
                             # Still refresh watch_state so Phase 3 keeps monitoring if zone was previously logged
-                            if watch_id in new_watch_state:
-                                trade_data["alert_ist"] = new_watch_state[watch_id].get(
+                            if watch_id in watch_state:
+                                trade_data["alert_ist"] = watch_state[watch_id].get(
                                     "alert_ist", ist_now.isoformat()
                                 )
-                                new_watch_state[watch_id] = trade_data
+                                watch_writes[watch_id] = trade_data
                             continue
                     except Exception:
                         pass
@@ -1407,12 +1411,18 @@ if __name__ == "__main__":
                     html, h1_chart, m15_chart
                 )
 
-                new_watch_state[watch_id] = trade_data
+                watch_writes[watch_id] = trade_data
                 print(f"  [>] LOGGED FOR PHASE 3: {name}")
 
     save_json("phase2_sent.json", phase2_sent)
-    save_json("active_watch_state.json", new_watch_state)
-    print("Phase 2 complete.")
+
+    # CONCURRENCY-SAFE SAVE: re-read latest disk state, apply only our upserts.
+    # If P3 deleted keys mid-run, those deletions are preserved.
+    fresh_disk = load_json("active_watch_state.json", {})
+    for k, v in watch_writes.items():
+        fresh_disk[k] = v
+    save_json("active_watch_state.json", fresh_disk)
+    print(f"Phase 2 complete. Watch upserts: {len(watch_writes)}")
 
     # Heartbeat — runs after main scan is fully saved. Wrapped in try/except.
     send_heartbeat_if_due(ist_now, active_obs)
