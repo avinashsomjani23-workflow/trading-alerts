@@ -23,7 +23,7 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          # P1 owns these files. yfinance_stale_log is shared with P2/P3 (append-only log).
+          # P1 owns these files. yfinance_stale_log is shared with P2/P3 (append-only).
           ALL_FILES="active_obs.json emailed_zones.json email_gate.json yfinance_stale_log.json"
 
           FILES=""
@@ -37,34 +37,32 @@ jobs:
             exit 0
           fi
 
+          # Show what's actually changing — for debugging.
+          echo "=== Working tree status before commit ==="
+          git status --short
+          echo "=== Diff stats for files to commit ==="
+          git diff --stat $FILES || true
+          echo "========================================="
+
           git add $FILES
           if git diff --staged --quiet; then
-            echo "No changes."
+            echo "No changes to commit."
             exit 0
           fi
 
-          # Stash my writes, sync to latest origin, reapply my writes on top.
-          # This avoids overwriting writes from a concurrent P2 or P3 run.
+          git commit -m "P1 Update [skip ci]"
+
+          # Sync with origin using rebase + autostash. Atomic. Fails loudly
+          # on conflict instead of silently dropping our changes.
           for i in 1 2 3 4 5; do
-            git stash push -- $FILES || true
-            git fetch origin main
-            git reset --hard origin/main
-            git stash pop || true
-
-            git add $FILES 2>/dev/null || true
-            if git diff --staged --quiet; then
-              echo "Nothing to commit after sync."
-              exit 0
+            if git pull --rebase --autostash origin main; then
+              if git push origin HEAD:main; then
+                echo "Push succeeded on attempt $i."
+                exit 0
+              fi
+              echo "Push rejected on attempt $i. Retrying."
+            else
+              echo "Rebase failed on attempt $i. Aborting rebase and retrying."
+              git rebase --abort || true
             fi
-
-            git commit -m "P1 Update [skip ci]"
-            if git push origin HEAD:main; then
-              echo "Push succeeded on attempt $i."
-              exit 0
-            fi
-            echo "Push rejected. Retrying (attempt $i)."
             sleep 2
-          done
-
-          echo "Push failed after 5 attempts."
-          exit 1
