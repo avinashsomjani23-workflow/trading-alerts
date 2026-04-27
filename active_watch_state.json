@@ -34,13 +34,13 @@
       "entry_source": "OB Proximal Limit"
     },
     "ob": {
-      "bos_idx": 148,
+      "bos_idx": 147,
       "bos_swing_price": 4686.60009765625,
-      "impulse_start_idx": 137,
+      "impulse_start_idx": 136,
       "impulse_start_price": 4745.7998046875,
       "bos_sequence_count": 1,
-      "last_choch_idx": 148,
-      "ob_idx": 143,
+      "last_choch_idx": 147,
+      "ob_idx": 142,
       "ob_timestamp": "2026-04-27T10:00:00+00:00",
       "direction": "bearish",
       "bos_tag": "CHoCH",
