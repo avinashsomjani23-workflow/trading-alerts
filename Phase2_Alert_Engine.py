@@ -49,7 +49,14 @@ def save_json(path, data):
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
-
+    
+def append_scan_log(entry):
+    """Append one JSON line per pair per scan to phase2_scan_log.jsonl."""
+    try:
+        with open("phase2_scan_log.jsonl", "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception as e:
+        print(f"  [SCANLOG ERR] {e}")
 
 def clean_df(df):
     if df is None or df.empty:
@@ -1158,7 +1165,20 @@ if __name__ == "__main__":
         dp = pair_conf.get("decimal_places", 5)
         entry_model = pair_conf.get("entry_model", "limit")
         pair_obs = active_obs.get(name, [])
+
+        scan_record = {
+            "ts_ist": ist_now.isoformat(),
+            "pair": name,
+            "zones_in_active_obs": len(pair_obs),
+            "current_price": None,
+            "h1_trend": None,
+            "zone_outcomes": [],
+            "final_action": None
+        }
+
         if not pair_obs:
+            scan_record["final_action"] = "no_zones_in_active_obs"
+            append_scan_log(scan_record)
             continue
 
         radar_tf = pair_conf.get("radar_tf", "15m")
@@ -1178,40 +1198,54 @@ if __name__ == "__main__":
         # A2: Always compute BOS sequence count from fresh H1 data.
         bos_counter = smc_detector.compute_bos_sequence_count(df_h1, lookback=4)
 
-        # Round 2: Phase 2 re-validates each zone against fresh H1 and then
-        # selects a single candidate per pair. Flow:
-        #   1. Proximity gate (as before).
-        #   2. Re-validation: opposite H1 BOS since OB formed -> zone dead.
-        #   3. Per-pair single-alert: pick zone closest to current price whose
-        #      direction matches current H1 trend. If no trend or no match,
-        #      skip this pair this scan.
+        scan_record["current_price"] = current_price
 
         surviving_obs = []
         for ob in pair_obs:
             proximal = float(ob['proximal_line'])
+            bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
+            distance = abs(current_price - proximal)
+            prox_cap = pair_conf["atr_multiplier"] * h1_atr
+
+            zone_outcome = {
+                "direction": ob['direction'],
+                "proximal": proximal,
+                "distance": round(distance, dp),
+                "proximity_cap": round(prox_cap, dp),
+                "result": None
+            }
+
             # 1. Proximity gate
-            if abs(current_price - proximal) > (pair_conf["atr_multiplier"] * h1_atr):
+            if distance > prox_cap:
+                zone_outcome["result"] = "dropped_proximity"
+                scan_record["zone_outcomes"].append(zone_outcome)
                 continue
 
-            bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
-
+            zone_outcome["result"] = "passed_to_trend_gate"
+            scan_record["zone_outcomes"].append(zone_outcome)
             surviving_obs.append(ob)
-
         if not surviving_obs:
+            scan_record["final_action"] = "no_zones_passed_proximity"
+            append_scan_log(scan_record)
             continue
 
         # 3. Per-pair single-alert: pick nearest-to-price zone that matches
         # current H1 trend direction. If trend is None or no zone matches, skip.
         current_trend = bos_counter.get('trend')  # 'bullish' | 'bearish' | None
+        scan_record["h1_trend"] = current_trend
+
         if current_trend is None:
             print(f"  [-] {name}: H1 trend ambiguous. Skipping pair this scan.")
+            scan_record["final_action"] = "h1_trend_ambiguous"
+            append_scan_log(scan_record)
             continue
 
         matching_obs = [o for o in surviving_obs if o.get('direction') == current_trend]
         if not matching_obs:
             print(f"  [-] {name}: no surviving zone matches current H1 trend ({current_trend}). Skipping.")
+            scan_record["final_action"] = "no_zone_matches_trend"
+            append_scan_log(scan_record)
             continue
-
         # Nearest-to-price wins
         matching_obs.sort(key=lambda o: abs(current_price - float(o['proximal_line'])))
         selected_ob = matching_obs[0]
@@ -1250,10 +1284,14 @@ if __name__ == "__main__":
                 bias, df_h1, ob, fvg_data, current_price, pair_conf, df_m15, macro_score
             )
             if score_res['total'] < pair_conf["min_confidence"]:
+                scan_record["final_action"] = f"score_below_min ({score_res['total']:.1f}<{pair_conf['min_confidence']})"
+                append_scan_log(scan_record)
                 continue
 
             levels = smc_detector.compute_dynamic_levels(pair_conf, bias, ob, fvg_data, current_price, df_m15)
             if not levels['valid']:
+                scan_record["final_action"] = "levels_invalid"
+                append_scan_log(scan_record)
                 continue
 
             # B2: Pass fvg_source, dealing_range, pd_position, plus new sweep
@@ -1301,9 +1339,15 @@ if __name__ == "__main__":
                 zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}"
                 pair_bias_key = f"{name}_{bias}"
 
-                # Layer 1: structural dedup
+                # Layer 1: structural dedup — refresh watch but don't re-email
                 if zone_id in phase2_sent:
-                    print(f"  [-] {name}: already alerted (structural dedup). Skipping.")
+                    if watch_id in watch_state:
+                        trade_data["alert_ist"] = watch_state[watch_id].get(
+                            "alert_ist", ist_now.isoformat()
+                        )
+                    watch_writes[watch_id] = trade_data
+                    scan_record["final_action"] = "dedup_already_alerted_ltf"
+                    append_scan_log(scan_record)
                     continue
 
                 # Layer 2: 4-hour cooldown per (pair, bias)
@@ -1314,10 +1358,11 @@ if __name__ == "__main__":
                         hrs_since = (ist_now - cd_dt).total_seconds() / 3600
                         if hrs_since < COOLDOWN_HOURS:
                             print(f"  [-] {name} {bias}: cooldown active ({hrs_since:.1f}h of {COOLDOWN_HOURS}h). Skipping.")
+                            scan_record["final_action"] = f"cooldown_active ({hrs_since:.1f}h)"
+                            append_scan_log(scan_record)
                             continue
                     except Exception:
                         pass  # Corrupt timestamp — treat as expired, fall through
-
                 # Register key and cooldown BEFORE send, save immediately.
                 # This ensures that if send crashes, we don't re-alert on next run.
                 phase2_sent[zone_id] = ist_now.isoformat()
@@ -1352,6 +1397,8 @@ if __name__ == "__main__":
                     html, h1_chart, m15_chart
                 )
                 print(f"  [OK] TRADE READY (FOREX): {name}")
+                scan_record["final_action"] = "alert_sent_TRADE_READY"
+                append_scan_log(scan_record)
             elif entry_model == "ltf_choch":
                 bos_swing_px = float(ob.get('bos_swing_price', proximal))
                 bos_tag = ob.get('bos_tag', 'BOS')
@@ -1383,6 +1430,8 @@ if __name__ == "__main__":
                                     "alert_ist", ist_now.isoformat()
                                 )
                                 watch_writes[watch_id] = trade_data
+                            scan_record["final_action"] = f"cooldown_active_ltf ({hrs_since:.1f}h)"
+                            append_scan_log(scan_record)
                             continue
                     except Exception:
                         pass
@@ -1421,6 +1470,8 @@ if __name__ == "__main__":
 
                 watch_writes[watch_id] = trade_data
                 print(f"  [>] LOGGED FOR PHASE 3: {name}")
+                scan_record["final_action"] = "alert_sent_APPROACHING"
+                append_scan_log(scan_record)
 
     save_json("phase2_sent.json", phase2_sent)
 
