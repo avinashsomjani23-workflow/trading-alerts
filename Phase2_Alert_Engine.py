@@ -1021,6 +1021,35 @@ def send_heartbeat_if_due(ist_now, active_obs):
 
         hb_state["last_sent_ist"] = ist_now.isoformat()
         save_json("heartbeat_state.json", hb_state)
+
+        # --- Rolling diagnostic log: append snapshot of this heartbeat ---
+        try:
+            ob_per_pair = {}
+            if isinstance(active_obs, dict):
+                for pair_name, pair_list in active_obs.items():
+                    ob_per_pair[pair_name] = len(pair_list) if isinstance(pair_list, list) else 0
+
+            log_entry = {
+                "ts": ist_now.isoformat(),
+                "ts_human": ist_now.strftime("%H:%M IST, %d %b %Y"),
+                "ob_count_total": diag["ob_count"],
+                "ob_count_per_pair": ob_per_pair,
+                "ob_age_hrs": diag["ob_age_hrs"],
+                "gemini_fails_3h": diag["gemini_fails"],
+                "yfinance_stale_3h": diag["yf_stale"],
+                "chart_fails_3h": diag["chart_fails"],
+                "issue_count": len(diag["issues"]),
+                "issues": [{"title": i["title"], "action": i["action"]} for i in diag["issues"]],
+            }
+            hb_log = load_json("heartbeat_log.json", [])
+            if not isinstance(hb_log, list):
+                hb_log = []
+            hb_log.append(log_entry)
+            hb_log = hb_log[-50:]  # keep last 50 heartbeats (~6 days at 3h interval)
+            save_json("heartbeat_log.json", hb_log)
+        except Exception as e:
+            print(f"  [HEARTBEAT LOG ERR] {e}")
+
         print(f"  [HEARTBEAT] Sent. Issues: {len(diag['issues'])}. OB count: {diag['ob_count']}.")
     except Exception as e:
         print(f"  [HEARTBEAT ERR] {e}")
