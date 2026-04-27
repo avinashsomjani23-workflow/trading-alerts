@@ -75,7 +75,7 @@ SWEEP_EQUAL_LEVEL_TOLERANCE_ATR = {
 # Sweep recency cap — sweeps older than this (relative to the OB candle) are
 # market-memory stale and excluded entirely. Counted in TRADING hours only
 # (Mon-Fri, weekends excluded). 72h ≈ 3 trading days.
-SWEEP_RECENCY_TRADING_HOURS = 72
+SWEEP_RECENCY_TRADING_HOURS = 10
 
 # Sweep observation window for Phase 1 (display-only badge). Same 72 trading-hour
 # rule applied during OB construction. Kept as a separate constant so Phase 1
