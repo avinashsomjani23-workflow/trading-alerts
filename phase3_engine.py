@@ -644,11 +644,16 @@ def run_phase3():
         send_email(f"TRADE READY (M5 SNIPER) | {pair_name} | {bias}", html, chart_b64)
         keys_to_delete.append(key)
 
+    # CONCURRENCY-SAFE SAVE: re-read latest disk state, delete only our processed keys.
+    # If P2 added new keys mid-run, those additions are preserved.
+    fresh_disk = load_json("active_watch_state.json", {})
+    deleted = 0
     for k in keys_to_delete:
-        if k in watch_state:
-            del watch_state[k]
-    save_json("active_watch_state.json", watch_state)
-    print("Phase 3 complete.")
+        if k in fresh_disk:
+            del fresh_disk[k]
+            deleted += 1
+    save_json("active_watch_state.json", fresh_disk)
+    print(f"Phase 3 complete. Watch deletions: {deleted}")
 
 
 if __name__ == "__main__":
