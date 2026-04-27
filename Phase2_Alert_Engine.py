@@ -35,6 +35,25 @@ def get_ist_now():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
 
+def get_day_id_ist(now=None):
+    """Trading-day identifier. Day starts at 09:00 IST. Mirrors Phase 1.
+    Pre-09:00 IST belongs to the previous day's slate."""
+    if now is None:
+        now = get_ist_now()
+    if now.hour >= 9:
+        return now.strftime("%Y-%m-%d")
+    return (now - timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def score_to_int(score):
+    """Integer floor of score. Stabilises 7.4 and 7.9 to the same bucket (7).
+    Used to decide whether a re-emerging zone has materially changed."""
+    try:
+        return int(float(score))
+    except Exception:
+        return -1
+
+
 def load_json(path, default):
     try:
         with open(path) as f:
@@ -1106,86 +1125,28 @@ if __name__ == "__main__":
 
     active_obs = load_slate_as_pair_map("active_obs.json")
     watch_state = load_json("active_watch_state.json", {})
-    phase2_sent = load_json("phase2_sent.json", {})
-    # CONCURRENCY FIX: track only keys this run touches (writes).
-    # Reads still go against watch_state (original snapshot). At save time we
-    # re-read disk and merge our writes on top — so we don't overwrite changes
-    # made by a concurrent P3 run that may have removed keys.
+    # --- Phase 2 dedup state — day-reset model ---
+    # Structure: { "day_id": "YYYY-MM-DD", "zones": { zone_id: {"score_int": 8, "alert_ist": "..."} } }
+    # Daily slate at 09:00 IST. Mirrors Phase 1's reset rhythm.
+    # Re-email policy: same zone re-emails ONLY when integer-floor score changes.
+    # No cooldown layer — score-change is the only re-alert trigger.
+    phase2_state = load_json("phase2_sent.json", {"day_id": None, "zones": {}})
+
+    # Defensive: handle legacy schema (flat zone_id -> iso) gracefully.
+    if not isinstance(phase2_state, dict) or "zones" not in phase2_state:
+        phase2_state = {"day_id": None, "zones": {}}
+
+    today_id = get_day_id_ist(ist_now)
+    if phase2_state.get("day_id") != today_id:
+        prev_count = len(phase2_state.get("zones", {}))
+        print(f"  [DAY RESET] New trading day {today_id}. Wiped {prev_count} prior zones.")
+        phase2_state = {"day_id": today_id, "zones": {}}
+        save_json("phase2_sent.json", phase2_state)
+
+    phase2_zones = phase2_state["zones"]
+
+    # CONCURRENCY: track watch_state writes; merge on save so P3 deletions stick.
     watch_writes = {}
-
-    # Dedup + cooldown constants
-    COOLDOWN_HOURS = 4  # Hard block on second alert for same (pair, bias) within this window
-
-    # Cooldown registry lives inside phase2_sent.json under a reserved meta-key.
-    # Structure: phase2_sent["__cooldown__"] = { "NZDUSD_SHORT": "2026-04-21T23:19:00", ... }
-    if "__cooldown__" not in phase2_sent or not isinstance(phase2_sent.get("__cooldown__"), dict):
-        phase2_sent["__cooldown__"] = {}
-    cooldown_map = phase2_sent["__cooldown__"]
-
-    # --- Purge expired dedup keys (trading-day-aware) ---
-    EXPIRY_TRADING_DAYS = {
-        "forex": 5,
-        "index": 3,
-        "commodity": 3
-    }
-    pair_type_map = {p["name"]: p.get("pair_type", "forex") for p in config["pairs"]}
-
-    def count_trading_days(from_dt, to_dt):
-        """Count weekdays (Mon-Fri) between two datetimes."""
-        days = 0
-        current = from_dt.date()
-        end = to_dt.date()
-        while current < end:
-            if current.weekday() < 5:  # Mon=0, Fri=4
-                days += 1
-            current += timedelta(days=1)
-        return days
-
-    keys_to_purge = []
-    for key, alerted_iso in phase2_sent.items():
-        # Skip meta-keys (reserved, leading __)
-        if key.startswith("__"):
-            continue
-        # Key format (new): PAIRNAME_BIAS_BOSTAG_PRICE  e.g. EURUSD_LONG_CHoCH_1.08450
-        # Key format (legacy): PAIRNAME_BIAS_PRICE e.g. EURUSD_LONG_1.08450
-        parts = key.split("_")
-        if len(parts) < 3:
-            continue
-        pair_name = parts[0]
-        ptype = pair_type_map.get(pair_name, "forex")
-        max_trading_days = EXPIRY_TRADING_DAYS.get(ptype, 5)
-        if not isinstance(alerted_iso, str):
-            continue
-        try:
-            alerted_dt = datetime.fromisoformat(alerted_iso)
-        except Exception:
-            continue
-        if count_trading_days(alerted_dt, ist_now) >= max_trading_days:
-            keys_to_purge.append(key)
-
-    for k in keys_to_purge:
-        del phase2_sent[k]
-
-    # Purge expired cooldown entries (older than COOLDOWN_HOURS)
-    cooldown_keys_to_purge = []
-    for cd_key, cd_iso in cooldown_map.items():
-        try:
-            cd_dt = datetime.fromisoformat(cd_iso)
-            if (ist_now - cd_dt).total_seconds() / 3600 >= COOLDOWN_HOURS:
-                cooldown_keys_to_purge.append(cd_key)
-        except Exception:
-            cooldown_keys_to_purge.append(cd_key)  # Corrupt → drop
-    for cdk in cooldown_keys_to_purge:
-        del cooldown_map[cdk]
-
-    if keys_to_purge or cooldown_keys_to_purge:
-        if keys_to_purge:
-            print(f"  [PURGE] Removed {len(keys_to_purge)} expired dedup keys: {keys_to_purge}")
-        if cooldown_keys_to_purge:
-            print(f"  [PURGE] Removed {len(cooldown_keys_to_purge)} expired cooldowns: {cooldown_keys_to_purge}")
-        # B4: Save immediately after purge to survive mid-scan crashes
-        save_json("phase2_sent.json", phase2_sent)
-
     balance = config["account"]["balance"]
     risk_pct = config["account"]["risk_percent"]
     dollar_risk = balance * (risk_pct / 100.0)
@@ -1369,40 +1330,34 @@ if __name__ == "__main__":
                 bos_tag = ob.get('bos_tag', 'BOS')
                 key_dp = max(0, dp - 1)
                 zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}"
-                pair_bias_key = f"{name}_{bias}"
-                watch_id = f"{name}_{round(proximal, dp)}"
 
-                # Layer 1: structural dedup — refresh watch but don't re-email
-                if zone_id in phase2_sent:
-                    if watch_id in watch_state:
-                        trade_data["alert_ist"] = watch_state[watch_id].get(
-                            "alert_ist", ist_now.isoformat()
-                        )
-                    watch_writes[watch_id] = trade_data
-                    scan_record["final_action"] = "dedup_already_alerted_ltf"
-                    append_scan_log(scan_record)
-                    continue
+                # Day-reset dedup with score-change re-email.
+                # First sighting today → email. Re-sighting with same int score → silent.
+                # Re-sighting with changed int score → email with UPDATED prefix.
+                current_score_int = score_to_int(score_res['total'])
+                prior = phase2_zones.get(zone_id)
+                is_update = False
+                prior_score_int = None
+                if prior is not None:
+                    prior_score_int = prior.get("score_int")
+                    if prior_score_int == current_score_int:
+                        scan_record["final_action"] = f"dedup_score_unchanged ({current_score_int})"
+                        append_scan_log(scan_record)
+                        continue
+                    is_update = True
 
-                # Layer 2: 4-hour cooldown per (pair, bias)
-                cd_iso = cooldown_map.get(pair_bias_key)
-                if cd_iso:
-                    try:
-                        cd_dt = datetime.fromisoformat(cd_iso)
-                        hrs_since = (ist_now - cd_dt).total_seconds() / 3600
-                        if hrs_since < COOLDOWN_HOURS:
-                            print(f"  [-] {name} {bias}: cooldown active ({hrs_since:.1f}h of {COOLDOWN_HOURS}h). Skipping.")
-                            scan_record["final_action"] = f"cooldown_active ({hrs_since:.1f}h)"
-                            append_scan_log(scan_record)
-                            continue
-                    except Exception:
-                        pass  # Corrupt timestamp — treat as expired, fall through
-                # Register key and cooldown BEFORE send, save immediately.
-                # This ensures that if send crashes, we don't re-alert on next run.
-                phase2_sent[zone_id] = ist_now.isoformat()
-                cooldown_map[pair_bias_key] = ist_now.isoformat()
-                save_json("phase2_sent.json", phase2_sent)
+                # Register zone state BEFORE send. Survives mid-scan crash.
+                phase2_zones[zone_id] = {
+                    "score_int": current_score_int,
+                    "score_raw": float(score_res['total']),
+                    "alert_ist": ist_now.isoformat(),
+                    "bias": bias,
+                    "pair": name
+                }
+                save_json("phase2_sent.json", phase2_state)
 
-                # B2: Pass levels and dr to H1 chart
+                # Limit zones do NOT write to active_watch_state.json.
+                # Phase 3 only handles ltf_choch zones (NAS100, GOLD).
                 h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
                                              f"{name} H1 - {bias} zone context", levels, dr)
                 m15_chart = generate_m15_chart(
@@ -1410,7 +1365,6 @@ if __name__ == "__main__":
                     levels, ob, pair_conf, fvg_data, score_res.get('sweep_price'), dr
                 )
 
-                # B8: Track chart rendering success for email banner
                 h1_ok = h1_chart is not None
                 m15_ok = m15_chart is not None
                 if not h1_ok:
@@ -1418,62 +1372,67 @@ if __name__ == "__main__":
                 if not m15_ok:
                     _log_chart_failure(name, "m15_phase2_limit")
 
-                # NEW
+                if is_update:
+                    subject_prefix = "TRADE READY (UPDATED)"
+                    email_label = f"TRADE READY — Score updated {prior_score_int} → {current_score_int}"
+                    log_action = f"alert_sent_TRADE_READY_UPDATED ({prior_score_int}->{current_score_int})"
+                    print_label = f"TRADE READY UPDATE (FOREX): {name} score {prior_score_int}->{current_score_int}"
+                else:
+                    subject_prefix = "TRADE READY"
+                    email_label = "TRADE READY"
+                    log_action = "alert_sent_TRADE_READY"
+                    print_label = f"TRADE READY (FOREX): {name}"
+
                 html = build_trade_email(
-                    trade_data, name, pair_conf, "TRADE READY",
+                    trade_data, name, pair_conf, email_label,
                     scorecard_rows, score_res['total'],
                     atr_label, distance_str, dollar_risk_str, scan_start_ts,
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
                 send_email(
-                    f"TRADE READY | {name} | {bias} | {ist_now.strftime('%H:%M IST')}",
+                    f"{subject_prefix} | {name} | {bias} | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
-                print(f"  [OK] TRADE READY (FOREX): {name}")
-                scan_record["final_action"] = "alert_sent_TRADE_READY"
+                print(f"  [OK] {print_label}")
+                scan_record["final_action"] = log_action
                 append_scan_log(scan_record)
             elif entry_model == "ltf_choch":
                 bos_swing_px = float(ob.get('bos_swing_price', proximal))
                 bos_tag = ob.get('bos_tag', 'BOS')
                 key_dp = max(0, dp - 1)
                 zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}"
-                pair_bias_key = f"{name}_{bias}"
                 watch_id = f"{name}_{round(proximal, dp)}"
 
-                # Layer 1: structural dedup — refresh watch but don't re-email
-                if zone_id in phase2_sent:
-                    if watch_id in watch_state:
-                        trade_data["alert_ist"] = watch_state[watch_id].get(
-                            "alert_ist", ist_now.isoformat()
-                        )
-                    watch_writes[watch_id] = trade_data
-                    continue
+                # Day-reset dedup with score-change re-email. Same model as limit branch.
+                current_score_int = score_to_int(score_res['total'])
+                prior = phase2_zones.get(zone_id)
+                is_update = False
+                prior_score_int = None
+                if prior is not None:
+                    prior_score_int = prior.get("score_int")
+                    if prior_score_int == current_score_int:
+                        # Same zone, same score — silent. But keep watch_state fresh
+                        # so Phase 3 keeps monitoring this zone for M5 trigger.
+                        if watch_id in watch_state:
+                            trade_data["alert_ist"] = watch_state[watch_id].get(
+                                "alert_ist", ist_now.isoformat()
+                            )
+                        watch_writes[watch_id] = trade_data
+                        scan_record["final_action"] = f"dedup_score_unchanged_ltf ({current_score_int})"
+                        append_scan_log(scan_record)
+                        continue
+                    is_update = True
 
-                # Layer 2: 4-hour cooldown per (pair, bias)
-                cd_iso = cooldown_map.get(pair_bias_key)
-                if cd_iso:
-                    try:
-                        cd_dt = datetime.fromisoformat(cd_iso)
-                        hrs_since = (ist_now - cd_dt).total_seconds() / 3600
-                        if hrs_since < COOLDOWN_HOURS:
-                            print(f"  [-] {name} {bias}: cooldown active ({hrs_since:.1f}h of {COOLDOWN_HOURS}h). Skipping APPROACHING alert.")
-                            # Still refresh watch_state so Phase 3 keeps monitoring if zone was previously logged
-                            if watch_id in watch_state:
-                                trade_data["alert_ist"] = watch_state[watch_id].get(
-                                    "alert_ist", ist_now.isoformat()
-                                )
-                                watch_writes[watch_id] = trade_data
-                            scan_record["final_action"] = f"cooldown_active_ltf ({hrs_since:.1f}h)"
-                            append_scan_log(scan_record)
-                            continue
-                    except Exception:
-                        pass
+                # Register zone state BEFORE send.
+                phase2_zones[zone_id] = {
+                    "score_int": current_score_int,
+                    "score_raw": float(score_res['total']),
+                    "alert_ist": ist_now.isoformat(),
+                    "bias": bias,
+                    "pair": name
+                }
+                save_json("phase2_sent.json", phase2_state)
 
-                phase2_sent[zone_id] = ist_now.isoformat()
-                cooldown_map[pair_bias_key] = ist_now.isoformat()
-                save_json("phase2_sent.json", phase2_sent)
-
-                # B2: Pass levels and dr to H1 chart
                 h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
                                              f"{name} H1 - {bias} zone context", levels, dr)
                 m15_chart = generate_m15_chart(
@@ -1481,7 +1440,6 @@ if __name__ == "__main__":
                     levels, ob, pair_conf, fvg_data, score_res.get('sweep_price'), dr
                 )
 
-                # B8: Track chart rendering success
                 h1_ok = h1_chart is not None
                 m15_ok = m15_chart is not None
                 if not h1_ok:
@@ -1489,24 +1447,34 @@ if __name__ == "__main__":
                 if not m15_ok:
                     _log_chart_failure(name, "m15_phase2_ltf")
 
-                # NEW
+                if is_update:
+                    subject_prefix = "APPROACHING (UPDATED)"
+                    email_label = f"APPROACHING — Score updated {prior_score_int} → {current_score_int}"
+                    log_action = f"alert_sent_APPROACHING_UPDATED ({prior_score_int}->{current_score_int})"
+                    print_label = f"APPROACHING UPDATE: {name} score {prior_score_int}->{current_score_int}"
+                else:
+                    subject_prefix = "APPROACHING"
+                    email_label = "APPROACHING"
+                    log_action = "alert_sent_APPROACHING"
+                    print_label = f"LOGGED FOR PHASE 3: {name}"
+
                 html = build_trade_email(
-                    trade_data, name, pair_conf, "APPROACHING",
+                    trade_data, name, pair_conf, email_label,
                     scorecard_rows, score_res['total'],
                     atr_label, distance_str, dollar_risk_str, scan_start_ts,
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
                 send_email(
-                    f"APPROACHING | {name} | {bias} | {ist_now.strftime('%H:%M IST')}",
+                    f"{subject_prefix} | {name} | {bias} | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
 
                 watch_writes[watch_id] = trade_data
-                print(f"  [>] LOGGED FOR PHASE 3: {name}")
-                scan_record["final_action"] = "alert_sent_APPROACHING"
+                print(f"  [>] {print_label}")
+                scan_record["final_action"] = log_action
                 append_scan_log(scan_record)
 
-    save_json("phase2_sent.json", phase2_sent)
+    save_json("phase2_sent.json", phase2_state)
 
     # CONCURRENCY-SAFE SAVE: re-read latest disk state, apply only our upserts.
     # If P3 deleted keys mid-run, those deletions are preserved.
