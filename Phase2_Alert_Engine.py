@@ -1338,6 +1338,7 @@ if __name__ == "__main__":
                 key_dp = max(0, dp - 1)
                 zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}"
                 pair_bias_key = f"{name}_{bias}"
+                watch_id = f"{name}_{round(proximal, dp)}"
 
                 # Layer 1: structural dedup — refresh watch but don't re-email
                 if zone_id in phase2_sent:
