@@ -18,7 +18,6 @@ jobs:
             echo "active_watch_state.json missing. Skipping."
             exit 0
           fi
-          # Count non-meta keys using python3 (pre-installed on ubuntu-latest)
           COUNT=$(python3 -c "
           import json, sys
           try:
@@ -64,7 +63,8 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          ALL_FILES="alert_log.json scan_log.json system_status.json zone_visit_state.json active_watch_state.json phase2_sent.json yfinance_stale_log.json gemini_failure_log.json chart_failure_log.json"
+          # P3 writes: active_watch_state (shared with P2), yfinance_stale_log (shared), chart_failure_log (shared with P2).
+          ALL_FILES="active_watch_state.json yfinance_stale_log.json chart_failure_log.json"
 
           FILES=""
           for f in $ALL_FILES; do
@@ -72,42 +72,35 @@ jobs:
           done
           echo "Files to commit: $FILES"
 
-          mkdir -p /tmp/p3_writes
-          for f in $FILES; do
-            cp "$f" "/tmp/p3_writes/$f"
-          done
-
-          git fetch origin main
-          git reset --hard origin/main
-          for f in $FILES; do
-            cp "/tmp/p3_writes/$f" "$f"
-          done
-
-          git add $FILES
-          if git diff --staged --quiet; then
-            echo "No changes to commit."
+          if [ -z "$FILES" ]; then
+            echo "Nothing to commit."
             exit 0
           fi
 
-          git commit -m "P3 Update [skip ci]"
+          git add $FILES
+          if git diff --staged --quiet; then
+            echo "No changes."
+            exit 0
+          fi
 
           for i in 1 2 3 4 5; do
+            git stash push -- $FILES || true
+            git fetch origin main
+            git reset --hard origin/main
+            git stash pop || true
+
+            git add $FILES 2>/dev/null || true
+            if git diff --staged --quiet; then
+              echo "Nothing to commit after sync."
+              exit 0
+            fi
+
+            git commit -m "P3 Update [skip ci]"
             if git push origin HEAD:main; then
               echo "Push succeeded on attempt $i."
               exit 0
             fi
-            echo "Push rejected. Rebasing and retrying (attempt $i)."
-            git fetch origin main
-            git reset --hard origin/main
-            for f in $FILES; do
-              if [ -f "/tmp/p3_writes/$f" ]; then cp "/tmp/p3_writes/$f" "$f"; fi
-            done
-            git add $FILES || true
-            if git diff --staged --quiet; then
-              echo "Nothing to commit after rebase."
-              exit 0
-            fi
-            git commit -m "P3 Update [skip ci]"
+            echo "Push rejected. Retrying (attempt $i)."
             sleep 2
           done
 
