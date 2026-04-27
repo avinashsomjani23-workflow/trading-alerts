@@ -49,6 +49,38 @@ def save_json(path, data):
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
+def load_slate_as_pair_map(path="active_obs.json"):
+    """
+    Backward-compatible reader. Phase 1 daily-slate schema is:
+      {"slate_date": "...", "slate_started_iso": "...",
+       "pairs": {"EURUSD": {"next_id_counter": N, "zones": [...]}, ...}}
+
+    Legacy flat schema:
+      {"EURUSD": [...], "USDJPY": [...], ...}
+
+    Phase 2's runtime expects flat {pair_name: [zones]}. This adapter
+    detects the schema version and returns the flat map regardless.
+
+    For new schema: only zones with status="active" are returned.
+    Dropped zones are excluded — Phase 2 must never alert on a dropped zone.
+    """
+    raw = load_json(path, {})
+    if not isinstance(raw, dict):
+        return {}
+    # New schema detection: presence of "pairs" key with dict value
+    if "pairs" in raw and isinstance(raw.get("pairs"), dict):
+        flat = {}
+        for pair_name, pblock in raw["pairs"].items():
+            if not isinstance(pblock, dict):
+                continue
+            zones = pblock.get("zones", [])
+            if not isinstance(zones, list):
+                continue
+            # Filter to active only — dropped zones must not feed Phase 2
+            flat[pair_name] = [z for z in zones if z.get("status") == "active"]
+        return flat
+    # Legacy schema: assume already flat
+    return raw
     
 def append_scan_log(entry):
     """Append one JSON line per pair per scan to phase2_scan_log.jsonl."""
@@ -1072,7 +1104,7 @@ if __name__ == "__main__":
     scan_start_ts = ist_now  # Captured at scan start; separate from per-alert send time.
     print(f"Phase 2 Engine started {ist_now.strftime('%H:%M')} IST")
 
-    active_obs = load_json("active_obs.json", {})
+    active_obs = load_slate_as_pair_map("active_obs.json")
     watch_state = load_json("active_watch_state.json", {})
     phase2_sent = load_json("phase2_sent.json", {})
     # CONCURRENCY FIX: track only keys this run touches (writes).
