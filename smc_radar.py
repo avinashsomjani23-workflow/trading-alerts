@@ -278,7 +278,7 @@ def is_valid_ob_candle(open_p, close_p, high_p, low_p):
     rng  = high_p - low_p
     if rng == 0:
         return False
-    return body > (rng * 0.15)
+    return body > (rng * 0.10)
 
 # NEW
 def detect_smc_radar(df, lookback, pair_type="forex"):
@@ -387,31 +387,34 @@ def detect_smc_radar(df, lookback, pair_type="forex"):
 
         ob_high = float(H[ob_idx])
         ob_low  = float(L[ob_idx])
+        ob_proximal = ob_high if bos_type == 'bullish' else ob_low
 
-        # FVG detection — leg-bounded via smc_detector (uniform across phases).
+        # PROXIMITY GATE — applied immediately after OB found, before any
+        # further work on this zone. Drop zones whose proximal sits more than
+        # 4× H1 ATR from current price. Saves compute (no FVG calc) and email
+        # noise (no card for unreachable zones).
+        current_price_now = float(C[-1])
+        if h1_atr_for_leg and h1_atr_for_leg > 0:
+            proximity_cap = 4.0 * h1_atr_for_leg
+            if abs(current_price_now - ob_proximal) > proximity_cap:
+                continue  # zone too far — drop silently
+
+        # FVG detection — H1 OB internal gap. Kept as Phase 1 badge.
         # Window: OB candle to BOS candle + 1 (catches displacement gaps on/just-after BOS).
         # Walks BACKWARD → first unmitigated FVG closest to BOS wins.
-        # If candidate is filled, returns ghost data for grey-box rendering.
-        ob_high_for_fvg = ob_high
-        ob_low_for_fvg  = ob_low
         bias_label      = "LONG" if bos_type == 'bullish' else "SHORT"
         h1_atr_for_fvg  = h1_atr_for_leg if h1_atr_for_leg else 0.0
         fvg_floor_mult  = smc_detector.FVG_NOISE_FLOOR_MULT.get("forex", 0.20)
-        # NOTE: pair_type is known to the caller in run_radar; we use the OB's
-        # own high/low as the zone overlap window, and let Phase 1's caller
-        # apply pair-type-aware floor below. For this helper we use H1 ATR
-        # with a neutral 0.20 floor — safe across all pairs on H1.
         atr_floor_h1    = fvg_floor_mult * h1_atr_for_fvg
 
         fvg_result = smc_detector.detect_fvg_in_zone(
-            df, bias_label, ob_high_for_fvg, ob_low_for_fvg, atr_floor_h1,
+            df, bias_label, ob_high, ob_low, atr_floor_h1,
             leg_start_idx=ob_idx, leg_end_idx=i
         )
 
-        # Absolute timestamp helpers — used by Phase 2/3 to locate candles in
-        # their own dataframes, since integer indices (ob_idx, bos_idx, c1_idx)
-        # are NOT portable across phases (rolling yfinance window shifts the
-        # df start point between scans).
+        # Absolute timestamp helpers — used by Phase 2 to locate candles in
+        # their own dataframes, since integer indices are NOT portable across
+        # phases (rolling yfinance window shifts the df start point between scans).
         def _ts_for_idx(idx_val):
             if idx_val is None:
                 return None
@@ -433,10 +436,8 @@ def detect_smc_radar(df, lookback, pair_type="forex"):
 
         ob_timestamp_str = _ts_for_idx(ob_idx)
         bos_timestamp_str = _ts_for_idx(i)
-        fvg_c1_ts_str = _ts_for_idx(fvg_result.get('c1_idx'))
-        ghost_c1_ts_str = _ts_for_idx(fvg_result.get('ghost_c1_idx'))
 
-       # Build fvg dict — pristine (dark green), partial (light green),
+        # Build fvg dict — pristine (dark green), partial (light green),
         # full (grey/ghost), or absent.
         fvg_dict = {
             'exists':       fvg_result.get('exists', False),
@@ -453,22 +454,8 @@ def detect_smc_radar(df, lookback, pair_type="forex"):
             'mitigated_at_idx': fvg_result.get('mitigated_at_idx')
         }
 
-        # Phase 1 sweep observation — display-only badge for the email card.
-        # Phase 2 ignores this field and re-grades from scratch on fresh data.
-        # We grade against H1 swings within 72 trading hours BEFORE the OB candle.
-        sweep_obs_swings = swings  # Phase 1's H1 swings (already in scope)
-        sweep_obs = smc_detector.grade_sweep(
-            df, sweep_obs_swings, ob_idx, bias_label,
-            h1_atr_for_leg, pair_type, tf_label="H1"
-        )
-        sweep_observed = {
-            'exists': sweep_obs['score'] > 0.0,
-            'tier':   sweep_obs['tier'],
-            'price':  sweep_obs['price'],
-            'tf':     sweep_obs['tf'],
-            'score':  sweep_obs['score'],
-            'hours_before_ob': sweep_obs['hours_before_anchor']
-        }
+        # NOTE: liquidity sweep grading removed from Phase 1.
+        # Phase 2 grades sweep on fresh M15 + H1 data when zone is approached.
 
         active_obs.append({
             'bos_idx':           i,
@@ -487,10 +474,11 @@ def detect_smc_radar(df, lookback, pair_type="forex"):
             'distal_line':     ob_low  if bos_type == 'bullish' else ob_high,
             'median_leg_body': median_leg_body,
             'ob_body':         abs(C[ob_idx] - O[ob_idx]),
-            'fvg': fvg_dict,
-            'sweep_observed': sweep_observed
+            'h1_atr':          float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
+            'fvg': fvg_dict
         })
-    # Mitigation + touch tracking
+# Mitigation + touch tracking. Sets 'touches' and 'status' on each OB.
+    # Must run BEFORE dedupe so the touch-state test in dedupe is meaningful.
     tracked_obs = []
     for ob in active_obs:
         mitigated = False
@@ -528,42 +516,71 @@ def detect_smc_radar(df, lookback, pair_type="forex"):
             filtered.append(ob)
             break
 
-    # Same-leg dedupe: if two OBs in `filtered` share a direction AND their
-    # proximal lines sit within the pair-type proximity threshold, they are
-    # the same visual zone. Keep the one with an unmitigated FVG; if tied,
-    # keep the one with the higher bos_idx (freshest structure).
-    # NOTE: proximity_threshold is resolved in the caller (run_radar) via
-    # pair_type — here we pass the threshold via ob['_dedupe_thresh'] which
-    # the caller injects. If absent, we fall back to forex default.
+    # Same-leg dedupe: 4-test ladder applied in strict order.
+    # Pristine > FVG-holder > Freshest > Defensive.
+    # Touch state ('touches' field) is set above in mitigation block.
     def _dedupe_same_leg(obs):
+        """
+        Same-leg dedupe — 4-test ladder applied in strict order.
+        Two OBs in same direction with proximal lines within pair-aware
+        threshold are the same visual zone. Keep one using:
+
+          Test 1: Pristine (0 touches) beats Tested.
+          Test 2: Both same touch state — FVG-holder wins.
+          Test 3: Tied on touch and FVG — freshest (higher bos_idx) wins.
+          Test 4: Defensive — identical bos_idx, keep first encountered.
+        """
         if len(obs) < 2:
             return obs
+
+        def _pick_winner(a, b):
+            a_touches = a.get('touches', 0)
+            b_touches = b.get('touches', 0)
+            a_pristine = (a_touches == 0)
+            b_pristine = (b_touches == 0)
+            if a_pristine and not b_pristine:
+                return a
+            if b_pristine and not a_pristine:
+                return b
+
+            a_fvg = a['fvg'].get('exists', False)
+            b_fvg = b['fvg'].get('exists', False)
+            if a_fvg and not b_fvg:
+                return a
+            if b_fvg and not a_fvg:
+                return b
+
+            if a['bos_idx'] > b['bos_idx']:
+                return a
+            if b['bos_idx'] > a['bos_idx']:
+                return b
+
+            logging.warning(
+                f"Dedupe Test 4 triggered — identical bos_idx {a['bos_idx']} "
+                f"for direction {a['direction']}. Keeping first."
+            )
+            return a
+
         by_dir = {}
         for o in obs:
             by_dir.setdefault(o['direction'], []).append(o)
+
         kept = []
         for direction, group in by_dir.items():
             if len(group) == 1:
                 kept.extend(group)
                 continue
-            group_sorted = sorted(group, key=lambda x: x['bos_idx'], reverse=True)
             survivors = []
-            for cand in group_sorted:
-                is_dup = False
+            for cand in group:
                 thresh = cand.get('_dedupe_thresh', 0.00030)
-                for surv in survivors:
+                merged = False
+                for idx, surv in enumerate(survivors):
                     if abs(cand['proximal_line'] - surv['proximal_line']) <= thresh:
-                        # Duplicate. Prefer the one with unmitigated FVG.
-                        cand_has_fvg = cand['fvg'].get('exists', False)
-                        surv_has_fvg = surv['fvg'].get('exists', False)
-                        if cand_has_fvg and not surv_has_fvg:
-                            # Replace survivor with cand.
-                            survivors.remove(surv)
-                            survivors.append(cand)
-                        # else: keep current survivor (freshest by bos_idx).
-                        is_dup = True
+                        winner = _pick_winner(cand, surv)
+                        survivors[idx] = winner
+                        merged = True
                         break
-                if not is_dup:
+                if not merged:
                     survivors.append(cand)
             kept.extend(survivors)
         return kept
@@ -1061,7 +1078,235 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
       {legend_html}
     </div>"""
 
+def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp):
+    """
+    Render an active zone card. Used for both NEW and UNCHANGED active zones.
+    NEW badge is rendered inline based on sz['is_new_this_scan'].
+    H1 ATR shown in zone metrics.
+    """
+    direction  = "Bullish (Demand)" if sz['direction'] == 'bullish' else "Bearish (Supply)"
+    dir_color  = '#27ae60' if sz['direction'] == 'bullish' else '#e74c3c'
+    status_label = sz.get('status_label', 'Pristine')
+    stat_color = '#27ae60' if 'Pristine' in status_label else '#e67e22'
 
+    fvg = sz.get('fvg', {})
+    mit = fvg.get('mitigation', 'none')
+    if fvg.get('exists') and mit == 'partial':
+        fvg_line = (
+            f"FVG: <span style='color:#7ed67e;'>◐ Partial "
+            f"{fvg['fvg_bottom']:.{dp}f} – {fvg['fvg_top']:.{dp}f}</span>"
+        )
+    elif fvg.get('exists'):
+        fvg_line = (
+            f"FVG: <span style='color:#27ae60;'>✓ {fvg['fvg_bottom']:.{dp}f} – "
+            f"{fvg['fvg_top']:.{dp}f}</span>"
+        )
+    elif fvg.get('was_detected'):
+        gb = fvg.get('ghost_bottom')
+        gt = fvg.get('ghost_top')
+        fvg_line = (
+            f"FVG: <span style='color:#888;'>✗ Mitigated "
+            f"({gb:.{dp}f} – {gt:.{dp}f})</span>"
+        )
+    else:
+        fvg_line = "FVG: <span style='color:#888;'>None</span>"
+
+    pip_unit  = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
+    zone_pips = round(abs(sz['proximal_line'] - sz['distal_line']) / pip_unit, 1)
+    h1_atr_val = sz.get('h1_atr', 0.0)
+    atr_display = f"{h1_atr_val:.{dp}f}" if h1_atr_val > 0 else "—"
+
+    is_new = sz.get('is_new_this_scan', False)
+    new_badge = ""
+    if is_new:
+        new_badge = (
+            "<span style='background:#27ae60;color:#fff;font-size:9px;padding:2px 6px;"
+            "border-radius:3px;margin-left:6px;font-weight:bold;'>NEW</span>"
+        )
+
+    chart_html = (
+        f'<img src="cid:{cid}" style="width:100%;max-width:600px;border-radius:6px;'
+        f'border:1px solid #2a2a3e;display:block;" />'
+        if cid else
+        '<div style="padding:8px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;'
+        'border-radius:4px;color:#e74c3c;font-size:11px;">&#9888; Chart unavailable.</div>'
+    )
+    legend_html = _phase1_chart_legend_html(sz.get('bos_tag', 'BOS'))
+
+    return f"""
+    <div style="margin-bottom:28px;padding:16px;background:#1a1a2e;border-radius:8px;
+                border-left:4px solid {dir_color};">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;
+                  margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+        <div>
+          <span style="font-size:10px;color:#888;font-family:monospace;margin-right:6px;">{sz['zone_id']}</span>
+          <span style="font-size:14px;font-weight:bold;color:#eee;">{name}</span>
+          <span style="font-size:12px;color:{dir_color};margin-left:8px;">{direction}</span>
+          {new_badge}
+        </div>
+        <span style="font-size:10px;color:#666;">{ist_timestamp} IST</span>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;">
+        <span style="font-size:11px;color:#aaa;">
+          <b style="color:#bb8fce;">Proximal</b> {sz['proximal_line']:.{dp}f}
+        </span>
+        <span style="font-size:11px;color:#aaa;">
+          <b style="color:#bb8fce;">Distal</b> {sz['distal_line']:.{dp}f}
+        </span>
+        <span style="font-size:11px;color:#aaa;">
+          <b>Width</b> {zone_pips} pips
+        </span>
+        <span style="font-size:11px;color:{stat_color};">
+          <b>Status</b> {status_label}
+        </span>
+        <span style="font-size:11px;color:#aaa;">
+          <b style="color:#bb8fce;">H1 ATR</b> {atr_display}
+        </span>
+        <span style="font-size:11px;color:#aaa;">{fvg_line}</span>
+      </div>
+      <p style="font-size:12px;color:#bbb;line-height:1.6;margin:0 0 12px 0;
+                border-left:3px solid #2a2a3e;padding-left:10px;">
+        {narrative}
+      </p>
+      {chart_html}
+      {legend_html}
+    </div>"""
+
+
+def build_dropped_zone_line(sz, name, dp):
+    """One-line note for a dropped zone."""
+    reason_map = {
+        "mitigated": "mitigated (distal broken or 3+ touches)",
+        "out_of_proximity": "moved beyond 4× H1 ATR from price",
+        "structure_invalidated": "structure no longer valid",
+        "stale_data": "stale data — zone unverifiable"
+    }
+    reason_text = reason_map.get(sz.get("drop_reason", ""), sz.get("drop_reason", "unknown"))
+    direction = "Bullish" if sz['direction'] == 'bullish' else "Bearish"
+    dir_color = '#27ae60' if sz['direction'] == 'bullish' else '#e74c3c'
+    return f"""
+    <div style="margin-bottom:6px;padding:7px 10px;background:#2a1a1a;
+                border-left:3px solid #e74c3c;border-radius:3px;opacity:0.7;">
+      <span style="font-size:10px;color:#888;font-family:monospace;margin-right:6px;">{sz['zone_id']}</span>
+      <span style="font-size:11px;font-weight:bold;color:#aaa;">{name}</span>
+      <span style="font-size:11px;color:{dir_color};margin-left:6px;">{direction}</span>
+      <span style="font-size:11px;color:#666;margin-left:6px;font-family:monospace;">
+        {sz['proximal_line']:.{dp}f} / {sz['distal_line']:.{dp}f}
+      </span>
+      <span style="font-size:11px;color:#e74c3c;margin-left:8px;">
+        DROPPED — {reason_text}
+      </span>
+    </div>"""
+
+
+def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
+    """
+    Wrapper around generate_zone_narrative that injects H1 ATR into the prompt
+    and fallback. Calls Gemini with ATR-aware prompt; falls back to local
+    narrative on failure.
+    """
+    if not GEMINI_API_KEY:
+        return _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr)
+
+    direction    = "bullish demand" if ob['direction'] == 'bullish' else "bearish supply"
+    proximal     = ob['proximal_line']
+    distal       = ob['distal_line']
+    pip_unit     = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
+    zone_pips    = round(abs(proximal - distal) / pip_unit, 1)
+    dist_pips    = round(abs(current_price - proximal) / pip_unit, 1)
+    atr_display  = f"{h1_atr:.{dp}f}" if h1_atr > 0 else "n/a"
+
+    if ob['fvg'].get('exists'):
+        mit = ob['fvg'].get('mitigation', 'pristine')
+        if mit == 'partial':
+            fvg_status = (
+                f"partially mitigated FVG between {ob['fvg']['fvg_bottom']:.{dp}f} "
+                f"and {ob['fvg']['fvg_top']:.{dp}f} (price tagged proximal, distal intact)"
+            )
+        else:
+            fvg_status = (
+                f"pristine FVG between {ob['fvg']['fvg_bottom']:.{dp}f} "
+                f"and {ob['fvg']['fvg_top']:.{dp}f}"
+            )
+    elif ob['fvg'].get('was_detected'):
+        fvg_status = "FVG fully mitigated — zone relies on OB alone"
+    else:
+        fvg_status = "no FVG present"
+    ratio = round(ob['ob_body'] / ob['median_leg_body'], 2) if ob['median_leg_body'] > 0 else 0
+
+    prompt = f"""You are a veteran SMC (Smart Money Concepts) prop trader writing a zone briefing for another experienced SMC trader.
+Be direct. No fluff. No pleasantries. Four sentences only. One paragraph.
+
+ZONE DATA — use these exact values, do not recalculate:
+- Pair: {name}
+- Bias: {direction} | Structure event: {ob['bos_tag']}
+- Proximal: {proximal:.{dp}f} | Distal: {distal:.{dp}f}
+- Zone width: {zone_pips} pips
+- OB body vs median impulse leg: {ob['ob_body']:.{dp}f} vs {ob['median_leg_body']:.{dp}f} (ratio: {ratio}x)
+- FVG: {fvg_status}
+- Zone status: {ob.get('status', 'Pristine')}
+- Current H1 ATR: {atr_display}
+- Current price: {current_price:.{dp}f} | Distance to proximal: {dist_pips} pips
+
+WRITE EXACTLY FOUR SENTENCES IN THIS ORDER:
+1. What structure event ({ob['bos_tag']}) created this zone and why institutional accumulation is likely here.
+2. OB quality: assess tightness (ratio {ratio}x), and whether pristine or tested means strength or caution.
+3. FVG assessment: displacement confirmation present or absent, and what that means for zone conviction.
+4. Current price context: distance to zone ({dist_pips} pips) measured against H1 ATR ({atr_display}), whether price is approaching or far, and what to watch for.
+
+STRICT OUTPUT RULES:
+- Plain text only
+- No bullet points, no headers, no markdown, no bold, no numbers
+- Four sentences, one paragraph
+- Do not repeat the zone levels in every sentence"""
+
+    try:
+        model = genai.GenerativeModel(
+            model_name="gemini-2.5-flash",
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.3,
+                max_output_tokens=300,
+                thinking_config=genai.types.ThinkingConfig(thinking_budget=0)
+            )
+        )
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+        if len(text) < 50:
+            return _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr)
+        return text
+    except Exception as e:
+        logging.error(f"Gemini narrative error for {name}: {e}")
+        return _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr)
+
+
+def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr):
+    pip_unit  = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
+    dist_pips = round(abs(current_price - ob['proximal_line']) / pip_unit, 1)
+    atr_display = f"{h1_atr:.{dp}f}" if h1_atr > 0 else "n/a"
+    if ob['fvg'].get('exists'):
+        mit = ob['fvg'].get('mitigation', 'pristine')
+        if mit == 'partial':
+            fvg_line = (
+                f"FVG partially mitigated between {ob['fvg']['fvg_bottom']:.{dp}f}–{ob['fvg']['fvg_top']:.{dp}f} "
+                f"— proximal tagged, distal still intact."
+            )
+        else:
+            fvg_line = (
+                f"FVG confirmed between {ob['fvg']['fvg_bottom']:.{dp}f}–{ob['fvg']['fvg_top']:.{dp}f}, "
+                f"adding displacement confluence."
+            )
+    elif ob['fvg'].get('was_detected'):
+        fvg_line = "FVG fully mitigated — zone relies on OB alone for confluence."
+    else:
+        fvg_line = "No FVG present — zone relies on OB alone for confluence."
+    return (
+        f"{ob['bos_tag']} confirmed the {ob['direction']} shift; this OB marks the last institutional "
+        f"accumulation before the break. "
+        f"OB body ratio {round(ob['ob_body']/ob['median_leg_body'],2):.2f}x vs median leg. "
+        f"{fvg_line} "
+        f"Current price is {dist_pips} pips from proximal (H1 ATR {atr_display}) — "
+        f"{'approaching zone, watch for reaction.' if dist_pips < 50 else 'still distant, no immediate action.'}"
+    )
 def build_changed_zone_html(stored_zone, changes, name, dp, cid=None):
     direction = "Bullish" if stored_zone['direction'] == 'bullish' else "Bearish"
     dir_color = '#27ae60' if stored_zone['direction'] == 'bullish' else '#e74c3c'
@@ -1208,7 +1453,91 @@ OB_DEDUPE_THRESHOLDS = {
     "commodity": 1.0        # $1 on GOLD
 }
 
+def send_master_digest_v2(summary_table_html, new_zone_cards, unchanged_zone_cards,
+                          dropped_lines, attachments, zone_count, ist_time):
+    """
+    Daily-slate digest. Three sections:
+      - NEW (full cards with charts)
+      - UNCHANGED ACTIVE (full cards with charts — every active zone gets chart)
+      - DROPPED (one-line notes with reason)
+    """
+    new_html      = "".join(new_zone_cards)
+    unchanged_html = "".join(unchanged_zone_cards)
+    dropped_html  = "".join(dropped_lines)
 
+    sections = ""
+    if new_zone_cards:
+        sections += f"""
+        <div style="margin-bottom:20px;">
+          <h3 style="color:#27ae60;font-size:12px;letter-spacing:1px;margin:0 0 10px 0;
+                     text-transform:uppercase;border-bottom:1px solid #1e3a2f;padding-bottom:6px;">
+            New Zones ({len(new_zone_cards)})
+          </h3>
+          {new_html}
+        </div>"""
+
+    if unchanged_zone_cards:
+        sections += f"""
+        <div style="margin-bottom:20px;">
+          <h3 style="color:#7a8aa6;font-size:12px;letter-spacing:1px;margin:0 0 10px 0;
+                     text-transform:uppercase;border-bottom:1px solid #1a2a3a;padding-bottom:6px;">
+            Active Zones — Refreshed ({len(unchanged_zone_cards)})
+          </h3>
+          {unchanged_html}
+        </div>"""
+
+    if dropped_lines:
+        sections += f"""
+        <div style="margin-bottom:8px;">
+          <h3 style="color:#e74c3c;font-size:11px;letter-spacing:1px;margin:0 0 8px 0;
+                     text-transform:uppercase;border-bottom:1px solid #2a1a1a;padding-bottom:6px;">
+            Dropped This Scan ({len(dropped_lines)})
+          </h3>
+          {dropped_html}
+        </div>"""
+
+    master_html = f"""<html>
+<body style="font-family:Arial,sans-serif;background:#0d0d1a;padding:16px;margin:0;">
+<div style="max-width:650px;margin:auto;background:#13131f;border-radius:10px;
+            overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+  <div style="background:#0d0d1a;padding:18px 20px;border-bottom:1px solid #1a1a2e;">
+    <h2 style="color:#eee;margin:0;font-size:18px;letter-spacing:1px;">
+      PHASE 1 SCOUT DIGEST
+    </h2>
+    <p style="color:#555;margin:4px 0 0;font-size:11px;">
+      {zone_count} active zones · updated {ist_time} IST
+    </p>
+  </div>
+  <div style="padding:18px 20px;">
+    {summary_table_html}
+    {sections}
+  </div>
+  <div style="background:#0d0d1a;padding:12px 20px;border-top:1px solid #1a1a2e;text-align:center;">
+    <p style="color:#333;font-size:10px;margin:0;">
+      SMC Alert Engine v2.1 · Daily Slate · {ist_time} IST
+    </p>
+  </div>
+</div>
+</body></html>"""
+
+    msg           = MIMEMultipart("related")
+    msg['From']   = EMAIL_CONFIG['sender']
+    msg['To']     = ", ".join(EMAIL_CONFIG['recipient'])
+    msg['Subject']= f"Scout Digest | {zone_count} Zones | {ist_time}"
+    msg.attach(MIMEText(master_html, 'html'))
+    for img in attachments:
+        msg.attach(img)
+
+    with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
+        server.starttls()
+        server.login(EMAIL_CONFIG['sender'], EMAIL_CONFIG['password'])
+        server.sendmail(EMAIL_CONFIG['sender'], EMAIL_CONFIG['recipient'], msg.as_string())
+
+    logging.info(f"Digest v2 sent: {zone_count} active zones, "
+                 f"{len(new_zone_cards)} new, {len(unchanged_zone_cards)} unchanged, "
+                 f"{len(dropped_lines)} dropped.")
+    print(f"Digest sent: {zone_count} active, {len(dropped_lines)} dropped.")
+                              
 def load_email_gate():
     return load_json_safe(EMAIL_GATE_FILE, {})
 
@@ -1236,20 +1565,241 @@ def append_audit_log(zones_this_scan, ist_now):
 
 
 # ---------------------------------------------------------------------------
-# MAIN RUNNER — STATELESS
+# DAILY SLATE — state file structure
+# ---------------------------------------------------------------------------
+# active_obs.json schema (overwritten only on first scan of each trading day):
+#
+# {
+#   "slate_date": "YYYY-MM-DD",                    # IST date of the slate
+#   "slate_started_iso": "...",                    # First-scan timestamp
+#   "pairs": {
+#     "EURUSD": {
+#       "next_id_counter": int,                    # Per-pair counter
+#       "zones": [
+#         {
+#           "zone_id": "EUR01",
+#           "status": "active" | "dropped",
+#           "drop_reason": null | "mitigated" | "out_of_proximity" | "structure_invalidated" | "stale_data",
+#           "first_seen_iso": "...", "first_seen_label": "HH:MM IST",
+#           "last_seen_iso": "...", "last_seen_label": "HH:MM IST",
+#           "is_new_this_scan": bool,
+#           "ob_timestamp": "...",                 # Identity anchor
+#           "direction": "bullish" | "bearish",
+#           "bos_tag": "BOS" | "CHoCH",
+#           "proximal_line": float, "distal_line": float,
+#           "high": float, "low": float,
+#           "ob_body": float, "median_leg_body": float,
+#           "touches": int, "status_label": "Pristine" | "Tested (Nx)",
+#           "h1_atr": float,                       # Refreshed every scan
+#           "current_price_at_scan": float,
+#           "distance_to_proximal_pips": float,
+#           "fvg": {...}
+#         }
+#       ]
+#     }
+#   }
+# }
+
+SLATE_FILE = "active_obs.json"
+
+
+def get_today_ist_date_str():
+    """Return today's date string in IST as YYYY-MM-DD."""
+    return get_ist_now().strftime('%Y-%m-%d')
+
+
+def load_slate():
+    """Load slate, return empty structure if missing or malformed."""
+    raw = load_json_safe(SLATE_FILE, {})
+    if not isinstance(raw, dict) or "pairs" not in raw:
+        return {"slate_date": None, "slate_started_iso": None, "pairs": {}}
+    return raw
+
+
+def save_slate(slate):
+    save_json_atomic(SLATE_FILE, slate)
+
+
+def init_fresh_slate(ist_now, pair_names):
+    """Build empty slate for a new trading day. Counters at zero per pair."""
+    return {
+        "slate_date": ist_now.strftime('%Y-%m-%d'),
+        "slate_started_iso": ist_now.isoformat(),
+        "pairs": {name: {"next_id_counter": 0, "zones": []} for name in pair_names}
+    }
+
+
+def find_matching_slate_zone(fresh_zone, slate_zones, pair_type):
+    """
+    Identity match: same direction AND
+      (a) same ob_timestamp, OR
+      (b) proximal_line within pair-aware threshold (timestamp drift fallback).
+    Returns the matching slate zone dict (still in 'active' state) or None.
+    """
+    threshold = ZONE_PROXIMITY_THRESHOLDS.get(pair_type, 0.0003)
+    for sz in slate_zones:
+        if sz.get("status") != "active":
+            continue
+        if sz.get("direction") != fresh_zone["direction"]:
+            continue
+        # (a) Exact timestamp match
+        if sz.get("ob_timestamp") and fresh_zone.get("ob_timestamp"):
+            if sz["ob_timestamp"] == fresh_zone["ob_timestamp"]:
+                return sz
+        # (b) Proximal-line proximity fallback
+        if abs(sz["proximal_line"] - fresh_zone["proximal_line"]) <= threshold:
+            return sz
+    return None
+
+
+def assign_new_zone_id(slate_pair_block, pair_name):
+    slate_pair_block["next_id_counter"] = slate_pair_block.get("next_id_counter", 0) + 1
+    prefix = ZONE_ID_PREFIX.get(pair_name, pair_name[:3].upper())
+    return f"{prefix}{slate_pair_block['next_id_counter']:02d}"
+
+
+def fresh_to_slate_zone(fresh_zone, zone_id, ist_now, current_price, dp):
+    """Materialize a fresh-detection dict into a slate zone record."""
+    pip_unit = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
+    dist_pips = round(abs(current_price - fresh_zone['proximal_line']) / pip_unit, 1)
+    label = ist_now.strftime('%H:%M IST')
+    iso = ist_now.isoformat()
+    return {
+        "zone_id": zone_id,
+        "status": "active",
+        "drop_reason": None,
+        "first_seen_iso": iso,
+        "first_seen_label": label,
+        "last_seen_iso": iso,
+        "last_seen_label": label,
+        "is_new_this_scan": True,
+        "ob_timestamp": fresh_zone.get("ob_timestamp"),
+        "direction": fresh_zone["direction"],
+        "bos_tag": fresh_zone["bos_tag"],
+        "proximal_line": fresh_zone["proximal_line"],
+        "distal_line": fresh_zone["distal_line"],
+        "high": fresh_zone["high"],
+        "low": fresh_zone["low"],
+        "ob_body": fresh_zone["ob_body"],
+        "median_leg_body": fresh_zone["median_leg_body"],
+        "bos_idx": fresh_zone["bos_idx"],
+        "ob_idx": fresh_zone["ob_idx"],
+        "impulse_start_idx": fresh_zone["impulse_start_idx"],
+        "impulse_start_price": fresh_zone["impulse_start_price"],
+        "bos_swing_price": fresh_zone["bos_swing_price"],
+        "touches": fresh_zone.get("touches", 0),
+        "status_label": fresh_zone.get("status", "Pristine"),
+        "h1_atr": fresh_zone.get("h1_atr", 0.0),
+        "current_price_at_scan": current_price,
+        "distance_to_proximal_pips": dist_pips,
+        "fvg": fresh_zone["fvg"]
+    }
+
+
+def refresh_slate_zone(slate_zone, fresh_zone, ist_now, current_price, dp):
+    """
+    Update an existing slate zone with fresh-scan data. Identity (zone_id,
+    first_seen) preserved. Mutable state (touches, status, fvg, atr, price)
+    refreshed from latest scan.
+    """
+    pip_unit = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
+    dist_pips = round(abs(current_price - fresh_zone['proximal_line']) / pip_unit, 1)
+    slate_zone["last_seen_iso"] = ist_now.isoformat()
+    slate_zone["last_seen_label"] = ist_now.strftime('%H:%M IST')
+    slate_zone["is_new_this_scan"] = False
+    # Refresh structural fields (in case proximal drifted within threshold).
+    slate_zone["proximal_line"] = fresh_zone["proximal_line"]
+    slate_zone["distal_line"]   = fresh_zone["distal_line"]
+    slate_zone["high"]          = fresh_zone["high"]
+    slate_zone["low"]           = fresh_zone["low"]
+    slate_zone["ob_body"]       = fresh_zone["ob_body"]
+    slate_zone["median_leg_body"] = fresh_zone["median_leg_body"]
+    slate_zone["bos_idx"]       = fresh_zone["bos_idx"]
+    slate_zone["ob_idx"]        = fresh_zone["ob_idx"]
+    slate_zone["touches"]       = fresh_zone.get("touches", 0)
+    slate_zone["status_label"]  = fresh_zone.get("status", "Pristine")
+    slate_zone["h1_atr"]        = fresh_zone.get("h1_atr", 0.0)
+    slate_zone["current_price_at_scan"] = current_price
+    slate_zone["distance_to_proximal_pips"] = dist_pips
+    slate_zone["fvg"]           = fresh_zone["fvg"]
+
+
+def determine_drop_reason(slate_zone, fresh_zones_in_pair, current_price, df, h1_atr):
+    """
+    A slate zone wasn't found in fresh scan. Why?
+      - 'mitigated': latest H1 candles broke through distal OR touches >= 3
+      - 'out_of_proximity': zone is now beyond 4× H1 ATR from price
+      - 'structure_invalidated': default fallback (zone simply no longer detected)
+    """
+    # Proximity check
+    if h1_atr and h1_atr > 0:
+        if abs(current_price - slate_zone['proximal_line']) > 4.0 * h1_atr:
+            return "out_of_proximity"
+
+    # Mitigation check — scan recent candles for distal break
+    if df is not None and len(df) > 0:
+        try:
+            C = df['Close'].values.astype(float)
+            H = df['High'].values.astype(float)
+            L = df['Low'].values.astype(float)
+            distal = slate_zone['distal_line']
+            proximal = slate_zone['proximal_line']
+            direction = slate_zone['direction']
+            touches = 0
+            for m in range(len(C)):
+                if direction == 'bullish':
+                    if C[m] < distal:
+                        return "mitigated"
+                    if L[m] <= proximal:
+                        touches += 1
+                else:
+                    if C[m] > distal:
+                        return "mitigated"
+                    if H[m] >= proximal:
+                        touches += 1
+                if touches >= 3:
+                    return "mitigated"
+        except Exception:
+            pass
+
+    return "structure_invalidated"
+
+
+# ---------------------------------------------------------------------------
+# MAIN RUNNER — DAILY SLATE MODEL
 # ---------------------------------------------------------------------------
 
 def run_radar():
     ist_now      = get_ist_now()
     ist_time_str = ist_now.strftime('%H:%M')
     ist_ts_full  = ist_now.strftime('%d %b %Y, %H:%M')
+    today_str    = get_today_ist_date_str()
 
     # Blackout: do nothing before 09:00 IST
     if ist_now.hour < 9:
         print(f"Blackout active. Suppressed until 09:00 IST.")
         return
 
-    # Email gate — only persisted state across runs.
+    pair_names = [p['name'] for p in config_master['pairs']]
+
+    # --- LOAD SLATE; START FRESH IF NEW TRADING DAY ---
+    slate = load_slate()
+    is_new_slate = (slate.get("slate_date") != today_str)
+    if is_new_slate:
+        slate = init_fresh_slate(ist_now, pair_names)
+        print(f"  [SLATE] New trading day {today_str} — slate reset, counters at zero.")
+    else:
+        # Mark every existing zone is_new_this_scan = False at start of scan.
+        for pname, pblock in slate.get("pairs", {}).items():
+            for z in pblock.get("zones", []):
+                z["is_new_this_scan"] = False
+
+    # Ensure all configured pairs have a block (handles config additions mid-day).
+    for name in pair_names:
+        if name not in slate["pairs"]:
+            slate["pairs"][name] = {"next_id_counter": 0, "zones": []}
+
+    # --- EMAIL GATE ---
     gate = load_email_gate()
     last_email_ts_str = gate.get("last_email_ts")
     send_email_this_run = True
@@ -1263,23 +1813,17 @@ def run_radar():
 
     print(f"Scout running at {ist_time_str} IST | Email: {'YES' if send_email_this_run else 'NO (within gate)'}")
 
-    export_payload = {}
     dp_map = {p['name']: p.get('decimal_places', 5) for p in config_master['pairs']}
+    pair_type_map = {p['name']: p.get('pair_type', 'forex') for p in config_master['pairs']}
 
-    # Stateless: every scan builds its own fresh zone list from scratch.
-    all_zones_for_table = []
-    zone_cards          = []
-    attachments         = []
-    chart_counter       = 0
-    audit_rows          = []
+    # Track per-scan fetch outcomes — for skipping zones with no fresh data
+    pairs_with_fresh_data = set()
+    pair_dfs = {}  # pair_name -> df (for drop-reason analysis)
+    pair_atrs = {}  # pair_name -> h1_atr
+    pair_prices = {}  # pair_name -> current_price
 
-    # Per-scan zone ID counters (reset every scan — stateless).
-    per_scan_counters = {}
-
-    def _next_id(pair_name):
-        per_scan_counters[pair_name] = per_scan_counters.get(pair_name, 0) + 1
-        prefix = ZONE_ID_PREFIX.get(pair_name, pair_name[:3].upper())
-        return f"{prefix}{per_scan_counters[pair_name]:02d}"
+    # --- SCAN EACH PAIR, RECONCILE WITH SLATE ---
+    audit_rows = []
 
     for pair in config_master["pairs"]:
         ticker   = pair["symbol"]
@@ -1290,125 +1834,164 @@ def run_radar():
 
         df = fetch_data(ticker, pair["map_tf"], "15d")
         if df is None:
-            logging.warning(f"No data for {name}. Skipped.")
+            logging.warning(f"No data for {name}. Slate untouched for this pair.")
+            print(f"  [NO DATA] {name}: slate untouched.")
             continue
+
+        pairs_with_fresh_data.add(name)
+        pair_dfs[name] = df
 
         result        = detect_smc_radar(df, lookback, pair_type=ptype)
         current_price = result["current_price"]
-        scanned_obs   = result["active_unmitigated_obs"]
+        fresh_zones   = result["active_unmitigated_obs"]
+        h1_atr        = smc_detector.compute_atr(df) or 0.0
 
-        # Inject pair-type-aware dedupe threshold for same-leg dedupe.
-        # detect_smc_radar already ran — but we re-dedupe here with pair-aware
-        # thresholds since detect_smc_radar used the default. Idempotent.
-        dedupe_thresh = OB_DEDUPE_THRESHOLDS.get(ptype, 0.00030)
-        if len(scanned_obs) > 1:
-            by_dir = {}
-            for o in scanned_obs:
-                by_dir.setdefault(o['direction'], []).append(o)
-            re_filtered = []
-            for direction, group in by_dir.items():
-                if len(group) == 1:
-                    re_filtered.extend(group)
-                    continue
-                group_sorted = sorted(group, key=lambda x: x['bos_idx'], reverse=True)
-                survivors = []
-                for cand in group_sorted:
-                    is_dup = False
-                    for surv in survivors:
-                        if abs(cand['proximal_line'] - surv['proximal_line']) <= dedupe_thresh:
-                            cand_has_fvg = cand['fvg'].get('exists', False)
-                            surv_has_fvg = surv['fvg'].get('exists', False)
-                            if cand_has_fvg and not surv_has_fvg:
-                                survivors.remove(surv)
-                                survivors.append(cand)
-                            is_dup = True
-                            break
-                    if not is_dup:
-                        survivors.append(cand)
-                re_filtered.extend(survivors)
-            scanned_obs = re_filtered
-            
-        # Proximity filter — drop zones further than 4× H1 ATR from current price.
-        # Gives ~4 hours of price-movement heads-up before zone is reachable.
-        # Pair-agnostic multiplier because ATR is already pair-scaled.
-        h1_atr_proximity = smc_detector.compute_atr(df)
-        if h1_atr_proximity and h1_atr_proximity > 0:
-            proximity_cap = 4.0 * h1_atr_proximity
-            before_count = len(scanned_obs)
-            scanned_obs = [
-                o for o in scanned_obs
-                if abs(current_price - float(o['proximal_line'])) <= proximity_cap
-            ]
-            dropped = before_count - len(scanned_obs)
-            if dropped > 0:
-                print(f"  [PROX] {name}: dropped {dropped} distant zones "
-                      f"(beyond {proximity_cap:.{dp}f}).")
-                
-        export_payload[name] = scanned_obs
+        pair_atrs[name] = h1_atr
+        pair_prices[name] = current_price
 
-        for ob in scanned_obs:
-            zone_id = _next_id(name)
-            first_seen_label = ist_now.strftime('%H:%M IST')
+        # Stamp fresh zones with h1_atr from this scan (already done in detect_smc_radar
+        # via 'h1_atr' field, but we ensure consistency here).
+        for fz in fresh_zones:
+            if not fz.get('h1_atr'):
+                fz['h1_atr'] = h1_atr
 
-            all_zones_for_table.append({
-                "name": name, "zone_id": zone_id, "direction": ob['direction'],
-                "proximal": ob['proximal_line'], "distal": ob['distal_line'],
-                "bos_tag": ob['bos_tag'], "status": ob['status'],
-                "fvg_valid": ob['fvg'].get('exists', False),
-                "fvg_ghost": (not ob['fvg'].get('exists', False))
-                              and ob['fvg'].get('was_detected', False),
-                "fvg_mitigation": ob['fvg'].get('mitigation', 'none'),
-                "first_seen_ist": first_seen_label,
-                "is_new": False, "is_changed": False
-            })
+        # --- RECONCILE FRESH ZONES WITH SLATE ---
+        slate_pair = slate["pairs"][name]
+        slate_zones = slate_pair["zones"]
+        active_slate_zones = [z for z in slate_zones if z["status"] == "active"]
 
-            audit_rows.append({
-                "zone_id": zone_id, "pair": name,
-                "direction": ob['direction'], "bos_tag": ob['bos_tag'],
-                "proximal": ob['proximal_line'], "distal": ob['distal_line'],
-                "status": ob['status'], "touches": ob.get('touches', 0),
-                "fvg_exists": ob['fvg'].get('exists', False),
-                "fvg_was_detected": ob['fvg'].get('was_detected', False),
-                "current_price": current_price
-            })
+        matched_slate_ids = set()
 
-            if send_email_this_run:
-                narrative = generate_zone_narrative(ob, name, dp, current_price)
-                cid       = f"chart_{name}_{chart_counter}"
-                chart_b64 = generate_h1_chart(df, ob, dp, name, ist_ts_full)
+        # 1. For each fresh zone, find match in slate or add as NEW.
+        for fz in fresh_zones:
+            match = find_matching_slate_zone(fz, active_slate_zones, ptype)
+            if match:
+                refresh_slate_zone(match, fz, ist_now, current_price, dp)
+                matched_slate_ids.add(match["zone_id"])
+            else:
+                new_id = assign_new_zone_id(slate_pair, name)
+                new_record = fresh_to_slate_zone(fz, new_id, ist_now, current_price, dp)
+                slate_zones.append(new_record)
+                matched_slate_ids.add(new_id)
 
-                zone_cards.append(
-                    build_new_zone_card_html(
-                        ob, name, dp, narrative,
-                        cid if chart_b64 else None,
-                        ist_ts_full, zone_id
-                    )
-                )
+        # 2. For each active slate zone NOT matched, mark dropped with reason.
+        for sz in active_slate_zones:
+            if sz["zone_id"] in matched_slate_ids:
+                continue
+            reason = determine_drop_reason(sz, fresh_zones, current_price, df, h1_atr)
+            sz["status"] = "dropped"
+            sz["drop_reason"] = reason
+            sz["last_seen_iso"] = ist_now.isoformat()
+            sz["last_seen_label"] = ist_now.strftime('%H:%M IST')
+            print(f"  [DROP] {name} {sz['zone_id']} dropped — {reason}.")
 
-                if chart_b64:
-                    img_mime = MIMEImage(base64.b64decode(chart_b64))
-                    img_mime.add_header("Content-ID", f"<{cid}>")
-                    img_mime.add_header("Content-Disposition", "inline",
-                                        filename=f"{cid}.png")
-                    attachments.append(img_mime)
-                    chart_counter += 1
+        # Audit log row per active zone post-reconcile
+        for sz in slate_zones:
+            if sz["status"] == "active":
+                audit_rows.append({
+                    "zone_id": sz["zone_id"], "pair": name,
+                    "direction": sz["direction"], "bos_tag": sz["bos_tag"],
+                    "proximal": sz["proximal_line"], "distal": sz["distal_line"],
+                    "status": sz["status_label"], "touches": sz.get("touches", 0),
+                    "fvg_exists": sz["fvg"].get("exists", False),
+                    "fvg_was_detected": sz["fvg"].get("was_detected", False),
+                    "current_price": current_price,
+                    "h1_atr": sz.get("h1_atr", 0.0),
+                    "is_new_this_scan": sz.get("is_new_this_scan", False)
+                })
 
-            print(f"  Zone: {name} {zone_id} {ob['direction']} @ {ob['proximal_line']:.{dp}f} "
-                  f"| FVG: {'✓' if ob['fvg'].get('exists') else ('ghost' if ob['fvg'].get('was_detected') else '—')} "
-                  f"| Status: {ob['status']}")
-
-    # Always write audit log (used by weekly review only).
-    if audit_rows:
-        append_audit_log(audit_rows, ist_now)
-
-    # Send email if gate allows
+    # --- BUILD EMAIL ---
     if send_email_this_run:
-        if all_zones_for_table:
+        # Collect renderable zones across all pairs.
+        new_zone_cards     = []
+        unchanged_zone_cards = []
+        dropped_lines      = []
+        all_zones_for_table = []
+        attachments        = []
+        chart_counter      = 0
+
+        for pair_name in pair_names:
+            dp = dp_map[pair_name]
+            pblock = slate["pairs"].get(pair_name, {})
+            for sz in pblock.get("zones", []):
+                if sz["status"] == "active":
+                    # Build OB-shaped dict for narrative + chart helpers.
+                    ob_for_render = {
+                        "direction": sz["direction"],
+                        "bos_tag": sz["bos_tag"],
+                        "proximal_line": sz["proximal_line"],
+                        "distal_line": sz["distal_line"],
+                        "high": sz["high"], "low": sz["low"],
+                        "ob_body": sz["ob_body"],
+                        "median_leg_body": sz["median_leg_body"],
+                        "ob_idx": sz["ob_idx"],
+                        "bos_idx": sz["bos_idx"],
+                        "bos_swing_price": sz["bos_swing_price"],
+                        "impulse_start_idx": sz["impulse_start_idx"],
+                        "impulse_start_price": sz["impulse_start_price"],
+                        "fvg": sz["fvg"],
+                        "touches": sz.get("touches", 0),
+                        "status": sz.get("status_label", "Pristine"),
+                        "h1_atr": sz.get("h1_atr", 0.0)
+                    }
+
+                    # Summary table row
+                    all_zones_for_table.append({
+                        "name": pair_name, "zone_id": sz["zone_id"],
+                        "direction": sz["direction"],
+                        "proximal": sz["proximal_line"], "distal": sz["distal_line"],
+                        "bos_tag": sz["bos_tag"], "status": sz.get("status_label", "Pristine"),
+                        "fvg_valid": sz["fvg"].get("exists", False),
+                        "fvg_ghost": (not sz["fvg"].get("exists", False))
+                                      and sz["fvg"].get("was_detected", False),
+                        "fvg_mitigation": sz["fvg"].get("mitigation", "none"),
+                        "first_seen_ist": sz.get("first_seen_label", "—"),
+                        "is_new": sz.get("is_new_this_scan", False),
+                        "is_changed": False
+                    })
+
+                    # Chart + narrative — only if we have fresh df for this pair.
+                    df = pair_dfs.get(pair_name)
+                    current_price = pair_prices.get(pair_name, sz.get("current_price_at_scan", 0))
+                    chart_b64 = None
+                    cid = None
+                    if df is not None:
+                        cid = f"chart_{pair_name}_{chart_counter}"
+                        chart_b64 = generate_h1_chart(df, ob_for_render, dp, pair_name, ist_ts_full)
+
+                    narrative = generate_zone_narrative_with_atr(
+                        ob_for_render, pair_name, dp, current_price, sz.get("h1_atr", 0.0)
+                    )
+
+                    card_html = build_active_zone_card_html(
+                        sz, pair_name, dp, narrative,
+                        cid if chart_b64 else None,
+                        ist_ts_full
+                    )
+
+                    if sz.get("is_new_this_scan", False):
+                        new_zone_cards.append(card_html)
+                    else:
+                        unchanged_zone_cards.append(card_html)
+
+                    if chart_b64:
+                        img_mime = MIMEImage(base64.b64decode(chart_b64))
+                        img_mime.add_header("Content-ID", f"<{cid}>")
+                        img_mime.add_header("Content-Disposition", "inline",
+                                            filename=f"{cid}.png")
+                        attachments.append(img_mime)
+                        chart_counter += 1
+
+                elif sz["status"] == "dropped":
+                    dropped_lines.append(build_dropped_zone_line(sz, pair_name, dp))
+
+        if all_zones_for_table or dropped_lines:
             summary_table = build_summary_table_html(all_zones_for_table, dp_map)
             try:
-                send_master_digest(
-                    summary_table, zone_cards, [], [],
-                    attachments, len(all_zones_for_table), ist_time_str
+                send_master_digest_v2(
+                    summary_table, new_zone_cards, unchanged_zone_cards,
+                    dropped_lines, attachments,
+                    len(all_zones_for_table), ist_time_str
                 )
                 gate["last_email_ts"] = ist_now.isoformat()
                 save_email_gate(gate)
@@ -1416,12 +1999,30 @@ def run_radar():
                 logging.error(f"Digest send failed: {e}")
                 print(f"  [EMAIL ERR] {e}")
         else:
-            print("  No active zones detected. Digest skipped.")
-    else:
-        print(f"  Scan complete. {len(all_zones_for_table)} zones cached. Email gate active.")
+            print("  No zones in slate. Digest skipped.")
 
-    save_json_atomic("active_obs.json", export_payload)
+        # 3. Drop-cycle cleanup: remove dropped zones from slate AFTER email sent.
+        for pname in pair_names:
+            pblock = slate["pairs"].get(pname, {})
+            pblock["zones"] = [z for z in pblock.get("zones", []) if z["status"] == "active"]
+
+    else:
+        active_count = sum(
+            1 for pname in pair_names
+            for z in slate["pairs"].get(pname, {}).get("zones", [])
+            if z["status"] == "active"
+        )
+        print(f"  Scan complete. {active_count} active zones in slate. Email gate active.")
+
+    # Always write audit log (used by weekly review only).
+    if audit_rows:
+        append_audit_log(audit_rows, ist_now)
+
+    # Persist slate (overwrites file — but only mutates within-day, never resets
+    # mid-day; new-day reset happens via slate_date check at scan start).
+    save_slate(slate)
     print(f"Phase 1 complete at {ist_time_str} IST.")
+
 
 if __name__ == "__main__":
     run_radar()
