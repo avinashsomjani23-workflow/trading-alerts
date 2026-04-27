@@ -1195,27 +1195,6 @@ if __name__ == "__main__":
 
             bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
 
-            # 2. Re-validation via opposite-BOS check on fresh H1.
-            # ob_timestamp is IST-naive ISO string; convert to UTC-naive for the call.
-            ob_ts_iso = ob.get('ob_timestamp')
-            since_utc = None
-            if ob_ts_iso:
-                try:
-                    ob_ts_parsed = datetime.fromisoformat(ob_ts_iso)
-                    if ob_ts_parsed.tzinfo is not None:
-                        # tz-aware input -> UTC-naive
-                        since_utc = datetime.utcfromtimestamp(ob_ts_parsed.timestamp())
-                    else:
-                        # Naive input. yfinance timestamps come back naive-UTC by default,
-                        # so we treat naive as UTC. No 5h30m subtraction.
-                        since_utc = ob_ts_parsed
-                except Exception:
-                    since_utc = None
-
-            if smc_detector.check_opposite_bos(df_h1, bias, since_ts=since_utc):
-                print(f"  [X] {name} {bias}: zone invalidated by opposite H1 BOS since OB formed. Skipping.")
-                continue
-
             surviving_obs.append(ob)
 
         if not surviving_obs:
