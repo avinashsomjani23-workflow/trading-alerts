@@ -16,56 +16,53 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python smc_radar.py
+
       - name: Commit state files
         run: |
           set -e
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          ALL_FILES="alert_log.json scan_log.json system_status.json zone_visit_state.json active_watch_state.json phase2_sent.json yfinance_stale_log.json gemini_failure_log.json chart_failure_log.json emailed_zones.json active_obs.json email_gate.json"
-          # Keep only files that actually exist on disk
+          # P1 owns these files. yfinance_stale_log is shared with P2/P3 (append-only log).
+          ALL_FILES="active_obs.json emailed_zones.json email_gate.json yfinance_stale_log.json"
+
           FILES=""
           for f in $ALL_FILES; do
             if [ -f "$f" ]; then FILES="$FILES $f"; fi
           done
           echo "Files to commit: $FILES"
 
-          mkdir -p /tmp/p2_writes
-          for f in $FILES; do
-            cp "$f" "/tmp/p2_writes/$f"
-          done
-
-          git fetch origin main
-          git reset --hard origin/main
-          for f in $FILES; do
-            cp "/tmp/p2_writes/$f" "$f"
-          done
-
-          git add $FILES
-          if git diff --staged --quiet; then
-            echo "No changes to commit."
+          if [ -z "$FILES" ]; then
+            echo "Nothing to commit."
             exit 0
           fi
 
-          git commit -m "P1 Update [skip ci]"
+          git add $FILES
+          if git diff --staged --quiet; then
+            echo "No changes."
+            exit 0
+          fi
 
+          # Stash my writes, sync to latest origin, reapply my writes on top.
+          # This avoids overwriting writes from a concurrent P2 or P3 run.
           for i in 1 2 3 4 5; do
+            git stash push -- $FILES || true
+            git fetch origin main
+            git reset --hard origin/main
+            git stash pop || true
+
+            git add $FILES 2>/dev/null || true
+            if git diff --staged --quiet; then
+              echo "Nothing to commit after sync."
+              exit 0
+            fi
+
+            git commit -m "P1 Update [skip ci]"
             if git push origin HEAD:main; then
               echo "Push succeeded on attempt $i."
               exit 0
             fi
-            echo "Push rejected. Rebasing and retrying (attempt $i)."
-            git fetch origin main
-            git reset --hard origin/main
-            for f in $FILES; do
-              if [ -f "/tmp/p1_writes/$f" ]; then cp "/tmp/p1_writes/$f" "$f"; fi
-            done
-            git add $FILES || true
-            if git diff --staged --quiet; then
-              echo "Nothing to commit after rebase."
-              exit 0
-            fi
-            git commit -m "P1 Update [skip ci]"
+            echo "Push rejected. Retrying (attempt $i)."
             sleep 2
           done
 
