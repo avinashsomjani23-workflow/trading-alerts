@@ -1176,10 +1176,13 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp):
 def build_dropped_zone_line(sz, name, dp):
     """One-line note for a dropped zone."""
     reason_map = {
-        "mitigated": "mitigated (distal broken or 3+ touches)",
+        "mitigated_distal_break": "mitigated — close broke distal",
+        "mitigated_three_touches": "mitigated — proximal hit 3 times",
         "out_of_proximity": "moved beyond 4× H1 ATR from price",
-        "structure_invalidated": "structure no longer valid",
-        "stale_data": "stale data — zone unverifiable"
+        "structure_supplanted": "replaced by fresher structure (same leg)",
+        "aged_out_of_window": "OB candle aged out of H1 data window",
+        "data_unavailable": "pair fetch failed — zone unverifiable",
+        "data_stale": "yfinance data stale — zone unverifiable"
     }
     reason_text = reason_map.get(sz.get("drop_reason", ""), sz.get("drop_reason", "unknown"))
     direction = "Bullish" if sz['direction'] == 'bullish' else "Bearish"
@@ -1724,19 +1727,51 @@ def refresh_slate_zone(slate_zone, fresh_zone, ist_now, current_price, dp):
     slate_zone["fvg"]           = fresh_zone["fvg"]
 
 
-def determine_drop_reason(slate_zone, fresh_zones_in_pair, current_price, df, h1_atr):
+def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_pair, pair_type):
     """
-    A slate zone wasn't found in fresh scan. Why?
-      - 'mitigated': latest H1 candles broke through distal OR touches >= 3
-      - 'out_of_proximity': zone is now beyond 4× H1 ATR from price
-      - 'structure_invalidated': default fallback (zone simply no longer detected)
+    Return concrete drop reason. Every drop must map to ONE of these checks.
+    No "unknown" or "structure_invalidated" fallback — silent fails are the
+    failure mode we are explicitly preventing.
+
+    Returns one of:
+      'mitigated_distal_break'
+      'mitigated_three_touches'
+      'out_of_proximity'
+      'structure_supplanted'
+      'aged_out_of_window'
+      'data_unavailable'
+      'data_stale'
+      None  -> zone should NOT be dropped; caller keeps it alive and logs.
     """
-    # Proximity check
+    # --- data_unavailable handled by caller before this is called ---
+
+    # --- out_of_proximity ---
     if h1_atr and h1_atr > 0:
         if abs(current_price - slate_zone['proximal_line']) > 4.0 * h1_atr:
             return "out_of_proximity"
 
-    # Mitigation check — scan recent candles for distal break
+    # --- aged_out_of_window ---
+    # Slate zone's OB candle is older than the oldest candle in fresh df.
+    if df is not None and len(df) > 0 and slate_zone.get("ob_timestamp"):
+        try:
+            slate_ob_dt = datetime.fromisoformat(slate_zone["ob_timestamp"])
+            if slate_ob_dt.tzinfo is not None:
+                slate_ob_dt = slate_ob_dt.replace(tzinfo=None)
+            first_ts_raw = df['Datetime'].iloc[0] if 'Datetime' in df.columns else df.index[0]
+            if hasattr(first_ts_raw, 'to_pydatetime'):
+                first_dt = first_ts_raw.to_pydatetime()
+            else:
+                first_dt = first_ts_raw
+            if hasattr(first_dt, 'tzinfo') and first_dt.tzinfo is not None:
+                first_dt = first_dt.replace(tzinfo=None)
+            if slate_ob_dt < first_dt:
+                return "aged_out_of_window"
+        except Exception:
+            pass  # if we can't compare, fall through to other checks
+
+    # --- mitigated_distal_break / mitigated_three_touches ---
+    # Replay candles from OB onwards (or whole df if OB not locatable) and
+    # check distal break OR 3-touch proximal mitigation.
     if df is not None and len(df) > 0:
         try:
             C = df['Close'].values.astype(float)
@@ -1745,25 +1780,80 @@ def determine_drop_reason(slate_zone, fresh_zones_in_pair, current_price, df, h1
             distal = slate_zone['distal_line']
             proximal = slate_zone['proximal_line']
             direction = slate_zone['direction']
+
+            # Find scan start index — from OB candle if locatable, else whole df.
+            scan_start = 0
+            if slate_zone.get("ob_timestamp"):
+                try:
+                    target_ts = datetime.fromisoformat(slate_zone["ob_timestamp"])
+                    if target_ts.tzinfo is not None:
+                        target_ts = target_ts.replace(tzinfo=None)
+                    ts_col = df['Datetime'] if 'Datetime' in df.columns else pd.Series(df.index)
+                    for k, t in enumerate(ts_col):
+                        kt = t.to_pydatetime() if hasattr(t, 'to_pydatetime') else t
+                        if hasattr(kt, 'tzinfo') and kt.tzinfo is not None:
+                            kt = kt.replace(tzinfo=None)
+                        if kt >= target_ts:
+                            scan_start = k + 1  # candles AFTER the OB candle
+                            break
+                except Exception:
+                    scan_start = 0
+
             touches = 0
-            for m in range(len(C)):
+            for m in range(scan_start, len(C)):
                 if direction == 'bullish':
                     if C[m] < distal:
-                        return "mitigated"
+                        return "mitigated_distal_break"
                     if L[m] <= proximal:
                         touches += 1
                 else:
                     if C[m] > distal:
-                        return "mitigated"
+                        return "mitigated_distal_break"
                     if H[m] >= proximal:
                         touches += 1
                 if touches >= 3:
-                    return "mitigated"
+                    return "mitigated_three_touches"
         except Exception:
             pass
 
-    return "structure_invalidated"
+    # --- structure_supplanted ---
+    # Same direction, overlapping by proximity threshold, fresh zone has
+    # HIGHER bos_idx (fresher structure). Means same-leg dedupe in the new
+    # scan picked a different OB representing the same zone.
+    threshold = ZONE_PROXIMITY_THRESHOLDS.get(pair_type, 0.0003)
+    slate_bos_idx = slate_zone.get("bos_idx", -1)
+    for fz in fresh_zones_in_pair:
+        if fz.get("direction") != slate_zone.get("direction"):
+            continue
+        if abs(fz.get("proximal_line", 0) - slate_zone.get("proximal_line", 0)) > threshold:
+            continue
+        if fz.get("bos_idx", -1) > slate_bos_idx:
+            return "structure_supplanted"
 
+    # --- No concrete reason matched ---
+    # Do NOT drop. Log diagnostic so we can investigate.
+    return None
+
+
+def log_unverified_drop_attempt(slate_zone, pair_name, ist_now):
+    """A zone disappeared from fresh scan but no concrete drop reason fires.
+    Log it; keep zone in slate. This is our silent-fail guardrail."""
+    try:
+        log = load_json_safe("drop_diagnostic_log.json", [])
+        log.append({
+            "ts": ist_now.isoformat(),
+            "pair": pair_name,
+            "zone_id": slate_zone.get("zone_id"),
+            "direction": slate_zone.get("direction"),
+            "proximal": slate_zone.get("proximal_line"),
+            "distal": slate_zone.get("distal_line"),
+            "ob_timestamp": slate_zone.get("ob_timestamp"),
+            "note": "Zone missing from fresh scan but no concrete drop reason matched. Kept in slate."
+        })
+        log = log[-300:]
+        save_json_atomic("drop_diagnostic_log.json", log)
+    except Exception as e:
+        logging.error(f"Drop diagnostic log write failed: {e}")
 
 # ---------------------------------------------------------------------------
 # MAIN RUNNER — DAILY SLATE MODEL
@@ -1834,8 +1924,14 @@ def run_radar():
 
         df = fetch_data(ticker, pair["map_tf"], "15d")
         if df is None:
-            logging.warning(f"No data for {name}. Slate untouched for this pair.")
-            print(f"  [NO DATA] {name}: slate untouched.")
+            # Cannot verify slate zones for this pair. Keep them alive but
+            # tag last_seen so weekly review can spot persistent fetch failures.
+            logging.warning(f"No data for {name}. Slate zones held; awaiting next scan.")
+            print(f"  [NO DATA] {name}: slate zones held (data_unavailable this scan).")
+            slate_pair = slate["pairs"].get(name, {})
+            for sz in slate_pair.get("zones", []):
+                if sz["status"] == "active":
+                    sz["last_data_unavailable_at"] = ist_now.isoformat()
             continue
 
         pairs_with_fresh_data.add(name)
@@ -1874,11 +1970,23 @@ def run_radar():
                 slate_zones.append(new_record)
                 matched_slate_ids.add(new_id)
 
-        # 2. For each active slate zone NOT matched, mark dropped with reason.
+        # 2. For each active slate zone NOT matched, determine concrete drop reason.
+        # If no concrete reason fires, KEEP the zone alive and log diagnostic.
+        # This prevents silent fails masquerading as "unknown" drops.
         for sz in active_slate_zones:
             if sz["zone_id"] in matched_slate_ids:
                 continue
-            reason = determine_drop_reason(sz, fresh_zones, current_price, df, h1_atr)
+            reason = determine_drop_reason(
+                sz, current_price, df, h1_atr, fresh_zones, ptype
+            )
+            if reason is None:
+                # No concrete reason. Keep zone alive, log for investigation.
+                log_unverified_drop_attempt(sz, name, ist_now)
+                # Refresh last_seen so it doesn't accumulate as ghost.
+                sz["last_seen_iso"] = ist_now.isoformat()
+                sz["last_seen_label"] = ist_now.strftime('%H:%M IST')
+                print(f"  [HOLD] {name} {sz['zone_id']} missing from scan but no concrete drop reason — kept in slate, logged.")
+                continue
             sz["status"] = "dropped"
             sz["drop_reason"] = reason
             sz["last_seen_iso"] = ist_now.isoformat()
