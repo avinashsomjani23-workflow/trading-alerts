@@ -12,18 +12,18 @@
       "killzone": 1.0,
       "macro": 1.0
     },
-    "sweep_price": 4762.5,
-    "sweep_tf": "H1",
+    "sweep_price": 4726.7001953125,
+    "sweep_tf": "M15",
     "sweep_tier": "decent",
     "sweep_components": {
       "base": 1.0,
       "equal_levels": 0.0,
       "equal_levels_matches": 0,
       "rejection": 0.5,
-      "wick_body_ratio": 2.07
+      "wick_body_ratio": 4.67
     },
-    "sweep_hours_before_ob": 64.0,
-    "macro_summary": "No Tier-1 economic events directly impacting GOLD are detected in the provided news. The current macro environment appears stable for GOLD based on the given information.",
+    "sweep_hours_before_ob": 1.8,
+    "macro_summary": "No Tier-1 economic events directly impacting GOLD were detected in the provided news. The current macro environment appears relatively stable for GOLD based on the given information.",
     "levels": {
       "valid": true,
       "entry": 4714.7,
@@ -76,6 +76,85 @@
       "status": "Tested (2x)"
     },
     "alert_ist": "2026-04-27T22:17:27.659929",
+    "scorecard_version": "v2"
+  },
+  "USDJPY_159.682": {
+    "pair": "USDJPY",
+    "bias": "SHORT",
+    "score": 7.0,
+    "breakdown": {
+      "structure": 2.5,
+      "sweep": 2.0,
+      "fvg": 0.0,
+      "freshness": 0.5,
+      "pd": 0.0,
+      "killzone": 1.0,
+      "macro": 1.0
+    },
+    "sweep_price": 159.8090057373047,
+    "sweep_tf": "M15",
+    "sweep_tier": "textbook",
+    "sweep_components": {
+      "base": 1.0,
+      "equal_levels": 0.5,
+      "equal_levels_matches": 2,
+      "rejection": 0.5,
+      "wick_body_ratio": 3.1
+    },
+    "sweep_hours_before_ob": 4.0,
+    "macro_summary": "No Tier-1 economic events affecting USDJPY were detected in the provided news. The current macro environment appears stable for this pair based on the given information.",
+    "levels": {
+      "valid": true,
+      "entry": 159.682,
+      "sl": 159.781,
+      "tp1": 159.428,
+      "tp2": 159.286,
+      "rr": 2.57,
+      "entry_source": "OB Proximal"
+    },
+    "ob": {
+      "bos_idx": 122,
+      "bos_swing_price": 159.5959930419922,
+      "impulse_start_idx": 114,
+      "impulse_start_price": 159.83999633789062,
+      "bos_sequence_count": 1,
+      "last_choch_idx": 122,
+      "ob_idx": 120,
+      "ob_timestamp": "2026-04-24T09:00:00+00:00",
+      "direction": "bearish",
+      "bos_tag": "CHoCH",
+      "high": 159.76100158691406,
+      "low": 159.6820068359375,
+      "proximal_line": 159.6820068359375,
+      "distal_line": 159.76100158691406,
+      "median_leg_body": 0.0360107421875,
+      "ob_body": 0.0360107421875,
+      "fvg": {
+        "exists": false,
+        "fvg_top": null,
+        "fvg_bottom": null,
+        "c1_idx": null,
+        "c3_idx": null,
+        "was_detected": false,
+        "mitigation": "none",
+        "ghost_top": null,
+        "ghost_bottom": null,
+        "ghost_c1_idx": null,
+        "ghost_c3_idx": null,
+        "mitigated_at_idx": null
+      },
+      "sweep_observed": {
+        "exists": false,
+        "tier": "none",
+        "price": null,
+        "tf": "H1",
+        "score": 0.0,
+        "hours_before_ob": null
+      },
+      "touches": 0,
+      "status": "Pristine"
+    },
+    "alert_ist": "2026-04-27T23:02:26.159709",
     "scorecard_version": "v2"
   }
 }
