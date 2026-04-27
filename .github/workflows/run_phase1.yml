@@ -66,3 +66,7 @@ jobs:
               git rebase --abort || true
             fi
             sleep 2
+          done
+
+          echo "Push failed after 5 attempts."
+          exit 1
