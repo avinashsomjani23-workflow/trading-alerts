@@ -390,9 +390,38 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         # --- BOS/CHoCH horizontal line ---
         bos_price = float(ob.get('bos_swing_price', 0))
         bos_tag = ob.get('bos_tag', 'BOS')
-        bos_color = '#00bcd4' if bos_tag == 'BOS' else '#ff9800'
+        bos_color = '#f1c40f' if bos_tag == 'BOS' else '#e91e63'
         if bos_price > 0:
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
+
+        # --- Liquidity sweep wick highlight (H1 only) ---
+        # Draws a dotted rectangle around the wick portion of the sweep candle.
+        # Drawn only if sweep occurred on H1 timeframe.
+        sweep_tf = ob.get('sweep_tf')
+        sweep_ts = ob.get('sweep_timestamp')
+        if sweep_tf == 'H1' and sweep_ts:
+            sw_abs_idx, sw_found = smc_detector.locate_ob_candle_idx(df_h1, sweep_ts)
+            if sw_found and sw_abs_idx >= window_start:
+                sw_local = sw_abs_idx - window_start
+                if 0 <= sw_local < n:
+                    sw_o = float(df_plot['Open'].iloc[sw_local])
+                    sw_h = float(df_plot['High'].iloc[sw_local])
+                    sw_l = float(df_plot['Low'].iloc[sw_local])
+                    sw_c = float(df_plot['Close'].iloc[sw_local])
+                    body_top = max(sw_o, sw_c)
+                    body_bot = min(sw_o, sw_c)
+                    # LONG sweep -> wick pierces below: lower wick
+                    # SHORT sweep -> wick pierces above: upper wick
+                    if ob.get('direction') == 'bullish':
+                        wick_lo, wick_hi = sw_l, body_bot
+                    else:
+                        wick_lo, wick_hi = body_top, sw_h
+                    if wick_hi > wick_lo:
+                        ax.add_patch(patches.Rectangle(
+                            (sw_local - 0.45, wick_lo), 0.9, wick_hi - wick_lo,
+                            fill=False, edgecolor='#00e5ff', linestyle=':',
+                            linewidth=1.5, zorder=5
+                        ))
 
         # --- FVG: outline middle (displacement) candle only, slightly wider for mitigation visibility ---
         # Cross-phase safety: resolve c1 candle position via timestamp (c1_idx
@@ -611,14 +640,37 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
                         fill=False, edgecolor='#2ecc71', linestyle='--', linewidth=1.0, zorder=2
                     ))
 
-        # --- Sweep marker (X only, no text) ---
-        if sweep_price is not None:
-            ax.scatter([n - 2], [sweep_price], color='#ff5370', marker='x', s=120, linewidth=2, zorder=5)
+        # --- Liquidity sweep wick highlight (M15 only) ---
+        # Draws a dotted rectangle around the wick portion of the sweep candle.
+        # Drawn only if sweep occurred on M15 timeframe.
+        sweep_tf = ob.get('sweep_tf')
+        sweep_ts = ob.get('sweep_timestamp')
+        if sweep_tf == 'M15' and sweep_ts:
+            sw_abs_idx, sw_found = smc_detector.locate_ob_candle_idx(df_m15, sweep_ts)
+            if sw_found and sw_abs_idx >= window_start:
+                sw_local = sw_abs_idx - window_start
+                if 0 <= sw_local < n:
+                    sw_o = float(df_plot['Open'].iloc[sw_local])
+                    sw_h = float(df_plot['High'].iloc[sw_local])
+                    sw_l = float(df_plot['Low'].iloc[sw_local])
+                    sw_c = float(df_plot['Close'].iloc[sw_local])
+                    body_top = max(sw_o, sw_c)
+                    body_bot = min(sw_o, sw_c)
+                    if ob.get('direction') == 'bullish':
+                        wick_lo, wick_hi = sw_l, body_bot
+                    else:
+                        wick_lo, wick_hi = body_top, sw_h
+                    if wick_hi > wick_lo:
+                        ax.add_patch(patches.Rectangle(
+                            (sw_local - 0.45, wick_lo), 0.9, wick_hi - wick_lo,
+                            fill=False, edgecolor='#00e5ff', linestyle=':',
+                            linewidth=1.5, zorder=5
+                        ))
 
         # --- BOS/CHoCH horizontal line ---
         bos_price = float(ob.get('bos_swing_price', 0))
         bos_tag = ob.get('bos_tag', 'BOS')
-        bos_color = '#00bcd4' if bos_tag == 'BOS' else '#ff9800'
+        bos_color = '#f1c40f' if bos_tag == 'BOS' else '#e91e63'
         if bos_price > 0:
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
 
@@ -746,7 +798,7 @@ def build_scorecard_html(rows, total):
 
 def _chart_legend_html(bos_tag="BOS"):
     """Colour-code legend rendered below each chart. Cosmetic only."""
-    bos_color = '#00bcd4' if bos_tag == 'BOS' else '#ff9800'
+    bos_color = '#f1c40f' if bos_tag == 'BOS' else '#e91e63'
     bos_label = bos_tag
     items = [
         ('#bb8fce', 'Zone band (proximal/distal)'),
@@ -757,7 +809,7 @@ def _chart_legend_html(bos_tag="BOS"):
         ('#e74c3c', 'Stop loss'),
         ('#27ae60', 'TP1'),
         ('#5dade2', 'Equilibrium (50% of range)'),
-        ('#ff5370', 'Sweep (X marker)'),
+        ('#00e5ff', 'Liquidity sweep (wick highlight)'),
     ]
     rows = "".join(
         f'<span style="display:inline-block;margin:2px 10px 2px 0;font-size:11px;color:#bbb;">'
@@ -1316,6 +1368,32 @@ if __name__ == "__main__":
                 sweep_hours_before_ob=score_res.get('sweep_hours_before_ob')
             )
 
+            # Resolve sweep candle timestamp for chart rendering. Charts use the
+            # timestamp (not idx) because Phase 2 indices are not portable across
+            # phases or across re-fetches. sweep_idx points into the SAME df the
+            # scorer used (df_h1 for H1 sweep, df_m15 for M15 sweep), so we look
+            # up the timestamp on that df here, while still in scope.
+            sweep_tf_resolved = score_res.get('sweep_tf')
+            sweep_idx_resolved = score_res.get('sweep_idx')
+            sweep_ts_iso = None
+            if sweep_idx_resolved is not None:
+                try:
+                    if sweep_tf_resolved == 'H1':
+                        sw_ts = df_h1.index[int(sweep_idx_resolved)]
+                    elif sweep_tf_resolved == 'M15':
+                        sw_ts = df_m15.index[int(sweep_idx_resolved)]
+                    else:
+                        sw_ts = None
+                    if sw_ts is not None:
+                        sweep_ts_iso = sw_ts.isoformat() if hasattr(sw_ts, 'isoformat') else str(sw_ts)
+                except Exception:
+                    sweep_ts_iso = None
+
+            # Inject onto the ob dict so chart functions can locate the sweep
+            # candle by timestamp. Non-invasive: ob is reused only for charts.
+            ob['sweep_tf'] = sweep_tf_resolved
+            ob['sweep_timestamp'] = sweep_ts_iso
+
             distance = abs(current_price - proximal)
             pip = pip_size(pair_conf)
             distance_pips_num = round(distance / pip, 1)
@@ -1341,7 +1419,6 @@ if __name__ == "__main__":
                 "trend_label": trend_label,
                 "h1_trend": current_trend
             }
-
             dr = score_res.get('dealing_range')
 
             if entry_model == "limit":
