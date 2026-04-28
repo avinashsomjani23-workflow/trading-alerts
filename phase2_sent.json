@@ -21,6 +21,13 @@
       "alert_ist": "2026-04-28T16:17:31.831532",
       "bias": "SHORT",
       "pair": "NAS100"
+    },
+    "USDJPY_LONG_CHoCH_159.57": {
+      "score_int": 6,
+      "score_raw": 6.8,
+      "alert_ist": "2026-04-28T16:47:30.432913",
+      "bias": "LONG",
+      "pair": "USDJPY"
     }
   }
 }
