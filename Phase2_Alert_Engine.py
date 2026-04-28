@@ -827,6 +827,20 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         / Distal {ob.get('distal_line', 0):.{dp}f}
     </div>"""
 
+    # Trend banner (information only — trader decides whether to take counter-trend)
+    trend_alignment = data.get("trend_alignment", "ambiguous")
+    trend_label = data.get("trend_label", "H1 trend unavailable")
+    if trend_alignment == "with_trend":
+        trend_bg, trend_border, trend_icon = "#1a3a1a", "#27ae60", "&#9989;"  # green ✅
+    elif trend_alignment == "counter_trend":
+        trend_bg, trend_border, trend_icon = "#3a1a1a", "#e74c3c", "&#9888;"  # red ⚠️
+    else:
+        trend_bg, trend_border, trend_icon = "#2a2a1a", "#f39c12", "&#10067;"  # amber ❓
+    trend_banner_html = f"""
+    <div style="margin-bottom:12px;padding:10px 14px;background:{trend_bg};border-left:4px solid {trend_border};border-radius:4px;font-size:13px;color:#eee;font-weight:bold;">
+        {trend_icon} Trend Context: {trend_label}
+    </div>"""
+
     # Chart blocks with fallback banner (B8)
     if h1_chart_ok:
         h1_chart_block = '<img src="cid:chart_h1" style="width:100%;border-radius:6px;margin-bottom:12px;" />'
@@ -846,6 +860,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         </div>
         <div style="padding:14px 18px;">
             {action_block}
+            {trend_banner_html}
             {distance_html}
             {context_html}
             {scorecard_html}
@@ -1222,29 +1237,32 @@ if __name__ == "__main__":
             append_scan_log(scan_record)
             continue
 
-        # 3. Per-pair single-alert: pick nearest-to-price zone that matches
-        # current H1 trend direction. If trend is None or no zone matches, skip.
+        # 3. Per-pair single-alert: pick nearest-to-price zone. No trend gating.
+        # Trend is computed as INFORMATION ONLY and surfaced in the email banner
+        # so the trader can decide with-trend vs counter-trend at execution time.
         current_trend = bos_counter.get('trend')  # 'bullish' | 'bearish' | None
         scan_record["h1_trend"] = current_trend
 
+        # Nearest-to-price wins across ALL surviving zones, regardless of direction
+        surviving_obs.sort(key=lambda o: abs(current_price - float(o['proximal_line'])))
+        selected_ob = surviving_obs[0]
+
+        # Classify trend alignment for the selected zone (information only)
+        zone_dir = selected_ob.get('direction')
         if current_trend is None:
-            print(f"  [-] {name}: H1 trend ambiguous. Skipping pair this scan.")
-            scan_record["final_action"] = "h1_trend_ambiguous"
-            append_scan_log(scan_record)
-            continue
+            trend_alignment = "ambiguous"
+            trend_label = "H1 trend ambiguous — no clear BOS sequence"
+        elif current_trend == zone_dir:
+            trend_alignment = "with_trend"
+            trend_label = f"WITH H1 trend (H1 is {current_trend})"
+        else:
+            trend_alignment = "counter_trend"
+            trend_label = f"AGAINST H1 trend (H1 is {current_trend}, zone is {zone_dir})"
 
-        matching_obs = [o for o in surviving_obs if o.get('direction') == current_trend]
-        if not matching_obs:
-            print(f"  [-] {name}: no surviving zone matches current H1 trend ({current_trend}). Skipping.")
-            scan_record["final_action"] = "no_zone_matches_trend"
-            append_scan_log(scan_record)
-            continue
-        # Nearest-to-price wins
-        matching_obs.sort(key=lambda o: abs(current_price - float(o['proximal_line'])))
-        selected_ob = matching_obs[0]
+        scan_record["trend_alignment"] = trend_alignment
 
-        # Inject fresh BOS count onto selected zone
-        if bos_counter['trend'] == selected_ob.get('direction'):
+        # Inject fresh BOS count onto selected zone (only meaningful when aligned)
+        if current_trend == zone_dir:
             selected_ob['bos_sequence_count'] = bos_counter['count']
 
         # Now score and alert only the selected zone
@@ -1318,7 +1336,10 @@ if __name__ == "__main__":
                 "levels": levels,
                 "ob": ob,
                 "alert_ist": ist_now.isoformat(),
-                "scorecard_version": "v2"
+                "scorecard_version": "v2",
+                "trend_alignment": trend_alignment,
+                "trend_label": trend_label,
+                "h1_trend": current_trend
             }
 
             dr = score_res.get('dealing_range')
