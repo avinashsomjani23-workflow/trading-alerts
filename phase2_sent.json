@@ -14,6 +14,13 @@
       "alert_ist": "2026-04-28T15:02:28.647599",
       "bias": "SHORT",
       "pair": "USDJPY"
+    },
+    "NAS100_SHORT_CHoCH_27298.5": {
+      "score_int": 6,
+      "score_raw": 6.5,
+      "alert_ist": "2026-04-28T16:17:31.831532",
+      "bias": "SHORT",
+      "pair": "NAS100"
     }
   }
 }
