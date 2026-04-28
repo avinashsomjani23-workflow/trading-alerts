@@ -1,4 +1,12 @@
 {
   "day_id": "2026-04-28",
-  "zones": {}
+  "zones": {
+    "USDJPY_LONG_BOS_158.99": {
+      "score_int": 6,
+      "score_raw": 6.0,
+      "alert_ist": "2026-04-28T09:17:32.713268",
+      "bias": "LONG",
+      "pair": "USDJPY"
+    }
+  }
 }
