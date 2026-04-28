@@ -897,13 +897,14 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     #   0.55 <= position < 0.65 -> 0.5 (mid premium)
     #   position < 0.55 -> 0.0 (below equilibrium, fail)
     h1_atr_val = compute_atr(df_h1)
+    proximal = float(ob['proximal_line'])
     dr = get_dealing_range(ob, df_h1, h1_atr_val,
-                           pair_conf=pair_conf, current_price=current_price)
+                           pair_conf=pair_conf, current_price=proximal)
     pd_position = None
     if dr["valid"]:
         rng_width = dr["range_high"] - dr["range_low"]
         if rng_width > 0:
-            pd_position = (current_price - dr["range_low"]) / rng_width
+            pd_position = (proximal - dr["range_low"]) / rng_width
             if bias == "LONG":
                 if pd_position <= 0.25:
                     bd["pd"] = 1.5
