@@ -483,7 +483,7 @@ def detect_smc_radar(df, lookback, pair_type="forex"):
     for ob in active_obs:
         mitigated = False
         touches   = 0
-        for m in range(ob['ob_idx'] + 2, n):
+        for m in range(ob['bos_idx'] + 1, n):
             if ob['direction'] == 'bullish':
                 if C[m] < ob['distal_line']:
                     mitigated = True
