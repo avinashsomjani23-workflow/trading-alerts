@@ -35,6 +35,13 @@
       "alert_ist": "2026-04-28T17:02:26.140617",
       "bias": "LONG",
       "pair": "EURUSD"
+    },
+    "NZDUSD_LONG_CHoCH_0.5863": {
+      "score_int": 6,
+      "score_raw": 6.2,
+      "alert_ist": "2026-04-28T17:32:34.762596",
+      "bias": "LONG",
+      "pair": "NZDUSD"
     }
   }
 }
