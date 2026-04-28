@@ -7,6 +7,13 @@
       "alert_ist": "2026-04-28T09:17:32.713268",
       "bias": "LONG",
       "pair": "USDJPY"
+    },
+    "USDJPY_SHORT_CHoCH_159.6": {
+      "score_int": 6,
+      "score_raw": 6.0,
+      "alert_ist": "2026-04-28T12:47:30.324917",
+      "bias": "SHORT",
+      "pair": "USDJPY"
     }
   }
 }
