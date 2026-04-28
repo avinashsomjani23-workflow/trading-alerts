@@ -68,6 +68,44 @@ def save_json(path, data):
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
+    
+def format_score_driver_line(prior_raw, current_raw, prior_breakdown, current_breakdown):
+    """
+    One-line summary explaining what drove the score change.
+    Compares prior vs current breakdown component-by-component, surfaces
+    the top movers (largest absolute deltas).
+
+    Falls back gracefully if prior breakdown is missing (older state files
+    written before this field was tracked).
+    """
+    delta_total = round(current_raw - prior_raw, 2)
+    sign = "+" if delta_total >= 0 else ""
+    header = f"Score {prior_raw:.1f} → {current_raw:.1f} ({sign}{delta_total:+.1f})."
+
+    if not isinstance(prior_breakdown, dict) or not isinstance(current_breakdown, dict):
+        return f"{header} Drivers: not available (first update post-deploy)."
+
+    component_deltas = []
+    keys = set(prior_breakdown.keys()) | set(current_breakdown.keys())
+    for k in keys:
+        try:
+            p = float(prior_breakdown.get(k, 0.0))
+            c = float(current_breakdown.get(k, 0.0))
+        except (TypeError, ValueError):
+            continue
+        d = round(c - p, 2)
+        if abs(d) >= 0.05:  # ignore noise-level shifts
+            component_deltas.append((k, d))
+
+    if not component_deltas:
+        return f"{header} Drivers: rounding-level adjustments only."
+
+    # Sort by absolute delta descending; show top 2.
+    component_deltas.sort(key=lambda x: abs(x[1]), reverse=True)
+    top = component_deltas[:2]
+    parts = [f"{name} {d:+.2f}" for name, d in top]
+    return f"{header} Drivers: {', '.join(parts)}."
+    
 def load_slate_as_pair_map(path="active_obs.json"):
     """
     Backward-compatible reader. Phase 1 daily-slate schema is:
@@ -904,6 +942,16 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     else:
         m15_chart_block = '<div style="padding:10px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:12px;margin-bottom:12px;">&#9888; M15 chart failed to render for this alert. Check GitHub Actions logs.</div>'
 
+    # Score-change driver line: only shown on update emails.
+    score_change_line = data.get("score_change_line")
+    if score_change_line:
+        score_change_html = f"""
+    <div style="margin-bottom:12px;padding:10px 14px;background:#1a1a2e;border-left:3px solid #f1c40f;border-radius:4px;font-size:12px;color:#eee;line-height:1.5;">
+        <b style="color:#f1c40f;">Score change:</b> {score_change_line}
+    </div>"""
+    else:
+        score_change_html = ""
+
     return f"""<html><body style="font-family:Arial,sans-serif;background:#0d0d1a;padding:12px;margin:0;">
     <div style="max-width:650px;margin:auto;background:#13131f;border-radius:14px;overflow:hidden;">
         <div style="background:#1a1a2e;padding:14px 18px;">
@@ -912,6 +960,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         </div>
         <div style="padding:14px 18px;">
             {action_block}
+            {score_change_html}
             {trend_banner_html}
             {distance_html}
             {context_html}
@@ -927,7 +976,6 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             </div>
         </div>
     </div></body></html>"""
-
 
 def send_email(subject, html_body, h1_chart_b64, m15_chart_b64):
     for recipient in config["account"].get("alert_emails", []):
@@ -1429,31 +1477,39 @@ if __name__ == "__main__":
                 key_dp = max(0, dp - 1)
                 zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}"
 
-                # Day-reset dedup with score-change re-email.
-                # First sighting today → email. Re-sighting with same int score → silent.
-                # Re-sighting with changed int score → email with UPDATED prefix.
-                current_score_int = score_to_int(score_res['total'])
+                # Day-reset dedup with score-DELTA re-email.
+                # First sighting today → email. Re-sighting with score delta < 0.5 → silent.
+                # Re-sighting with abs delta >= 0.5 → email with UPDATED prefix + drivers line.
+                # Symmetric: covers both score increases and decreases.
+                current_score_raw = float(score_res['total'])
+                current_breakdown = score_res.get('breakdown', {})
                 prior = phase2_zones.get(zone_id)
                 is_update = False
-                prior_score_int = None
+                prior_score_raw = None
+                prior_breakdown = None
                 if prior is not None:
-                    prior_score_int = prior.get("score_int")
-                    if prior_score_int == current_score_int:
-                        scan_record["final_action"] = f"dedup_score_unchanged ({current_score_int})"
+                    prior_score_raw = float(prior.get("score_raw", 0.0))
+                    prior_breakdown = prior.get("breakdown")
+                    if abs(current_score_raw - prior_score_raw) < 0.5:
+                        scan_record["final_action"] = (
+                            f"dedup_score_delta_below_threshold "
+                            f"({prior_score_raw:.1f}->{current_score_raw:.1f})"
+                        )
                         append_scan_log(scan_record)
                         continue
                     is_update = True
 
                 # Register zone state BEFORE send. Survives mid-scan crash.
+                # Stores breakdown so future updates can show driver deltas.
                 phase2_zones[zone_id] = {
-                    "score_int": current_score_int,
-                    "score_raw": float(score_res['total']),
+                    "score_int": score_to_int(current_score_raw),
+                    "score_raw": current_score_raw,
+                    "breakdown": current_breakdown,
                     "alert_ist": ist_now.isoformat(),
                     "bias": bias,
                     "pair": name
                 }
                 save_json("phase2_sent.json", phase2_state)
-
                 # Limit zones do NOT write to active_watch_state.json.
                 # Phase 3 only handles ltf_choch zones (NAS100, GOLD).
                 h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
@@ -1471,10 +1527,23 @@ if __name__ == "__main__":
                     _log_chart_failure(name, "m15_phase2_limit")
 
                 if is_update:
+                    drivers_line = format_score_driver_line(
+                        prior_score_raw, current_score_raw,
+                        prior_breakdown, current_breakdown
+                    )
                     subject_prefix = "TRADE READY (UPDATED)"
-                    email_label = f"TRADE READY — Score updated {prior_score_int} → {current_score_int}"
-                    log_action = f"alert_sent_TRADE_READY_UPDATED ({prior_score_int}->{current_score_int})"
-                    print_label = f"TRADE READY UPDATE (FOREX): {name} score {prior_score_int}->{current_score_int}"
+                    email_label = (
+                        f"TRADE READY — Score updated {prior_score_raw:.1f} → {current_score_raw:.1f}"
+                    )
+                    trade_data["score_change_line"] = drivers_line
+                    log_action = (
+                        f"alert_sent_TRADE_READY_UPDATED "
+                        f"({prior_score_raw:.1f}->{current_score_raw:.1f})"
+                    )
+                    print_label = (
+                        f"TRADE READY UPDATE (FOREX): {name} "
+                        f"score {prior_score_raw:.1f}->{current_score_raw:.1f}"
+                    )
                 else:
                     subject_prefix = "TRADE READY"
                     email_label = "TRADE READY"
@@ -1501,30 +1570,38 @@ if __name__ == "__main__":
                 zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}"
                 watch_id = f"{name}_{round(proximal, dp)}"
 
-                # Day-reset dedup with score-change re-email. Same model as limit branch.
-                current_score_int = score_to_int(score_res['total'])
+                # Day-reset dedup with score-DELTA re-email. Same model as limit branch.
+                # Symmetric: re-emails on abs(delta) >= 0.5 in either direction.
+                current_score_raw = float(score_res['total'])
+                current_breakdown = score_res.get('breakdown', {})
                 prior = phase2_zones.get(zone_id)
                 is_update = False
-                prior_score_int = None
+                prior_score_raw = None
+                prior_breakdown = None
                 if prior is not None:
-                    prior_score_int = prior.get("score_int")
-                    if prior_score_int == current_score_int:
-                        # Same zone, same score — silent. But keep watch_state fresh
-                        # so Phase 3 keeps monitoring this zone for M5 trigger.
+                    prior_score_raw = float(prior.get("score_raw", 0.0))
+                    prior_breakdown = prior.get("breakdown")
+                    if abs(current_score_raw - prior_score_raw) < 0.5:
+                        # Same zone, sub-threshold delta — silent. But keep watch_state
+                        # fresh so Phase 3 keeps monitoring this zone for M5 trigger.
                         if watch_id in watch_state:
                             trade_data["alert_ist"] = watch_state[watch_id].get(
                                 "alert_ist", ist_now.isoformat()
                             )
                         watch_writes[watch_id] = trade_data
-                        scan_record["final_action"] = f"dedup_score_unchanged_ltf ({current_score_int})"
+                        scan_record["final_action"] = (
+                            f"dedup_score_delta_below_threshold_ltf "
+                            f"({prior_score_raw:.1f}->{current_score_raw:.1f})"
+                        )
                         append_scan_log(scan_record)
                         continue
                     is_update = True
 
                 # Register zone state BEFORE send.
                 phase2_zones[zone_id] = {
-                    "score_int": current_score_int,
-                    "score_raw": float(score_res['total']),
+                    "score_int": score_to_int(current_score_raw),
+                    "score_raw": current_score_raw,
+                    "breakdown": current_breakdown,
                     "alert_ist": ist_now.isoformat(),
                     "bias": bias,
                     "pair": name
@@ -1546,10 +1623,23 @@ if __name__ == "__main__":
                     _log_chart_failure(name, "m15_phase2_ltf")
 
                 if is_update:
+                    drivers_line = format_score_driver_line(
+                        prior_score_raw, current_score_raw,
+                        prior_breakdown, current_breakdown
+                    )
                     subject_prefix = "APPROACHING (UPDATED)"
-                    email_label = f"APPROACHING — Score updated {prior_score_int} → {current_score_int}"
-                    log_action = f"alert_sent_APPROACHING_UPDATED ({prior_score_int}->{current_score_int})"
-                    print_label = f"APPROACHING UPDATE: {name} score {prior_score_int}->{current_score_int}"
+                    email_label = (
+                        f"APPROACHING — Score updated {prior_score_raw:.1f} → {current_score_raw:.1f}"
+                    )
+                    trade_data["score_change_line"] = drivers_line
+                    log_action = (
+                        f"alert_sent_APPROACHING_UPDATED "
+                        f"({prior_score_raw:.1f}->{current_score_raw:.1f})"
+                    )
+                    print_label = (
+                        f"APPROACHING UPDATE: {name} "
+                        f"score {prior_score_raw:.1f}->{current_score_raw:.1f}"
+                    )
                 else:
                     subject_prefix = "APPROACHING"
                     email_label = "APPROACHING"
@@ -1566,7 +1656,6 @@ if __name__ == "__main__":
                     f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/10 | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
-
                 watch_writes[watch_id] = trade_data
                 print(f"  [>] {print_label}")
                 scan_record["final_action"] = log_action
