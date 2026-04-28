@@ -942,6 +942,7 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         "breakdown": bd,
         "sweep_price": sweep_price,
         "sweep_tf": sweep_tf,
+        "sweep_idx": chosen_sweep.get('sweep_idx'),
         "sweep_tier": chosen_sweep['tier'],
         "sweep_components": chosen_sweep['components'],
         "sweep_hours_before_ob": chosen_sweep['hours_before_anchor'],
