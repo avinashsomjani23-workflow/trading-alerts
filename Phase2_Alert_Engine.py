@@ -1411,7 +1411,7 @@ if __name__ == "__main__":
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
                 send_email(
-                    f"{subject_prefix} | {name} | {bias} | {ist_now.strftime('%H:%M IST')}",
+                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/10 | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
                 print(f"  [OK] {print_label}")
@@ -1486,7 +1486,7 @@ if __name__ == "__main__":
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
                 send_email(
-                    f"{subject_prefix} | {name} | {bias} | {ist_now.strftime('%H:%M IST')}",
+                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/10 | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
 
