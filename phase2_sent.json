@@ -30,9 +30,9 @@
       "pair": "USDJPY"
     },
     "EURUSD_LONG_CHoCH_1.1692": {
-      "score_int": 8,
-      "score_raw": 8.0,
-      "alert_ist": "2026-04-28T18:02:29.110783",
+      "score_int": 7,
+      "score_raw": 7.8,
+      "alert_ist": "2026-04-28T18:17:28.260296",
       "bias": "LONG",
       "pair": "EURUSD"
     },
