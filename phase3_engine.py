@@ -235,11 +235,10 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
 
         # M5 CHoCH horizontal line
         if choch_level is not None and choch_level > 0:
-            ax.axhline(y=choch_level, color='#ff9800', linestyle='--', linewidth=1.0, alpha=0.85, zorder=3)
+            ax.axhline(y=choch_level, color='#e91e63', linestyle='--', linewidth=1.0, alpha=0.85, zorder=3)
 
-        # M5 sweep marker (X only, no text)
-        if sweep_price is not None:
-            ax.scatter([n - 2], [sweep_price], color='#ff5370', marker='x', s=120, linewidth=2, zorder=5)
+        # M5 sweep is intentionally not drawn. M5 sweep is hardcoded to None
+        # in run_phase3 (no M5 confluences beyond FVG by design).
 
         # OB candle outline (white)
         ob_ts_iso = ob.get('ob_timestamp')
@@ -313,7 +312,7 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
             mid_labels.append((proximal, f"{proximal:.{dp}f}", '#bb8fce'))
             mid_labels.append((distal, f"{distal:.{dp}f}", '#bb8fce'))
         if choch_level is not None and choch_level > 0:
-            mid_labels.append((float(choch_level), f"{float(choch_level):.{dp}f}", '#ff9800'))
+            mid_labels.append((float(choch_level), f"{float(choch_level):.{dp}f}", '#e91e63'))
         mid_labels.append((current, f"{current:.{dp}f}", '#ffffff'))
         mid_stacked = smc_detector.stack_labels(mid_labels, pair_conf)
         for adj_price, text, color in mid_stacked:
@@ -396,13 +395,12 @@ def _chart_legend_html():
     items = [
         ('#bb8fce', 'H1 zone band (proximal/distal)'),
         ('#2ecc71', 'M5 FVG (displacement)'),
-        ('#ff9800', 'M5 CHoCH level'),
+        ('#e91e63', 'M5 CHoCH level'),
         ('#ffffff', 'OB candle / current price'),
         ('#e67e22', 'Entry'),
         ('#e74c3c', 'Stop loss'),
         ('#27ae60', 'TP1'),
         ('#1abc9c', 'TP2'),
-        ('#ff5370', 'Sweep (X marker)'),
     ]
     rows = "".join(
         f'<span style="display:inline-block;margin:2px 10px 2px 0;font-size:11px;color:#bbb;">'
@@ -577,6 +575,44 @@ def run_phase3():
         )
 
         if inv_reason:
+            # Entry-touched suppression: if price has already touched the projected
+            # entry since the alert fired, the trade has either filled or already
+            # played out. Invalidation emails at this point are misleading noise.
+            # We still delete the watch (no point monitoring further).
+            entry_p = float(levels.get('entry', 0))
+            entry_touched = False
+            if entry_p > 0:
+                # Bound the M5 window to candles AFTER alert_ts when possible.
+                # alert_ts is IST-naive; df_m5 index is UTC-naive. Compare in UTC.
+                try:
+                    if alert_ts is not None:
+                        alert_utc = alert_ts - timedelta(hours=5, minutes=30)
+                        m5_idx = df_m5.index
+                        if hasattr(m5_idx, 'tz_convert') and m5_idx.tz is not None:
+                            m5_idx_naive = m5_idx.tz_convert('UTC').tz_localize(None)
+                        else:
+                            m5_idx_naive = m5_idx
+                        mask = m5_idx_naive >= alert_utc
+                        post_alert = df_m5[mask] if mask.any() else df_m5.tail(0)
+                    else:
+                        post_alert = df_m5
+                except Exception:
+                    post_alert = df_m5
+
+                if not post_alert.empty:
+                    if bias == "LONG":
+                        # Buy entry sits at/above zone proximal. LONG fills when
+                        # price drops to or below entry (any low <= entry).
+                        entry_touched = bool((post_alert['Low'] <= entry_p).any())
+                    else:
+                        # SHORT fills when price rises to or above entry.
+                        entry_touched = bool((post_alert['High'] >= entry_p).any())
+
+            if entry_touched:
+                print(f"  [X] {pair_name} INVALIDATED but entry already touched — suppressing email. Reason was: {inv_reason}")
+                keys_to_delete.append(key)
+                continue
+
             print(f"  [X] {pair_name} INVALIDATED: {inv_reason}")
             html_inv = build_invalidation_email(
                 pair_name, bias, inv_reason, inv_detail, ob, levels, alert_ts, ist_now, pair_conf, scan_start_ts
