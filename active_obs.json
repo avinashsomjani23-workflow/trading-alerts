@@ -1,222 +1,118 @@
 {
-  "EURUSD": [
-    {
-      "bos_idx": 119,
-      "bos_swing_price": 1.1691803932189941,
-      "impulse_start_idx": 112,
-      "impulse_start_price": 1.1676785945892334,
-      "bos_sequence_count": 1,
-      "last_choch_idx": 116,
-      "ob_idx": 118,
-      "ob_timestamp": "2026-04-24T09:00:00+00:00",
-      "direction": "bullish",
-      "bos_tag": "BOS",
-      "high": 1.1694538593292236,
-      "low": 1.168770432472229,
-      "proximal_line": 1.1694538593292236,
-      "distal_line": 1.168770432472229,
-      "median_leg_body": 0.00034123659133911133,
-      "ob_body": 0.0004101991653442383,
-      "fvg": {
-        "exists": true,
-        "fvg_top": 1.1706860065460205,
-        "fvg_bottom": 1.1694538593292236,
-        "c1_idx": 118,
-        "c3_idx": 120,
-        "was_detected": true,
-        "mitigation": "partial",
-        "ghost_top": null,
-        "ghost_bottom": null,
-        "ghost_c1_idx": null,
-        "ghost_c3_idx": null,
-        "mitigated_at_idx": null
-      },
-      "sweep_observed": {
-        "exists": false,
-        "tier": "none",
-        "price": null,
-        "tf": "H1",
-        "score": 0.0,
-        "hours_before_ob": null
-      },
-      "touches": 0,
-      "status": "Pristine"
-    }
-  ],
-  "USDJPY": [
-    {
-      "bos_idx": 121,
-      "bos_swing_price": 159.5959930419922,
-      "impulse_start_idx": 113,
-      "impulse_start_price": 159.83999633789062,
-      "bos_sequence_count": 0,
-      "last_choch_idx": 121,
-      "ob_idx": 119,
-      "ob_timestamp": "2026-04-24T09:00:00+00:00",
-      "direction": "bearish",
-      "bos_tag": "CHoCH",
-      "high": 159.76100158691406,
-      "low": 159.6820068359375,
-      "proximal_line": 159.6820068359375,
-      "distal_line": 159.76100158691406,
-      "median_leg_body": 0.0360107421875,
-      "ob_body": 0.0360107421875,
-      "fvg": {
-        "exists": false,
-        "fvg_top": null,
-        "fvg_bottom": null,
-        "c1_idx": null,
-        "c3_idx": null,
-        "was_detected": false,
-        "mitigation": "none",
-        "ghost_top": null,
-        "ghost_bottom": null,
-        "ghost_c1_idx": null,
-        "ghost_c3_idx": null,
-        "mitigated_at_idx": null
-      },
-      "sweep_observed": {
-        "exists": false,
-        "tier": "none",
-        "price": null,
-        "tf": "H1",
-        "score": 0.0,
-        "hours_before_ob": null
-      },
-      "touches": 0,
-      "status": "Pristine"
+  "slate_date": "2026-04-28",
+  "slate_started_iso": "2026-04-28T09:02:32.702535",
+  "pairs": {
+    "EURUSD": {
+      "next_id_counter": 1,
+      "zones": [
+        {
+          "zone_id": "EUR01",
+          "status": "active",
+          "drop_reason": null,
+          "first_seen_iso": "2026-04-28T09:02:32.702535",
+          "first_seen_label": "09:02 IST",
+          "last_seen_iso": "2026-04-28T09:02:32.702535",
+          "last_seen_label": "09:02 IST",
+          "is_new_this_scan": true,
+          "ob_timestamp": "2026-04-24T09:00:00+00:00",
+          "direction": "bullish",
+          "bos_tag": "BOS",
+          "proximal_line": 1.1694538593292236,
+          "distal_line": 1.168770432472229,
+          "high": 1.1694538593292236,
+          "low": 1.168770432472229,
+          "ob_body": 0.0004101991653442383,
+          "median_leg_body": 0.00034123659133911133,
+          "bos_idx": 109,
+          "ob_idx": 108,
+          "impulse_start_idx": 102,
+          "impulse_start_price": 1.1676785945892334,
+          "bos_swing_price": 1.1691803932189941,
+          "touches": 0,
+          "status_label": "Pristine",
+          "h1_atr": 0.000638561589377267,
+          "current_price_at_scan": 1.1719207763671875,
+          "distance_to_proximal_pips": 24.7,
+          "fvg": {
+            "exists": true,
+            "fvg_top": 1.1706860065460205,
+            "fvg_bottom": 1.1694538593292236,
+            "c1_idx": 108,
+            "c3_idx": 110,
+            "was_detected": true,
+            "mitigation": "partial",
+            "ghost_top": null,
+            "ghost_bottom": null,
+            "ghost_c1_idx": null,
+            "ghost_c3_idx": null,
+            "mitigated_at_idx": null
+          }
+        }
+      ]
     },
-    {
-      "bos_idx": 45,
-      "bos_swing_price": 158.9949951171875,
-      "impulse_start_idx": 44,
-      "impulse_start_price": 158.78599548339844,
-      "bos_sequence_count": 1,
-      "last_choch_idx": 38,
-      "ob_idx": 44,
-      "ob_timestamp": "2026-04-21T06:00:00+00:00",
-      "direction": "bullish",
-      "bos_tag": "BOS",
-      "high": 158.91400146484375,
-      "low": 158.78599548339844,
-      "proximal_line": 158.91400146484375,
-      "distal_line": 158.78599548339844,
-      "median_leg_body": 0.14599609375,
-      "ob_body": 0.08599853515625,
-      "fvg": {
-        "exists": true,
-        "fvg_top": 159.00999450683594,
-        "fvg_bottom": 158.91400146484375,
-        "c1_idx": 44,
-        "c3_idx": 46,
-        "was_detected": true,
-        "mitigation": "partial",
-        "ghost_top": null,
-        "ghost_bottom": null,
-        "ghost_c1_idx": null,
-        "ghost_c3_idx": null,
-        "mitigated_at_idx": null
-      },
-      "sweep_observed": {
-        "exists": false,
-        "tier": "none",
-        "price": null,
-        "tf": "H1",
-        "score": 0.0,
-        "hours_before_ob": null
-      },
-      "touches": 0,
-      "status": "Pristine"
+    "USDJPY": {
+      "next_id_counter": 1,
+      "zones": [
+        {
+          "zone_id": "JPY01",
+          "status": "active",
+          "drop_reason": null,
+          "first_seen_iso": "2026-04-28T09:02:32.702535",
+          "first_seen_label": "09:02 IST",
+          "last_seen_iso": "2026-04-28T09:02:32.702535",
+          "last_seen_label": "09:02 IST",
+          "is_new_this_scan": true,
+          "ob_timestamp": "2026-04-21T06:00:00+00:00",
+          "direction": "bullish",
+          "bos_tag": "BOS",
+          "proximal_line": 158.91400146484375,
+          "distal_line": 158.78599548339844,
+          "high": 158.91400146484375,
+          "low": 158.78599548339844,
+          "ob_body": 0.08599853515625,
+          "median_leg_body": 0.14599609375,
+          "bos_idx": 35,
+          "ob_idx": 34,
+          "impulse_start_idx": 34,
+          "impulse_start_price": 158.78599548339844,
+          "bos_swing_price": 158.9949951171875,
+          "touches": 0,
+          "status_label": "Pristine",
+          "h1_atr": 0.13764190673828125,
+          "current_price_at_scan": 159.0540008544922,
+          "distance_to_proximal_pips": 14.0,
+          "fvg": {
+            "exists": true,
+            "fvg_top": 159.00999450683594,
+            "fvg_bottom": 158.91400146484375,
+            "c1_idx": 34,
+            "c3_idx": 36,
+            "was_detected": true,
+            "mitigation": "partial",
+            "ghost_top": null,
+            "ghost_bottom": null,
+            "ghost_c1_idx": null,
+            "ghost_c3_idx": null,
+            "mitigated_at_idx": null
+          }
+        }
+      ]
+    },
+    "NZDUSD": {
+      "next_id_counter": 0,
+      "zones": []
+    },
+    "USDCHF": {
+      "next_id_counter": 0,
+      "zones": []
+    },
+    "NAS100": {
+      "next_id_counter": 0,
+      "zones": []
+    },
+    "GOLD": {
+      "next_id_counter": 0,
+      "zones": []
     }
-  ],
-  "NZDUSD": [],
-  "USDCHF": [],
-  "NAS100": [
-    {
-      "bos_idx": 119,
-      "bos_swing_price": 27135.75,
-      "impulse_start_idx": 103,
-      "impulse_start_price": 26681.75,
-      "bos_sequence_count": 1,
-      "last_choch_idx": 77,
-      "ob_idx": 117,
-      "ob_timestamp": "2026-04-24T08:00:00+00:00",
-      "direction": "bullish",
-      "bos_tag": "BOS",
-      "high": 27153.75,
-      "low": 27073.25,
-      "proximal_line": 27153.75,
-      "distal_line": 27073.25,
-      "median_leg_body": 34.75,
-      "ob_body": 15.0,
-      "fvg": {
-        "exists": true,
-        "fvg_top": 27170.5,
-        "fvg_bottom": 27120.75,
-        "c1_idx": 118,
-        "c3_idx": 120,
-        "was_detected": true,
-        "mitigation": "partial",
-        "ghost_top": null,
-        "ghost_bottom": null,
-        "ghost_c1_idx": null,
-        "ghost_c3_idx": null,
-        "mitigated_at_idx": null
-      },
-      "sweep_observed": {
-        "exists": false,
-        "tier": "none",
-        "price": null,
-        "tf": "H1",
-        "score": 0.0,
-        "hours_before_ob": null
-      },
-      "touches": 2,
-      "status": "Tested (2x)"
-    }
-  ],
-  "GOLD": [
-    {
-      "bos_idx": 147,
-      "bos_swing_price": 4686.60009765625,
-      "impulse_start_idx": 136,
-      "impulse_start_price": 4745.7998046875,
-      "bos_sequence_count": 0,
-      "last_choch_idx": 147,
-      "ob_idx": 142,
-      "ob_timestamp": "2026-04-27T10:00:00+00:00",
-      "direction": "bearish",
-      "bos_tag": "CHoCH",
-      "high": 4726.39990234375,
-      "low": 4714.7001953125,
-      "proximal_line": 4714.7001953125,
-      "distal_line": 4726.39990234375,
-      "median_leg_body": 4.7998046875,
-      "ob_body": 5.099609375,
-      "fvg": {
-        "exists": false,
-        "fvg_top": null,
-        "fvg_bottom": null,
-        "c1_idx": null,
-        "c3_idx": null,
-        "was_detected": false,
-        "mitigation": "none",
-        "ghost_top": null,
-        "ghost_bottom": null,
-        "ghost_c1_idx": null,
-        "ghost_c3_idx": null,
-        "mitigated_at_idx": null
-      },
-      "sweep_observed": {
-        "exists": false,
-        "tier": "none",
-        "price": null,
-        "tf": "H1",
-        "score": 0.0,
-        "hours_before_ob": null
-      },
-      "touches": 2,
-      "status": "Tested (2x)"
-    }
-  ]
+  }
 }
