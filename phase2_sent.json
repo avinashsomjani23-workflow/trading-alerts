@@ -2,8 +2,8 @@
   "day_id": "2026-04-29",
   "zones": {
     "NZDUSD_LONG_CHoCH_0.5863": {
-      "score_int": 6,
-      "score_raw": 6.5,
+      "score_int": 7,
+      "score_raw": 7.5,
       "breakdown": {
         "structure": 2.5,
         "sweep": 1.0,
@@ -11,11 +11,27 @@
         "freshness": 0.5,
         "pd": 1.5,
         "killzone": 1.0,
-        "macro": 0.0
+        "macro": 1.0
       },
-      "alert_ist": "2026-04-29T12:02:31.044989",
+      "alert_ist": "2026-04-29T13:32:32.113731",
       "bias": "LONG",
       "pair": "NZDUSD"
+    },
+    "EURUSD_LONG_CHoCH_1.1692": {
+      "score_int": 6,
+      "score_raw": 6.8,
+      "breakdown": {
+        "structure": 2.5,
+        "sweep": 1.5,
+        "fvg": 0.0,
+        "freshness": 0.25,
+        "pd": 1.5,
+        "killzone": 1.0,
+        "macro": 0.0
+      },
+      "alert_ist": "2026-04-29T13:32:32.113731",
+      "bias": "LONG",
+      "pair": "EURUSD"
     }
   }
 }

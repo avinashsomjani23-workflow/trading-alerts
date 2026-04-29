@@ -73,5 +73,10 @@
     "ts": "2026-04-28T14:47:32.993410",
     "pair": "USDJPY",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-04-29T13:32:56.277955",
+    "pair": "NZDUSD",
+    "reason": "no candidates field, attempt 3"
   }
 ]
