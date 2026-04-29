@@ -103,5 +103,10 @@
     "ts": "2026-04-29T14:32:47.191874",
     "pair": "NZDUSD",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-04-29T14:47:36.062968",
+    "pair": "GOLD",
+    "reason": "no candidates field, attempt 3"
   }
 ]
