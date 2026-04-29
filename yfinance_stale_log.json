@@ -292,5 +292,12 @@
     "interval": "5m",
     "reason": "stale data (age 0.76h, limit 0.3h)",
     "age_hours": 0.76
+  },
+  {
+    "ts": "2026-04-29T09:45:38.494717",
+    "symbol": "NQ=F",
+    "interval": "5m",
+    "reason": "stale data (age 0.93h, limit 0.3h)",
+    "age_hours": 0.93
   }
 ]
