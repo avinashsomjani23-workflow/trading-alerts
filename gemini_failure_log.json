@@ -123,5 +123,10 @@
     "ts": "2026-04-29T15:17:44.416501",
     "pair": "GOLD",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-04-29T15:32:38.366551",
+    "pair": "EURUSD",
+    "reason": "no candidates field, attempt 3"
   }
 ]
