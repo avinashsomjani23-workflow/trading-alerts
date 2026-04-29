@@ -25,13 +25,13 @@ def compute_atr(df, period=14):
 
 # ---------------------------------------------------------------------------
 # Dealing range lookback per pair type (in H1 candles).
-# Veteran-calibrated: forex ~3 trading days, indices ~2, commodities ~4.
+# Trader-set: Forex 5 trading days, Index 3 days, Gold 5 days.
+# 1 trading day = 24 H1 candles. Weekend candles already excluded by yfinance.
 # ---------------------------------------------------------------------------
-# NEW
 DEALING_RANGE_LOOKBACK_H1 = {
-    "forex": 72,
-    "index": 48,
-    "commodity": 96
+    "forex": 120,
+    "index": 72,
+    "commodity": 120
 }
 
 # ---------------------------------------------------------------------------
@@ -82,10 +82,10 @@ SWEEP_RECENCY_TRADING_HOURS = 10
 # observation logic is decoupled from Phase 2 grading.
 PHASE1_SWEEP_OBS_TRADING_HOURS = 72
 
-# Scoring caps for the redesigned sweep score. Sums to 2.0 by construction.
+# Scoring caps for the redesigned sweep score. Sums to 2.5 by construction.
 SWEEP_SCORE_BASE_MAX        = 1.0   # presence (wick + close-back, bias-aligned, within recency)
 SWEEP_SCORE_EQUAL_LEVEL_MAX = 0.5   # 0 / 0.25 / 0.5 for 0 / 1 / 2 prior matches in last 3 swings
-SWEEP_SCORE_REJECTION_MAX   = 0.5   # 0 / 0.25 / 0.5 for wick:body ratio < 1 / 1-2 / > 2
+SWEEP_SCORE_REJECTION_MAX   = 1.0   # 0 / 0.33 / 0.66 / 1.0 for wick:body ratio < 1 / 1-2 / 2-3 / >3
 
 # When both H1 and M15 sweeps are detected, M15 only outranks H1 if it scores
 # at least this multiple of the H1 score. Mitigates M15 noise outvoting H1 signal.
@@ -151,72 +151,42 @@ def trading_hours_between(ts_earlier, ts_later):
 
 def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
     """
-    Compute the dealing range using the most recent HTF swing high and swing low
-    within a pair-aware lookback window on H1.
+    Compute the dealing range as the highest high and lowest low over the last
+    N trading days of H1 candles, where N is pair-aware:
+        Forex     -> 5 trading days (120 H1 candles)
+        Index     -> 3 trading days (72  H1 candles)
+        Commodity -> 5 trading days (120 H1 candles)
 
-    This is what a veteran does on a chart: scroll back a few days, identify the
-    highest swing high and lowest swing low that enclose current price, and use
-    that as the dealing range. Range is recomputed each scan (not frozen at OB
-    creation) so it stays fresh as structure evolves.
+    This is structure-agnostic by design. We are not looking for fractal swing
+    pivots — we want the actual price extremes the market touched in the
+    window. Wicks are included (institutions ran liquidity at those levels).
 
-    If current price sits outside the detected range, the range is extended to
-    include current_price ± 0.5x ATR so pd_position stays within [0, 1].
+    Same-scan redraw: the live (currently-forming) candle is included via
+    df_h1.tail(lookback), so a break of either bound during this scan is
+    immediately reflected — no waiting for the next scan.
 
-    Signature keeps backward-compatible defaults: if pair_conf or current_price
-    are not passed, falls back to window-min/max of last 72 candles.
+    No silent ATR extensions. No fabrication. Range is whatever max/min of
+    the window says it is.
+
+    The `ob`, `h1_atr`, and `current_price` parameters are retained for
+    signature compatibility with existing callers but are no longer used in
+    the calculation.
 
     Returns dict: valid, range_high, range_low, equilibrium, source.
     """
     if df_h1 is None or len(df_h1) < 20:
         return {"valid": False, "source": "insufficient_data"}
-    if h1_atr is None or h1_atr == 0:
-        return {"valid": False, "source": "no_atr"}
 
-    # Pair-aware lookback window
     pair_type = pair_conf.get("pair_type", "forex") if pair_conf else "forex"
-    lookback = DEALING_RANGE_LOOKBACK_H1.get(pair_type, 72)
+    lookback = DEALING_RANGE_LOOKBACK_H1.get(pair_type, 120)
     lookback = min(lookback, len(df_h1))
 
     df_window = df_h1.tail(lookback)
+    range_high = float(df_window['High'].max())
+    range_low = float(df_window['Low'].min())
 
-    # Find fractal swings within the window. Use a copy with reset index so
-    # get_swing_points returns indices local to the window.
-    df_window_reset = df_window.reset_index(drop=True)
-    swings = get_swing_points(df_window_reset, lookback=5)
-
-    if swings:
-        highs = [s['price'] for s in swings if s['type'] == 'high']
-        lows = [s['price'] for s in swings if s['type'] == 'low']
-        if highs and lows:
-            range_high = max(highs)
-            range_low = min(lows)
-            source = "swings_window"
-        else:
-            # Only one side has swings — fall back to window extremes
-            range_high = float(df_window['High'].max())
-            range_low = float(df_window['Low'].min())
-            source = "window_extremes_partial"
-    else:
-        # No swings detected at all — use window extremes
-        range_high = float(df_window['High'].max())
-        range_low = float(df_window['Low'].min())
-        source = "window_extremes"
-
-    # Safety: ensure range is positive-width
     if range_high <= range_low:
         return {"valid": False, "source": "degenerate_range"}
-
-    # If current price sits outside the range, extend to include it with a
-    # half-ATR buffer. This keeps pd_position math sane and represents "range
-    # just broke — redraw from the new extreme" in veteran terms.
-    if current_price is not None:
-        buf = 0.5 * h1_atr
-        if current_price > range_high:
-            range_high = current_price + buf
-            source = source + "+extended_high"
-        elif current_price < range_low:
-            range_low = current_price - buf
-            source = source + "+extended_low"
 
     eq = (range_high + range_low) / 2.0
     return {
@@ -224,9 +194,8 @@ def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
         "range_high": range_high,
         "range_low": range_low,
         "equilibrium": eq,
-        "source": source
+        "source": f"window_{lookback}h"
     }
-
 
 def get_swing_points(df, lookback=4, bounds=None):
     if df is None or len(df) < lookback * 2 + 1:
@@ -382,10 +351,11 @@ def _rejection_score(df, sweep_idx, swept_type, tf_atr):
     body = abs(close - open)
     ratio = wick / max(body, 0.0001 * tf_atr)  -- epsilon prevents doji div-by-zero
 
-    Tiers:
-      ratio < 1.0       -> 0.0
-      1.0 <= ratio < 2.0-> 0.25
-      ratio >= 2.0      -> 0.5
+    Tiers (4-tier, max 1.0):
+      ratio < 1.0           -> 0.0   (no real rejection — body dominates)
+      1.0 <= ratio < 2.0    -> 0.33  (weak rejection — ambiguous)
+      2.0 <= ratio < 3.0    -> 0.66  (strong rejection — institutional signature)
+      ratio >= 3.0          -> 1.0   (textbook rejection — clear stop run + reversal)
 
     Returns: (score, ratio_value)
     """
@@ -409,9 +379,10 @@ def _rejection_score(df, sweep_idx, swept_type, tf_atr):
     if ratio < 1.0:
         return 0.0, ratio
     if ratio < 2.0:
-        return 0.25, ratio
-    return 0.5, ratio
-
+        return 0.33, ratio
+    if ratio < 3.0:
+        return 0.66, ratio
+    return 1.0, ratio
 
 def grade_sweep(df, swings, anchor_idx, bias, tf_atr, pair_type, tf_label):
     """
@@ -549,10 +520,10 @@ def grade_sweep(df, swings, anchor_idx, bias, tf_atr, pair_type, tf_label):
 
 
 def _sweep_tier(score):
-    """Classify final sweep score into a label for narration."""
-    if score >= 1.75:
+    """Classify final sweep score into a label for narration. Max 2.5."""
+    if score >= 2.0:
         return 'textbook'
-    if score >= 1.25:
+    if score >= 1.5:
         return 'decent'
     if score > 0.0:
         return 'weak'
@@ -864,11 +835,36 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     sweep_price  = chosen_sweep['price']
     sweep_tf     = chosen_sweep['tf']
 
-    # FVG
-    # Partial mitigation and pristine both score full (fvg['exists'] is True for both).
-    # Only full mitigation or absent FVG scores 0 (exists: False).
+    # FVG — 4-tier grading (max 2.0).
+    # Detects M15 FVG body vs H1 OB body overlap on the fly. Any overlap (even
+    # 1 pip) qualifies as "overlapping". Mitigation status from detect_fvg_in_zone.
+    #
+    # Tiers:
+    #   2.0  -> M15 FVG inside zone, ANY overlap with H1 OB body, pristine
+    #   1.25 -> M15 FVG inside zone, no overlap with H1 OB body, pristine
+    #   0.75 -> M15 FVG present but partially mitigated (any overlap status)
+    #   0.0  -> No FVG (full mitigation or never detected)
     if fvg and fvg.get('exists'):
-        bd["fvg"] = 1.5 if fvg.get('touches_ob', False) else 1.0
+        ob_body_top    = float(ob.get('ob_high',
+                                      ob.get('high',
+                                             ob.get('proximal_line', 0))))
+        ob_body_bottom = float(ob.get('ob_low',
+                                      ob.get('low',
+                                             ob.get('distal_line', 0))))
+        if ob_body_top < ob_body_bottom:
+            ob_body_top, ob_body_bottom = ob_body_bottom, ob_body_top
+        fvg_top    = float(fvg.get('fvg_top', 0))
+        fvg_bottom = float(fvg.get('fvg_bottom', 0))
+        # Any-overlap test: two intervals [a1, a2] and [b1, b2] overlap iff
+        # a1 <= b2 AND b1 <= a2. Here intervals are FVG body and OB body.
+        overlaps_ob = (fvg_bottom <= ob_body_top) and (ob_body_bottom <= fvg_top)
+        mitigation = fvg.get('mitigation', 'pristine')
+        if mitigation == 'partial':
+            bd["fvg"] = 0.75
+        elif overlaps_ob:
+            bd["fvg"] = 2.0
+        else:
+            bd["fvg"] = 1.25
     else:
         bd["fvg"] = 0.0
 
@@ -935,7 +931,7 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     ist_hour = (datetime.utcnow() + timedelta(hours=5, minutes=30)).hour
     bd["killzone"] = 1.0 if _killzone_hit(ist_hour, pair_type) else 0.0
 
-    bd["macro"] = macro_score
+    # Macro removed from scorecard. Still surfaced as email-only context.
 
     return {
         "total": round(sum(bd.values()), 1),
@@ -954,13 +950,16 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
 def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_conf,
                             dealing_range=None, fvg_source=None, pd_position=None,
                             sweep_tier=None, sweep_components=None,
-                            sweep_hours_before_ob=None):
+                            sweep_hours_before_ob=None, fvg=None):
     """
     Return list of (label, score, max_score, status, explanation) for email rendering.
 
-    New scorecard maxima:
-      Structure 2.5 | Sweep 2.0 | FVG 1.5 | Freshness 0.5 | PD 1.5 | Killzone 1.0 | Macro 1.0
-      TOTAL 10.0
+    New scorecard maxima (total 10.0):
+      Structure 2.5 | Sweep 2.5 | FVG 2.0 | Freshness 0.5 | PD 1.5 | Killzone 1.0
+    Macro removed from scoring; still rendered as email-only context block.
+
+    Sweep row shows ✓/✗ based on PRESENCE only (base component). Detailed
+    breakdown rendered separately in build_sweep_breakdown_html banner.
     """
     dp = _dp(pair_conf)
     rows = []
@@ -979,45 +978,34 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     else:
         rows.append(("Structure", s, 2.5, "fail", "No confirmed BOS or CHoCH."))
 
-    # 2. Liquidity Sweep — graded (0..2.0), tiered narration
+    # 2. Liquidity Sweep — scorecard shows PRESENCE only.
+    # Quality breakdown rendered separately above Macro Context in email.
     s = breakdown.get("sweep", 0)
     comps = sweep_components or {}
-    eq_matches = comps.get('equal_levels_matches', 0)
-    wb_ratio   = comps.get('wick_body_ratio', 0.0)
-    hrs_str    = (f"{sweep_hours_before_ob:.0f}h before OB"
-                  if sweep_hours_before_ob is not None else "")
-    if sweep_tier == 'textbook' and sweep_price is not None:
-        detail = (f"{sweep_tf} sweep at {sweep_price:.{dp}f}, {hrs_str}. "
-                  f"{eq_matches} equal level(s) matched · wick:body {wb_ratio:.1f}.")
-        rows.append(("Liquidity Sweep", s, 2.0, "ok",
-                     "Textbook stop-hunt — strong institutional fingerprint. " + detail))
-    elif sweep_tier == 'decent' and sweep_price is not None:
-        detail = (f"{sweep_tf} sweep at {sweep_price:.{dp}f}, {hrs_str}. "
-                  f"{eq_matches} equal level(s) matched · wick:body {wb_ratio:.1f}.")
-        rows.append(("Liquidity Sweep", s, 2.0, "warn",
-                     "Sweep present with partial confluence. " + detail))
-    elif sweep_tier == 'weak' and sweep_price is not None:
-        detail = (f"{sweep_tf} sweep at {sweep_price:.{dp}f}, {hrs_str}. "
-                  f"No equal levels · wick:body {wb_ratio:.1f}.")
-        rows.append(("Liquidity Sweep", s, 2.0, "fail",
-                     "Sweep happened but lacks quality confluences. " + detail))
+    presence = comps.get('base', 0.0)
+    if presence > 0 and sweep_price is not None:
+        rows.append(("Liquidity Sweep", s, 2.5, "ok",
+                     f"{sweep_tf} sweep confirmed at {sweep_price:.{dp}f}. See breakdown below charts."))
     else:
-        rows.append(("Liquidity Sweep", s, 2.0, "fail",
-                     "No qualifying sweep within 72 trading hours before the OB."))
+        rows.append(("Liquidity Sweep", s, 2.5, "fail",
+                     "No qualifying sweep within recency window before the OB."))
 
-    # 3. FVG — with source label (M15 / H1)
+    # 3. FVG — 4-tier (max 2.0). Reflects overlap + mitigation.
     s = breakdown.get("fvg", 0)
     src_label = f"{fvg_source} " if fvg_source else ""
-    if s >= 1.5:
-        rows.append(("FVG", s, 1.5, "ok",
+    if s >= 2.0:
+        rows.append(("FVG", s, 2.0, "ok",
                       f"{src_label}FVG overlaps the Order Block — strong displacement confluence."))
-    elif s >= 1.0:
-        rows.append(("FVG", s, 1.5, "warn",
-                      f"{src_label}FVG exists inside the zone but does not overlap the OB."))
+    elif s >= 1.25:
+        rows.append(("FVG", s, 2.0, "warn",
+                      f"{src_label}FVG inside the zone but does not overlap the OB."))
+    elif s >= 0.75:
+        rows.append(("FVG", s, 2.0, "warn",
+                      f"{src_label}FVG present but partially mitigated."))
     else:
-        rows.append(("FVG", s, 1.5, "fail", "No unmitigated FVG inside the zone."))
+        rows.append(("FVG", s, 2.0, "fail", "No unmitigated FVG inside the zone."))
 
-    # 4. Freshness — driven by lifetime touch counter from Phase 1.
+    # 4. Freshness
     s = breakdown.get("freshness", 0)
     touches = int(ob.get('touches', 0))
     if touches == 0:
@@ -1030,16 +1018,13 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         rows.append(("Freshness", s, 0.5, "fail",
                      f"Tested {touches}x since formation — zone fatigued."))
 
-    # 5. Premium / Discount — 4-tier graded scoring (0 / 0.5 / 1.0 / 1.5)
+    # 5. Premium / Discount — 4-tier (0 / 0.5 / 1.0 / 1.5)
     s = breakdown.get("pd", 0)
     dr_src = ""
     if dealing_range and dealing_range.get("valid"):
         dr_src = (f" (range: {dealing_range['range_low']:.{dp}f}"
                   f"–{dealing_range['range_high']:.{dp}f},"
                   f" EQ: {dealing_range['equilibrium']:.{dp}f})")
-        src_val = dealing_range.get("source", "")
-        if "extended" in src_val:
-            dr_src += " [range extended to include current price]"
 
     pd_pct_str = f"{pd_position * 100:.0f}%" if pd_position is not None else "n/a"
 
@@ -1081,15 +1066,7 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         rows.append(("Killzone", s, 1.0, "fail",
                       "Outside main trading window — lower volume expected."))
 
-    # 7. Macro / News
-    s = breakdown.get("macro", 0)
-    if s >= 1.0:
-        rows.append(("Macro / News", s, 1.0, "ok", "No Tier-1 news expected in the 2h window."))
-    else:
-        rows.append(("Macro / News", s, 1.0, "fail", "High-impact news imminent — risk of whipsaw."))
-
     return rows
-
 def detect_ltf_choch(df_m5, bias, bounds):
     """
     Detect M5 CHoCH where the BREAK LEVEL is near the HTF zone.
