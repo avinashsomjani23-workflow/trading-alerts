@@ -193,5 +193,29 @@
         "action": "Check yfinance_stale_log.json. If persistent, yfinance may be rate-limiting."
       }
     ]
+  },
+  {
+    "ts": "2026-04-29T15:02:43.112641",
+    "ts_human": "15:02 IST, 29 Apr 2026",
+    "ob_count_total": 4,
+    "ob_count_per_pair": {
+      "EURUSD": 1,
+      "USDJPY": 0,
+      "NZDUSD": 2,
+      "USDCHF": 0,
+      "NAS100": 0,
+      "GOLD": 1
+    },
+    "ob_age_hrs": 0.0082975175,
+    "gemini_fails_3h": 8,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "issue_count": 1,
+    "issues": [
+      {
+        "title": "8 Gemini API failures in last 3h",
+        "action": "Check gemini_failure_log.json \u2014 likely rate limit or key issue."
+      }
+    ]
   }
 ]
