@@ -1430,22 +1430,55 @@ if __name__ == "__main__":
             zone_top = max(proximal, float(ob['distal_line']))
             zone_bottom = min(proximal, float(ob['distal_line']))
 
-            # NEW
-            # FVG: try M15 first, fall back to H1 from OB data. Track source.
-            # atr_floor gates out microscopic gaps (noise). Pair-type-aware.
+            # FVG: detect H1 + M15 INDEPENDENTLY in the same time window
+            # anchored to the OB candle. Veteran SMC: H1 FVG is the macro
+            # displacement signature; M15 FVG is the finer-resolution
+            # confirmation in the same window. Both are scored separately.
+            #
+            # H1 FVG: inherited from Phase 1 (radar already detected it with
+            # the OB→OB+7 window). We do NOT redetect on H1.
+            # M15 FVG: detected here on the M15 dataframe using OB→OB+28
+            # M15 candles. Window anchored to OB timestamp.
             ptype = pair_conf.get("pair_type", "forex")
             fvg_floor_mult = smc_detector.FVG_NOISE_FLOOR_MULT.get(ptype, 0.20)
             m15_atr_for_fvg = m15_atr if m15_atr else 0.0
             atr_floor_m15 = fvg_floor_mult * m15_atr_for_fvg
 
-            fvg_data = smc_detector.detect_fvg_in_zone(
-                df_m15, bias, zone_top, zone_bottom, atr_floor_m15
-            )
-            if fvg_data['exists']:
-                fvg_source = "M15"
-            else:
-                fvg_data = ob.get("fvg", {"exists": False})
-                fvg_source = "H1" if fvg_data.get('exists') else None
+            # Locate OB candle on M15 via its absolute timestamp.
+            ob_ts_iso = ob.get('ob_timestamp')
+            ob_idx_m15 = None
+            if ob_ts_iso:
+                idx_found_m15, on_chart_m15 = smc_detector.locate_ob_candle_idx(
+                    df_m15, ob_ts_iso
+                )
+                if on_chart_m15:
+                    ob_idx_m15 = idx_found_m15
+
+            fvg_m15 = {"exists": False, "was_detected": False, "mitigation": "none"}
+            if ob_idx_m15 is not None and atr_floor_m15 > 0:
+                m15_window_end = min(
+                    ob_idx_m15 + smc_detector.FVG_WINDOW_M15_CANDLES,
+                    len(df_m15) - 1
+                )
+                fvg_m15 = smc_detector.detect_fvg_in_zone(
+                    df_m15, bias, zone_top, zone_bottom, atr_floor_m15,
+                    leg_start_idx=ob_idx_m15, leg_end_idx=m15_window_end
+                )
+
+            fvg_h1 = ob.get("fvg", {"exists": False, "was_detected": False,
+                                    "mitigation": "none"})
+
+            # Bundle for scorecard + downstream consumers.
+            fvg_data = {"h1": fvg_h1, "m15": fvg_m15}
+
+            # Source label for email rendering: which timeframes contributed.
+            srcs = []
+            if fvg_h1.get('exists'):
+                srcs.append("H1")
+            if fvg_m15.get('exists'):
+                srcs.append("M15")
+            fvg_source = "+".join(srcs) if srcs else None
+
             gemini_risk = call_gemini_flash(name, bias, fetch_macro_news(name))
             macro_score = gemini_risk.get('macro_score', 1.0)
 
@@ -1574,7 +1607,7 @@ if __name__ == "__main__":
                                              f"{name} H1 - {bias} zone context", levels, dr)
                 m15_chart = generate_m15_chart(
                     df_m15, f"{name} M15 - Approach and entry",
-                    levels, ob, pair_conf, fvg_data, score_res.get('sweep_price'), dr
+                    levels, ob, pair_conf, fvg_data.get('m15') if isinstance(fvg_data, dict) and 'm15' in fvg_data else fvg_data, score_res.get('sweep_price'), dr
                 )
 
                 h1_ok = h1_chart is not None
@@ -1670,7 +1703,7 @@ if __name__ == "__main__":
                                              f"{name} H1 - {bias} zone context", levels, dr)
                 m15_chart = generate_m15_chart(
                     df_m15, f"{name} M15 - Approach",
-                    levels, ob, pair_conf, fvg_data, score_res.get('sweep_price'), dr
+                    levels, ob, pair_conf, fvg_data.get('m15') if isinstance(fvg_data, dict) and 'm15' in fvg_data else fvg_data, score_res.get('sweep_price'), dr
                 )
 
                 h1_ok = h1_chart is not None
