@@ -1,4 +1,21 @@
 {
   "day_id": "2026-04-29",
-  "zones": {}
+  "zones": {
+    "NZDUSD_LONG_CHoCH_0.5863": {
+      "score_int": 6,
+      "score_raw": 6.5,
+      "breakdown": {
+        "structure": 2.5,
+        "sweep": 1.0,
+        "fvg": 0.0,
+        "freshness": 0.5,
+        "pd": 1.5,
+        "killzone": 1.0,
+        "macro": 0.0
+      },
+      "alert_ist": "2026-04-29T12:02:31.044989",
+      "bias": "LONG",
+      "pair": "NZDUSD"
+    }
+  }
 }
