@@ -158,5 +158,25 @@
     "ts": "2026-04-29T18:02:44.436821",
     "pair": "GOLD",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-04-29T20:47:47.860808",
+    "pair": "EURUSD",
+    "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-04-29T20:47:52.825754",
+    "pair": "USDJPY",
+    "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-04-29T20:48:01.530384",
+    "pair": "NZDUSD",
+    "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-04-29T20:48:16.186125",
+    "pair": "GOLD",
+    "reason": "no candidates field, attempt 3"
   }
 ]
