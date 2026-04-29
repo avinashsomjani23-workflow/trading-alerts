@@ -18,8 +18,8 @@
       "pair": "NZDUSD"
     },
     "EURUSD_LONG_CHoCH_1.1692": {
-      "score_int": 7,
-      "score_raw": 7.8,
+      "score_int": 6,
+      "score_raw": 6.8,
       "breakdown": {
         "structure": 2.5,
         "sweep": 1.5,
@@ -27,11 +27,27 @@
         "freshness": 0.25,
         "pd": 1.5,
         "killzone": 1.0,
-        "macro": 1.0
+        "macro": 0.0
       },
-      "alert_ist": "2026-04-29T14:02:32.311441",
+      "alert_ist": "2026-04-29T14:17:30.862359",
       "bias": "LONG",
       "pair": "EURUSD"
+    },
+    "GOLD_SHORT_BOS_4589.1": {
+      "score_int": 6,
+      "score_raw": 6.0,
+      "breakdown": {
+        "structure": 1.5,
+        "sweep": 2.0,
+        "fvg": 0.0,
+        "freshness": 0.5,
+        "pd": 0.0,
+        "killzone": 1.0,
+        "macro": 1.0
+      },
+      "alert_ist": "2026-04-29T14:17:30.862359",
+      "bias": "SHORT",
+      "pair": "GOLD"
     }
   }
 }
