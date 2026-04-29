@@ -46,7 +46,21 @@ FVG_NOISE_FLOOR_MULT = {
     "index":     0.12,
     "commodity": 0.12
 }
-
+# ---------------------------------------------------------------------------
+# FVG search window — number of candles past the OB candle to scan for a
+# 3-candle FVG. The FVG is the displacement signature that confirms the OB.
+# Veteran SMC: displacement happens during OB→BOS leg AND can extend 1-2
+# candles past BOS. Window must cover this without leaking into unrelated
+# structure.
+#
+# H1 = 7 candles past OB.
+# M15 = 28 candles past OB (same time window as H1, finer resolution).
+#
+# Anchored to OB (not to BOS) so window length is consistent regardless of
+# how long the OB→BOS leg takes.
+# ---------------------------------------------------------------------------
+FVG_WINDOW_H1_CANDLES  = 7
+FVG_WINDOW_M15_CANDLES = 28
 # ---------------------------------------------------------------------------
 # Minimum leg-size thresholds for H1 structure events (ATR multiples).
 # Applied as net price displacement from prior opposite swing to break close.
@@ -617,8 +631,6 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
 
         if bias == "LONG" and H[k] < L[k + 2]:
             ft, fb = float(L[k + 2]), float(H[k])
-            if fb > zone_top or ft < zone_bottom:
-                continue
             if (ft - fb) < atr_floor:
                 continue
             # LONG: proximal = ft, distal = fb. Touch-based mitigation.
@@ -647,8 +659,6 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
 
         elif bias == "SHORT" and L[k] > H[k + 2]:
             ft, fb = float(L[k]), float(H[k + 2])
-            if fb > zone_top or ft < zone_bottom:
-                continue
             if (ft - fb) < atr_floor:
                 continue
             # SHORT: proximal = fb, distal = ft. Touch-based mitigation.
@@ -687,9 +697,31 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     ob_prox = ob_top if bias == "LONG" else ob_bottom
     ob_mean = (ob_top + ob_bottom) / 2.0
 
+    # FVG proximal selection for entry cascade. Prefer H1 pristine first,
+    # then M15 pristine, then any partial. Pristine FVGs offer cleaner entries;
+    # partial FVGs have already been touched and aren't reliable limit prices.
     fvg_prox = None
-    if fvg and fvg.get('exists'):
-        fvg_prox = float(fvg['fvg_top']) if bias == "LONG" else float(fvg['fvg_bottom'])
+    if fvg and isinstance(fvg, dict):
+        # New dual-FVG shape: {'h1': {...}, 'm15': {...}}
+        candidates = []
+        if 'h1' in fvg or 'm15' in fvg:
+            for tf_key in ('h1', 'm15'):  # H1 first
+                f = fvg.get(tf_key)
+                if f and f.get('exists') and f.get('mitigation') == 'pristine':
+                    candidates.append(f)
+            if not candidates:
+                # Fall back to partials, same priority
+                for tf_key in ('h1', 'm15'):
+                    f = fvg.get(tf_key)
+                    if f and f.get('exists'):
+                        candidates.append(f)
+        # Legacy single-FVG shape
+        elif fvg.get('exists'):
+            candidates.append(fvg)
+
+        if candidates:
+            chosen = candidates[0]
+            fvg_prox = float(chosen['fvg_top']) if bias == "LONG" else float(chosen['fvg_bottom'])
 
     swings = get_swing_points(df_trigger, lookback=10)
     tp_targets = [
@@ -835,39 +867,40 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     sweep_price  = chosen_sweep['price']
     sweep_tf     = chosen_sweep['tf']
 
-    # FVG — 4-tier grading (max 2.0).
-    # Detects M15 FVG body vs H1 OB body overlap on the fly. Any overlap (even
-    # 1 pip) qualifies as "overlapping". Mitigation status from detect_fvg_in_zone.
+    # FVG — independent H1 + M15 scoring (max 2.0 total).
+    # Veteran SMC: H1 FVG = macro displacement (the structural signal).
+    # M15 FVG = same displacement at higher resolution (confirms but doesn't
+    # carry alone). H1 weighted heavier; M15 weighted lighter.
     #
-    # Tiers:
-    #   2.0  -> M15 FVG inside zone, ANY overlap with H1 OB body, pristine
-    #   1.25 -> M15 FVG inside zone, no overlap with H1 OB body, pristine
-    #   0.75 -> M15 FVG present but partially mitigated (any overlap status)
-    #   0.0  -> No FVG (full mitigation or never detected)
-    if fvg and fvg.get('exists'):
-        ob_body_top    = float(ob.get('ob_high',
-                                      ob.get('high',
-                                             ob.get('proximal_line', 0))))
-        ob_body_bottom = float(ob.get('ob_low',
-                                      ob.get('low',
-                                             ob.get('distal_line', 0))))
-        if ob_body_top < ob_body_bottom:
-            ob_body_top, ob_body_bottom = ob_body_bottom, ob_body_top
-        fvg_top    = float(fvg.get('fvg_top', 0))
-        fvg_bottom = float(fvg.get('fvg_bottom', 0))
-        # Any-overlap test: two intervals [a1, a2] and [b1, b2] overlap iff
-        # a1 <= b2 AND b1 <= a2. Here intervals are FVG body and OB body.
-        overlaps_ob = (fvg_bottom <= ob_body_top) and (ob_body_bottom <= fvg_top)
-        mitigation = fvg.get('mitigation', 'pristine')
-        if mitigation == 'partial':
-            bd["fvg"] = 0.75
-        elif overlaps_ob:
-            bd["fvg"] = 2.0
-        else:
-            bd["fvg"] = 1.25
-    else:
-        bd["fvg"] = 0.0
+    # Per-timeframe scoring:
+    #   H1:  pristine 1.2 | partial 0.5 | full/none 0.0
+    #   M15: pristine 0.8 | partial 0.3 | full/none 0.0
+    #
+    # Mitigation = price wicked the DISTAL line (full fill of imbalance).
+    # Partial = price touched proximal but not distal (still has institutional
+    # intent, just weakened).
+    #
+    # Overlap with OB body is NOT scored. The OB→OB+N search window already
+    # enforces FVG-anchored-to-OB; overlap-vs-not is geometry of the OB candle
+    # width, not signal.
+    def _grade_single(fvg_obj, pristine_pts, partial_pts):
+        if not fvg_obj or not fvg_obj.get('exists'):
+            return 0.0
+        mit = fvg_obj.get('mitigation', 'pristine')
+        if mit == 'partial':
+            return partial_pts
+        # 'pristine' (or anything else with exists=True) -> full credit
+        return pristine_pts
 
+    fvg_h1  = fvg.get('h1')  if isinstance(fvg, dict) else None
+    fvg_m15 = fvg.get('m15') if isinstance(fvg, dict) else None
+
+    # Backward-compat: if caller passes a single FVG object (legacy shape with
+    # 'exists' at top level), treat it as H1.
+    if fvg and isinstance(fvg, dict) and 'exists' in fvg and fvg_h1 is None and fvg_m15 is None:
+        fvg_h1 = fvg
+
+    bd["fvg"] = _grade_single(fvg_h1, 1.2, 0.5) + _grade_single(fvg_m15, 0.8, 0.3)
     # NEW
     # Freshness — driven by Phase 1's lifetime touch counter on the OB.
     # 0 touches -> 0.5 (pristine, full credit)
@@ -990,21 +1023,43 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         rows.append(("Liquidity Sweep", s, 2.5, "fail",
                      "No qualifying sweep within recency window before the OB."))
 
-    # 3. FVG — 4-tier (max 2.0). Reflects overlap + mitigation.
+    # 3. FVG — independent H1 + M15 (max 2.0 total).
+    # H1: pristine 1.2 | partial 0.5 | none/full 0.0
+    # M15: pristine 0.8 | partial 0.3 | none/full 0.0
     s = breakdown.get("fvg", 0)
-    src_label = f"{fvg_source} " if fvg_source else ""
-    if s >= 2.0:
-        rows.append(("FVG", s, 2.0, "ok",
-                      f"{src_label}FVG overlaps the Order Block — strong displacement confluence."))
-    elif s >= 1.25:
-        rows.append(("FVG", s, 2.0, "warn",
-                      f"{src_label}FVG inside the zone but does not overlap the OB."))
-    elif s >= 0.75:
-        rows.append(("FVG", s, 2.0, "warn",
-                      f"{src_label}FVG present but partially mitigated."))
-    else:
-        rows.append(("FVG", s, 2.0, "fail", "No unmitigated FVG inside the zone."))
+    fvg_h1  = fvg.get('h1')  if isinstance(fvg, dict) else None
+    fvg_m15 = fvg.get('m15') if isinstance(fvg, dict) else None
+    # Legacy single-FVG fallback (treat as H1)
+    if fvg and isinstance(fvg, dict) and 'exists' in fvg and fvg_h1 is None and fvg_m15 is None:
+        fvg_h1 = fvg
 
+    def _state(f):
+        if not f or not f.get('exists'):
+            # was_detected + mitigation tells us if ghost was seen
+            if f and f.get('was_detected') and f.get('mitigation') == 'full':
+                return "fully mitigated"
+            return "absent"
+        return "partial" if f.get('mitigation') == 'partial' else "pristine"
+
+    h1_state  = _state(fvg_h1)
+    m15_state = _state(fvg_m15)
+    desc = f"H1 FVG {h1_state}; M15 FVG {m15_state}."
+
+    if s >= 1.6:
+        # Both pristine, or H1 pristine + M15 partial
+        rows.append(("FVG", s, 2.0, "ok",
+                     f"{desc} Strong displacement on both timeframes."))
+    elif s >= 1.0:
+        # H1 pristine alone (1.2), or other partial combos
+        rows.append(("FVG", s, 2.0, "warn",
+                     f"{desc} Displacement present but confluence partial."))
+    elif s > 0:
+        # Only M15 contributing, or partials only
+        rows.append(("FVG", s, 2.0, "warn",
+                     f"{desc} Weak displacement signal."))
+    else:
+        rows.append(("FVG", s, 2.0, "fail",
+                     f"{desc} No qualifying displacement on either timeframe."))
     # 4. Freshness
     s = breakdown.get("freshness", 0)
     touches = int(ob.get('touches', 0))
