@@ -320,19 +320,18 @@ def fetch_macro_news(pair_name):
 
 def call_gemini_flash(pair, bias, news_headlines):
     prompt = f"""
-    You are a strict Risk Management AI. DO NOT analyze the chart. DO NOT calculate math.
+    You are a Macro Context Writer. DO NOT analyze the chart. DO NOT score the trade.
+    Your only job is to summarize macro risk for the trader to read.
     TRADE DETAILS: Pair: {pair} | Direction: {bias}
     RECENT NEWS: {news_headlines}
 
     TASK:
-    1. Identify any Tier-1 economic events (e.g., CPI, NFP) affecting {pair}.
-    2. Assign a macro_score: 1.0 if safe, 0.0 if a high-impact event is imminent.
+    Identify any Tier-1 economic events (e.g., CPI, NFP) affecting {pair} and
+    summarize them in plain language. The trader will decide what to do with this.
 
     OUTPUT FORMAT (Strict JSON):
     {{
-        "high_impact_news_detected": boolean,
-        "macro_score": float,
-        "macro_summary": "Exactly 2 concise sentences summarizing the risk specific to {pair}."
+        "macro_summary": "Exactly 2 concise sentences summarizing the macro risk specific to {pair}. If no Tier-1 events, say so explicitly."
     }}
     """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
