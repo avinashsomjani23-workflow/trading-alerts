@@ -407,9 +407,15 @@ def detect_smc_radar(df, lookback, pair_type="forex"):
         fvg_floor_mult  = smc_detector.FVG_NOISE_FLOOR_MULT.get("forex", 0.20)
         atr_floor_h1    = fvg_floor_mult * h1_atr_for_fvg
 
+        # FVG search window: OB candle through OB + FVG_WINDOW_H1_CANDLES.
+        # Anchored to OB so window is consistent regardless of OB→BOS leg
+        # length. Captures the post-BOS displacement gap which is where the
+        # confirming FVG most often forms.
+        h1_fvg_window_end = min(ob_idx + smc_detector.FVG_WINDOW_H1_CANDLES,
+                                len(df) - 1)
         fvg_result = smc_detector.detect_fvg_in_zone(
             df, bias_label, ob_high, ob_low, atr_floor_h1,
-            leg_start_idx=ob_idx, leg_end_idx=i
+            leg_start_idx=ob_idx, leg_end_idx=h1_fvg_window_end
         )
 
         # Absolute timestamp helpers — used by Phase 2 to locate candles in
