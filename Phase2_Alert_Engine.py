@@ -952,6 +952,8 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     else:
         score_change_html = ""
 
+    sweep_breakdown_html = build_sweep_breakdown_html(data, dp)
+
     return f"""<html><body style="font-family:Arial,sans-serif;background:#0d0d1a;padding:12px;margin:0;">
     <div style="max-width:650px;margin:auto;background:#13131f;border-radius:14px;overflow:hidden;">
         <div style="background:#1a1a2e;padding:14px 18px;">
@@ -960,7 +962,6 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         </div>
         <div style="padding:14px 18px;">
             {action_block}
-            {score_change_html}
             {trend_banner_html}
             {distance_html}
             {context_html}
@@ -971,12 +972,70 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">M15 Approach</div>
             {m15_chart_block}
             {_chart_legend_html(bos_tag)}
+            {sweep_breakdown_html}
             <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #888;border-radius:4px;font-size:12px;color:#bbb;line-height:1.5;">
                 <b style="color:#eee;">Macro Context:</b> {data.get('macro_summary', 'N/A')}
             </div>
         </div>
     </div></body></html>"""
 
+
+def build_sweep_breakdown_html(data, dp):
+    """
+    Render the Sweep Quality Breakdown banner. Placed below M15 chart, above
+    Macro Context. Shows the three components that make up the sweep score:
+    Presence, Equal Levels, Rejection Quality.
+    """
+    comps = data.get('sweep_components') or {}
+    sweep_price = data.get('sweep_price')
+    sweep_tf    = data.get('sweep_tf', 'H1')
+    hrs_before  = data.get('sweep_hours_before_ob')
+    base        = comps.get('base', 0.0)
+    eq_score    = comps.get('equal_levels', 0.0)
+    eq_matches  = comps.get('equal_levels_matches', 0)
+    rej_score   = comps.get('rejection', 0.0)
+    wb_ratio    = comps.get('wick_body_ratio', 0.0)
+
+    if base <= 0:
+        return f"""
+    <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #e74c3c;border-radius:4px;font-size:12px;color:#bbb;line-height:1.6;">
+        <div style="color:#eee;font-weight:bold;margin-bottom:6px;letter-spacing:0.5px;">SWEEP QUALITY BREAKDOWN</div>
+        <div>No qualifying sweep detected within the recency window before the OB.</div>
+    </div>"""
+
+    presence_icon = "&#10003;" if base > 0 else "&#10007;"      # ✓ / ✗
+    eq_icon       = "&#10003;" if eq_score > 0 else "&#10007;"
+    rej_icon      = "&#10003;" if rej_score > 0 else "&#10007;"
+
+    hrs_str = f"{hrs_before:.0f}h before OB" if hrs_before is not None else "n/a"
+    sweep_price_str = f"{sweep_price:.{dp}f}" if sweep_price is not None else "n/a"
+
+    if rej_score >= 1.0:
+        rej_label = "textbook rejection (wick:body > 3)"
+    elif rej_score >= 0.66:
+        rej_label = "strong rejection (wick:body 2-3)"
+    elif rej_score >= 0.33:
+        rej_label = "weak rejection (wick:body 1-2)"
+    else:
+        rej_label = "no real rejection (wick:body < 1)"
+
+    if eq_matches >= 2:
+        eq_label = f"{eq_matches} equal levels matched"
+    elif eq_matches == 1:
+        eq_label = "1 equal level matched"
+    else:
+        eq_label = "0 equal levels matched"
+
+    total = base + eq_score + rej_score
+
+    return f"""
+    <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #00bcd4;border-radius:4px;font-size:12px;color:#bbb;line-height:1.6;">
+        <div style="color:#eee;font-weight:bold;margin-bottom:6px;letter-spacing:0.5px;">SWEEP QUALITY BREAKDOWN</div>
+        <div>{presence_icon} <b style="color:#eee;">Presence:</b> {base:.2f}/1.0 &middot; {sweep_tf} sweep at {sweep_price_str}, {hrs_str}</div>
+        <div>{eq_icon} <b style="color:#eee;">Equal Levels:</b> {eq_score:.2f}/0.5 &middot; {eq_label}</div>
+        <div>{rej_icon} <b style="color:#eee;">Rejection Quality:</b> {rej_score:.2f}/1.0 &middot; {rej_label} (ratio {wb_ratio:.1f})</div>
+        <div style="margin-top:4px;color:#eee;"><b>Total: {total:.2f}/2.5</b></div>
+    </div>"""
 def send_email(subject, html_body, h1_chart_b64, m15_chart_b64):
     for recipient in config["account"].get("alert_emails", []):
         msg = MIMEMultipart("related")
@@ -1413,9 +1472,9 @@ if __name__ == "__main__":
                 score_res.get('dealing_range'), fvg_source, score_res.get('pd_position'),
                 sweep_tier=score_res.get('sweep_tier'),
                 sweep_components=score_res.get('sweep_components'),
-                sweep_hours_before_ob=score_res.get('sweep_hours_before_ob')
+                sweep_hours_before_ob=score_res.get('sweep_hours_before_ob'),
+                fvg=fvg_data
             )
-
             # Resolve sweep candle timestamp for chart rendering. Charts use the
             # timestamp (not idx) because Phase 2 indices are not portable across
             # phases or across re-fetches. sweep_idx points into the SAME df the
