@@ -322,5 +322,24 @@
     "chart_fails_3h": 0,
     "issue_count": 0,
     "issues": []
+  },
+  {
+    "ts": "2026-04-30T18:32:38.977060",
+    "ts_human": "18:32 IST, 30 Apr 2026",
+    "ob_count_total": 5,
+    "ob_count_per_pair": {
+      "EURUSD": 1,
+      "USDJPY": 0,
+      "NZDUSD": 2,
+      "USDCHF": 0,
+      "NAS100": 0,
+      "GOLD": 2
+    },
+    "ob_age_hrs": 0.005822297222222223,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
   }
 ]
