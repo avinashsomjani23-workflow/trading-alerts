@@ -87,14 +87,14 @@
   "GOLD_4682.3": {
     "pair": "GOLD",
     "bias": "SHORT",
-    "score": 7.2,
+    "score": 6.2,
     "breakdown": {
       "structure": 1.5,
       "sweep": 2.0,
       "fvg": 1.2,
       "freshness": 0.5,
       "pd": 1.0,
-      "killzone": 1.0
+      "killzone": 0.0
     },
     "sweep_price": 4706.2998046875,
     "sweep_tf": "M15",
@@ -162,10 +162,11 @@
       "sweep_tf": "M15",
       "sweep_timestamp": "2026-04-27T23:15:00+00:00"
     },
-    "alert_ist": "2026-04-30T16:47:29.222290",
+    "alert_ist": "2026-04-30T17:02:23.646353",
     "scorecard_version": "v2",
     "trend_alignment": "counter_trend",
     "trend_label": "AGAINST H1 trend (H1 is bullish, zone is bearish)",
-    "h1_trend": "bullish"
+    "h1_trend": "bullish",
+    "score_change_line": "Score 7.2 \u2192 6.2 (-1.0). Drivers: killzone -1.00."
   }
 }
