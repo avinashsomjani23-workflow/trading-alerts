@@ -191,7 +191,7 @@
       "wick_body_ratio": 46.96
     },
     "sweep_hours_before_ob": 2.0,
-    "macro_summary": "Recent US economic data shows a slowdown with Q1 GDP at +2.0% and initial jobless claims lower at 189K, while US March PCE inflation met expectations at +3.5% y/y. Eurozone and Italy's preliminary CPI data for April both exceeded expectations, indicating persistent inflation pressures in Europe.",
+    "macro_summary": "US Q1 GDP came in softer than expected, potentially signaling a weaker economic outlook which could be supportive for gold. However, US initial jobless claims were significantly lower than anticipated, suggesting underlying labor market strength that might temper gold's upside.",
     "levels": {
       "valid": true,
       "entry": 4568.0,
@@ -207,8 +207,8 @@
       "drop_reason": null,
       "first_seen_iso": "2026-04-30T18:02:44.667152",
       "first_seen_label": "18:02 IST",
-      "last_seen_iso": "2026-04-30T21:02:39.295074",
-      "last_seen_label": "21:02 IST",
+      "last_seen_iso": "2026-04-30T22:02:37.162131",
+      "last_seen_label": "22:02 IST",
       "is_new_this_scan": false,
       "ob_timestamp": "2026-04-30T04:00:00+00:00",
       "direction": "bullish",
@@ -219,22 +219,22 @@
       "low": 4552.2001953125,
       "ob_body": 14.19970703125,
       "median_leg_body": 17.89990234375,
-      "bos_idx": 142,
-      "ob_idx": 138,
+      "bos_idx": 141,
+      "ob_idx": 137,
       "impulse_start_idx": 141,
       "impulse_start_price": 4552.2001953125,
       "bos_swing_price": 4624.2998046875,
       "touches": 0,
       "status_label": "Pristine",
-      "h1_atr": 21.94287109375,
-      "current_price_at_scan": 4628.89990234375,
-      "distance_to_proximal_pips": 60.9,
+      "h1_atr": 21.557163783482142,
+      "current_price_at_scan": 4621.0,
+      "distance_to_proximal_pips": 53.0,
       "fvg": {
         "exists": true,
         "fvg_top": 4626.2998046875,
         "fvg_bottom": 4617.2998046875,
-        "c1_idx": 141,
-        "c3_idx": 143,
+        "c1_idx": 140,
+        "c3_idx": 142,
         "was_detected": true,
         "mitigation": "partial",
         "ghost_top": null,
@@ -251,7 +251,6 @@
     "scorecard_version": "v2",
     "trend_alignment": "with_trend",
     "trend_label": "WITH H1 trend (H1 is bullish)",
-    "h1_trend": "bullish",
-    "score_change_line": "Score 8.7 \u2192 8.0 (-0.7). Drivers: fvg -0.70."
+    "h1_trend": "bullish"
   }
 }
