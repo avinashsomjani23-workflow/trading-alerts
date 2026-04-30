@@ -188,5 +188,10 @@
     "ts": "2026-04-30T15:17:45.276912",
     "pair": "USDCHF",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-04-30T20:32:32.935758",
+    "pair": "NZDUSD",
+    "reason": "no candidates field, attempt 3"
   }
 ]
