@@ -18,16 +18,16 @@
     },
     "GOLD_LONG_CHoCH_4624.3": {
       "score_int": 8,
-      "score_raw": 8.7,
+      "score_raw": 8.0,
       "breakdown": {
         "structure": 2.5,
         "sweep": 2.0,
-        "fvg": 1.2,
+        "fvg": 0.5,
         "freshness": 0.5,
         "pd": 1.5,
         "killzone": 1.0
       },
-      "alert_ist": "2026-04-30T19:32:29.689259",
+      "alert_ist": "2026-04-30T22:02:34.520440",
       "bias": "LONG",
       "pair": "GOLD"
     },
