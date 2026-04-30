@@ -107,7 +107,7 @@
       "wick_body_ratio": 3.75
     },
     "sweep_hours_before_ob": 3.8,
-    "macro_summary": "Recent US economic data shows a mixed picture with lower-than-expected Q1 GDP and initial jobless claims, but PCE inflation met expectations. Globally, Italy's preliminary CPI was higher than expected, while Canada's GDP was in line with forecasts.",
+    "macro_summary": "US Q1 GDP came in below expectations, while US initial jobless claims were significantly lower than estimated, suggesting some mixed signals on economic health. US March PCE inflation met expectations, indicating inflation is stable but still elevated.",
     "levels": {
       "valid": true,
       "entry": 4682.3,
