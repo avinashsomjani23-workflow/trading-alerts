@@ -87,14 +87,14 @@
   "GOLD_4682.3": {
     "pair": "GOLD",
     "bias": "SHORT",
-    "score": 6.2,
+    "score": 6.5,
     "breakdown": {
       "structure": 1.5,
       "sweep": 2.0,
-      "fvg": 1.2,
+      "fvg": 0.5,
       "freshness": 0.5,
       "pd": 1.0,
-      "killzone": 0.0
+      "killzone": 1.0
     },
     "sweep_price": 4706.2998046875,
     "sweep_tf": "M15",
@@ -107,7 +107,7 @@
       "wick_body_ratio": 3.75
     },
     "sweep_hours_before_ob": 3.8,
-    "macro_summary": "There are no Tier-1 economic events directly affecting GOLD in the provided news. The recent Eurozone and Italian CPI data, while higher than expected, are not direct drivers for GOLD in the same way as US inflation or Fed policy.",
+    "macro_summary": "Recent US economic data shows a mixed picture with lower jobless claims but weaker GDP growth, while PCE inflation met expectations. Eurozone inflation data came in slightly higher than expected, potentially impacting global interest rate expectations which can influence gold.",
     "levels": {
       "valid": true,
       "entry": 4682.3,
@@ -123,8 +123,8 @@
       "drop_reason": null,
       "first_seen_iso": "2026-04-30T14:02:48.057615",
       "first_seen_label": "14:02 IST",
-      "last_seen_iso": "2026-04-30T16:02:33.510111",
-      "last_seen_label": "16:02 IST",
+      "last_seen_iso": "2026-04-30T17:02:33.103238",
+      "last_seen_label": "17:02 IST",
       "is_new_this_scan": false,
       "ob_timestamp": "2026-04-28T03:00:00+00:00",
       "direction": "bearish",
@@ -135,24 +135,24 @@
       "low": 4682.2998046875,
       "ob_body": 2.7001953125,
       "median_leg_body": 3.000244140625,
-      "bos_idx": 98,
-      "ob_idx": 96,
+      "bos_idx": 97,
+      "ob_idx": 95,
       "impulse_start_idx": 95,
       "impulse_start_price": 4716.5,
       "bos_swing_price": 4681.2001953125,
       "touches": 0,
       "status_label": "Pristine",
-      "h1_atr": 19.164236886160715,
-      "current_price_at_scan": 4643.0,
-      "distance_to_proximal_pips": 39.3,
+      "h1_atr": 20.214250837053573,
+      "current_price_at_scan": 4651.60009765625,
+      "distance_to_proximal_pips": 30.7,
       "fvg": {
         "exists": true,
         "fvg_top": 4679.7001953125,
         "fvg_bottom": 4656.89990234375,
-        "c1_idx": 97,
-        "c3_idx": 99,
+        "c1_idx": 96,
+        "c3_idx": 98,
         "was_detected": true,
-        "mitigation": "pristine",
+        "mitigation": "partial",
         "ghost_top": null,
         "ghost_bottom": null,
         "ghost_c1_idx": null,
@@ -166,7 +166,6 @@
     "scorecard_version": "v2",
     "trend_alignment": "counter_trend",
     "trend_label": "AGAINST H1 trend (H1 is bullish, zone is bearish)",
-    "h1_trend": "bullish",
-    "score_change_line": "Score 7.2 \u2192 6.2 (-1.0). Drivers: killzone -1.00."
+    "h1_trend": "bullish"
   }
 }
