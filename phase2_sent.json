@@ -32,17 +32,17 @@
       "pair": "GOLD"
     },
     "NZDUSD_LONG_CHoCH_0.5847": {
-      "score_int": 6,
-      "score_raw": 6.9,
+      "score_int": 7,
+      "score_raw": 7.4,
       "breakdown": {
         "structure": 2.5,
         "sweep": 1.91,
-        "fvg": 0.0,
+        "fvg": 0.5,
         "freshness": 0.5,
         "pd": 1.0,
         "killzone": 1.0
       },
-      "alert_ist": "2026-04-30T15:47:33.692913",
+      "alert_ist": "2026-04-30T19:17:34.212324",
       "bias": "LONG",
       "pair": "NZDUSD"
     },
