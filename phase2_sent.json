@@ -2,17 +2,17 @@
   "day_id": "2026-05-01",
   "zones": {
     "EURUSD_SHORT_CHoCH_1.1729": {
-      "score_int": 7,
-      "score_raw": 7.7,
+      "score_int": 9,
+      "score_raw": 9.5,
       "breakdown": {
         "structure": 2.5,
         "sweep": 2.0,
-        "fvg": 1.2,
+        "fvg": 2.0,
         "freshness": 0.5,
         "pd": 1.5,
-        "killzone": 0.0
+        "killzone": 1.0
       },
-      "alert_ist": "2026-05-01T11:17:29.488876",
+      "alert_ist": "2026-05-01T12:02:30.151054",
       "bias": "SHORT",
       "pair": "EURUSD"
     }
