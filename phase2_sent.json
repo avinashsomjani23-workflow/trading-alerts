@@ -47,17 +47,17 @@
       "pair": "USDJPY"
     },
     "GOLD_LONG_CHoCH_4624.3": {
-      "score_int": 7,
-      "score_raw": 7.5,
+      "score_int": 6,
+      "score_raw": 6.5,
       "breakdown": {
         "structure": 2.5,
         "sweep": 2.0,
         "fvg": 0.0,
         "freshness": 0.5,
         "pd": 1.5,
-        "killzone": 1.0
+        "killzone": 0.0
       },
-      "alert_ist": "2026-05-01T13:32:32.901632",
+      "alert_ist": "2026-05-01T17:17:26.325151",
       "bias": "LONG",
       "pair": "GOLD"
     },
