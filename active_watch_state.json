@@ -340,27 +340,27 @@
   "GOLD_4625.9": {
     "pair": "GOLD",
     "bias": "SHORT",
-    "score": 6.2,
+    "score": 6.5,
     "breakdown": {
       "structure": 2.5,
-      "sweep": 2.25,
+      "sweep": 2.5,
       "fvg": 0.0,
       "freshness": 0.5,
       "pd": 0.0,
       "killzone": 1.0
     },
-    "sweep_price": 4640.2998046875,
+    "sweep_price": 4621.2998046875,
     "sweep_tf": "M15",
     "sweep_tier": "textbook",
     "sweep_components": {
       "base": 1.0,
-      "equal_levels": 0.25,
-      "equal_levels_matches": 1,
+      "equal_levels": 0.5,
+      "equal_levels_matches": 2,
       "rejection": 1.0,
-      "wick_body_ratio": 3.5
+      "wick_body_ratio": 6.64
     },
-    "sweep_hours_before_ob": 0.8,
-    "macro_summary": "There are no Tier-1 economic events directly affecting GOLD in the provided news. Geopolitical tensions involving Iran and potential Japanese yen intervention are notable, but not Tier-1 economic releases.",
+    "sweep_hours_before_ob": 8.2,
+    "macro_summary": "There are no Tier-1 economic events directly affecting GOLD in the provided news. Recent Fed commentary suggests a hawkish bias, pushing back on easing expectations, which could be a headwind for gold.",
     "levels": {
       "valid": true,
       "entry": 4625.9,
@@ -412,14 +412,14 @@
         "ghost_c3_idx": 145,
         "mitigated_at_idx": 146
       },
-      "bos_sequence_count": 1,
       "sweep_tf": "M15",
-      "sweep_timestamp": "2026-05-01T00:15:00+00:00"
+      "sweep_timestamp": "2026-04-30T16:45:00+00:00"
     },
-    "alert_ist": "2026-05-01T18:02:35.441722",
+    "alert_ist": "2026-05-01T20:02:27.285793",
     "scorecard_version": "v2",
-    "trend_alignment": "with_trend",
-    "trend_label": "WITH H1 trend (H1 is bearish)",
-    "h1_trend": "bearish"
+    "trend_alignment": "counter_trend",
+    "trend_label": "AGAINST H1 trend (H1 is bullish, zone is bearish)",
+    "h1_trend": "bullish",
+    "score_change_line": "Score 6.0 \u2192 6.5 (++0.5). Drivers: sweep +0.50."
   }
 }

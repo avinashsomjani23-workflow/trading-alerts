@@ -18,16 +18,16 @@
     },
     "GOLD_SHORT_CHoCH_4618.0": {
       "score_int": 6,
-      "score_raw": 6.0,
+      "score_raw": 6.5,
       "breakdown": {
         "structure": 2.5,
-        "sweep": 2.0,
+        "sweep": 2.5,
         "fvg": 0.0,
         "freshness": 0.5,
         "pd": 0.0,
         "killzone": 1.0
       },
-      "alert_ist": "2026-05-01T18:02:35.441722",
+      "alert_ist": "2026-05-01T20:02:27.285793",
       "bias": "SHORT",
       "pair": "GOLD"
     },
