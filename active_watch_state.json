@@ -376,8 +376,8 @@
       "drop_reason": null,
       "first_seen_iso": "2026-05-01T13:02:35.565895",
       "first_seen_label": "13:02 IST",
-      "last_seen_iso": "2026-05-01T17:02:33.216167",
-      "last_seen_label": "17:02 IST",
+      "last_seen_iso": "2026-05-01T18:02:33.973788",
+      "last_seen_label": "18:02 IST",
       "is_new_this_scan": false,
       "ob_timestamp": "2026-05-01T01:00:00+00:00",
       "direction": "bearish",
@@ -388,16 +388,16 @@
       "low": 4625.89990234375,
       "ob_body": 1.0,
       "median_leg_body": 5.150146484375,
-      "bos_idx": 143,
-      "ob_idx": 139,
+      "bos_idx": 142,
+      "ob_idx": 138,
       "impulse_start_idx": 140,
       "impulse_start_price": 4652.0,
       "bos_swing_price": 4618.0,
       "touches": 0,
       "status_label": "Pristine",
-      "h1_atr": 15.200055803571429,
-      "current_price_at_scan": 4583.89990234375,
-      "distance_to_proximal_pips": 42.0,
+      "h1_atr": 15.957205636160714,
+      "current_price_at_scan": 4603.0,
+      "distance_to_proximal_pips": 22.9,
       "fvg": {
         "exists": false,
         "fvg_top": null,
@@ -408,9 +408,9 @@
         "mitigation": "full",
         "ghost_top": 4586.7998046875,
         "ghost_bottom": 4584.0,
-        "ghost_c1_idx": 145,
-        "ghost_c3_idx": 147,
-        "mitigated_at_idx": 148
+        "ghost_c1_idx": 144,
+        "ghost_c3_idx": 146,
+        "mitigated_at_idx": 147
       },
       "bos_sequence_count": 1,
       "sweep_tf": "M15",
@@ -420,7 +420,6 @@
     "scorecard_version": "v2",
     "trend_alignment": "with_trend",
     "trend_label": "WITH H1 trend (H1 is bearish)",
-    "h1_trend": "bearish",
-    "score_change_line": "Score 7.5 \u2192 6.0 (-1.5). Drivers: fvg -1.50."
+    "h1_trend": "bearish"
   }
 }
