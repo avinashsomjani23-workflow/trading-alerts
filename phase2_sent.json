@@ -135,6 +135,21 @@
       "alert_ist": "2026-05-01T20:17:26.685271",
       "bias": "SHORT",
       "pair": "GOLD"
+    },
+    "NAS100_LONG_BOS_27674.5": {
+      "score_int": 6,
+      "score_raw": 6.5,
+      "breakdown": {
+        "structure": 1.5,
+        "sweep": 2.25,
+        "fvg": 1.2,
+        "freshness": 0.5,
+        "pd": 0.0,
+        "killzone": 1.0
+      },
+      "alert_ist": "2026-05-01T22:17:32.200834",
+      "bias": "LONG",
+      "pair": "NAS100"
     }
   }
 }
