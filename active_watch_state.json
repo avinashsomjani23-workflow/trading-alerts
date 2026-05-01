@@ -256,11 +256,11 @@
   "GOLD_4636.9": {
     "pair": "GOLD",
     "bias": "SHORT",
-    "score": 6.8,
+    "score": 6.3,
     "breakdown": {
       "structure": 2.5,
       "sweep": 2.0,
-      "fvg": 0.8,
+      "fvg": 0.3,
       "freshness": 0.5,
       "pd": 0.0,
       "killzone": 1.0
@@ -276,7 +276,7 @@
       "wick_body_ratio": 23.98
     },
     "sweep_hours_before_ob": 3.8,
-    "macro_summary": "There are no Tier-1 economic events directly affecting GOLD identified in the recent news. However, geopolitical tensions in the Middle East are a recurring theme, potentially impacting safe-haven demand for GOLD.",
+    "macro_summary": "There are no Tier-1 economic events directly affecting GOLD mentioned in the recent news. However, geopolitical tensions in the Middle East are a recurring theme, potentially impacting safe-haven assets like gold.",
     "levels": {
       "valid": true,
       "entry": 4636.9,
@@ -332,10 +332,11 @@
       "sweep_tf": "M15",
       "sweep_timestamp": "2026-04-30T18:15:00+00:00"
     },
-    "alert_ist": "2026-05-01T12:17:28.753038",
+    "alert_ist": "2026-05-01T12:32:33.735424",
     "scorecard_version": "v2",
     "trend_alignment": "with_trend",
     "trend_label": "WITH H1 trend (H1 is bearish)",
-    "h1_trend": "bearish"
+    "h1_trend": "bearish",
+    "score_change_line": "Score 6.8 \u2192 6.3 (-0.5). Drivers: fvg -0.50."
   }
 }
