@@ -15,6 +15,21 @@
       "alert_ist": "2026-05-01T12:02:30.151054",
       "bias": "SHORT",
       "pair": "EURUSD"
+    },
+    "GOLD_SHORT_CHoCH_4618.0": {
+      "score_int": 6,
+      "score_raw": 6.8,
+      "breakdown": {
+        "structure": 2.5,
+        "sweep": 2.0,
+        "fvg": 0.8,
+        "freshness": 0.5,
+        "pd": 0.0,
+        "killzone": 1.0
+      },
+      "alert_ist": "2026-05-01T12:17:28.753038",
+      "bias": "SHORT",
+      "pair": "GOLD"
     }
   }
 }
