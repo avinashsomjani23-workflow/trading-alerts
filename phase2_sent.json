@@ -105,6 +105,36 @@
       "alert_ist": "2026-05-01T18:02:35.441722",
       "bias": "SHORT",
       "pair": "USDCHF"
+    },
+    "NZDUSD_LONG_BOS_0.591": {
+      "score_int": 6,
+      "score_raw": 6.8,
+      "breakdown": {
+        "structure": 1.5,
+        "sweep": 2.25,
+        "fvg": 1.5,
+        "freshness": 0.5,
+        "pd": 0.0,
+        "killzone": 1.0
+      },
+      "alert_ist": "2026-05-01T20:17:26.685271",
+      "bias": "LONG",
+      "pair": "NZDUSD"
+    },
+    "GOLD_SHORT_BOS_4681.2": {
+      "score_int": 6,
+      "score_raw": 6.5,
+      "breakdown": {
+        "structure": 1.5,
+        "sweep": 2.0,
+        "fvg": 0.5,
+        "freshness": 0.5,
+        "pd": 1.0,
+        "killzone": 1.0
+      },
+      "alert_ist": "2026-05-01T20:17:26.685271",
+      "bias": "SHORT",
+      "pair": "GOLD"
     }
   }
 }
