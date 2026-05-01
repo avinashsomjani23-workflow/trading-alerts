@@ -17,19 +17,34 @@
       "pair": "EURUSD"
     },
     "GOLD_SHORT_CHoCH_4618.0": {
-      "score_int": 6,
-      "score_raw": 6.3,
+      "score_int": 7,
+      "score_raw": 7.5,
       "breakdown": {
         "structure": 2.5,
         "sweep": 2.0,
-        "fvg": 0.3,
+        "fvg": 1.5,
         "freshness": 0.5,
         "pd": 0.0,
         "killzone": 1.0
       },
-      "alert_ist": "2026-05-01T12:32:33.735424",
+      "alert_ist": "2026-05-01T13:17:28.037301",
       "bias": "SHORT",
       "pair": "GOLD"
+    },
+    "USDJPY_SHORT_BOS_156.3": {
+      "score_int": 6,
+      "score_raw": 6.3,
+      "breakdown": {
+        "structure": 1.5,
+        "sweep": 1.33,
+        "fvg": 2.0,
+        "freshness": 0.5,
+        "pd": 0.0,
+        "killzone": 1.0
+      },
+      "alert_ist": "2026-05-01T13:17:28.037301",
+      "bias": "SHORT",
+      "pair": "USDJPY"
     }
   }
 }
