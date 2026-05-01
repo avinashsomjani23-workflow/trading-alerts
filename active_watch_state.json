@@ -360,7 +360,7 @@
       "wick_body_ratio": 3.5
     },
     "sweep_hours_before_ob": 0.8,
-    "macro_summary": "There are no Tier-1 economic events (e.g., CPI, NFP) affecting GOLD in the provided news. Geopolitical tensions in the Middle East, particularly concerning Iran, are a significant macro risk for GOLD.",
+    "macro_summary": "There are no Tier-1 economic events directly affecting GOLD in the provided news. Geopolitical tensions in the Middle East, particularly concerning Iran, are a significant macro risk factor.",
     "levels": {
       "valid": true,
       "entry": 4625.9,
