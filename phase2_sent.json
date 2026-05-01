@@ -17,17 +17,17 @@
       "pair": "EURUSD"
     },
     "GOLD_SHORT_CHoCH_4618.0": {
-      "score_int": 7,
-      "score_raw": 7.5,
+      "score_int": 6,
+      "score_raw": 6.0,
       "breakdown": {
         "structure": 2.5,
         "sweep": 2.0,
-        "fvg": 1.5,
+        "fvg": 0.0,
         "freshness": 0.5,
         "pd": 0.0,
         "killzone": 1.0
       },
-      "alert_ist": "2026-05-01T13:17:28.037301",
+      "alert_ist": "2026-05-01T18:02:35.441722",
       "bias": "SHORT",
       "pair": "GOLD"
     },
@@ -75,6 +75,36 @@
       "alert_ist": "2026-05-01T15:47:22.975068",
       "bias": "LONG",
       "pair": "EURUSD"
+    },
+    "EURUSD_LONG_BOS_1.1744": {
+      "score_int": 6,
+      "score_raw": 6.5,
+      "breakdown": {
+        "structure": 1.5,
+        "sweep": 1.5,
+        "fvg": 2.0,
+        "freshness": 0.5,
+        "pd": 0.0,
+        "killzone": 1.0
+      },
+      "alert_ist": "2026-05-01T18:02:35.441722",
+      "bias": "LONG",
+      "pair": "EURUSD"
+    },
+    "USDCHF_SHORT_BOS_0.7803": {
+      "score_int": 6,
+      "score_raw": 6.0,
+      "breakdown": {
+        "structure": 1.5,
+        "sweep": 2.25,
+        "fvg": 0.8,
+        "freshness": 0.5,
+        "pd": 0.0,
+        "killzone": 1.0
+      },
+      "alert_ist": "2026-05-01T18:02:35.441722",
+      "bias": "SHORT",
+      "pair": "USDCHF"
     }
   }
 }
