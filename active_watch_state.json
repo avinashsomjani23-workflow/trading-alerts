@@ -340,27 +340,27 @@
   "GOLD_4625.9": {
     "pair": "GOLD",
     "bias": "SHORT",
-    "score": 6.2,
+    "score": 6.0,
     "breakdown": {
       "structure": 2.5,
-      "sweep": 2.25,
+      "sweep": 2.0,
       "fvg": 0.0,
       "freshness": 0.5,
       "pd": 0.0,
       "killzone": 1.0
     },
-    "sweep_price": 4640.2998046875,
+    "sweep_price": 4637.7998046875,
     "sweep_tf": "M15",
     "sweep_tier": "textbook",
     "sweep_components": {
       "base": 1.0,
-      "equal_levels": 0.25,
-      "equal_levels_matches": 1,
+      "equal_levels": 0.0,
+      "equal_levels_matches": 0,
       "rejection": 1.0,
       "wick_body_ratio": 3.5
     },
     "sweep_hours_before_ob": 0.8,
-    "macro_summary": "There are no Tier-1 economic events directly affecting GOLD in the provided news. Geopolitical tensions in the Middle East and potential Japanese yen intervention are notable themes, but these are not Tier-1 economic releases.",
+    "macro_summary": "There are no Tier-1 economic events directly affecting GOLD in the provided news. Geopolitical tensions surrounding Iran and potential Japanese yen intervention are notable, but not Tier-1 economic events.",
     "levels": {
       "valid": true,
       "entry": 4625.9,
