@@ -1094,9 +1094,20 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     s = breakdown.get("pd", 0)
     dr_src = ""
     if dealing_range and dealing_range.get("valid"):
+        # Tag source so a fallback range never goes unnoticed in alerts.
+        src_raw = dealing_range.get("source", "structural")
+        if "fallback" in src_raw:
+            src_label = "FALLBACK — no recent BOS/CHoCH"
+        elif "structural" in src_raw:
+            src_label = "structural"
+        elif "legacy" in src_raw:
+            src_label = "legacy window"
+        else:
+            src_label = src_raw
         dr_src = (f" (range: {dealing_range['range_low']:.{dp}f}"
                   f"–{dealing_range['range_high']:.{dp}f},"
-                  f" EQ: {dealing_range['equilibrium']:.{dp}f})")
+                  f" EQ: {dealing_range['equilibrium']:.{dp}f},"
+                  f" src: {src_label})")
 
     pd_pct_str = f"{pd_position * 100:.0f}%" if pd_position is not None else "n/a"
 
