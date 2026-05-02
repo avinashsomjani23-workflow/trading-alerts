@@ -24,8 +24,7 @@ jobs:
           git config --local user.name "GitHub Action"
 
           # P1 owns these files. yfinance_stale_log is shared with P2/P3 (append-only).
-          ALL_FILES="active_obs.json emailed_zones.json email_gate.json yfinance_stale_log.json"
-
+          ALL_FILES="active_obs.json emailed_zones.json email_gate.json yfinance_stale_log.json state/structure_state.json"
           FILES=""
           for f in $ALL_FILES; do
             if [ -f "$f" ]; then FILES="$FILES $f"; fi
