@@ -165,52 +165,69 @@ def trading_hours_between(ts_earlier, ts_later):
 
 def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
     """
-    Compute the dealing range as the highest high and lowest low over the last
-    N trading days of H1 candles, where N is pair-aware:
-        Forex     -> 5 trading days (120 H1 candles)
-        Index     -> 3 trading days (72  H1 candles)
-        Commodity -> 5 trading days (120 H1 candles)
+    Wrapper over dealing_range.py — the new single-source-of-truth module.
 
-    This is structure-agnostic by design. We are not looking for fractal swing
-    pivots — we want the actual price extremes the market touched in the
-    window. Wicks are included (institutions ran liquidity at those levels).
+    Resolution order:
+      1. If structure_state.json has clean (non-placeholder) walls for this
+         pair, return them (structural source).
+      2. If walls are placeholders OR state is missing for this pair, fall
+         back to the legacy window high/low so nothing downstream breaks.
+         valid=False is returned in placeholder-active cases — PD scoring
+         suspends as designed.
 
-    Same-scan redraw: the live (currently-forming) candle is included via
-    df_h1.tail(lookback), so a break of either bound during this scan is
-    immediately reflected — no waiting for the next scan.
-
-    No silent ATR extensions. No fabrication. Range is whatever max/min of
-    the window says it is.
-
-    The `ob`, `h1_atr`, and `current_price` parameters are retained for
-    signature compatibility with existing callers but are no longer used in
-    the calculation.
-
-    Returns dict: valid, range_high, range_low, equilibrium, source.
+    The `ob`, `h1_atr`, `current_price` params are kept for signature
+    compatibility with every existing call site. Only `pair_conf['name']`
+    is consumed by the new logic.
     """
+    pair_name = (pair_conf or {}).get("name")
+    pair_type = (pair_conf or {}).get("pair_type", "forex")
+
+    # 1. Try structure_state.json
+    try:
+        import dealing_range as _DR
+        state = _DR.load_state()
+        walls = state.get(pair_name) if pair_name else None
+    except Exception:
+        walls = None
+
+    proximal = float(ob.get("proximal_line", 0.0)) if ob else 0.0
+    if walls and walls.get("ceiling_price") is not None and walls.get("floor_price") is not None:
+        pd_info = _DR.compute_pd_position(proximal, walls)
+        if pd_info.get("valid"):
+            return {
+                "valid":       True,
+                "range_high":  pd_info["range_high"],
+                "range_low":   pd_info["range_low"],
+                "equilibrium": pd_info["equilibrium"],
+                "source":      "structural_fallback_window" if pd_info.get("fallback_active") else "structural_walls"
+            }
+        # walls exist but placeholder active — return invalid so PD score = 0
+        return {
+            "valid":       False,
+            "range_high":  pd_info.get("range_high", 0.0),
+            "range_low":   pd_info.get("range_low",  0.0),
+            "equilibrium": pd_info.get("equilibrium", 0.0),
+            "source":      pd_info.get("source", "placeholder_active")
+        }
+
+    # 2. Legacy fallback — preserves prior behaviour when state is missing.
     if df_h1 is None or len(df_h1) < 20:
         return {"valid": False, "source": "insufficient_data"}
-
-    pair_type = pair_conf.get("pair_type", "forex") if pair_conf else "forex"
     lookback = DEALING_RANGE_LOOKBACK_H1.get(pair_type, 120)
     lookback = min(lookback, len(df_h1))
-
     df_window = df_h1.tail(lookback)
     range_high = float(df_window['High'].max())
     range_low = float(df_window['Low'].min())
-
     if range_high <= range_low:
         return {"valid": False, "source": "degenerate_range"}
-
     eq = (range_high + range_low) / 2.0
     return {
         "valid": True,
         "range_high": range_high,
         "range_low": range_low,
         "equilibrium": eq,
-        "source": f"window_{lookback}h"
+        "source": f"legacy_window_{lookback}h"
     }
-
 def get_swing_points(df, lookback=4, bounds=None):
     if df is None or len(df) < lookback * 2 + 1:
         return []
