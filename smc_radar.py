@@ -8,6 +8,7 @@ import os
 import time
 import google.generativeai as genai
 import smc_detector
+import dealing_range
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -1942,6 +1943,24 @@ def run_radar():
 
         pairs_with_fresh_data.add(name)
         pair_dfs[name] = df
+
+        # --- DEALING RANGE WALL UPDATE (single source of truth) ---
+        # Load prior state for this pair, walk forward through fresh H1 data,
+        # update walls if any breaks fired, save back. Phase 2 reads only.
+        try:
+            structure_state_all = dealing_range.load_state()
+            prior_walls = structure_state_all.get(name)
+            new_walls = dealing_range.update_pair(df, prior_walls, pair)
+            structure_state_all[name] = new_walls
+            dealing_range.save_state(structure_state_all)
+            if new_walls.get("fallback_active"):
+                logging.warning(
+                    f"[{name}] Dealing-range fallback active — no BOS/CHoCH in cold-start window."
+                )
+                print(f"  [WALLS] {name}: fallback active (window high/low used).")
+        except Exception as _dr_err:
+            logging.error(f"[{name}] dealing_range update failed: {_dr_err}")
+            print(f"  [WALLS ERR] {name}: {_dr_err}")
 
         result        = detect_smc_radar(df, lookback, pair_type=ptype)
         current_price = result["current_price"]
