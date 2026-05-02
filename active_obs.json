@@ -1,1 +1,30 @@
-{}
+{
+  "slate_date": "2026-05-02",
+  "slate_started_iso": "2026-05-02T22:20:18.535631",
+  "pairs": {
+    "EURUSD": {
+      "next_id_counter": 0,
+      "zones": []
+    },
+    "USDJPY": {
+      "next_id_counter": 0,
+      "zones": []
+    },
+    "NZDUSD": {
+      "next_id_counter": 0,
+      "zones": []
+    },
+    "USDCHF": {
+      "next_id_counter": 0,
+      "zones": []
+    },
+    "NAS100": {
+      "next_id_counter": 0,
+      "zones": []
+    },
+    "GOLD": {
+      "next_id_counter": 0,
+      "zones": []
+    }
+  }
+}
