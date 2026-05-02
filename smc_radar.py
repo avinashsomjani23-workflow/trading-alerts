@@ -2018,7 +2018,13 @@ def run_radar():
             sz["last_seen_label"] = ist_now.strftime('%H:%M IST')
             print(f"  [DROP] {name} {sz['zone_id']} dropped — {reason}.")
 
-        # Audit log row per active zone post-reconcile
+        # Audit log row per active zone post-reconcile.
+        # Shadow-logs dealing range source + PD position for retrospective analysis.
+        try:
+            _walls_for_audit = dealing_range.load_state().get(name, {})
+            _pd_audit = dealing_range.compute_pd_position(current_price, _walls_for_audit)
+        except Exception:
+            _pd_audit = {"valid": False, "source": "error", "pd_position": None}
         for sz in slate_zones:
             if sz["status"] == "active":
                 audit_rows.append({
@@ -2030,11 +2036,45 @@ def run_radar():
                     "fvg_was_detected": sz["fvg"].get("was_detected", False),
                     "current_price": current_price,
                     "h1_atr": sz.get("h1_atr", 0.0),
-                    "is_new_this_scan": sz.get("is_new_this_scan", False)
+                    "is_new_this_scan": sz.get("is_new_this_scan", False),
+                    "dr_source": _pd_audit.get("source"),
+                    "dr_valid":  _pd_audit.get("valid"),
+                    "dr_pd_position": _pd_audit.get("pd_position"),
+                    "dr_fallback": _pd_audit.get("fallback_active", False)
                 })
 
     # --- BUILD EMAIL ---
     if send_email_this_run:
+        # Structure status banner: tells the trader at a glance which pairs
+        # have a structurally-anchored dealing range vs. fallback.
+        try:
+            _structure_state_for_banner = dealing_range.load_state()
+        except Exception:
+            _structure_state_for_banner = {}
+        _fb_pairs = []
+        _ph_pairs = []
+        _ok_pairs = []
+        for _pn in pair_names:
+            _ws = _structure_state_for_banner.get(_pn, {})
+            if _ws.get("fallback_active"):
+                _fb_pairs.append(_pn)
+            elif _ws.get("ceiling_is_placeholder") or _ws.get("floor_is_placeholder"):
+                _ph_pairs.append(_pn)
+            elif _ws.get("ceiling_price") is not None and _ws.get("floor_price") is not None:
+                _ok_pairs.append(_pn)
+        _structure_banner_lines = [
+            f"Structure: {len(_ok_pairs)}/{len(pair_names)} pairs anchored."
+        ]
+        if _ph_pairs:
+            _structure_banner_lines.append(
+                f"  Placeholder side (PD scoring suspended): {', '.join(_ph_pairs)}"
+            )
+        if _fb_pairs:
+            _structure_banner_lines.append(
+                f"  FALLBACK (no recent BOS/CHoCH — using window high/low): {', '.join(_fb_pairs)}"
+            )
+        structure_banner_text = "\n".join(_structure_banner_lines)
+        print(structure_banner_text)
         # Collect renderable zones across all pairs.
         new_zone_cards     = []
         unchanged_zone_cards = []
@@ -2121,6 +2161,23 @@ def run_radar():
         if all_zones_for_table or dropped_lines:
             summary_table = build_summary_table_html(all_zones_for_table, dp_map)
             try:
+                # Prepend structure banner to the email content.
+                if new_zone_cards:
+                    _banner_html = (
+                        f'<div style="background:#1a1f2e;border-left:3px solid #5dade2;'
+                        f'padding:8px 12px;margin:0 0 10px 0;color:#dddddd;'
+                        f'font-family:monospace;font-size:12px;white-space:pre-wrap;">'
+                        f'{structure_banner_text}</div>'
+                    )
+                    new_zone_cards = [_banner_html] + new_zone_cards
+                elif unchanged_zone_cards:
+                    _banner_html = (
+                        f'<div style="background:#1a1f2e;border-left:3px solid #5dade2;'
+                        f'padding:8px 12px;margin:0 0 10px 0;color:#dddddd;'
+                        f'font-family:monospace;font-size:12px;white-space:pre-wrap;">'
+                        f'{structure_banner_text}</div>'
+                    )
+                    unchanged_zone_cards = [_banner_html] + unchanged_zone_cards
                 send_master_digest_v2(
                     summary_table, new_zone_cards, unchanged_zone_cards,
                     dropped_lines, attachments,
