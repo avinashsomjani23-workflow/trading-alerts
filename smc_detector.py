@@ -162,18 +162,17 @@ def trading_hours_between(ts_earlier, ts_later):
     except Exception:
         return None
 
-
 def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
     """
     Wrapper over dealing_range.py — the new single-source-of-truth module.
 
     Resolution order:
-      1. If structure_state.json has clean (non-placeholder) walls for this
-         pair, return them (structural source).
-      2. If walls are placeholders OR state is missing for this pair, fall
-         back to the legacy window high/low so nothing downstream breaks.
-         valid=False is returned in placeholder-active cases — PD scoring
-         suspends as designed.
+      1. If structure_state.json has walls with prices for this pair, return
+         them. Geometry is valid whenever both walls have prices (confirmed
+         OR tentative). The `tentative` flag indicates whether either wall
+         is currently a rolling extreme.
+      2. If state is missing for this pair, fall back to the legacy window
+         high/low so nothing downstream breaks.
 
     The `ob`, `h1_atr`, `current_price` params are kept for signature
     compatibility with every existing call site. Only `pair_conf['name']`
@@ -193,39 +192,59 @@ def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
     proximal = float(ob.get("proximal_line", 0.0)) if ob else 0.0
     if walls and walls.get("ceiling_price") is not None and walls.get("floor_price") is not None:
         pd_info = _DR.compute_pd_position(proximal, walls)
+        chop_flag = bool(walls.get("last_event_chop", False))
+        last_event_type = walls.get("last_event_type")
         if pd_info.get("valid"):
+            tentative = bool(pd_info.get("tentative", False))
+            if pd_info.get("fallback_active"):
+                source = "structural_fallback_window"
+            elif tentative:
+                source = "structural_tentative"
+            else:
+                source = "structural_walls"
             return {
                 "valid":       True,
                 "range_high":  pd_info["range_high"],
                 "range_low":   pd_info["range_low"],
                 "equilibrium": pd_info["equilibrium"],
-                "source":      "structural_fallback_window" if pd_info.get("fallback_active") else "structural_walls"
+                "tentative":   tentative,
+                "chop_flag":   chop_flag,
+                "last_event_type": last_event_type,
+                "source":      source
             }
-        # walls exist but placeholder active — return invalid so PD score = 0
+        # Walls present but degenerate / incomplete — return geometry-only block.
         return {
             "valid":       False,
             "range_high":  pd_info.get("range_high", 0.0),
             "range_low":   pd_info.get("range_low",  0.0),
             "equilibrium": pd_info.get("equilibrium", 0.0),
-            "source":      pd_info.get("source", "placeholder_active")
+            "tentative":   bool(pd_info.get("tentative", True)),
+            "chop_flag":   chop_flag,
+            "last_event_type": last_event_type,
+            "source":      pd_info.get("source", "incomplete_walls")
         }
 
     # 2. Legacy fallback — preserves prior behaviour when state is missing.
     if df_h1 is None or len(df_h1) < 20:
-        return {"valid": False, "source": "insufficient_data"}
+        return {"valid": False, "tentative": False, "chop_flag": False,
+                "last_event_type": None, "source": "insufficient_data"}
     lookback = DEALING_RANGE_LOOKBACK_H1.get(pair_type, 120)
     lookback = min(lookback, len(df_h1))
     df_window = df_h1.tail(lookback)
     range_high = float(df_window['High'].max())
     range_low = float(df_window['Low'].min())
     if range_high <= range_low:
-        return {"valid": False, "source": "degenerate_range"}
+        return {"valid": False, "tentative": False, "chop_flag": False,
+                "last_event_type": None, "source": "degenerate_range"}
     eq = (range_high + range_low) / 2.0
     return {
         "valid": True,
         "range_high": range_high,
         "range_low": range_low,
         "equilibrium": eq,
+        "tentative": False,
+        "chop_flag": False,
+        "last_event_type": None,
         "source": f"legacy_window_{lookback}h"
     }
 def get_swing_points(df, lookback=4, bounds=None):
@@ -931,51 +950,21 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     else:
         bd["freshness"] = 0.0
 
-    # Premium / Discount — graded scoring on impulse-leg dealing range. Now max 1.5.
-    # LONG wants price deep in discount:
-    #   position <= 0.25 -> 1.5 (very deep discount)
-    #   0.25 < position <= 0.35 -> 1.0 (deep discount)
-    #   0.35 < position <= 0.45 -> 0.5 (mid discount)
-    #   position > 0.45 -> 0.0 (above equilibrium, fail)
-    # SHORT wants price deep in premium:
-    #   position >= 0.75 -> 1.5 (very deep premium)
-    #   0.65 <= position < 0.75 -> 1.0 (deep premium)
-    #   0.55 <= position < 0.65 -> 0.5 (mid premium)
-    #   position < 0.55 -> 0.0 (below equilibrium, fail)
+    # Premium / Discount — REMOVED FROM SCORING (May 2026 overhaul).
+    # Geometry (range high/low/equilibrium, pd_position %) is still computed
+    # and surfaced to the email so the trader can read it; it just no longer
+    # contributes points to the scorecard. The 'pd' breakdown key is kept at
+    # 0.0 for backwards compatibility (legacy consumers reading bd["pd"]).
     h1_atr_val = compute_atr(df_h1)
     proximal = float(ob['proximal_line'])
     dr = get_dealing_range(ob, df_h1, h1_atr_val,
                            pair_conf=pair_conf, current_price=proximal)
     pd_position = None
-    if dr["valid"]:
+    if dr.get("valid"):
         rng_width = dr["range_high"] - dr["range_low"]
         if rng_width > 0:
             pd_position = (proximal - dr["range_low"]) / rng_width
-            if bias == "LONG":
-                if pd_position <= 0.25:
-                    bd["pd"] = 1.5
-                elif pd_position <= 0.35:
-                    bd["pd"] = 1.0
-                elif pd_position <= 0.45:
-                    bd["pd"] = 0.5
-                else:
-                    bd["pd"] = 0.0
-            else:  # SHORT
-                if pd_position >= 0.75:
-                    bd["pd"] = 1.5
-                elif pd_position >= 0.65:
-                    bd["pd"] = 1.0
-                elif pd_position >= 0.55:
-                    bd["pd"] = 0.5
-                else:
-                    bd["pd"] = 0.0
-        else:
-            bd["pd"] = 0.0
-    else:
-        bd["pd"] = 0.0
-        dr = {"valid": False, "range_high": 0, "range_low": 0, "equilibrium": 0,
-              "source": dr.get("source", "unknown")}
-
+    bd["pd"] = 0.0  # PD removed from scoring; display-only.
     # Killzone — IST-based (hardcoded IST clock hours; no DST drift needed since
     # windows are defined in local IST and IST has no DST).
     ist_hour = (datetime.utcnow() + timedelta(hours=5, minutes=30)).hour
@@ -1004,9 +993,12 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     """
     Return list of (label, score, max_score, status, explanation) for email rendering.
 
-    New scorecard maxima (total 10.0):
-      Structure 2.5 | Sweep 2.5 | FVG 2.0 | Freshness 0.5 | PD 1.5 | Killzone 1.0
-    Macro removed from scoring; still rendered as email-only context block.
+    Scorecard maxima (May 2026 — PD removed from scoring; total 8.5):
+      Structure 2.5 | Sweep 2.5 | FVG 2.0 | Freshness 0.5 | Killzone 1.0
+    PD is rendered as a display-only row (max_score = 0) showing range
+    geometry and PD% so the trader can use it for judgement, but it
+    contributes no points. Macro removed from scoring; still rendered
+    as email-only context block.
 
     Sweep row shows ✓/✗ based on PRESENCE only (base component). Detailed
     breakdown rendered separately in build_sweep_breakdown_html banner.
@@ -1090,43 +1082,52 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         rows.append(("Freshness", s, 0.5, "fail",
                      f"Tested {touches}x since formation — zone fatigued."))
 
-    # 5. Premium / Discount — 4-tier (0 / 0.5 / 1.0 / 1.5)
-    s = breakdown.get("pd", 0)
+    # 5. Premium / Discount — DISPLAY ONLY (no longer contributes points).
+    # Geometry (range, equilibrium, %) is surfaced for trader judgement.
+    # Tentative-range flag rendered when applicable.
     dr_src = ""
+    dr_tag = ""
+    chop_tag = ""
     if dealing_range and dealing_range.get("valid"):
-        # Tag source so a fallback range never goes unnoticed in alerts.
         src_raw = dealing_range.get("source", "structural")
         if "fallback" in src_raw:
             src_label = "FALLBACK — no recent BOS/CHoCH"
+        elif "tentative" in src_raw:
+            src_label = "tentative — one wall not yet swing-confirmed"
         elif "structural" in src_raw:
             src_label = "structural"
         elif "legacy" in src_raw:
             src_label = "legacy window"
         else:
             src_label = src_raw
-        dr_src = (f" (range: {dealing_range['range_low']:.{dp}f}"
-                  f"–{dealing_range['range_high']:.{dp}f},"
-                  f" EQ: {dealing_range['equilibrium']:.{dp}f},"
-                  f" src: {src_label})")
+        dr_src = (f"Range: {dealing_range['range_low']:.{dp}f}"
+                  f"–{dealing_range['range_high']:.{dp}f}, "
+                  f"EQ: {dealing_range['equilibrium']:.{dp}f}, "
+                  f"src: {src_label}.")
+        if dealing_range.get("tentative"):
+            dr_tag = " (tentative range — wall pending swing confirmation)"
+    if dealing_range and dealing_range.get("chop_flag"):
+        chop_tag = (" \u26a0\ufe0f Rapid CHoCH within 5 candles of prior event — "
+                    "possible ranging conditions, low conviction.")
 
     pd_pct_str = f"{pd_position * 100:.0f}%" if pd_position is not None else "n/a"
 
     if not dealing_range or not dealing_range.get("valid"):
-        rows.append(("Premium / Discount", s, 1.5, "warn",
-                      "Dealing range too narrow to score. Neutral."))
-    elif bias == "LONG":
-        if s >= 1.5:
-            rows.append(("Premium / Discount", s, 1.5, "ok",
-                          f"Price at {pd_pct_str} of dealing range (very deep discount).{dr_src}"))
-        elif s >= 1.0:
-            rows.append(("Premium / Discount", s, 1.5, "ok",
-                          f"Price at {pd_pct_str} of dealing range (deep discount).{dr_src}"))
-        elif s >= 0.5:
-            rows.append(("Premium / Discount", s, 1.5, "warn",
-                          f"Price at {pd_pct_str} of dealing range (mid discount).{dr_src}"))
+        rows.append(("Premium / Discount", 0.0, 0.0, "info",
+                      f"Dealing range not available — skipped (display only).{chop_tag}"))
+    else:
+        if bias == "LONG":
+            zone_label = ("very deep discount" if pd_position is not None and pd_position <= 0.25
+                          else "deep discount"  if pd_position is not None and pd_position <= 0.35
+                          else "mid discount"   if pd_position is not None and pd_position <= 0.45
+                          else "above equilibrium")
         else:
-            rows.append(("Premium / Discount", s, 1.5, "fail",
-                          f"Price at {pd_pct_str} of dealing range (above equilibrium — not optimal for LONG).{dr_src}"))
+            zone_label = ("very deep premium" if pd_position is not None and pd_position >= 0.75
+                          else "deep premium"  if pd_position is not None and pd_position >= 0.65
+                          else "mid premium"   if pd_position is not None and pd_position >= 0.55
+                          else "below equilibrium")
+        rows.append(("Premium / Discount", 0.0, 0.0, "info",
+                      f"Price at {pd_pct_str} of dealing range ({zone_label}). {dr_src}{dr_tag}{chop_tag}"))
     else:  # SHORT
         if s >= 1.5:
             rows.append(("Premium / Discount", s, 1.5, "ok",
