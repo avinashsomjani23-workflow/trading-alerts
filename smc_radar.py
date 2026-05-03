@@ -1957,7 +1957,9 @@ def run_radar():
                 logging.warning(
                     f"[{name}] Dealing-range fallback active — no BOS/CHoCH in cold-start window."
                 )
-                print(f"  [WALLS] {name}: fallback active (window high/low used).")
+                print(f"  [WALLS] {name}: fallback active (last 72h high/low used).")
+            elif new_walls.get("last_event_chop"):
+                print(f"  [WALLS] {name}: rapid CHoCH within 5 candles — possible chop.")
         except Exception as _dr_err:
             logging.error(f"[{name}] dealing_range update failed: {_dr_err}")
             print(f"  [WALLS ERR] {name}: {_dr_err}")
@@ -2024,6 +2026,7 @@ def run_radar():
             _walls_for_audit = dealing_range.load_state().get(name, {})
             _pd_audit = dealing_range.compute_pd_position(current_price, _walls_for_audit)
         except Exception:
+            _walls_for_audit = {}
             _pd_audit = {"valid": False, "source": "error", "pd_position": None}
         for sz in slate_zones:
             if sz["status"] == "active":
@@ -2040,38 +2043,49 @@ def run_radar():
                     "dr_source": _pd_audit.get("source"),
                     "dr_valid":  _pd_audit.get("valid"),
                     "dr_pd_position": _pd_audit.get("pd_position"),
-                    "dr_fallback": _pd_audit.get("fallback_active", False)
+                    "dr_fallback": _pd_audit.get("fallback_active", False),
+                    "dr_tentative": _pd_audit.get("tentative", False),
+                    "dr_event_status": _walls_for_audit.get("last_event_status"),
+                    "dr_event_pending": _walls_for_audit.get("last_event_pending_confirmation", False),
+                    "dr_chop_flag": _walls_for_audit.get("last_event_chop", False)
                 })
 
     # --- BUILD EMAIL ---
     if send_email_this_run:
         # Structure status banner: tells the trader at a glance which pairs
-        # have a structurally-anchored dealing range vs. fallback.
+        # have a fully-anchored dealing range vs. tentative side vs. fallback.
         try:
             _structure_state_for_banner = dealing_range.load_state()
         except Exception:
             _structure_state_for_banner = {}
         _fb_pairs = []
-        _ph_pairs = []
+        _tent_pairs = []
         _ok_pairs = []
+        _chop_pairs = []
         for _pn in pair_names:
             _ws = _structure_state_for_banner.get(_pn, {})
             if _ws.get("fallback_active"):
                 _fb_pairs.append(_pn)
             elif _ws.get("ceiling_is_placeholder") or _ws.get("floor_is_placeholder"):
-                _ph_pairs.append(_pn)
+                _tent_pairs.append(_pn)
             elif _ws.get("ceiling_price") is not None and _ws.get("floor_price") is not None:
                 _ok_pairs.append(_pn)
+            if _ws.get("last_event_chop"):
+                _chop_pairs.append(_pn)
         _structure_banner_lines = [
-            f"Structure: {len(_ok_pairs)}/{len(pair_names)} pairs anchored."
+            f"Structure: {len(_ok_pairs)}/{len(pair_names)} pairs fully anchored."
         ]
-        if _ph_pairs:
+        if _tent_pairs:
             _structure_banner_lines.append(
-                f"  Placeholder side (PD scoring suspended): {', '.join(_ph_pairs)}"
+                f"  Tentative side (one wall pending swing confirmation): {', '.join(_tent_pairs)}"
             )
         if _fb_pairs:
             _structure_banner_lines.append(
-                f"  FALLBACK (no recent BOS/CHoCH — using window high/low): {', '.join(_fb_pairs)}"
+                f"  FALLBACK (no recent BOS/CHoCH — using last 72h high/low): {', '.join(_fb_pairs)}"
+            )
+        if _chop_pairs:
+            _structure_banner_lines.append(
+                f"  \u26a0\ufe0f Rapid CHoCH (possible chop, low conviction): {', '.join(_chop_pairs)}"
             )
         structure_banner_text = "\n".join(_structure_banner_lines)
         print(structure_banner_text)
