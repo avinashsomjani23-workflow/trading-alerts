@@ -28,18 +28,28 @@ Phase 2 reads `state/structure_state.json` and consumes:
 Phase 2 NEVER writes state. One writer (Phase 1), many readers.
 
 Design decisions (locked):
-  - Lookback for swing confirmation: 3 (3 before + swing + 3 after = 7 candles)
-  - BOS leg threshold:   0.4 x H1 ATR
-  - CHoCH leg threshold: 0.75 x H1 ATR
-  - Trailing wall on BOS = most recent confirmed swing INSIDE the just-completed leg.
-    No ATR pullback threshold. If no confirmed swing is inside the leg, wall stays.
-  - CHoCH wall reset = most recent confirmed swing of the just-completed trend
-    (the swing that formed just before the swing whose break was the CHoCH).
-    NOT the absolute trend extreme. This kills the runaway-extreme problem.
-  - Cold-start window: 150 H1 candles.
+  - Lookback for swing confirmation: 3 (3 before + swing + 3 after = 7 candles).
+    Strict comparison (>, <) — equal highs/lows do not register as swings.
+  - BOS leg threshold:   0.2 x H1 ATR  -- DISPLACEMENT PAST THE BROKEN WALL
+  - CHoCH leg threshold: 0.35 x H1 ATR -- DISPLACEMENT PAST THE BROKEN WALL
+    (Earlier versions measured from the opposite wall — that was wrong.)
+  - Tentative walls: BOTH walls always exist. After an event, the broken
+    side becomes a TENTATIVE wall holding the rolling max/min since the
+    event. Tentative walls CAN be broken — break fires an event tagged
+    'tentative'. A tentative wall promotes to confirmed when its anchor
+    candle passes lookback=3.
+  - Trailing wall on BOS = most recent confirmed swing INSIDE the
+    just-completed leg. No ATR pullback threshold.
+  - CHoCH wall reset = most recent confirmed swing of the just-completed
+    trend, strictly BEFORE the swing whose break = CHoCH. Kills runaway
+    extreme problem.
+  - Cold-start window: 150 H1 candles for event detection walk.
+  - Fallback window: last 72 H1 candles (≈ 3 trading days). Used ONLY when
+    no event fires across the full 150-candle walk. Trend init from close
+    direction across the 72-candle window.
   - Internal swings inside the range generate no structural events.
-  - No silent fallback. If no event fires across the cold-start window,
-    fallback to window high/low and flag fallback_active = True.
+  - Chop flag: a CHoCH within 5 candles of the previous event is tagged
+    last_event_chop=True for downstream surfacing.
   - Atomic writes (temp + rename), like every other state file in this codebase.
 """
 
@@ -50,11 +60,21 @@ from typing import Optional, Tuple, List, Dict, Any
 # --- Tunables (locked) -------------------------------------------------------
 
 SWING_LOOKBACK = 3
-BOS_ATR_MULT   = 0.4
-CHOCH_ATR_MULT = 0.75
+# Leg-size threshold = displacement of the break candle's CLOSE PAST the wall
+# it just broke. Not distance from the opposite wall. See design note in
+# update history. Values calibrated for "displacement past broken level".
+BOS_ATR_MULT   = 0.2
+CHOCH_ATR_MULT = 0.35
 
-# Cold-start window — number of most recent H1 candles to walk forward.
+# Cold-start window — number of most recent H1 candles to walk forward
+# looking for events. If no events fire across this whole window, fallback
+# walls are computed from FALLBACK_WINDOW_H1 only (a tighter recent window).
 COLDSTART_WINDOW_H1 = 150
+FALLBACK_WINDOW_H1  = 72   # last 72 H1 candles ≈ 3 trading days
+
+# Chop flag: a CHoCH within this many candles of the previous event tags
+# the event as possible-chop in audit + email.
+CHOP_LOOKBACK_CANDLES = 5
 
 # State file path. Lives in a dedicated directory outside any purge scope.
 STATE_DIR  = "state"
@@ -140,11 +160,16 @@ def detect_swings(df, lookback: int = SWING_LOOKBACK) -> List[Dict[str, Any]]:
     Find confirmed swing highs and swing lows over the entire df.
 
     A candle at idx i is:
-      - a swing high if H[i] is the strict max over [i-lookback, i+lookback]
-      - a swing low  if L[i] is the strict min over [i-lookback, i+lookback]
+      - a swing high if H[i] is STRICTLY GREATER than every other high in
+        the window [i-lookback, i+lookback].
+      - a swing low  if L[i] is STRICTLY LESS than every other low in
+        the window [i-lookback, i+lookback].
 
-    Both can fire on the same candle (rare but possible). Returns list sorted
-    by idx, each entry: {'type': 'high'|'low', 'idx': i, 'price': float, 'ts': iso}.
+    Strict comparison: equal highs / equal lows do NOT register as swings.
+    A flat top / flat bottom across the window correctly produces no swing.
+
+    Returns list sorted by idx, each entry:
+      {'type': 'high'|'low', 'idx': i, 'price': float, 'ts': iso}
     """
     if df is None or len(df) < lookback * 2 + 1:
         return []
@@ -153,11 +178,17 @@ def detect_swings(df, lookback: int = SWING_LOOKBACK) -> List[Dict[str, Any]]:
     n = len(df)
     out = []
     for i in range(lookback, n - lookback):
-        wh = H[i - lookback: i + lookback + 1]
-        wl = L[i - lookback: i + lookback + 1]
-        if H[i] == max(wh):
+        # Compare against every neighbour in window EXCLUDING i itself.
+        wh_left  = H[i - lookback: i]
+        wh_right = H[i + 1: i + lookback + 1]
+        wl_left  = L[i - lookback: i]
+        wl_right = L[i + 1: i + lookback + 1]
+        # Use Python max/min on numpy slices — fine for small windows.
+        max_neighbour_h = max(max(wh_left), max(wh_right)) if len(wh_left) and len(wh_right) else None
+        min_neighbour_l = min(min(wl_left), min(wl_right)) if len(wl_left) and len(wl_right) else None
+        if max_neighbour_h is not None and H[i] > max_neighbour_h:
             out.append({'type': 'high', 'idx': i, 'price': float(H[i]), 'ts': _ts_iso(df, i)})
-        if L[i] == min(wl):
+        if min_neighbour_l is not None and L[i] < min_neighbour_l:
             out.append({'type': 'low',  'idx': i, 'price': float(L[i]), 'ts': _ts_iso(df, i)})
     out.sort(key=lambda s: s['idx'])
     return out
@@ -170,12 +201,16 @@ def _empty_state() -> Dict[str, Any]:
         "trend": None,                        # 'bullish' | 'bearish' | None
         "ceiling_price": None,
         "ceiling_ts": None,
-        "ceiling_is_placeholder": True,
+        "ceiling_is_placeholder": True,       # True = tentative wall (rolling extreme)
         "floor_price": None,
         "floor_ts": None,
-        "floor_is_placeholder": True,
+        "floor_is_placeholder": True,         # True = tentative wall (rolling extreme)
         "last_event_type": None,              # 'BOS' | 'CHoCH' | None
         "last_event_ts": None,
+        "last_event_status": None,            # 'confirmed' | 'tentative' | None
+        "last_event_pending_confirmation": False,  # True if tentative & anchor not yet swing-confirmed
+        "last_event_idx_iso": None,           # ISO ts of the break candle (used for chop gap calc)
+        "last_event_chop": False,             # True if this CHoCH fired within CHOP_LOOKBACK_CANDLES of prior event
         "last_scanned_ts": None,
         "fallback_active": False,
     }
@@ -324,8 +359,16 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
 
     last_event_type = state.get("last_event_type")
     last_event_ts   = state.get("last_event_ts")
+    last_event_status = state.get("last_event_status")
+    last_event_pending = bool(state.get("last_event_pending_confirmation", False))
+    last_event_idx_iso = state.get("last_event_idx_iso")
+    last_event_chop = bool(state.get("last_event_chop", False))
     leg_start_idx   = 0  # idx of the most recent structural anchor in this df
     fallback_active = state.get("fallback_active", False)
+
+    # Resolve the local positional idx of the most recent event (for chop gap calc).
+    # If we have last_event_idx_iso, find that ts in df. Otherwise fall back to None.
+    last_event_local_idx: Optional[int] = None
 
     # Map walls back to df indices when possible (resolve "idx" from ts).
     def _idx_from_ts(ts_iso: Optional[str]) -> Optional[int]:
@@ -354,6 +397,10 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
     if candidates_for_leg_start:
         leg_start_idx = max(candidates_for_leg_start)
 
+    # Resolve local idx of the previous event for chop gap measurement.
+    if last_event_idx_iso:
+        last_event_local_idx = _idx_from_ts(last_event_idx_iso)
+
     # Helpers to resolve placeholders given current candle position.
     def _try_promote_placeholder(side: str, current_i: int):
         """If side is placeholder, see if a confirmed swing now exists in
@@ -378,24 +425,54 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
                 floor["idx"]   = promoted["idx"]
                 floor["is_placeholder"] = is_ph
 
+    # Helper: refresh a tentative wall to the rolling extreme since leg_start.
+    # Tentative wall = is_placeholder = True. Holds the rolling max/min of
+    # candles in (leg_start_idx, current_i]. Used for break detection.
+    def _refresh_tentative(side: str, current_i: int):
+        if side == 'ceiling':
+            if not ceiling["is_placeholder"]:
+                return
+            lo, hi = leg_start_idx + 1, current_i
+            if lo > hi:
+                return
+            H_arr = df['High'].values.astype(float)
+            rng_idx = lo + int(H_arr[lo: hi + 1].argmax())
+            ceiling["price"] = float(H_arr[rng_idx])
+            ceiling["ts"]    = _ts_iso(df, rng_idx)
+            ceiling["idx"]   = rng_idx
+            # Stays placeholder until promoted by a confirmed swing.
+        else:
+            if not floor["is_placeholder"]:
+                return
+            lo, hi = leg_start_idx + 1, current_i
+            if lo > hi:
+                return
+            L_arr = df['Low'].values.astype(float)
+            rng_idx = lo + int(L_arr[lo: hi + 1].argmin())
+            floor["price"] = float(L_arr[rng_idx])
+            floor["ts"]    = _ts_iso(df, rng_idx)
+            floor["idx"]   = rng_idx
+
     # Walk forward.
     for i in range(start_i, n):
-        # 1. Try to promote any placeholders using newly-confirmed swings up to i.
+        # 1a. Try to promote any placeholders to confirmed using newly-confirmed swings.
         _try_promote_placeholder('ceiling', i)
         _try_promote_placeholder('floor',   i)
+        # 1b. For walls still tentative, refresh their rolling extreme.
+        _refresh_tentative('ceiling', i)
+        _refresh_tentative('floor',   i)
 
         close_i = float(C[i])
 
-        # 2. Check for wall break — closed candle close beyond a REAL wall.
-        # Placeholder walls cannot be broken (they are visualization only).
+        # 2. Check for wall break. Both confirmed AND tentative walls can break.
+        # The event status is later tagged as 'confirmed' or 'tentative' based
+        # on whether the wall that broke was a real swing or rolling extreme.
         broke_ceiling = (
             ceiling["price"] is not None
-            and not ceiling["is_placeholder"]
             and close_i > ceiling["price"]
         )
         broke_floor = (
             floor["price"] is not None
-            and not floor["is_placeholder"]
             and close_i < floor["price"]
         )
         if not broke_ceiling and not broke_floor:
@@ -409,6 +486,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
                 broke_ceiling = False
 
         break_dir = 'bullish' if broke_ceiling else 'bearish'
+
         # 3. Classify BOS vs CHoCH against current trend.
         if trend is None:
             event = 'BOS'   # first event ever — initialize trend
@@ -417,15 +495,29 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
         else:
             event = 'CHoCH'
 
-        # 4. Leg-size filter — distance from prior opposite wall to this close.
-        prior_opposite = floor["price"] if break_dir == 'bullish' else ceiling["price"]
-        if prior_opposite is None:
-            continue  # cannot measure — skip
+        # 4. Leg-size filter — DISPLACEMENT PAST THE BROKEN WALL (not from
+        # opposite wall). Bullish: close above ceiling by >= threshold * ATR.
+        # Bearish: close below floor by >= threshold * ATR.
+        broken_wall_price = ceiling["price"] if break_dir == 'bullish' else floor["price"]
         threshold_mult = BOS_ATR_MULT if event == 'BOS' else CHOCH_ATR_MULT
-        if abs(close_i - prior_opposite) < threshold_mult * atr:
-            continue  # leg too small — non-event
+        if abs(close_i - broken_wall_price) < threshold_mult * atr:
+            continue  # break too shallow past the wall — non-event
 
-        # 5. Apply wall update rules.
+        # 5. Tag event status — confirmed if broken wall was real, tentative if rolling extreme.
+        broken_was_tentative = (
+            ceiling["is_placeholder"] if break_dir == 'bullish'
+            else floor["is_placeholder"]
+        )
+        event_status = 'tentative' if broken_was_tentative else 'confirmed'
+
+        # 6. Chop flag — CHoCH only, gap from prior event in candles.
+        chop_this_event = False
+        if event == 'CHoCH' and last_event_local_idx is not None:
+            gap = i - last_event_local_idx
+            if gap > 0 and gap <= CHOP_LOOKBACK_CANDLES:
+                chop_this_event = True
+
+        # 7. Apply wall update rules.
         if event == 'BOS':
             if break_dir == 'bullish':
                 # Floor trails up: most recent confirmed swing low INSIDE the leg
@@ -438,10 +530,11 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
                     floor["is_placeholder"] = False
                 # else: floor unchanged (no qualifying interior swing).
 
-                # Ceiling broke -> placeholder until new swing high confirms.
-                ceiling["price"] = None
-                ceiling["ts"]    = None
-                ceiling["idx"]   = None
+                # Ceiling broke -> tentative. Reset to the break-candle high so
+                # the rolling extreme starts here; refresh on next iteration.
+                ceiling["price"] = float(df['High'].iloc[i])
+                ceiling["ts"]    = _ts_iso(df, i)
+                ceiling["idx"]   = i
                 ceiling["is_placeholder"] = True
             else:
                 # Bearish BOS — mirrored.
@@ -451,26 +544,19 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
                     ceiling["ts"]    = trailed["ts"]
                     ceiling["idx"]   = trailed["idx"]
                     ceiling["is_placeholder"] = False
-                floor["price"] = None
-                floor["ts"]    = None
-                floor["idx"]   = None
+                floor["price"] = float(df['Low'].iloc[i])
+                floor["ts"]    = _ts_iso(df, i)
+                floor["idx"]   = i
                 floor["is_placeholder"] = True
 
             trend = break_dir
 
         else:  # CHoCH
-            # The wall that just broke: placeholder.
-            # The OPPOSITE wall resets to the most recent confirmed swing of the
-            # just-completed trend, strictly BEFORE the swing whose break = CHoCH.
-            #
-            # The swing whose break = CHoCH is the wall that just broke, i.e.
-            # the most recent swing high (bullish CHoCH) or swing low (bearish
-            # CHoCH) before i. The opposite-wall reset target is therefore the
-            # most recent swing of the OPPOSITE type strictly before that swing.
+            # The wall that just broke becomes tentative (anchored at break
+            # candle's extreme on that side; refresh fills in next iteration).
+            # The OPPOSITE wall resets to most recent confirmed swing of the
+            # just-completed trend, strictly BEFORE the broken-wall swing.
             if break_dir == 'bullish':
-                # The broken ceiling was anchored at ceiling["idx"] (the lower
-                # high of the bearish trend). New floor = most recent swing LOW
-                # strictly before that ceiling swing.
                 ref_idx = ceiling["idx"] if ceiling["idx"] is not None else i
                 new_floor = _most_recent_swing_before(swings, 'low', ref_idx)
                 if new_floor is not None:
@@ -479,12 +565,11 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
                     floor["idx"]   = new_floor["idx"]
                     floor["is_placeholder"] = False
                 # else floor unchanged — extremely rare; held until next event.
-                ceiling["price"] = None
-                ceiling["ts"]    = None
-                ceiling["idx"]   = None
+                ceiling["price"] = float(df['High'].iloc[i])
+                ceiling["ts"]    = _ts_iso(df, i)
+                ceiling["idx"]   = i
                 ceiling["is_placeholder"] = True
             else:
-                # Bearish CHoCH — mirrored.
                 ref_idx = floor["idx"] if floor["idx"] is not None else i
                 new_ceiling = _most_recent_swing_before(swings, 'high', ref_idx)
                 if new_ceiling is not None:
@@ -492,36 +577,60 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
                     ceiling["ts"]    = new_ceiling["ts"]
                     ceiling["idx"]   = new_ceiling["idx"]
                     ceiling["is_placeholder"] = False
-                floor["price"] = None
-                floor["ts"]    = None
-                floor["idx"]   = None
+                floor["price"] = float(df['Low'].iloc[i])
+                floor["ts"]    = _ts_iso(df, i)
+                floor["idx"]   = i
                 floor["is_placeholder"] = True
 
             trend = break_dir
 
-        last_event_type = event
-        last_event_ts   = _ts_iso(df, i)
-        leg_start_idx   = i
-        fallback_active = False  # any real event clears fallback
+        last_event_type   = event
+        last_event_ts     = _ts_iso(df, i)
+        last_event_status = event_status
+        last_event_pending = (event_status == 'tentative')
+        last_event_idx_iso = _ts_iso(df, i)
+        last_event_local_idx = i
+        last_event_chop   = chop_this_event
+        leg_start_idx     = i
+        fallback_active   = False  # any real event clears fallback
 
-        # After the event, immediately try to promote the broken side's
-        # placeholder using any swings already confirmed since leg_start.
+        # After the event, immediately try to promote the broken side using
+        # any swings already confirmed since leg_start; otherwise refresh.
         _try_promote_placeholder('ceiling', i)
         _try_promote_placeholder('floor',   i)
+        _refresh_tentative('ceiling', i)
+        _refresh_tentative('floor',   i)
 
-    # End of walk. Final placeholder promotion attempt at last candle.
+    # End of walk. Final promotion / refresh attempt at last candle.
     _try_promote_placeholder('ceiling', n - 1)
     _try_promote_placeholder('floor',   n - 1)
+    _refresh_tentative('ceiling', n - 1)
+    _refresh_tentative('floor',   n - 1)
 
-    # Cold-start fallback: if neither wall was ever set and no event fired
-    # across the entire window, fall back to window high/low.
+    # If the prior tentative event's anchor swing has now confirmed, mark
+    # last_event_pending = False. We detect this by checking whether the
+    # opposite wall (the one that was real on event fire) is still confirmed
+    # AND the wall that became tentative on event fire is now confirmed.
+    # Simpler proxy: if both walls are now confirmed, no event is pending.
+    if last_event_pending and not ceiling["is_placeholder"] and not floor["is_placeholder"]:
+        last_event_pending = False
+        if last_event_status == 'tentative':
+            last_event_status = 'confirmed'
+
+    # Cold-start fallback: if no event fired across the entire walk, fall back
+    # to high/low of the most recent FALLBACK_WINDOW_H1 candles (NOT all 150).
+    # Trend initialised from close-direction across the fallback window.
     if is_cold_start and last_event_type is None:
         H_arr = df['High'].values.astype(float)
         L_arr = df['Low'].values.astype(float)
-        rng_hi = float(H_arr.max())
-        rng_lo = float(L_arr.min())
-        hi_idx = int(H_arr.argmax())
-        lo_idx = int(L_arr.argmin())
+        C_arr = df['Close'].values.astype(float)
+        fb_lo_idx = max(0, n - FALLBACK_WINDOW_H1)
+        fb_hi_arr = H_arr[fb_lo_idx:]
+        fb_lo_arr = L_arr[fb_lo_idx:]
+        rng_hi = float(fb_hi_arr.max())
+        rng_lo = float(fb_lo_arr.min())
+        hi_idx = fb_lo_idx + int(fb_hi_arr.argmax())
+        lo_idx = fb_lo_idx + int(fb_lo_arr.argmin())
         ceiling = {
             "price": rng_hi, "ts": _ts_iso(df, hi_idx), "idx": hi_idx,
             "is_placeholder": False
@@ -530,6 +639,11 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
             "price": rng_lo, "ts": _ts_iso(df, lo_idx), "idx": lo_idx,
             "is_placeholder": False
         }
+        # Trend init from fallback window slope. Bullish if last close > first
+        # close in the window; bearish if lower; tie -> bullish (deterministic).
+        first_c = float(C_arr[fb_lo_idx])
+        last_c  = float(C_arr[n - 1])
+        trend = 'bearish' if last_c < first_c else 'bullish'
         fallback_active = True
 
     # Build returned state.
@@ -543,6 +657,10 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
         "floor_is_placeholder":   bool(floor["is_placeholder"]),
         "last_event_type":        last_event_type,
         "last_event_ts":          last_event_ts,
+        "last_event_status":      last_event_status,
+        "last_event_pending_confirmation": bool(last_event_pending),
+        "last_event_idx_iso":     last_event_idx_iso,
+        "last_event_chop":        bool(last_event_chop),
         "last_scanned_ts":        _ts_iso(df, n - 1),
         "fallback_active":        bool(fallback_active),
     }
@@ -585,24 +703,28 @@ def compute_pd_position(price: float, walls: Dict[str, Any]) -> Dict[str, Any]:
 
     Returns dict:
       {
-        "valid":         bool,      # False if either wall is placeholder OR walls invalid
+        "valid":         bool,      # True if both walls have prices and range is non-degenerate
         "range_high":    float,
         "range_low":     float,
         "equilibrium":   float,
         "pd_position":   float,     # 0.0 = at floor, 1.0 = at ceiling, None if invalid
         "ceiling_is_placeholder": bool,
         "floor_is_placeholder":   bool,
+        "tentative":     bool,      # True if either wall is currently tentative (rolling extreme)
         "fallback_active":        bool,
         "source":        str        # human label
       }
 
-    PD scoring is suspended (valid=False) if EITHER wall is a placeholder.
-    Phase 2 callers should treat valid=False as "no PD score this scan".
+    Geometry is valid whenever both walls have prices (confirmed OR tentative)
+    and the range is non-degenerate. Whether either wall is tentative is
+    surfaced via the `tentative` flag for downstream consumers to label.
+    PD scoring is no longer driven by this function's `valid` (PD removed
+    from scorecard); `valid` here only gates whether geometry renders.
     """
     if not walls:
         return {"valid": False, "source": "no_state",
                 "ceiling_is_placeholder": True, "floor_is_placeholder": True,
-                "fallback_active": False, "pd_position": None,
+                "tentative": True, "fallback_active": False, "pd_position": None,
                 "range_high": 0.0, "range_low": 0.0, "equilibrium": 0.0}
 
     ceiling = walls.get("ceiling_price")
@@ -610,10 +732,12 @@ def compute_pd_position(price: float, walls: Dict[str, Any]) -> Dict[str, Any]:
     cph = bool(walls.get("ceiling_is_placeholder", True))
     fph = bool(walls.get("floor_is_placeholder", True))
     fb  = bool(walls.get("fallback_active", False))
+    tentative = cph or fph
 
     base = {
         "ceiling_is_placeholder": cph,
         "floor_is_placeholder":   fph,
+        "tentative":              tentative,
         "fallback_active":        fb,
         "range_high": float(ceiling) if ceiling is not None else 0.0,
         "range_low":  float(floor)   if floor   is not None else 0.0,
@@ -629,16 +753,15 @@ def compute_pd_position(price: float, walls: Dict[str, Any]) -> Dict[str, Any]:
         base.update({"valid": False, "source": "degenerate_range"})
         return base
 
-    if cph or fph:
-        # Wall geometry exists for visualization but PD scoring is suspended.
-        base["equilibrium"] = (float(ceiling) + float(floor)) / 2.0
-        base.update({"valid": False, "source": "placeholder_active"})
-        return base
-
     eq = (float(ceiling) + float(floor)) / 2.0
     width = float(ceiling) - float(floor)
     pos = (float(price) - float(floor)) / width if width > 0 else None
-    src = "fallback_window" if fb else "structural"
+    if fb:
+        src = "fallback_window"
+    elif tentative:
+        src = "tentative_walls"
+    else:
+        src = "structural"
     return {
         "valid": True,
         "range_high": float(ceiling),
@@ -647,6 +770,7 @@ def compute_pd_position(price: float, walls: Dict[str, Any]) -> Dict[str, Any]:
         "pd_position": pos,
         "ceiling_is_placeholder": cph,
         "floor_is_placeholder":   fph,
+        "tentative":              tentative,
         "fallback_active":        fb,
         "source": src,
     }
