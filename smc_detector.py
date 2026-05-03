@@ -1128,20 +1128,7 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
                           else "below equilibrium")
         rows.append(("Premium / Discount", 0.0, 0.0, "info",
                       f"Price at {pd_pct_str} of dealing range ({zone_label}). {dr_src}{dr_tag}{chop_tag}"))
-    else:  # SHORT
-        if s >= 1.5:
-            rows.append(("Premium / Discount", s, 1.5, "ok",
-                          f"Price at {pd_pct_str} of dealing range (very deep premium).{dr_src}"))
-        elif s >= 1.0:
-            rows.append(("Premium / Discount", s, 1.5, "ok",
-                          f"Price at {pd_pct_str} of dealing range (deep premium).{dr_src}"))
-        elif s >= 0.5:
-            rows.append(("Premium / Discount", s, 1.5, "warn",
-                          f"Price at {pd_pct_str} of dealing range (mid premium).{dr_src}"))
-        else:
-            rows.append(("Premium / Discount", s, 1.5, "fail",
-                          f"Price at {pd_pct_str} of dealing range (below equilibrium — not optimal for SHORT).{dr_src}"))
-
+    
     # 6. Killzone
     s = breakdown.get("killzone", 0)
     if s >= 1.0:
