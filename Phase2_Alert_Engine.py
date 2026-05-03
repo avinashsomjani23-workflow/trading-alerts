@@ -812,6 +812,16 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
 def build_scorecard_html(rows, total):
     body = ""
     for label, score, max_score, status, expl in rows:
+        if status == "info":
+            # Display-only row (e.g. PD post-removal). No score column shown.
+            body += f"""
+            <tr>
+              <td style="padding:5px 8px;color:#888;font-weight:bold;font-size:13px;white-space:nowrap;vertical-align:top;">&bull;</td>
+              <td style="padding:5px 8px;color:#eee;font-size:12px;white-space:nowrap;vertical-align:top;">{label}</td>
+              <td style="padding:5px 8px;color:#888;font-size:11px;font-family:monospace;white-space:nowrap;vertical-align:top;">info</td>
+              <td style="padding:5px 8px;color:#bbb;font-size:12px;line-height:1.45;">{expl}</td>
+            </tr>"""
+            continue
         icon = {"ok": "&#10003;", "warn": "!", "fail": "&#10007;"}.get(status, "&bull;")
         color = {"ok": "#27ae60", "warn": "#e67e22", "fail": "#e74c3c"}.get(status, "#888")
         body += f"""
@@ -825,13 +835,12 @@ def build_scorecard_html(rows, total):
     return f"""
     <div style="margin-bottom:14px;">
       <div style="color:#aaa;font-size:11px;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">
-        Confluence Scorecard &mdash; <span style="color:#eee;font-size:14px;font-weight:bold;">{total}/10</span>
+        Confluence Scorecard &mdash; <span style="color:#eee;font-size:14px;font-weight:bold;">{total}/8.5</span>
       </div>
       <table style="width:100%;border-collapse:collapse;background:#1a1a2e;border-radius:6px;">
         <tbody>{body}</tbody>
       </table>
     </div>"""
-
 
 def _chart_legend_html(bos_tag="BOS"):
     """Colour-code legend rendered below each chart. Cosmetic only."""
@@ -1648,7 +1657,7 @@ if __name__ == "__main__":
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
                 send_email(
-                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/10 | {ist_now.strftime('%H:%M IST')}",
+                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/8.5 | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
                 print(f"  [OK] {print_label}")
@@ -1744,7 +1753,7 @@ if __name__ == "__main__":
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
                 send_email(
-                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/10 | {ist_now.strftime('%H:%M IST')}",
+                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/8.5 | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
                 watch_writes[watch_id] = trade_data
