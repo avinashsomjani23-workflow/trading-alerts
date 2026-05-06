@@ -275,25 +275,26 @@ def fetch_data(ticker, interval, period, retries=2):
 # ---------------------------------------------------------------------------
 
 def is_valid_ob_candle(open_p, close_p, high_p, low_p):
+    # Body minimum 20% of candle range. Below this is near-doji territory —
+    # no clear directional intent. The backward walk continues to older
+    # opposing candles if the most recent one fails this check.
     body = abs(open_p - close_p)
     rng  = high_p - low_p
     if rng == 0:
         return False
-    return body > (rng * 0.10)
+    return body > (rng * 0.20)
 
 # NEW
-def detect_smc_radar(df, lookback, pair_type="forex"):
+def detect_smc_radar(df, pair_type="forex"):
     """
-    A4 applied: OB walk-back includes the swing candle itself (impulse_start_idx).
-    Verification: range(5-1, 0-1, -1) = range(4, -1, -1) = [4, 3, 2, 1, 0]. Includes 0.
+    Swing detection: lookback=3 (dealing_range.SWING_LOOKBACK), strict >/<.
+    Matches dealing_range.py exactly — same swing pool, same structural resolution.
+    Equal highs/lows do NOT register as swings (they are liquidity, not structure).
 
-    Leg-size filter (Round 2): a break is only emitted as a structure event
-    (CHoCH or BOS) if the net price displacement from the prior opposite swing
-    to the break candle's close is at least LEG_SIZE_MIN_ATR * H1 ATR. Breaks
-    below threshold are treated as non-events: no zone emitted, trend_state and
-    bos_seq_counter are not updated. This filters micro-swing noise in ranging
-    markets without rejecting large multi-candle moves.
+    Leg-size filter: displacement of close PAST the broken wall >= threshold * ATR.
+    Matches dealing_range.py measurement (not from opposite swing).
     """
+    _lb = dealing_range.SWING_LOOKBACK  # 3 — uniform across all pairs
     n = len(df)
     O = df['Open'].values
     C = df['Close'].values
@@ -303,12 +304,16 @@ def detect_smc_radar(df, lookback, pair_type="forex"):
     # H1 ATR for leg-size threshold. Computed once per scan.
     h1_atr_for_leg = smc_detector.compute_atr(df)
     swings = []
-    for i in range(lookback, n - lookback):
-        window_highs = H[i - lookback: i + lookback + 1]
-        window_lows  = L[i - lookback: i + lookback + 1]
-        if H[i] == max(window_highs):
+    for i in range(_lb, n - _lb):
+        wh_left  = H[i - _lb: i]
+        wh_right = H[i + 1: i + _lb + 1]
+        wl_left  = L[i - _lb: i]
+        wl_right = L[i + 1: i + _lb + 1]
+        max_nb_h = max(max(wh_left), max(wh_right)) if len(wh_left) and len(wh_right) else None
+        min_nb_l = min(min(wl_left), min(wl_right)) if len(wl_left) and len(wl_right) else None
+        if max_nb_h is not None and H[i] > max_nb_h:
             swings.append({'type': 'high', 'idx': i, 'price': float(H[i])})
-        elif L[i] == min(window_lows):
+        if min_nb_l is not None and L[i] < min_nb_l:
             swings.append({'type': 'low',  'idx': i, 'price': float(L[i])})
 
     swings = sorted(swings, key=lambda x: x['idx'])
@@ -317,7 +322,7 @@ def detect_smc_radar(df, lookback, pair_type="forex"):
     bos_seq_counter = 0
     last_choch_idx = None
 
-    for i in range(lookback + 1, n):
+    for i in range(_lb + 1, n):
         past_swings = [s for s in swings if s['idx'] < i]
         if len(past_swings) < 2:
             continue
@@ -342,15 +347,15 @@ def detect_smc_radar(df, lookback, pair_type="forex"):
         provisional_tag = 'CHoCH' if (trend_state is None or trend_state != bos_type) else 'BOS'
         threshold_mult = smc_detector.LEG_SIZE_MIN_ATR.get(provisional_tag, 0.6)
 
-        # Prior opposite swing that this break flipped:
-        # bullish break -> swung off the prior low (sl['price'])
-        # bearish break -> swung off the prior high (sh['price'])
-        prior_opposite_swing_price = sl['price'] if bos_type == 'bullish' else sh['price']
+        # Displacement past the broken wall — matches dealing_range.py measurement.
+        # Bullish break: close must clear the swing high by >= threshold * ATR.
+        # Bearish break: close must clear the swing low by >= threshold * ATR.
+        broken_wall_price = sh['price'] if bos_type == 'bullish' else sl['price']
 
         if not smc_detector.validate_leg_distance(
-            prior_opposite_swing_price, C[i], h1_atr_for_leg, threshold_mult
+            broken_wall_price, C[i], h1_atr_for_leg, threshold_mult
         ):
-            # Leg too small — treat as non-event. Do NOT update state.
+            # Displacement too shallow past the broken level — non-event.
             continue
 
         # Passed leg-size filter. Now commit state.
@@ -372,16 +377,20 @@ def detect_smc_radar(df, lookback, pair_type="forex"):
         if median_leg_body == 0:
             median_leg_body = 0.0001
 
-        # A4: Walk back from BOS candle through impulse leg, INCLUDING swing candle.
+        # Walk back from BOS candle through impulse leg, INCLUDING swing candle.
         # range(i-1, impulse_start_idx - 1, -1) stops BEFORE impulse_start_idx - 1,
         # so the swing candle at impulse_start_idx IS included in scan.
+        # Take the FIRST opposing candle that meets direction + body minimum.
+        # The 1.5x median-leg-body filter was removed — it pushed selection to
+        # older, less relevant candles when the most recent opposing candle
+        # was moderately sized. Veteran SMC: take the most recent opposing
+        # candle, period. Size filtering is handled by is_valid_ob_candle.
         for j in range(i - 1, impulse_start_idx - 1, -1):
             if (bos_type == 'bullish' and C[j] < O[j]) or \
                (bos_type == 'bearish' and C[j] > O[j]):
                 if is_valid_ob_candle(O[j], C[j], H[j], L[j]):
-                    if abs(C[j] - O[j]) <= (1.5 * median_leg_body):
-                        ob_idx = j
-                        break
+                    ob_idx = j
+                    break
 
         if ob_idx == -1:
             continue
@@ -1927,8 +1936,6 @@ def run_radar():
         name     = pair["name"]
         dp       = pair.get("decimal_places", 5)
         ptype    = pair.get("pair_type", "forex")
-        lookback = 5 if name in ["NZDUSD", "GOLD"] else 6 if name == "NAS100" else 4
-
         df = fetch_data(ticker, pair["map_tf"], "15d")
         if df is None:
             # Cannot verify slate zones for this pair. Keep them alive but
@@ -1964,7 +1971,7 @@ def run_radar():
             logging.error(f"[{name}] dealing_range update failed: {_dr_err}")
             print(f"  [WALLS ERR] {name}: {_dr_err}")
 
-        result        = detect_smc_radar(df, lookback, pair_type=ptype)
+        result        = detect_smc_radar(df, pair_type=ptype)
         current_price = result["current_price"]
         fresh_zones   = result["active_unmitigated_obs"]
         h1_atr        = smc_detector.compute_atr(df) or 0.0

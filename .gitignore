@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 smc_radar.log
 *.tmp
+logs/

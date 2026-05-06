@@ -57,14 +57,21 @@ import json
 import os
 from typing import Optional, Tuple, List, Dict, Any
 
+# Optional structure event logger. Logging failures must never break the
+# trading flow — every call site below wraps in try/except.
+try:
+    import event_logger as _event_logger
+except Exception:
+    _event_logger = None
+
 # --- Tunables (locked) -------------------------------------------------------
 
 SWING_LOOKBACK = 3
 # Leg-size threshold = displacement of the break candle's CLOSE PAST the wall
 # it just broke. Not distance from the opposite wall. See design note in
 # update history. Values calibrated for "displacement past broken level".
-BOS_ATR_MULT   = 0.2
-CHOCH_ATR_MULT = 0.35
+BOS_ATR_MULT   = 0.4
+CHOCH_ATR_MULT = 0.6
 
 # Cold-start window — number of most recent H1 candles to walk forward
 # looking for events. If no events fire across this whole window, fallback
@@ -295,7 +302,8 @@ def _most_recent_swing_before(swings: List[Dict[str, Any]], swing_type: str,
     return {'idx': s['idx'], 'price': s['price'], 'ts': s['ts']}
 
 
-def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
+                  pair_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Walk forward through df starting from either:
       - candle 0 (cold start, prior_state is empty/None), or
@@ -500,7 +508,40 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
         # Bearish: close below floor by >= threshold * ATR.
         broken_wall_price = ceiling["price"] if break_dir == 'bullish' else floor["price"]
         threshold_mult = BOS_ATR_MULT if event == 'BOS' else CHOCH_ATR_MULT
-        if abs(close_i - broken_wall_price) < threshold_mult * atr:
+        displacement = abs(close_i - broken_wall_price)
+        broken_was_tentative_now = (
+            ceiling["is_placeholder"] if break_dir == 'bullish'
+            else floor["is_placeholder"]
+        )
+        broken_swing_ts_now = ceiling["ts"] if break_dir == 'bullish' else floor["ts"]
+        if displacement < threshold_mult * atr:
+            # Log rejected break for offline review of threshold calibration.
+            if _event_logger is not None and pair_name:
+                try:
+                    cb = abs(float(df['Close'].iloc[i]) - float(df['Open'].iloc[i]))
+                    cr = float(df['High'].iloc[i]) - float(df['Low'].iloc[i])
+                    _event_logger.log_event({
+                        'candle_ts':       _ts_iso(df, i),
+                        'pair':            pair_name,
+                        'timeframe':       'H1',
+                        'event_kind':      'BREAK_REJECTED',
+                        'reject_reason':   'atr_threshold',
+                        'attempted_event': event,
+                        'direction':       break_dir,
+                        'swing_price':     float(broken_wall_price),
+                        'swing_ts':        broken_swing_ts_now,
+                        'close_price':     float(close_i),
+                        'displacement':    float(displacement),
+                        'displacement_atr': float(displacement / atr) if atr else None,
+                        'threshold_atr':   float(threshold_mult),
+                        'atr':             float(atr) if atr else None,
+                        'wall_status':     'tentative' if broken_was_tentative_now else 'confirmed',
+                        'candle_body':     float(cb),
+                        'candle_range':    float(cr),
+                        'body_range_pct':  float(cb / cr) if cr > 0 else 0.0,
+                    })
+                except Exception:
+                    pass
             continue  # break too shallow past the wall — non-event
 
         # 5. Tag event status — confirmed if broken wall was real, tentative if rolling extreme.
@@ -594,6 +635,33 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
         leg_start_idx     = i
         fallback_active   = False  # any real event clears fallback
 
+        # Log qualified structure event for offline review.
+        if _event_logger is not None and pair_name:
+            try:
+                cb = abs(float(df['Close'].iloc[i]) - float(df['Open'].iloc[i]))
+                cr = float(df['High'].iloc[i]) - float(df['Low'].iloc[i])
+                _event_logger.log_event({
+                    'candle_ts':       _ts_iso(df, i),
+                    'pair':            pair_name,
+                    'timeframe':       'H1',
+                    'event_kind':      event,
+                    'direction':       break_dir,
+                    'swing_price':     float(broken_wall_price),
+                    'swing_ts':        broken_swing_ts_now,
+                    'close_price':     float(close_i),
+                    'displacement':    float(displacement),
+                    'displacement_atr': float(displacement / atr) if atr else None,
+                    'threshold_atr':   float(threshold_mult),
+                    'atr':             float(atr) if atr else None,
+                    'wall_status':     event_status,
+                    'chop_flag':       bool(chop_this_event),
+                    'candle_body':     float(cb),
+                    'candle_range':    float(cr),
+                    'body_range_pct':  float(cb / cr) if cr > 0 else 0.0,
+                })
+            except Exception:
+                pass
+
         # After the event, immediately try to promote the broken side using
         # any swings already confirmed since leg_start; otherwise refresh.
         _try_promote_placeholder('ceiling', i)
@@ -646,6 +714,22 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None) -> Dict[str,
         trend = 'bearish' if last_c < first_c else 'bullish'
         fallback_active = True
 
+        # Log fallback usage so we know when no real event fired in window.
+        if _event_logger is not None and pair_name:
+            try:
+                _event_logger.log_event({
+                    'candle_ts':    _ts_iso(df, n - 1),
+                    'pair':         pair_name,
+                    'timeframe':    'H1',
+                    'event_kind':   'FALLBACK_USED',
+                    'direction':    trend,
+                    'fallback_window_h1': FALLBACK_WINDOW_H1,
+                    'range_high':   float(rng_hi),
+                    'range_low':    float(rng_lo),
+                })
+            except Exception:
+                pass
+
     # Build returned state.
     new_state = {
         "trend":                  trend,
@@ -688,11 +772,12 @@ def update_pair(df, prior_state: Optional[Dict[str, Any]],
         or prior_state.get("ceiling_price") is None
         or prior_state.get("floor_price") is None
     )
+    pair_name = (pair_conf or {}).get("name") if pair_conf else None
     if is_cold:
         df_used = df.tail(COLDSTART_WINDOW_H1).copy().reset_index(drop=True) \
                   if len(df) > COLDSTART_WINDOW_H1 else df
-        return _walk_forward(df_used, prior_state=None)
-    return _walk_forward(df, prior_state=prior_state)
+        return _walk_forward(df_used, prior_state=None, pair_name=pair_name)
+    return _walk_forward(df, prior_state=prior_state, pair_name=pair_name)
 
 
 # --- Public API used by Phase 1 + Phase 2 (read-only) ------------------------

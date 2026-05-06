@@ -848,13 +848,27 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     bos_tag = ob.get('bos_tag', 'BOS')
     pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
 
-    # Structure — pair-aware BOS sequence penalty
+    # Structure — pair-aware BOS sequence with positive gradient for early
+    # continuation. Vet logic: BOS #1-2 after CHoCH is the strongest setup
+    # (smart money still loading); by the caution threshold the trend is
+    # exhausted. Caution thresholds reflect typical pair behaviour — forex
+    # mean-reverts faster, indices sustain trends longer.
+    #   CHoCH                       -> 2.5 (trend reversal confirmed)
+    #   BOS #1-2                    -> 2.0 (early continuation, strongest)
+    #   BOS #3 .. caution-1         -> 1.5 (mid-trend; commodity/index only)
+    #   BOS >= caution_threshold    -> 1.0 (exhausted)
     if bos_tag == 'CHoCH':
         bd = {"structure": 2.5}
     else:
         bos_seq = ob.get('bos_sequence_count', 1)
         caution_threshold = {'forex': 3, 'index': 5, 'commodity': 4}.get(pair_type, 3)
-        bd = {"structure": 1.0 if bos_seq >= caution_threshold else 1.5}
+        if bos_seq >= caution_threshold:
+            structure_score = 1.0
+        elif bos_seq <= 2:
+            structure_score = 2.0
+        else:
+            structure_score = 1.5
+        bd = {"structure": structure_score}
 
     # ------------------------------------------------------------------
     # Sweep — graded score (0..2.0). Anchored to the OB candle, not to
@@ -1011,12 +1025,15 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     bos_seq = ob.get('bos_sequence_count', 1)
     if s >= 2.5:
         rows.append(("Structure", s, 2.5, "ok", "Trend has shifted in our favor (CHoCH confirmed)."))
+    elif s >= 2.0:
+        rows.append(("Structure", s, 2.5, "ok",
+                      f"Early continuation (BOS #{bos_seq} since CHoCH) — smart money still loading."))
     elif s >= 1.5:
         rows.append(("Structure", s, 2.5, "warn",
-                      f"Trend continuation (BOS #{bos_seq} since CHoCH)."))
+                      f"Mid-trend continuation (BOS #{bos_seq} since CHoCH)."))
     elif s >= 1.0:
         rows.append(("Structure", s, 2.5, "fail",
-                      f"Late trend continuation (BOS #{bos_seq} since CHoCH) — trend may be exhausted."))
+                      f"Late continuation (BOS #{bos_seq} since CHoCH) — trend may be exhausted."))
     else:
         rows.append(("Structure", s, 2.5, "fail", "No confirmed BOS or CHoCH."))
 
