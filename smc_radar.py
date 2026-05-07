@@ -284,7 +284,17 @@ def is_valid_ob_candle(open_p, close_p, high_p, low_p):
         return False
     return body > (rng * 0.20)
 
-def detect_smc_radar(df, pair_type="forex", events=None):
+
+def _event_label(bos_tag, bos_tier):
+    # Single source of truth for the human-readable structural-event label.
+    # BOS is single-tier (no Major/Minor split); CHoCH carries the tier.
+    if bos_tag == 'BOS':
+        return 'BOS'
+    if bos_tier == 'Minor':
+        return 'Minor CHoCH'
+    return 'Major CHoCH'
+
+def detect_smc_radar(df, pair_type="forex", events=None, walls=None):
     """
     Build OB zones from BOS / CHoCH events emitted by dealing_range.py.
 
@@ -300,6 +310,10 @@ def detect_smc_radar(df, pair_type="forex", events=None):
         pair_type: 'forex' | 'index' | 'commodity' (used for FVG noise floor).
         events: list of event dicts from dealing_range state. If None, the
                 function returns no zones (defensive fallback).
+        walls: dealing_range pair-state dict for the pair (ceiling/floor +
+                placeholder/fallback flags). Used for the PD-array gate
+                (bullish OBs only valid in discount, bearish in premium).
+                When None or fallback is active, the gate fails open.
     """
     n = len(df)
     O = df['Open'].values
@@ -400,6 +414,22 @@ def detect_smc_radar(df, pair_type="forex", events=None):
         ob_high = float(H[ob_idx])
         ob_low  = float(L[ob_idx])
         ob_proximal = ob_high if ev_dir == 'bullish' else ob_low
+
+        # PD-array gate. Vet rule: bullish OBs are only valid when the
+        # entry side (proximal) sits in the discount half of the dealing
+        # range; bearish OBs only valid in the premium half. Applied to
+        # all OBs (BOS and CHoCH alike) — buying in premium / selling in
+        # discount is the wrong side of the range regardless of event.
+        # Fails open when geometry is unavailable (no walls / cold-start
+        # fallback): we cannot trust the gate, so we let the OB through.
+        if walls:
+            pd_info = dealing_range.compute_pd_position(ob_proximal, walls)
+            if pd_info.get('valid') and not pd_info.get('fallback_active'):
+                eq = pd_info['equilibrium']
+                if ev_dir == 'bullish' and ob_proximal > eq:
+                    continue
+                if ev_dir == 'bearish' and ob_proximal < eq:
+                    continue
 
         # Proximity gate.
         if h1_atr_for_leg and h1_atr_for_leg > 0:
@@ -757,8 +787,9 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
         ax.set_xlim(-1, n_plot + 10)
 
         direction_label = "Demand" if ob['direction'] == 'bullish' else "Supply"
+        event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
         title = (
-            f"{pair_name} | {direction_label} Zone | {ob['bos_tag']} | "
+            f"{pair_name} | {direction_label} Zone | {event_label} | "
             f"{ob['status']}   —   {ist_timestamp} IST"
         )
         ax.set_title(title, color='#dddddd', fontsize=10, pad=8, loc='left')
@@ -814,12 +845,13 @@ def generate_zone_narrative(ob, name, dp, current_price):
         fvg_status = "no FVG present"
     ratio        = round(ob['ob_body'] / ob['median_leg_body'], 2) if ob['median_leg_body'] > 0 else 0
 
+    event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
     prompt = f"""You are a veteran SMC (Smart Money Concepts) prop trader writing a zone briefing for another experienced SMC trader.
 Be direct. No fluff. No pleasantries. Four sentences only. One paragraph.
 
 ZONE DATA — use these exact values, do not recalculate:
 - Pair: {name}
-- Bias: {direction} | Structure event: {ob['bos_tag']}
+- Bias: {direction} | Structure event: {event_label}
 - Proximal: {proximal:.{dp}f} | Distal: {distal:.{dp}f}
 - Zone width: {zone_pips} pips
 - OB body vs median impulse leg: {ob['ob_body']:.{dp}f} vs {ob['median_leg_body']:.{dp}f} (ratio: {ratio}x — valid because <2.0x)
@@ -828,7 +860,7 @@ ZONE DATA — use these exact values, do not recalculate:
 - Current price: {current_price:.{dp}f} | Distance to proximal: {dist_pips} pips
 
 WRITE EXACTLY FOUR SENTENCES IN THIS ORDER:
-1. What structure event ({ob['bos_tag']}) created this zone and why institutional accumulation is likely here.
+1. What structure event ({event_label}) created this zone and why institutional accumulation is likely here.
 2. OB quality: assess tightness (ratio {ratio}x), and whether pristine or tested means strength or caution.
 3. FVG assessment: displacement confirmation present or absent, and what that means for zone conviction.
 4. Current price context: distance to zone ({dist_pips} pips), whether price is approaching or far, and what to watch for.
@@ -877,8 +909,9 @@ def _fallback_narrative(ob, name, dp, current_price):
         fvg_line = "FVG fully mitigated — zone relies on OB alone for confluence."
     else:
         fvg_line = "No FVG present — zone relies on OB alone for confluence."
+    event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
     return (
-        f"{ob['bos_tag']} confirmed the {ob['direction']} shift; this OB marks the last institutional "
+        f"{event_label} confirmed the {ob['direction']} shift; this OB marks the last institutional "
         f"accumulation before the break. "
         f"OB body ratio {round(ob['ob_body']/ob['median_leg_body'],2):.2f}x vs median leg — tight and valid. "
         f"{fvg_line} "
@@ -1247,12 +1280,13 @@ def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
         fvg_status = "no FVG present"
     ratio = round(ob['ob_body'] / ob['median_leg_body'], 2) if ob['median_leg_body'] > 0 else 0
 
+    event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
     prompt = f"""You are a veteran SMC (Smart Money Concepts) prop trader writing a zone briefing for another experienced SMC trader.
 Be direct. No fluff. No pleasantries. Four sentences only. One paragraph.
 
 ZONE DATA — use these exact values, do not recalculate:
 - Pair: {name}
-- Bias: {direction} | Structure event: {ob['bos_tag']}
+- Bias: {direction} | Structure event: {event_label}
 - Proximal: {proximal:.{dp}f} | Distal: {distal:.{dp}f}
 - Zone width: {zone_pips} pips
 - OB body vs median impulse leg: {ob['ob_body']:.{dp}f} vs {ob['median_leg_body']:.{dp}f} (ratio: {ratio}x)
@@ -1262,7 +1296,7 @@ ZONE DATA — use these exact values, do not recalculate:
 - Current price: {current_price:.{dp}f} | Distance to proximal: {dist_pips} pips
 
 WRITE EXACTLY FOUR SENTENCES IN THIS ORDER:
-1. What structure event ({ob['bos_tag']}) created this zone and why institutional accumulation is likely here.
+1. What structure event ({event_label}) created this zone and why institutional accumulation is likely here.
 2. OB quality: assess tightness (ratio {ratio}x), and whether pristine or tested means strength or caution.
 3. FVG assessment: displacement confirmation present or absent, and what that means for zone conviction.
 4. Current price context: distance to zone ({dist_pips} pips) measured against H1 ATR ({atr_display}), whether price is approaching or far, and what to watch for.
@@ -1312,8 +1346,9 @@ def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr):
         fvg_line = "FVG fully mitigated — zone relies on OB alone for confluence."
     else:
         fvg_line = "No FVG present — zone relies on OB alone for confluence."
+    event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
     return (
-        f"{ob['bos_tag']} confirmed the {ob['direction']} shift; this OB marks the last institutional "
+        f"{event_label} confirmed the {ob['direction']} shift; this OB marks the last institutional "
         f"accumulation before the break. "
         f"OB body ratio {round(ob['ob_body']/ob['median_leg_body'],2):.2f}x vs median leg. "
         f"{fvg_line} "
@@ -1978,7 +2013,8 @@ def run_radar():
             print(f"  [WALLS ERR] {name}: {_dr_err}")
 
         result        = detect_smc_radar(df, pair_type=ptype,
-                                          events=new_walls.get('events', []))
+                                          events=new_walls.get('events', []),
+                                          walls=new_walls)
         current_price = result["current_price"]
         fresh_zones   = result["active_unmitigated_obs"]
         h1_atr        = smc_detector.compute_atr(df) or 0.0

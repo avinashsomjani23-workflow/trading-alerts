@@ -202,6 +202,53 @@ of CHoCH across pairs, from `logs/structure_events_*.json`.
 
 ---
 
+## 2026-05-08 — Strong / Weak high-low classification on OBs (scheduled: 2026-05-09)
+
+LuxAlgo distinguishes "Strong" vs "Weak" swing highs/lows: a high made
+during a downtrend is Strong (held the move); a high made during an uptrend
+is Weak (likely to break). Mirror for lows. A bullish OB anchored at a
+Strong Low is higher quality than one at a Weak Low.
+
+**Status:** approved for implementation 2026-05-09. Will tag each OB with a
+strong/weak attribute derived from the prevailing trend at the swing's
+formation. Wired into Phase 2 confidence scoring (not a Phase 1 hard gate).
+
+**Note:** see Benchmarking.md section 4 for the source comparison.
+
+---
+
+## 2026-05-08 — Breaker block detection (deferred)
+
+When a bullish OB closes-through to the downside, that zone often flips
+and acts as resistance — a "breaker block." Currently we delete the OB on
+mitigation (close past distal). Breaker tracking would keep the dead zone
+on the chart, flipped, with a separate label.
+
+**Defer until:** Phase 1 + Phase 2 are stable end-to-end. Adding breaker
+tracking before the base OB lifecycle is trusted compounds debugging.
+
+**Evidence to revisit:** observed cases where price retests a recently
+mitigated OB from the opposite side and reverses — i.e. breaker behaviour
+that we currently ignore.
+
+---
+
+## 2026-05-08 — Minor CHoCH OBs use the same "confirmed the X shift" narrative
+
+The fallback narrative (and Gemini prompt) say "{event} confirmed the
+{direction} shift." For Minor CHoCH this is misleading: Minor CHoCH does
+NOT flip trend (it's a weakening flag inside the prevailing trend). The
+sentence is grammatically intact thanks to the new event-label change but
+semantically loose for Minor CHoCH OBs.
+
+**Defer until:** narrative copy pass. Low priority — surface label is
+correct; only the surrounding template language is off for Minor.
+
+**Possible fix:** branch the narrative template by tier, or rephrase to
+"this OB marks the institutional candle behind the {event} print."
+
+---
+
 ## 2026-05-07 — Historical backtest harness (replay through Phase 1/2/3)
 
 Goal: feed historical OHLC data through our existing Phase 1, Phase 2, and
