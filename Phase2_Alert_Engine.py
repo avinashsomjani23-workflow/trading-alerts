@@ -424,10 +424,20 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                 fill=False, edgecolor='#bb8fce', linestyle=':', linewidth=1.5, zorder=2
             ))
 
-        # --- BOS/CHoCH horizontal line ---
+        # --- BOS / CHoCH horizontal line ---
+        # Palette:
+        #   BOS              -> yellow #f1c40f
+        #   Major CHoCH      -> pink   #e91e63
+        #   Minor CHoCH      -> purple #9c27b0  (lookback=2 weakening flag)
         bos_price = float(ob.get('bos_swing_price', 0))
         bos_tag = ob.get('bos_tag', 'BOS')
-        bos_color = '#f1c40f' if bos_tag == 'BOS' else '#e91e63'
+        bos_tier = ob.get('bos_tier', 'Major')
+        if bos_tag == 'BOS':
+            bos_color = '#f1c40f'
+        elif bos_tier == 'Minor':
+            bos_color = '#9c27b0'
+        else:
+            bos_color = '#e91e63'
         if bos_price > 0:
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
 
@@ -704,10 +714,20 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
                             linewidth=1.5, zorder=5
                         ))
 
-        # --- BOS/CHoCH horizontal line ---
+        # --- BOS / CHoCH horizontal line ---
+        # Palette:
+        #   BOS              -> yellow #f1c40f
+        #   Major CHoCH      -> pink   #e91e63
+        #   Minor CHoCH      -> purple #9c27b0  (lookback=2 weakening flag)
         bos_price = float(ob.get('bos_swing_price', 0))
         bos_tag = ob.get('bos_tag', 'BOS')
-        bos_color = '#f1c40f' if bos_tag == 'BOS' else '#e91e63'
+        bos_tier = ob.get('bos_tier', 'Major')
+        if bos_tag == 'BOS':
+            bos_color = '#f1c40f'
+        elif bos_tier == 'Minor':
+            bos_color = '#9c27b0'
+        else:
+            bos_color = '#e91e63'
         if bos_price > 0:
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
 
@@ -842,10 +862,14 @@ def build_scorecard_html(rows, total):
       </table>
     </div>"""
 
-def _chart_legend_html(bos_tag="BOS"):
+def _chart_legend_html(bos_tag="BOS", bos_tier="Major"):
     """Colour-code legend rendered below each chart. Cosmetic only."""
-    bos_color = '#f1c40f' if bos_tag == 'BOS' else '#e91e63'
-    bos_label = bos_tag
+    if bos_tag == 'BOS':
+        bos_color, bos_label = '#f1c40f', 'BOS'
+    elif bos_tier == 'Minor':
+        bos_color, bos_label = '#9c27b0', 'Minor CHoCH'
+    else:
+        bos_color, bos_label = '#e91e63', 'Major CHoCH'
     items = [
         ('#bb8fce', 'Zone band (proximal/distal)'),
         ('#2ecc71', 'FVG (displacement)'),
@@ -879,6 +903,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     levels = data.get('levels', {})
     # Freshness display handled by scorecard row alone; no separate context line.
     bos_tag = ob.get('bos_tag', 'BOS')
+    bos_tier = ob.get('bos_tier', 'Major')
     entry_model = pair_conf.get('entry_model', 'limit')
     if entry_model == "limit":
         action_word = "SELL LIMIT" if bias == "SHORT" else "BUY LIMIT"
@@ -976,10 +1001,10 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             {scorecard_html}
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">H1 Context</div>
             {h1_chart_block}
-            {_chart_legend_html(bos_tag)}
+            {_chart_legend_html(bos_tag, bos_tier)}
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">M15 Approach</div>
             {m15_chart_block}
-            {_chart_legend_html(bos_tag)}
+            {_chart_legend_html(bos_tag, bos_tier)}
             {sweep_breakdown_html}
             <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #888;border-radius:4px;font-size:12px;color:#bbb;line-height:1.5;">
                 <b style="color:#eee;">Macro Context:</b> {data.get('macro_summary', 'N/A')}
@@ -1369,9 +1394,9 @@ if __name__ == "__main__":
         if not h1_atr:
             continue
 
-        # NEW
-        # A2: Always compute BOS sequence count from fresh H1 data.
-        bos_counter = smc_detector.compute_bos_sequence_count(df_h1, lookback=4)
+        # BOS sequence count is read from dealing_range state (single source of
+        # truth). Counter resets on Major CHoCH; Minor CHoCH does NOT reset it.
+        bos_counter = smc_detector.compute_bos_sequence_count(name)
 
         scan_record["current_price"] = current_price
 
@@ -1428,9 +1453,11 @@ if __name__ == "__main__":
 
         scan_record["trend_alignment"] = trend_alignment
 
-        # Inject fresh BOS count onto selected zone (only meaningful when aligned)
+        # Inject fresh BOS count + ring-overflow flag onto selected zone
+        # (count meaningful when zone aligned with current H1 trend).
         if current_trend == zone_dir:
             selected_ob['bos_sequence_count'] = bos_counter['count']
+        selected_ob['bos_count_maxed'] = bool(bos_counter.get('count_maxed', False))
 
         # Now score and alert only the selected zone
         for ob in [selected_ob]:

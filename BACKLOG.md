@@ -115,6 +115,20 @@ stable.
 
 ---
 
+## 2026-05-07 — Wick-based swing definition may misidentify stop runs as swings
+
+Swing detection uses candle High/Low (wicks), not Close. A single-candle stop
+run (long wick, body near opposite end) registers as a structural swing. Break
+detection correctly uses Close, so the level being broken may not have been real
+structure — only a wick.
+
+**Impact:** Low in normal conditions. More relevant on Gold and NAS100 around
+news spikes and Asia-session wicks.
+**Revisit when:** alerts fire against a wick-only extreme that a vet would call
+a liquidity grab, not structure.
+
+---
+
 ## 2026-05-04 — FVG logging (deferred)
 
 Structure event log currently captures BOS / CHoCH / range break / rejection
@@ -123,3 +137,101 @@ only. FVG presence affects OB quality and would benefit from the same
 
 **Revisit when:** structure logging has stabilised and we are auditing OB
 quality alerts that surprise us.
+
+---
+
+## 2026-05-08 — Phase 2 zone invalidation via state read (revisit during Entry pass)
+
+`smc_detector.check_opposite_bos` was rewritten from a self-contained
+walk-forward to a state reader that consumes the dealing_range event ring.
+Current behaviour: a zone is killed if the most recent event for the pair
+(within `since_ts`) is a BOS or a **Major** CHoCH in the opposite direction.
+Minor CHoCH is intentionally ignored (consistent with the locked rule that
+Minor does not flip trend).
+
+**Revisit when:** we work on Entry-side logic (limit-order vs market-trigger
+nuances). Open questions:
+- Should Minor CHoCH ever invalidate a zone (for example, against pristine
+  ones with no other confirmation)?
+- Should the lookup window (`since_ts`) treat ring overflow specially when
+  the ring has been pruned past the alert's emission ts?
+- Is "any BOS in opposite direction" too aggressive for short-watch zones
+  during news bars where micro-BOS prints in both directions?
+
+**Action when ready:** wire concrete decisions into the Entry pass. Until
+then, current behaviour is preserved.
+
+---
+
+## 2026-05-08 — Phase 3 M5 CHoCH consistency with new H1 rules
+
+`smc_detector.detect_ltf_choch` (the M5 entry trigger used by
+NAS100 / GOLD `entry_model: ltf_choch`) keeps its own M5-local logic — it has
+no premium/discount-zone gate and no Major/Minor distinction. By design it
+is intentionally permissive: an M5 CHoCH inside the H1 zone (or within an
+M5-ATR grace band) fires the trigger.
+
+**Revisit when:** we work on Phase 3 quality (entry triggers, hit rate).
+Open questions:
+- Should M5 CHoCH require a reversal from a fraction of the M5-zone's range
+  (analog to H1's premium-zone gate)?
+- Should M5 distinguish Major vs Minor (lookback=3 vs 2) on M5?
+- Currently any swing-low / swing-high inside or near the zone qualifies —
+  is that catching too many low-quality M5 reversals?
+
+**Action when ready:** decide whether M5 should mirror H1 zone-gating or
+keep its current permissive behaviour as the entry trigger.
+
+---
+
+## 2026-05-08 — Caution thresholds revisit after BOS-counter rebuild
+
+`compute_bos_sequence_count` now reads from the dealing_range event ring
+(capped at 20). Counter resets only on Major CHoCH. Caution thresholds
+(Forex 3, Commodity 4, Index 5) trigger the "exhausted trend" structure
+score (1.0) and were calibrated against the OLD detection (lookback=4
+self-contained walk).
+
+**Revisit when:** ~1 month of fresh logs accumulate under the new event
+schema. The new detection is stricter (premium-zone gate on CHoCH, no
+events on placeholder walls). It will likely produce FEWER CHoCHs and
+LONGER BOS sequences before reset → caution thresholds may need to rise.
+
+**Evidence required:** distribution of BOS-sequence-counts at the moment
+of CHoCH across pairs, from `logs/structure_events_*.json`.
+
+---
+
+## 2026-05-07 — Historical backtest harness (replay through Phase 1/2/3)
+
+Goal: feed historical OHLC data through our existing Phase 1, Phase 2, and
+Phase 3 modules and record every alert that would have fired. Output: a CSV
+per instrument per month with timestamp, OB, score, breakdown. Then compute
+a hypothetical win rate per month so we can answer "would this system have
+made money in June-Oct 2025?"
+
+**Why we want it:**
+- Verify the system on history before risking real money on it
+- Catch regressions when methodology changes (alerts shift unexpectedly)
+- Establish a per-month / per-pair win-rate benchmark
+
+**Approach (locked):**
+- Use the `backtesting.py` library as a thin harness. Inside its
+  `Strategy.next()` we feed bars to our actual production modules — no
+  reimplementation of detection logic. One concept, one implementation.
+- Historical bars: yfinance for FX/Gold/NAS H1/M15/M5 (~2 years available).
+- Output: CSV of would-be alerts. Initial grading is mechanical (price hit
+  TP / SL / time-exit). Vet-eye grading layered on later via weekly review.
+
+**What this is NOT:**
+- Not a replacement for the real weekly review (which does much more).
+- Not auto-grading by price alone — that grades luck, not setup quality. The
+  CSV is a starting point; a vet still has to look at the borderline ones.
+
+**Trigger:** build only AFTER the live system is stable enough that we
+trust its alert generation. Building a backtest harness on top of moving
+methodology wastes effort.
+
+**Evidence required to call it a success:** ≥60% mechanical win rate over
+6 months of historical data, OR a clearly explainable failure mode that
+points at a fixable methodology issue.

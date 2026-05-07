@@ -284,177 +284,142 @@ def is_valid_ob_candle(open_p, close_p, high_p, low_p):
         return False
     return body > (rng * 0.20)
 
-# NEW
-def detect_smc_radar(df, pair_type="forex"):
+def detect_smc_radar(df, pair_type="forex", events=None):
     """
-    Swing detection: lookback=3 (dealing_range.SWING_LOOKBACK), strict >/<.
-    Matches dealing_range.py exactly — same swing pool, same structural resolution.
-    Equal highs/lows do NOT register as swings (they are liquidity, not structure).
+    Build OB zones from BOS / CHoCH events emitted by dealing_range.py.
 
-    Leg-size filter: displacement of close PAST the broken wall >= threshold * ATR.
-    Matches dealing_range.py measurement (not from opposite swing).
+    No detection happens here — the events list is the single source of
+    truth for structural events (BOS, Major CHoCH, Minor CHoCH). For each
+    event in the ring, we resolve the break candle and impulse-leg start
+    from absolute timestamps (idx is NOT portable across scans since the
+    yfinance window rolls), then walk back through the impulse leg to find
+    the order block, attach an FVG badge, and proximity-gate.
+
+    Args:
+        df: H1 OHLC dataframe for the pair.
+        pair_type: 'forex' | 'index' | 'commodity' (used for FVG noise floor).
+        events: list of event dicts from dealing_range state. If None, the
+                function returns no zones (defensive fallback).
     """
-    _lb = dealing_range.SWING_LOOKBACK  # 3 — uniform across all pairs
     n = len(df)
     O = df['Open'].values
     C = df['Close'].values
     H = df['High'].values
     L = df['Low'].values
-
-    # H1 ATR for leg-size threshold. Computed once per scan.
     h1_atr_for_leg = smc_detector.compute_atr(df)
-    swings = []
-    for i in range(_lb, n - _lb):
-        wh_left  = H[i - _lb: i]
-        wh_right = H[i + 1: i + _lb + 1]
-        wl_left  = L[i - _lb: i]
-        wl_right = L[i + 1: i + _lb + 1]
-        max_nb_h = max(max(wh_left), max(wh_right)) if len(wh_left) and len(wh_right) else None
-        min_nb_l = min(min(wl_left), min(wl_right)) if len(wl_left) and len(wl_right) else None
-        if max_nb_h is not None and H[i] > max_nb_h:
-            swings.append({'type': 'high', 'idx': i, 'price': float(H[i])})
-        if min_nb_l is not None and L[i] < min_nb_l:
-            swings.append({'type': 'low',  'idx': i, 'price': float(L[i])})
+    current_price_now = float(C[-1]) if n > 0 else 0.0
 
-    swings = sorted(swings, key=lambda x: x['idx'])
-    active_obs = []
-    trend_state = None
+    if not events:
+        return {"current_price": current_price_now, "active_unmitigated_obs": []}
+
+    def _ts_for_idx(idx_val):
+        if idx_val is None:
+            return None
+        try:
+            idx_val = int(idx_val)
+            if idx_val < 0 or idx_val >= len(df):
+                return None
+            if 'Datetime' in df.columns:
+                raw = df['Datetime'].iloc[idx_val]
+            elif 'Date' in df.columns:
+                raw = df['Date'].iloc[idx_val]
+            else:
+                raw = df.index[idx_val]
+            if hasattr(raw, 'isoformat'):
+                return raw.isoformat()
+            return str(raw)
+        except Exception:
+            return None
+
+    def _idx_from_ts(ts_iso):
+        if not ts_iso:
+            return None
+        for k in range(len(df)):
+            if _ts_for_idx(k) == ts_iso:
+                return k
+        return None
+
+    # BOS sequence count is recomputed by Phase 2 fresh from state — but we
+    # also stamp it on each fresh OB at emit time so downstream slate dedupe /
+    # logging has a value. Counter resets on Major CHoCH only (Minor CHoCH
+    # does NOT flip trend, so does NOT reset BOS chain).
     bos_seq_counter = 0
-    last_choch_idx = None
+    last_choch_local_idx: Optional[int] = None  # idx in this df, or None
+    active_obs = []
 
-    for i in range(_lb + 1, n):
-        past_swings = [s for s in swings if s['idx'] < i]
-        if len(past_swings) < 2:
-            continue
-        latest_high = [s for s in past_swings if s['type'] == 'high']
-        latest_low  = [s for s in past_swings if s['type'] == 'low']
-        if not latest_high or not latest_low:
-            continue
-
-        # NEW
-        sh, sl = latest_high[-1], latest_low[-1]
-        bos_detected, bos_type = False, None
-
-        if C[i] > sh['price'] and C[i - 1] <= sh['price']:
-            bos_detected, bos_type = True, 'bullish'
-        elif C[i] < sl['price'] and C[i - 1] >= sl['price']:
-            bos_detected, bos_type = True, 'bearish'
-
-        if not bos_detected:
+    for ev in events:
+        ev_type = ev.get('type')           # 'BOS' | 'CHoCH'
+        ev_tier = ev.get('tier')           # 'Major' | 'Minor'
+        ev_dir  = ev.get('direction')      # 'bullish' | 'bearish'
+        if ev_type not in ('BOS', 'CHoCH'):
             continue
 
-        # Provisional classification — tells us which threshold to apply.
-        provisional_tag = 'CHoCH' if (trend_state is None or trend_state != bos_type) else 'BOS'
-        threshold_mult = smc_detector.LEG_SIZE_MIN_ATR.get(provisional_tag, 0.6)
-
-        # Displacement past the broken wall — matches dealing_range.py measurement.
-        # Bullish break: close must clear the swing high by >= threshold * ATR.
-        # Bearish break: close must clear the swing low by >= threshold * ATR.
-        broken_wall_price = sh['price'] if bos_type == 'bullish' else sl['price']
-
-        if not smc_detector.validate_leg_distance(
-            broken_wall_price, C[i], h1_atr_for_leg, threshold_mult
-        ):
-            # Displacement too shallow past the broken level — non-event.
-            continue
-
-        # Passed leg-size filter. Now commit state.
-        bos_tag = provisional_tag
-        if bos_tag == 'CHoCH':
+        # Update BOS chain bookkeeping.
+        if ev_type == 'CHoCH' and ev_tier == 'Major':
             bos_seq_counter = 0
-            last_choch_idx = i
-        else:
+        elif ev_type == 'BOS':
             bos_seq_counter += 1
-        trend_state = bos_type
-        bos_swing_price = sh['price'] if bos_type == 'bullish' else sl['price']
-        ob_idx = -1
-        impulse_start_idx = sl['idx'] if bos_type == 'bullish' else sh['idx']
-        if impulse_start_idx >= i:
+        # Minor CHoCH: do not touch the counter.
+
+        # Locate the break candle and impulse-leg start in CURRENT df.
+        bos_idx = _idx_from_ts(ev.get('candle_ts'))
+        impulse_start_idx = _idx_from_ts(ev.get('impulse_start_ts'))
+        if bos_idx is None or impulse_start_idx is None:
+            # Event references a candle outside the current df window. Common
+            # for older events in the ring — they have no fresh OB to build.
+            continue
+        if impulse_start_idx >= bos_idx:
             continue
 
-        leg_bodies = [abs(C[k] - O[k]) for k in range(impulse_start_idx, i + 1)]
+        if ev_type == 'CHoCH':
+            last_choch_local_idx = bos_idx
+
+        bos_swing_price = float(ev.get('broken_swing_price') or 0.0)
+
+        # Median leg body (used downstream by some cosmetic features).
+        leg_bodies = [abs(C[k] - O[k]) for k in range(impulse_start_idx, bos_idx + 1)]
         median_leg_body = float(np.median(leg_bodies)) if leg_bodies else 0.0001
         if median_leg_body == 0:
             median_leg_body = 0.0001
 
-        # Walk back from BOS candle through impulse leg, INCLUDING swing candle.
-        # range(i-1, impulse_start_idx - 1, -1) stops BEFORE impulse_start_idx - 1,
-        # so the swing candle at impulse_start_idx IS included in scan.
-        # Take the FIRST opposing candle that meets direction + body minimum.
-        # The 1.5x median-leg-body filter was removed — it pushed selection to
-        # older, less relevant candles when the most recent opposing candle
-        # was moderately sized. Veteran SMC: take the most recent opposing
-        # candle, period. Size filtering is handled by is_valid_ob_candle.
-        for j in range(i - 1, impulse_start_idx - 1, -1):
-            if (bos_type == 'bullish' and C[j] < O[j]) or \
-               (bos_type == 'bearish' and C[j] > O[j]):
+        # Walk back from break candle through impulse leg to find OB.
+        # First opposing candle that passes range cap + body minimum wins.
+        ob_idx = -1
+        for j in range(bos_idx - 1, impulse_start_idx - 1, -1):
+            if (ev_dir == 'bullish' and C[j] < O[j]) or \
+               (ev_dir == 'bearish' and C[j] > O[j]):
+                if h1_atr_for_leg and h1_atr_for_leg > 0:
+                    if (H[j] - L[j]) > smc_detector.OB_MAX_RANGE_ATR_MULT * h1_atr_for_leg:
+                        continue
                 if is_valid_ob_candle(O[j], C[j], H[j], L[j]):
                     ob_idx = j
                     break
-
         if ob_idx == -1:
             continue
 
         ob_high = float(H[ob_idx])
         ob_low  = float(L[ob_idx])
-        ob_proximal = ob_high if bos_type == 'bullish' else ob_low
+        ob_proximal = ob_high if ev_dir == 'bullish' else ob_low
 
-        # PROXIMITY GATE — applied immediately after OB found, before any
-        # further work on this zone. Drop zones whose proximal sits more than
-        # 4× H1 ATR from current price. Saves compute (no FVG calc) and email
-        # noise (no card for unreachable zones).
-        current_price_now = float(C[-1])
+        # Proximity gate.
         if h1_atr_for_leg and h1_atr_for_leg > 0:
-            proximity_cap = 4.0 * h1_atr_for_leg
-            if abs(current_price_now - ob_proximal) > proximity_cap:
-                continue  # zone too far — drop silently
+            if abs(current_price_now - ob_proximal) > 4.0 * h1_atr_for_leg:
+                continue
 
-        # FVG detection — H1 OB internal gap. Kept as Phase 1 badge.
-        # Window: OB candle to BOS candle + 1 (catches displacement gaps on/just-after BOS).
-        # Walks BACKWARD → first unmitigated FVG closest to BOS wins.
-        bias_label      = "LONG" if bos_type == 'bullish' else "SHORT"
-        h1_atr_for_fvg  = h1_atr_for_leg if h1_atr_for_leg else 0.0
-        fvg_floor_mult  = smc_detector.FVG_NOISE_FLOOR_MULT.get("forex", 0.20)
-        atr_floor_h1    = fvg_floor_mult * h1_atr_for_fvg
-
-        # FVG search window: OB candle through OB + FVG_WINDOW_H1_CANDLES.
-        # Anchored to OB so window is consistent regardless of OB→BOS leg
-        # length. Captures the post-BOS displacement gap which is where the
-        # confirming FVG most often forms.
-        h1_fvg_window_end = min(ob_idx + smc_detector.FVG_WINDOW_H1_CANDLES,
-                                len(df) - 1)
+        # FVG detection — H1 internal gap, anchored to OB candle.
+        bias_label    = "LONG" if ev_dir == 'bullish' else "SHORT"
+        h1_atr_for_fvg = h1_atr_for_leg if h1_atr_for_leg else 0.0
+        fvg_floor_mult = smc_detector.FVG_NOISE_FLOOR_MULT.get(pair_type, 0.20)
+        atr_floor_h1   = fvg_floor_mult * h1_atr_for_fvg
+        h1_fvg_window_end = min(ob_idx + smc_detector.FVG_WINDOW_H1_CANDLES, n - 1)
         fvg_result = smc_detector.detect_fvg_in_zone(
             df, bias_label, ob_high, ob_low, atr_floor_h1,
             leg_start_idx=ob_idx, leg_end_idx=h1_fvg_window_end
         )
 
-        # Absolute timestamp helpers — used by Phase 2 to locate candles in
-        # their own dataframes, since integer indices are NOT portable across
-        # phases (rolling yfinance window shifts the df start point between scans).
-        def _ts_for_idx(idx_val):
-            if idx_val is None:
-                return None
-            try:
-                idx_val = int(idx_val)
-                if idx_val < 0 or idx_val >= len(df):
-                    return None
-                if 'Datetime' in df.columns:
-                    raw = df['Datetime'].iloc[idx_val]
-                elif 'Date' in df.columns:
-                    raw = df['Date'].iloc[idx_val]
-                else:
-                    raw = df.index[idx_val]
-                if hasattr(raw, 'isoformat'):
-                    return raw.isoformat()
-                return str(raw)
-            except Exception:
-                return None
+        ob_timestamp_str  = _ts_for_idx(ob_idx)
+        bos_timestamp_str = _ts_for_idx(bos_idx)
 
-        ob_timestamp_str = _ts_for_idx(ob_idx)
-        bos_timestamp_str = _ts_for_idx(i)
-
-        # Build fvg dict — pristine (dark green), partial (light green),
-        # full (grey/ghost), or absent.
         fvg_dict = {
             'exists':       fvg_result.get('exists', False),
             'fvg_top':      fvg_result.get('fvg_top'),
@@ -470,28 +435,33 @@ def detect_smc_radar(df, pair_type="forex"):
             'mitigated_at_idx': fvg_result.get('mitigated_at_idx')
         }
 
-        # NOTE: liquidity sweep grading removed from Phase 1.
-        # Phase 2 grades sweep on fresh M15 + H1 data when zone is approached.
-
+        # 'bos_tag' is the legacy field name for the structural event type.
+        # Kept for backwards compatibility with chart / scoring / dedupe code.
+        # 'bos_tier' carries the Major / Minor distinction (Major for BOS).
         active_obs.append({
-            'bos_idx':           i,
-            'bos_swing_price':   bos_swing_price,
-            'impulse_start_idx': impulse_start_idx,
-            'impulse_start_price': float(L[impulse_start_idx]) if bos_type == 'bullish' else float(H[impulse_start_idx]),
+            'bos_idx':            bos_idx,
+            'bos_timestamp':      bos_timestamp_str,
+            'bos_swing_price':    bos_swing_price,
+            'impulse_start_idx':  impulse_start_idx,
+            'impulse_start_price': float(L[impulse_start_idx]) if ev_dir == 'bullish'
+                                    else float(H[impulse_start_idx]),
             'bos_sequence_count': bos_seq_counter,
-            'last_choch_idx':    last_choch_idx,
-            'ob_idx':            ob_idx,
-            'ob_timestamp':      ob_timestamp_str,
-            'direction':       bos_type,
-            'bos_tag':         bos_tag,
-            'high':            ob_high,
-            'low':             ob_low,
-            'proximal_line':   ob_high if bos_type == 'bullish' else ob_low,
-            'distal_line':     ob_low  if bos_type == 'bullish' else ob_high,
-            'median_leg_body': median_leg_body,
-            'ob_body':         abs(C[ob_idx] - O[ob_idx]),
-            'h1_atr':          float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
-            'fvg': fvg_dict
+            'last_choch_idx':     last_choch_local_idx,
+            'ob_idx':             ob_idx,
+            'ob_timestamp':       ob_timestamp_str,
+            'direction':          ev_dir,
+            'bos_tag':            ev_type,
+            'bos_tier':           ev_tier,
+            'broken_was_wall':    bool(ev.get('broken_was_wall', False)),
+            'reversal_pct':       ev.get('reversal_pct'),
+            'high':               ob_high,
+            'low':                ob_low,
+            'proximal_line':      ob_high if ev_dir == 'bullish' else ob_low,
+            'distal_line':        ob_low  if ev_dir == 'bullish' else ob_high,
+            'median_leg_body':    median_leg_body,
+            'ob_body':            abs(C[ob_idx] - O[ob_idx]),
+            'h1_atr':             float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
+            'fvg':                fvg_dict
         })
 # Mitigation + touch tracking. Sets 'touches' and 'status' on each OB.
     # Must run BEFORE dedupe so the touch-state test in dedupe is meaningful.
@@ -718,9 +688,17 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
                     linestyle=':', zorder=2
                 ))
 
-        # --- BOS/CHoCH horizontal line ---
+        # --- BOS / CHoCH horizontal line ---
+        # Palette: BOS=cyan, Major CHoCH=orange, Minor CHoCH=purple.
         bos_price = float(ob['bos_swing_price'])
-        bos_color = '#00bcd4' if ob['bos_tag'] == 'BOS' else '#ff9800'
+        _btag = ob.get('bos_tag', 'BOS')
+        _btier = ob.get('bos_tier', 'Major')
+        if _btag == 'BOS':
+            bos_color = '#00bcd4'
+        elif _btier == 'Minor':
+            bos_color = '#9c27b0'
+        else:
+            bos_color = '#ff9800'
         ax.axhline(
             y=bos_price, color=bos_color, linewidth=0.8,
             linestyle='--', alpha=0.7, zorder=2
@@ -933,12 +911,21 @@ def build_summary_table_html(all_zones_for_table, dp_map):
         else:
             fvg_cell = "&ndash;"
             fvg_col  = '#888'
+        # Badge palette:
+        #   BOS              -> cyan #00bcd4
+        #   Major CHoCH      -> orange #ff9800
+        #   Minor CHoCH      -> purple #9c27b0  (lookback=2 break, weakening flag)
+        # Color carries the tier; no text label needed for Minor vs Major.
+        _tier = z.get('bos_tier', 'Major')
+        if z['bos_tag'] == 'BOS':
+            _badge_color, _badge_text = '#00bcd4', 'BOS'
+        elif _tier == 'Minor':
+            _badge_color, _badge_text = '#9c27b0', 'CHoCH'
+        else:
+            _badge_color, _badge_text = '#ff9800', 'CHoCH'
         tag_badge = (
-            f"<span style='background:#00bcd4;color:#000;font-size:9px;"
-            f"padding:1px 4px;border-radius:3px;font-weight:bold;'>{z['bos_tag']}</span>"
-            if z['bos_tag'] == 'BOS' else
-            f"<span style='background:#ff9800;color:#000;font-size:9px;"
-            f"padding:1px 4px;border-radius:3px;font-weight:bold;'>{z['bos_tag']}</span>"
+            f"<span style='background:{_badge_color};color:#000;font-size:9px;"
+            f"padding:1px 4px;border-radius:3px;font-weight:bold;'>{_badge_text}</span>"
         )
         is_new     = z.get('is_new', False)
         is_changed = z.get('is_changed', False)
@@ -983,15 +970,20 @@ def build_summary_table_html(all_zones_for_table, dp_map):
       </table>
     </div>"""
 
-def _phase1_chart_legend_html(bos_tag="BOS"):
+def _phase1_chart_legend_html(bos_tag="BOS", bos_tier="Major"):
     """Colour-code legend rendered below H1 zone chart in Phase 1 digest. Cosmetic only."""
-    bos_color = '#00bcd4' if bos_tag == 'BOS' else '#ff9800'
+    if bos_tag == 'BOS':
+        bos_color, bos_label = '#00bcd4', 'BOS'
+    elif bos_tier == 'Minor':
+        bos_color, bos_label = '#9c27b0', 'Minor CHoCH'
+    else:
+        bos_color, bos_label = '#ff9800', 'Major CHoCH'
     items = [
         ('#bb8fce', 'Zone band (proximal/distal)'),
         ('#d7bde2', 'OB candle outline'),
         ('#2ecc71', 'FVG (displacement)'),
         ('#888888', 'FVG mitigated (ghost)'),
-        (bos_color, f'{bos_tag} break candle / level'),
+        (bos_color, f'{bos_label} break candle / level'),
         ('#ffffff', 'Current price'),
     ]
     rows = "".join(
@@ -1054,7 +1046,8 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
         if cid else
         '<div style="padding:8px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:11px;">&#9888; Chart failed to render.</div>'
     )
-    legend_html = _phase1_chart_legend_html(ob.get('bos_tag', 'BOS'))
+    legend_html = _phase1_chart_legend_html(ob.get('bos_tag', 'BOS'),
+                                              ob.get('bos_tier', 'Major'))
 
     return f"""
     <div style="margin-bottom:28px;padding:16px;background:#1a1a2e;border-radius:8px;
@@ -1147,7 +1140,8 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp):
         '<div style="padding:8px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;'
         'border-radius:4px;color:#e74c3c;font-size:11px;">&#9888; Chart unavailable.</div>'
     )
-    legend_html = _phase1_chart_legend_html(sz.get('bos_tag', 'BOS'))
+    legend_html = _phase1_chart_legend_html(sz.get('bos_tag', 'BOS'),
+                                              sz.get('bos_tier', 'Major'))
 
     return f"""
     <div style="margin-bottom:28px;padding:16px;background:#1a1a2e;border-radius:8px;
@@ -1695,6 +1689,10 @@ def fresh_to_slate_zone(fresh_zone, zone_id, ist_now, current_price, dp):
         "ob_timestamp": fresh_zone.get("ob_timestamp"),
         "direction": fresh_zone["direction"],
         "bos_tag": fresh_zone["bos_tag"],
+        "bos_tier": fresh_zone.get("bos_tier", "Major"),
+        "broken_was_wall": fresh_zone.get("broken_was_wall", False),
+        "reversal_pct": fresh_zone.get("reversal_pct"),
+        "bos_timestamp": fresh_zone.get("bos_timestamp"),
         "proximal_line": fresh_zone["proximal_line"],
         "distal_line": fresh_zone["distal_line"],
         "high": fresh_zone["high"],
@@ -1741,6 +1739,13 @@ def refresh_slate_zone(slate_zone, fresh_zone, ist_now, current_price, dp):
     slate_zone["current_price_at_scan"] = current_price
     slate_zone["distance_to_proximal_pips"] = dist_pips
     slate_zone["fvg"]           = fresh_zone["fvg"]
+    # Tier / context refresh (Major / Minor distinction may change if a
+    # later re-emission upgrades the structural classification).
+    slate_zone["bos_tier"]      = fresh_zone.get("bos_tier", slate_zone.get("bos_tier", "Major"))
+    slate_zone["broken_was_wall"] = fresh_zone.get("broken_was_wall",
+                                                    slate_zone.get("broken_was_wall", False))
+    slate_zone["reversal_pct"]  = fresh_zone.get("reversal_pct", slate_zone.get("reversal_pct"))
+    slate_zone["bos_timestamp"] = fresh_zone.get("bos_timestamp", slate_zone.get("bos_timestamp"))
 
 
 def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_pair, pair_type):
@@ -1954,10 +1959,11 @@ def run_radar():
         # --- DEALING RANGE WALL UPDATE (single source of truth) ---
         # Load prior state for this pair, walk forward through fresh H1 data,
         # update walls if any breaks fired, save back. Phase 2 reads only.
+        new_walls = {}
         try:
             structure_state_all = dealing_range.load_state()
             prior_walls = structure_state_all.get(name)
-            new_walls = dealing_range.update_pair(df, prior_walls, pair)
+            new_walls = dealing_range.update_pair(df, prior_walls, pair) or {}
             structure_state_all[name] = new_walls
             dealing_range.save_state(structure_state_all)
             if new_walls.get("fallback_active"):
@@ -1971,7 +1977,8 @@ def run_radar():
             logging.error(f"[{name}] dealing_range update failed: {_dr_err}")
             print(f"  [WALLS ERR] {name}: {_dr_err}")
 
-        result        = detect_smc_radar(df, pair_type=ptype)
+        result        = detect_smc_radar(df, pair_type=ptype,
+                                          events=new_walls.get('events', []))
         current_price = result["current_price"]
         fresh_zones   = result["active_unmitigated_obs"]
         h1_atr        = smc_detector.compute_atr(df) or 0.0
@@ -2052,9 +2059,10 @@ def run_radar():
                     "dr_pd_position": _pd_audit.get("pd_position"),
                     "dr_fallback": _pd_audit.get("fallback_active", False),
                     "dr_tentative": _pd_audit.get("tentative", False),
-                    "dr_event_status": _walls_for_audit.get("last_event_status"),
-                    "dr_event_pending": _walls_for_audit.get("last_event_pending_confirmation", False),
-                    "dr_chop_flag": _walls_for_audit.get("last_event_chop", False)
+                    "dr_event_type":  _walls_for_audit.get("last_event_type"),
+                    "dr_event_tier":  _walls_for_audit.get("last_event_tier"),
+                    "dr_event_dir":   _walls_for_audit.get("last_event_direction"),
+                    "dr_chop_flag":   _walls_for_audit.get("last_event_chop", False)
                 })
 
     # --- BUILD EMAIL ---

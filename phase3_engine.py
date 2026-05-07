@@ -507,14 +507,17 @@ def check_invalidation(bias, current_close, distal, m5_atr, pair_conf, alert_ts,
     if age_hrs > max_hrs:
         return ("Time expiry", f"Setup has been active {round(age_hrs,1)} hours without trigger (limit: {max_hrs}h).")
 
-    # NEW
-    # 3. Opposite H1 BOS. check_opposite_bos now expects UTC-naive since_ts.
-    # alert_ts is IST-naive (parsed from ist timestamps) -> subtract 5h30m.
+    # 3. Opposite H1 structure shift (BOS or Major CHoCH against the bias).
+    # check_opposite_bos reads from dealing_range state (single source of truth).
+    # alert_ts is IST-naive (parsed from IST timestamps) -> subtract 5h30m
+    # to compare against UTC-naive event timestamps in state.
     since_utc = alert_ts - timedelta(hours=5, minutes=30) if alert_ts else None
-    if df_h1 is not None and smc_detector.check_opposite_bos(df_h1, bias, since_ts=since_utc):
+    pair_name = pair_conf.get("name") if pair_conf else None
+    if pair_name and smc_detector.check_opposite_bos(pair_name, bias, since_ts=since_utc):
         return (
             "Opposite H1 structure shift",
-            "H1 printed a Break of Structure in the opposite direction since the alert fired. The setup's foundation is broken."
+            "H1 printed a Break of Structure or Major CHoCH in the opposite "
+            "direction since the alert fired. The setup's foundation is broken."
         )
 
     return (None, None)

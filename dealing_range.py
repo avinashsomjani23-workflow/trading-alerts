@@ -1,26 +1,43 @@
 """
-Dealing Range — single source of truth for H1 dealing range walls.
+Dealing Range — single source of truth for H1 dealing range walls AND
+BOS / CHoCH detection.
 
 Concepts (plain English):
 
 A dealing range has two walls: a CEILING (upper) and a FLOOR (lower). Walls
-are anchored to confirmed swing highs / swing lows on H1. They update only
-when a wall is broken by a candle's CLOSE (not wick).
+are anchored to CONFIRMED swing highs / lows on H1 (lookback=3 strict).
 
-A wall break is classified as:
-  - BOS   (Break of Structure)    — break in the direction of the current trend
-  - CHoCH (Change of Character)  — break against the current trend (reversal)
+Two structural events are detected:
+  - BOS   (Break of Structure)   — close past a wall in the trend direction.
+  - CHoCH (Change of Character) — close past a confirmed swing AGAINST trend,
+                                    with a premium/discount-zone reversal.
 
-Each wall is either real (a confirmed swing) or a placeholder (rolling-max /
-rolling-min while a new swing has not yet formed). PD scoring is suspended
-on the placeholder side.
+CHoCH has two tiers:
+  - Major: broken pivot is a lookback=3 swing (or the opposite wall when no
+    internal lookback=3 swing exists). Flips trend.
+  - Minor: broken pivot is a lookback=2 swing inside the trend. Does NOT flip
+    trend; does NOT move walls. Informational weakening flag only.
+
+Wall update rule (LOCKED): walls move ONLY when a wall is broken.
+  - BOS: trend-direction wall trails to break-candle extreme (tentative
+    until promoted); opposite wall trails to deepest pullback inside the
+    just-completed leg.
+  - Major CHoCH AT WALL (no internal pivot existed; close past opposite wall):
+    broken wall → tentative; opposite wall stays put (it's the prior trend
+    anchor = new trend's starting extreme). NO history search.
+  - Major CHoCH on internal HL/LH: walls do NOT move; trend flips.
+  - Minor CHoCH: walls do NOT move; trend does NOT flip.
+
+Premium / discount gate (LOCKED, CHoCH only): the reversal high (for down
+CHoCH in an uptrend) must lie in the top 25% of the dealing range; the
+reversal low (for up CHoCH) must lie in the bottom 25%. Without this, an
+"internal" close past a swing in mid-range is just noise, not a CHoCH.
 
 Phase 1 calls:
     dealing_range.update_pair(df_h1, prior_state, pair_conf)
 
-This either cold-starts (if no prior state) by walking forward through the
-fetched H1 window, or runs incrementally (if prior state exists). Returns
-the new state for that pair plus a fallback flag.
+Cold-starts on first call, runs incrementally otherwise. Returns the new
+state for that pair (walls + last_event metadata + event ring).
 
 Phase 2 reads `state/structure_state.json` and consumes:
     dealing_range.compute_pd_position(price, walls)
@@ -28,29 +45,18 @@ Phase 2 reads `state/structure_state.json` and consumes:
 Phase 2 NEVER writes state. One writer (Phase 1), many readers.
 
 Design decisions (locked):
-  - Lookback for swing confirmation: 3 (3 before + swing + 3 after = 7 candles).
-    Strict comparison (>, <) — equal highs/lows do not register as swings.
-  - BOS leg threshold:   0.2 x H1 ATR  -- DISPLACEMENT PAST THE BROKEN WALL
-  - CHoCH leg threshold: 0.35 x H1 ATR -- DISPLACEMENT PAST THE BROKEN WALL
-    (Earlier versions measured from the opposite wall — that was wrong.)
-  - Tentative walls: BOTH walls always exist. After an event, the broken
-    side becomes a TENTATIVE wall holding the rolling max/min since the
-    event. Tentative walls CAN be broken — break fires an event tagged
-    'tentative'. A tentative wall promotes to confirmed when its anchor
-    candle passes lookback=3.
-  - Trailing wall on BOS = most recent confirmed swing INSIDE the
-    just-completed leg. No ATR pullback threshold.
-  - CHoCH wall reset = most recent confirmed swing of the just-completed
-    trend, strictly BEFORE the swing whose break = CHoCH. Kills runaway
-    extreme problem.
-  - Cold-start window: 150 H1 candles for event detection walk.
-  - Fallback window: last 72 H1 candles (≈ 3 trading days). Used ONLY when
-    no event fires across the full 150-candle walk. Trend init from close
-    direction across the 72-candle window.
-  - Internal swings inside the range generate no structural events.
-  - Chop flag: a CHoCH within 5 candles of the previous event is tagged
-    last_event_chop=True for downstream surfacing.
-  - Atomic writes (temp + rename), like every other state file in this codebase.
+  - SWING_LOOKBACK = 3 for walls, BOS, Major CHoCH.
+  - MINOR_SWING_LOOKBACK = 2 for Minor CHoCH detection only.
+  - BOS displacement >= 0.40 × H1 ATR past broken wall.
+  - CHoCH displacement >= 0.60 × H1 ATR past broken pivot (Major and Minor
+    use the same threshold).
+  - Premium / discount threshold = 25% of dealing range.
+  - Tentative (placeholder) walls give geometry only — events do NOT fire
+    on placeholder-wall break.
+  - Event ring: last 20 qualified events kept on state for Phase 2 readers
+    (BOS sequence count; zone invalidation).
+  - Chop flag: CHoCH within 5 candles of prior event marks last_event_chop.
+  - Atomic state writes (temp + rename).
 """
 
 import json
@@ -66,12 +72,27 @@ except Exception:
 
 # --- Tunables (locked) -------------------------------------------------------
 
-SWING_LOOKBACK = 3
+# Two parallel swing pools.
+#   SWING_LOOKBACK (3) is the "Major" / wall-grade swing. Used for walls,
+#   BOS detection, and Major CHoCH detection.
+#   MINOR_SWING_LOOKBACK (2) is used ONLY for Minor CHoCH detection. A Minor
+#   CHoCH break is informational (weakening flag) — it does NOT flip trend
+#   and does NOT move walls.
+SWING_LOOKBACK       = 3
+MINOR_SWING_LOOKBACK = 2
+
 # Leg-size threshold = displacement of the break candle's CLOSE PAST the wall
-# it just broke. Not distance from the opposite wall. See design note in
-# update history. Values calibrated for "displacement past broken level".
+# (or pivot) it just broke. Major and Minor CHoCH share the same threshold
+# (0.60× ATR) — the depth of the broken swing differs, but a noise filter
+# at the candle level is the same problem.
 BOS_ATR_MULT   = 0.4
 CHOCH_ATR_MULT = 0.6
+
+# Premium / discount thresholds for the CHoCH zone gate. A CHoCH is valid
+# only if the reversal high (down CHoCH) sits in the top 25% of the dealing
+# range, or the reversal low (up CHoCH) sits in the bottom 25%.
+PREMIUM_PCT  = 0.75
+DISCOUNT_PCT = 0.25
 
 # Cold-start window — number of most recent H1 candles to walk forward
 # looking for events. If no events fire across this whole window, fallback
@@ -82,6 +103,11 @@ FALLBACK_WINDOW_H1  = 72   # last 72 H1 candles ≈ 3 trading days
 # Chop flag: a CHoCH within this many candles of the previous event tags
 # the event as possible-chop in audit + email.
 CHOP_LOOKBACK_CANDLES = 5
+
+# Event ring — last N qualified events kept on state for downstream readers
+# (Phase 2 BOS-sequence count, zone invalidation). Cap chosen well above
+# any realistic per-trend BOS run (caution thresholds are 3–5).
+EVENT_RING_MAX = 20
 
 # State file path. Lives in a dedicated directory outside any purge scope.
 STATE_DIR  = "state"
@@ -201,6 +227,186 @@ def detect_swings(df, lookback: int = SWING_LOOKBACK) -> List[Dict[str, Any]]:
     return out
 
 
+def detect_minor_swings(df) -> List[Dict[str, Any]]:
+    """Lookback=2 swing pool. Used ONLY for Minor CHoCH detection.
+
+    Same shape and rules as detect_swings, but with a tighter window. A
+    lookback=2 swing requires the 2 candles on each side to be strictly lower
+    (for highs) or higher (for lows). These swings appear more frequently and
+    represent shallower, internal structure shifts.
+    """
+    return detect_swings(df, lookback=MINOR_SWING_LOOKBACK)
+
+
+def _most_recent_swing_in_window(swings: List[Dict[str, Any]], swing_type: str,
+                                  start_idx: int, end_idx: int) -> Optional[Dict[str, Any]]:
+    """Most recent swing of the given type with start_idx <= idx <= end_idx.
+
+    Used by CHoCH detection to find the most recent confirmed pivot inside
+    the current trend (between leg_start_idx and the current candle).
+    Returns the swing dict, or None if none qualify.
+    """
+    if start_idx > end_idx:
+        return None
+    matches = [s for s in swings
+               if s['type'] == swing_type and start_idx <= s['idx'] <= end_idx]
+    if not matches:
+        return None
+    matches.sort(key=lambda s: s['idx'], reverse=True)
+    return matches[0]
+
+
+def _pick_choch_pivot(swings_lb3: List[Dict[str, Any]],
+                      swings_lb2: List[Dict[str, Any]],
+                      trend: str,
+                      leg_start_idx: int,
+                      current_idx: int,
+                      ceiling: Dict[str, Any],
+                      floor: Dict[str, Any]
+                      ) -> Optional[Tuple[Dict[str, Any], str, bool]]:
+    """Pick the pivot whose break would constitute a CHoCH at this candle.
+
+    Returns (pivot_dict, tier, at_wall) or None if no candidate.
+
+    Picks the MOST RECENT confirmed pivot of the relevant type inside the
+    current trend. lookback=3 swings are a SUBSET of lookback=2 swings, so
+    we use the lb2 pool for "most recent" and tag tier=Major if that swing
+    also appears in lb3, else Minor.
+
+    Why most-recent: in an uptrend, sequential HLs rise — the most recent HL
+    is the highest. Price closing below the most recent HL IS a structural
+    break; an older lb3 HL further down is still un-broken at that close.
+    Picking the older lb3 swing would miss the real break.
+
+    Fallback: if no internal pivot exists, the opposite wall (floor in
+    uptrend, ceiling in downtrend) is the pivot — break of a wall is Major
+    CHoCH at_wall=True. Only valid if the wall is CONFIRMED (not placeholder).
+
+    Search window: (leg_start_idx, current_idx-1] — strictly inside the
+    current trend and strictly before the candle being tested.
+    """
+    if trend == 'bullish':
+        target_type = 'low'        # Down CHoCH breaks an HL (swing low).
+        wall = floor
+    elif trend == 'bearish':
+        target_type = 'high'       # Up CHoCH breaks an LH (swing high).
+        wall = ceiling
+    else:
+        return None
+
+    lo, hi = leg_start_idx + 1, current_idx - 1
+    if lo > hi:
+        return None
+
+    pivot = _most_recent_swing_in_window(swings_lb2, target_type, lo, hi)
+    if pivot is not None:
+        # Tier = Major if this swing is also in the lb3 pool, else Minor.
+        is_lb3 = any(s['idx'] == pivot['idx'] and s['type'] == pivot['type']
+                     for s in swings_lb3)
+        return (pivot, 'Major' if is_lb3 else 'Minor', False)
+
+    # Fall back to the opposite wall — but only if it's confirmed.
+    if wall.get('price') is None or wall.get('is_placeholder', True):
+        return None
+    wall_pivot = {'idx': wall.get('idx'), 'price': wall['price'], 'ts': wall.get('ts')}
+    return (wall_pivot, 'Major', True)
+
+
+def _resolve_impulse_start(event_kind: str, direction: str,
+                            swings_lb3: List[Dict[str, Any]],
+                            df, broken_pivot_idx: int, break_idx: int,
+                            leg_start_idx: int) -> Optional[Dict[str, Any]]:
+    """Find the impulse-start anchor for an event so the OB-finder downstream
+    knows the leg to walk back through.
+
+    BOS: impulse_start = most recent confirmed lookback=3 swing of the opposite
+         type between leg_start_idx and break_idx (the latest HL before a
+         bullish BOS, the latest LH before a bearish BOS).
+
+    CHoCH: impulse_start = the index of the reversal extreme between the
+         broken pivot and the break candle (the highest High for a down CHoCH,
+         the lowest Low for an up CHoCH). Always exists by construction (the
+         premium-zone gate already implied a non-empty window).
+
+    Returns dict with idx/price/ts, or None if not resolvable.
+    """
+    if event_kind == 'BOS':
+        # Opposite-type swing for the impulse leg's anchor.
+        target_type = 'low' if direction == 'bullish' else 'high'
+        lo, hi = leg_start_idx + 1, break_idx - 1
+        if lo > hi:
+            return None
+        candidates = [s for s in swings_lb3
+                      if s['type'] == target_type and lo <= s['idx'] <= hi]
+        if not candidates:
+            return None
+        candidates.sort(key=lambda s: s['idx'], reverse=True)
+        s = candidates[0]
+        return {'idx': s['idx'], 'price': s['price'], 'ts': s['ts']}
+
+    # CHoCH: reversal extreme between broken pivot idx and break_idx-1.
+    lo, hi = broken_pivot_idx, break_idx - 1
+    if lo > hi or lo < 0 or hi >= len(df):
+        return None
+    H = df['High'].values.astype(float)
+    L = df['Low'].values.astype(float)
+    if direction == 'bearish':       # uptrend reversal — find reversal HIGH
+        slc = H[lo: hi + 1]
+        rng_idx = lo + int(slc.argmax())
+        return {'idx': rng_idx, 'price': float(H[rng_idx]), 'ts': _ts_iso(df, rng_idx)}
+    else:                            # downtrend reversal — find reversal LOW
+        slc = L[lo: hi + 1]
+        rng_idx = lo + int(slc.argmin())
+        return {'idx': rng_idx, 'price': float(L[rng_idx]), 'ts': _ts_iso(df, rng_idx)}
+
+
+def _premium_zone_satisfied(direction_of_choch: str,
+                             df,
+                             pivot_idx: int,
+                             break_idx: int,
+                             ceiling_price: Optional[float],
+                             floor_price: Optional[float]
+                             ) -> Tuple[bool, Optional[float]]:
+    """Verify the reversal happened from premium (down CHoCH) or discount (up CHoCH).
+
+    For a down CHoCH (uptrend reversing): the highest High over
+        [pivot_idx .. break_idx - 1]
+    must satisfy:  reversal_high >= floor + 0.75 * (ceiling - floor)
+        (i.e. reversal high lies in the top 25% of the dealing range).
+
+    For an up CHoCH (downtrend reversing): mirror with the lowest Low and the
+    bottom 25%.
+
+    Returns (gate_passed, reversal_pct) where reversal_pct is the fractional
+    position of the reversal extreme in the dealing range (None if walls
+    degenerate, in which case gate FAILS CLOSED).
+    """
+    if (ceiling_price is None or floor_price is None
+            or ceiling_price <= floor_price):
+        return False, None
+    if pivot_idx is None or break_idx is None or pivot_idx >= break_idx:
+        return False, None
+
+    H = df['High'].values.astype(float)
+    L = df['Low'].values.astype(float)
+    lo, hi = pivot_idx, break_idx - 1
+    if lo < 0 or hi >= len(df) or lo > hi:
+        return False, None
+
+    range_size = ceiling_price - floor_price
+    if direction_of_choch == 'bearish':       # down CHoCH (uptrend reversal)
+        reversal_high = float(H[lo: hi + 1].max())
+        pct = (reversal_high - floor_price) / range_size
+        threshold = floor_price + PREMIUM_PCT * range_size
+        return reversal_high >= threshold, pct
+    elif direction_of_choch == 'bullish':     # up CHoCH (downtrend reversal)
+        reversal_low = float(L[lo: hi + 1].min())
+        pct = (reversal_low - floor_price) / range_size
+        threshold = floor_price + DISCOUNT_PCT * range_size
+        return reversal_low <= threshold, pct
+    return False, None
+
+
 # --- Core: walk forward and build state -------------------------------------
 
 def _empty_state() -> Dict[str, Any]:
@@ -213,13 +419,14 @@ def _empty_state() -> Dict[str, Any]:
         "floor_ts": None,
         "floor_is_placeholder": True,         # True = tentative wall (rolling extreme)
         "last_event_type": None,              # 'BOS' | 'CHoCH' | None
+        "last_event_tier": None,              # 'Major' | 'Minor' | None  (Major for BOS too)
+        "last_event_direction": None,         # 'bullish' | 'bearish' | None
         "last_event_ts": None,
-        "last_event_status": None,            # 'confirmed' | 'tentative' | None
-        "last_event_pending_confirmation": False,  # True if tentative & anchor not yet swing-confirmed
         "last_event_idx_iso": None,           # ISO ts of the break candle (used for chop gap calc)
         "last_event_chop": False,             # True if this CHoCH fired within CHOP_LOOKBACK_CANDLES of prior event
         "last_scanned_ts": None,
         "fallback_active": False,
+        "events": [],                         # ring of last EVENT_RING_MAX qualified events
     }
 
 
@@ -291,17 +498,6 @@ def _trail_inside_leg(side: str, swings: List[Dict[str, Any]],
     return {'idx': best['idx'], 'price': best['price'], 'ts': best['ts']}
 
 
-def _most_recent_swing_before(swings: List[Dict[str, Any]], swing_type: str,
-                              before_idx: int) -> Optional[Dict[str, Any]]:
-    """Most recent confirmed swing of `swing_type` strictly before `before_idx`."""
-    matches = [s for s in swings if s['type'] == swing_type and s['idx'] < before_idx]
-    if not matches:
-        return None
-    matches.sort(key=lambda s: s['idx'], reverse=True)
-    s = matches[0]
-    return {'idx': s['idx'], 'price': s['price'], 'ts': s['ts']}
-
-
 def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                   pair_name: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -309,8 +505,10 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
       - candle 0 (cold start, prior_state is empty/None), or
       - the candle just after prior_state['last_scanned_ts'] (incremental).
 
-    Apply BOS/CHoCH detection against current walls (NOT against latest
-    swings). Update walls per locked rules. Return updated state.
+    Detects BOS, Major CHoCH (lookback=3 internal pivot or wall break), and
+    Minor CHoCH (lookback=2 internal pivot break) per the locked rules.
+    Updates walls only when a wall is broken (BOS or Major CHoCH-at-wall).
+    Internal-pivot CHoCH does not move walls; Minor CHoCH does not flip trend.
 
     Cold start fallback: if no event fires across the entire window, walls
     fall back to window high/low and fallback_active = True.
@@ -321,12 +519,12 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
 
     atr = _compute_atr(df)
     if atr is None or atr <= 0:
-        # Can't classify legs without ATR — hold prior state if any, else empty.
         return prior_state or _empty_state()
 
-    swings = detect_swings(df, lookback=SWING_LOOKBACK)
+    # Two parallel swing pools (computed once per walk).
+    swings_lb3 = detect_swings(df, lookback=SWING_LOOKBACK)
+    swings_lb2 = detect_swings(df, lookback=MINOR_SWING_LOOKBACK)
 
-    # Determine starting candle for the forward walk.
     state = prior_state if prior_state else _empty_state()
     is_cold_start = (
         prior_state is None
@@ -336,7 +534,6 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
 
     start_i = 0
     if not is_cold_start and prior_state.get("last_scanned_ts"):
-        # Find first candle whose ts > last_scanned_ts.
         last_ts = prior_state["last_scanned_ts"]
         for i in range(n):
             ts = _ts_iso(df, i)
@@ -344,7 +541,6 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                 start_i = i
                 break
         else:
-            # No new candles since last scan — just refresh last_scanned_ts.
             new_state = dict(state)
             new_state["last_scanned_ts"] = _ts_iso(df, n - 1)
             return new_state
@@ -355,7 +551,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
     ceiling = {
         "price": state.get("ceiling_price"),
         "ts":    state.get("ceiling_ts"),
-        "idx":   None,  # idx is local to the simulation; we re-resolve where needed
+        "idx":   None,
         "is_placeholder": state.get("ceiling_is_placeholder", True),
     }
     floor = {
@@ -365,20 +561,18 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         "is_placeholder": state.get("floor_is_placeholder", True),
     }
 
-    last_event_type = state.get("last_event_type")
-    last_event_ts   = state.get("last_event_ts")
-    last_event_status = state.get("last_event_status")
-    last_event_pending = bool(state.get("last_event_pending_confirmation", False))
-    last_event_idx_iso = state.get("last_event_idx_iso")
-    last_event_chop = bool(state.get("last_event_chop", False))
-    leg_start_idx   = 0  # idx of the most recent structural anchor in this df
-    fallback_active = state.get("fallback_active", False)
+    last_event_type      = state.get("last_event_type")
+    last_event_tier      = state.get("last_event_tier")
+    last_event_direction = state.get("last_event_direction")
+    last_event_ts        = state.get("last_event_ts")
+    last_event_idx_iso   = state.get("last_event_idx_iso")
+    last_event_chop      = bool(state.get("last_event_chop", False))
+    leg_start_idx        = 0
+    fallback_active      = state.get("fallback_active", False)
+    events_ring          = list(state.get("events", []))
 
-    # Resolve the local positional idx of the most recent event (for chop gap calc).
-    # If we have last_event_idx_iso, find that ts in df. Otherwise fall back to None.
     last_event_local_idx: Optional[int] = None
 
-    # Map walls back to df indices when possible (resolve "idx" from ts).
     def _idx_from_ts(ts_iso: Optional[str]) -> Optional[int]:
         if not ts_iso:
             return None
@@ -392,7 +586,6 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
     if floor["ts"]:
         floor["idx"] = _idx_from_ts(floor["ts"])
 
-    # leg_start = the most recent of (last event, ceiling_idx, floor_idx).
     candidates_for_leg_start = []
     if ceiling["idx"] is not None:
         candidates_for_leg_start.append(ceiling["idx"])
@@ -405,19 +598,16 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
     if candidates_for_leg_start:
         leg_start_idx = max(candidates_for_leg_start)
 
-    # Resolve local idx of the previous event for chop gap measurement.
     if last_event_idx_iso:
         last_event_local_idx = _idx_from_ts(last_event_idx_iso)
 
-    # Helpers to resolve placeholders given current candle position.
+    # Promote a placeholder wall if a confirmed swing now exists in
+    # (leg_start_idx, current_i].
     def _try_promote_placeholder(side: str, current_i: int):
-        """If side is placeholder, see if a confirmed swing now exists in
-        (leg_start_idx, current_i] and promote the wall. Otherwise refresh
-        rolling extreme."""
         if side == 'ceiling':
             if not ceiling["is_placeholder"]:
                 return
-            promoted, is_ph = _resolve_placeholder('ceiling', df, leg_start_idx + 1, current_i, swings)
+            promoted, is_ph = _resolve_placeholder('ceiling', df, leg_start_idx + 1, current_i, swings_lb3)
             if promoted is not None:
                 ceiling["price"] = promoted["price"]
                 ceiling["ts"]    = promoted["ts"]
@@ -426,16 +616,15 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         else:
             if not floor["is_placeholder"]:
                 return
-            promoted, is_ph = _resolve_placeholder('floor', df, leg_start_idx + 1, current_i, swings)
+            promoted, is_ph = _resolve_placeholder('floor', df, leg_start_idx + 1, current_i, swings_lb3)
             if promoted is not None:
                 floor["price"] = promoted["price"]
                 floor["ts"]    = promoted["ts"]
                 floor["idx"]   = promoted["idx"]
                 floor["is_placeholder"] = is_ph
 
-    # Helper: refresh a tentative wall to the rolling extreme since leg_start.
-    # Tentative wall = is_placeholder = True. Holds the rolling max/min of
-    # candles in (leg_start_idx, current_i]. Used for break detection.
+    # Refresh a still-tentative wall to the rolling extreme since leg_start.
+    # Geometry only — events do NOT fire on placeholder-wall break.
     def _refresh_tentative(side: str, current_i: int):
         if side == 'ceiling':
             if not ceiling["is_placeholder"]:
@@ -448,7 +637,6 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             ceiling["price"] = float(H_arr[rng_idx])
             ceiling["ts"]    = _ts_iso(df, rng_idx)
             ceiling["idx"]   = rng_idx
-            # Stays placeholder until promoted by a confirmed swing.
         else:
             if not floor["is_placeholder"]:
                 return
@@ -461,125 +649,184 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             floor["ts"]    = _ts_iso(df, rng_idx)
             floor["idx"]   = rng_idx
 
+    def _log_safe(payload: Dict[str, Any]):
+        if _event_logger is None or not pair_name:
+            return
+        try:
+            _event_logger.log_event(payload)
+        except Exception:
+            pass
+
+    def _ring_append(event_dict: Dict[str, Any]):
+        events_ring.append(event_dict)
+        if len(events_ring) > EVENT_RING_MAX:
+            del events_ring[0: len(events_ring) - EVENT_RING_MAX]
+
+    # ------------------------------------------------------------------
     # Walk forward.
+    # ------------------------------------------------------------------
     for i in range(start_i, n):
-        # 1a. Try to promote any placeholders to confirmed using newly-confirmed swings.
+        # 1. Promote / refresh placeholders (geometry maintenance).
         _try_promote_placeholder('ceiling', i)
         _try_promote_placeholder('floor',   i)
-        # 1b. For walls still tentative, refresh their rolling extreme.
         _refresh_tentative('ceiling', i)
         _refresh_tentative('floor',   i)
 
         close_i = float(C[i])
+        event_kind = None       # 'BOS' | 'CHoCH' | None
+        event_tier = None       # 'Major' | 'Minor' | None  (Major for BOS)
+        event_direction = None  # 'bullish' | 'bearish'
+        event_at_wall = False
+        event_pivot = None      # the pivot/wall that broke — dict with idx/price/ts
+        event_displacement = 0.0
+        event_reversal_pct = None  # CHoCH only
 
-        # 2. Check for wall break. Both confirmed AND tentative walls can break.
-        # The event status is later tagged as 'confirmed' or 'tentative' based
-        # on whether the wall that broke was a real swing or rolling extreme.
-        broke_ceiling = (
-            ceiling["price"] is not None
-            and close_i > ceiling["price"]
-        )
-        broke_floor = (
-            floor["price"] is not None
-            and close_i < floor["price"]
-        )
-        if not broke_ceiling and not broke_floor:
+        # 2. BOS check — ONLY on confirmed walls.
+        # In trend direction:
+        #   bullish trend -> close > confirmed ceiling
+        #   bearish trend -> close < confirmed floor
+        # Cold-start (trend is None): a confirmed wall break in either direction
+        # initialises the trend as a BOS.
+        if (trend in ('bullish', None)
+                and ceiling["price"] is not None
+                and not ceiling["is_placeholder"]
+                and close_i > ceiling["price"]):
+            disp = close_i - ceiling["price"]
+            if disp >= BOS_ATR_MULT * atr:
+                event_kind = 'BOS'
+                event_tier = 'Major'
+                event_direction = 'bullish'
+                event_at_wall = True
+                event_pivot = {
+                    'idx': ceiling["idx"], 'price': ceiling["price"], 'ts': ceiling["ts"]
+                }
+                event_displacement = disp
+            else:
+                _log_safe({
+                    'candle_ts': _ts_iso(df, i), 'pair': pair_name, 'timeframe': 'H1',
+                    'event_kind': 'BREAK_REJECTED', 'reject_reason': 'atr_threshold',
+                    'attempted_event': 'BOS', 'direction': 'bullish',
+                    'swing_price': float(ceiling["price"]), 'swing_ts': ceiling["ts"],
+                    'close_price': float(close_i), 'displacement': float(disp),
+                    'displacement_atr': float(disp / atr),
+                    'threshold_atr': float(BOS_ATR_MULT), 'atr': float(atr),
+                })
+
+        elif (trend in ('bearish', None)
+                and floor["price"] is not None
+                and not floor["is_placeholder"]
+                and close_i < floor["price"]):
+            disp = floor["price"] - close_i
+            if disp >= BOS_ATR_MULT * atr:
+                event_kind = 'BOS'
+                event_tier = 'Major'
+                event_direction = 'bearish'
+                event_at_wall = True
+                event_pivot = {
+                    'idx': floor["idx"], 'price': floor["price"], 'ts': floor["ts"]
+                }
+                event_displacement = disp
+            else:
+                _log_safe({
+                    'candle_ts': _ts_iso(df, i), 'pair': pair_name, 'timeframe': 'H1',
+                    'event_kind': 'BREAK_REJECTED', 'reject_reason': 'atr_threshold',
+                    'attempted_event': 'BOS', 'direction': 'bearish',
+                    'swing_price': float(floor["price"]), 'swing_ts': floor["ts"],
+                    'close_price': float(close_i), 'displacement': float(disp),
+                    'displacement_atr': float(disp / atr),
+                    'threshold_atr': float(BOS_ATR_MULT), 'atr': float(atr),
+                })
+
+        # 3. CHoCH check — only when there's an established trend AND no BOS already
+        # fired this candle. Direction is AGAINST trend.
+        if event_kind is None and trend in ('bullish', 'bearish'):
+            choch_dir = 'bearish' if trend == 'bullish' else 'bullish'
+            picked = _pick_choch_pivot(swings_lb3, swings_lb2, trend,
+                                       leg_start_idx, i, ceiling, floor)
+            if picked is not None:
+                pivot, tier, at_wall = picked
+                pivot_price = pivot['price']
+                # Direction-aware break test:
+                if choch_dir == 'bearish':       # uptrend reversing
+                    broke = close_i < pivot_price
+                    disp = pivot_price - close_i
+                else:                            # downtrend reversing
+                    broke = close_i > pivot_price
+                    disp = close_i - pivot_price
+
+                if broke:
+                    if disp >= CHOCH_ATR_MULT * atr:
+                        # Premium / discount zone gate.
+                        gate_passed, reversal_pct = _premium_zone_satisfied(
+                            choch_dir, df, pivot['idx'], i,
+                            ceiling.get("price"), floor.get("price")
+                        )
+                        if gate_passed:
+                            event_kind = 'CHoCH'
+                            event_tier = tier
+                            event_direction = choch_dir
+                            event_at_wall = at_wall
+                            event_pivot = pivot
+                            event_displacement = disp
+                            event_reversal_pct = reversal_pct
+                        else:
+                            _log_safe({
+                                'candle_ts': _ts_iso(df, i), 'pair': pair_name, 'timeframe': 'H1',
+                                'event_kind': 'BREAK_REJECTED',
+                                'reject_reason': 'not_in_premium_zone',
+                                'attempted_event': f'CHoCH-{tier}',
+                                'direction': choch_dir,
+                                'swing_price': float(pivot_price), 'swing_ts': pivot.get('ts'),
+                                'close_price': float(close_i), 'displacement': float(disp),
+                                'displacement_atr': float(disp / atr),
+                                'reversal_pct': reversal_pct,
+                                'threshold_pct': PREMIUM_PCT if choch_dir == 'bearish' else DISCOUNT_PCT,
+                                'broken_was_wall': bool(at_wall),
+                            })
+                    else:
+                        _log_safe({
+                            'candle_ts': _ts_iso(df, i), 'pair': pair_name, 'timeframe': 'H1',
+                            'event_kind': 'BREAK_REJECTED', 'reject_reason': 'atr_threshold',
+                            'attempted_event': f'CHoCH-{tier}',
+                            'direction': choch_dir,
+                            'swing_price': float(pivot_price), 'swing_ts': pivot.get('ts'),
+                            'close_price': float(close_i), 'displacement': float(disp),
+                            'displacement_atr': float(disp / atr),
+                            'threshold_atr': float(CHOCH_ATR_MULT), 'atr': float(atr),
+                            'broken_was_wall': bool(at_wall),
+                        })
+
+        if event_kind is None:
             continue
 
-        # If both broke (extreme single-candle move): use the larger displacement.
-        if broke_ceiling and broke_floor:
-            if (close_i - ceiling["price"]) >= (floor["price"] - close_i):
-                broke_floor = False
-            else:
-                broke_ceiling = False
-
-        break_dir = 'bullish' if broke_ceiling else 'bearish'
-
-        # 3. Classify BOS vs CHoCH against current trend.
-        if trend is None:
-            event = 'BOS'   # first event ever — initialize trend
-        elif trend == break_dir:
-            event = 'BOS'
-        else:
-            event = 'CHoCH'
-
-        # 4. Leg-size filter — DISPLACEMENT PAST THE BROKEN WALL (not from
-        # opposite wall). Bullish: close above ceiling by >= threshold * ATR.
-        # Bearish: close below floor by >= threshold * ATR.
-        broken_wall_price = ceiling["price"] if break_dir == 'bullish' else floor["price"]
-        threshold_mult = BOS_ATR_MULT if event == 'BOS' else CHOCH_ATR_MULT
-        displacement = abs(close_i - broken_wall_price)
-        broken_was_tentative_now = (
-            ceiling["is_placeholder"] if break_dir == 'bullish'
-            else floor["is_placeholder"]
-        )
-        broken_swing_ts_now = ceiling["ts"] if break_dir == 'bullish' else floor["ts"]
-        if displacement < threshold_mult * atr:
-            # Log rejected break for offline review of threshold calibration.
-            if _event_logger is not None and pair_name:
-                try:
-                    cb = abs(float(df['Close'].iloc[i]) - float(df['Open'].iloc[i]))
-                    cr = float(df['High'].iloc[i]) - float(df['Low'].iloc[i])
-                    _event_logger.log_event({
-                        'candle_ts':       _ts_iso(df, i),
-                        'pair':            pair_name,
-                        'timeframe':       'H1',
-                        'event_kind':      'BREAK_REJECTED',
-                        'reject_reason':   'atr_threshold',
-                        'attempted_event': event,
-                        'direction':       break_dir,
-                        'swing_price':     float(broken_wall_price),
-                        'swing_ts':        broken_swing_ts_now,
-                        'close_price':     float(close_i),
-                        'displacement':    float(displacement),
-                        'displacement_atr': float(displacement / atr) if atr else None,
-                        'threshold_atr':   float(threshold_mult),
-                        'atr':             float(atr) if atr else None,
-                        'wall_status':     'tentative' if broken_was_tentative_now else 'confirmed',
-                        'candle_body':     float(cb),
-                        'candle_range':    float(cr),
-                        'body_range_pct':  float(cb / cr) if cr > 0 else 0.0,
-                    })
-                except Exception:
-                    pass
-            continue  # break too shallow past the wall — non-event
-
-        # 5. Tag event status — confirmed if broken wall was real, tentative if rolling extreme.
-        broken_was_tentative = (
-            ceiling["is_placeholder"] if break_dir == 'bullish'
-            else floor["is_placeholder"]
-        )
-        event_status = 'tentative' if broken_was_tentative else 'confirmed'
-
-        # 6. Chop flag — CHoCH only, gap from prior event in candles.
+        # 4. Chop flag — CHoCH only, gap from prior event in candles.
         chop_this_event = False
-        if event == 'CHoCH' and last_event_local_idx is not None:
+        if event_kind == 'CHoCH' and last_event_local_idx is not None:
             gap = i - last_event_local_idx
-            if gap > 0 and gap <= CHOP_LOOKBACK_CANDLES:
+            if 0 < gap <= CHOP_LOOKBACK_CANDLES:
                 chop_this_event = True
 
-        # 7. Apply wall update rules.
-        if event == 'BOS':
-            if break_dir == 'bullish':
-                # Floor trails up: most recent confirmed swing low INSIDE the leg
-                # (leg = from prior leg_start to break candle i).
-                trailed = _trail_inside_leg('floor', swings, leg_start_idx, i)
+        # 5. Apply wall update rules per event type.
+        broken_swing_price = float(event_pivot['price'])
+        broken_swing_ts    = event_pivot.get('ts')
+        broken_was_wall    = event_at_wall
+
+        if event_kind == 'BOS':
+            # Trend-direction wall just broke -> tentative at break-candle extreme.
+            # Opposite wall trails to deepest pullback inside just-completed leg.
+            if event_direction == 'bullish':
+                trailed = _trail_inside_leg('floor', swings_lb3, leg_start_idx, i)
                 if trailed is not None:
                     floor["price"] = trailed["price"]
                     floor["ts"]    = trailed["ts"]
                     floor["idx"]   = trailed["idx"]
                     floor["is_placeholder"] = False
-                # else: floor unchanged (no qualifying interior swing).
-
-                # Ceiling broke -> tentative. Reset to the break-candle high so
-                # the rolling extreme starts here; refresh on next iteration.
                 ceiling["price"] = float(df['High'].iloc[i])
                 ceiling["ts"]    = _ts_iso(df, i)
                 ceiling["idx"]   = i
                 ceiling["is_placeholder"] = True
             else:
-                # Bearish BOS — mirrored.
-                trailed = _trail_inside_leg('ceiling', swings, leg_start_idx, i)
+                trailed = _trail_inside_leg('ceiling', swings_lb3, leg_start_idx, i)
                 if trailed is not None:
                     ceiling["price"] = trailed["price"]
                     ceiling["ts"]    = trailed["ts"]
@@ -589,105 +836,109 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                 floor["ts"]    = _ts_iso(df, i)
                 floor["idx"]   = i
                 floor["is_placeholder"] = True
+            trend = event_direction
 
-            trend = break_dir
+        elif event_kind == 'CHoCH' and event_tier == 'Major':
+            if event_at_wall:
+                # The wall we just closed past becomes tentative.
+                # Opposite wall STAYS — it's the prior trend anchor and
+                # the new trend's starting extreme.
+                if event_direction == 'bearish':       # down CHoCH at floor wall
+                    floor["price"] = float(df['Low'].iloc[i])
+                    floor["ts"]    = _ts_iso(df, i)
+                    floor["idx"]   = i
+                    floor["is_placeholder"] = True
+                else:                                  # up CHoCH at ceiling wall
+                    ceiling["price"] = float(df['High'].iloc[i])
+                    ceiling["ts"]    = _ts_iso(df, i)
+                    ceiling["idx"]   = i
+                    ceiling["is_placeholder"] = True
+            # else: internal-pivot Major CHoCH -> walls do NOT change.
+            trend = event_direction
 
-        else:  # CHoCH
-            # The wall that just broke becomes tentative (anchored at break
-            # candle's extreme on that side; refresh fills in next iteration).
-            # The OPPOSITE wall resets to most recent confirmed swing of the
-            # just-completed trend, strictly BEFORE the broken-wall swing.
-            if break_dir == 'bullish':
-                ref_idx = ceiling["idx"] if ceiling["idx"] is not None else i
-                new_floor = _most_recent_swing_before(swings, 'low', ref_idx)
-                if new_floor is not None:
-                    floor["price"] = new_floor["price"]
-                    floor["ts"]    = new_floor["ts"]
-                    floor["idx"]   = new_floor["idx"]
-                    floor["is_placeholder"] = False
-                # else floor unchanged — extremely rare; held until next event.
-                ceiling["price"] = float(df['High'].iloc[i])
-                ceiling["ts"]    = _ts_iso(df, i)
-                ceiling["idx"]   = i
-                ceiling["is_placeholder"] = True
-            else:
-                ref_idx = floor["idx"] if floor["idx"] is not None else i
-                new_ceiling = _most_recent_swing_before(swings, 'high', ref_idx)
-                if new_ceiling is not None:
-                    ceiling["price"] = new_ceiling["price"]
-                    ceiling["ts"]    = new_ceiling["ts"]
-                    ceiling["idx"]   = new_ceiling["idx"]
-                    ceiling["is_placeholder"] = False
-                floor["price"] = float(df['Low'].iloc[i])
-                floor["ts"]    = _ts_iso(df, i)
-                floor["idx"]   = i
-                floor["is_placeholder"] = True
+        else:  # Minor CHoCH
+            # Walls do NOT change. Trend does NOT flip. Informational only.
+            pass
 
-            trend = break_dir
+        # 6. Resolve impulse-start anchor (used downstream by smc_radar to
+        # build the OB by walking back through the impulse leg).
+        impulse_start = _resolve_impulse_start(
+            event_kind, event_direction, swings_lb3, df,
+            event_pivot.get('idx') if event_pivot else None, i, leg_start_idx
+        )
+        impulse_start_ts    = impulse_start.get('ts') if impulse_start else None
+        impulse_start_price = (float(impulse_start['price'])
+                                if impulse_start else None)
 
-        last_event_type   = event
-        last_event_ts     = _ts_iso(df, i)
-        last_event_status = event_status
-        last_event_pending = (event_status == 'tentative')
-        last_event_idx_iso = _ts_iso(df, i)
+        # 7. Commit event metadata + ring append.
+        last_event_type      = event_kind
+        last_event_tier      = event_tier
+        last_event_direction = event_direction
+        last_event_ts        = _ts_iso(df, i)
+        last_event_idx_iso   = _ts_iso(df, i)
         last_event_local_idx = i
-        last_event_chop   = chop_this_event
-        leg_start_idx     = i
-        fallback_active   = False  # any real event clears fallback
+        last_event_chop      = chop_this_event
+        leg_start_idx        = i
+        fallback_active      = False
 
-        # Log qualified structure event for offline review.
-        if _event_logger is not None and pair_name:
-            try:
-                cb = abs(float(df['Close'].iloc[i]) - float(df['Open'].iloc[i]))
-                cr = float(df['High'].iloc[i]) - float(df['Low'].iloc[i])
-                _event_logger.log_event({
-                    'candle_ts':       _ts_iso(df, i),
-                    'pair':            pair_name,
-                    'timeframe':       'H1',
-                    'event_kind':      event,
-                    'direction':       break_dir,
-                    'swing_price':     float(broken_wall_price),
-                    'swing_ts':        broken_swing_ts_now,
-                    'close_price':     float(close_i),
-                    'displacement':    float(displacement),
-                    'displacement_atr': float(displacement / atr) if atr else None,
-                    'threshold_atr':   float(threshold_mult),
-                    'atr':             float(atr) if atr else None,
-                    'wall_status':     event_status,
-                    'chop_flag':       bool(chop_this_event),
-                    'candle_body':     float(cb),
-                    'candle_range':    float(cr),
-                    'body_range_pct':  float(cb / cr) if cr > 0 else 0.0,
-                })
-            except Exception:
-                pass
+        _ring_append({
+            'type':                 event_kind,
+            'tier':                 event_tier,
+            'direction':            event_direction,
+            'candle_ts':            _ts_iso(df, i),
+            'broken_swing_price':   broken_swing_price,
+            'broken_swing_ts':      broken_swing_ts,
+            'broken_was_wall':      bool(broken_was_wall),
+            'displacement_atr':     float(event_displacement / atr),
+            'chop':                 bool(chop_this_event),
+            'reversal_pct':         (float(event_reversal_pct)
+                                      if event_reversal_pct is not None else None),
+            'impulse_start_ts':     impulse_start_ts,
+            'impulse_start_price':  impulse_start_price,
+            'trend_after':          trend,
+        })
 
-        # After the event, immediately try to promote the broken side using
-        # any swings already confirmed since leg_start; otherwise refresh.
+        # Log qualified event for offline review.
+        cb = abs(float(df['Close'].iloc[i]) - float(df['Open'].iloc[i]))
+        cr = float(df['High'].iloc[i]) - float(df['Low'].iloc[i])
+        _log_safe({
+            'candle_ts':       _ts_iso(df, i),
+            'pair':            pair_name,
+            'timeframe':       'H1',
+            'event_kind':      event_kind,
+            'tier':            event_tier,
+            'direction':       event_direction,
+            'swing_price':     broken_swing_price,
+            'swing_ts':        broken_swing_ts,
+            'close_price':     float(close_i),
+            'displacement':    float(event_displacement),
+            'displacement_atr': float(event_displacement / atr),
+            'threshold_atr':   float(BOS_ATR_MULT if event_kind == 'BOS' else CHOCH_ATR_MULT),
+            'atr':             float(atr),
+            'broken_was_wall': bool(broken_was_wall),
+            'reversal_pct':    (float(event_reversal_pct)
+                                 if event_reversal_pct is not None else None),
+            'chop_flag':       bool(chop_this_event),
+            'candle_body':     float(cb),
+            'candle_range':    float(cr),
+            'body_range_pct':  float(cb / cr) if cr > 0 else 0.0,
+            'trend_after':     trend,
+        })
+
+        # After the event, try to promote / refresh again — the new tentative
+        # wall (if any) needs initial geometry.
         _try_promote_placeholder('ceiling', i)
         _try_promote_placeholder('floor',   i)
         _refresh_tentative('ceiling', i)
         _refresh_tentative('floor',   i)
 
-    # End of walk. Final promotion / refresh attempt at last candle.
+    # End of walk: final promote / refresh pass.
     _try_promote_placeholder('ceiling', n - 1)
     _try_promote_placeholder('floor',   n - 1)
     _refresh_tentative('ceiling', n - 1)
     _refresh_tentative('floor',   n - 1)
 
-    # If the prior tentative event's anchor swing has now confirmed, mark
-    # last_event_pending = False. We detect this by checking whether the
-    # opposite wall (the one that was real on event fire) is still confirmed
-    # AND the wall that became tentative on event fire is now confirmed.
-    # Simpler proxy: if both walls are now confirmed, no event is pending.
-    if last_event_pending and not ceiling["is_placeholder"] and not floor["is_placeholder"]:
-        last_event_pending = False
-        if last_event_status == 'tentative':
-            last_event_status = 'confirmed'
-
-    # Cold-start fallback: if no event fired across the entire walk, fall back
-    # to high/low of the most recent FALLBACK_WINDOW_H1 candles (NOT all 150).
-    # Trend initialised from close-direction across the fallback window.
+    # Cold-start fallback: no event fired across entire walk.
     if is_cold_start and last_event_type is None:
         H_arr = df['High'].values.astype(float)
         L_arr = df['Low'].values.astype(float)
@@ -707,30 +958,21 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             "price": rng_lo, "ts": _ts_iso(df, lo_idx), "idx": lo_idx,
             "is_placeholder": False
         }
-        # Trend init from fallback window slope. Bullish if last close > first
-        # close in the window; bearish if lower; tie -> bullish (deterministic).
         first_c = float(C_arr[fb_lo_idx])
         last_c  = float(C_arr[n - 1])
         trend = 'bearish' if last_c < first_c else 'bullish'
         fallback_active = True
+        _log_safe({
+            'candle_ts':    _ts_iso(df, n - 1),
+            'pair':         pair_name,
+            'timeframe':    'H1',
+            'event_kind':   'FALLBACK_USED',
+            'direction':    trend,
+            'fallback_window_h1': FALLBACK_WINDOW_H1,
+            'range_high':   float(rng_hi),
+            'range_low':    float(rng_lo),
+        })
 
-        # Log fallback usage so we know when no real event fired in window.
-        if _event_logger is not None and pair_name:
-            try:
-                _event_logger.log_event({
-                    'candle_ts':    _ts_iso(df, n - 1),
-                    'pair':         pair_name,
-                    'timeframe':    'H1',
-                    'event_kind':   'FALLBACK_USED',
-                    'direction':    trend,
-                    'fallback_window_h1': FALLBACK_WINDOW_H1,
-                    'range_high':   float(rng_hi),
-                    'range_low':    float(rng_lo),
-                })
-            except Exception:
-                pass
-
-    # Build returned state.
     new_state = {
         "trend":                  trend,
         "ceiling_price":          ceiling["price"],
@@ -740,13 +982,14 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         "floor_ts":               floor["ts"],
         "floor_is_placeholder":   bool(floor["is_placeholder"]),
         "last_event_type":        last_event_type,
+        "last_event_tier":        last_event_tier,
+        "last_event_direction":   last_event_direction,
         "last_event_ts":          last_event_ts,
-        "last_event_status":      last_event_status,
-        "last_event_pending_confirmation": bool(last_event_pending),
         "last_event_idx_iso":     last_event_idx_iso,
         "last_event_chop":        bool(last_event_chop),
         "last_scanned_ts":        _ts_iso(df, n - 1),
         "fallback_active":        bool(fallback_active),
+        "events":                 events_ring,
     }
     return new_state
 

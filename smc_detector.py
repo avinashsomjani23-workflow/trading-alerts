@@ -61,17 +61,12 @@ FVG_NOISE_FLOOR_MULT = {
 # ---------------------------------------------------------------------------
 FVG_WINDOW_H1_CANDLES  = 7
 FVG_WINDOW_M15_CANDLES = 28
-# ---------------------------------------------------------------------------
-# Minimum leg-size thresholds for H1 structure events (ATR multiples).
-# Applied as net price displacement from prior opposite swing to break close.
-# Uniform across Phase 1 emission and Phase 2 re-validation.
-# Loosened aggressively to surface recent continuation BOS. Downstream
-# scoring + PD-array confluence filters the noise.
-# ---------------------------------------------------------------------------
-LEG_SIZE_MIN_ATR = {
-    "CHoCH": 0.35,
-    "BOS":   0.20
-}
+
+# OB candidate range cap. Reject candles where (high - low) > N x ATR.
+# Filters volatility spikes (news bars) from being picked as OBs.
+# Adopted from LuxAlgo SMC ob_coord. Not the inverse of the removed 1.5x
+# median minimum — that one rejected small candles; this rejects oversized.
+OB_MAX_RANGE_ATR_MULT = 2.0
 
 # ---------------------------------------------------------------------------
 # Liquidity sweep — pair-aware tolerance for "equal highs / equal lows" detection.
@@ -104,26 +99,6 @@ SWEEP_SCORE_REJECTION_MAX   = 1.0   # 0 / 0.33 / 0.66 / 1.0 for wick:body ratio 
 # When both H1 and M15 sweeps are detected, M15 only outranks H1 if it scores
 # at least this multiple of the H1 score. Mitigates M15 noise outvoting H1 signal.
 SWEEP_M15_OVER_H1_BUFFER = 1.10
-
-
-def validate_leg_distance(swing_price, break_close, atr, threshold_mult):
-    """
-    Was the net price displacement from the prior opposite swing to the break
-    close at least `threshold_mult * atr`?
-
-    Measures absolute distance only. Distance-based (not candle-based): a move
-    that covers the threshold in 1 candle or 5 candles both qualify.
-
-    Returns True if displacement meets threshold, False otherwise (including
-    when atr is missing — fail-closed; we don't emit structure events on
-    data we can't measure).
-    """
-    if atr is None or atr <= 0:
-        return False
-    if threshold_mult is None or threshold_mult <= 0:
-        return False
-    distance = abs(break_close - swing_price)
-    return distance >= (threshold_mult * atr)
 
 
 def trading_hours_between(ts_earlier, ts_later):
@@ -255,72 +230,70 @@ def get_swing_points(df, lookback=4, bounds=None):
     for i in range(lookback, len(H) - lookback):
         if bounds and (H[i] > bounds['max'] or L[i] < bounds['min']):
             continue
-        if H[i] == max(H[i - lookback: i + lookback + 1]):
+        wh_left  = H[i - lookback: i]
+        wh_right = H[i + 1: i + lookback + 1]
+        wl_left  = L[i - lookback: i]
+        wl_right = L[i + 1: i + lookback + 1]
+        if H[i] > max(max(wh_left), max(wh_right)):
             swings.append({"type": "high", "price": float(H[i]), "idx": i, "ts": df.index[i]})
-        if L[i] == min(L[i - lookback: i + lookback + 1]):
+        if L[i] < min(min(wl_left), min(wl_right)):
             swings.append({"type": "low", "price": float(L[i]), "idx": i, "ts": df.index[i]})
     return sorted(swings, key=lambda s: s["idx"])
 
 
-# NEW
-def compute_bos_sequence_count(df_h1, lookback=4):
+def compute_bos_sequence_count(pair_name):
+    """Count BOS events since the most recent Major CHoCH for the given pair.
+
+    Reads from dealing_range's structure_state.json — single source of truth.
+    Detection lives in dealing_range.py; this function does NOT walk-forward.
+
+    Counter rules (matches dealing_range tier semantics):
+      - BOS                  -> increments counter
+      - Major CHoCH          -> resets counter (trend flipped)
+      - Minor CHoCH          -> ignored (does NOT flip trend, does NOT reset)
+
+    Returns:
+      {
+        'count':       int   (1 if no events / no BOS yet),
+        'trend':       'bullish' | 'bearish' | None,
+        'count_maxed': bool  (True if event ring is full — count may be capped),
+      }
+
+    `count` reports the position of the LATEST BOS (i.e. how many BOS events
+    have printed since the last Major CHoCH, including the latest). If the
+    most recent event is a CHoCH, count is reported as 1 (the CHoCH "is" the
+    structure event of interest at that moment; downstream scoring uses tier).
     """
-    Count how many consecutive BOS events have printed since the last CHoCH on H1.
-    Returns the count for the most recent directional trend.
+    try:
+        import dealing_range as _dr
+        state_all = _dr.load_state()
+        pair_state = state_all.get(pair_name) or {}
+    except Exception:
+        return {'count': 1, 'trend': None, 'count_maxed': False}
 
-    Applies leg-size filter uniformly with Phase 1's detect_smc_radar. A break
-    below threshold is treated as a non-event (state not updated). This keeps
-    the returned trend consistent with what Phase 1 would emit.
+    events = pair_state.get('events', []) or []
+    trend = pair_state.get('trend')
+    if not events:
+        return {'count': 1, 'trend': trend, 'count_maxed': False}
 
-    Returns dict: {'count': int, 'trend': 'bullish'|'bearish'|None}
-    """
-    if df_h1 is None or len(df_h1) < lookback * 2 + 2:
-        return {'count': 1, 'trend': None}
+    # Walk events forward; reset on Major CHoCH; increment on BOS.
+    count = 0
+    for ev in events:
+        kind = ev.get('type')
+        tier = ev.get('tier')
+        if kind == 'CHoCH' and tier == 'Major':
+            count = 0
+        elif kind == 'BOS':
+            count += 1
+        # Minor CHoCH: ignored.
 
-    C = df_h1['Close'].values.astype(float)
-    n = len(df_h1)
-    swings = get_swing_points(df_h1, lookback=lookback)
+    # If no BOS has fired since last Major CHoCH, report count=1 so callers
+    # treating the latest event as "the structural anchor" don't divide-by-zero.
+    if count == 0:
+        count = 1
 
-    h1_atr = compute_atr(df_h1)
-
-    trend_state = None
-    bos_seq_counter = 0
-
-    for i in range(lookback + 1, n):
-        past_swings = [s for s in swings if s['idx'] < i]
-        if len(past_swings) < 2:
-            continue
-        latest_high = [s for s in past_swings if s['type'] == 'high']
-        latest_low = [s for s in past_swings if s['type'] == 'low']
-        if not latest_high or not latest_low:
-            continue
-
-        sh, sl = latest_high[-1], latest_low[-1]
-        bos_detected, bos_type = False, None
-
-        if C[i] > sh['price'] and C[i - 1] <= sh['price']:
-            bos_detected, bos_type = True, 'bullish'
-        elif C[i] < sl['price'] and C[i - 1] >= sl['price']:
-            bos_detected, bos_type = True, 'bearish'
-
-        if not bos_detected:
-            continue
-
-        # Leg-size filter — match Phase 1 detect_smc_radar thresholds.
-        provisional_tag = 'CHoCH' if (trend_state is None or trend_state != bos_type) else 'BOS'
-        threshold_mult = LEG_SIZE_MIN_ATR.get(provisional_tag, 0.6)
-        prior_opposite_swing_price = sl['price'] if bos_type == 'bullish' else sh['price']
-
-        if not validate_leg_distance(prior_opposite_swing_price, C[i], h1_atr, threshold_mult):
-            continue
-
-        if trend_state is None or trend_state != bos_type:
-            bos_seq_counter = 0
-        else:
-            bos_seq_counter += 1
-        trend_state = bos_type
-
-    return {'count': max(1, bos_seq_counter + 1), 'trend': trend_state}
+    count_maxed = (len(events) >= _dr.EVENT_RING_MAX)
+    return {'count': count, 'trend': trend, 'count_maxed': count_maxed}
 
 def stack_labels(labels, pair_conf):
     """
@@ -833,14 +806,18 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     }
 
 
-def _killzone_hit(ist_hour, pair_type):
-    """Widened session windows (hour-level precision)."""
-    if pair_type == "forex":
-        return (12 <= ist_hour <= 16) or (ist_hour >= 18) or (ist_hour == 0)
+def _killzone_hit(utc_hour, pair_type):
+    """Kill zone windows in UTC. IST is for display only.
+    User trading window: weekdays 09:00-24:00 IST = 03:30-18:30 UTC.
+    Hours outside that window are blackout and excluded here.
+    Hour-level precision (no 30-min boundaries).
+    """
+    if pair_type in ("forex", "commodity"):
+        # London open through NY session, capped at user trading-day end.
+        return 6 <= utc_hour <= 18
     if pair_type == "index":
-        return (ist_hour >= 19) or (ist_hour <= 1)
-    if pair_type == "commodity":
-        return (12 <= ist_hour <= 16) or (ist_hour >= 18) or (ist_hour == 0)
+        # NY core only.
+        return 13 <= utc_hour <= 18
     return False
 
 
@@ -848,17 +825,17 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     bos_tag = ob.get('bos_tag', 'BOS')
     pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
 
-    # Structure — pair-aware BOS sequence with positive gradient for early
-    # continuation. Vet logic: BOS #1-2 after CHoCH is the strongest setup
-    # (smart money still loading); by the caution threshold the trend is
-    # exhausted. Caution thresholds reflect typical pair behaviour — forex
-    # mean-reverts faster, indices sustain trends longer.
-    #   CHoCH                       -> 2.5 (trend reversal confirmed)
-    #   BOS #1-2                    -> 2.0 (early continuation, strongest)
-    #   BOS #3 .. caution-1         -> 1.5 (mid-trend; commodity/index only)
-    #   BOS >= caution_threshold    -> 1.0 (exhausted)
+    # Structure score grid (locked):
+    #   Major CHoCH                 -> 2.5  (trend reversal confirmed)
+    #   Minor CHoCH                 -> 2.0  (lookback=2 break, weakening — not reversed)
+    #   BOS #1-2 since last CHoCH   -> 2.0  (early continuation, strongest)
+    #   BOS #3 .. caution-1         -> 1.5  (mid-trend; commodity/index only)
+    #   BOS >= caution_threshold    -> 1.0  (exhausted)
+    # Caution thresholds reflect typical pair behaviour: forex mean-reverts
+    # faster, indices sustain trends longer.
+    bos_tier = ob.get('bos_tier', 'Major')
     if bos_tag == 'CHoCH':
-        bd = {"structure": 2.5}
+        bd = {"structure": 2.5 if bos_tier == 'Major' else 2.0}
     else:
         bos_seq = ob.get('bos_sequence_count', 1)
         caution_threshold = {'forex': 3, 'index': 5, 'commodity': 4}.get(pair_type, 3)
@@ -979,10 +956,9 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         if rng_width > 0:
             pd_position = (proximal - dr["range_low"]) / rng_width
     bd["pd"] = 0.0  # PD removed from scoring; display-only.
-    # Killzone — IST-based (hardcoded IST clock hours; no DST drift needed since
-    # windows are defined in local IST and IST has no DST).
-    ist_hour = (datetime.utcnow() + timedelta(hours=5, minutes=30)).hour
-    bd["killzone"] = 1.0 if _killzone_hit(ist_hour, pair_type) else 0.0
+    # Killzone — UTC-based. IST conversion is for display only.
+    utc_hour = datetime.utcnow().hour
+    bd["killzone"] = 1.0 if _killzone_hit(utc_hour, pair_type) else 0.0
 
     # Macro removed from scorecard. Still surfaced as email-only context.
 
@@ -1020,20 +996,28 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     dp = _dp(pair_conf)
     rows = []
 
-    # 1. Structure — pair-aware BOS sequence
+    # 1. Structure — pair-aware BOS sequence + Major/Minor CHoCH tier.
     s = breakdown.get("structure", 0)
     bos_seq = ob.get('bos_sequence_count', 1)
-    if s >= 2.5:
-        rows.append(("Structure", s, 2.5, "ok", "Trend has shifted in our favor (CHoCH confirmed)."))
+    bos_tag_local = ob.get('bos_tag', 'BOS')
+    bos_tier_local = ob.get('bos_tier', 'Major')
+    bos_count_maxed = bool(ob.get('bos_count_maxed', False))
+    seq_str = f"#{bos_seq}+" if bos_count_maxed else f"#{bos_seq}"
+    if bos_tag_local == 'CHoCH' and bos_tier_local == 'Major':
+        rows.append(("Structure", s, 2.5, "ok",
+                     "Major CHoCH — trend has reversed (lookback=3 break, reversal from premium/discount)."))
+    elif bos_tag_local == 'CHoCH' and bos_tier_local == 'Minor':
+        rows.append(("Structure", s, 2.5, "warn",
+                     "Minor CHoCH (lookback=2) — trend weakening, not yet reversed."))
     elif s >= 2.0:
         rows.append(("Structure", s, 2.5, "ok",
-                      f"Early continuation (BOS #{bos_seq} since CHoCH) — smart money still loading."))
+                      f"Early continuation (BOS {seq_str} since last Major CHoCH) — smart money still loading."))
     elif s >= 1.5:
         rows.append(("Structure", s, 2.5, "warn",
-                      f"Mid-trend continuation (BOS #{bos_seq} since CHoCH)."))
+                      f"Mid-trend continuation (BOS {seq_str} since last Major CHoCH)."))
     elif s >= 1.0:
         rows.append(("Structure", s, 2.5, "fail",
-                      f"Late continuation (BOS #{bos_seq} since CHoCH) — trend may be exhausted."))
+                      f"Late continuation (BOS {seq_str} since last Major CHoCH) — trend may be exhausted."))
     else:
         rows.append(("Structure", s, 2.5, "fail", "No confirmed BOS or CHoCH."))
 
@@ -1212,76 +1196,64 @@ def detect_ltf_choch(df_m5, bias, bounds):
     return {"fired": False, "level": None}
 
 
-# NEW (use this — simplified, no dead helper)
-def check_opposite_bos(df_h1, bias, since_ts=None):
-    """
-    Return True if H1 printed a BOS in the opposite direction to `bias` since
-    `since_ts`, AND that BOS passed the 0.6x H1 ATR leg-size filter.
+def check_opposite_bos(pair_name, bias, since_ts=None):
+    """Return True if a structural event opposite to `bias` has fired since
+    `since_ts` for the given pair.
 
-    `since_ts` must be UTC-naive (no timezone info) OR tz-aware. Naive datetimes
-    are treated as UTC. Callers holding IST datetimes must subtract 5h30m before
-    passing. This is a breaking change from prior behavior (which silently
-    subtracted 5h30m internally). All callers updated accordingly.
+    Reads from dealing_range structure_state.json — does NOT walk-forward.
 
-    The leg-size filter prevents micro counter-swings from invalidating a
-    valid zone. Uses BOS threshold (0.6x H1 ATR).
+    What counts as "opposite structure":
+      - BOS in the opposite direction         -> True
+      - Major CHoCH in the opposite direction -> True
+    Minor CHoCH does NOT invalidate a zone (consistent with the locked rule
+    that Minor does not flip trend).
+
+    `bias`: 'LONG' or 'SHORT'.
+    `since_ts`: datetime (tz-aware or UTC-naive) — events with candle_ts >
+                since_ts qualify. None means "any event in the ring".
     """
-    if df_h1 is None or len(df_h1) < 10:
+    if bias not in ('LONG', 'SHORT'):
         return False
 
-    swings = get_swing_points(df_h1, lookback=5)
-    C = df_h1['Close'].values
-    n = len(df_h1)
-    start_idx = max(1, n - 24)
+    try:
+        import dealing_range as _dr
+        state_all = _dr.load_state()
+        pair_state = state_all.get(pair_name) or {}
+    except Exception:
+        return False
 
-    h1_atr = compute_atr(df_h1)
+    events = pair_state.get('events', []) or []
+    if not events:
+        return False
 
-    # Normalize since_ts to UTC-naive
-    since_utc = None
+    opposite_dir = 'bearish' if bias == 'LONG' else 'bullish'
+
+    # Normalize since_ts to UTC-naive ISO string for direct comparison with
+    # the event ring's candle_ts (which is stored as ISO).
+    since_iso = None
     if since_ts is not None:
         try:
-            if hasattr(since_ts, 'tzinfo') and since_ts.tzinfo is not None:
-                since_utc = datetime.utcfromtimestamp(since_ts.timestamp())
-            else:
-                since_utc = since_ts  # naive assumed UTC
+            ts = since_ts
+            if hasattr(ts, 'tzinfo') and ts.tzinfo is not None:
+                ts = ts.astimezone(None).replace(tzinfo=None)
+            if hasattr(ts, 'isoformat'):
+                since_iso = ts.isoformat()
         except Exception:
-            since_utc = None
+            since_iso = None
 
-    if since_utc is not None:
-        try:
-            for i in range(n):
-                ts = df_h1.index[i]
-                if hasattr(ts, 'tz_convert') and ts.tzinfo is not None:
-                    ts_cmp = ts.tz_convert('UTC').tz_localize(None).to_pydatetime()
-                elif hasattr(ts, 'to_pydatetime'):
-                    ts_cmp = ts.to_pydatetime()
-                    if ts_cmp.tzinfo is not None:
-                        ts_cmp = ts_cmp.replace(tzinfo=None)
-                else:
-                    ts_cmp = ts
-                if ts_cmp >= since_utc:
-                    start_idx = max(1, i)
-                    break
-        except Exception:
-            start_idx = max(1, n - 24)
-
-    threshold_mult = LEG_SIZE_MIN_ATR.get("BOS", 0.6)
-
-    for i in range(start_idx, n):
-        past_swings = [s for s in swings if s['idx'] < i]
-        latest_high = [s for s in past_swings if s['type'] == 'high']
-        latest_low = [s for s in past_swings if s['type'] == 'low']
-
-        if bias == "LONG" and latest_low:
-            swing_px = latest_low[-1]['price']
-            if C[i] < swing_px and C[i - 1] >= swing_px:
-                if validate_leg_distance(swing_px, C[i], h1_atr, threshold_mult):
-                    return True
-        elif bias == "SHORT" and latest_high:
-            swing_px = latest_high[-1]['price']
-            if C[i] > swing_px and C[i - 1] <= swing_px:
-                if validate_leg_distance(swing_px, C[i], h1_atr, threshold_mult):
-                    return True
+    for ev in events:
+        if ev.get('direction') != opposite_dir:
+            continue
+        kind = ev.get('type')
+        tier = ev.get('tier')
+        # Only BOS or Major CHoCH count as zone-killing structure.
+        if not (kind == 'BOS' or (kind == 'CHoCH' and tier == 'Major')):
+            continue
+        if since_iso is None:
+            return True
+        ev_ts = ev.get('candle_ts')
+        if ev_ts and ev_ts > since_iso:
+            return True
 
     return False
 def compute_h1_break_candle_span(df_h1, ob, h1_atr):
