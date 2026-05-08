@@ -1,8 +1,8 @@
 {
   "EURUSD": {
     "trend": "bearish",
-    "ceiling_price": 1.17384672164917,
-    "ceiling_ts": "2026-05-07T21:00:00+00:00",
+    "ceiling_price": 1.1741223335266113,
+    "ceiling_ts": "2026-05-08T05:00:00+00:00",
     "ceiling_is_placeholder": true,
     "floor_price": 1.1727453470230103,
     "floor_ts": "2026-05-07T20:00:00+00:00",
@@ -13,7 +13,7 @@
     "last_event_ts": "2026-05-07T19:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T19:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-08T04:00:00+00:00",
+    "last_scanned_ts": "2026-05-08T05:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -107,7 +107,7 @@
     "last_event_ts": "2026-05-07T16:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T16:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-08T04:00:00+00:00",
+    "last_scanned_ts": "2026-05-08T05:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -186,7 +186,7 @@
     "last_event_ts": "2026-05-07T19:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T19:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-08T04:00:00+00:00",
+    "last_scanned_ts": "2026-05-08T05:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -340,7 +340,7 @@
     "last_event_ts": "2026-05-07T12:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T12:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-08T04:00:00+00:00",
+    "last_scanned_ts": "2026-05-08T05:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -419,7 +419,7 @@
     "last_event_ts": "2026-05-07T14:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T14:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-08T04:00:00+00:00",
+    "last_scanned_ts": "2026-05-08T05:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -528,7 +528,7 @@
     "last_event_ts": "2026-05-07T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-08T04:00:00+00:00",
+    "last_scanned_ts": "2026-05-08T05:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
