@@ -3,3 +3,4 @@ __pycache__/
 smc_radar.log
 *.tmp
 logs/
+phase2_scan_log.jsonl

@@ -1,7 +1,23 @@
 {
   "permissions": {
     "allow": [
-      "Bash(py -c \"import event_logger; import dealing_range; print\\('imports OK'\\)\")"
+      "Bash(py -c \"import event_logger; import dealing_range; print\\('imports OK'\\)\")",
+      "WebSearch",
+      "Read(//c/Users/aviso/OneDrive/Desktop/smc-research/joshyattridge-smc/smartmoneyconcepts/**)",
+      "Read(//c/Users/aviso/OneDrive/Desktop/smc-research/smtlab-smc/smartmoneyconcepts/**)",
+      "WebFetch(domain:gist.githubusercontent.com)",
+      "WebFetch(domain:www.tradingview.com)",
+      "Bash(mkdir -p \"c:/Users/aviso/OneDrive/Desktop/smc-research/luxalgo\")",
+      "Bash(curl -sL \"https://gist.githubusercontent.com/niquedegraaff/8c2f45dc73519458afeae14b0096d719/raw\" -o \"c:/Users/aviso/OneDrive/Desktop/smc-research/luxalgo/luxalgo-smc-enhanced.pine\")",
+      "Read(//c/Users/aviso/OneDrive/Desktop/smc-research/luxalgo/**)",
+      "Bash(python -c \"import dealing_range; print\\('OK'\\)\")",
+      "Bash(where python *)",
+      "Bash(where py *)",
+      "Bash(where python3 *)",
+      "Bash(ls /c/Python*/python.exe)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/aviso/anaconda3/**)",
+      "Read(//c/Users/aviso/miniconda3/**)"
     ]
   }
 }

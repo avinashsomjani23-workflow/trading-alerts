@@ -613,18 +613,39 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None):
 # CHART GENERATION
 # ---------------------------------------------------------------------------
 
-def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
+def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
+    """
+    H1 zone chart.
+
+    Visual elements:
+      - Candles (thin body 0.55, fat wick 1.5) — last 40 candles + 6 right margin
+      - Zone band (proximal/distal, purple)
+      - OB candle outline
+      - FVG (active or ghost)
+      - BOS/CHoCH horizontal line + break candle outline
+      - Current price (white)
+      - DR ceiling/floor (always drawn): solid dotted if confirmed,
+        dashed-gap if placeholder; faded color
+      - Equilibrium line (only when both DR walls on-screen)
+      - Swing markers: filled triangle for lookback-3, hollow for lookback-2,
+        muted yellow, placed outside the candle
+      - Adaptive figure height when DR is wide vs candle range
+    """
     try:
         full_df = df.dropna(subset=['Open', 'High', 'Low', 'Close']).copy().reset_index(drop=True)
         n_full  = len(full_df)
         ob_abs  = ob['ob_idx']
 
-        window_start = max(0, ob_abs - 15)
-        window_start = min(window_start, n_full - 1)
+        # --- Plot window: 40 back from current, but always include OB candle.
+        WINDOW_BACK = 40
+        RIGHT_MARGIN = 6
+        window_start = max(0, n_full - WINDOW_BACK)
+        # If OB sits earlier than that, extend window back to include it.
+        if ob_abs < window_start:
+            window_start = max(0, ob_abs - 3)
 
         df_plot = full_df.iloc[window_start:].copy().reset_index(drop=True)
         n_plot  = len(df_plot)
-
         ob_plot_idx = ob_abs - window_start
 
         O = df_plot['Open'].values
@@ -632,29 +653,85 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
         H = df_plot['High'].values
         L = df_plot['Low'].values
 
-        fig, ax = plt.subplots(1, 1, figsize=(12, 5.5), facecolor='#131722')
-        ax.set_facecolor('#131722')
-        for spine in ax.spines.values():
-            spine.set_color('#2a2a3e')
-
-        for i in range(n_plot):
-            o, h, l, c = float(O[i]), float(H[i]), float(L[i]), float(C[i])
-            col = '#26a69a' if c >= o else '#ef5350'
-            ax.plot([i, i], [l, h], color=col, linewidth=1.2, zorder=2)
-            body = abs(c - o) or (h - l) * 0.02
-            ax.add_patch(patches.Rectangle(
-                (i - 0.4, min(o, c)), 0.8, body,
-                facecolor=col, linewidth=0, alpha=0.9, zorder=3
-            ))
-
         proximal = float(ob['proximal_line'])
         distal   = float(ob['distal_line'])
         zone_lo  = min(proximal, distal)
         zone_hi  = max(proximal, distal)
 
+        # --- Walls (optional) ---
+        ceiling_price = None
+        floor_price   = None
+        ceiling_ph    = True
+        floor_ph      = True
+        if walls and isinstance(walls, dict):
+            ceiling_price = walls.get("ceiling_price")
+            floor_price   = walls.get("floor_price")
+            ceiling_ph    = bool(walls.get("ceiling_is_placeholder", True))
+            floor_ph      = bool(walls.get("floor_is_placeholder", True))
+        eq_price = None
+        if ceiling_price is not None and floor_price is not None and ceiling_price > floor_price:
+            eq_price = (ceiling_price + floor_price) / 2.0
+
+        # --- Y-limits: include candles, zone, FVG, current price, DR walls, EQ.
+        candle_lo = float(np.min(L))
+        candle_hi = float(np.max(H))
+        ymin_candidates = [candle_lo, zone_lo]
+        ymax_candidates = [candle_hi, zone_hi]
+        if ob['fvg'].get('exists') or ob['fvg'].get('was_detected'):
+            ft = ob['fvg'].get('fvg_top') or ob['fvg'].get('ghost_top')
+            fb = ob['fvg'].get('fvg_bottom') or ob['fvg'].get('ghost_bottom')
+            if ft is not None and fb is not None:
+                ymin_candidates.append(float(fb))
+                ymax_candidates.append(float(ft))
+        ymin_candidates.append(float(C[-1]))
+        ymax_candidates.append(float(C[-1]))
+        if ceiling_price is not None:
+            ymax_candidates.append(float(ceiling_price))
+        if floor_price is not None:
+            ymin_candidates.append(float(floor_price))
+
+        y_min_raw = min(ymin_candidates)
+        y_max_raw = max(ymax_candidates)
+
+        # H1 ATR-based minimum padding (0.5 ATR) so tight pairs aren't cramped.
+        h1_atr = ob.get('h1_atr', 0.0) or 0.0
+        atr_pad = 0.5 * h1_atr if h1_atr > 0 else (y_max_raw - y_min_raw) * 0.05
+        # General padding 6% of required range.
+        gen_pad = (y_max_raw - y_min_raw) * 0.06
+        pad = max(atr_pad, gen_pad)
+        y_min = y_min_raw - pad
+        y_max = y_max_raw + pad
+
+        # --- Adaptive figure height.
+        candle_range = max(candle_hi - candle_lo, 1e-9)
+        required_range = y_max - y_min
+        ratio = required_range / candle_range
+        # Base height 6.0; bump up to 9.0 as DR/zone forces a wider y span.
+        base_h = 6.0
+        if ratio > 1.5:
+            base_h = min(9.0, 6.0 + (ratio - 1.5) * 1.5)
+        fig, ax = plt.subplots(1, 1, figsize=(14, base_h), facecolor='#131722')
+        ax.set_facecolor('#131722')
+        for spine in ax.spines.values():
+            spine.set_color('#2a2a3e')
+
+        # --- Candles (thin bodies, fat wicks) ---
+        BODY_W = 0.55
+        WICK_W = 1.5
+        for i in range(n_plot):
+            o, h, l, c = float(O[i]), float(H[i]), float(L[i]), float(C[i])
+            col = '#26a69a' if c >= o else '#ef5350'
+            ax.plot([i, i], [l, h], color=col, linewidth=WICK_W, zorder=2,
+                    solid_capstyle='butt')
+            body = abs(c - o) or (h - l) * 0.02
+            ax.add_patch(patches.Rectangle(
+                (i - BODY_W/2, min(o, c)), BODY_W, body,
+                facecolor=col, linewidth=0, alpha=0.95, zorder=3
+            ))
+
         # --- Zone band ---
         zone_x_start = max(0, ob_plot_idx - 0.5)
-        zone_width   = (n_plot + 2) - zone_x_start
+        zone_width   = (n_plot + RIGHT_MARGIN - 1) - zone_x_start
         ax.add_patch(patches.Rectangle(
             (zone_x_start, zone_lo), zone_width, zone_hi - zone_lo,
             facecolor='#9b59b6', alpha=0.12, zorder=1
@@ -664,7 +741,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
             fill=False, edgecolor='#bb8fce', linestyle=':', linewidth=1.5, zorder=2
         ))
 
-        # --- OB candle outline (light purple, no text label) ---
+        # --- OB candle outline ---
         if 0 <= ob_plot_idx < n_plot:
             ob_h = float(H[ob_plot_idx])
             ob_l = float(L[ob_plot_idx])
@@ -674,11 +751,10 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
                 linestyle='-'
             ))
 
-        # --- FVG: outline middle (displacement) candle only, slightly wider for mitigation visibility ---
-        fvg_active = ob['fvg']['exists'] and ob['fvg']['c1_idx'] is not None
-        fvg_ghost  = (not ob['fvg']['exists']) and ob['fvg'].get('was_detected') and ob['fvg'].get('ghost_c1_idx') is not None
+        # --- FVG outline ---
+        fvg_active  = ob['fvg']['exists'] and ob['fvg']['c1_idx'] is not None
+        fvg_ghost   = (not ob['fvg']['exists']) and ob['fvg'].get('was_detected') and ob['fvg'].get('ghost_c1_idx') is not None
         fvg_partial = fvg_active and ob['fvg'].get('mitigation') == 'partial'
-
         if fvg_active:
             ft = float(ob['fvg']['fvg_top'])
             fb = float(ob['fvg']['fvg_bottom'])
@@ -689,14 +765,12 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
                     face_col, edge_col = '#a8e6a1', '#7ed67e'
                 else:
                     face_col, edge_col = '#27ae60', '#2ecc71'
-                fvg_x_start = mid_local - 0.6
-                fvg_width   = 1.8 + 1.2
                 ax.add_patch(patches.Rectangle(
-                    (fvg_x_start, fb), fvg_width, ft - fb,
+                    (mid_local - 0.6, fb), 3.0, ft - fb,
                     facecolor=face_col, alpha=0.25, zorder=1
                 ))
                 ax.add_patch(patches.Rectangle(
-                    (fvg_x_start, fb), fvg_width, ft - fb,
+                    (mid_local - 0.6, fb), 3.0, ft - fb,
                     fill=False, edgecolor=edge_col, linewidth=1.0,
                     linestyle='--', zorder=2
                 ))
@@ -706,20 +780,17 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
             mid_abs = ob['fvg']['ghost_c1_idx'] + 1
             mid_local = mid_abs - window_start
             if 0 <= mid_local < n_plot:
-                fvg_x_start = mid_local - 0.6
-                fvg_width   = 1.8 + 1.2
                 ax.add_patch(patches.Rectangle(
-                    (fvg_x_start, fb), fvg_width, ft - fb,
+                    (mid_local - 0.6, fb), 3.0, ft - fb,
                     facecolor='#888888', alpha=0.10, zorder=1
                 ))
                 ax.add_patch(patches.Rectangle(
-                    (fvg_x_start, fb), fvg_width, ft - fb,
+                    (mid_local - 0.6, fb), 3.0, ft - fb,
                     fill=False, edgecolor='#888888', linewidth=1.0,
                     linestyle=':', zorder=2
                 ))
 
-        # --- BOS / CHoCH horizontal line ---
-        # Palette: BOS=cyan, Major CHoCH=orange, Minor CHoCH=purple.
+        # --- BOS / CHoCH line + break-candle outline ---
         bos_price = float(ob['bos_swing_price'])
         _btag = ob.get('bos_tag', 'BOS')
         _btier = ob.get('bos_tier', 'Major')
@@ -729,12 +800,9 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
             bos_color = '#9c27b0'
         else:
             bos_color = '#ff9800'
-        ax.axhline(
-            y=bos_price, color=bos_color, linewidth=0.8,
-            linestyle='--', alpha=0.7, zorder=2
-        )
+        ax.axhline(y=bos_price, color=bos_color, linewidth=0.8,
+                   linestyle='--', alpha=0.7, zorder=2)
 
-        # --- BOS/CHoCH break candle outline ---
         br_start, br_end = smc_detector.compute_h1_break_candle_span(full_df, ob, None)
         if br_start is not None and br_end is not None:
             for abs_i in range(br_start, br_end + 1):
@@ -749,18 +817,76 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
                         fill=False, edgecolor=bos_color, linewidth=1.5, zorder=5
                     ))
 
+        # --- Dealing Range walls + Equilibrium ---
+        # Confirmed = solid dotted, alpha 0.85; Placeholder = dashed-gap, alpha 0.45.
+        DR_COLOR = '#5dade2'   # muted blue, doesn't clash with palette
+        EQ_COLOR = '#85c1e9'   # lighter than DR walls
+        DR_LW = 1.0
+        if ceiling_price is not None:
+            ax.axhline(
+                y=ceiling_price, color=DR_COLOR, linewidth=DR_LW,
+                linestyle=':' if not ceiling_ph else (0, (4, 4)),
+                alpha=0.85 if not ceiling_ph else 0.45, zorder=2
+            )
+        if floor_price is not None:
+            ax.axhline(
+                y=floor_price, color=DR_COLOR, linewidth=DR_LW,
+                linestyle=':' if not floor_ph else (0, (4, 4)),
+                alpha=0.85 if not floor_ph else 0.45, zorder=2
+            )
+        if eq_price is not None:
+            ax.axhline(
+                y=eq_price, color=EQ_COLOR, linewidth=0.8,
+                linestyle=':', alpha=0.6, zorder=2
+            )
+
+        # --- Swing triangles (lookback 2 hollow, lookback 3 filled) ---
+        SWING_COLOR = '#d4a017'
+        try:
+            swings_lb3 = smc_detector.get_swing_points(full_df, lookback=3)
+            swings_lb2 = smc_detector.get_swing_points(full_df, lookback=2)
+        except Exception:
+            swings_lb3, swings_lb2 = [], []
+        # lb2 minus lb3 (so lb3 swings render as filled, lb2-only as hollow).
+        lb3_keys = {(s['idx'], s['type']) for s in swings_lb3}
+        # Visual offset based on chart vertical span (not pixels).
+        marker_offset = (y_max - y_min) * 0.012
+        for s in swings_lb3:
+            xi = s['idx'] - window_start
+            if not (0 <= xi < n_plot):
+                continue
+            if s['type'] == 'high':
+                ax.scatter([xi], [s['price'] + marker_offset], marker='v',
+                           s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
+                           linewidths=1.0, zorder=6)
+            else:
+                ax.scatter([xi], [s['price'] - marker_offset], marker='^',
+                           s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
+                           linewidths=1.0, zorder=6)
+        for s in swings_lb2:
+            if (s['idx'], s['type']) in lb3_keys:
+                continue  # already drawn as filled lb3
+            xi = s['idx'] - window_start
+            if not (0 <= xi < n_plot):
+                continue
+            if s['type'] == 'high':
+                ax.scatter([xi], [s['price'] + marker_offset], marker='v',
+                           s=36, facecolors='none', edgecolors=SWING_COLOR,
+                           linewidths=1.2, zorder=6)
+            else:
+                ax.scatter([xi], [s['price'] - marker_offset], marker='^',
+                           s=36, facecolors='none', edgecolors=SWING_COLOR,
+                           linewidths=1.2, zorder=6)
+
         # --- Current price line ---
         current_price = float(C[-1])
-        ax.axhline(
-            y=current_price, color='#ffffff', linewidth=0.8,
-            linestyle='-', alpha=0.5, zorder=2
-        )
+        ax.axhline(y=current_price, color='#ffffff', linewidth=0.8,
+                   linestyle='-', alpha=0.5, zorder=2)
 
-        # --- Mid-chart tags: proximal, distal, BOS/CHoCH, current (numbers only, colour-matched) ---
-        # Build pair_conf shim for stack_labels (it needs decimal_places + pair_type).
+        # --- Mid-chart numeric tags (price units; chart axis stays in price) ---
         pair_type_guess = "forex"
         if dp == 3:
-            pair_type_guess = "forex"  # JPY-style
+            pair_type_guess = "forex"
         elif dp == 0 or dp == 1:
             pair_type_guess = "index"
         elif dp == 2:
@@ -770,21 +896,33 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp):
         mid_x = n_plot / 2.0
         mid_labels = [
             (proximal, f"{proximal:.{dp}f}", '#bb8fce'),
-            (distal, f"{distal:.{dp}f}", '#bb8fce'),
+            (distal,   f"{distal:.{dp}f}",   '#bb8fce'),
             (bos_price, f"{bos_price:.{dp}f}", bos_color),
             (current_price, f"{current_price:.{dp}f}", '#ffffff'),
         ]
+        if ceiling_price is not None:
+            mid_labels.append(
+                (ceiling_price,
+                 f"DR↑ {ceiling_price:.{dp}f}{' (ph)' if ceiling_ph else ''}",
+                 DR_COLOR)
+            )
+        if floor_price is not None:
+            mid_labels.append(
+                (floor_price,
+                 f"DR↓ {floor_price:.{dp}f}{' (ph)' if floor_ph else ''}",
+                 DR_COLOR)
+            )
+        if eq_price is not None:
+            mid_labels.append((eq_price, f"EQ {eq_price:.{dp}f}", EQ_COLOR))
+
         mid_stacked = smc_detector.stack_labels(mid_labels, pair_conf_shim)
         for adj_price, text, color in mid_stacked:
             ax.text(mid_x, adj_price, text, color=color, fontsize=10, va='center',
-                    ha='center', fontweight='bold', zorder=5,
-                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
+                    ha='center', fontweight='bold', zorder=7,
+                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.78))
 
-        y_min = float(np.min(L))
-        y_max = float(np.max(H))
-        pad   = (y_max - y_min) * 0.08
-        ax.set_ylim(y_min - pad, y_max + pad)
-        ax.set_xlim(-1, n_plot + 10)
+        ax.set_ylim(y_min, y_max)
+        ax.set_xlim(-1, n_plot + RIGHT_MARGIN)
 
         direction_label = "Demand" if ob['direction'] == 'bullish' else "Supply"
         event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
@@ -923,32 +1061,83 @@ def _fallback_narrative(ob, name, dp, current_price):
 # EMAIL ASSEMBLY
 # ---------------------------------------------------------------------------
 
-def build_summary_table_html(all_zones_for_table, dp_map):
+def _format_dr_walls_cell(walls):
+    """Render the DR Walls cell. Confirmed/placeholder per side; fallback flagged."""
+    if not walls or not isinstance(walls, dict):
+        return "<span style='color:#888;'>&mdash;</span>"
+    if walls.get("fallback_active"):
+        return "<span style='color:#e74c3c;'>&#9888; Fallback</span>"
+    ceiling_ph = walls.get("ceiling_is_placeholder", True)
+    floor_ph   = walls.get("floor_is_placeholder", True)
+    if not ceiling_ph and not floor_ph:
+        return "<span style='color:#27ae60;'>&#10003; Confirmed</span>"
+    if ceiling_ph and floor_ph:
+        return "<span style='color:#e67e22;'>&#9888; Both placeholder</span>"
+    if ceiling_ph:
+        return "<span style='color:#e67e22;'>&#9888; Ceiling placeholder</span>"
+    return "<span style='color:#e67e22;'>&#9888; Floor placeholder</span>"
+
+
+def _pip_unit(dp):
+    return 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
+
+
+def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
+    pair_prices = pair_prices or {}
     rows = ""
     for z in all_zones_for_table:
         name      = z['name']
         dp        = dp_map[name]
+        walls     = z.get('walls', {})
+        dr_cell   = _format_dr_walls_cell(walls)
+
+        # Placeholder row: pair has no active zone (or data unavailable).
+        # Columns: Pair | Bias | Status | Dist | DR Walls | FVG | First Seen
+        if z.get('is_placeholder_row'):
+            rows += f"""
+        <tr style="background:transparent;border-bottom:1px solid #2a2a3e;opacity:0.55;">
+          <td style="padding:6px 8px;font-weight:bold;color:#aaa;font-size:12px;white-space:nowrap;">
+            <span style='color:#555;font-size:10px;font-family:monospace;'>&mdash;&nbsp;</span>{name}
+          </td>
+          <td style="padding:6px 8px;color:#888;font-size:11px;white-space:nowrap;">&mdash;</td>
+          <td style="padding:6px 8px;color:#888;font-size:11px;white-space:nowrap;font-style:italic;">{z['status']}</td>
+          <td style="padding:6px 8px;color:#888;font-size:11px;text-align:right;">&mdash;</td>
+          <td style="padding:6px 8px;font-size:11px;white-space:nowrap;">{dr_cell}</td>
+          <td style="padding:6px 8px;color:#888;font-size:12px;text-align:center;">&mdash;</td>
+          <td style="padding:6px 8px;color:#666;font-size:10px;white-space:nowrap;">&mdash;</td>
+        </tr>"""
+            continue
+
         direction = "&#9650; Bullish" if z['direction'] == 'bullish' else "&#9660; Bearish"
         dir_color = '#27ae60'   if z['direction'] == 'bullish' else '#e74c3c'
         status    = z['status']
         stat_col  = '#27ae60'   if 'Pristine' in status else '#e67e22'
+
+        # Distance to proximal in pips. If price is inside zone, show "in zone".
+        cur_price = pair_prices.get(name)
+        if cur_price is not None and z.get('proximal') is not None:
+            pip_unit = _pip_unit(dp)
+            if z.get('in_progress'):
+                dist_cell = "<span style='color:#f1c40f;'>in zone</span>"
+            else:
+                dpips = round(abs(cur_price - z['proximal']) / pip_unit, 1)
+                dist_cell = f"{dpips} p"
+        else:
+            dist_cell = "&mdash;"
+
         if z['fvg_valid'] and z.get('fvg_mitigation') == 'partial':
-            fvg_cell = "&#9680;"   # half-filled circle = partial
-            fvg_col  = '#7ed67e'   # light green
+            fvg_cell = "&#9680;"
+            fvg_col  = '#7ed67e'
         elif z['fvg_valid']:
             fvg_cell = "&#10003;"
             fvg_col  = '#27ae60'
         elif z.get('fvg_ghost'):
-            fvg_cell = "&#9675;"   # empty circle = fully mitigated ghost
+            fvg_cell = "&#9675;"
             fvg_col  = '#888888'
         else:
             fvg_cell = "&ndash;"
             fvg_col  = '#888'
-        # Badge palette:
-        #   BOS              -> cyan #00bcd4
-        #   Major CHoCH      -> orange #ff9800
-        #   Minor CHoCH      -> purple #9c27b0  (lookback=2 break, weakening flag)
-        # Color carries the tier; no text label needed for Minor vs Major.
+
         _tier = z.get('bos_tier', 'Major')
         if z['bos_tag'] == 'BOS':
             _badge_color, _badge_text = '#00bcd4', 'BOS'
@@ -980,6 +1169,8 @@ def build_summary_table_html(all_zones_for_table, dp_map):
             {direction}&nbsp;{tag_badge}
           </td>
           <td style="padding:6px 8px;color:{stat_col};font-size:11px;white-space:nowrap;">{status}</td>
+          <td style="padding:6px 8px;color:#ddd;font-size:11px;text-align:right;white-space:nowrap;">{dist_cell}</td>
+          <td style="padding:6px 8px;font-size:11px;white-space:nowrap;">{dr_cell}</td>
           <td style="padding:6px 8px;color:{fvg_col};font-size:12px;text-align:center;">{fvg_cell}</td>
           <td style="padding:6px 8px;color:#888;font-size:10px;white-space:nowrap;">{z['first_seen_ist']}</td>
         </tr>"""
@@ -995,6 +1186,8 @@ def build_summary_table_html(all_zones_for_table, dp_map):
             <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Pair</th>
             <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Bias</th>
             <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Status</th>
+            <th style="padding:7px 8px;text-align:right;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Dist</th>
+            <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">DR Walls</th>
             <th style="padding:7px 8px;text-align:center;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">FVG</th>
             <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">First Seen</th>
           </tr>
@@ -1017,6 +1210,9 @@ def _phase1_chart_legend_html(bos_tag="BOS", bos_tier="Major"):
         ('#2ecc71', 'FVG (displacement)'),
         ('#888888', 'FVG mitigated (ghost)'),
         (bos_color, f'{bos_label} break candle / level'),
+        ('#5dade2', 'Dealing range walls (dotted=confirmed, dashed=placeholder)'),
+        ('#85c1e9', 'Equilibrium (50%)'),
+        ('#d4a017', 'Swing: ▲▼ filled = lookback-3, △▽ hollow = lookback-2'),
         ('#ffffff', 'Current price'),
     ]
     rows = "".join(
@@ -1120,11 +1316,12 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
       {legend_html}
     </div>"""
 
-def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp):
+def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
+                                 current_price=None, in_progress=False):
     """
     Render an active zone card. Used for both NEW and UNCHANGED active zones.
     NEW badge is rendered inline based on sz['is_new_this_scan'].
-    H1 ATR shown in zone metrics.
+    Distance to proximal shown in pips. 'In zone' label when in_progress.
     """
     direction  = "Bullish (Demand)" if sz['direction'] == 'bullish' else "Bearish (Supply)"
     dir_color  = '#27ae60' if sz['direction'] == 'bullish' else '#e74c3c'
@@ -1153,10 +1350,21 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp):
     else:
         fvg_line = "FVG: <span style='color:#888;'>None</span>"
 
-    pip_unit  = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
+    pip_unit  = _pip_unit(dp)
     zone_pips = round(abs(sz['proximal_line'] - sz['distal_line']) / pip_unit, 1)
     h1_atr_val = sz.get('h1_atr', 0.0)
-    atr_display = f"{h1_atr_val:.{dp}f}" if h1_atr_val > 0 else "—"
+    # H1 ATR rendered in pips (was raw price units — confusing across pairs).
+    atr_pips_display = (
+        f"{round(h1_atr_val / pip_unit, 1)} p" if h1_atr_val > 0 else "—"
+    )
+    if current_price is not None:
+        if in_progress:
+            dist_text = "<span style='color:#f1c40f;font-weight:bold;'>in zone</span>"
+        else:
+            dist_pips_val = round(abs(current_price - sz['proximal_line']) / pip_unit, 1)
+            dist_text = f"{dist_pips_val} pips"
+    else:
+        dist_text = "—"
 
     is_new = sz.get('is_new_this_scan', False)
     new_badge = ""
@@ -1203,7 +1411,10 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp):
           <b>Status</b> {status_label}
         </span>
         <span style="font-size:11px;color:#aaa;">
-          <b style="color:#bb8fce;">H1 ATR</b> {atr_display}
+          <b style="color:#bb8fce;">Dist</b> {dist_text}
+        </span>
+        <span style="font-size:11px;color:#aaa;">
+          <b style="color:#bb8fce;">H1 ATR</b> {atr_pips_display}
         </span>
         <span style="font-size:11px;color:#aaa;">{fvg_line}</span>
       </div>
@@ -1219,9 +1430,8 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp):
 def build_dropped_zone_line(sz, name, dp):
     """One-line note for a dropped zone."""
     reason_map = {
-        "mitigated_distal_break": "mitigated — close broke distal",
+        "mitigated_distal_break": "invalidated — price touched distal",
         "mitigated_three_touches": "mitigated — proximal hit 3 times",
-        "out_of_proximity": "moved beyond 4× H1 ATR from price",
         "structure_supplanted": "replaced by fresher structure (same leg)",
         "aged_out_of_window": "OB candle aged out of H1 data window",
         "data_unavailable": "pair fetch failed — zone unverifiable",
@@ -1257,22 +1467,28 @@ def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
     direction    = "bullish demand" if ob['direction'] == 'bullish' else "bearish supply"
     proximal     = ob['proximal_line']
     distal       = ob['distal_line']
-    pip_unit     = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
+    pip_unit     = _pip_unit(dp)
     zone_pips    = round(abs(proximal - distal) / pip_unit, 1)
     dist_pips    = round(abs(current_price - proximal) / pip_unit, 1)
-    atr_display  = f"{h1_atr:.{dp}f}" if h1_atr > 0 else "n/a"
+    atr_pips     = round(h1_atr / pip_unit, 1) if h1_atr > 0 else None
+    atr_display  = f"{atr_pips} pips" if atr_pips is not None else "n/a"
+
+    z_lo = min(proximal, distal)
+    z_hi = max(proximal, distal)
+    in_zone = z_lo <= current_price <= z_hi
 
     if ob['fvg'].get('exists'):
         mit = ob['fvg'].get('mitigation', 'pristine')
+        fvg_top_pips = round(ob['fvg']['fvg_top'] / pip_unit, 1)
+        fvg_bot_pips = round(ob['fvg']['fvg_bottom'] / pip_unit, 1)
         if mit == 'partial':
             fvg_status = (
-                f"partially mitigated FVG between {ob['fvg']['fvg_bottom']:.{dp}f} "
-                f"and {ob['fvg']['fvg_top']:.{dp}f} (price tagged proximal, distal intact)"
+                f"partially mitigated FVG ({fvg_bot_pips}–{fvg_top_pips} pips zone) "
+                f"— price tagged proximal, distal intact"
             )
         else:
             fvg_status = (
-                f"pristine FVG between {ob['fvg']['fvg_bottom']:.{dp}f} "
-                f"and {ob['fvg']['fvg_top']:.{dp}f}"
+                f"pristine FVG ({fvg_bot_pips}–{fvg_top_pips} pips zone)"
             )
     elif ob['fvg'].get('was_detected'):
         fvg_status = "FVG fully mitigated — zone relies on OB alone"
@@ -1281,25 +1497,26 @@ def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
     ratio = round(ob['ob_body'] / ob['median_leg_body'], 2) if ob['median_leg_body'] > 0 else 0
 
     event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
+    distance_brief = "price is INSIDE the zone (mitigation in progress)" if in_zone \
+                     else f"price is {dist_pips} pips from proximal"
     prompt = f"""You are a veteran SMC (Smart Money Concepts) prop trader writing a zone briefing for another experienced SMC trader.
 Be direct. No fluff. No pleasantries. Four sentences only. One paragraph.
 
-ZONE DATA — use these exact values, do not recalculate:
+ZONE DATA — use these exact values, do not recalculate. ALL distances in PIPS.
 - Pair: {name}
 - Bias: {direction} | Structure event: {event_label}
-- Proximal: {proximal:.{dp}f} | Distal: {distal:.{dp}f}
 - Zone width: {zone_pips} pips
-- OB body vs median impulse leg: {ob['ob_body']:.{dp}f} vs {ob['median_leg_body']:.{dp}f} (ratio: {ratio}x)
+- OB body vs median impulse leg ratio: {ratio}x
 - FVG: {fvg_status}
 - Zone status: {ob.get('status', 'Pristine')}
-- Current H1 ATR: {atr_display}
-- Current price: {current_price:.{dp}f} | Distance to proximal: {dist_pips} pips
+- H1 ATR: {atr_display}
+- {distance_brief}
 
 WRITE EXACTLY FOUR SENTENCES IN THIS ORDER:
 1. What structure event ({event_label}) created this zone and why institutional accumulation is likely here.
 2. OB quality: assess tightness (ratio {ratio}x), and whether pristine or tested means strength or caution.
 3. FVG assessment: displacement confirmation present or absent, and what that means for zone conviction.
-4. Current price context: distance to zone ({dist_pips} pips) measured against H1 ATR ({atr_display}), whether price is approaching or far, and what to watch for.
+4. Current price context: state distance in pips, compare to H1 ATR ({atr_display}), and what to watch for. Use only pips for distance, never raw price.
 
 STRICT OUTPUT RULES:
 - Plain text only
@@ -1327,33 +1544,43 @@ STRICT OUTPUT RULES:
 
 
 def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr):
-    pip_unit  = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
+    pip_unit  = _pip_unit(dp)
     dist_pips = round(abs(current_price - ob['proximal_line']) / pip_unit, 1)
-    atr_display = f"{h1_atr:.{dp}f}" if h1_atr > 0 else "n/a"
+    atr_pips  = round(h1_atr / pip_unit, 1) if h1_atr > 0 else None
+    atr_display = f"{atr_pips} pips" if atr_pips is not None else "n/a"
+    z_lo = min(ob['proximal_line'], ob['distal_line'])
+    z_hi = max(ob['proximal_line'], ob['distal_line'])
+    in_zone = z_lo <= current_price <= z_hi
+
     if ob['fvg'].get('exists'):
         mit = ob['fvg'].get('mitigation', 'pristine')
+        fvg_w_pips = round(abs(ob['fvg']['fvg_top'] - ob['fvg']['fvg_bottom']) / pip_unit, 1)
         if mit == 'partial':
             fvg_line = (
-                f"FVG partially mitigated between {ob['fvg']['fvg_bottom']:.{dp}f}–{ob['fvg']['fvg_top']:.{dp}f} "
+                f"FVG partially mitigated ({fvg_w_pips} pips wide) "
                 f"— proximal tagged, distal still intact."
             )
         else:
             fvg_line = (
-                f"FVG confirmed between {ob['fvg']['fvg_bottom']:.{dp}f}–{ob['fvg']['fvg_top']:.{dp}f}, "
-                f"adding displacement confluence."
+                f"FVG confirmed ({fvg_w_pips} pips wide), adding displacement confluence."
             )
     elif ob['fvg'].get('was_detected'):
         fvg_line = "FVG fully mitigated — zone relies on OB alone for confluence."
     else:
         fvg_line = "No FVG present — zone relies on OB alone for confluence."
     event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
+    if in_zone:
+        distance_line = f"Price is INSIDE the zone — mitigation in progress, watch for reaction (H1 ATR {atr_display})."
+    elif dist_pips < 50:
+        distance_line = f"Current price is {dist_pips} pips from proximal (H1 ATR {atr_display}) — approaching zone, watch for reaction."
+    else:
+        distance_line = f"Current price is {dist_pips} pips from proximal (H1 ATR {atr_display}) — still distant, no immediate action."
     return (
         f"{event_label} confirmed the {ob['direction']} shift; this OB marks the last institutional "
         f"accumulation before the break. "
         f"OB body ratio {round(ob['ob_body']/ob['median_leg_body'],2):.2f}x vs median leg. "
         f"{fvg_line} "
-        f"Current price is {dist_pips} pips from proximal (H1 ATR {atr_display}) — "
-        f"{'approaching zone, watch for reaction.' if dist_pips < 50 else 'still distant, no immediate action.'}"
+        f"{distance_line}"
     )
 def build_changed_zone_html(stored_zone, changes, name, dp, cid=None):
     direction = "Bullish" if stored_zone['direction'] == 'bullish' else "Bearish"
@@ -1627,7 +1854,7 @@ def append_audit_log(zones_this_scan, ist_now):
 #         {
 #           "zone_id": "EUR01",
 #           "status": "active" | "dropped",
-#           "drop_reason": null | "mitigated" | "out_of_proximity" | "structure_invalidated" | "stale_data",
+#           "drop_reason": null | "mitigated_distal_break" | "mitigated_three_touches" | "structure_supplanted" | "aged_out_of_window" | "data_unavailable" | "data_stale",
 #           "first_seen_iso": "...", "first_seen_label": "HH:MM IST",
 #           "last_seen_iso": "...", "last_seen_label": "HH:MM IST",
 #           "is_new_this_scan": bool,
@@ -1792,19 +2019,16 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
     Returns one of:
       'mitigated_distal_break'
       'mitigated_three_touches'
-      'out_of_proximity'
       'structure_supplanted'
       'aged_out_of_window'
       'data_unavailable'
       'data_stale'
       None  -> zone should NOT be dropped; caller keeps it alive and logs.
+
+    Note: proximity gating was removed. Phase 1 surfaces all 6 pairs every run;
+    only invalidation drops a zone.
     """
     # --- data_unavailable handled by caller before this is called ---
-
-    # --- out_of_proximity ---
-    if h1_atr and h1_atr > 0:
-        if abs(current_price - slate_zone['proximal_line']) > 4.0 * h1_atr:
-            return "out_of_proximity"
 
     # --- aged_out_of_window ---
     # Slate zone's OB candle is older than the oldest candle in fresh df.
@@ -1857,13 +2081,16 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
 
             touches = 0
             for m in range(scan_start, len(C)):
+                # Distal invalidation: ANY wick touch of distal kills the zone.
+                # Veteran rule — if institutions defended weakly enough that
+                # price tagged distal, the zone is done. No close required.
                 if direction == 'bullish':
-                    if C[m] < distal:
+                    if L[m] <= distal:
                         return "mitigated_distal_break"
                     if L[m] <= proximal:
                         touches += 1
                 else:
-                    if C[m] > distal:
+                    if H[m] >= distal:
                         return "mitigated_distal_break"
                     if H[m] >= proximal:
                         touches += 1
@@ -1889,6 +2116,50 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
     # --- No concrete reason matched ---
     # Do NOT drop. Log diagnostic so we can investigate.
     return None
+
+
+def select_relevant_zone_for_pair(active_zones, current_price, dp):
+    """
+    Phase 1 highlights ONE zone per pair, recomputed every scan.
+
+    Selection rule (locked):
+      1. If price is INSIDE any active zone (between proximal and distal,
+         inclusive), that zone wins. Tag it 'zone-in-progress'. If multiple
+         zones contain price (rare; nested zones), pick the one whose proximal
+         is closest to price.
+      2. Otherwise: pick the zone with smallest |current_price - proximal|.
+
+    No bias filter (counter-trend OBs can flag the next CHoCH).
+    No pristine preference (closeness wins).
+    No hysteresis (closest each scan; flapping = real signal that price sits
+    between zones).
+
+    Returns (selected_zone, in_progress_flag) or (None, False) if no zones.
+    """
+    if not active_zones:
+        return None, False
+
+    # In-zone check first.
+    inside = []
+    for z in active_zones:
+        prox = z['proximal_line']
+        dist = z['distal_line']
+        lo, hi = (dist, prox) if z['direction'] == 'bullish' else (prox, dist)
+        # Bullish demand: distal below proximal, both below price normally.
+        # Bearish supply: proximal below distal, both above price normally.
+        # Generic containment by min/max handles both.
+        z_lo = min(prox, dist)
+        z_hi = max(prox, dist)
+        if z_lo <= current_price <= z_hi:
+            inside.append(z)
+
+    if inside:
+        winner = min(inside, key=lambda z: abs(current_price - z['proximal_line']))
+        return winner, True
+
+    # Otherwise closest by pip distance to proximal.
+    winner = min(active_zones, key=lambda z: abs(current_price - z['proximal_line']))
+    return winner, False
 
 
 def log_unverified_drop_attempt(slate_zone, pair_name, ist_now):
@@ -2151,80 +2422,143 @@ def run_radar():
         for pair_name in pair_names:
             dp = dp_map[pair_name]
             pblock = slate["pairs"].get(pair_name, {})
-            for sz in pblock.get("zones", []):
-                if sz["status"] == "active":
-                    # Build OB-shaped dict for narrative + chart helpers.
-                    ob_for_render = {
-                        "direction": sz["direction"],
-                        "bos_tag": sz["bos_tag"],
-                        "proximal_line": sz["proximal_line"],
-                        "distal_line": sz["distal_line"],
-                        "high": sz["high"], "low": sz["low"],
-                        "ob_body": sz["ob_body"],
-                        "median_leg_body": sz["median_leg_body"],
-                        "ob_idx": sz["ob_idx"],
-                        "bos_idx": sz["bos_idx"],
-                        "bos_swing_price": sz["bos_swing_price"],
-                        "impulse_start_idx": sz["impulse_start_idx"],
-                        "impulse_start_price": sz["impulse_start_price"],
-                        "fvg": sz["fvg"],
-                        "touches": sz.get("touches", 0),
-                        "status": sz.get("status_label", "Pristine"),
-                        "h1_atr": sz.get("h1_atr", 0.0)
-                    }
+            zones_in_pair = pblock.get("zones", [])
 
-                    # Summary table row
-                    all_zones_for_table.append({
-                        "name": pair_name, "zone_id": sz["zone_id"],
-                        "direction": sz["direction"],
-                        "proximal": sz["proximal_line"], "distal": sz["distal_line"],
-                        "bos_tag": sz["bos_tag"], "status": sz.get("status_label", "Pristine"),
-                        "fvg_valid": sz["fvg"].get("exists", False),
-                        "fvg_ghost": (not sz["fvg"].get("exists", False))
-                                      and sz["fvg"].get("was_detected", False),
-                        "fvg_mitigation": sz["fvg"].get("mitigation", "none"),
-                        "first_seen_ist": sz.get("first_seen_label", "—"),
-                        "is_new": sz.get("is_new_this_scan", False),
-                        "is_changed": False
-                    })
-
-                    # Chart + narrative — only if we have fresh df for this pair.
-                    df = pair_dfs.get(pair_name)
-                    current_price = pair_prices.get(pair_name, sz.get("current_price_at_scan", 0))
-                    chart_b64 = None
-                    cid = None
-                    if df is not None:
-                        cid = f"chart_{pair_name}_{chart_counter}"
-                        chart_b64 = generate_h1_chart(df, ob_for_render, dp, pair_name, ist_ts_full)
-
-                    narrative = generate_zone_narrative_with_atr(
-                        ob_for_render, pair_name, dp, current_price, sz.get("h1_atr", 0.0)
-                    )
-
-                    card_html = build_active_zone_card_html(
-                        sz, pair_name, dp, narrative,
-                        cid if chart_b64 else None,
-                        ist_ts_full
-                    )
-
-                    if sz.get("is_new_this_scan", False):
-                        new_zone_cards.append(card_html)
-                    else:
-                        unchanged_zone_cards.append(card_html)
-
-                    if chart_b64:
-                        img_mime = MIMEImage(base64.b64decode(chart_b64))
-                        img_mime.add_header("Content-ID", f"<{cid}>")
-                        img_mime.add_header("Content-Disposition", "inline",
-                                            filename=f"{cid}.png")
-                        attachments.append(img_mime)
-                        chart_counter += 1
-
-                elif sz["status"] == "dropped":
+            # Dropped lines first (independent of selection).
+            for sz in zones_in_pair:
+                if sz["status"] == "dropped":
                     dropped_lines.append(build_dropped_zone_line(sz, pair_name, dp))
 
+            active_zones = [z for z in zones_in_pair if z["status"] == "active"]
+            current_price = pair_prices.get(pair_name)
+            df = pair_dfs.get(pair_name)
+
+            # Pair-level walls for table + chart context.
+            # Reuse the structure state already loaded for the banner above —
+            # avoids N+1 disk reads.
+            pair_walls = _structure_state_for_banner.get(pair_name, {}) or {}
+
+            # No active zones for this pair — render placeholder row.
+            if not active_zones:
+                all_zones_for_table.append({
+                    "name": pair_name, "zone_id": "—",
+                    "direction": None,
+                    "proximal": None, "distal": None,
+                    "bos_tag": None, "status": "No active zone",
+                    "fvg_valid": False, "fvg_ghost": False,
+                    "fvg_mitigation": "none",
+                    "first_seen_ist": "—",
+                    "is_new": False, "is_changed": False,
+                    "is_placeholder_row": True,
+                    "walls": pair_walls
+                })
+                continue
+
+            # Price unknown (fetch failed this scan) — fall back to last
+            # recorded price-at-scan from the most recent zone, else skip
+            # selection and render placeholder.
+            if current_price is None:
+                fallback_price = None
+                for z in active_zones:
+                    if z.get("current_price_at_scan"):
+                        fallback_price = z["current_price_at_scan"]
+                        break
+                if fallback_price is None:
+                    all_zones_for_table.append({
+                        "name": pair_name, "zone_id": "—",
+                        "direction": None,
+                        "proximal": None, "distal": None,
+                        "bos_tag": None, "status": "Data unavailable",
+                        "fvg_valid": False, "fvg_ghost": False,
+                        "fvg_mitigation": "none",
+                        "first_seen_ist": "—",
+                        "is_new": False, "is_changed": False,
+                        "is_placeholder_row": True,
+                        "walls": pair_walls
+                    })
+                    continue
+                current_price = fallback_price
+
+            sz, in_progress = select_relevant_zone_for_pair(
+                active_zones, current_price, dp
+            )
+            if sz is None:
+                continue  # defensive — active_zones non-empty so shouldn't fire
+
+            # Build OB-shaped dict for narrative + chart helpers.
+            ob_for_render = {
+                "direction": sz["direction"],
+                "bos_tag": sz["bos_tag"],
+                "proximal_line": sz["proximal_line"],
+                "distal_line": sz["distal_line"],
+                "high": sz["high"], "low": sz["low"],
+                "ob_body": sz["ob_body"],
+                "median_leg_body": sz["median_leg_body"],
+                "ob_idx": sz["ob_idx"],
+                "bos_idx": sz["bos_idx"],
+                "bos_swing_price": sz["bos_swing_price"],
+                "impulse_start_idx": sz["impulse_start_idx"],
+                "impulse_start_price": sz["impulse_start_price"],
+                "fvg": sz["fvg"],
+                "touches": sz.get("touches", 0),
+                "status": sz.get("status_label", "Pristine"),
+                "h1_atr": sz.get("h1_atr", 0.0)
+            }
+
+            # Summary table row for the SELECTED zone.
+            all_zones_for_table.append({
+                "name": pair_name, "zone_id": sz["zone_id"],
+                "direction": sz["direction"],
+                "proximal": sz["proximal_line"], "distal": sz["distal_line"],
+                "bos_tag": sz["bos_tag"], "status": sz.get("status_label", "Pristine"),
+                "fvg_valid": sz["fvg"].get("exists", False),
+                "fvg_ghost": (not sz["fvg"].get("exists", False))
+                              and sz["fvg"].get("was_detected", False),
+                "fvg_mitigation": sz["fvg"].get("mitigation", "none"),
+                "first_seen_ist": sz.get("first_seen_label", "—"),
+                "is_new": sz.get("is_new_this_scan", False),
+                "is_changed": False,
+                "is_placeholder_row": False,
+                "in_progress": in_progress,
+                "walls": pair_walls
+            })
+
+            chart_b64 = None
+            cid = None
+            if df is not None:
+                cid = f"chart_{pair_name}_{chart_counter}"
+                chart_b64 = generate_h1_chart(
+                    df, ob_for_render, dp, pair_name, ist_ts_full,
+                    walls=pair_walls
+                )
+
+            narrative = generate_zone_narrative_with_atr(
+                ob_for_render, pair_name, dp, current_price, sz.get("h1_atr", 0.0)
+            )
+
+            card_html = build_active_zone_card_html(
+                sz, pair_name, dp, narrative,
+                cid if chart_b64 else None,
+                ist_ts_full,
+                current_price=current_price,
+                in_progress=in_progress
+            )
+
+            if sz.get("is_new_this_scan", False):
+                new_zone_cards.append(card_html)
+            else:
+                unchanged_zone_cards.append(card_html)
+
+            if chart_b64:
+                img_mime = MIMEImage(base64.b64decode(chart_b64))
+                img_mime.add_header("Content-ID", f"<{cid}>")
+                img_mime.add_header("Content-Disposition", "inline",
+                                    filename=f"{cid}.png")
+                attachments.append(img_mime)
+                chart_counter += 1
+
         if all_zones_for_table or dropped_lines:
-            summary_table = build_summary_table_html(all_zones_for_table, dp_map)
+            summary_table = build_summary_table_html(all_zones_for_table, dp_map, pair_prices)
             try:
                 # Prepend structure banner to the email content.
                 if new_zone_cards:
