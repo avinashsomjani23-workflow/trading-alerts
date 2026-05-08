@@ -1,8 +1,8 @@
 {
   "EURUSD": {
     "trend": "bearish",
-    "ceiling_price": 1.1741223335266113,
-    "ceiling_ts": "2026-05-08T05:00:00+00:00",
+    "ceiling_price": 1.1750881671905518,
+    "ceiling_ts": "2026-05-08T06:00:00+00:00",
     "ceiling_is_placeholder": true,
     "floor_price": 1.1727453470230103,
     "floor_ts": "2026-05-07T20:00:00+00:00",
@@ -13,7 +13,7 @@
     "last_event_ts": "2026-05-07T19:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T19:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-08T05:00:00+00:00",
+    "last_scanned_ts": "2026-05-08T06:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -107,7 +107,7 @@
     "last_event_ts": "2026-05-07T16:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T16:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-08T05:00:00+00:00",
+    "last_scanned_ts": "2026-05-08T06:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -186,7 +186,7 @@
     "last_event_ts": "2026-05-07T19:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T19:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-08T05:00:00+00:00",
+    "last_scanned_ts": "2026-05-08T06:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -340,7 +340,7 @@
     "last_event_ts": "2026-05-07T12:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T12:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-08T05:00:00+00:00",
+    "last_scanned_ts": "2026-05-08T06:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -407,19 +407,19 @@
   },
   "NAS100": {
     "trend": "bullish",
-    "ceiling_price": 28766.25,
-    "ceiling_ts": "2026-05-07T20:00:00+00:00",
-    "ceiling_is_placeholder": false,
-    "floor_price": 28637.0,
-    "floor_ts": "2026-05-07T00:00:00+00:00",
+    "ceiling_price": 28824.0,
+    "ceiling_ts": "2026-05-08T06:00:00+00:00",
+    "ceiling_is_placeholder": true,
+    "floor_price": 28541.0,
+    "floor_ts": "2026-05-07T22:00:00+00:00",
     "floor_is_placeholder": false,
     "last_event_type": "BOS",
     "last_event_tier": "Major",
     "last_event_direction": "bullish",
-    "last_event_ts": "2026-05-07T14:00:00+00:00",
-    "last_event_idx_iso": "2026-05-07T14:00:00+00:00",
+    "last_event_ts": "2026-05-08T06:00:00+00:00",
+    "last_event_idx_iso": "2026-05-08T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-08T05:00:00+00:00",
+    "last_scanned_ts": "2026-05-08T06:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -511,6 +511,21 @@
         "impulse_start_ts": "2026-05-07T10:00:00+00:00",
         "impulse_start_price": 28690.25,
         "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-05-08T06:00:00+00:00",
+        "broken_swing_price": 28766.25,
+        "broken_swing_ts": "2026-05-07T20:00:00+00:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.4604635310156782,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-07T22:00:00+00:00",
+        "impulse_start_price": 28541.0,
+        "trend_after": "bullish"
       }
     ]
   },
@@ -528,7 +543,7 @@
     "last_event_ts": "2026-05-07T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-08T05:00:00+00:00",
+    "last_scanned_ts": "2026-05-08T06:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
