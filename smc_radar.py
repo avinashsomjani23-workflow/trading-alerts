@@ -294,7 +294,7 @@ def _event_label(bos_tag, bos_tier):
         return 'Minor CHoCH'
     return 'Major CHoCH'
 
-def detect_smc_radar(df, pair_type="forex", events=None, walls=None):
+def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=None):
     """
     Build OB zones from BOS / CHoCH events emitted by dealing_range.py.
 
@@ -436,15 +436,24 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None):
             if abs(current_price_now - ob_proximal) > 4.0 * h1_atr_for_leg:
                 continue
 
-        # FVG detection — H1 internal gap, anchored to OB candle.
+        # FVG detection — H1 internal gap, anchored to the displacement leg.
+        # Window = [ob_idx, bos_idx + 1]: covers the OB candle through one
+        # candle past BOS confirmation (catches late displacement). Self-
+        # adjusts to leg length. Soft cap of FVG_WINDOW_H1_CANDLES guards
+        # against runaway windows on slow grinds.
         bias_label    = "LONG" if ev_dir == 'bullish' else "SHORT"
         h1_atr_for_fvg = h1_atr_for_leg if h1_atr_for_leg else 0.0
         fvg_floor_mult = smc_detector.FVG_NOISE_FLOOR_MULT.get(pair_type, 0.20)
         atr_floor_h1   = fvg_floor_mult * h1_atr_for_fvg
-        h1_fvg_window_end = min(ob_idx + smc_detector.FVG_WINDOW_H1_CANDLES, n - 1)
+        leg_window_end = min(
+            bos_idx + 1,
+            ob_idx + smc_detector.FVG_WINDOW_H1_CANDLES,
+            n - 1
+        )
         fvg_result = smc_detector.detect_fvg_in_zone(
             df, bias_label, ob_high, ob_low, atr_floor_h1,
-            leg_start_idx=ob_idx, leg_end_idx=h1_fvg_window_end
+            leg_start_idx=ob_idx, leg_end_idx=leg_window_end,
+            pair_type=pair_type
         )
 
         ob_timestamp_str  = _ts_for_idx(ob_idx)
@@ -464,6 +473,18 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None):
             'ghost_c3_idx': fvg_result.get('ghost_c3_idx'),
             'mitigated_at_idx': fvg_result.get('mitigated_at_idx')
         }
+
+        # Phase 1 sweep observation — leg-anchored snapshot.
+        # Scans [impulse_start_idx, ob_idx] for the most-recent qualifying
+        # sweep. Snapshot semantics: written once at OB build, never re-graded.
+        try:
+            sweep_obs = smc_detector.observe_phase1_sweep(
+                df, ob_idx, impulse_start_idx, ev_dir,
+                h1_atr_for_leg, pair_type, pair_name, tf_label='H1'
+            )
+        except Exception as _sweep_err:
+            logging.warning(f"[sweep_observed] OB build failed sweep observation: {_sweep_err}")
+            sweep_obs = {'exists': False}
 
         # 'bos_tag' is the legacy field name for the structural event type.
         # Kept for backwards compatibility with chart / scoring / dedupe code.
@@ -491,7 +512,8 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None):
             'median_leg_body':    median_leg_body,
             'ob_body':            abs(C[ob_idx] - O[ob_idx]),
             'h1_atr':             float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
-            'fvg':                fvg_dict
+            'fvg':                fvg_dict,
+            'sweep_observed':     sweep_obs
         })
 # Mitigation + touch tracking. Sets 'touches' and 'status' on each OB.
     # Must run BEFORE dedupe so the touch-state test in dedupe is meaningful.
@@ -762,7 +784,9 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
             mid_local = mid_abs - window_start
             if 0 <= mid_local < n_plot:
                 if fvg_partial:
-                    face_col, edge_col = '#a8e6a1', '#7ed67e'
+                    # Amber — partial mitigation. Distinct from pristine green
+                    # and ghost grey: reads as caution at a glance.
+                    face_col, edge_col = '#f4d03f', '#f1c40f'
                 else:
                     face_col, edge_col = '#27ae60', '#2ecc71'
                 ax.add_patch(patches.Rectangle(
@@ -1127,13 +1151,13 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
 
         if z['fvg_valid'] and z.get('fvg_mitigation') == 'partial':
             fvg_cell = "&#9680;"
-            fvg_col  = '#7ed67e'
+            fvg_col  = '#f1c40f'   # amber — partial (caution)
         elif z['fvg_valid']:
             fvg_cell = "&#10003;"
-            fvg_col  = '#27ae60'
+            fvg_col  = '#27ae60'   # green — pristine
         elif z.get('fvg_ghost'):
             fvg_cell = "&#9675;"
-            fvg_col  = '#888888'
+            fvg_col  = '#888888'   # grey — ghost (mitigated)
         else:
             fvg_cell = "&ndash;"
             fvg_col  = '#888'
@@ -1207,7 +1231,8 @@ def _phase1_chart_legend_html(bos_tag="BOS", bos_tier="Major"):
     items = [
         ('#bb8fce', 'Zone band (proximal/distal)'),
         ('#d7bde2', 'OB candle outline'),
-        ('#2ecc71', 'FVG (displacement)'),
+        ('#2ecc71', 'FVG pristine (displacement)'),
+        ('#f1c40f', 'FVG partial (proximal touched)'),
         ('#888888', 'FVG mitigated (ghost)'),
         (bos_color, f'{bos_label} break candle / level'),
         ('#5dade2', 'Dealing range walls (dotted=confirmed, dashed=placeholder)'),
@@ -1225,15 +1250,77 @@ def _phase1_chart_legend_html(bos_tag="BOS", bos_tier="Major"):
         f'<div style="margin:8px 0 0 0;padding:8px 10px;background:#0d0d1a;'
         f'border-radius:4px;line-height:1.8;">{rows}</div>'
     )
+
+
+def _render_sweep_observation_html(sweep_obs, dp):
+    """
+    Render the Phase 1 sweep observation badge HTML. Single source of truth
+    used by both NEW-zone and active-zone card builders so the format stays
+    consistent. Snapshot semantics: timestamp / numbers / tags are frozen at
+    OB build time.
+
+    Returns the HTML string starting with "Sweep:".
+    """
+    sweep_obs = sweep_obs or {}
+    if not sweep_obs.get('exists'):
+        return "Sweep: <span style='color:#888;'>None observed in this leg</span>"
+
+    tier = sweep_obs.get('tier', 'weak')
+    tier_color = {'textbook': '#27ae60', 'decent': '#e67e22', 'weak': '#888'}.get(tier, '#888')
+    tier_emoji = {'textbook': '🎯', 'decent': '◐', 'weak': '·'}.get(tier, '·')
+    tier_explainer = {
+        'textbook': 'Strong rejection wick with multiple prior swings at the same level.',
+        'decent':   'Either strong rejection OR equal-level cluster — one of the two signals.',
+        'weak':     'Sweep present but minimal rejection and no equal-level cluster.'
+    }.get(tier, '')
+
+    ts_raw = sweep_obs.get('timestamp', '')
+    ts_short = ''
+    try:
+        if ts_raw:
+            ts_short = datetime.fromisoformat(ts_raw.replace('Z', '')).strftime('%H:%M UTC on %d-%b')
+    except Exception:
+        ts_short = ts_raw[:16] if ts_raw else ''
+
+    tag_pretty = {
+        'round_number':    'round number',
+        'prior_day_high':  'prior day high',
+        'prior_day_low':   'prior day low',
+        'asia_high':       'Asia high',
+        'asia_low':        'Asia low',
+        'london_high':     'London high',
+        'london_low':      'London low',
+        'ny_high':         'NY high',
+        'ny_low':          'NY low'
+    }
+    tags = sweep_obs.get('context_tags', []) or []
+    tags_text = ', '.join(tag_pretty.get(t, t) for t in tags) if tags else 'none'
+    wick_pips = sweep_obs.get('wick_distance_pips', 0)
+    wick_body = sweep_obs.get('wick_body_ratio', 0)
+    eq_count  = sweep_obs.get('equal_levels_count', 0)
+
+    return (
+        f"Sweep: <span style='color:{tier_color};'>"
+        f"{tier_emoji} {tier.title()} ({sweep_obs.get('tf', 'H1')} "
+        f"@ {sweep_obs.get('price', 0):.{dp}f} at {ts_short})</span>"
+        f"<div style='font-size:10px;color:#aaa;margin-top:3px;line-height:1.5;'>"
+        f"Wick {wick_pips} past level &middot; wick:body {wick_body}x &middot; "
+        f"equal levels {eq_count}<br>"
+        f"Context: {tags_text}<br>"
+        f"<span style='color:#888;font-style:italic;'>{tier_explainer}</span>"
+        f"</div>"
+    )
+
+
 def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_id="—"):
     direction  = "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)"
     dir_color  = '#27ae60' if ob['direction'] == 'bullish' else '#e74c3c'
     stat_color = '#27ae60' if 'Pristine' in ob['status'] else '#e67e22'
     mit = ob['fvg'].get('mitigation', 'none')
     if ob['fvg'].get('exists') and mit == 'partial':
-        # Partial — price crossed proximal but not distal. Light green.
+        # Partial — price crossed proximal but not distal. Amber (caution).
         fvg_line = (
-            f"FVG: <span style='color:#7ed67e;'>◐ Partial "
+            f"FVG: <span style='color:#f1c40f;'>◐ Partial "
             f"{ob['fvg']['fvg_bottom']:.{dp}f} – {ob['fvg']['fvg_top']:.{dp}f}</span>"
         )
     elif ob['fvg'].get('exists'):
@@ -1252,19 +1339,9 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
     else:
         fvg_line = "FVG: <span style='color:#888;'>None</span>"
 
-    # Sweep observation badge (display-only; Phase 2 re-grades independently)
-    sweep_obs = ob.get('sweep_observed', {}) or {}
-    if sweep_obs.get('exists'):
-        tier = sweep_obs.get('tier', 'weak')
-        tier_color = {'textbook': '#27ae60', 'decent': '#e67e22', 'weak': '#888'}.get(tier, '#888')
-        tier_emoji = {'textbook': '🎯', 'decent': '◐', 'weak': '·'}.get(tier, '·')
-        sweep_line = (
-            f"Sweep: <span style='color:{tier_color};'>"
-            f"{tier_emoji} {tier.title()} ({sweep_obs.get('tf', 'H1')} "
-            f"@ {sweep_obs.get('price', 0):.{dp}f})</span>"
-        )
-    else:
-        sweep_line = "Sweep: <span style='color:#888;'>None observed</span>"
+    # Sweep observation badge — Phase 1 snapshot. Same render path used by
+    # build_active_zone_card_html for consistency across NEW and active cards.
+    sweep_line = _render_sweep_observation_html(ob.get('sweep_observed'), dp)
 
     pip_unit  = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
     zone_pips = round(abs(ob['proximal_line'] - ob['distal_line']) / pip_unit, 1)
@@ -1332,7 +1409,7 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
     mit = fvg.get('mitigation', 'none')
     if fvg.get('exists') and mit == 'partial':
         fvg_line = (
-            f"FVG: <span style='color:#7ed67e;'>◐ Partial "
+            f"FVG: <span style='color:#f1c40f;'>◐ Partial "
             f"{fvg['fvg_bottom']:.{dp}f} – {fvg['fvg_top']:.{dp}f}</span>"
         )
     elif fvg.get('exists'):
@@ -1384,6 +1461,9 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
     legend_html = _phase1_chart_legend_html(sz.get('bos_tag', 'BOS'),
                                               sz.get('bos_tier', 'Major'))
 
+    # Phase 1 sweep snapshot — same renderer as NEW card.
+    sweep_line = _render_sweep_observation_html(sz.get('sweep_observed'), dp)
+
     return f"""
     <div style="margin-bottom:28px;padding:16px;background:#1a1a2e;border-radius:8px;
                 border-left:4px solid {dir_color};">
@@ -1418,6 +1498,7 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
         </span>
         <span style="font-size:11px;color:#aaa;">{fvg_line}</span>
       </div>
+      <div style="margin-bottom:10px;font-size:11px;color:#aaa;">{sweep_line}</div>
       <p style="font-size:12px;color:#bbb;line-height:1.6;margin:0 0 12px 0;
                 border-left:3px solid #2a2a3e;padding-left:10px;">
         {narrative}
@@ -1971,7 +2052,9 @@ def fresh_to_slate_zone(fresh_zone, zone_id, ist_now, current_price, dp):
         "h1_atr": fresh_zone.get("h1_atr", 0.0),
         "current_price_at_scan": current_price,
         "distance_to_proximal_pips": dist_pips,
-        "fvg": fresh_zone["fvg"]
+        "fvg": fresh_zone["fvg"],
+        # Phase 1 sweep snapshot — preserved across scans; never re-evaluated.
+        "sweep_observed": fresh_zone.get("sweep_observed", {"exists": False})
     }
 
 
@@ -2285,7 +2368,7 @@ def run_radar():
 
         result        = detect_smc_radar(df, pair_type=ptype,
                                           events=new_walls.get('events', []),
-                                          walls=new_walls)
+                                          walls=new_walls, pair_name=name)
         current_price = result["current_price"]
         fresh_zones   = result["active_unmitigated_obs"]
         h1_atr        = smc_detector.compute_atr(df) or 0.0

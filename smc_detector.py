@@ -43,23 +43,23 @@ DEALING_RANGE_LOOKBACK_H1 = {
 #   Phase 1 -> H1 ATR  |  Phase 2 -> M15 ATR  |  Phase 3 -> M5 ATR
 FVG_NOISE_FLOOR_MULT = {
     "forex":     0.08,
-    "index":     0.12,
+    "index":     0.15,
     "commodity": 0.12
 }
 # ---------------------------------------------------------------------------
 # FVG search window — number of candles past the OB candle to scan for a
 # 3-candle FVG. The FVG is the displacement signature that confirms the OB.
-# Veteran SMC: displacement happens during OB→BOS leg AND can extend 1-2
-# candles past BOS. Window must cover this without leaking into unrelated
-# structure.
+# Veteran SMC: displacement happens during OB→BOS leg AND can extend 1 candle
+# past BOS. The actual window used is [ob_idx, bos_idx+1], i.e. the leg
+# itself. These constants are SOFT CAPS to prevent runaway windows on slow
+# grinds.
 #
-# H1 = 7 candles past OB.
-# M15 = 28 candles past OB (same time window as H1, finer resolution).
-#
-# Anchored to OB (not to BOS) so window length is consistent regardless of
-# how long the OB→BOS leg takes.
+# H1 = 10 candles soft cap (was 7; widened because the leg-anchored window
+#      self-adjusts and 7 was occasionally tighter than the leg).
+# M15 = 28 candles (Phase 2 still uses fixed window — Phase 2 doesn't have a
+#       BOS index on M15).
 # ---------------------------------------------------------------------------
-FVG_WINDOW_H1_CANDLES  = 7
+FVG_WINDOW_H1_CANDLES  = 10
 FVG_WINDOW_M15_CANDLES = 28
 
 # OB candidate range cap. Reject candles where (high - low) > N x ATR.
@@ -74,11 +74,60 @@ OB_MAX_RANGE_ATR_MULT = 2.0
 # considered "equal" if they sit within this multiple of the TF's own ATR.
 # Forex: tighter — pairs respect levels precisely.
 # Index/commodity: looser — wider noise around levels.
+# Widened (2026-05) from 0.15/0.25 -> 0.30/0.40 — vet feedback that a sub-2
+# pip spread between forex lows still reads as "equal" in practice. Also
+# reused as the context-tag proximity band (prior-day H/L, session H/L).
 # ---------------------------------------------------------------------------
 SWEEP_EQUAL_LEVEL_TOLERANCE_ATR = {
-    "forex":     0.15,
-    "index":     0.25,
-    "commodity": 0.25
+    "forex":     0.30,
+    "index":     0.40,
+    "commodity": 0.40
+}
+
+# Wick pierce minimum — the sweep wick must extend BEYOND the swept level by
+# at least this multiple of the TF ATR. Decoupled from equal-level tolerance:
+# they measure different things (level identity vs. clear pierce). A below-
+# noise poke is not a sweep.
+SWEEP_WICK_PIERCE_MIN_ATR = {
+    "forex":     0.05,
+    "index":     0.08,
+    "commodity": 0.08
+}
+
+# Round-number grid used by Phase 1 context tagging. Tight tolerance — being
+# "near a round number" must mean within a few pips, not 30. yfinance wick
+# revisions are typically sub-pip, well inside this band; weekly_review must
+# log tag accuracy to confirm the band holds up.
+ROUND_NUMBER_GRID = {
+    "forex":     0.0050,   # 50 pips on 5-dp pairs
+    "forex_jpy": 0.50,     # 50 pips on 3-dp JPY pairs
+    "index":     50.0,     # 50 points on NAS100
+    "commodity": 5.0       # $5 on Gold
+}
+ROUND_NUMBER_TOLERANCE = {
+    "forex":     0.0005,   # 5 pips
+    "forex_jpy": 0.05,     # 5 pips (JPY)
+    "index":     5.0,      # 5 points
+    "commodity": 0.50      # $0.50
+}
+
+# Session windows in UTC. Asia wraps midnight (22 prev-day -> 07 same-day).
+# Phase 1 displays IST equivalents in the email but computes in UTC.
+# Asia    ~03:30-12:30 IST | London ~12:30-17:30 IST | NY ~17:30-22:30 IST
+SESSION_WINDOWS_UTC = {
+    "asia":   (22, 7),
+    "london": (7, 12),
+    "ny":     (12, 17)
+}
+
+# Per-pair session tags shown in Phase 1 sweep badge (handoff table).
+PAIR_SESSION_TAGS = {
+    "EURUSD": ["asia", "london"],
+    "USDJPY": ["asia", "london"],
+    "NZDUSD": ["asia"],
+    "USDCHF": ["london"],
+    "GOLD":   ["london", "ny"],
+    "NAS100": ["ny"]
 }
 
 # Sweep recency cap — sweeps older than this (relative to the OB candle) are
@@ -553,6 +602,283 @@ def _sweep_tier(score):
     return 'none'
 
 
+# ============================================================================
+# Phase 1 sweep observation (display-only, snapshot semantics)
+# ============================================================================
+# Anchored to the leg `[impulse_start_idx, ob_idx]` already on every OB. Scans
+# the most-recent qualifying sweep in that leg (newest first). Records a
+# snapshot onto ob['sweep_observed']. Phase 2 consumes the snapshot — it does
+# NOT re-grade. Past observations are not re-evaluated when yfinance revises.
+# ----------------------------------------------------------------------------
+
+def _round_number_key(pair_name, pair_type):
+    """Round-number grid lookup — JPY pairs need their own bucket."""
+    if pair_name == 'USDJPY':
+        return 'forex_jpy'
+    return pair_type if pair_type in ROUND_NUMBER_GRID else 'forex'
+
+
+def _nearest_round_number(price, grid):
+    """Return the nearest grid level to `price`."""
+    if grid <= 0:
+        return price
+    return round(price / grid) * grid
+
+
+def _prior_trading_day_hl(df, anchor_ts):
+    """
+    Return (high, low) of the prior trading day for the candle containing
+    `anchor_ts`. Trading day = Mon-Fri UTC. Sunday's "prior day" is Friday.
+
+    Returns (None, None) if df has no candles in the prior trading day.
+    """
+    if df is None or len(df) == 0 or anchor_ts is None:
+        return None, None
+    try:
+        anchor_dt = anchor_ts.to_pydatetime() if hasattr(anchor_ts, 'to_pydatetime') else anchor_ts
+        if hasattr(anchor_dt, 'tzinfo') and anchor_dt.tzinfo is not None:
+            anchor_dt = anchor_dt.replace(tzinfo=None)
+        cursor = anchor_dt - timedelta(days=1)
+        # Walk back across weekend if needed (Sat=5, Sun=6)
+        while cursor.weekday() >= 5:
+            cursor = cursor - timedelta(days=1)
+        target_date = cursor.date()
+        # Slice df rows whose index falls on target_date
+        prior_mask = []
+        for ts in df.index:
+            t = ts.to_pydatetime() if hasattr(ts, 'to_pydatetime') else ts
+            if hasattr(t, 'tzinfo') and t.tzinfo is not None:
+                t = t.replace(tzinfo=None)
+            prior_mask.append(t.date() == target_date)
+        if not any(prior_mask):
+            return None, None
+        prior_df = df[prior_mask]
+        return float(prior_df['High'].max()), float(prior_df['Low'].min())
+    except Exception:
+        return None, None
+
+
+def _session_hl_until(df, anchor_ts, session_key):
+    """
+    High/low of the named session on `anchor_ts`'s UTC date, clipped to
+    `anchor_ts` (we never include candles in the session's future relative
+    to the OB candle). Asia wraps midnight — we use the asia window that
+    *ends* on the anchor date.
+
+    Returns (high, low) or (None, None) if no candles fall in window.
+    """
+    if df is None or len(df) == 0 or anchor_ts is None:
+        return None, None
+    if session_key not in SESSION_WINDOWS_UTC:
+        return None, None
+    try:
+        anchor_dt = anchor_ts.to_pydatetime() if hasattr(anchor_ts, 'to_pydatetime') else anchor_ts
+        if hasattr(anchor_dt, 'tzinfo') and anchor_dt.tzinfo is not None:
+            anchor_dt = anchor_dt.replace(tzinfo=None)
+        start_h, end_h = SESSION_WINDOWS_UTC[session_key]
+        anchor_date = anchor_dt.date()
+        if session_key == 'asia':
+            # 22:00 (prev day) -> 07:00 (anchor date). If anchor_dt is before 07,
+            # use the window ending today; else use the window starting today 22:00
+            # which is in the FUTURE — instead use yesterday-22 -> today-07.
+            sess_start = datetime.combine(anchor_date, datetime.min.time()).replace(hour=start_h) - timedelta(days=1)
+            sess_end   = datetime.combine(anchor_date, datetime.min.time()).replace(hour=end_h)
+        else:
+            sess_start = datetime.combine(anchor_date, datetime.min.time()).replace(hour=start_h)
+            sess_end   = datetime.combine(anchor_date, datetime.min.time()).replace(hour=end_h)
+        # Clip end to anchor (we cannot see the future)
+        sess_end = min(sess_end, anchor_dt)
+        if sess_end <= sess_start:
+            return None, None
+        mask = []
+        for ts in df.index:
+            t = ts.to_pydatetime() if hasattr(ts, 'to_pydatetime') else ts
+            if hasattr(t, 'tzinfo') and t.tzinfo is not None:
+                t = t.replace(tzinfo=None)
+            mask.append(sess_start <= t < sess_end)
+        if not any(mask):
+            return None, None
+        sess_df = df[mask]
+        return float(sess_df['High'].max()), float(sess_df['Low'].min())
+    except Exception:
+        return None, None
+
+
+def _compute_context_tags(swept_price, swept_type, df, anchor_ts,
+                          pair_name, pair_type, tf_atr):
+    """
+    Return list of human-readable tags describing what the swept level is
+    aligned with. Tags use the same widened ATR tolerance as equal-levels,
+    except round-number which uses its own tight bucket.
+    """
+    tags = []
+    if tf_atr is None or tf_atr <= 0:
+        return tags
+    tol = SWEEP_EQUAL_LEVEL_TOLERANCE_ATR.get(pair_type, 0.30) * tf_atr
+
+    # Round number
+    rn_key = _round_number_key(pair_name, pair_type)
+    grid   = ROUND_NUMBER_GRID.get(rn_key, 0.0)
+    rn_tol = ROUND_NUMBER_TOLERANCE.get(rn_key, 0.0)
+    if grid > 0:
+        nearest = _nearest_round_number(swept_price, grid)
+        if abs(swept_price - nearest) <= rn_tol:
+            tags.append('round_number')
+
+    # Prior day H/L
+    pd_high, pd_low = _prior_trading_day_hl(df, anchor_ts)
+    if swept_type == 'low' and pd_low is not None:
+        if abs(swept_price - pd_low) <= tol:
+            tags.append('prior_day_low')
+    if swept_type == 'high' and pd_high is not None:
+        if abs(swept_price - pd_high) <= tol:
+            tags.append('prior_day_high')
+
+    # Per-pair session H/L
+    for sess in PAIR_SESSION_TAGS.get(pair_name, []):
+        s_high, s_low = _session_hl_until(df, anchor_ts, sess)
+        if swept_type == 'low' and s_low is not None:
+            if abs(swept_price - s_low) <= tol:
+                tags.append(f'{sess}_low')
+        if swept_type == 'high' and s_high is not None:
+            if abs(swept_price - s_high) <= tol:
+                tags.append(f'{sess}_high')
+
+    return tags
+
+
+def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
+                         tf_atr, pair_type, pair_name, tf_label='H1'):
+    """
+    Phase 1 sweep observation — leg-anchored, snapshot semantics.
+
+    Scans candles in `[impulse_start_idx, ob_idx]` (inclusive) for the most
+    recent qualifying sweep:
+      - Bullish OB: candle's low pierces a prior swing low by at least the
+        pair's wick-pierce minimum, AND closes back above that low.
+      - Bearish OB: candle's high pierces a prior swing high by the pierce
+        minimum, AND closes back below that high.
+
+    The swept swing must be the EXTREME (lowest low / highest high) inside
+    `[impulse_start_idx, sweep_candle - 1]` — interior swings are not sweeps.
+
+    Iteration is reverse (newest candidate first); the first match wins.
+
+    Returns the snapshot dict written to ob['sweep_observed'].
+    """
+    not_observed = {'exists': False}
+
+    if df is None or len(df) == 0:
+        return not_observed
+    if ob_idx is None or impulse_start_idx is None:
+        return not_observed
+    if direction not in ('bullish', 'bearish'):
+        return not_observed
+    if tf_atr is None or tf_atr <= 0:
+        return not_observed
+    # Need at least one candle of leg before the OB candle, OR the OB candle
+    # itself can be the sweep. Guard against impossible windows.
+    if impulse_start_idx < 0 or ob_idx >= len(df) or impulse_start_idx > ob_idx:
+        return not_observed
+
+    H = df['High'].values.astype(float)
+    L = df['Low'].values.astype(float)
+    O = df['Open'].values.astype(float)
+    C = df['Close'].values.astype(float)
+
+    bias_low = (direction == 'bullish')  # bullish OB -> hunt low sweeps
+    pierce_min = SWEEP_WICK_PIERCE_MIN_ATR.get(pair_type, 0.05) * tf_atr
+
+    # Swings inside the leg. lookback=2 catches short legs; lookback=3
+    # qualifying swings are a strict subset, so we don't miss them.
+    leg_df = df.iloc[impulse_start_idx:ob_idx + 1]
+    leg_swings_local = get_swing_points(leg_df, lookback=2)
+    # Translate local idx -> absolute idx in df
+    swings = [
+        {'type': s['type'], 'price': s['price'],
+         'idx': s['idx'] + impulse_start_idx,
+         'ts':  s['ts']}
+        for s in leg_swings_local
+    ]
+    if not swings:
+        return not_observed
+
+    swing_type_we_want = 'low' if bias_low else 'high'
+
+    # Candidate sweep candles: include ob_idx itself (the OB candle can be
+    # the sweep candle in textbook cases). Reverse iteration -> newest first.
+    for i in range(ob_idx, impulse_start_idx - 1, -1):
+        # Find candidate swept swings: same direction, strictly before i,
+        # and the extreme so far inside [impulse_start_idx, i-1].
+        prior_swings = [s for s in swings if s['type'] == swing_type_we_want and s['idx'] < i]
+        if not prior_swings:
+            continue
+
+        if bias_low:
+            extreme = min(prior_swings, key=lambda s: s['price'])
+            level   = extreme['price']
+            pierced = (L[i] < level - pierce_min)
+            closed_back = (C[i] > level)
+        else:
+            extreme = max(prior_swings, key=lambda s: s['price'])
+            level   = extreme['price']
+            pierced = (H[i] > level + pierce_min)
+            closed_back = (C[i] < level)
+
+        if not (pierced and closed_back):
+            continue
+
+        # Qualifying sweep found. Score it using existing Phase 2 helpers so
+        # tier semantics stay consistent across phases.
+        swept_type = 'low' if bias_low else 'high'
+        eq_score, eq_matches = _equal_levels_score(extreme, swings, pair_type, tf_atr)
+        rej_score, wb_ratio  = _rejection_score(df, i, swept_type, tf_atr)
+        total = SWEEP_SCORE_BASE_MAX + eq_score + rej_score
+        tier  = _sweep_tier(total)
+
+        # Pierce distance in display units (pips for forex, points/$ for others).
+        if pair_type == 'forex':
+            # 0.0001 for 5-dp, 0.01 for 3-dp JPY pairs
+            pip_unit = 0.01 if pair_name == 'USDJPY' else 0.0001
+        elif pair_type == 'index':
+            pip_unit = 1.0
+        else:  # commodity (Gold)
+            pip_unit = 1.0
+        if bias_low:
+            raw_distance = level - L[i]
+        else:
+            raw_distance = H[i] - level
+        wick_distance_pips = round(max(raw_distance, 0.0) / pip_unit, 2)
+
+        # Snapshot timestamp + observed-at (UTC).
+        sweep_ts = df.index[i]
+        try:
+            sweep_ts_iso = sweep_ts.isoformat() if hasattr(sweep_ts, 'isoformat') else str(sweep_ts)
+        except Exception:
+            sweep_ts_iso = str(sweep_ts)
+
+        context_tags = _compute_context_tags(
+            level, swept_type, df, sweep_ts, pair_name, pair_type, tf_atr
+        )
+
+        return {
+            'exists':              True,
+            'tf':                  tf_label,
+            'tier':                tier,
+            'score':               round(total, 3),
+            'price':               float(level),
+            'sweep_idx':           int(i),
+            'timestamp':           sweep_ts_iso,
+            'wick_distance_pips':  wick_distance_pips,
+            'wick_body_ratio':     round(wb_ratio, 2),
+            'equal_levels_count':  int(eq_matches),
+            'context_tags':        context_tags,
+            'observed_at':         datetime.utcnow().isoformat()
+        }
+
+    return not_observed
+
+
 def select_best_sweep(h1_result, m15_result):
     """
     Choose between H1 and M15 sweep results applying the M15-over-H1 buffer.
@@ -581,37 +907,49 @@ def select_best_sweep(h1_result, m15_result):
 # NEW
 # NEW
 def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
-                       leg_start_idx=None, leg_end_idx=None):
+                       leg_start_idx=None, leg_end_idx=None,
+                       pair_type="forex"):
     """
-    Find the most relevant 3-candle FVG.
+    Find the most relevant 3-candle FVG inside the displacement leg.
+
+    Selection rule:
+      Scan oldest-first within the window. Return the FIRST live (pristine or
+      partial) FVG — i.e. the FVG closest to the OB candle. This is the FVG
+      price hits first on retrace. If no live FVG exists, fall back to the
+      most-recent ghost (latest fully-mitigated FVG) so chart context is kept.
 
     Mitigation states:
       - 'pristine' : price has NOT touched FVG proximal since formation.
       - 'partial'  : price touched proximal but NOT distal. Full score.
-      - 'full'     : price touched distal (wick tag is enough). Zero score.
+      - 'full'     : FVG is dead. Definition is pair-aware (see below).
+
+    Pair-aware full mitigation:
+      - Forex: touch-based full mit. Any wick through distal kills the FVG.
+        Forex respects levels precisely.
+      - Index (NAS100) / Commodity (Gold): close-based full mit. A wick spike
+        does not kill the FVG; only a candle close past distal does. Both
+        instruments routinely wick through levels on news without genuine
+        fills.
+
+    Partial mitigation is touch-based for all pairs (proximal touch is the
+    proximal touch regardless of close).
 
     Proximal / Distal by bias:
       LONG  FVG: proximal = fvg_top    | distal = fvg_bottom
       SHORT FVG: proximal = fvg_bottom | distal = fvg_top
 
-    Touch-based (no close required):
-      LONG  full mitigation -> any L[m] <= fvg_bottom
-      LONG  partial         -> any L[m] <= fvg_top (but no full-mit yet)
-      SHORT full mitigation -> any H[m] >= fvg_top
-      SHORT partial         -> any H[m] >= fvg_bottom (but no full-mit yet)
-
     Return shape:
-      Pristine/partial -> {"exists": True, "fvg_top": ft, "fvg_bottom": fb,
-                           "c1_idx": k, "c3_idx": k+2,
-                           "mitigation": "pristine" | "partial",
-                           "was_detected": True}
-      Full mitigation  -> {"exists": False, "fvg_top": None, "fvg_bottom": None,
-                           "was_detected": True, "mitigation": "full",
-                           "ghost_top": ft, "ghost_bottom": fb,
-                           "ghost_c1_idx": k, "ghost_c3_idx": k+2,
-                           "mitigated_at_idx": m}
-      Nothing          -> {"exists": False, "fvg_top": None, "fvg_bottom": None,
-                           "was_detected": False, "mitigation": "none"}
+      Live (pristine/partial) -> {"exists": True, "fvg_top": ft, "fvg_bottom": fb,
+                                  "c1_idx": k, "c3_idx": k+2,
+                                  "mitigation": "pristine" | "partial",
+                                  "was_detected": True}
+      Ghost only (full mit)   -> {"exists": False, "fvg_top": None, "fvg_bottom": None,
+                                  "was_detected": True, "mitigation": "full",
+                                  "ghost_top": ft, "ghost_bottom": fb,
+                                  "ghost_c1_idx": k, "ghost_c3_idx": k+2,
+                                  "mitigated_at_idx": m}
+      Nothing                 -> {"exists": False, "fvg_top": None, "fvg_bottom": None,
+                                  "was_detected": False, "mitigation": "none"}
     """
     _empty = {"exists": False, "fvg_top": None, "fvg_bottom": None,
               "was_detected": False, "mitigation": "none"}
@@ -623,16 +961,27 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
 
     H = df['High'].values.astype(float)
     L = df['Low'].values.astype(float)
+    C = df['Close'].values.astype(float)
     n = len(df)
 
+    # Close-based full mit for index (NAS) and commodity (Gold) — both wick
+    # through levels on news without genuine fills. Forex keeps touch-based.
+    close_based_full_mit = pair_type in ("index", "commodity")
+
+    # Oldest-first scan: returns FVG closest to OB. When a live FVG exists,
+    # it is preferred over later ghosts (price hits the deepest live FVG first
+    # on retrace).
     if leg_start_idx is not None and leg_end_idx is not None:
-        k_hi = min(leg_end_idx - 1, n - 3)
         k_lo = max(leg_start_idx, 0)
+        k_hi = min(leg_end_idx - 1, n - 3)
         if k_hi < k_lo:
             return _empty
-        scan_range = range(k_hi, k_lo - 1, -1)
+        scan_range = range(k_lo, k_hi + 1)
     else:
-        scan_range = range(n - 3, max(0, n - 30), -1)
+        # Default fallback (Phase 3 M5 path): scan last ~30 bars oldest-first.
+        scan_range = range(max(0, n - 30), n - 2)
+
+    last_ghost = None  # remember the most-recent ghost for fallback display
 
     for k in scan_range:
         if k + 2 >= n or k < 0:
@@ -642,23 +991,32 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
             ft, fb = float(L[k + 2]), float(H[k])
             if (ft - fb) < atr_floor:
                 continue
-            # LONG: proximal = ft, distal = fb. Touch-based mitigation.
+            # LONG: proximal = ft, distal = fb.
             full_fill_idx = None
             partial_hit = False
             for m in range(k + 3, n):
-                if L[m] <= fb:
-                    full_fill_idx = m
-                    break
+                # Full mit check (pair-aware).
+                if close_based_full_mit:
+                    if C[m] < fb:
+                        full_fill_idx = m
+                        break
+                else:
+                    if L[m] <= fb:
+                        full_fill_idx = m
+                        break
+                # Partial check (touch-based for all pairs).
                 if L[m] <= ft:
                     partial_hit = True
             if full_fill_idx is not None:
-                return {
+                # Track latest ghost; keep scanning for a live FVG closer to BOS.
+                last_ghost = {
                     "exists": False, "fvg_top": None, "fvg_bottom": None,
                     "was_detected": True, "mitigation": "full",
                     "ghost_top": ft, "ghost_bottom": fb,
                     "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
                     "mitigated_at_idx": full_fill_idx
                 }
+                continue
             return {
                 "exists": True, "fvg_top": ft, "fvg_bottom": fb,
                 "c1_idx": k, "c3_idx": k + 2,
@@ -670,23 +1028,29 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
             ft, fb = float(L[k]), float(H[k + 2])
             if (ft - fb) < atr_floor:
                 continue
-            # SHORT: proximal = fb, distal = ft. Touch-based mitigation.
+            # SHORT: proximal = fb, distal = ft.
             full_fill_idx = None
             partial_hit = False
             for m in range(k + 3, n):
-                if H[m] >= ft:
-                    full_fill_idx = m
-                    break
+                if close_based_full_mit:
+                    if C[m] > ft:
+                        full_fill_idx = m
+                        break
+                else:
+                    if H[m] >= ft:
+                        full_fill_idx = m
+                        break
                 if H[m] >= fb:
                     partial_hit = True
             if full_fill_idx is not None:
-                return {
+                last_ghost = {
                     "exists": False, "fvg_top": None, "fvg_bottom": None,
                     "was_detected": True, "mitigation": "full",
                     "ghost_top": ft, "ghost_bottom": fb,
                     "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
                     "mitigated_at_idx": full_fill_idx
                 }
+                continue
             return {
                 "exists": True, "fvg_top": ft, "fvg_bottom": fb,
                 "c1_idx": k, "c3_idx": k + 2,
@@ -694,6 +1058,9 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
                 "was_detected": True
             }
 
+    # No live FVG found in the window. Return the latest ghost if any.
+    if last_ghost is not None:
+        return last_ghost
     return _empty
 def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     dp = _dp(pair_conf)
