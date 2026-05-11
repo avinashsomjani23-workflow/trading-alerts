@@ -498,7 +498,8 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                 if 0 <= mid_local < n:
                     mit = fvg.get('mitigation', 'pristine')
                     if mit == 'partial':
-                        face_col, edge_col = '#a8e6a1', '#7ed67e'
+                        # Amber — partial mitigation (caution).
+                        face_col, edge_col = '#f4d03f', '#f1c40f'
                     else:
                         face_col, edge_col = '#27ae60', '#2ecc71'
                     fvg_x_start = mid_local - 0.6
@@ -872,7 +873,8 @@ def _chart_legend_html(bos_tag="BOS", bos_tier="Major"):
         bos_color, bos_label = '#e91e63', 'Major CHoCH'
     items = [
         ('#bb8fce', 'Zone band (proximal/distal)'),
-        ('#2ecc71', 'FVG (displacement)'),
+        ('#2ecc71', 'FVG pristine (displacement)'),
+        ('#f1c40f', 'FVG partial (proximal touched)'),
         (bos_color, f'{bos_label} break candle / level'),
         ('#ffffff', 'OB candle / current price'),
         ('#e67e22', 'Entry'),
@@ -1498,7 +1500,8 @@ if __name__ == "__main__":
                 )
                 fvg_m15 = smc_detector.detect_fvg_in_zone(
                     df_m15, bias, zone_top, zone_bottom, atr_floor_m15,
-                    leg_start_idx=ob_idx_m15, leg_end_idx=m15_window_end
+                    leg_start_idx=ob_idx_m15, leg_end_idx=m15_window_end,
+                    pair_type=ptype
                 )
 
             fvg_h1 = ob.get("fvg", {"exists": False, "was_detected": False,

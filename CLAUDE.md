@@ -70,6 +70,11 @@ FVG, liquidity sweep, kill zone, macro news, PD array alignment, OB and FVG fres
 - Architectural changes flagged before action. Small obvious fixes can be done after announcement.
 - One concept, one implementation. Duplicate logic is a bug, not design.
 
+**Git workflow**
+- Approving an edit ≠ approving a push. Commit + push only when the user says "ship it" (or equivalent: "push", "publish").
+- On "ship it": stage only the relevant files (never blanket `git add -A`), write a clear commit message, push to `origin main`. Skip `.claude/settings.local.json` unless explicitly asked.
+- Pull from GitHub only when needed (start of session if remote may have moved, or before edits if remote changes are mentioned). No background auto-pull.
+
 **Quality**
 - Sanity check after every change.
 - Flag design / logic / system problems proactively.

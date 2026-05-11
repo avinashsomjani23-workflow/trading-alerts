@@ -219,7 +219,8 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
                 if 0 <= mid_local < n:
                     mit = m5_fvg.get('mitigation', 'pristine')
                     if mit == 'partial':
-                        face_col, edge_col = '#a8e6a1', '#7ed67e'
+                        # Amber — partial mitigation (caution).
+                        face_col, edge_col = '#f4d03f', '#f1c40f'
                     else:
                         face_col, edge_col = '#27ae60', '#2ecc71'
                     fvg_x_start = mid_local - 0.6
@@ -394,7 +395,8 @@ def _chart_legend_html():
     """Colour-code legend rendered below M5 chart. Cosmetic only."""
     items = [
         ('#bb8fce', 'H1 zone band (proximal/distal)'),
-        ('#2ecc71', 'M5 FVG (displacement)'),
+        ('#2ecc71', 'M5 FVG pristine (displacement)'),
+        ('#f1c40f', 'M5 FVG partial (proximal touched)'),
         ('#e91e63', 'M5 CHoCH level'),
         ('#ffffff', 'OB candle / current price'),
         ('#e67e22', 'Entry'),
@@ -658,7 +660,8 @@ def run_phase3():
         atr_floor_m5 = fvg_floor_mult * m5_atr_for_fvg
 
         m5_fvg = smc_detector.detect_fvg_in_zone(
-            df_m5, bias, zone_top, zone_bottom, atr_floor_m5
+            df_m5, bias, zone_top, zone_bottom, atr_floor_m5,
+            pair_type=ptype
         )
         m5_sweep_price = None  # M5 sweep not used on chart or in levels.
 
