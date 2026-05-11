@@ -13,7 +13,7 @@
     "last_event_ts": "2026-05-07T19:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T19:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-11T16:00:00+00:00",
+    "last_scanned_ts": "2026-05-11T17:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -107,7 +107,7 @@
     "last_event_ts": "2026-05-07T16:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T16:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-11T16:00:00+00:00",
+    "last_scanned_ts": "2026-05-11T17:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -186,7 +186,7 @@
     "last_event_ts": "2026-05-07T19:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T19:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-11T16:00:00+00:00",
+    "last_scanned_ts": "2026-05-11T17:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -340,7 +340,7 @@
     "last_event_ts": "2026-05-08T09:00:00+00:00",
     "last_event_idx_iso": "2026-05-08T09:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-11T16:00:00+00:00",
+    "last_scanned_ts": "2026-05-11T17:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -422,8 +422,8 @@
   },
   "NAS100": {
     "trend": "bullish",
-    "ceiling_price": 29480.0,
-    "ceiling_ts": "2026-05-11T16:00:00+00:00",
+    "ceiling_price": 29432.5,
+    "ceiling_ts": "2026-05-11T17:00:00+00:00",
     "ceiling_is_placeholder": true,
     "floor_price": 29263.25,
     "floor_ts": "2026-05-11T08:00:00+00:00",
@@ -434,7 +434,7 @@
     "last_event_ts": "2026-05-11T16:00:00+00:00",
     "last_event_idx_iso": "2026-05-11T16:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-11T16:00:00+00:00",
+    "last_scanned_ts": "2026-05-11T17:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -573,7 +573,7 @@
     "last_event_ts": "2026-05-07T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-11T16:00:00+00:00",
+    "last_scanned_ts": "2026-05-11T17:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
