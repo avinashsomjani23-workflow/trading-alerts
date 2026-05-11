@@ -25,6 +25,11 @@ Wall update rule (LOCKED): walls move ONLY when a wall is broken.
   - Major CHoCH AT WALL (no internal pivot existed; close past opposite wall):
     broken wall → tentative; opposite wall stays put (it's the prior trend
     anchor = new trend's starting extreme). NO history search.
+    EXCEPTION — chop CHoCH-at-wall: if chop=True on this event, the BOS
+    that set the opposite wall just before was a fakeout. The opposite
+    wall also resets to tentative at the break-candle extreme. Both walls
+    re-anchor inside the new leg via _try_promote_placeholder /
+    _refresh_tentative.
   - Major CHoCH on internal HL/LH: walls do NOT move; trend flips.
   - Minor CHoCH: walls do NOT move; trend does NOT flip.
 
@@ -841,18 +846,32 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         elif event_kind == 'CHoCH' and event_tier == 'Major':
             if event_at_wall:
                 # The wall we just closed past becomes tentative.
-                # Opposite wall STAYS — it's the prior trend anchor and
-                # the new trend's starting extreme.
+                # Opposite wall normally STAYS — it's the prior trend anchor
+                # and the new trend's starting extreme.
+                # EXCEPTION: chop CHoCH-at-wall (chop_this_event=True). The
+                # BOS that set the opposite wall just before was a fakeout.
+                # Reset BOTH walls so they re-anchor inside the new leg
+                # (avoids inheriting spike-derived walls like USDJPY 160.7).
                 if event_direction == 'bearish':       # down CHoCH at floor wall
                     floor["price"] = float(df['Low'].iloc[i])
                     floor["ts"]    = _ts_iso(df, i)
                     floor["idx"]   = i
                     floor["is_placeholder"] = True
+                    if chop_this_event:
+                        ceiling["price"] = float(df['High'].iloc[i])
+                        ceiling["ts"]    = _ts_iso(df, i)
+                        ceiling["idx"]   = i
+                        ceiling["is_placeholder"] = True
                 else:                                  # up CHoCH at ceiling wall
                     ceiling["price"] = float(df['High'].iloc[i])
                     ceiling["ts"]    = _ts_iso(df, i)
                     ceiling["idx"]   = i
                     ceiling["is_placeholder"] = True
+                    if chop_this_event:
+                        floor["price"] = float(df['Low'].iloc[i])
+                        floor["ts"]    = _ts_iso(df, i)
+                        floor["idx"]   = i
+                        floor["is_placeholder"] = True
             # else: internal-pivot Major CHoCH -> walls do NOT change.
             trend = event_direction
 

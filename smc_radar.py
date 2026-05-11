@@ -20,8 +20,12 @@ from email.mime.image import MIMEImage
 import base64
 from io import BytesIO
 
+# Route runtime logs to stdout — GitHub Actions captures stdout into run logs,
+# and locally it's still readable from the terminal. The structured Phase 1
+# scan log (state/phase1_scans/YYYY-MM.jsonl) is the source of truth for
+# forensic analysis; this stream is for live tail / error reporting only.
 logging.basicConfig(
-    filename="smc_radar.log", level=logging.INFO,
+    level=logging.INFO,
     format="%(asctime)s — %(levelname)s — %(message)s"
 )
 
@@ -100,6 +104,166 @@ def load_json_safe(path, default):
             return json.load(f)
     except Exception:
         return default
+
+
+# ---------------------------------------------------------------------------
+# PHASE 1 SCAN LOG (forensic trail)
+# ---------------------------------------------------------------------------
+# One JSONL line per pair per scan, written to state/phase1_scans/YYYY-MM.jsonl.
+# Monthly rotation keeps individual files small and greppable. Records are
+# structured so post-hoc analysis can answer "why didn't this fire?" without
+# re-running anything.
+#
+# Record schema (one line):
+#   {
+#     "scan_ts": "<IST iso>", "source": "scan" | "backfill",
+#     "pair": "USDJPY",
+#     "current_price": float | null,
+#     "trend": "bullish" | "bearish" | null,
+#     "walls": {ceiling_price, ceiling_is_placeholder, floor_price,
+#               floor_is_placeholder, fallback_active},
+#     "last_event": {type, tier, direction, ts, chop},
+#     "active_zones": [{id, direction, status, touches, fvg_mitigation,
+#                       proximal, distal, distance_to_proximal_pips,
+#                       sweep_observed: {exists, tier, price} | null}],
+#     "dropped_this_scan": [{id, reason}],
+#     "diagnostics": [str]   # optional one-line notes
+#   }
+# ---------------------------------------------------------------------------
+PHASE1_SCAN_DIR = os.path.join("state", "phase1_scans")
+
+def _phase1_scan_log_path(ist_now=None):
+    """Return the path for the current month's scan log file."""
+    if ist_now is None:
+        ist_now = get_ist_now()
+    month_str = ist_now.strftime('%Y-%m')
+    return os.path.join(PHASE1_SCAN_DIR, f"{month_str}.jsonl")
+
+
+def _write_phase1_scan_records(records, ist_now=None):
+    """Append a batch of scan records to the current month's log file."""
+    if not records:
+        return
+    try:
+        os.makedirs(PHASE1_SCAN_DIR, exist_ok=True)
+        path = _phase1_scan_log_path(ist_now)
+        with open(path, "a", encoding="utf-8") as f:
+            for rec in records:
+                f.write(json.dumps(rec, default=str) + "\n")
+    except Exception as e:
+        logging.warning(f"phase1 scan log write failed: {e}")
+
+
+def _backfill_phase1_scan_log():
+    """One-time backfill from structure_state.json events.
+
+    Idempotent: writes only if the current month's log file does not already
+    exist. Emits one record per historical structure event (Phase 1 has
+    finer-grained scans, but pre-feature we only have event-level history).
+    """
+    path = _phase1_scan_log_path()
+    if os.path.exists(path):
+        return
+    try:
+        state = dealing_range.load_state() or {}
+        if not state:
+            return
+        records = []
+        for pair_name, pair_state in state.items():
+            events = pair_state.get('events', []) or []
+            for ev in events:
+                ts = ev.get('candle_ts')
+                if not ts:
+                    continue
+                records.append({
+                    'scan_ts': ts,
+                    'source': 'backfill',
+                    'pair': pair_name,
+                    'current_price': None,
+                    'trend': ev.get('trend_after'),
+                    'walls': {
+                        # Backfill cannot reconstruct walls-at-time-of-event
+                        # from the snapshot alone — only event facts are kept.
+                        'ceiling_price': None,
+                        'ceiling_is_placeholder': None,
+                        'floor_price': None,
+                        'floor_is_placeholder': None,
+                        'fallback_active': None,
+                    },
+                    'last_event': {
+                        'type': ev.get('type'),
+                        'tier': ev.get('tier'),
+                        'direction': ev.get('direction'),
+                        'ts': ts,
+                        'chop': bool(ev.get('chop', False)),
+                        'broken_was_wall': bool(ev.get('broken_was_wall', False)),
+                        'broken_swing_price': ev.get('broken_swing_price'),
+                        'displacement_atr': ev.get('displacement_atr'),
+                        'reversal_pct': ev.get('reversal_pct'),
+                    },
+                    'active_zones': [],
+                    'dropped_this_scan': [],
+                    'diagnostics': ['backfilled from structure_state.events'],
+                })
+        records.sort(key=lambda r: (r.get('scan_ts') or '', r.get('pair') or ''))
+        _write_phase1_scan_records(records)
+        if records:
+            logging.info(f"Phase 1 scan log backfilled with {len(records)} event records.")
+    except Exception as e:
+        logging.warning(f"phase1 scan log backfill failed: {e}")
+
+
+def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
+                              slate_zones, fresh_zones, dropped_this_scan,
+                              diagnostics=None):
+    """Construct a single per-pair scan record (snapshot of decisions)."""
+    walls = walls or {}
+    active = []
+    for sz in slate_zones:
+        if sz.get('status') != 'active':
+            continue
+        sw = sz.get('sweep_observed') or {}
+        active.append({
+            'id': sz.get('zone_id'),
+            'direction': sz.get('direction'),
+            'bos_tag': sz.get('bos_tag'),
+            'bos_tier': sz.get('bos_tier'),
+            'status': sz.get('status_label'),
+            'touches': sz.get('touches', 0),
+            'proximal': sz.get('proximal_line'),
+            'distal': sz.get('distal_line'),
+            'distance_to_proximal_pips': sz.get('distance_to_proximal_pips'),
+            'fvg_mitigation': (sz.get('fvg') or {}).get('mitigation', 'none'),
+            'sweep_observed': {
+                'exists': bool(sw.get('exists')),
+                'tier': sw.get('tier'),
+                'price': sw.get('price'),
+            } if sw else None,
+        })
+    return {
+        'scan_ts': ist_now.isoformat(),
+        'source': 'scan',
+        'pair': pair_name,
+        'current_price': current_price,
+        'trend': walls.get('trend'),
+        'walls': {
+            'ceiling_price': walls.get('ceiling_price'),
+            'ceiling_is_placeholder': walls.get('ceiling_is_placeholder'),
+            'floor_price': walls.get('floor_price'),
+            'floor_is_placeholder': walls.get('floor_is_placeholder'),
+            'fallback_active': bool(walls.get('fallback_active', False)),
+        },
+        'last_event': {
+            'type': walls.get('last_event_type'),
+            'tier': walls.get('last_event_tier'),
+            'direction': walls.get('last_event_direction'),
+            'ts': walls.get('last_event_ts'),
+            'chop': bool(walls.get('last_event_chop', False)),
+        },
+        'active_zones': active,
+        'dropped_this_scan': dropped_this_scan or [],
+        'diagnostics': diagnostics or [],
+    }
 
 
 def _log_stale_skip(symbol, interval, reason, age_hours):
@@ -293,6 +457,70 @@ def _event_label(bos_tag, bos_tier):
     if bos_tier == 'Minor':
         return 'Minor CHoCH'
     return 'Major CHoCH'
+
+
+# ---------------------------------------------------------------------------
+# PHASE 1 OB MITIGATION (single source of truth)
+# ---------------------------------------------------------------------------
+# Rule (LOCKED):
+#   - Distal mitigation = CLOSE strictly beyond distal.
+#       Bullish OB:  C[m] < distal  → mitigated
+#       Bearish OB:  C[m] > distal  → mitigated
+#     Strict. No ATR buffer. Wick-only breaches do NOT mitigate.
+#   - Touches counted by wick at proximal (a touch = a visit).
+#   - 3 touches at proximal = mitigated (overuse mitigation).
+#
+# Phase 2 / Phase 3 invalidation paths have their own rules (Phase 3 adds
+# an ATR buffer on M5 close). This function is Phase 1 only.
+# ---------------------------------------------------------------------------
+def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx, end_idx=None):
+    """
+    Replay candles in [start_idx, end_idx) and apply Phase 1 mitigation.
+
+    Args:
+        direction: 'bullish' | 'bearish'.
+        distal:    OB distal price.
+        proximal:  OB proximal price.
+        df:        H1 OHLC dataframe.
+        start_idx: first idx to inspect (exclusive of OB candle is up to caller).
+        end_idx:   one past last idx to inspect; defaults to len(df).
+
+    Returns:
+        (mitigated: bool, reason: Optional[str], touches: int)
+        reason ∈ {'mitigated_distal_break', 'mitigated_three_touches'} or None.
+    """
+    if df is None or len(df) == 0:
+        return False, None, 0
+    if end_idx is None:
+        end_idx = len(df)
+    start_idx = max(0, int(start_idx))
+    end_idx = min(int(end_idx), len(df))
+    if start_idx >= end_idx:
+        return False, None, 0
+
+    C = df['Close'].values.astype(float)
+    H = df['High'].values.astype(float)
+    L = df['Low'].values.astype(float)
+
+    touches = 0
+    for m in range(start_idx, end_idx):
+        if direction == 'bullish':
+            # CLOSE below distal = mitigated. Wick alone does not mitigate.
+            if C[m] < distal:
+                return True, 'mitigated_distal_break', touches
+            # Touch = wick into proximal (visit, not invalidation).
+            if L[m] <= proximal:
+                touches += 1
+        else:
+            if C[m] > distal:
+                return True, 'mitigated_distal_break', touches
+            if H[m] >= proximal:
+                touches += 1
+        if touches >= 3:
+            return True, 'mitigated_three_touches', touches
+
+    return False, None, touches
+
 
 def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=None):
     """
@@ -517,27 +745,13 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         })
 # Mitigation + touch tracking. Sets 'touches' and 'status' on each OB.
     # Must run BEFORE dedupe so the touch-state test in dedupe is meaningful.
+    # Mitigation rule: see is_ob_mitigated_phase1 (close-based, strict, no ATR).
     tracked_obs = []
     for ob in active_obs:
-        mitigated = False
-        touches   = 0
-        for m in range(ob['bos_idx'] + 1, n):
-            if ob['direction'] == 'bullish':
-                if C[m] < ob['distal_line']:
-                    mitigated = True
-                    break
-                elif L[m] <= ob['proximal_line']:
-                    touches += 1
-            else:
-                if C[m] > ob['distal_line']:
-                    mitigated = True
-                    break
-                elif H[m] >= ob['proximal_line']:
-                    touches += 1
-            if touches >= 3:
-                mitigated = True
-                break
-
+        mitigated, _reason, touches = is_ob_mitigated_phase1(
+            ob['direction'], ob['distal_line'], ob['proximal_line'],
+            df, start_idx=ob['bos_idx'] + 1, end_idx=n
+        )
         if not mitigated:
             ob['touches'] = touches
             ob['status']  = 'Pristine' if touches == 0 else f'Tested ({touches}x)'
@@ -694,9 +908,30 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
         if ceiling_price is not None and floor_price is not None and ceiling_price > floor_price:
             eq_price = (ceiling_price + floor_price) / 2.0
 
-        # --- Y-limits: include candles, zone, FVG, current price, DR walls, EQ.
+        # --- Y-limits: candles + zone + FVG + current price ALWAYS included.
+        # Walls included ONLY when within a reasonable proximity to the candle
+        # range; far walls (e.g. a stale 4-ATR-away ceiling) get rendered as
+        # off-chart annotations so candles stay tall and readable.
         candle_lo = float(np.min(L))
         candle_hi = float(np.max(H))
+        candle_span = max(candle_hi - candle_lo, 1e-9)
+        h1_atr = ob.get('h1_atr', 0.0) or 0.0
+        # Proximity threshold: 2.5×ATR or 1.5×candle_range, whichever is larger.
+        # Wall must sit within this band of the candle range to be drawn on-chart.
+        if h1_atr > 0:
+            wall_proximity_max = max(2.5 * h1_atr, 1.5 * candle_span)
+        else:
+            wall_proximity_max = 1.5 * candle_span
+
+        def _wall_in_view(wall_price):
+            if wall_price is None:
+                return False
+            return (wall_price <= candle_hi + wall_proximity_max
+                    and wall_price >= candle_lo - wall_proximity_max)
+
+        ceiling_in_view = _wall_in_view(ceiling_price)
+        floor_in_view   = _wall_in_view(floor_price)
+
         ymin_candidates = [candle_lo, zone_lo]
         ymax_candidates = [candle_hi, zone_hi]
         if ob['fvg'].get('exists') or ob['fvg'].get('was_detected'):
@@ -707,16 +942,15 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
                 ymax_candidates.append(float(ft))
         ymin_candidates.append(float(C[-1]))
         ymax_candidates.append(float(C[-1]))
-        if ceiling_price is not None:
+        if ceiling_in_view:
             ymax_candidates.append(float(ceiling_price))
-        if floor_price is not None:
+        if floor_in_view:
             ymin_candidates.append(float(floor_price))
 
         y_min_raw = min(ymin_candidates)
         y_max_raw = max(ymax_candidates)
 
         # H1 ATR-based minimum padding (0.5 ATR) so tight pairs aren't cramped.
-        h1_atr = ob.get('h1_atr', 0.0) or 0.0
         atr_pad = 0.5 * h1_atr if h1_atr > 0 else (y_max_raw - y_min_raw) * 0.05
         # General padding 6% of required range.
         gen_pad = (y_max_raw - y_min_raw) * 0.06
@@ -842,36 +1076,45 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
                     ))
 
         # --- Dealing Range walls + Equilibrium ---
-        # Confirmed = solid dotted, alpha 0.85; Placeholder = dashed-gap, alpha 0.45.
+        # Anchored = solid dotted, alpha 0.85; Placeholder = dashed-gap, alpha 0.45.
+        # Walls outside the candle proximity band render as off-chart edge
+        # annotations (decided earlier as ceiling_in_view / floor_in_view).
         DR_COLOR = '#5dade2'   # muted blue, doesn't clash with palette
         EQ_COLOR = '#85c1e9'   # lighter than DR walls
         DR_LW = 1.0
-        if ceiling_price is not None:
+        if ceiling_price is not None and ceiling_in_view:
             ax.axhline(
                 y=ceiling_price, color=DR_COLOR, linewidth=DR_LW,
                 linestyle=':' if not ceiling_ph else (0, (4, 4)),
                 alpha=0.85 if not ceiling_ph else 0.45, zorder=2
             )
-        if floor_price is not None:
+        if floor_price is not None and floor_in_view:
             ax.axhline(
                 y=floor_price, color=DR_COLOR, linewidth=DR_LW,
                 linestyle=':' if not floor_ph else (0, (4, 4)),
                 alpha=0.85 if not floor_ph else 0.45, zorder=2
             )
-        if eq_price is not None:
+        # EQ only drawn when both walls are on-chart — otherwise it's
+        # geometrically meaningful only with respect to the off-chart wall.
+        if eq_price is not None and ceiling_in_view and floor_in_view:
             ax.axhline(
                 y=eq_price, color=EQ_COLOR, linewidth=0.8,
                 linestyle=':', alpha=0.6, zorder=2
             )
 
-        # --- Swing triangles (lookback 2 hollow, lookback 3 filled) ---
+        # --- Swing triangles ---
+        # lookback-3 filled triangles render across the visible window
+        # (structural swings; drive walls / BOS / Major CHoCH).
+        # lookback-2 hollow triangles render ONLY inside the OB impulse leg
+        # [impulse_start_idx, ob_idx] — that's the slice where they drive
+        # Phase 1 sweep observation. Outside the leg they're decision-
+        # irrelevant noise.
         SWING_COLOR = '#d4a017'
         try:
             swings_lb3 = smc_detector.get_swing_points(full_df, lookback=3)
             swings_lb2 = smc_detector.get_swing_points(full_df, lookback=2)
         except Exception:
             swings_lb3, swings_lb2 = [], []
-        # lb2 minus lb3 (so lb3 swings render as filled, lb2-only as hollow).
         lb3_keys = {(s['idx'], s['type']) for s in swings_lb3}
         # Visual offset based on chart vertical span (not pixels).
         marker_offset = (y_max - y_min) * 0.012
@@ -887,20 +1130,76 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
                 ax.scatter([xi], [s['price'] - marker_offset], marker='^',
                            s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
                            linewidths=1.0, zorder=6)
-        for s in swings_lb2:
-            if (s['idx'], s['type']) in lb3_keys:
-                continue  # already drawn as filled lb3
-            xi = s['idx'] - window_start
-            if not (0 <= xi < n_plot):
-                continue
-            if s['type'] == 'high':
-                ax.scatter([xi], [s['price'] + marker_offset], marker='v',
-                           s=36, facecolors='none', edgecolors=SWING_COLOR,
-                           linewidths=1.2, zorder=6)
-            else:
-                ax.scatter([xi], [s['price'] - marker_offset], marker='^',
-                           s=36, facecolors='none', edgecolors=SWING_COLOR,
-                           linewidths=1.2, zorder=6)
+        # lb2 scoped to the OB impulse leg only.
+        impulse_start_abs = ob.get('impulse_start_idx')
+        ob_idx_abs = ob.get('ob_idx')
+        leg_valid = (
+            impulse_start_abs is not None
+            and ob_idx_abs is not None
+            and impulse_start_abs <= ob_idx_abs
+        )
+        if leg_valid:
+            for s in swings_lb2:
+                if (s['idx'], s['type']) in lb3_keys:
+                    continue  # already drawn as filled lb3
+                # Scope: idx must lie inside the impulse leg.
+                if not (impulse_start_abs <= s['idx'] <= ob_idx_abs):
+                    continue
+                xi = s['idx'] - window_start
+                if not (0 <= xi < n_plot):
+                    continue
+                if s['type'] == 'high':
+                    ax.scatter([xi], [s['price'] + marker_offset], marker='v',
+                               s=36, facecolors='none', edgecolors=SWING_COLOR,
+                               linewidths=1.2, zorder=6)
+                else:
+                    ax.scatter([xi], [s['price'] - marker_offset], marker='^',
+                               s=36, facecolors='none', edgecolors=SWING_COLOR,
+                               linewidths=1.2, zorder=6)
+
+        # --- Sweep candle marker (Phase 1 sweep observation) ---
+        # Highlights the swept candle's wick in a distinct color, places a
+        # star at the wick tip, and draws a short level line at the swept
+        # price. Sweep_idx is refreshed each scan via refresh_slate_zone, so
+        # this maps to the current df frame correctly.
+        sw = ob.get('sweep_observed') or {}
+        if sw.get('exists'):
+            sw_abs_idx = sw.get('sweep_idx')
+            sw_level = sw.get('price')
+            sw_tier = sw.get('tier', 'weak')
+            SWEEP_COLOR_MAP = {
+                'textbook': '#00e5ff',
+                'decent':   '#26c6da',
+                'weak':     '#80deea',
+            }
+            SWEEP_COLOR = SWEEP_COLOR_MAP.get(sw_tier, '#00e5ff')
+            if sw_abs_idx is not None and sw_level is not None:
+                sw_local = sw_abs_idx - window_start
+                if 0 <= sw_local < n_plot:
+                    sw_h = float(H[sw_local])
+                    sw_l = float(L[sw_local])
+                    # Highlight the sweep candle wick (thick line in sweep color).
+                    ax.plot([sw_local, sw_local], [sw_l, sw_h],
+                            color=SWEEP_COLOR, linewidth=2.8, alpha=0.85,
+                            zorder=7, solid_capstyle='butt')
+                    # Mark the swept wick tip with a star.
+                    wick_tip = sw_l if ob['direction'] == 'bullish' else sw_h
+                    ax.scatter([sw_local], [wick_tip], marker='*', s=140,
+                               color=SWEEP_COLOR, edgecolors='#001f24',
+                               linewidths=0.8, zorder=8)
+                    # Short dashed line at the swept price level (extends
+                    # back from the sweep candle to show the swept swing).
+                    lvl_x_start = max(0, sw_local - 6)
+                    ax.plot([lvl_x_start, sw_local], [sw_level, sw_level],
+                            color=SWEEP_COLOR, linewidth=1.0,
+                            linestyle=(0, (3, 2)), alpha=0.7, zorder=4)
+                    # Compact label near the wick tip.
+                    label_dy = -14 if ob['direction'] == 'bullish' else 14
+                    label_va = 'top' if ob['direction'] == 'bullish' else 'bottom'
+                    ax.annotate('Sweep', xy=(sw_local, wick_tip),
+                                xytext=(0, label_dy), textcoords='offset points',
+                                color=SWEEP_COLOR, fontsize=8, fontweight='bold',
+                                ha='center', va=label_va, zorder=8)
 
         # --- Current price line ---
         current_price = float(C[-1])
@@ -924,19 +1223,24 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
             (bos_price, f"{bos_price:.{dp}f}", bos_color),
             (current_price, f"{current_price:.{dp}f}", '#ffffff'),
         ]
-        if ceiling_price is not None:
+        # Wall labels go in mid-chart ONLY when the wall is on-chart. Off-
+        # chart walls get edge annotations below.
+        if ceiling_price is not None and ceiling_in_view:
+            anchor_tag = '(placeholder)' if ceiling_ph else '(anchored)'
             mid_labels.append(
                 (ceiling_price,
-                 f"DR↑ {ceiling_price:.{dp}f}{' (ph)' if ceiling_ph else ''}",
+                 f"DR↑ {ceiling_price:.{dp}f} {anchor_tag}",
                  DR_COLOR)
             )
-        if floor_price is not None:
+        if floor_price is not None and floor_in_view:
+            anchor_tag = '(placeholder)' if floor_ph else '(anchored)'
             mid_labels.append(
                 (floor_price,
-                 f"DR↓ {floor_price:.{dp}f}{' (ph)' if floor_ph else ''}",
+                 f"DR↓ {floor_price:.{dp}f} {anchor_tag}",
                  DR_COLOR)
             )
-        if eq_price is not None:
+        # EQ label only when EQ line is drawn (both walls on-chart).
+        if eq_price is not None and ceiling_in_view and floor_in_view:
             mid_labels.append((eq_price, f"EQ {eq_price:.{dp}f}", EQ_COLOR))
 
         mid_stacked = smc_detector.stack_labels(mid_labels, pair_conf_shim)
@@ -947,6 +1251,49 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
 
         ax.set_ylim(y_min, y_max)
         ax.set_xlim(-1, n_plot + RIGHT_MARGIN)
+
+        # --- Off-chart wall annotations ---
+        # Far walls (not in candle proximity band) render as compact edge
+        # labels so the trader still knows where the structural reference
+        # sits, without sacrificing candle height.
+        if dp == 5:
+            pip_unit_local = 0.0001
+        elif dp == 3:
+            pip_unit_local = 0.01
+        else:
+            pip_unit_local = 1.0
+
+        def _off_chart_label(direction, wall_price, is_placeholder):
+            anchor_tag = 'placeholder' if is_placeholder else 'anchored'
+            if direction == 'up':
+                dist = (wall_price - candle_hi) / pip_unit_local
+                arrow = '↑'
+                ref = 'above'
+            else:
+                dist = (candle_lo - wall_price) / pip_unit_local
+                arrow = '↓'
+                ref = 'below'
+            dist_str = f"{abs(dist):.0f}p {ref}"
+            return f"DR{arrow} {wall_price:.{dp}f} ({anchor_tag}, {dist_str})"
+
+        if ceiling_price is not None and not ceiling_in_view:
+            txt = _off_chart_label('up', ceiling_price, ceiling_ph)
+            ax.text(
+                n_plot / 2.0, y_max, txt,
+                color=DR_COLOR, fontsize=9, fontweight='bold',
+                ha='center', va='top', zorder=7,
+                bbox=dict(facecolor='#131722', edgecolor=DR_COLOR,
+                          linewidth=0.7, pad=2.5, alpha=0.92)
+            )
+        if floor_price is not None and not floor_in_view:
+            txt = _off_chart_label('down', floor_price, floor_ph)
+            ax.text(
+                n_plot / 2.0, y_min, txt,
+                color=DR_COLOR, fontsize=9, fontweight='bold',
+                ha='center', va='bottom', zorder=7,
+                bbox=dict(facecolor='#131722', edgecolor=DR_COLOR,
+                          linewidth=0.7, pad=2.5, alpha=0.92)
+            )
 
         direction_label = "Demand" if ob['direction'] == 'bullish' else "Supply"
         event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
@@ -1086,7 +1433,7 @@ def _fallback_narrative(ob, name, dp, current_price):
 # ---------------------------------------------------------------------------
 
 def _format_dr_walls_cell(walls):
-    """Render the DR Walls cell. Confirmed/placeholder per side; fallback flagged."""
+    """Render the DR Walls cell. Per-wall anchored/placeholder status."""
     if not walls or not isinstance(walls, dict):
         return "<span style='color:#888;'>&mdash;</span>"
     if walls.get("fallback_active"):
@@ -1094,12 +1441,19 @@ def _format_dr_walls_cell(walls):
     ceiling_ph = walls.get("ceiling_is_placeholder", True)
     floor_ph   = walls.get("floor_is_placeholder", True)
     if not ceiling_ph and not floor_ph:
-        return "<span style='color:#27ae60;'>&#10003; Confirmed</span>"
+        return "<span style='color:#27ae60;'>&#10003; Both anchored</span>"
     if ceiling_ph and floor_ph:
         return "<span style='color:#e67e22;'>&#9888; Both placeholder</span>"
     if ceiling_ph:
-        return "<span style='color:#e67e22;'>&#9888; Ceiling placeholder</span>"
-    return "<span style='color:#e67e22;'>&#9888; Floor placeholder</span>"
+        # Ceiling tentative, floor anchored.
+        return (
+            "<span style='color:#e67e22;'>&#9888; Ceiling placeholder</span>"
+            "<span style='color:#666;font-size:10px;'>&nbsp;/ floor anchored</span>"
+        )
+    return (
+        "<span style='color:#e67e22;'>&#9888; Floor placeholder</span>"
+        "<span style='color:#666;font-size:10px;'>&nbsp;/ ceiling anchored</span>"
+    )
 
 
 def _pip_unit(dp):
@@ -1235,9 +1589,10 @@ def _phase1_chart_legend_html(bos_tag="BOS", bos_tier="Major"):
         ('#f1c40f', 'FVG partial (proximal touched)'),
         ('#888888', 'FVG mitigated (ghost)'),
         (bos_color, f'{bos_label} break candle / level'),
-        ('#5dade2', 'Dealing range walls (dotted=confirmed, dashed=placeholder)'),
+        ('#5dade2', 'Dealing range walls (dotted=anchored, dashed=placeholder; far walls render as edge labels)'),
         ('#85c1e9', 'Equilibrium (50%)'),
-        ('#d4a017', 'Swing: ▲▼ filled = lookback-3, △▽ hollow = lookback-2'),
+        ('#d4a017', 'Swing: ▲▼ filled = lookback-3 (visible window); △▽ hollow = lookback-2 (OB impulse leg only)'),
+        ('#00e5ff', 'Sweep candle (★ at wick tip, line at swept level) — Phase 1 sweep observation'),
         ('#ffffff', 'Current price'),
     ]
     rows = "".join(
@@ -2076,14 +2431,30 @@ def refresh_slate_zone(slate_zone, fresh_zone, ist_now, current_price, dp):
     slate_zone["low"]           = fresh_zone["low"]
     slate_zone["ob_body"]       = fresh_zone["ob_body"]
     slate_zone["median_leg_body"] = fresh_zone["median_leg_body"]
-    slate_zone["bos_idx"]       = fresh_zone["bos_idx"]
-    slate_zone["ob_idx"]        = fresh_zone["ob_idx"]
+    # All idx-bearing fields MUST be refreshed together — they belong to the
+    # same df frame, which rolls each scan as yfinance returns a new window.
+    # Bug history: previously only bos_idx + ob_idx were refreshed, leaving
+    # impulse_start_idx stale (pointing past ob_idx after enough scans). This
+    # silently disabled sweep observation since the leg slice became empty.
+    slate_zone["bos_idx"]              = fresh_zone["bos_idx"]
+    slate_zone["ob_idx"]               = fresh_zone["ob_idx"]
+    slate_zone["impulse_start_idx"]    = fresh_zone["impulse_start_idx"]
+    slate_zone["impulse_start_price"]  = fresh_zone["impulse_start_price"]
+    slate_zone["bos_swing_price"]      = fresh_zone["bos_swing_price"]
     slate_zone["touches"]       = fresh_zone.get("touches", 0)
     slate_zone["status_label"]  = fresh_zone.get("status", "Pristine")
     slate_zone["h1_atr"]        = fresh_zone.get("h1_atr", 0.0)
     slate_zone["current_price_at_scan"] = current_price
     slate_zone["distance_to_proximal_pips"] = dist_pips
     slate_zone["fvg"]           = fresh_zone["fvg"]
+    # Sweep observation: refresh with the fresh observation. Original design
+    # was "snapshot, never re-evaluate", but that assumed df-frame stability
+    # which doesn't hold. Sweep observation is deterministic given the leg,
+    # so re-observing each scan yields the same answer in stable conditions
+    # and self-corrects if yfinance revises wicks.
+    slate_zone["sweep_observed"] = fresh_zone.get(
+        "sweep_observed", slate_zone.get("sweep_observed", {"exists": False})
+    )
     # Tier / context refresh (Major / Minor distinction may change if a
     # later re-emission upgrades the structural classification).
     slate_zone["bos_tier"]      = fresh_zone.get("bos_tier", slate_zone.get("bos_tier", "Major"))
@@ -2133,18 +2504,17 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
             pass  # if we can't compare, fall through to other checks
 
     # --- mitigated_distal_break / mitigated_three_touches ---
-    # Replay candles from OB onwards (or whole df if OB not locatable) and
-    # check distal break OR 3-touch proximal mitigation.
+    # Uses is_ob_mitigated_phase1 — single source of truth for Phase 1.
+    # Rule: close beyond distal (strict, no ATR buffer). Wick alone never
+    # invalidates. 3 wick touches at proximal = mitigated.
     if df is not None and len(df) > 0:
         try:
-            C = df['Close'].values.astype(float)
-            H = df['High'].values.astype(float)
-            L = df['Low'].values.astype(float)
             distal = slate_zone['distal_line']
             proximal = slate_zone['proximal_line']
             direction = slate_zone['direction']
 
-            # Find scan start index — from OB candle if locatable, else whole df.
+            # Find scan start index — from the candle AFTER OB if locatable,
+            # else whole df.
             scan_start = 0
             if slate_zone.get("ob_timestamp"):
                 try:
@@ -2162,23 +2532,12 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
                 except Exception:
                     scan_start = 0
 
-            touches = 0
-            for m in range(scan_start, len(C)):
-                # Distal invalidation: ANY wick touch of distal kills the zone.
-                # Veteran rule — if institutions defended weakly enough that
-                # price tagged distal, the zone is done. No close required.
-                if direction == 'bullish':
-                    if L[m] <= distal:
-                        return "mitigated_distal_break"
-                    if L[m] <= proximal:
-                        touches += 1
-                else:
-                    if H[m] >= distal:
-                        return "mitigated_distal_break"
-                    if H[m] >= proximal:
-                        touches += 1
-                if touches >= 3:
-                    return "mitigated_three_touches"
+            mitigated, reason, _touches = is_ob_mitigated_phase1(
+                direction, distal, proximal, df,
+                start_idx=scan_start, end_idx=len(df)
+            )
+            if mitigated and reason:
+                return reason
         except Exception:
             pass
 
@@ -2280,7 +2639,13 @@ def run_radar():
         print(f"Blackout active. Suppressed until 09:00 IST.")
         return
 
+    # One-time backfill of the Phase 1 scan log from structure_state events.
+    # Idempotent: skips if the current month's log file already exists.
+    _backfill_phase1_scan_log()
+
     pair_names = [p['name'] for p in config_master['pairs']]
+    # Per-pair scan records accumulated across the scan; written once at end.
+    phase1_scan_records = []
 
     # --- LOAD SLATE; START FRESH IF NEW TRADING DAY ---
     slate = load_slate()
@@ -2340,6 +2705,16 @@ def run_radar():
             for sz in slate_pair.get("zones", []):
                 if sz["status"] == "active":
                     sz["last_data_unavailable_at"] = ist_now.isoformat()
+            # Scan log still records the gap.
+            try:
+                _walls_for_log = dealing_range.load_state().get(name, {})
+            except Exception:
+                _walls_for_log = {}
+            phase1_scan_records.append(_build_phase1_scan_record(
+                name, ist_now, None, _walls_for_log,
+                slate_pair.get("zones", []), [], [],
+                diagnostics=['data_unavailable: fetch_data returned None']
+            ))
             continue
 
         pairs_with_fresh_data.add(name)
@@ -2404,6 +2779,7 @@ def run_radar():
         # 2. For each active slate zone NOT matched, determine concrete drop reason.
         # If no concrete reason fires, KEEP the zone alive and log diagnostic.
         # This prevents silent fails masquerading as "unknown" drops.
+        drops_this_pair = []
         for sz in active_slate_zones:
             if sz["zone_id"] in matched_slate_ids:
                 continue
@@ -2422,7 +2798,14 @@ def run_radar():
             sz["drop_reason"] = reason
             sz["last_seen_iso"] = ist_now.isoformat()
             sz["last_seen_label"] = ist_now.strftime('%H:%M IST')
+            drops_this_pair.append({"id": sz["zone_id"], "reason": reason})
             print(f"  [DROP] {name} {sz['zone_id']} dropped — {reason}.")
+
+        # Phase 1 scan log — one record per pair per scan (forensic trail).
+        phase1_scan_records.append(_build_phase1_scan_record(
+            name, ist_now, current_price, new_walls,
+            slate_zones, fresh_zones, drops_this_pair
+        ))
 
         # Audit log row per active zone post-reconcile.
         # Shadow-logs dealing range source + PD position for retrospective analysis.
@@ -2689,6 +3072,10 @@ def run_radar():
     # Always write audit log (used by weekly review only).
     if audit_rows:
         append_audit_log(audit_rows, ist_now)
+
+    # Phase 1 scan log — flush all records collected this scan in one append.
+    # Single fsync, single rotation check. File path = current month.
+    _write_phase1_scan_records(phase1_scan_records, ist_now)
 
     # Persist slate (overwrites file — but only mutates within-day, never resets
     # mid-day; new-day reset happens via slate_date check at scan start).
