@@ -215,8 +215,14 @@ def _backfill_phase1_scan_log():
 
 def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
                               slate_zones, fresh_zones, dropped_this_scan,
-                              diagnostics=None):
-    """Construct a single per-pair scan record (snapshot of decisions)."""
+                              diagnostics=None, placeholder_diagnostic=None):
+    """Construct a single per-pair scan record (snapshot of decisions).
+
+    `placeholder_diagnostic`: structured per-side explanation of why a wall
+    remains tentative (or that it's anchored). Sourced from
+    `dealing_range.update_pair()` under PLACEHOLDER_DIAG_KEY. May be None
+    when the walk took an early-return path (no new candle / empty df).
+    """
     walls = walls or {}
     active = []
     for sz in slate_zones:
@@ -263,6 +269,7 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
         'active_zones': active,
         'dropped_this_scan': dropped_this_scan or [],
         'diagnostics': diagnostics or [],
+        'placeholder_diagnostic': placeholder_diagnostic,
     }
 
 
@@ -2724,10 +2731,14 @@ def run_radar():
         # Load prior state for this pair, walk forward through fresh H1 data,
         # update walls if any breaks fired, save back. Phase 2 reads only.
         new_walls = {}
+        placeholder_diag = None
         try:
             structure_state_all = dealing_range.load_state()
             prior_walls = structure_state_all.get(name)
             new_walls = dealing_range.update_pair(df, prior_walls, pair) or {}
+            # Strip non-persisted diagnostic before saving — it stays in
+            # the in-memory copy for downstream scan logging only.
+            placeholder_diag = new_walls.pop(dealing_range.PLACEHOLDER_DIAG_KEY, None)
             structure_state_all[name] = new_walls
             dealing_range.save_state(structure_state_all)
             if new_walls.get("fallback_active"):
@@ -2804,7 +2815,8 @@ def run_radar():
         # Phase 1 scan log — one record per pair per scan (forensic trail).
         phase1_scan_records.append(_build_phase1_scan_record(
             name, ist_now, current_price, new_walls,
-            slate_zones, fresh_zones, drops_this_pair
+            slate_zones, fresh_zones, drops_this_pair,
+            placeholder_diagnostic=placeholder_diag
         ))
 
         # Audit log row per active zone post-reconcile.

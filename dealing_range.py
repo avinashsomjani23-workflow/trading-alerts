@@ -118,6 +118,11 @@ EVENT_RING_MAX = 20
 STATE_DIR  = "state"
 STATE_PATH = os.path.join(STATE_DIR, "structure_state.json")
 
+# Non-persisted key attached to update_pair()'s returned state. Carries the
+# placeholder-not-promoted diagnostic for downstream scan logging. MUST be
+# stripped before save_state() so structure_state.json stays clean.
+PLACEHOLDER_DIAG_KEY = "_diagnostic_last_walk"
+
 
 # --- ATR (local copy to avoid import cycle) ----------------------------------
 
@@ -957,6 +962,141 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
     _refresh_tentative('ceiling', n - 1)
     _refresh_tentative('floor',   n - 1)
 
+    # --- Placeholder-not-promoted diagnostic ----------------------------------
+    # For any wall still tentative at end-of-walk, explain WHY no lookback=3
+    # swing in (leg_start_idx, n-1] was promotable. Three outcomes per side:
+    #   - anchored          : wall is confirmed, no diagnostic needed
+    #   - no_interior_window: leg_start_idx == n-1 (just had an event, no room)
+    #   - swings_present    : N lb3 swings existed but none was picked (bug path)
+    #   - blocked_by_idx    : the highest H / lowest L in the window is not
+    #                          a confirmed swing because a neighbour candle
+    #                          violates the strict-greater/less rule. Names
+    #                          the blocking candle.
+    def _diagnose_placeholder(side: str) -> Dict[str, Any]:
+        wall = ceiling if side == 'ceiling' else floor
+        if not wall["is_placeholder"]:
+            return {
+                "side": side,
+                "is_placeholder": False,
+                "reason": "anchored",
+            }
+        current_i = n - 1
+        lo, hi = leg_start_idx + 1, current_i
+        out: Dict[str, Any] = {
+            "side": side,
+            "is_placeholder": True,
+            "leg_start_idx": int(leg_start_idx),
+            "leg_start_ts":  _ts_iso(df, leg_start_idx) if 0 <= leg_start_idx < n else None,
+            "current_idx":   int(current_i),
+            "current_ts":    _ts_iso(df, current_i),
+            "wall_price":    float(wall["price"]) if wall["price"] is not None else None,
+            "wall_ts":       wall["ts"],
+        }
+        if lo > hi:
+            out["reason"] = "no_interior_window"
+            return out
+
+        target_type = 'high' if side == 'ceiling' else 'low'
+        lb3_in_window = [s for s in swings_lb3
+                         if s['type'] == target_type and lo <= s['idx'] <= hi]
+        out["lb3_swings_in_window"] = len(lb3_in_window)
+
+        if lb3_in_window:
+            # Should have been promoted — record the candidate the resolver
+            # WOULD have picked so we can compare with what's on state.
+            if side == 'ceiling':
+                best = max(lb3_in_window, key=lambda s: s['price'])
+            else:
+                best = min(lb3_in_window, key=lambda s: s['price'])
+            out["reason"] = "swings_present_but_not_promoted"
+            out["candidate_idx"]   = int(best['idx'])
+            out["candidate_ts"]    = best['ts']
+            out["candidate_price"] = float(best['price'])
+            return out
+
+        # No lb3 swing exists in window. Find the candle that holds the
+        # rolling extreme and identify what neighbour blocks it from being
+        # a confirmed swing.
+        H_arr = df['High'].values.astype(float)
+        L_arr = df['Low'].values.astype(float)
+        arr = H_arr if side == 'ceiling' else L_arr
+        if side == 'ceiling':
+            ext_idx = lo + int(arr[lo: hi + 1].argmax())
+        else:
+            ext_idx = lo + int(arr[lo: hi + 1].argmin())
+        ext_price = float(arr[ext_idx])
+        out["rolling_extreme_idx"]   = int(ext_idx)
+        out["rolling_extreme_ts"]    = _ts_iso(df, ext_idx)
+        out["rolling_extreme_price"] = ext_price
+        out["candles_after_extreme"] = int(current_i - ext_idx)
+
+        # Right-edge check: does the extreme even have SWING_LOOKBACK candles
+        # to its right? If not, it cannot be confirmed yet regardless of values.
+        right_edge_needed = ext_idx + SWING_LOOKBACK
+        if right_edge_needed >= n:
+            out["reason"] = "right_edge_insufficient"
+            out["right_candles_needed"]  = int(SWING_LOOKBACK)
+            out["right_candles_present"] = int(n - 1 - ext_idx)
+            return out
+
+        # Left/right neighbour windows used by detect_swings.
+        l_lo = max(0, ext_idx - SWING_LOOKBACK)
+        l_hi = ext_idx                       # exclusive
+        r_lo = ext_idx + 1
+        r_hi = min(n, ext_idx + SWING_LOOKBACK + 1)  # exclusive
+
+        blocker_side = None
+        blocker_idx  = None
+        blocker_val  = None
+        if side == 'ceiling':
+            for j in range(l_lo, l_hi):
+                if H_arr[j] >= ext_price:
+                    blocker_side = "left"
+                    blocker_idx  = j
+                    blocker_val  = float(H_arr[j])
+                    break
+            if blocker_idx is None:
+                for j in range(r_lo, r_hi):
+                    if H_arr[j] >= ext_price:
+                        blocker_side = "right"
+                        blocker_idx  = j
+                        blocker_val  = float(H_arr[j])
+                        break
+        else:
+            for j in range(l_lo, l_hi):
+                if L_arr[j] <= ext_price:
+                    blocker_side = "left"
+                    blocker_idx  = j
+                    blocker_val  = float(L_arr[j])
+                    break
+            if blocker_idx is None:
+                for j in range(r_lo, r_hi):
+                    if L_arr[j] <= ext_price:
+                        blocker_side = "right"
+                        blocker_idx  = j
+                        blocker_val  = float(L_arr[j])
+                        break
+
+        if blocker_idx is not None:
+            out["reason"] = "blocked_by_neighbour"
+            out["blocker_side"]  = blocker_side
+            out["blocker_idx"]   = int(blocker_idx)
+            out["blocker_ts"]    = _ts_iso(df, blocker_idx)
+            out["blocker_value"] = blocker_val
+        else:
+            # No neighbour violates the rule — extreme should be a swing.
+            # Means detect_swings has a logic gap (shouldn't happen).
+            out["reason"] = "rule_satisfied_but_no_swing_detected"
+
+        return out
+
+    placeholder_diag = {
+        "ceiling": _diagnose_placeholder('ceiling'),
+        "floor":   _diagnose_placeholder('floor'),
+        "leg_start_idx": int(leg_start_idx),
+        "n_candles_in_df": int(n),
+    }
+
     # Cold-start fallback: no event fired across entire walk.
     if is_cold_start and last_event_type is None:
         H_arr = df['High'].values.astype(float)
@@ -1009,6 +1149,9 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         "last_scanned_ts":        _ts_iso(df, n - 1),
         "fallback_active":        bool(fallback_active),
         "events":                 events_ring,
+        # Non-persisted diagnostic — caller must strip before save_state().
+        # See PLACEHOLDER_DIAG_KEY constant.
+        PLACEHOLDER_DIAG_KEY:     placeholder_diag,
     }
     return new_state
 
