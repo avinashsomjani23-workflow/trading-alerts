@@ -73,6 +73,19 @@ EMAIL_GATE_MINUTES = 100  # Email sent if ≥100 min since last email
 ZONE_MAX_AGE_DAYS = 14  # Drop zones whose last_seen is older than this
 
 # ---------------------------------------------------------------------------
+# OB PERSISTENCE — hard age cap on slate OBs
+# ---------------------------------------------------------------------------
+# Slate zones (active OBs) are persisted across scans and re-checked for
+# mitigation each scan. Independent of the H1 data window: an OB built 10
+# days ago stays alive as long as mitigation hasn't fired, even though its
+# OB candle is long gone from the rolling 150-candle fetch.
+#
+# This cap retires OBs that have neither been tested nor invalidated after
+# OB_MAX_AGE_DAYS. Vet rationale: a zone untouched for two weeks is
+# functionally stale — institutions don't re-defend levels indefinitely.
+OB_MAX_AGE_DAYS = 15
+
+# ---------------------------------------------------------------------------
 # TIME HELPERS
 # ---------------------------------------------------------------------------
 
@@ -619,7 +632,16 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     last_choch_local_idx: Optional[int] = None  # idx in this df, or None
     active_obs = []
 
-    for ev in events:
+    for ev_pos, ev in enumerate(events):
+        # Most recent prior event's break-candle idx in the current df. Used
+        # to widen the CHoCH sweep search window backwards through the prior
+        # trend. Resolved from events[ev_pos - 1].candle_ts. None when no
+        # prior event exists yet or its candle falls outside the df window.
+        if ev_pos > 0:
+            prior_event_idx = _idx_from_ts(events[ev_pos - 1].get('candle_ts'))
+        else:
+            prior_event_idx = None
+
         ev_type = ev.get('type')           # 'BOS' | 'CHoCH'
         ev_tier = ev.get('tier')           # 'Major' | 'Minor'
         ev_dir  = ev.get('direction')      # 'bullish' | 'bearish'
@@ -737,10 +759,19 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         # all OBs (BOS and CHoCH alike) — buying in premium / selling in
         # discount is the wrong side of the range regardless of event.
         # Fails open when geometry is unavailable (no walls / cold-start
-        # fallback): we cannot trust the gate, so we let the OB through.
+        # fallback / either wall is placeholder): we cannot trust the gate
+        # against a tentative wall — the eq line moves as the wall promotes,
+        # so a transient narrow range right after a CHoCH would wrongly
+        # reject OBs that sit fine relative to the eventual confirmed range.
         if walls:
             pd_info = dealing_range.compute_pd_position(ob_proximal, walls)
-            if pd_info.get('valid') and not pd_info.get('fallback_active'):
+            walls_both_confirmed = (
+                not walls.get('ceiling_is_placeholder', True)
+                and not walls.get('floor_is_placeholder', True)
+            )
+            if (pd_info.get('valid')
+                    and not pd_info.get('fallback_active')
+                    and walls_both_confirmed):
                 eq = pd_info['equilibrium']
                 if (ev_dir == 'bullish' and ob_proximal > eq) or \
                    (ev_dir == 'bearish' and ob_proximal < eq):
@@ -809,13 +840,20 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'mitigated_at_idx': fvg_result.get('mitigated_at_idx')
         }
 
-        # Phase 1 sweep observation — leg-anchored snapshot.
-        # Scans [impulse_start_idx, ob_idx] for the most-recent qualifying
-        # sweep. Snapshot semantics: written once at OB build, never re-graded.
+        # Phase 1 sweep observation — snapshot semantics. Window depends on
+        # event type:
+        #   BOS:  [impulse_start_idx, ob_idx] (leg-anchored — counter-trend
+        #         sweep inside the pullback leg).
+        #   CHoCH: [prior_event_idx, ob_idx] (widened — the catalysing sweep
+        #         is the prior trend's terminal extreme, OUTSIDE the new
+        #         impulse leg). Falls back to leg-anchored when no prior
+        #         event exists in the current df window.
         try:
             sweep_obs = smc_detector.observe_phase1_sweep(
                 df, ob_idx, impulse_start_idx, ev_dir,
-                h1_atr_for_leg, pair_type, pair_name, tf_label='H1'
+                h1_atr_for_leg, pair_type, pair_name, tf_label='H1',
+                event_type=ev_type,
+                prior_event_idx=prior_event_idx,
             )
         except Exception as _sweep_err:
             logging.warning(f"[sweep_observed] OB build failed sweep observation: {_sweep_err}")
@@ -1101,6 +1139,24 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
         if floor_in_view:
             ymin_candidates.append(float(floor_price))
 
+        # Off-window event broken-swing price: include in y-range so the
+        # horizontal level annotation (drawn below) has room to render. Only
+        # added when no OB is on this chart and the level falls within the
+        # same proximity band used for walls (so a wildly stale level can't
+        # drag the y-axis far from current candles).
+        _off_window_bws_for_y = None
+        if (not has_ob) and last_event is not None:
+            _le_bws_y = last_event.get('broken_swing_price')
+            if _le_bws_y is not None:
+                try:
+                    _le_bws_y_f = float(_le_bws_y)
+                except Exception:
+                    _le_bws_y_f = None
+                if _le_bws_y_f is not None and _wall_in_view(_le_bws_y_f):
+                    ymin_candidates.append(_le_bws_y_f)
+                    ymax_candidates.append(_le_bws_y_f)
+                    _off_window_bws_for_y = _le_bws_y_f
+
         y_min_raw = min(ymin_candidates)
         y_max_raw = max(ymax_candidates)
 
@@ -1250,11 +1306,19 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                         ))
         elif last_event is not None:
             # Structure-only: mark the last BOS/CHoCH so the vet can see what
-            # defined the current dealing range. No band, no break-candle
-            # outline — just a vertical guide on the candle column.
+            # defined the current dealing range.
+            #   - In-window: vertical guide on the event candle column.
+            #   - Off-window (event candle older than n_full - window_start):
+            #     horizontal line at the broken-swing price with a "N candles
+            #     ago" label at the left edge. The level matters more than the
+            #     candle — drawing it on-chart lets the vet trace what's
+            #     defining the current dealing range without us widening the
+            #     candle window (which would shrink price detail).
             le_type = last_event.get('type')
             le_tier = last_event.get('tier', 'Major')
+            le_dir  = last_event.get('direction')
             le_ts   = last_event.get('ts')
+            le_bws  = last_event.get('broken_swing_price')
             if le_type == 'BOS':
                 ev_color = '#00bcd4'
             elif le_tier == 'Minor':
@@ -1279,6 +1343,32 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                     ax.text(local_i, y_max, f"  {le_type} {le_tier}",
                             color=ev_color, fontsize=8, fontweight='bold',
                             ha='left', va='top', zorder=7,
+                            bbox=dict(facecolor='#131722', edgecolor='none',
+                                      pad=1.5, alpha=0.78))
+            elif le_bws is not None:
+                # Event is off-window. Draw the broken-swing as a horizontal
+                # level with a left-edge "N candles ago" label so the vet
+                # still sees the level defining the current dealing range.
+                # Only when the level sits inside the candle proximity band
+                # (mirrors _wall_in_view) — a wildly stale level would just
+                # be a stray line; skip rendering in that case.
+                try:
+                    bws_f = float(le_bws)
+                except Exception:
+                    bws_f = None
+                if bws_f is not None and _wall_in_view(bws_f):
+                    candles_ago = None
+                    if le_idx is not None:
+                        candles_ago = max(0, n_full - 1 - le_idx)
+                    ax.axhline(y=bws_f, color=ev_color, linewidth=0.8,
+                               linestyle='--', alpha=0.55, zorder=2)
+                    ev_name = "BOS" if le_type == 'BOS' else f"{le_tier} CHoCH"
+                    dir_part = f" {le_dir}" if le_dir else ""
+                    age_part = (f" · {candles_ago}c ago"
+                                if candles_ago is not None else "")
+                    ax.text(0, bws_f, f"  {ev_name}{dir_part}{age_part}",
+                            color=ev_color, fontsize=8, fontweight='bold',
+                            ha='left', va='center', zorder=7,
                             bbox=dict(facecolor='#131722', edgecolor='none',
                                       pad=1.5, alpha=0.78))
 
@@ -2114,7 +2204,7 @@ def build_dropped_zone_line(sz, name, dp):
         "mitigated_distal_break": "invalidated — price touched distal",
         "mitigated_three_touches": "mitigated — proximal hit 3 times",
         "structure_supplanted": "replaced by fresher structure (same leg)",
-        "aged_out_of_window": "OB candle aged out of H1 data window",
+        "aged_out_of_window": f"OB older than {OB_MAX_AGE_DAYS} days — retired",
         "data_unavailable": "pair fetch failed — zone unverifiable",
         "data_stale": "yfinance data stale — zone unverifiable"
     }
@@ -2169,7 +2259,7 @@ _INVALIDATION_REASON_LONG = {
     "mitigated_distal_break":  "price closed beyond distal — zone is dead",
     "mitigated_three_touches": "proximal was wicked three times — zone is mitigated",
     "structure_supplanted":    "fresher structure on the same leg replaced this OB",
-    "aged_out_of_window":      "OB candle aged out of the H1 data window",
+    "aged_out_of_window":      f"OB older than {OB_MAX_AGE_DAYS} days — auto-retired",
     "data_unavailable":        "pair data feed failed — could not verify the zone",
     "data_stale":              "yfinance data went stale — could not verify the zone",
 }
@@ -2211,12 +2301,63 @@ def build_invalidation_card_html(sz, name, dp, cid, ist_timestamp):
     </div>"""
 
 
-def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls, last_event):
+_OB_DROP_GATE_LABELS = {
+    "event_outside_window":   "event candle outside H1 data window",
+    "degenerate_leg":         "impulse leg too short to form an OB",
+    "no_qualifying_ob_candle": "no opposing candle in the leg qualified",
+    "pd_array_gate":          "OB sat on the wrong side of equilibrium",
+    "proximity_gate":          "price too far from OB to be actionable",
+    "post_build_mitigation":   "OB built then died (close beyond distal or 3 touches)",
+}
+
+
+def _summarise_last_ob_attempt(ob_build_diagnostics):
+    """Pick the most recent OB build attempt and return a short English line.
+
+    Used in the 'no active OB' card so the vet can see WHY nothing is being
+    surfaced, not just that nothing is. Returns "" when there is nothing
+    informative to show.
+    """
+    if not ob_build_diagnostics:
+        return ""
+    # Most recent attempt = max event_ts. Diagnostics include both built
+    # (subsequently dropped by post-build mitigation) and dropped paths.
+    try:
+        sorted_diag = sorted(
+            ob_build_diagnostics,
+            key=lambda d: d.get('event_ts') or '',
+            reverse=True,
+        )
+    except Exception:
+        sorted_diag = list(ob_build_diagnostics)
+    if not sorted_diag:
+        return ""
+    latest = sorted_diag[0]
+    gate = latest.get('drop_gate')
+    ev_ts = latest.get('event_ts') or ''
+    ev_type = latest.get('event_type') or '?'
+    ev_dir = latest.get('event_dir') or ''
+    if not gate:
+        return ""  # outcome was 'built' and not subsequently dropped
+    gate_text = _OB_DROP_GATE_LABELS.get(gate, gate.replace('_', ' '))
+    try:
+        ts_short = ev_ts[:10]
+    except Exception:
+        ts_short = str(ev_ts)
+    return (
+        f"Last OB attempt: {ev_type} {ev_dir} on {ts_short} — "
+        f"dropped: {gate_text}."
+    )
+
+
+def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
+                                  last_event, ob_build_diagnostics=None):
     """Card for a pair with no active OB and no recently-dropped OB.
 
     The vet wants to see WHY there's nothing to trade and what to wait for.
     Caption is plain-English: stop-and-think trigger for both a pullback OR a
-    range-fail CHoCH.
+    range-fail CHoCH. When OB build attempts exist, surface the most recent
+    drop reason so the vet knows the system saw the setup and rejected it.
     """
     chart_html = (
         f'<img src="cid:{cid}" style="width:100%;border-radius:6px;display:block;margin-top:10px;" />'
@@ -2241,6 +2382,12 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls, last_even
         f"Wait for price to return into the dealing range — could form a "
         f"continuation OB on the next leg, or a CHoCH if the range fails."
     )
+    ob_attempt_line = _summarise_last_ob_attempt(ob_build_diagnostics)
+    attempt_html = (
+        f'<p style="font-size:11px;color:#888;line-height:1.5;'
+        f'margin:0 0 6px 0;font-style:italic;">{ob_attempt_line}</p>'
+        if ob_attempt_line else ""
+    )
     return f"""
     <div style="margin-bottom:14px;padding:12px 14px;background:#13131f;
                 border-left:3px solid #5dade2;border-radius:6px;">
@@ -2250,6 +2397,7 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls, last_even
                      border-radius:3px;font-weight:bold;margin-left:8px;">NO ACTIVE OB</span>
       </div>
       <p style="font-size:12px;color:#bbb;line-height:1.5;margin:0 0 6px 0;">{caption}</p>
+      {attempt_html}
       {chart_html}
     </div>"""
 
@@ -2921,20 +3069,18 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
     # --- data_unavailable handled by caller before this is called ---
 
     # --- aged_out_of_window ---
-    # Slate zone's OB candle is older than the oldest candle in fresh df.
-    if df is not None and len(df) > 0 and slate_zone.get("ob_timestamp"):
+    # Hard age cap on slate OBs. Retire any zone whose OB candle is older
+    # than OB_MAX_AGE_DAYS. Independent of the H1 data window — an OB whose
+    # candle has rolled out of the 150-candle fetch is still tracked here
+    # for mitigation against the latest df slice, until the age cap fires.
+    if slate_zone.get("ob_timestamp"):
         try:
             slate_ob_dt = datetime.fromisoformat(slate_zone["ob_timestamp"])
             if slate_ob_dt.tzinfo is not None:
                 slate_ob_dt = slate_ob_dt.replace(tzinfo=None)
-            first_ts_raw = df['Datetime'].iloc[0] if 'Datetime' in df.columns else df.index[0]
-            if hasattr(first_ts_raw, 'to_pydatetime'):
-                first_dt = first_ts_raw.to_pydatetime()
-            else:
-                first_dt = first_ts_raw
-            if hasattr(first_dt, 'tzinfo') and first_dt.tzinfo is not None:
-                first_dt = first_dt.replace(tzinfo=None)
-            if slate_ob_dt < first_dt:
+            now_utc = datetime.utcnow()
+            age_days = (now_utc - slate_ob_dt).total_seconds() / 86400.0
+            if age_days >= OB_MAX_AGE_DAYS:
                 return "aged_out_of_window"
         except Exception:
             pass  # if we can't compare, fall through to other checks
@@ -3362,11 +3508,24 @@ def run_radar():
             # Reuse the structure state already loaded for the banner above —
             # avoids N+1 disk reads.
             pair_walls = _structure_state_for_banner.get(pair_name, {}) or {}
+            # Enrich last_event with the broken-swing price by scanning the
+            # event ring for the matching candle_ts. Needed by generate_h1_chart
+            # to draw an off-window event level (horizontal line + "N candles
+            # ago" label) when the event candle has rolled out of the visible
+            # 130-candle window.
+            _le_ts = pair_walls.get("last_event_ts")
+            _le_bws = None
+            if _le_ts:
+                for _e in (pair_walls.get("events") or []):
+                    if _e.get("candle_ts") == _le_ts:
+                        _le_bws = _e.get("broken_swing_price")
+                        break
             last_event = {
                 "type":      pair_walls.get("last_event_type"),
                 "tier":      pair_walls.get("last_event_tier"),
                 "direction": pair_walls.get("last_event_direction"),
-                "ts":        pair_walls.get("last_event_ts"),
+                "ts":        _le_ts,
+                "broken_swing_price": _le_bws,
             }
 
             # Bookkeeping drops (structure_supplanted / aged_out / data_*) get
@@ -3508,7 +3667,8 @@ def run_radar():
                             inactive_pair_cards.append(
                                 build_inactive_pair_card_html(
                                     pair_name, dp, cid, ist_ts_full,
-                                    pair_walls, last_event
+                                    pair_walls, last_event,
+                                    ob_build_diagnostics=ob_build_diag,
                                 )
                             )
                             _attach_chart(chart_b64, cid)
@@ -3517,7 +3677,8 @@ def run_radar():
                             inactive_pair_cards.append(
                                 build_inactive_pair_card_html(
                                     pair_name, dp, None, ist_ts_full,
-                                    pair_walls, last_event
+                                    pair_walls, last_event,
+                                    ob_build_diagnostics=ob_build_diag,
                                 )
                             )
 
@@ -3550,7 +3711,8 @@ def run_radar():
                         inactive_pair_cards.append(
                             build_inactive_pair_card_html(
                                 pair_name, dp, cid, ist_ts_full,
-                                pair_walls, last_event
+                                pair_walls, last_event,
+                                ob_build_diagnostics=ob_build_diag,
                             )
                         )
                         _attach_chart(chart_b64, cid)
@@ -3559,7 +3721,8 @@ def run_radar():
                         inactive_pair_cards.append(
                             build_inactive_pair_card_html(
                                 pair_name, dp, None, ist_ts_full,
-                                pair_walls, last_event
+                                pair_walls, last_event,
+                                ob_build_diagnostics=ob_build_diag,
                             )
                         )
 

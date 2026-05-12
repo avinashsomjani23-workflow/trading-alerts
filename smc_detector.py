@@ -748,19 +748,30 @@ def _compute_context_tags(swept_price, swept_type, df, anchor_ts,
 
 
 def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
-                         tf_atr, pair_type, pair_name, tf_label='H1'):
+                         tf_atr, pair_type, pair_name, tf_label='H1',
+                         event_type='BOS', prior_event_idx=None):
     """
-    Phase 1 sweep observation — leg-anchored, snapshot semantics.
+    Phase 1 sweep observation — snapshot semantics.
 
-    Scans candles in `[impulse_start_idx, ob_idx]` (inclusive) for the most
-    recent qualifying sweep:
+    Search window depends on event type:
+      - BOS:  `[impulse_start_idx, ob_idx]` — leg-anchored. The catalysing
+              sweep for a BOS is a counter-trend poke inside the pullback
+              leg, then continuation through the wall.
+      - CHoCH: `[prior_event_idx, ob_idx]` when prior_event_idx is provided
+              (lb-3 swing pool only — see notes). Falls back to the
+              leg-anchored window when no prior event exists yet. The
+              catalysing sweep for a CHoCH is typically OUTSIDE the impulse
+              leg (the prior trend's terminal extreme that price ran out
+              just before the reversal began).
+
+    A qualifying sweep:
       - Bullish OB: candle's low pierces a prior swing low by at least the
         pair's wick-pierce minimum, AND closes back above that low.
       - Bearish OB: candle's high pierces a prior swing high by the pierce
         minimum, AND closes back below that high.
 
-    The swept swing must be the EXTREME (lowest low / highest high) inside
-    `[impulse_start_idx, sweep_candle - 1]` — interior swings are not sweeps.
+    The swept swing must be the EXTREME (lowest low / highest high) of the
+    prior-swing pool that's strictly before the candidate sweep candle.
 
     Iteration is reverse (newest candidate first); the first match wins.
 
@@ -789,14 +800,28 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     bias_low = (direction == 'bullish')  # bullish OB -> hunt low sweeps
     pierce_min = SWEEP_WICK_PIERCE_MIN_ATR.get(pair_type, 0.05) * tf_atr
 
-    # Swings inside the leg. lookback=2 catches short legs; lookback=3
-    # qualifying swings are a strict subset, so we don't miss them.
-    leg_df = df.iloc[impulse_start_idx:ob_idx + 1]
-    leg_swings_local = get_swing_points(leg_df, lookback=2)
+    # Determine search window. CHoCH widens to [prior_event_idx, ob_idx] so
+    # we can find the prior-trend extreme that was swept before the flip.
+    # BOS keeps the impulse-leg window.
+    if event_type == 'CHoCH' and prior_event_idx is not None and prior_event_idx >= 0:
+        search_lo = min(int(prior_event_idx), int(impulse_start_idx))
+    else:
+        search_lo = int(impulse_start_idx)
+    if search_lo < 0:
+        search_lo = 0
+    if search_lo > ob_idx:
+        return not_observed
+
+    # Swing pool. CHoCH uses lb-3 only (Major-grade swings — sweep anchors
+    # should be wall-grade). BOS keeps lb-2 to catch short pullback legs;
+    # lb-3 is a subset of lb-2 so wall-grade swings are still included.
+    leg_df = df.iloc[search_lo:ob_idx + 1]
+    sweep_lookback = 3 if event_type == 'CHoCH' else 2
+    leg_swings_local = get_swing_points(leg_df, lookback=sweep_lookback)
     # Translate local idx -> absolute idx in df
     swings = [
         {'type': s['type'], 'price': s['price'],
-         'idx': s['idx'] + impulse_start_idx,
+         'idx': s['idx'] + search_lo,
          'ts':  s['ts']}
         for s in leg_swings_local
     ]
@@ -807,9 +832,9 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
 
     # Candidate sweep candles: include ob_idx itself (the OB candle can be
     # the sweep candle in textbook cases). Reverse iteration -> newest first.
-    for i in range(ob_idx, impulse_start_idx - 1, -1):
+    for i in range(ob_idx, search_lo - 1, -1):
         # Find candidate swept swings: same direction, strictly before i,
-        # and the extreme so far inside [impulse_start_idx, i-1].
+        # and the extreme so far inside [search_lo, i-1].
         prior_swings = [s for s in swings if s['type'] == swing_type_we_want and s['idx'] < i]
         if not prior_swings:
             continue

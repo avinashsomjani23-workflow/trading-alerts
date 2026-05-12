@@ -30,8 +30,21 @@ Wall update rule (LOCKED): walls move ONLY when a wall is broken.
     wall also resets to tentative at the break-candle extreme. Both walls
     re-anchor inside the new leg via _try_promote_placeholder /
     _refresh_tentative.
-  - Major CHoCH on internal HL/LH: walls do NOT move; trend flips.
+  - Major CHoCH on internal HL/LH: trend flips. The trend-direction wall
+    in the NEW trend (the ceiling after a bullish CHoCH; the floor after a
+    bearish CHoCH) resets to a placeholder at the CHoCH candle's matching
+    extreme so the wall reflects the new leg, not the prior trend's stale
+    extreme. Opposite wall is unchanged (it was the broken pivot's side).
   - Minor CHoCH: walls do NOT move; trend does NOT flip.
+
+Wall-stale rule: when the non-trend-side wall is confirmed and price closes
+beyond it by >= STALE_WALL_ATR_MULT × ATR without firing a CHoCH (e.g. no
+qualifying internal pivot yet), the wall is relabelled. It moves to the
+most recent confirmed lookback=3 swing of the right type in the current
+leg (strictly past the old wall on the breached side). If none exists yet,
+the wall falls back to the breach candle's extreme as a placeholder that
+refreshes forward via _refresh_tentative. No event fires; trend does NOT
+flip. Geometry-only relabel that keeps the dealing range visually honest.
 
 Premium / discount gate (LOCKED, CHoCH only): the reversal high (for down
 CHoCH in an uptrend) must lie in the top 25% of the dealing range; the
@@ -113,6 +126,14 @@ CHOP_LOOKBACK_CANDLES = 5
 # (Phase 2 BOS-sequence count, zone invalidation). Cap chosen well above
 # any realistic per-trend BOS run (caution thresholds are 3–5).
 EVENT_RING_MAX = 20
+
+# Wall-stale rule: in a bullish trend, if close drops below the confirmed
+# floor by >= STALE_WALL_ATR_MULT * ATR, the floor is no longer respected.
+# Symmetric for bearish (close above confirmed ceiling). Does NOT fire an
+# event and does NOT flip trend — geometry-only relabel of a wall that the
+# market has already invalidated without a CHoCH. Same threshold as BOS
+# (0.40) keeps the "meaningful displacement" bar consistent.
+STALE_WALL_ATR_MULT = 0.4
 
 # State file path. Lives in a dedicated directory outside any purge scope.
 STATE_DIR  = "state"
@@ -677,6 +698,100 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             floor["ts"]    = _ts_iso(df, rng_idx)
             floor["idx"]   = rng_idx
 
+    # Relabel a confirmed non-trend-side wall as stale when price has already
+    # closed beyond it by >= STALE_WALL_ATR_MULT * ATR. No event fires; trend
+    # does NOT flip. The wall moves to the most recent confirmed lb-3 swing
+    # of the right type in (leg_start_idx, current_i]; if none exists yet,
+    # falls back to the breach candle's extreme as a placeholder that will
+    # refresh forward via _refresh_tentative. One-way ratchet: in bullish
+    # trend the floor can only move DOWN here; in bearish the ceiling can
+    # only move UP.
+    def _stale_wall_check(current_i: int, close_i: float):
+        nonlocal_trend = trend
+        if nonlocal_trend not in ('bullish', 'bearish'):
+            return
+        if atr is None or atr <= 0:
+            return
+
+        if nonlocal_trend == 'bullish':
+            # Floor stale when close drops below confirmed floor by >= N*ATR.
+            if (floor["price"] is None
+                    or floor["is_placeholder"]
+                    or close_i >= floor["price"] - STALE_WALL_ATR_MULT * atr):
+                return
+            new_floor_price = float(close_i)  # tentative target before swing search
+            # Most recent confirmed lb-3 swing low strictly inside the leg
+            # and STRICTLY BELOW the current floor (the wall we're discarding).
+            cand = [
+                s for s in swings_lb3
+                if s['type'] == 'low'
+                and leg_start_idx < s['idx'] <= current_i
+                and s['price'] < floor["price"]
+            ]
+            if cand:
+                cand.sort(key=lambda s: s['idx'], reverse=True)
+                best = cand[0]
+                floor["price"] = float(best['price'])
+                floor["ts"]    = best['ts']
+                floor["idx"]   = best['idx']
+                floor["is_placeholder"] = False
+            else:
+                floor["price"] = float(df['Low'].iloc[current_i])
+                floor["ts"]    = _ts_iso(df, current_i)
+                floor["idx"]   = current_i
+                floor["is_placeholder"] = True
+            _log_safe({
+                'candle_ts':       _ts_iso(df, current_i),
+                'pair':            pair_name,
+                'timeframe':       'H1',
+                'event_kind':      'WALL_STALE',
+                'wall_side':       'floor',
+                'trend':           nonlocal_trend,
+                'close_price':     float(close_i),
+                'new_wall_price':  float(floor["price"]),
+                'new_wall_is_placeholder': bool(floor["is_placeholder"]),
+                'atr':             float(atr),
+                'threshold_atr':   float(STALE_WALL_ATR_MULT),
+            })
+            return
+
+        # bearish: ceiling stale when close rises above confirmed ceiling.
+        if (ceiling["price"] is None
+                or ceiling["is_placeholder"]
+                or close_i <= ceiling["price"] + STALE_WALL_ATR_MULT * atr):
+            return
+        cand = [
+            s for s in swings_lb3
+            if s['type'] == 'high'
+            and leg_start_idx < s['idx'] <= current_i
+            and s['price'] > ceiling["price"]
+        ]
+        if cand:
+            cand.sort(key=lambda s: s['idx'], reverse=True)
+            best = cand[0]
+            ceiling["price"] = float(best['price'])
+            ceiling["ts"]    = best['ts']
+            ceiling["idx"]   = best['idx']
+            ceiling["is_placeholder"] = False
+        else:
+            ceiling["price"] = float(df['High'].iloc[current_i])
+            ceiling["ts"]    = _ts_iso(df, current_i)
+            ceiling["idx"]   = current_i
+            ceiling["is_placeholder"] = True
+        _log_safe({
+            'candle_ts':       _ts_iso(df, current_i),
+            'pair':            pair_name,
+            'timeframe':       'H1',
+            'event_kind':      'WALL_STALE',
+            'wall_side':       'ceiling',
+            'trend':           nonlocal_trend,
+            'close_price':     float(close_i),
+            'new_wall_price':  float(ceiling["price"]),
+            'new_wall_is_placeholder': bool(ceiling["is_placeholder"]),
+            'atr':             float(atr),
+            'threshold_atr':   float(STALE_WALL_ATR_MULT),
+        })
+
     def _log_safe(payload: Dict[str, Any]):
         if _event_logger is None or not pair_name:
             return
@@ -701,6 +816,12 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         _refresh_tentative('floor',   i)
 
         close_i = float(C[i])
+
+        # 1b. Stale-wall relabel. If price has already closed beyond the
+        # non-trend-side wall by >= STALE_WALL_ATR_MULT * ATR without firing
+        # a CHoCH (e.g. no qualifying internal pivot yet), the wall is no
+        # longer respected by the market. Relabel it. No event, no flip.
+        _stale_wall_check(i, close_i)
         event_kind = None       # 'BOS' | 'CHoCH' | None
         event_tier = None       # 'Major' | 'Minor' | None  (Major for BOS)
         event_direction = None  # 'bullish' | 'bearish'
@@ -895,7 +1016,27 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                         floor["ts"]    = _ts_iso(df, i)
                         floor["idx"]   = i
                         floor["is_placeholder"] = True
-            # else: internal-pivot Major CHoCH -> walls do NOT change.
+            else:
+                # Internal-pivot Major CHoCH: trend flips. The wall that was
+                # "above price" in the prior trend (the bearish-trend ceiling,
+                # or the bullish-trend floor) is stale relative to the NEW
+                # trend — it never participated in the new leg. Reset it to a
+                # placeholder anchored at the CHoCH candle's matching extreme
+                # so it refreshes forward as the new leg builds.
+                # Example: USDJPY bullish CHoCH on internal pivot — old
+                # ceiling (160.7) reset to placeholder at break-candle High;
+                # then promotes to a real lb-3 swing once the new uptrend
+                # produces one. Same wall behaviour as a fresh BOS.
+                if event_direction == 'bullish':
+                    ceiling["price"] = float(df['High'].iloc[i])
+                    ceiling["ts"]    = _ts_iso(df, i)
+                    ceiling["idx"]   = i
+                    ceiling["is_placeholder"] = True
+                else:
+                    floor["price"] = float(df['Low'].iloc[i])
+                    floor["ts"]    = _ts_iso(df, i)
+                    floor["idx"]   = i
+                    floor["is_placeholder"] = True
             trend = event_direction
 
         else:  # Minor CHoCH
