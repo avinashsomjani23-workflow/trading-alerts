@@ -984,16 +984,26 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
 # CHART GENERATION
 # ---------------------------------------------------------------------------
 
-def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
+def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
+                      is_invalidated=False, last_event=None):
     """
-    H1 zone chart.
+    H1 zone chart. Used for active zones, invalidated zones, and structure-only
+    (no zone) views.
+
+    Args:
+      ob: zone dict (proximal/distal/ob_idx/fvg/etc.) OR None for structure-only.
+      walls: dealing_range walls dict.
+      is_invalidated: True to render the OB band greyed out (dead zone).
+      last_event: optional dict {type, tier, direction, ts} — when ob is None,
+                  used to draw a marker at the most recent BOS/CHoCH so the
+                  vet can see what defined the current dealing range.
 
     Visual elements:
-      - Candles (thin body 0.55, fat wick 1.5) — last 40 candles + 6 right margin
-      - Zone band (proximal/distal, purple)
-      - OB candle outline
-      - FVG (active or ghost)
-      - BOS/CHoCH horizontal line + break candle outline
+      - Candles (thin body 0.55, fat wick 1.5) — last 130 candles + 8 right margin
+      - Zone band (proximal/distal, purple — greyed when is_invalidated)
+      - OB candle outline (greyed when is_invalidated)
+      - FVG (active or ghost) — skipped when ob is None or is_invalidated
+      - BOS/CHoCH horizontal line + break candle outline (greyed when invalidated)
       - Current price (white)
       - DR ceiling/floor (always drawn): solid dotted if confirmed,
         dashed-gap if placeholder; faded color
@@ -1005,29 +1015,35 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
     try:
         full_df = df.dropna(subset=['Open', 'High', 'Low', 'Close']).copy().reset_index(drop=True)
         n_full  = len(full_df)
-        ob_abs  = ob['ob_idx']
+        has_ob  = ob is not None
+        ob_abs  = ob['ob_idx'] if has_ob else None
 
-        # --- Plot window: 40 back from current, but always include OB candle.
-        WINDOW_BACK = 40
-        RIGHT_MARGIN = 6
+        # --- Plot window: 130 back from current, but always include OB candle.
+        # Wider window (~5 days of H1) gives the vet enough context to trace
+        # CHoCH breaks, the swing that was taken, and the levels in play.
+        WINDOW_BACK = 130
+        RIGHT_MARGIN = 8
         window_start = max(0, n_full - WINDOW_BACK)
         # If OB sits earlier than that, extend window back to include it.
-        if ob_abs < window_start:
+        if has_ob and ob_abs < window_start:
             window_start = max(0, ob_abs - 3)
 
         df_plot = full_df.iloc[window_start:].copy().reset_index(drop=True)
         n_plot  = len(df_plot)
-        ob_plot_idx = ob_abs - window_start
+        ob_plot_idx = (ob_abs - window_start) if has_ob else None
 
         O = df_plot['Open'].values
         C = df_plot['Close'].values
         H = df_plot['High'].values
         L = df_plot['Low'].values
 
-        proximal = float(ob['proximal_line'])
-        distal   = float(ob['distal_line'])
-        zone_lo  = min(proximal, distal)
-        zone_hi  = max(proximal, distal)
+        if has_ob:
+            proximal = float(ob['proximal_line'])
+            distal   = float(ob['distal_line'])
+            zone_lo  = min(proximal, distal)
+            zone_hi  = max(proximal, distal)
+        else:
+            proximal = distal = zone_lo = zone_hi = None
 
         # --- Walls (optional) ---
         ceiling_price = None
@@ -1050,7 +1066,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
         candle_lo = float(np.min(L))
         candle_hi = float(np.max(H))
         candle_span = max(candle_hi - candle_lo, 1e-9)
-        h1_atr = ob.get('h1_atr', 0.0) or 0.0
+        h1_atr = (ob.get('h1_atr', 0.0) or 0.0) if has_ob else 0.0
         # Proximity threshold: 2.5×ATR or 1.5×candle_range, whichever is larger.
         # Wall must sit within this band of the candle range to be drawn on-chart.
         if h1_atr > 0:
@@ -1067,14 +1083,17 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
         ceiling_in_view = _wall_in_view(ceiling_price)
         floor_in_view   = _wall_in_view(floor_price)
 
-        ymin_candidates = [candle_lo, zone_lo]
-        ymax_candidates = [candle_hi, zone_hi]
-        if ob['fvg'].get('exists') or ob['fvg'].get('was_detected'):
-            ft = ob['fvg'].get('fvg_top') or ob['fvg'].get('ghost_top')
-            fb = ob['fvg'].get('fvg_bottom') or ob['fvg'].get('ghost_bottom')
-            if ft is not None and fb is not None:
-                ymin_candidates.append(float(fb))
-                ymax_candidates.append(float(ft))
+        ymin_candidates = [candle_lo]
+        ymax_candidates = [candle_hi]
+        if has_ob:
+            ymin_candidates.append(zone_lo)
+            ymax_candidates.append(zone_hi)
+            if ob['fvg'].get('exists') or ob['fvg'].get('was_detected'):
+                ft = ob['fvg'].get('fvg_top') or ob['fvg'].get('ghost_top')
+                fb = ob['fvg'].get('fvg_bottom') or ob['fvg'].get('ghost_bottom')
+                if ft is not None and fb is not None:
+                    ymin_candidates.append(float(fb))
+                    ymax_candidates.append(float(ft))
         ymin_candidates.append(float(C[-1]))
         ymax_candidates.append(float(C[-1]))
         if ceiling_in_view:
@@ -1094,14 +1113,17 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
         y_max = y_max_raw + pad
 
         # --- Adaptive figure height.
+        # Taller, slightly narrower frame (12 wide × 7.5+ tall) so 130 candles
+        # render with TradingView-style proportions: narrow bodies, tall wicks,
+        # vertical price space. Base height 7.5; bump up to 11 as DR/zone
+        # forces a wider y span.
         candle_range = max(candle_hi - candle_lo, 1e-9)
         required_range = y_max - y_min
         ratio = required_range / candle_range
-        # Base height 6.0; bump up to 9.0 as DR/zone forces a wider y span.
-        base_h = 6.0
+        base_h = 7.5
         if ratio > 1.5:
-            base_h = min(9.0, 6.0 + (ratio - 1.5) * 1.5)
-        fig, ax = plt.subplots(1, 1, figsize=(14, base_h), facecolor='#131722')
+            base_h = min(11.0, 7.5 + (ratio - 1.5) * 1.7)
+        fig, ax = plt.subplots(1, 1, figsize=(12, base_h), facecolor='#131722')
         ax.set_facecolor('#131722')
         for spine in ax.spines.values():
             spine.set_color('#2a2a3e')
@@ -1121,31 +1143,42 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
             ))
 
         # --- Zone band ---
-        zone_x_start = max(0, ob_plot_idx - 0.5)
-        zone_width   = (n_plot + RIGHT_MARGIN - 1) - zone_x_start
-        ax.add_patch(patches.Rectangle(
-            (zone_x_start, zone_lo), zone_width, zone_hi - zone_lo,
-            facecolor='#9b59b6', alpha=0.12, zorder=1
-        ))
-        ax.add_patch(patches.Rectangle(
-            (zone_x_start, zone_lo), zone_width, zone_hi - zone_lo,
-            fill=False, edgecolor='#bb8fce', linestyle=':', linewidth=1.5, zorder=2
-        ))
-
-        # --- OB candle outline ---
-        if 0 <= ob_plot_idx < n_plot:
-            ob_h = float(H[ob_plot_idx])
-            ob_l = float(L[ob_plot_idx])
+        # Greyed out when invalidated (dead zone — corpse only).
+        if has_ob:
+            if is_invalidated:
+                band_face, band_edge, band_alpha = '#666666', '#888888', 0.10
+            else:
+                band_face, band_edge, band_alpha = '#9b59b6', '#bb8fce', 0.12
+            zone_x_start = max(0, ob_plot_idx - 0.5)
+            zone_width   = (n_plot + RIGHT_MARGIN - 1) - zone_x_start
             ax.add_patch(patches.Rectangle(
-                (ob_plot_idx - 0.5, ob_l), 1.0, ob_h - ob_l,
-                fill=False, edgecolor='#d7bde2', linewidth=2.0, zorder=4,
-                linestyle='-'
+                (zone_x_start, zone_lo), zone_width, zone_hi - zone_lo,
+                facecolor=band_face, alpha=band_alpha, zorder=1
+            ))
+            ax.add_patch(patches.Rectangle(
+                (zone_x_start, zone_lo), zone_width, zone_hi - zone_lo,
+                fill=False, edgecolor=band_edge, linestyle=':', linewidth=1.5, zorder=2
             ))
 
+            # --- OB candle outline ---
+            if 0 <= ob_plot_idx < n_plot:
+                ob_h = float(H[ob_plot_idx])
+                ob_l = float(L[ob_plot_idx])
+                ob_outline = '#888888' if is_invalidated else '#d7bde2'
+                ax.add_patch(patches.Rectangle(
+                    (ob_plot_idx - 0.5, ob_l), 1.0, ob_h - ob_l,
+                    fill=False, edgecolor=ob_outline, linewidth=2.0, zorder=4,
+                    linestyle='-'
+                ))
+
         # --- FVG outline ---
-        fvg_active  = ob['fvg']['exists'] and ob['fvg']['c1_idx'] is not None
-        fvg_ghost   = (not ob['fvg']['exists']) and ob['fvg'].get('was_detected') and ob['fvg'].get('ghost_c1_idx') is not None
-        fvg_partial = fvg_active and ob['fvg'].get('mitigation') == 'partial'
+        # Skipped entirely for structure-only (no ob) and invalidated views —
+        # FVG is meaningful only for live zones.
+        fvg_active = fvg_ghost = fvg_partial = False
+        if has_ob and not is_invalidated:
+            fvg_active  = ob['fvg']['exists'] and ob['fvg']['c1_idx'] is not None
+            fvg_ghost   = (not ob['fvg']['exists']) and ob['fvg'].get('was_detected') and ob['fvg'].get('ghost_c1_idx') is not None
+            fvg_partial = fvg_active and ob['fvg'].get('mitigation') == 'partial'
         if fvg_active:
             ft = float(ob['fvg']['fvg_top'])
             fb = float(ob['fvg']['fvg_bottom'])
@@ -1184,31 +1217,70 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
                 ))
 
         # --- BOS / CHoCH line + break-candle outline ---
-        bos_price = float(ob['bos_swing_price'])
-        _btag = ob.get('bos_tag', 'BOS')
-        _btier = ob.get('bos_tier', 'Major')
-        if _btag == 'BOS':
-            bos_color = '#00bcd4'
-        elif _btier == 'Minor':
-            bos_color = '#9c27b0'
-        else:
-            bos_color = '#ff9800'
-        ax.axhline(y=bos_price, color=bos_color, linewidth=0.8,
-                   linestyle='--', alpha=0.7, zorder=2)
+        bos_price = None
+        bos_color = '#00bcd4'  # default; reassigned below from ob or last_event
+        if has_ob:
+            bos_price = float(ob['bos_swing_price'])
+            _btag = ob.get('bos_tag', 'BOS')
+            _btier = ob.get('bos_tier', 'Major')
+            if _btag == 'BOS':
+                bos_color = '#00bcd4'
+            elif _btier == 'Minor':
+                bos_color = '#9c27b0'
+            else:
+                bos_color = '#ff9800'
+            # Greyed for invalidated zones (the structure is historical now).
+            line_alpha = 0.3 if is_invalidated else 0.7
+            edge_color = '#888888' if is_invalidated else bos_color
+            ax.axhline(y=bos_price, color=edge_color, linewidth=0.8,
+                       linestyle='--', alpha=line_alpha, zorder=2)
 
-        br_start, br_end = smc_detector.compute_h1_break_candle_span(full_df, ob, None)
-        if br_start is not None and br_end is not None:
-            for abs_i in range(br_start, br_end + 1):
-                if abs_i < window_start:
-                    continue
-                local_i = abs_i - window_start
+            br_start, br_end = smc_detector.compute_h1_break_candle_span(full_df, ob, None)
+            if br_start is not None and br_end is not None:
+                for abs_i in range(br_start, br_end + 1):
+                    if abs_i < window_start:
+                        continue
+                    local_i = abs_i - window_start
+                    if 0 <= local_i < n_plot:
+                        c_h = float(H[local_i])
+                        c_l = float(L[local_i])
+                        ax.add_patch(patches.Rectangle(
+                            (local_i - 0.5, c_l), 1.0, c_h - c_l,
+                            fill=False, edgecolor=edge_color, linewidth=1.5, zorder=5
+                        ))
+        elif last_event is not None:
+            # Structure-only: mark the last BOS/CHoCH so the vet can see what
+            # defined the current dealing range. No band, no break-candle
+            # outline — just a vertical guide on the candle column.
+            le_type = last_event.get('type')
+            le_tier = last_event.get('tier', 'Major')
+            le_ts   = last_event.get('ts')
+            if le_type == 'BOS':
+                ev_color = '#00bcd4'
+            elif le_tier == 'Minor':
+                ev_color = '#9c27b0'
+            else:
+                ev_color = '#ff9800'
+            le_idx = None
+            if le_ts:
+                # Match against full_df since window_start may chop history.
+                ts_col = full_df['Datetime'] if 'Datetime' in full_df.columns else full_df.index
+                for k in range(len(full_df)):
+                    raw = ts_col.iloc[k] if hasattr(ts_col, 'iloc') else ts_col[k]
+                    raw_iso = raw.isoformat() if hasattr(raw, 'isoformat') else str(raw)
+                    if raw_iso == le_ts:
+                        le_idx = k
+                        break
+            if le_idx is not None and le_idx >= window_start:
+                local_i = le_idx - window_start
                 if 0 <= local_i < n_plot:
-                    c_h = float(H[local_i])
-                    c_l = float(L[local_i])
-                    ax.add_patch(patches.Rectangle(
-                        (local_i - 0.5, c_l), 1.0, c_h - c_l,
-                        fill=False, edgecolor=bos_color, linewidth=1.5, zorder=5
-                    ))
+                    ax.axvline(x=local_i, color=ev_color, linewidth=0.8,
+                               linestyle='--', alpha=0.45, zorder=2)
+                    ax.text(local_i, y_max, f"  {le_type} {le_tier}",
+                            color=ev_color, fontsize=8, fontweight='bold',
+                            ha='left', va='top', zorder=7,
+                            bbox=dict(facecolor='#131722', edgecolor='none',
+                                      pad=1.5, alpha=0.78))
 
         # --- Dealing Range walls + Equilibrium ---
         # Anchored = solid dotted, alpha 0.85; Placeholder = dashed-gap, alpha 0.45.
@@ -1266,8 +1338,8 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
                            s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
                            linewidths=1.0, zorder=6)
         # lb2 scoped to the OB impulse leg only.
-        impulse_start_abs = ob.get('impulse_start_idx')
-        ob_idx_abs = ob.get('ob_idx')
+        impulse_start_abs = ob.get('impulse_start_idx') if has_ob else None
+        ob_idx_abs = ob.get('ob_idx') if has_ob else None
         leg_valid = (
             impulse_start_abs is not None
             and ob_idx_abs is not None
@@ -1296,8 +1368,9 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
         # Highlights the swept candle's wick in a distinct color, places a
         # star at the wick tip, and draws a short level line at the swept
         # price. Sweep_idx is refreshed each scan via refresh_slate_zone, so
-        # this maps to the current df frame correctly.
-        sw = ob.get('sweep_observed') or {}
+        # this maps to the current df frame correctly. Skipped for
+        # structure-only and invalidated views.
+        sw = (ob.get('sweep_observed') or {}) if (has_ob and not is_invalidated) else {}
         if sw.get('exists'):
             sw_abs_idx = sw.get('sweep_idx')
             sw_level = sw.get('price')
@@ -1352,12 +1425,14 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
         pair_conf_shim = {"decimal_places": dp, "pair_type": pair_type_guess}
 
         mid_x = n_plot / 2.0
-        mid_labels = [
-            (proximal, f"{proximal:.{dp}f}", '#bb8fce'),
-            (distal,   f"{distal:.{dp}f}",   '#bb8fce'),
-            (bos_price, f"{bos_price:.{dp}f}", bos_color),
-            (current_price, f"{current_price:.{dp}f}", '#ffffff'),
-        ]
+        mid_labels = [(current_price, f"{current_price:.{dp}f}", '#ffffff')]
+        if has_ob:
+            zone_label_color = '#888888' if is_invalidated else '#bb8fce'
+            mid_labels.append((proximal, f"{proximal:.{dp}f}", zone_label_color))
+            mid_labels.append((distal,   f"{distal:.{dp}f}",   zone_label_color))
+            if bos_price is not None:
+                bos_label_color = '#888888' if is_invalidated else bos_color
+                mid_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_label_color))
         # Wall labels go in mid-chart ONLY when the wall is on-chart. Off-
         # chart walls get edge annotations below.
         if ceiling_price is not None and ceiling_in_view:
@@ -1430,13 +1505,18 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None):
                           linewidth=0.7, pad=2.5, alpha=0.92)
             )
 
-        direction_label = "Demand" if ob['direction'] == 'bullish' else "Supply"
-        event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
-        title = (
-            f"{pair_name} | {direction_label} Zone | {event_label} | "
-            f"{ob['status']}   —   {ist_timestamp} IST"
-        )
-        ax.set_title(title, color='#dddddd', fontsize=10, pad=8, loc='left')
+        if has_ob:
+            direction_label = "Demand" if ob['direction'] == 'bullish' else "Supply"
+            event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
+            state_label = "INVALIDATED" if is_invalidated else ob.get('status', 'Pristine')
+            title = (
+                f"{pair_name} | {direction_label} Zone | {event_label} | "
+                f"{state_label}   —   {ist_timestamp} IST"
+            )
+        else:
+            title = f"{pair_name} | No Active Zone — Structure View   —   {ist_timestamp} IST"
+        title_color = '#888888' if is_invalidated else '#dddddd'
+        ax.set_title(title, color=title_color, fontsize=10, pad=8, loc='left')
         ax.tick_params(colors='#888', labelsize=9)
         ax.yaxis.tick_right()
         ax.set_xticks([])
@@ -1591,118 +1671,149 @@ def _format_dr_walls_cell(walls):
     )
 
 
+def _walls_icon_cell(walls):
+    """Compact icon for the Walls column in the phone summary table.
+
+    ✓✓ both anchored, ✓– one anchored, –– cold-start fallback. Tooltip via
+    title= holds the long-form label so a long-press on phones reveals it.
+    """
+    if not walls or not isinstance(walls, dict):
+        return ("<span style='color:#888;' title='No wall data'>&mdash;&mdash;</span>")
+    if walls.get("fallback_active"):
+        return ("<span style='color:#e74c3c;' title='Fallback — no recent BOS/CHoCH'>"
+                "&mdash;&mdash;</span>")
+    cph = walls.get("ceiling_is_placeholder", True)
+    fph = walls.get("floor_is_placeholder", True)
+    if not cph and not fph:
+        return "<span style='color:#27ae60;' title='Both walls anchored'>&#10003;&#10003;</span>"
+    if cph and fph:
+        return "<span style='color:#e67e22;' title='Both walls placeholder'>&#9888;&#9888;</span>"
+    if cph:
+        return "<span style='color:#e67e22;' title='Ceiling placeholder, floor anchored'>&#9888;&#10003;</span>"
+    return "<span style='color:#e67e22;' title='Floor placeholder, ceiling anchored'>&#10003;&#9888;</span>"
+
+
 def _pip_unit(dp):
     return 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
 
 
 def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
+    """Phone-friendly summary table — icons only, no prices.
+
+    Columns: Pair | Bias | Event | OB | FVG | Sweep | Walls
+
+    Numbers / prices live in the zone card. Trend (Bias) and Structure type
+    (Event) are preserved per user requirement. First Seen moved into the
+    zone card header so phone view stays compact.
+    """
     pair_prices = pair_prices or {}
     rows = ""
     for z in all_zones_for_table:
         name      = z['name']
-        dp        = dp_map[name]
         walls     = z.get('walls', {})
-        dr_cell   = _format_dr_walls_cell(walls)
+        walls_cell = _walls_icon_cell(walls)
 
         # Placeholder row: pair has no active zone (or data unavailable).
-        # Columns: Pair | Bias | Status | Dist | DR Walls | FVG | First Seen
+        # All confluence cells dashed; walls cell still drawn so user can
+        # see structure health at a glance.
         if z.get('is_placeholder_row'):
             rows += f"""
         <tr style="background:transparent;border-bottom:1px solid #2a2a3e;opacity:0.55;">
-          <td style="padding:6px 8px;font-weight:bold;color:#aaa;font-size:12px;white-space:nowrap;">
-            <span style='color:#555;font-size:10px;font-family:monospace;'>&mdash;&nbsp;</span>{name}
-          </td>
-          <td style="padding:6px 8px;color:#888;font-size:11px;white-space:nowrap;">&mdash;</td>
-          <td style="padding:6px 8px;color:#888;font-size:11px;white-space:nowrap;font-style:italic;">{z['status']}</td>
-          <td style="padding:6px 8px;color:#888;font-size:11px;text-align:right;">&mdash;</td>
-          <td style="padding:6px 8px;font-size:11px;white-space:nowrap;">{dr_cell}</td>
-          <td style="padding:6px 8px;color:#888;font-size:12px;text-align:center;">&mdash;</td>
-          <td style="padding:6px 8px;color:#666;font-size:10px;white-space:nowrap;">&mdash;</td>
+          <td style="padding:6px 6px;font-weight:bold;color:#aaa;font-size:12px;white-space:nowrap;">{name}</td>
+          <td style="padding:6px 4px;text-align:center;color:#666;font-size:13px;">&mdash;</td>
+          <td style="padding:6px 4px;text-align:center;color:#666;font-size:10px;">&mdash;</td>
+          <td style="padding:6px 4px;text-align:center;color:#666;font-size:13px;">&mdash;</td>
+          <td style="padding:6px 4px;text-align:center;color:#666;font-size:13px;">&mdash;</td>
+          <td style="padding:6px 4px;text-align:center;color:#666;font-size:13px;">&mdash;</td>
+          <td style="padding:6px 4px;text-align:center;font-size:11px;">{walls_cell}</td>
         </tr>"""
             continue
 
-        direction = "&#9650; Bullish" if z['direction'] == 'bullish' else "&#9660; Bearish"
-        dir_color = '#27ae60'   if z['direction'] == 'bullish' else '#e74c3c'
-        status    = z['status']
-        stat_col  = '#27ae60'   if 'Pristine' in status else '#e67e22'
-
-        # Distance to proximal in pips. If price is inside zone, show "in zone".
-        cur_price = pair_prices.get(name)
-        if cur_price is not None and z.get('proximal') is not None:
-            pip_unit = _pip_unit(dp)
-            if z.get('in_progress'):
-                dist_cell = "<span style='color:#f1c40f;'>in zone</span>"
-            else:
-                dpips = round(abs(cur_price - z['proximal']) / pip_unit, 1)
-                dist_cell = f"{dpips} p"
+        # --- Bias glyph (kept per user requirement: trend direction stays).
+        if z['direction'] == 'bullish':
+            bias_glyph, bias_col = '&#9650;', '#27ae60'
         else:
-            dist_cell = "&mdash;"
+            bias_glyph, bias_col = '&#9660;', '#e74c3c'
 
-        if z['fvg_valid'] and z.get('fvg_mitigation') == 'partial':
-            fvg_cell = "&#9680;"
-            fvg_col  = '#f1c40f'   # amber — partial (caution)
-        elif z['fvg_valid']:
-            fvg_cell = "&#10003;"
-            fvg_col  = '#27ae60'   # green — pristine
-        elif z.get('fvg_ghost'):
-            fvg_cell = "&#9675;"
-            fvg_col  = '#888888'   # grey — ghost (mitigated)
-        else:
-            fvg_cell = "&ndash;"
-            fvg_col  = '#888'
-
+        # --- Event chip (kept per user requirement: structure type stays).
         _tier = z.get('bos_tier', 'Major')
         if z['bos_tag'] == 'BOS':
-            _badge_color, _badge_text = '#00bcd4', 'BOS'
+            ev_color, ev_text = '#00bcd4', 'BOS'
         elif _tier == 'Minor':
-            _badge_color, _badge_text = '#9c27b0', 'CHoCH'
+            ev_color, ev_text = '#9c27b0', 'mCH'
         else:
-            _badge_color, _badge_text = '#ff9800', 'CHoCH'
-        tag_badge = (
-            f"<span style='background:{_badge_color};color:#000;font-size:9px;"
-            f"padding:1px 4px;border-radius:3px;font-weight:bold;'>{_badge_text}</span>"
-        )
+            ev_color, ev_text = '#ff9800', 'CHoCH'
+        event_chip = (f"<span style='background:{ev_color};color:#000;font-size:9px;"
+                      f"padding:1px 4px;border-radius:3px;font-weight:bold;'>{ev_text}</span>")
+
+        # --- OB cell: ✓ pristine, ◐ tested, – none.
+        touches = z.get('touches', 0)
+        if touches == 0:
+            ob_glyph, ob_col, ob_title = '&#10003;', '#27ae60', 'Pristine OB'
+        else:
+            ob_glyph, ob_col, ob_title = '&#9680;', '#e67e22', f'Tested {touches}x'
+
+        # --- FVG cell: ✓ pristine, ◐ partial, ○ ghost, – none.
+        if z['fvg_valid'] and z.get('fvg_mitigation') == 'partial':
+            fvg_glyph, fvg_col, fvg_title = '&#9680;', '#f1c40f', 'FVG partial'
+        elif z['fvg_valid']:
+            fvg_glyph, fvg_col, fvg_title = '&#10003;', '#27ae60', 'FVG pristine'
+        elif z.get('fvg_ghost'):
+            fvg_glyph, fvg_col, fvg_title = '&#9675;', '#888', 'FVG ghost (mitigated)'
+        else:
+            fvg_glyph, fvg_col, fvg_title = '&ndash;', '#666', 'No FVG'
+
+        # --- Sweep cell: ★ textbook, ● decent, ○ weak, – none.
+        sw = z.get('sweep_observed') or {}
+        if not sw.get('exists'):
+            sw_glyph, sw_col, sw_title = '&ndash;', '#666', 'No sweep'
+        else:
+            tier = (sw.get('tier') or 'weak').lower()
+            if tier == 'textbook':
+                sw_glyph, sw_col, sw_title = '&#9733;', '#27ae60', 'Textbook sweep'
+            elif tier == 'decent':
+                sw_glyph, sw_col, sw_title = '&#9679;', '#f1c40f', 'Decent sweep'
+            else:
+                sw_glyph, sw_col, sw_title = '&#9675;', '#888', 'Weak sweep'
+
         is_new     = z.get('is_new', False)
         is_changed = z.get('is_changed', False)
         row_bg     = '#1e3a2f' if is_new else ('#2d2a1a' if is_changed else 'transparent')
-        new_badge  = ""
+        # NEW / UPD badge inline next to pair name — small, doesn't blow up width.
+        suffix_badge = ""
         if is_new:
-            new_badge = "<span style='background:#27ae60;color:#fff;font-size:9px;padding:1px 4px;border-radius:3px;margin-left:4px;'>NEW</span>"
+            suffix_badge = (" <span style='background:#27ae60;color:#fff;font-size:8px;"
+                            "padding:0 3px;border-radius:2px;'>N</span>")
         elif is_changed:
-            new_badge = "<span style='background:#e67e22;color:#fff;font-size:9px;padding:1px 4px;border-radius:3px;margin-left:4px;'>UPD</span>"
-
-        zone_label = f"<span style='color:#555;font-size:10px;font-family:monospace;'>{z.get('zone_id','&mdash;')}&nbsp;</span>"
+            suffix_badge = (" <span style='background:#e67e22;color:#fff;font-size:8px;"
+                            "padding:0 3px;border-radius:2px;'>U</span>")
 
         rows += f"""
         <tr style="background:{row_bg};border-bottom:1px solid #2a2a3e;">
-          <td style="padding:6px 8px;font-weight:bold;color:#eee;font-size:12px;white-space:nowrap;">
-            {zone_label}{name}{new_badge}
-          </td>
-          <td style="padding:6px 8px;color:{dir_color};font-size:12px;white-space:nowrap;">
-            {direction}&nbsp;{tag_badge}
-          </td>
-          <td style="padding:6px 8px;color:{stat_col};font-size:11px;white-space:nowrap;">{status}</td>
-          <td style="padding:6px 8px;color:#ddd;font-size:11px;text-align:right;white-space:nowrap;">{dist_cell}</td>
-          <td style="padding:6px 8px;font-size:11px;white-space:nowrap;">{dr_cell}</td>
-          <td style="padding:6px 8px;color:{fvg_col};font-size:12px;text-align:center;">{fvg_cell}</td>
-          <td style="padding:6px 8px;color:#888;font-size:10px;white-space:nowrap;">{z['first_seen_ist']}</td>
+          <td style="padding:6px 6px;font-weight:bold;color:#eee;font-size:12px;white-space:nowrap;">{name}{suffix_badge}</td>
+          <td style="padding:6px 4px;text-align:center;color:{bias_col};font-size:13px;">{bias_glyph}</td>
+          <td style="padding:6px 4px;text-align:center;">{event_chip}</td>
+          <td style="padding:6px 4px;text-align:center;color:{ob_col};font-size:13px;" title="{ob_title}">{ob_glyph}</td>
+          <td style="padding:6px 4px;text-align:center;color:{fvg_col};font-size:13px;" title="{fvg_title}">{fvg_glyph}</td>
+          <td style="padding:6px 4px;text-align:center;color:{sw_col};font-size:13px;" title="{sw_title}">{sw_glyph}</td>
+          <td style="padding:6px 4px;text-align:center;font-size:11px;">{walls_cell}</td>
         </tr>"""
 
     return f"""
-    <div style="margin-bottom:24px;">
-      <h3 style="color:#aaa;font-size:12px;letter-spacing:1px;margin:0 0 8px 0;text-transform:uppercase;">
+    <div style="margin-bottom:18px;">
+      <h3 style="color:#aaa;font-size:12px;letter-spacing:1px;margin:0 0 6px 0;text-transform:uppercase;">
         Active Zone Map
       </h3>
       <table style="width:100%;border-collapse:collapse;background:#1a1a2e;border-radius:6px;overflow:hidden;">
         <thead>
           <tr style="background:#0d0d1a;">
-            <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Pair</th>
-            <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Bias</th>
-            <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Status</th>
-            <th style="padding:7px 8px;text-align:right;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">Dist</th>
-            <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">DR Walls</th>
-            <th style="padding:7px 8px;text-align:center;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">FVG</th>
-            <th style="padding:7px 8px;text-align:left;color:#666;font-size:10px;font-weight:normal;text-transform:uppercase;letter-spacing:0.5px;">First Seen</th>
+            <th style="padding:6px 6px;text-align:left;color:#666;font-size:9px;font-weight:normal;text-transform:uppercase;letter-spacing:0.4px;">Pair</th>
+            <th style="padding:6px 4px;text-align:center;color:#666;font-size:9px;font-weight:normal;text-transform:uppercase;letter-spacing:0.4px;">Bias</th>
+            <th style="padding:6px 4px;text-align:center;color:#666;font-size:9px;font-weight:normal;text-transform:uppercase;letter-spacing:0.4px;">Event</th>
+            <th style="padding:6px 4px;text-align:center;color:#666;font-size:9px;font-weight:normal;text-transform:uppercase;letter-spacing:0.4px;">OB</th>
+            <th style="padding:6px 4px;text-align:center;color:#666;font-size:9px;font-weight:normal;text-transform:uppercase;letter-spacing:0.4px;">FVG</th>
+            <th style="padding:6px 4px;text-align:center;color:#666;font-size:9px;font-weight:normal;text-transform:uppercase;letter-spacing:0.4px;">Sweep</th>
+            <th style="padding:6px 4px;text-align:center;color:#666;font-size:9px;font-weight:normal;text-transform:uppercase;letter-spacing:0.4px;">Walls</th>
           </tr>
         </thead>
         <tbody>{rows}</tbody>
@@ -1710,20 +1821,21 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
     </div>"""
 
 def _phase1_chart_legend_html(bos_tag="BOS", bos_tier="Major"):
-    """Colour-code legend rendered below H1 zone chart in Phase 1 digest. Cosmetic only."""
-    if bos_tag == 'BOS':
-        bos_color, bos_label = '#00bcd4', 'BOS'
-    elif bos_tier == 'Minor':
-        bos_color, bos_label = '#9c27b0', 'Minor CHoCH'
-    else:
-        bos_color, bos_label = '#ff9800', 'Major CHoCH'
+    """Colour-code legend rendered ONCE at the bottom of the Phase 1 digest.
+
+    Args kept for backwards-compat call sites, but ignored — the global legend
+    surfaces ALL three structure-event colours at once instead of switching
+    based on a single zone's event.
+    """
     items = [
-        ('#bb8fce', 'Zone band (proximal/distal)'),
-        ('#d7bde2', 'OB candle outline'),
+        ('#bb8fce', 'Zone band (proximal/distal) — greyed when invalidated'),
+        ('#d7bde2', 'OB candle outline — greyed when invalidated'),
         ('#2ecc71', 'FVG pristine (displacement)'),
         ('#f1c40f', 'FVG partial (proximal touched)'),
-        ('#888888', 'FVG mitigated (ghost)'),
-        (bos_color, f'{bos_label} break candle / level'),
+        ('#888888', 'FVG mitigated (ghost) / Invalidated zone'),
+        ('#00bcd4', 'BOS break candle / level'),
+        ('#ff9800', 'Major CHoCH break candle / level'),
+        ('#9c27b0', 'Minor CHoCH break candle / level'),
         ('#5dade2', 'Dealing range walls (dotted=anchored, dashed=placeholder; far walls render as edge labels)'),
         ('#85c1e9', 'Equilibrium (50%)'),
         ('#d4a017', 'Swing: ▲▼ filled = lookback-3 (visible window); △▽ hollow = lookback-2 (OB impulse leg only)'),
@@ -1842,8 +1954,8 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
         if cid else
         '<div style="padding:8px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:11px;">&#9888; Chart failed to render.</div>'
     )
-    legend_html = _phase1_chart_legend_html(ob.get('bos_tag', 'BOS'),
-                                              ob.get('bos_tier', 'Major'))
+    # Legend rendered ONCE at the end of the email (see send_master_digest_v2),
+    # not per-card — frees up vertical space on phones.
 
     return f"""
     <div style="margin-bottom:28px;padding:16px;background:#1a1a2e;border-radius:8px;
@@ -1880,7 +1992,6 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
         {narrative}
       </p>
       {chart_html}
-      {legend_html}
     </div>"""
 
 def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
@@ -1948,8 +2059,8 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
         '<div style="padding:8px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;'
         'border-radius:4px;color:#e74c3c;font-size:11px;">&#9888; Chart unavailable.</div>'
     )
-    legend_html = _phase1_chart_legend_html(sz.get('bos_tag', 'BOS'),
-                                              sz.get('bos_tier', 'Major'))
+    # Legend rendered ONCE at the end of the email (see send_master_digest_v2),
+    # not per-card — frees up vertical space on phones.
 
     # Phase 1 sweep snapshot — same renderer as NEW card.
     sweep_line = _render_sweep_observation_html(sz.get('sweep_observed'), dp)
@@ -1994,7 +2105,6 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
         {narrative}
       </p>
       {chart_html}
-      {legend_html}
     </div>"""
 
 
@@ -2024,6 +2134,141 @@ def build_dropped_zone_line(sz, name, dp):
         DROPPED — {reason_text}
       </span>
     </div>"""
+
+
+def _slate_zone_to_ob_shape(sz):
+    """Reshape a slate zone dict into the OB-shape dict generate_h1_chart wants.
+
+    Slate zones carry the same field names as fresh OBs, so this is a thin
+    adaptor — exists so callers don't repeat the same dict-shaping inline.
+    """
+    return {
+        "direction": sz["direction"],
+        "bos_tag":   sz.get("bos_tag", "BOS"),
+        "bos_tier":  sz.get("bos_tier", "Major"),
+        "proximal_line": sz["proximal_line"],
+        "distal_line":   sz["distal_line"],
+        "high":      sz["high"],
+        "low":       sz["low"],
+        "ob_body":   sz["ob_body"],
+        "median_leg_body": sz["median_leg_body"],
+        "ob_idx":    sz["ob_idx"],
+        "bos_idx":   sz["bos_idx"],
+        "bos_swing_price":   sz["bos_swing_price"],
+        "impulse_start_idx": sz["impulse_start_idx"],
+        "impulse_start_price": sz["impulse_start_price"],
+        "fvg":       sz["fvg"],
+        "touches":   sz.get("touches", 0),
+        "status":    sz.get("status_label", "Pristine"),
+        "h1_atr":    sz.get("h1_atr", 0.0),
+        "sweep_observed": sz.get("sweep_observed", {"exists": False}),
+    }
+
+
+_INVALIDATION_REASON_LONG = {
+    "mitigated_distal_break":  "price closed beyond distal — zone is dead",
+    "mitigated_three_touches": "proximal was wicked three times — zone is mitigated",
+    "structure_supplanted":    "fresher structure on the same leg replaced this OB",
+    "aged_out_of_window":      "OB candle aged out of the H1 data window",
+    "data_unavailable":        "pair data feed failed — could not verify the zone",
+    "data_stale":              "yfinance data went stale — could not verify the zone",
+}
+
+
+def build_invalidation_card_html(sz, name, dp, cid, ist_timestamp):
+    """One-paragraph card stating WHY the OB was invalidated. Chart sits below.
+
+    Per CLAUDE.md: plain English, vet voice, no fluff. The chart (greyed-out OB)
+    carries the visual; this card carries the reason.
+    """
+    direction = "Bullish demand" if sz['direction'] == 'bullish' else "Bearish supply"
+    dir_color = '#27ae60' if sz['direction'] == 'bullish' else '#e74c3c'
+    reason_key = sz.get('drop_reason', '')
+    reason_text = _INVALIDATION_REASON_LONG.get(reason_key, reason_key or 'unknown reason')
+    last_seen = sz.get('last_seen_label', '—')
+    first_seen = sz.get('first_seen_label', '—')
+    chart_html = (
+        f'<img src="cid:{cid}" style="width:100%;border-radius:6px;display:block;margin-top:10px;" />'
+        if cid else
+        '<div style="padding:8px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;'
+        'border-radius:4px;color:#e74c3c;font-size:11px;">&#9888; Chart unavailable.</div>'
+    )
+    zone_id = sz.get('zone_id', '—')
+    return f"""
+    <div style="margin-bottom:14px;padding:12px 14px;background:#1a1a2e;
+                border-left:3px solid #888;border-radius:6px;opacity:0.92;">
+      <div style="margin-bottom:6px;">
+        <span style="font-size:10px;color:#666;font-family:monospace;margin-right:6px;">{zone_id}</span>
+        <span style="font-size:13px;font-weight:bold;color:#bbb;">{name}</span>
+        <span style="font-size:11px;color:{dir_color};margin-left:8px;">{direction}</span>
+        <span style="background:#888;color:#000;font-size:9px;padding:1px 5px;
+                     border-radius:3px;font-weight:bold;margin-left:8px;">INVALIDATED</span>
+      </div>
+      <p style="font-size:12px;color:#bbb;line-height:1.5;margin:0 0 6px 0;">
+        Zone is dead — {reason_text}. Lived from {first_seen} to {last_seen}.
+      </p>
+      {chart_html}
+    </div>"""
+
+
+def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls, last_event):
+    """Card for a pair with no active OB and no recently-dropped OB.
+
+    The vet wants to see WHY there's nothing to trade and what to wait for.
+    Caption is plain-English: stop-and-think trigger for both a pullback OR a
+    range-fail CHoCH.
+    """
+    chart_html = (
+        f'<img src="cid:{cid}" style="width:100%;border-radius:6px;display:block;margin-top:10px;" />'
+        if cid else
+        '<div style="padding:8px 12px;background:#1a1f2e;border-left:3px solid #5dade2;'
+        'border-radius:4px;color:#5dade2;font-size:11px;">Structure-only chart unavailable.</div>'
+    )
+    le_type  = (last_event or {}).get('type')
+    le_tier  = (last_event or {}).get('tier', 'Major')
+    le_dir   = (last_event or {}).get('direction')
+    le_ts    = (last_event or {}).get('ts')
+    le_label = "—"
+    if le_type and le_dir and le_ts:
+        try:
+            ts_short = le_ts[:10]
+        except Exception:
+            ts_short = str(le_ts)
+        ev_name = "BOS" if le_type == 'BOS' else f"{le_tier} CHoCH"
+        le_label = f"{ev_name} {le_dir} on {ts_short}"
+    caption = (
+        f"No active OB. Last structure event: {le_label}. "
+        f"Wait for price to return into the dealing range — could form a "
+        f"continuation OB on the next leg, or a CHoCH if the range fails."
+    )
+    return f"""
+    <div style="margin-bottom:14px;padding:12px 14px;background:#13131f;
+                border-left:3px solid #5dade2;border-radius:6px;">
+      <div style="margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:bold;color:#dddddd;">{name}</span>
+        <span style="background:#5dade2;color:#000;font-size:9px;padding:1px 5px;
+                     border-radius:3px;font-weight:bold;margin-left:8px;">NO ACTIVE OB</span>
+      </div>
+      <p style="font-size:12px;color:#bbb;line-height:1.5;margin:0 0 6px 0;">{caption}</p>
+      {chart_html}
+    </div>"""
+
+
+def build_zone_changed_notice_html(prev_zone_id, new_zone_id, prev_zone_status, name):
+    """One-line notice when the displayed zone for a pair changes between scans.
+
+    Triggered when select_relevant_zone_for_pair picks a different zone than
+    last scan (e.g. price moved closer to OB2 than OB1, or OB1 was invalidated).
+    """
+    if prev_zone_status == 'invalidated':
+        msg = f"{prev_zone_id} was invalidated. Now showing {new_zone_id}."
+    else:
+        msg = (f"{prev_zone_id} is no longer the closest zone — price moved. "
+               f"Showing {new_zone_id}. {prev_zone_id} stays alive in the slate "
+               f"until it's touched or invalidated.")
+    return (f'<div style="margin:6px 0 8px;padding:6px 10px;background:#2a2a1a;'
+            f'border-left:3px solid #e67e22;border-radius:3px;font-size:11px;'
+            f'color:#e67e22;"><b>{name}:</b> {msg}</div>')
 
 
 def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
@@ -2300,18 +2545,34 @@ OB_DEDUPE_THRESHOLDS = {
 }
 
 def send_master_digest_v2(summary_table_html, new_zone_cards, unchanged_zone_cards,
-                          dropped_lines, attachments, zone_count, ist_time):
+                          invalidation_cards, inactive_pair_cards,
+                          zone_change_notices, dropped_lines,
+                          attachments, zone_count, ist_time):
     """
-    Daily-slate digest. Three sections:
-      - NEW (full cards with charts)
-      - UNCHANGED ACTIVE (full cards with charts — every active zone gets chart)
-      - DROPPED (one-line notes with reason)
+    Daily-slate digest sections:
+      - Zone-change notices (when displayed zone for a pair flips)
+      - NEW active zones (full cards with charts)
+      - REFRESHED active zones (full cards with charts)
+      - INVALIDATED (paragraph + greyed-OB chart per pair)
+      - INACTIVE PAIRS (structure-only chart per pair)
+      - DROPPED (one-line notes — book-keeping reasons only)
+      - Legend (rendered once at the bottom)
+
+    By design every pair gets exactly ONE chart per email: an active card,
+    an invalidation card, or an inactive-pair card.
     """
-    new_html      = "".join(new_zone_cards)
-    unchanged_html = "".join(unchanged_zone_cards)
-    dropped_html  = "".join(dropped_lines)
+    new_html         = "".join(new_zone_cards)
+    unchanged_html   = "".join(unchanged_zone_cards)
+    invalidated_html = "".join(invalidation_cards)
+    inactive_html    = "".join(inactive_pair_cards)
+    dropped_html     = "".join(dropped_lines)
+    notices_html     = "".join(zone_change_notices)
 
     sections = ""
+    if zone_change_notices:
+        sections += f"""
+        <div style="margin-bottom:14px;">{notices_html}</div>"""
+
     if new_zone_cards:
         sections += f"""
         <div style="margin-bottom:20px;">
@@ -2332,15 +2593,39 @@ def send_master_digest_v2(summary_table_html, new_zone_cards, unchanged_zone_car
           {unchanged_html}
         </div>"""
 
+    if invalidation_cards:
+        sections += f"""
+        <div style="margin-bottom:20px;">
+          <h3 style="color:#e74c3c;font-size:12px;letter-spacing:1px;margin:0 0 10px 0;
+                     text-transform:uppercase;border-bottom:1px solid #2a1a1a;padding-bottom:6px;">
+            Invalidated Zones ({len(invalidation_cards)})
+          </h3>
+          {invalidated_html}
+        </div>"""
+
+    if inactive_pair_cards:
+        sections += f"""
+        <div style="margin-bottom:20px;">
+          <h3 style="color:#5dade2;font-size:12px;letter-spacing:1px;margin:0 0 10px 0;
+                     text-transform:uppercase;border-bottom:1px solid #1a2a3a;padding-bottom:6px;">
+            Pairs Without an Active OB ({len(inactive_pair_cards)})
+          </h3>
+          {inactive_html}
+        </div>"""
+
     if dropped_lines:
         sections += f"""
         <div style="margin-bottom:8px;">
-          <h3 style="color:#e74c3c;font-size:11px;letter-spacing:1px;margin:0 0 8px 0;
-                     text-transform:uppercase;border-bottom:1px solid #2a1a1a;padding-bottom:6px;">
-            Dropped This Scan ({len(dropped_lines)})
+          <h3 style="color:#888;font-size:11px;letter-spacing:1px;margin:0 0 8px 0;
+                     text-transform:uppercase;border-bottom:1px solid #2a2a3e;padding-bottom:6px;">
+            Other Drops ({len(dropped_lines)})
           </h3>
           {dropped_html}
         </div>"""
+
+    # Single legend at the very bottom — replaces the per-card legend that
+    # previously bloated every chart card.
+    legend_html = _phase1_chart_legend_html('BOS', 'Major')
 
     master_html = f"""<html>
 <body style="font-family:Arial,sans-serif;background:#0d0d1a;padding:16px;margin:0;">
@@ -2357,6 +2642,13 @@ def send_master_digest_v2(summary_table_html, new_zone_cards, unchanged_zone_car
   <div style="padding:18px 20px;">
     {summary_table_html}
     {sections}
+    <div style="margin-top:18px;">
+      <h3 style="color:#666;font-size:10px;letter-spacing:1px;margin:0 0 6px 0;
+                 text-transform:uppercase;border-bottom:1px solid #2a2a3e;padding-bottom:4px;">
+        Legend
+      </h3>
+      {legend_html}
+    </div>
   </div>
   <div style="background:#0d0d1a;padding:12px 20px;border-top:1px solid #1a1a2e;text-align:center;">
     <p style="color:#333;font-size:10px;margin:0;">
@@ -2379,10 +2671,17 @@ def send_master_digest_v2(summary_table_html, new_zone_cards, unchanged_zone_car
         server.login(EMAIL_CONFIG['sender'], EMAIL_CONFIG['password'])
         server.sendmail(EMAIL_CONFIG['sender'], EMAIL_CONFIG['recipient'], msg.as_string())
 
-    logging.info(f"Digest v2 sent: {zone_count} active zones, "
-                 f"{len(new_zone_cards)} new, {len(unchanged_zone_cards)} unchanged, "
-                 f"{len(dropped_lines)} dropped.")
-    print(f"Digest sent: {zone_count} active, {len(dropped_lines)} dropped.")
+    logging.info(
+        f"Digest v2 sent: {zone_count} active zones, "
+        f"{len(new_zone_cards)} new, {len(unchanged_zone_cards)} refreshed, "
+        f"{len(invalidation_cards)} invalidated, "
+        f"{len(inactive_pair_cards)} inactive-pair, "
+        f"{len(dropped_lines)} other-drops."
+    )
+    print(
+        f"Digest sent: {zone_count} active, {len(invalidation_cards)} invalidated, "
+        f"{len(inactive_pair_cards)} inactive."
+    )
                               
 def load_email_gate():
     return load_json_safe(EMAIL_GATE_FILE, {})
@@ -2471,7 +2770,9 @@ def init_fresh_slate(ist_now, pair_names):
     return {
         "slate_date": ist_now.strftime('%Y-%m-%d'),
         "slate_started_iso": ist_now.isoformat(),
-        "pairs": {name: {"next_id_counter": 0, "zones": []} for name in pair_names}
+        "pairs": {name: {"next_id_counter": 0, "zones": [],
+                          "last_displayed_zone_id": None}
+                  for name in pair_names}
     }
 
 
@@ -2797,7 +3098,8 @@ def run_radar():
     # Ensure all configured pairs have a block (handles config additions mid-day).
     for name in pair_names:
         if name not in slate["pairs"]:
-            slate["pairs"][name] = {"next_id_counter": 0, "zones": []}
+            slate["pairs"][name] = {"next_id_counter": 0, "zones": [],
+                                     "last_displayed_zone_id": None}
 
     # --- EMAIL GATE ---
     gate = load_email_gate()
@@ -3020,25 +3322,39 @@ def run_radar():
             )
         structure_banner_text = "\n".join(_structure_banner_lines)
         print(structure_banner_text)
-        # Collect renderable zones across all pairs.
-        new_zone_cards     = []
+        # Collect renderable items across all pairs.
+        # Per requirement: every pair gets EXACTLY ONE chart — active card,
+        # invalidation card, or inactive-pair structure card.
+        new_zone_cards       = []
         unchanged_zone_cards = []
-        dropped_lines      = []
-        all_zones_for_table = []
-        attachments        = []
-        chart_counter      = 0
+        invalidation_cards   = []
+        inactive_pair_cards  = []
+        zone_change_notices  = []
+        dropped_lines        = []   # bookkeeping reasons only (supplanted/aged/data_*)
+        all_zones_for_table  = []
+        attachments          = []
+        chart_counter        = 0
+
+        # Reasons that warrant a full invalidation card (paragraph + chart).
+        # Other reasons stay as one-line drops (bookkeeping noise).
+        INVALIDATION_REASONS = {"mitigated_distal_break", "mitigated_three_touches"}
+
+        def _attach_chart(b64_str, cid_str):
+            """Attach a base64 PNG as inline MIME with the given content-id."""
+            img_mime = MIMEImage(base64.b64decode(b64_str))
+            img_mime.add_header("Content-ID", f"<{cid_str}>")
+            img_mime.add_header("Content-Disposition", "inline",
+                                filename=f"{cid_str}.png")
+            attachments.append(img_mime)
 
         for pair_name in pair_names:
             dp = dp_map[pair_name]
             pblock = slate["pairs"].get(pair_name, {})
             zones_in_pair = pblock.get("zones", [])
-
-            # Dropped lines first (independent of selection).
-            for sz in zones_in_pair:
-                if sz["status"] == "dropped":
-                    dropped_lines.append(build_dropped_zone_line(sz, pair_name, dp))
+            prev_displayed_id = pblock.get("last_displayed_zone_id")
 
             active_zones = [z for z in zones_in_pair if z["status"] == "active"]
+            dropped_today = [z for z in zones_in_pair if z["status"] == "dropped"]
             current_price = pair_prices.get(pair_name)
             df = pair_dfs.get(pair_name)
 
@@ -3046,9 +3362,104 @@ def run_radar():
             # Reuse the structure state already loaded for the banner above —
             # avoids N+1 disk reads.
             pair_walls = _structure_state_for_banner.get(pair_name, {}) or {}
+            last_event = {
+                "type":      pair_walls.get("last_event_type"),
+                "tier":      pair_walls.get("last_event_tier"),
+                "direction": pair_walls.get("last_event_direction"),
+                "ts":        pair_walls.get("last_event_ts"),
+            }
 
-            # No active zones for this pair — render placeholder row.
-            if not active_zones:
+            # Bookkeeping drops (structure_supplanted / aged_out / data_*) get
+            # the one-liner regardless of whether we render an active card.
+            for sz in dropped_today:
+                if sz.get("drop_reason") not in INVALIDATION_REASONS:
+                    dropped_lines.append(build_dropped_zone_line(sz, pair_name, dp))
+
+            # Price-unavailable fallback (preserved from prior behaviour).
+            if active_zones and current_price is None:
+                for z in active_zones:
+                    if z.get("current_price_at_scan"):
+                        current_price = z["current_price_at_scan"]
+                        break
+
+            new_displayed_id = None
+            displayed_status = None  # 'active' | 'invalidated' | 'inactive'
+
+            if active_zones and current_price is not None:
+                # --- Active path -------------------------------------------
+                sz, in_progress = select_relevant_zone_for_pair(
+                    active_zones, current_price, dp
+                )
+                if sz is None:
+                    continue  # defensive — active_zones non-empty so shouldn't fire
+
+                ob_for_render = _slate_zone_to_ob_shape(sz)
+                new_displayed_id = sz["zone_id"]
+                displayed_status = "active"
+
+                # Summary table row for the SELECTED zone.
+                all_zones_for_table.append({
+                    "name": pair_name, "zone_id": sz["zone_id"],
+                    "direction": sz["direction"],
+                    "proximal": sz["proximal_line"], "distal": sz["distal_line"],
+                    "bos_tag": sz["bos_tag"],
+                    "bos_tier": sz.get("bos_tier", "Major"),
+                    "status": sz.get("status_label", "Pristine"),
+                    "touches": sz.get("touches", 0),
+                    "fvg_valid": sz["fvg"].get("exists", False),
+                    "fvg_ghost": (not sz["fvg"].get("exists", False))
+                                  and sz["fvg"].get("was_detected", False),
+                    "fvg_mitigation": sz["fvg"].get("mitigation", "none"),
+                    "sweep_observed": sz.get("sweep_observed", {"exists": False}),
+                    "first_seen_ist": sz.get("first_seen_label", "—"),
+                    "is_new": sz.get("is_new_this_scan", False),
+                    "is_changed": False,
+                    "is_placeholder_row": False,
+                    "in_progress": in_progress,
+                    "walls": pair_walls
+                })
+
+                chart_b64 = None
+                cid = None
+                if df is not None:
+                    cid = f"chart_{pair_name}_{chart_counter}"
+                    chart_b64 = generate_h1_chart(
+                        df, ob_for_render, dp, pair_name, ist_ts_full,
+                        walls=pair_walls
+                    )
+
+                narrative = generate_zone_narrative_with_atr(
+                    ob_for_render, pair_name, dp, current_price, sz.get("h1_atr", 0.0)
+                )
+
+                card_html = build_active_zone_card_html(
+                    sz, pair_name, dp, narrative,
+                    cid if chart_b64 else None,
+                    ist_ts_full,
+                    current_price=current_price,
+                    in_progress=in_progress
+                )
+
+                if sz.get("is_new_this_scan", False):
+                    new_zone_cards.append(card_html)
+                else:
+                    unchanged_zone_cards.append(card_html)
+
+                if chart_b64:
+                    _attach_chart(chart_b64, cid)
+                    chart_counter += 1
+
+            elif dropped_today:
+                # --- Invalidation path -------------------------------------
+                # No active zones, but at least one was dropped today.
+                # Pick the most recent invalidation (mitigation reason); fall
+                # back to the most recent drop overall if none were invalidated.
+                invalidations = [z for z in dropped_today
+                                 if z.get("drop_reason") in INVALIDATION_REASONS]
+                target = (invalidations or dropped_today)[-1]
+
+                # Summary table: placeholder row (no active zone for the
+                # confluence cells; the invalidation card carries the detail).
                 all_zones_for_table.append({
                     "name": pair_name, "zone_id": "—",
                     "direction": None,
@@ -3061,135 +3472,159 @@ def run_radar():
                     "is_placeholder_row": True,
                     "walls": pair_walls
                 })
-                continue
 
-            # Price unknown (fetch failed this scan) — fall back to last
-            # recorded price-at-scan from the most recent zone, else skip
-            # selection and render placeholder.
-            if current_price is None:
-                fallback_price = None
-                for z in active_zones:
-                    if z.get("current_price_at_scan"):
-                        fallback_price = z["current_price_at_scan"]
-                        break
-                if fallback_price is None:
-                    all_zones_for_table.append({
-                        "name": pair_name, "zone_id": "—",
-                        "direction": None,
-                        "proximal": None, "distal": None,
-                        "bos_tag": None, "status": "Data unavailable",
-                        "fvg_valid": False, "fvg_ghost": False,
-                        "fvg_mitigation": "none",
-                        "first_seen_ist": "—",
-                        "is_new": False, "is_changed": False,
-                        "is_placeholder_row": True,
-                        "walls": pair_walls
-                    })
-                    continue
-                current_price = fallback_price
+                if df is not None and target.get("drop_reason") in INVALIDATION_REASONS:
+                    cid = f"chart_{pair_name}_{chart_counter}"
+                    ob_for_chart = _slate_zone_to_ob_shape(target)
+                    chart_b64 = generate_h1_chart(
+                        df, ob_for_chart, dp, pair_name, ist_ts_full,
+                        walls=pair_walls, is_invalidated=True
+                    )
+                    if chart_b64:
+                        invalidation_cards.append(
+                            build_invalidation_card_html(
+                                target, pair_name, dp, cid, ist_ts_full
+                            )
+                        )
+                        _attach_chart(chart_b64, cid)
+                        chart_counter += 1
+                    else:
+                        invalidation_cards.append(
+                            build_invalidation_card_html(
+                                target, pair_name, dp, None, ist_ts_full
+                            )
+                        )
+                # Else: no invalidation candidate (only bookkeeping drops),
+                # which already went into dropped_lines above. Render an
+                # inactive-pair card so the pair still gets a chart.
+                else:
+                    if df is not None:
+                        cid = f"chart_{pair_name}_{chart_counter}"
+                        chart_b64 = generate_h1_chart(
+                            df, None, dp, pair_name, ist_ts_full,
+                            walls=pair_walls, last_event=last_event
+                        )
+                        if chart_b64:
+                            inactive_pair_cards.append(
+                                build_inactive_pair_card_html(
+                                    pair_name, dp, cid, ist_ts_full,
+                                    pair_walls, last_event
+                                )
+                            )
+                            _attach_chart(chart_b64, cid)
+                            chart_counter += 1
+                        else:
+                            inactive_pair_cards.append(
+                                build_inactive_pair_card_html(
+                                    pair_name, dp, None, ist_ts_full,
+                                    pair_walls, last_event
+                                )
+                            )
 
-            sz, in_progress = select_relevant_zone_for_pair(
-                active_zones, current_price, dp
-            )
-            if sz is None:
-                continue  # defensive — active_zones non-empty so shouldn't fire
+                displayed_status = "invalidated"
+                # new_displayed_id stays None — there's no active zone to track.
 
-            # Build OB-shaped dict for narrative + chart helpers.
-            ob_for_render = {
-                "direction": sz["direction"],
-                "bos_tag": sz["bos_tag"],
-                "proximal_line": sz["proximal_line"],
-                "distal_line": sz["distal_line"],
-                "high": sz["high"], "low": sz["low"],
-                "ob_body": sz["ob_body"],
-                "median_leg_body": sz["median_leg_body"],
-                "ob_idx": sz["ob_idx"],
-                "bos_idx": sz["bos_idx"],
-                "bos_swing_price": sz["bos_swing_price"],
-                "impulse_start_idx": sz["impulse_start_idx"],
-                "impulse_start_price": sz["impulse_start_price"],
-                "fvg": sz["fvg"],
-                "touches": sz.get("touches", 0),
-                "status": sz.get("status_label", "Pristine"),
-                "h1_atr": sz.get("h1_atr", 0.0)
-            }
-
-            # Summary table row for the SELECTED zone.
-            all_zones_for_table.append({
-                "name": pair_name, "zone_id": sz["zone_id"],
-                "direction": sz["direction"],
-                "proximal": sz["proximal_line"], "distal": sz["distal_line"],
-                "bos_tag": sz["bos_tag"], "status": sz.get("status_label", "Pristine"),
-                "fvg_valid": sz["fvg"].get("exists", False),
-                "fvg_ghost": (not sz["fvg"].get("exists", False))
-                              and sz["fvg"].get("was_detected", False),
-                "fvg_mitigation": sz["fvg"].get("mitigation", "none"),
-                "first_seen_ist": sz.get("first_seen_label", "—"),
-                "is_new": sz.get("is_new_this_scan", False),
-                "is_changed": False,
-                "is_placeholder_row": False,
-                "in_progress": in_progress,
-                "walls": pair_walls
-            })
-
-            chart_b64 = None
-            cid = None
-            if df is not None:
-                cid = f"chart_{pair_name}_{chart_counter}"
-                chart_b64 = generate_h1_chart(
-                    df, ob_for_render, dp, pair_name, ist_ts_full,
-                    walls=pair_walls
-                )
-
-            narrative = generate_zone_narrative_with_atr(
-                ob_for_render, pair_name, dp, current_price, sz.get("h1_atr", 0.0)
-            )
-
-            card_html = build_active_zone_card_html(
-                sz, pair_name, dp, narrative,
-                cid if chart_b64 else None,
-                ist_ts_full,
-                current_price=current_price,
-                in_progress=in_progress
-            )
-
-            if sz.get("is_new_this_scan", False):
-                new_zone_cards.append(card_html)
             else:
-                unchanged_zone_cards.append(card_html)
+                # --- Inactive-pair path ------------------------------------
+                # No active zones, no recent drops. Pure structure-only view.
+                all_zones_for_table.append({
+                    "name": pair_name, "zone_id": "—",
+                    "direction": None,
+                    "proximal": None, "distal": None,
+                    "bos_tag": None, "status": "No active zone",
+                    "fvg_valid": False, "fvg_ghost": False,
+                    "fvg_mitigation": "none",
+                    "first_seen_ist": "—",
+                    "is_new": False, "is_changed": False,
+                    "is_placeholder_row": True,
+                    "walls": pair_walls
+                })
 
-            if chart_b64:
-                img_mime = MIMEImage(base64.b64decode(chart_b64))
-                img_mime.add_header("Content-ID", f"<{cid}>")
-                img_mime.add_header("Content-Disposition", "inline",
-                                    filename=f"{cid}.png")
-                attachments.append(img_mime)
-                chart_counter += 1
+                if df is not None:
+                    cid = f"chart_{pair_name}_{chart_counter}"
+                    chart_b64 = generate_h1_chart(
+                        df, None, dp, pair_name, ist_ts_full,
+                        walls=pair_walls, last_event=last_event
+                    )
+                    if chart_b64:
+                        inactive_pair_cards.append(
+                            build_inactive_pair_card_html(
+                                pair_name, dp, cid, ist_ts_full,
+                                pair_walls, last_event
+                            )
+                        )
+                        _attach_chart(chart_b64, cid)
+                        chart_counter += 1
+                    else:
+                        inactive_pair_cards.append(
+                            build_inactive_pair_card_html(
+                                pair_name, dp, None, ist_ts_full,
+                                pair_walls, last_event
+                            )
+                        )
 
-        if all_zones_for_table or dropped_lines:
+                displayed_status = "inactive"
+
+            # --- Zone-change notice ----------------------------------------
+            # Tell the user when the displayed zone for a pair flipped between
+            # scans. Two cases trigger:
+            #   1. Active path: closest zone changed (price moved closer to a
+            #      different OB). Old OB stays alive in slate.
+            #   2. Invalidated path: the previously displayed OB was dropped
+            #      with an invalidation reason this scan.
+            if prev_displayed_id and prev_displayed_id != new_displayed_id:
+                # Was the previous one invalidated this scan?
+                prev_zone_obj = next(
+                    (z for z in dropped_today if z.get("zone_id") == prev_displayed_id),
+                    None
+                )
+                prev_was_invalidated = (
+                    prev_zone_obj is not None
+                    and prev_zone_obj.get("drop_reason") in INVALIDATION_REASONS
+                )
+                if displayed_status == "active":
+                    zone_change_notices.append(build_zone_changed_notice_html(
+                        prev_displayed_id, new_displayed_id,
+                        'invalidated' if prev_was_invalidated else 'still_active',
+                        pair_name
+                    ))
+                elif displayed_status == "invalidated" and prev_was_invalidated:
+                    zone_change_notices.append(build_zone_changed_notice_html(
+                        prev_displayed_id, "—", 'invalidated', pair_name
+                    ))
+
+            # Persist for next scan's comparison.
+            pblock["last_displayed_zone_id"] = new_displayed_id
+
+        if (all_zones_for_table or dropped_lines or
+                invalidation_cards or inactive_pair_cards):
             summary_table = build_summary_table_html(all_zones_for_table, dp_map, pair_prices)
             try:
-                # Prepend structure banner to the email content.
+                # Prepend structure banner to the first section that has content.
+                _banner_html = (
+                    f'<div style="background:#1a1f2e;border-left:3px solid #5dade2;'
+                    f'padding:8px 12px;margin:0 0 10px 0;color:#dddddd;'
+                    f'font-family:monospace;font-size:12px;white-space:pre-wrap;">'
+                    f'{structure_banner_text}</div>'
+                )
                 if new_zone_cards:
-                    _banner_html = (
-                        f'<div style="background:#1a1f2e;border-left:3px solid #5dade2;'
-                        f'padding:8px 12px;margin:0 0 10px 0;color:#dddddd;'
-                        f'font-family:monospace;font-size:12px;white-space:pre-wrap;">'
-                        f'{structure_banner_text}</div>'
-                    )
                     new_zone_cards = [_banner_html] + new_zone_cards
                 elif unchanged_zone_cards:
-                    _banner_html = (
-                        f'<div style="background:#1a1f2e;border-left:3px solid #5dade2;'
-                        f'padding:8px 12px;margin:0 0 10px 0;color:#dddddd;'
-                        f'font-family:monospace;font-size:12px;white-space:pre-wrap;">'
-                        f'{structure_banner_text}</div>'
-                    )
                     unchanged_zone_cards = [_banner_html] + unchanged_zone_cards
+                elif invalidation_cards:
+                    invalidation_cards = [_banner_html] + invalidation_cards
+                elif inactive_pair_cards:
+                    inactive_pair_cards = [_banner_html] + inactive_pair_cards
+                # Active count for the header line — number of pairs with a
+                # live OB (not the placeholder rows).
+                active_pair_count = sum(
+                    1 for z in all_zones_for_table if not z.get("is_placeholder_row")
+                )
                 send_master_digest_v2(
                     summary_table, new_zone_cards, unchanged_zone_cards,
-                    dropped_lines, attachments,
-                    len(all_zones_for_table), ist_time_str
+                    invalidation_cards, inactive_pair_cards,
+                    zone_change_notices, dropped_lines,
+                    attachments, active_pair_count, ist_time_str
                 )
                 gate["last_email_ts"] = ist_now.isoformat()
                 save_email_gate(gate)
