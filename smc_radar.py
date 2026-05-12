@@ -215,7 +215,8 @@ def _backfill_phase1_scan_log():
 
 def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
                               slate_zones, fresh_zones, dropped_this_scan,
-                              diagnostics=None, placeholder_diagnostic=None):
+                              diagnostics=None, placeholder_diagnostic=None,
+                              ob_build_diagnostics=None):  # TEMP DIAG — remove with OB build verification
     """Construct a single per-pair scan record (snapshot of decisions).
 
     `placeholder_diagnostic`: structured per-side explanation of why a wall
@@ -270,6 +271,11 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
         'dropped_this_scan': dropped_this_scan or [],
         'diagnostics': diagnostics or [],
         'placeholder_diagnostic': placeholder_diagnostic,
+        # TEMP DIAG — remove with OB build verification.
+        # Per-event ledger of how detect_smc_radar handled each BOS/CHoCH:
+        # built or dropped (with the gate that fired). One entry per event in
+        # dealing_range.events for this pair, in chronological order.
+        'ob_build_diagnostics': ob_build_diagnostics or [],
     }
 
 
@@ -558,8 +564,25 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     h1_atr_for_leg = smc_detector.compute_atr(df)
     current_price_now = float(C[-1]) if n > 0 else 0.0
 
+    # TEMP DIAG — remove with OB build verification.
+    # Per-event ledger of how each event was handled (built / dropped + gate).
+    # Surfaced via the result dict and persisted in the Phase 1 scan log.
+    ob_build_diagnostics = []
+
+    def _diag_short(payload):
+        """Compact one-line console string for an OB-drop event."""
+        ts = (payload.get('event_ts') or '')[:16] or '?'
+        et = payload.get('event_type', '?')
+        di = payload.get('event_dir', '?')
+        gate = payload.get('drop_gate', '?')
+        det = payload.get('drop_detail', {}) or {}
+        det_str = ", ".join(f"{k}={v}" for k, v in det.items())
+        return f"  [OB-DROP] {pair_name or '?'} {di} {et} @ {ts} -> {gate} ({det_str})"
+
     if not events:
-        return {"current_price": current_price_now, "active_unmitigated_obs": []}
+        return {"current_price": current_price_now,
+                "active_unmitigated_obs": [],
+                "ob_build_diagnostics": ob_build_diagnostics}  # TEMP DIAG
 
     def _ts_for_idx(idx_val):
         if idx_val is None:
@@ -603,6 +626,23 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         if ev_type not in ('BOS', 'CHoCH'):
             continue
 
+        # TEMP DIAG — remove with OB build verification.
+        # Seed a diagnostic stub for this event; gates below fill drop_gate
+        # and drop_detail when they reject, or flip outcome to 'built' on
+        # success (post-build mitigation has its own pass below).
+        diag = {
+            'event_ts':    ev.get('candle_ts'),
+            'event_type':  ev_type,
+            'event_tier':  ev_tier,
+            'event_dir':   ev_dir,
+            'outcome':     'dropped',
+            'drop_gate':   None,
+            'drop_detail': {},
+            'ob_idx_ts':   None,
+            'ob_proximal': None,
+            'ob_distal':   None,
+        }
+
         # Update BOS chain bookkeeping.
         if ev_type == 'CHoCH' and ev_tier == 'Major':
             bos_seq_counter = 0
@@ -616,8 +656,24 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         if bos_idx is None or impulse_start_idx is None:
             # Event references a candle outside the current df window. Common
             # for older events in the ring — they have no fresh OB to build.
+            diag['drop_gate'] = 'event_outside_window'
+            diag['drop_detail'] = {
+                'candle_ts_resolved': bos_idx is not None,
+                'impulse_start_ts_resolved': impulse_start_idx is not None,
+                'df_first_ts': _ts_for_idx(0),
+                'df_last_ts':  _ts_for_idx(n - 1),
+            }
+            ob_build_diagnostics.append(diag)
+            print(_diag_short(diag))
             continue
         if impulse_start_idx >= bos_idx:
+            diag['drop_gate'] = 'degenerate_leg'
+            diag['drop_detail'] = {
+                'impulse_start_idx': int(impulse_start_idx),
+                'bos_idx': int(bos_idx),
+            }
+            ob_build_diagnostics.append(diag)
+            print(_diag_short(diag))
             continue
 
         if ev_type == 'CHoCH':
@@ -633,22 +689,47 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
 
         # Walk back from break candle through impulse leg to find OB.
         # First opposing candle that passes range cap + body minimum wins.
+        # TEMP DIAG — remove with OB build verification.
+        # Track which sub-gate rejected the leg so we can tell whether the
+        # walk found no opposing candle at all, all of them were oversized,
+        # or all of them were near-doji.
         ob_idx = -1
+        opposing_count = 0
+        oversized_count = 0
+        doji_count = 0
         for j in range(bos_idx - 1, impulse_start_idx - 1, -1):
             if (ev_dir == 'bullish' and C[j] < O[j]) or \
                (ev_dir == 'bearish' and C[j] > O[j]):
+                opposing_count += 1
                 if h1_atr_for_leg and h1_atr_for_leg > 0:
                     if (H[j] - L[j]) > smc_detector.OB_MAX_RANGE_ATR_MULT * h1_atr_for_leg:
+                        oversized_count += 1
                         continue
                 if is_valid_ob_candle(O[j], C[j], H[j], L[j]):
                     ob_idx = j
                     break
+                else:
+                    doji_count += 1
         if ob_idx == -1:
+            diag['drop_gate'] = 'no_qualifying_ob_candle'
+            diag['drop_detail'] = {
+                'leg_len': int(bos_idx - impulse_start_idx),
+                'opposing_candles_in_leg': opposing_count,
+                'oversized_rejected': oversized_count,
+                'doji_rejected': doji_count,
+                'h1_atr': float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
+            }
+            ob_build_diagnostics.append(diag)
+            print(_diag_short(diag))
             continue
 
         ob_high = float(H[ob_idx])
         ob_low  = float(L[ob_idx])
         ob_proximal = ob_high if ev_dir == 'bullish' else ob_low
+        # TEMP DIAG — stamp resolved OB candle on the diag now that we have it.
+        diag['ob_idx_ts'] = _ts_for_idx(ob_idx)
+        diag['ob_proximal'] = ob_proximal
+        diag['ob_distal'] = ob_low if ev_dir == 'bullish' else ob_high
 
         # PD-array gate. Vet rule: bullish OBs are only valid when the
         # entry side (proximal) sits in the discount half of the dealing
@@ -661,14 +742,33 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             pd_info = dealing_range.compute_pd_position(ob_proximal, walls)
             if pd_info.get('valid') and not pd_info.get('fallback_active'):
                 eq = pd_info['equilibrium']
-                if ev_dir == 'bullish' and ob_proximal > eq:
-                    continue
-                if ev_dir == 'bearish' and ob_proximal < eq:
+                if (ev_dir == 'bullish' and ob_proximal > eq) or \
+                   (ev_dir == 'bearish' and ob_proximal < eq):
+                    diag['drop_gate'] = 'pd_array_gate'
+                    diag['drop_detail'] = {
+                        'ob_proximal': ob_proximal,
+                        'equilibrium': float(eq),
+                        'ceiling': walls.get('ceiling_price'),
+                        'floor':   walls.get('floor_price'),
+                        'wrong_half': 'premium' if ev_dir == 'bullish' else 'discount',
+                    }
+                    ob_build_diagnostics.append(diag)
+                    print(_diag_short(diag))
                     continue
 
         # Proximity gate.
         if h1_atr_for_leg and h1_atr_for_leg > 0:
             if abs(current_price_now - ob_proximal) > 4.0 * h1_atr_for_leg:
+                diag['drop_gate'] = 'proximity_gate'
+                diag['drop_detail'] = {
+                    'ob_proximal': ob_proximal,
+                    'current_price': current_price_now,
+                    'h1_atr': float(h1_atr_for_leg),
+                    'distance_atr': abs(current_price_now - ob_proximal) / h1_atr_for_leg,
+                    'limit_atr': 4.0,
+                }
+                ob_build_diagnostics.append(diag)
+                print(_diag_short(diag))
                 continue
 
         # FVG detection — H1 internal gap, anchored to the displacement leg.
@@ -748,8 +848,16 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'ob_body':            abs(C[ob_idx] - O[ob_idx]),
             'h1_atr':             float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
             'fvg':                fvg_dict,
-            'sweep_observed':     sweep_obs
+            'sweep_observed':     sweep_obs,
+            # TEMP DIAG — back-reference so post-build mitigation can amend
+            # the right diag entry. Stripped before returning.
+            '_diag_ref':          diag,
         })
+        # TEMP DIAG — survived all construction gates; mark built. The
+        # post-build mitigation pass below may flip this back to 'dropped'
+        # with drop_gate='post_build_mitigation'.
+        diag['outcome'] = 'built'
+        ob_build_diagnostics.append(diag)
 # Mitigation + touch tracking. Sets 'touches' and 'status' on each OB.
     # Must run BEFORE dedupe so the touch-state test in dedupe is meaningful.
     # Mitigation rule: see is_ob_mitigated_phase1 (close-based, strict, no ATR).
@@ -763,6 +871,21 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             ob['touches'] = touches
             ob['status']  = 'Pristine' if touches == 0 else f'Tested ({touches}x)'
             tracked_obs.append(ob)
+        else:
+            # TEMP DIAG — flip the previously-built diag entry to dropped.
+            _d = ob.get('_diag_ref')
+            if _d is not None:
+                _d['outcome'] = 'dropped'
+                _d['drop_gate'] = 'post_build_mitigation'
+                _d['drop_detail'] = {
+                    'reason': _reason,
+                    'touches': int(touches),
+                    'proximal': ob['proximal_line'],
+                    'distal':   ob['distal_line'],
+                    'scanned_from_idx': int(ob['bos_idx'] + 1),
+                    'scanned_to_idx':   int(n),
+                }
+                print(_diag_short(_d))
 
     # Latest OB per bias; same-leg fallback only.
     latest, filtered = {}, []
@@ -849,8 +972,13 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     # Strip the private dedupe hint before returning.
     for o in filtered:
         o.pop('_dedupe_thresh', None)
+        o.pop('_diag_ref', None)  # TEMP DIAG — internal back-reference
 
-    return {"current_price": float(C[-1]), "active_unmitigated_obs": filtered}
+    return {
+        "current_price": float(C[-1]),
+        "active_unmitigated_obs": filtered,
+        "ob_build_diagnostics": ob_build_diagnostics,  # TEMP DIAG
+    }
 
 # ---------------------------------------------------------------------------
 # CHART GENERATION
@@ -2757,6 +2885,8 @@ def run_radar():
                                           walls=new_walls, pair_name=name)
         current_price = result["current_price"]
         fresh_zones   = result["active_unmitigated_obs"]
+        # TEMP DIAG — remove with OB build verification.
+        ob_build_diag = result.get("ob_build_diagnostics", [])
         h1_atr        = smc_detector.compute_atr(df) or 0.0
 
         pair_atrs[name] = h1_atr
@@ -2816,7 +2946,8 @@ def run_radar():
         phase1_scan_records.append(_build_phase1_scan_record(
             name, ist_now, current_price, new_walls,
             slate_zones, fresh_zones, drops_this_pair,
-            placeholder_diagnostic=placeholder_diag
+            placeholder_diagnostic=placeholder_diag,
+            ob_build_diagnostics=ob_build_diag,  # TEMP DIAG
         ))
 
         # Audit log row per active zone post-reconcile.
