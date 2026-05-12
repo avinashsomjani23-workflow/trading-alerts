@@ -13,7 +13,7 @@
     "last_event_ts": "2026-05-07T19:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T19:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-12T06:00:00+00:00",
+    "last_scanned_ts": "2026-05-12T07:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -107,7 +107,7 @@
     "last_event_ts": "2026-05-07T16:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T16:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-12T06:00:00+00:00",
+    "last_scanned_ts": "2026-05-12T07:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -186,7 +186,7 @@
     "last_event_ts": "2026-05-07T19:00:00+00:00",
     "last_event_idx_iso": "2026-05-07T19:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-12T06:00:00+00:00",
+    "last_scanned_ts": "2026-05-12T07:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -340,7 +340,7 @@
     "last_event_ts": "2026-05-12T00:00:00+00:00",
     "last_event_idx_iso": "2026-05-12T00:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-12T06:00:00+00:00",
+    "last_scanned_ts": "2026-05-12T07:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -449,7 +449,7 @@
     "last_event_ts": "2026-05-11T16:00:00+00:00",
     "last_event_idx_iso": "2026-05-11T16:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-12T06:00:00+00:00",
+    "last_scanned_ts": "2026-05-12T07:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -588,7 +588,7 @@
     "last_event_ts": "2026-05-11T23:00:00+00:00",
     "last_event_idx_iso": "2026-05-11T23:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-12T06:00:00+00:00",
+    "last_scanned_ts": "2026-05-12T07:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
