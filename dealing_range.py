@@ -440,25 +440,45 @@ def _empty_state() -> Dict[str, Any]:
     }
 
 
-def _resolve_placeholder(side: str, df, leg_start_idx: int, leg_end_idx: int,
-                         all_swings: List[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any]], bool]:
+def _resolve_placeholder(side: str, df, leg_start_idx: int, leg_end_idx: int
+                         ) -> Tuple[Optional[Dict[str, Any]], bool]:
     """
     Try to resolve a placeholder wall on `side` ('ceiling' or 'floor') by
     finding the highest swing high (for ceiling) or lowest swing low (for
     floor) inside [leg_start_idx, leg_end_idx]. Returns (swing_dict_or_None,
     is_placeholder).
 
-    If no confirmed swing is present in the range, returns (rolling_extreme,
+    Swings are detected on the LEG SLICE only — candles outside the leg
+    (notably the BOS candle that sits at leg_start_idx - 0) are not part of
+    the lookback=3 neighbour window. Reason: a BOS / CHoCH break candle is
+    not a structural pivot. Including it as a neighbour blocks every
+    leg-internal swing whose high is below the break candle, which is the
+    normal post-BOS state.
+
+    If no confirmed leg-internal swing is present, returns (rolling_extreme,
     True) where rolling_extreme is a synthetic dict with the highest H or
-    lowest L in the range (visualization only).
+    lowest L in the leg (visualization only — wall stays placeholder).
     """
     if df is None or leg_start_idx >= leg_end_idx:
         return None, True
 
+    # Leg slice [leg_start_idx + 1 ... leg_end_idx] inclusive.
+    # We pass leg_start_idx+1 as the caller's `leg_start_idx`, so the slice
+    # is df.iloc[leg_start_idx : leg_end_idx + 1].
+    slice_lo = leg_start_idx
+    slice_hi_excl = leg_end_idx + 1
+    leg_df = df.iloc[slice_lo:slice_hi_excl]
+
     target_type = 'high' if side == 'ceiling' else 'low'
-    candidates = [s for s in all_swings
-                  if s['type'] == target_type
-                  and leg_start_idx <= s['idx'] <= leg_end_idx]
+    leg_swings = detect_swings(leg_df, lookback=SWING_LOOKBACK)
+    # Translate slice-local idx back to absolute df idx.
+    candidates = [
+        {'type': s['type'],
+         'idx': slice_lo + int(s['idx']),
+         'price': float(s['price']),
+         'ts': _ts_iso(df, slice_lo + int(s['idx']))}
+        for s in leg_swings if s['type'] == target_type
+    ]
     if candidates:
         if side == 'ceiling':
             best = max(candidates, key=lambda s: s['price'])
@@ -466,7 +486,7 @@ def _resolve_placeholder(side: str, df, leg_start_idx: int, leg_end_idx: int,
             best = min(candidates, key=lambda s: s['price'])
         return {'idx': best['idx'], 'price': best['price'], 'ts': best['ts']}, False
 
-    # No confirmed swing yet — produce rolling extreme for visualization.
+    # No confirmed leg-internal swing yet — produce rolling extreme.
     H = df['High'].values.astype(float)
     L = df['Low'].values.astype(float)
     if side == 'ceiling':
@@ -596,17 +616,15 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
     if floor["ts"]:
         floor["idx"] = _idx_from_ts(floor["ts"])
 
-    candidates_for_leg_start = []
-    if ceiling["idx"] is not None:
-        candidates_for_leg_start.append(ceiling["idx"])
-    if floor["idx"] is not None:
-        candidates_for_leg_start.append(floor["idx"])
+    # Leg start = the candle of the most recent BOS / Major CHoCH-at-wall.
+    # Walls are NOT leg boundaries — a placeholder wall trails forward each
+    # scan, so including it here would drag leg_start with it and shrink the
+    # leg over time. Confirmed walls sit inside the leg, not at its edge.
+    # No event yet (cold start) -> leg starts at candle 0.
     if last_event_ts:
         ev_idx = _idx_from_ts(last_event_ts)
         if ev_idx is not None:
-            candidates_for_leg_start.append(ev_idx)
-    if candidates_for_leg_start:
-        leg_start_idx = max(candidates_for_leg_start)
+            leg_start_idx = ev_idx
 
     if last_event_idx_iso:
         last_event_local_idx = _idx_from_ts(last_event_idx_iso)
@@ -617,7 +635,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         if side == 'ceiling':
             if not ceiling["is_placeholder"]:
                 return
-            promoted, is_ph = _resolve_placeholder('ceiling', df, leg_start_idx + 1, current_i, swings_lb3)
+            promoted, is_ph = _resolve_placeholder('ceiling', df, leg_start_idx + 1, current_i)
             if promoted is not None:
                 ceiling["price"] = promoted["price"]
                 ceiling["ts"]    = promoted["ts"]
@@ -626,7 +644,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         else:
             if not floor["is_placeholder"]:
                 return
-            promoted, is_ph = _resolve_placeholder('floor', df, leg_start_idx + 1, current_i, swings_lb3)
+            promoted, is_ph = _resolve_placeholder('floor', df, leg_start_idx + 1, current_i)
             if promoted is not None:
                 floor["price"] = promoted["price"]
                 floor["ts"]    = promoted["ts"]
@@ -982,41 +1000,48 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             }
         current_i = n - 1
         lo, hi = leg_start_idx + 1, current_i
+        leg_len = max(0, hi - lo + 1)
         out: Dict[str, Any] = {
             "side": side,
             "is_placeholder": True,
             "leg_start_idx": int(leg_start_idx),
             "leg_start_ts":  _ts_iso(df, leg_start_idx) if 0 <= leg_start_idx < n else None,
+            "leg_slice_len": int(leg_len),
             "current_idx":   int(current_i),
             "current_ts":    _ts_iso(df, current_i),
             "wall_price":    float(wall["price"]) if wall["price"] is not None else None,
             "wall_ts":       wall["ts"],
+            "last_event_ts": last_event_ts,
         }
         if lo > hi:
             out["reason"] = "no_interior_window"
             return out
 
+        # Mirror the resolver: detect swings on the leg slice, not full df.
+        # leg_start_idx+1 == lo, leg_end_idx == hi.
+        slice_lo, slice_hi_excl = lo, hi + 1
+        leg_df = df.iloc[slice_lo:slice_hi_excl]
         target_type = 'high' if side == 'ceiling' else 'low'
-        lb3_in_window = [s for s in swings_lb3
-                         if s['type'] == target_type and lo <= s['idx'] <= hi]
-        out["lb3_swings_in_window"] = len(lb3_in_window)
+        leg_swings = detect_swings(leg_df, lookback=SWING_LOOKBACK)
+        leg_swings_typed = [s for s in leg_swings if s['type'] == target_type]
+        out["leg_lb3_swings"] = len(leg_swings_typed)
 
-        if lb3_in_window:
-            # Should have been promoted — record the candidate the resolver
-            # WOULD have picked so we can compare with what's on state.
+        if leg_swings_typed:
+            # Should have been promoted by the resolver — record what it would
+            # have picked. Reaching this branch means a bug.
             if side == 'ceiling':
-                best = max(lb3_in_window, key=lambda s: s['price'])
+                best = max(leg_swings_typed, key=lambda s: s['price'])
             else:
-                best = min(lb3_in_window, key=lambda s: s['price'])
+                best = min(leg_swings_typed, key=lambda s: s['price'])
+            abs_idx = slice_lo + int(best['idx'])
             out["reason"] = "swings_present_but_not_promoted"
-            out["candidate_idx"]   = int(best['idx'])
-            out["candidate_ts"]    = best['ts']
+            out["candidate_idx"]   = int(abs_idx)
+            out["candidate_ts"]    = _ts_iso(df, abs_idx)
             out["candidate_price"] = float(best['price'])
             return out
 
-        # No lb3 swing exists in window. Find the candle that holds the
-        # rolling extreme and identify what neighbour blocks it from being
-        # a confirmed swing.
+        # No leg-internal lb3 swing. Identify the rolling extreme inside the
+        # leg and why it isn't a swing within the leg slice.
         H_arr = df['High'].values.astype(float)
         L_arr = df['Low'].values.astype(float)
         arr = H_arr if side == 'ceiling' else L_arr
@@ -1030,20 +1055,27 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         out["rolling_extreme_price"] = ext_price
         out["candles_after_extreme"] = int(current_i - ext_idx)
 
-        # Right-edge check: does the extreme even have SWING_LOOKBACK candles
-        # to its right? If not, it cannot be confirmed yet regardless of values.
-        right_edge_needed = ext_idx + SWING_LOOKBACK
-        if right_edge_needed >= n:
-            out["reason"] = "right_edge_insufficient"
+        # Leg-relative position of the extreme.
+        ext_slice_idx = ext_idx - slice_lo
+        slice_len = slice_hi_excl - slice_lo
+
+        # Need SWING_LOOKBACK candles on each side WITHIN the leg slice.
+        if ext_slice_idx < SWING_LOOKBACK:
+            out["reason"] = "left_edge_insufficient_in_leg"
+            out["left_candles_needed"]  = int(SWING_LOOKBACK)
+            out["left_candles_present"] = int(ext_slice_idx)
+            return out
+        if ext_slice_idx + SWING_LOOKBACK >= slice_len:
+            out["reason"] = "right_edge_insufficient_in_leg"
             out["right_candles_needed"]  = int(SWING_LOOKBACK)
-            out["right_candles_present"] = int(n - 1 - ext_idx)
+            out["right_candles_present"] = int(slice_len - 1 - ext_slice_idx)
             return out
 
-        # Left/right neighbour windows used by detect_swings.
-        l_lo = max(0, ext_idx - SWING_LOOKBACK)
+        # Neighbour windows inside the leg slice only.
+        l_lo = ext_idx - SWING_LOOKBACK
         l_hi = ext_idx                       # exclusive
         r_lo = ext_idx + 1
-        r_hi = min(n, ext_idx + SWING_LOOKBACK + 1)  # exclusive
+        r_hi = ext_idx + SWING_LOOKBACK + 1  # exclusive
 
         blocker_side = None
         blocker_idx  = None
@@ -1051,41 +1083,29 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         if side == 'ceiling':
             for j in range(l_lo, l_hi):
                 if H_arr[j] >= ext_price:
-                    blocker_side = "left"
-                    blocker_idx  = j
-                    blocker_val  = float(H_arr[j])
-                    break
+                    blocker_side = "left"; blocker_idx = j; blocker_val = float(H_arr[j]); break
             if blocker_idx is None:
                 for j in range(r_lo, r_hi):
                     if H_arr[j] >= ext_price:
-                        blocker_side = "right"
-                        blocker_idx  = j
-                        blocker_val  = float(H_arr[j])
-                        break
+                        blocker_side = "right"; blocker_idx = j; blocker_val = float(H_arr[j]); break
         else:
             for j in range(l_lo, l_hi):
                 if L_arr[j] <= ext_price:
-                    blocker_side = "left"
-                    blocker_idx  = j
-                    blocker_val  = float(L_arr[j])
-                    break
+                    blocker_side = "left"; blocker_idx = j; blocker_val = float(L_arr[j]); break
             if blocker_idx is None:
                 for j in range(r_lo, r_hi):
                     if L_arr[j] <= ext_price:
-                        blocker_side = "right"
-                        blocker_idx  = j
-                        blocker_val  = float(L_arr[j])
-                        break
+                        blocker_side = "right"; blocker_idx = j; blocker_val = float(L_arr[j]); break
 
         if blocker_idx is not None:
-            out["reason"] = "blocked_by_neighbour"
+            out["reason"] = "blocked_by_neighbour_in_leg"
             out["blocker_side"]  = blocker_side
             out["blocker_idx"]   = int(blocker_idx)
             out["blocker_ts"]    = _ts_iso(df, blocker_idx)
             out["blocker_value"] = blocker_val
         else:
-            # No neighbour violates the rule — extreme should be a swing.
-            # Means detect_swings has a logic gap (shouldn't happen).
+            # Extreme has clean neighbours inside the leg. Shouldn't happen —
+            # detect_swings on the leg slice would have returned it.
             out["reason"] = "rule_satisfied_but_no_swing_detected"
 
         return out
