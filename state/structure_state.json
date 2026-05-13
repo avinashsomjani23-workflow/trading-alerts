@@ -13,7 +13,7 @@
     "last_event_ts": "2026-05-13T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-13T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-13T14:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -137,7 +137,7 @@
     "last_event_ts": "2026-05-13T09:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T09:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-13T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-13T14:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -261,7 +261,7 @@
     "last_event_ts": "2026-05-13T08:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T08:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-13T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-13T14:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -343,19 +343,19 @@
   },
   "USDCHF": {
     "trend": "bullish",
-    "ceiling_price": 0.7823200225830078,
-    "ceiling_ts": "2026-05-12T15:00:00+00:00",
-    "ceiling_is_placeholder": false,
-    "floor_price": 0.7764300107955933,
-    "floor_ts": "2026-05-11T21:00:00+00:00",
+    "ceiling_price": 0.7827399969100952,
+    "ceiling_ts": "2026-05-13T14:00:00+00:00",
+    "ceiling_is_placeholder": true,
+    "floor_price": 0.7787500023841858,
+    "floor_ts": "2026-05-12T05:00:00+00:00",
     "floor_is_placeholder": false,
-    "last_event_type": "CHoCH",
+    "last_event_type": "BOS",
     "last_event_tier": "Major",
     "last_event_direction": "bullish",
-    "last_event_ts": "2026-05-12T00:00:00+00:00",
-    "last_event_idx_iso": "2026-05-12T00:00:00+00:00",
+    "last_event_ts": "2026-05-13T14:00:00+00:00",
+    "last_event_idx_iso": "2026-05-13T14:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-13T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-13T14:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -462,6 +462,21 @@
         "impulse_start_ts": "2026-05-11T21:00:00+00:00",
         "impulse_start_price": 0.7764300107955933,
         "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-05-13T14:00:00+00:00",
+        "broken_swing_price": 0.7823200225830078,
+        "broken_swing_ts": "2026-05-12T15:00:00+00:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.4883390511834217,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-13T11:00:00+00:00",
+        "impulse_start_price": 0.7811300158500671,
+        "trend_after": "bullish"
       }
     ]
   },
@@ -479,7 +494,7 @@
     "last_event_ts": "2026-05-13T08:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T08:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-13T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-13T14:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -588,7 +603,7 @@
     "last_event_ts": "2026-05-12T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-12T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-13T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-13T14:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
