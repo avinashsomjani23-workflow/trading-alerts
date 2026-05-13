@@ -428,7 +428,7 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         # Palette:
         #   BOS              -> yellow #f1c40f
         #   Major CHoCH      -> pink   #e91e63
-        #   Minor CHoCH      -> purple #9c27b0  (lookback=2 weakening flag)
+        #   Minor CHoCH      -> purple #9c27b0  (internal lb-3 break after wall touch — weakening flag)
         bos_price = float(ob.get('bos_swing_price', 0))
         bos_tag = ob.get('bos_tag', 'BOS')
         bos_tier = ob.get('bos_tier', 'Major')
@@ -719,7 +719,7 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
         # Palette:
         #   BOS              -> yellow #f1c40f
         #   Major CHoCH      -> pink   #e91e63
-        #   Minor CHoCH      -> purple #9c27b0  (lookback=2 weakening flag)
+        #   Minor CHoCH      -> purple #9c27b0  (internal lb-3 break after wall touch — weakening flag)
         bos_price = float(ob.get('bos_swing_price', 0))
         bos_tag = ob.get('bos_tag', 'BOS')
         bos_tier = ob.get('bos_tier', 'Major')

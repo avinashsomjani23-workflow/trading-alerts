@@ -33,7 +33,7 @@ Calibration questions (test X vs Y on historical data) live in BACKLOG.md, not h
 - **Open question (BACKLOG):** should BOS-OBs in late-trend impulse legs be treated more leniently? Currently they get the same gate as CHoCH-OBs.
 
 ### OB tier labelling (BOS / Major CHoCH / Minor CHoCH)
-- **Reasoning:** BOS detection is single-tier (always Major). CHoCH detection is the only event with a real Major / Minor split (lookback=3 swing → Major, lookback=2 internal → Minor). The OB inherits this from its source event.
+- **Reasoning:** BOS detection is single-tier (always Major). CHoCH detection has a Major / Minor split: Major = opposite-wall break (trend flips); Minor = internal lookback=3 break after a wall touch within MINOR_CHOCH_WALL_TOUCH_ATR * ATR (trend weakening, does not flip). Both tiers use the same lookback=3 swing pool — geometry distinguishes them. The OB inherits this from its source event.
 - **Where:** `smc_radar._event_label` helper. Used by Phase 1 chart title, Gemini prompts, and fallback narratives. Existing `_phase1_chart_legend_html` already applied the same labelling for chart legends.
 - **Why it matters:** downstream display / scoring can distinguish a Minor-CHoCH OB (early-warning, trend not yet flipped) from a Major-CHoCH OB (genuine reversal anchor) without re-deriving from `bos_tag` + `bos_tier`.
 
@@ -58,15 +58,15 @@ Calibration questions (test X vs Y on historical data) live in BACKLOG.md, not h
 - Distinguishes range-wall breaks from internal-swing breaks (LuxAlgo's tiers fire structural events on internal too, just labeled). ✓
 - Chop flag: CHoCH within 5 candles of prior event tagged for review. LuxAlgo has none. ✓
 
-### CHoCH — handling of micro-swings (the lookback=2 scenario)
+### CHoCH — handling of internal swings (the micro-swing scenario)
 
 **LuxAlgo:** if a small swing (e.g. 130 in the example) qualifies the internal tier (length=5), internal CHoCH fires when it's broken. Major tier stays silent until a major wall breaks. Two tiers running in parallel handle this case.
 
 **joshyattridge:** single lookback (50 default). The 130 swing does not qualify. They miss the break entirely.
 
-**Ours (planned):** lookback=3 walls + lookback=2 micro-swings allowed only after price reverses from a wall and breaks the micro-swing. More nuanced than either repo.
+**Ours:** single lookback=3 pool. Major CHoCH = opposite-wall break (trend flips). Minor CHoCH = internal lb-3 break gated by a wall-touch precondition (price tested the trend-direction wall within MINOR_CHOCH_WALL_TOUCH_ATR * ATR in the current leg); informational only — trend does not flip, walls do not move. Mid-range lb-3 breaks without a wall touch are noise and produce no event.
 
-**Status:** intended methodology, **not yet implemented**. Planned for future build.
+**Status:** implemented in `dealing_range._pick_choch_pivot`.
 
 ### Sweep — LuxAlgo (EQH/EQL)
 - Pivot high/low with small lookback (3 each side).

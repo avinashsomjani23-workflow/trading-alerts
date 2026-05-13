@@ -477,8 +477,12 @@ def is_valid_ob_candle(open_p, close_p, high_p, low_p):
 
 def _event_label(bos_tag, bos_tier):
     # Single source of truth for the human-readable structural-event label.
-    # BOS is single-tier (no Major/Minor split); CHoCH carries the tier.
+    # Both BOS and CHoCH carry a Major/Minor tier. Minor BOS = continuation
+    # break of an internal lb-3 swing inside the active leg (walls don't move,
+    # trend doesn't flip); Major BOS = trend-direction wall break.
     if bos_tag == 'BOS':
+        if bos_tier == 'Minor':
+            return 'Minor BOS'
         return 'BOS'
     if bos_tier == 'Minor':
         return 'Minor CHoCH'
@@ -665,12 +669,14 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'ob_distal':   None,
         }
 
-        # Update BOS chain bookkeeping.
+        # Update BOS chain bookkeeping. Only Major BOS contributes to the
+        # chain count — Minor BOS is a continuation sub-event, not a fresh
+        # leg, so it must not inflate the count Phase 2 uses to score caution.
         if ev_type == 'CHoCH' and ev_tier == 'Major':
             bos_seq_counter = 0
-        elif ev_type == 'BOS':
+        elif ev_type == 'BOS' and ev_tier == 'Major':
             bos_seq_counter += 1
-        # Minor CHoCH: do not touch the counter.
+        # Minor BOS, Minor CHoCH: do not touch the counter.
 
         # Locate the break candle and impulse-leg start in CURRENT df.
         bos_idx = _idx_from_ts(ev.get('candle_ts'))
@@ -1046,7 +1052,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
       - DR ceiling/floor (always drawn): solid dotted if confirmed,
         dashed-gap if placeholder; faded color
       - Equilibrium line (only when both DR walls on-screen)
-      - Swing markers: filled triangle for lookback-3, hollow for lookback-2,
+      - Swing markers: filled triangle for lookback-3 structural swings,
         muted yellow, placed outside the candle
       - Adaptive figure height when DR is wide vs candle range
     """
@@ -1280,7 +1286,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
             _btag = ob.get('bos_tag', 'BOS')
             _btier = ob.get('bos_tier', 'Major')
             if _btag == 'BOS':
-                bos_color = '#00bcd4'
+                bos_color = '#00897b' if _btier == 'Minor' else '#00bcd4'
             elif _btier == 'Minor':
                 bos_color = '#9c27b0'
             else:
@@ -1320,7 +1326,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
             le_ts   = last_event.get('ts')
             le_bws  = last_event.get('broken_swing_price')
             if le_type == 'BOS':
-                ev_color = '#00bcd4'
+                ev_color = '#00897b' if le_tier == 'Minor' else '#00bcd4'
             elif le_tier == 'Minor':
                 ev_color = '#9c27b0'
             else:
@@ -1362,7 +1368,10 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                         candles_ago = max(0, n_full - 1 - le_idx)
                     ax.axhline(y=bws_f, color=ev_color, linewidth=0.8,
                                linestyle='--', alpha=0.55, zorder=2)
-                    ev_name = "BOS" if le_type == 'BOS' else f"{le_tier} CHoCH"
+                    if le_type == 'BOS':
+                        ev_name = "Minor BOS" if le_tier == 'Minor' else "BOS"
+                    else:
+                        ev_name = f"{le_tier} CHoCH"
                     dir_part = f" {le_dir}" if le_dir else ""
                     age_part = (f" · {candles_ago}c ago"
                                 if candles_ago is not None else "")
@@ -1401,18 +1410,12 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
 
         # --- Swing triangles ---
         # lookback-3 filled triangles render across the visible window
-        # (structural swings; drive walls / BOS / Major CHoCH).
-        # lookback-2 hollow triangles render ONLY inside the OB impulse leg
-        # [impulse_start_idx, ob_idx] — that's the slice where they drive
-        # Phase 1 sweep observation. Outside the leg they're decision-
-        # irrelevant noise.
+        # (structural swings; drive walls / BOS / both CHoCH tiers).
         SWING_COLOR = '#d4a017'
         try:
             swings_lb3 = smc_detector.get_swing_points(full_df, lookback=3)
-            swings_lb2 = smc_detector.get_swing_points(full_df, lookback=2)
         except Exception:
-            swings_lb3, swings_lb2 = [], []
-        lb3_keys = {(s['idx'], s['type']) for s in swings_lb3}
+            swings_lb3 = []
         # Visual offset based on chart vertical span (not pixels).
         marker_offset = (y_max - y_min) * 0.012
         for s in swings_lb3:
@@ -1427,32 +1430,6 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                 ax.scatter([xi], [s['price'] - marker_offset], marker='^',
                            s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
                            linewidths=1.0, zorder=6)
-        # lb2 scoped to the OB impulse leg only.
-        impulse_start_abs = ob.get('impulse_start_idx') if has_ob else None
-        ob_idx_abs = ob.get('ob_idx') if has_ob else None
-        leg_valid = (
-            impulse_start_abs is not None
-            and ob_idx_abs is not None
-            and impulse_start_abs <= ob_idx_abs
-        )
-        if leg_valid:
-            for s in swings_lb2:
-                if (s['idx'], s['type']) in lb3_keys:
-                    continue  # already drawn as filled lb3
-                # Scope: idx must lie inside the impulse leg.
-                if not (impulse_start_abs <= s['idx'] <= ob_idx_abs):
-                    continue
-                xi = s['idx'] - window_start
-                if not (0 <= xi < n_plot):
-                    continue
-                if s['type'] == 'high':
-                    ax.scatter([xi], [s['price'] + marker_offset], marker='v',
-                               s=36, facecolors='none', edgecolors=SWING_COLOR,
-                               linewidths=1.2, zorder=6)
-                else:
-                    ax.scatter([xi], [s['price'] - marker_offset], marker='^',
-                               s=36, facecolors='none', edgecolors=SWING_COLOR,
-                               linewidths=1.2, zorder=6)
 
         # --- Sweep candle marker (Phase 1 sweep observation) ---
         # Highlights the swept candle's wick in a distinct color, places a
@@ -1828,7 +1805,10 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
         # --- Event chip (kept per user requirement: structure type stays).
         _tier = z.get('bos_tier', 'Major')
         if z['bos_tag'] == 'BOS':
-            ev_color, ev_text = '#00bcd4', 'BOS'
+            if _tier == 'Minor':
+                ev_color, ev_text = '#00897b', 'mBOS'
+            else:
+                ev_color, ev_text = '#00bcd4', 'BOS'
         elif _tier == 'Minor':
             ev_color, ev_text = '#9c27b0', 'mCH'
         else:
@@ -1923,12 +1903,13 @@ def _phase1_chart_legend_html(bos_tag="BOS", bos_tier="Major"):
         ('#2ecc71', 'FVG pristine (displacement)'),
         ('#f1c40f', 'FVG partial (proximal touched)'),
         ('#888888', 'FVG mitigated (ghost) / Invalidated zone'),
-        ('#00bcd4', 'BOS break candle / level'),
+        ('#00bcd4', 'Major BOS break candle / level (wall break)'),
+        ('#00897b', 'Minor BOS break candle / level (internal continuation)'),
         ('#ff9800', 'Major CHoCH break candle / level'),
         ('#9c27b0', 'Minor CHoCH break candle / level'),
         ('#5dade2', 'Dealing range walls (dotted=anchored, dashed=placeholder; far walls render as edge labels)'),
         ('#85c1e9', 'Equilibrium (50%)'),
-        ('#d4a017', 'Swing: ▲▼ filled = lookback-3 (visible window); △▽ hollow = lookback-2 (OB impulse leg only)'),
+        ('#d4a017', 'Swing: ▲▼ lookback-3 (structural swings — walls / BOS / CHoCH)'),
         ('#00e5ff', 'Sweep candle (★ at wick tip, line at swept level) — Phase 1 sweep observation'),
         ('#ffffff', 'Current price'),
     ]
@@ -2375,7 +2356,10 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
             ts_short = le_ts[:10]
         except Exception:
             ts_short = str(le_ts)
-        ev_name = "BOS" if le_type == 'BOS' else f"{le_tier} CHoCH"
+        if le_type == 'BOS':
+            ev_name = "Minor BOS" if le_tier == 'Minor' else "BOS"
+        else:
+            ev_name = f"{le_tier} CHoCH"
         le_label = f"{ev_name} {le_dir} on {ts_short}"
     caption = (
         f"No active OB. Last structure event: {le_label}. "

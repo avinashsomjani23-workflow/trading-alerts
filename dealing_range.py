@@ -12,29 +12,30 @@ Two structural events are detected:
   - CHoCH (Change of Character) — close past a confirmed swing AGAINST trend,
                                     with a premium/discount-zone reversal.
 
-CHoCH has two tiers:
-  - Major: broken pivot is a lookback=3 swing (or the opposite wall when no
-    internal lookback=3 swing exists). Flips trend.
-  - Minor: broken pivot is a lookback=2 swing inside the trend. Does NOT flip
-    trend; does NOT move walls. Informational weakening flag only.
+CHoCH has two tiers — both use lookback=3 swings; geometry distinguishes them:
+  - Major: close past the OPPOSITE confirmed wall. The dealing range itself
+    is broken; trend flips. No precondition beyond displacement + premium/
+    discount gate.
+  - Minor: close past the most recent unbroken lookback=3 swing of the
+    relevant type INSIDE the current leg, AFTER price has tested the
+    trend-direction wall within MINOR_CHOCH_WALL_TOUCH_ATR * ATR somewhere
+    in the same leg. Informational weakening flag; does NOT flip trend;
+    does NOT move walls.
+
+  Major has precedence: a candle that qualifies for both fires Major.
 
 Wall update rule (LOCKED): walls move ONLY when a wall is broken.
   - BOS: trend-direction wall trails to break-candle extreme (tentative
     until promoted); opposite wall trails to deepest pullback inside the
     just-completed leg.
-  - Major CHoCH AT WALL (no internal pivot existed; close past opposite wall):
-    broken wall → tentative; opposite wall stays put (it's the prior trend
-    anchor = new trend's starting extreme). NO history search.
+  - Major CHoCH AT WALL (close past opposite confirmed wall): broken wall
+    → tentative; opposite wall stays put (it's the prior trend anchor =
+    new trend's starting extreme). NO history search.
     EXCEPTION — chop CHoCH-at-wall: if chop=True on this event, the BOS
     that set the opposite wall just before was a fakeout. The opposite
     wall also resets to tentative at the break-candle extreme. Both walls
     re-anchor inside the new leg via _try_promote_placeholder /
     _refresh_tentative.
-  - Major CHoCH on internal HL/LH: trend flips. The trend-direction wall
-    in the NEW trend (the ceiling after a bullish CHoCH; the floor after a
-    bearish CHoCH) resets to a placeholder at the CHoCH candle's matching
-    extreme so the wall reflects the new leg, not the prior trend's stale
-    extreme. Opposite wall is unchanged (it was the broken pivot's side).
   - Minor CHoCH: walls do NOT move; trend does NOT flip.
 
 Wall-stale rule: when the non-trend-side wall is confirmed and price closes
@@ -63,11 +64,13 @@ Phase 2 reads `state/structure_state.json` and consumes:
 Phase 2 NEVER writes state. One writer (Phase 1), many readers.
 
 Design decisions (locked):
-  - SWING_LOOKBACK = 3 for walls, BOS, Major CHoCH.
-  - MINOR_SWING_LOOKBACK = 2 for Minor CHoCH detection only.
+  - SWING_LOOKBACK = 3 — single swing pool, drives walls, BOS, and both
+    CHoCH tiers. No separate lb-2 pool.
   - BOS displacement >= 0.40 × H1 ATR past broken wall.
   - CHoCH displacement >= 0.60 × H1 ATR past broken pivot (Major and Minor
     use the same threshold).
+  - Minor CHoCH wall-touch precondition: 0.35 × H1 ATR proximity to the
+    trend-direction wall, anywhere in the current leg.
   - Premium / discount threshold = 25% of dealing range.
   - Tentative (placeholder) walls give geometry only — events do NOT fire
     on placeholder-wall break.
@@ -75,6 +78,9 @@ Design decisions (locked):
     (BOS sequence count; zone invalidation).
   - Chop flag: CHoCH within 5 candles of prior event marks last_event_chop.
   - Atomic state writes (temp + rename).
+  - Event detection order per candle: BOS first, then CHoCH; stale-wall
+    relabel runs only when no event fired (prevents stale from swallowing
+    a Major CHoCH whose displacement crossed both thresholds).
 """
 
 import json
@@ -90,14 +96,13 @@ except Exception:
 
 # --- Tunables (locked) -------------------------------------------------------
 
-# Two parallel swing pools.
-#   SWING_LOOKBACK (3) is the "Major" / wall-grade swing. Used for walls,
-#   BOS detection, and Major CHoCH detection.
-#   MINOR_SWING_LOOKBACK (2) is used ONLY for Minor CHoCH detection. A Minor
-#   CHoCH break is informational (weakening flag) — it does NOT flip trend
-#   and does NOT move walls.
-SWING_LOOKBACK       = 3
-MINOR_SWING_LOOKBACK = 2
+# Single swing pool. lookback=3 wall-grade swings drive walls, BOS detection,
+# and both Major and Minor CHoCH detection. Minor CHoCH is distinguished
+# from Major by event geometry, not by a separate swing pool — see
+# _pick_choch_pivot for the Major (wall break) vs Minor (internal break
+# after wall touch) rule. Minor CHoCH does not flip trend and does not move
+# walls; informational weakening flag only.
+SWING_LOOKBACK = 3
 
 # Leg-size threshold = displacement of the break candle's CLOSE PAST the wall
 # (or pivot) it just broke. Major and Minor CHoCH share the same threshold
@@ -134,6 +139,15 @@ EVENT_RING_MAX = 20
 # market has already invalidated without a CHoCH. Same threshold as BOS
 # (0.40) keeps the "meaningful displacement" bar consistent.
 STALE_WALL_ATR_MULT = 0.4
+
+# Minor CHoCH wall-touch precondition. A Minor CHoCH (internal lb-3 break
+# inside the current trend) is only valid if price tested the trend-direction
+# wall within MINOR_CHOCH_WALL_TOUCH_ATR * ATR somewhere in the current leg
+# (since the last structural event). Filters mid-range chop where an internal
+# pivot breaks without the trend ever actually testing the boundary. Loose
+# enough to absorb data-feed wick noise (~0.10-0.15*ATR on forex H1); tight
+# enough to require genuine proximity. Does NOT gate Major CHoCH.
+MINOR_CHOCH_WALL_TOUCH_ATR = 0.35
 
 # State file path. Lives in a dedicated directory outside any purge scope.
 STATE_DIR  = "state"
@@ -258,17 +272,6 @@ def detect_swings(df, lookback: int = SWING_LOOKBACK) -> List[Dict[str, Any]]:
     return out
 
 
-def detect_minor_swings(df) -> List[Dict[str, Any]]:
-    """Lookback=2 swing pool. Used ONLY for Minor CHoCH detection.
-
-    Same shape and rules as detect_swings, but with a tighter window. A
-    lookback=2 swing requires the 2 candles on each side to be strictly lower
-    (for highs) or higher (for lows). These swings appear more frequently and
-    represent shallower, internal structure shifts.
-    """
-    return detect_swings(df, lookback=MINOR_SWING_LOOKBACK)
-
-
 def _most_recent_swing_in_window(swings: List[Dict[str, Any]], swing_type: str,
                                   start_idx: int, end_idx: int) -> Optional[Dict[str, Any]]:
     """Most recent swing of the given type with start_idx <= idx <= end_idx.
@@ -287,60 +290,127 @@ def _most_recent_swing_in_window(swings: List[Dict[str, Any]], swing_type: str,
     return matches[0]
 
 
+def _wall_touched_in_leg(side: str, df, leg_start_idx: int, current_idx: int,
+                         wall_price: Optional[float], atr: float) -> bool:
+    """Return True if any candle in (leg_start_idx, current_idx] tested the
+    given wall within MINOR_CHOCH_WALL_TOUCH_ATR * ATR.
+
+    side: 'ceiling' or 'floor'. Caller passes the trend-direction wall (ceiling
+    for bullish trend, floor for bearish) — this is the wall whose rejection
+    qualifies a subsequent internal break as a Minor CHoCH.
+
+    Evaluated against the CURRENT wall_price: trend-direction walls only
+    tighten inward within a leg (placeholder -> confirmed via promote) and
+    are never relabelled by stale-wall (stale targets the non-trend side),
+    so a candle that satisfied the touch precondition against the looser
+    placeholder also satisfies it against the tightened confirmed wall in
+    every case where it matters.
+    """
+    if wall_price is None or atr is None or atr <= 0:
+        return False
+    if leg_start_idx + 1 > current_idx:
+        return False
+    threshold = MINOR_CHOCH_WALL_TOUCH_ATR * atr
+    if side == 'ceiling':
+        H = df['High'].values.astype(float)
+        for j in range(leg_start_idx + 1, current_idx + 1):
+            if H[j] >= wall_price - threshold:
+                return True
+        return False
+    if side == 'floor':
+        L = df['Low'].values.astype(float)
+        for j in range(leg_start_idx + 1, current_idx + 1):
+            if L[j] <= wall_price + threshold:
+                return True
+        return False
+    return False
+
+
 def _pick_choch_pivot(swings_lb3: List[Dict[str, Any]],
-                      swings_lb2: List[Dict[str, Any]],
                       trend: str,
                       leg_start_idx: int,
                       current_idx: int,
                       ceiling: Dict[str, Any],
-                      floor: Dict[str, Any]
+                      floor: Dict[str, Any],
+                      df=None,
+                      atr: Optional[float] = None,
                       ) -> Optional[Tuple[Dict[str, Any], str, bool]]:
     """Pick the pivot whose break would constitute a CHoCH at this candle.
 
     Returns (pivot_dict, tier, at_wall) or None if no candidate.
 
-    Picks the MOST RECENT confirmed pivot of the relevant type inside the
-    current trend. lookback=3 swings are a SUBSET of lookback=2 swings, so
-    we use the lb2 pool for "most recent" and tag tier=Major if that swing
-    also appears in lb3, else Minor.
+    Two tiers, both using lookback=3 swings:
 
-    Why most-recent: in an uptrend, sequential HLs rise — the most recent HL
-    is the highest. Price closing below the most recent HL IS a structural
-    break; an older lb3 HL further down is still un-broken at that close.
-    Picking the older lb3 swing would miss the real break.
+      Major CHoCH — close past the opposite confirmed wall (floor in an
+        uptrend, ceiling in a downtrend). The dealing range itself is broken;
+        trend flips. No wall-touch precondition: a confirmed wall break
+        with displacement is sufficient on its own.
 
-    Fallback: if no internal pivot exists, the opposite wall (floor in
-    uptrend, ceiling in downtrend) is the pivot — break of a wall is Major
-    CHoCH at_wall=True. Only valid if the wall is CONFIRMED (not placeholder).
+      Minor CHoCH — close past the most recent unbroken lb-3 swing of the
+        relevant type INSIDE the current leg, AFTER price has tested the
+        trend-direction wall within MINOR_CHOCH_WALL_TOUCH_ATR * ATR
+        somewhere in the same leg. Informational weakening flag; trend
+        does NOT flip, walls do NOT move. The wall-touch precondition
+        filters mid-range internal breaks where the trend never actually
+        engaged its boundary.
+
+    Major has precedence over Minor: when a candle qualifies for both (close
+    past the opposite wall AND past an internal lb-3 pivot), Major fires.
+    The internal break is implied by the wall break.
+
+    Why most-recent (Minor): in an uptrend, sequential HLs rise — the most
+    recent HL is the highest. Price closing below it IS a structural break.
+    An older HL further down is still un-broken at that close; picking it
+    would miss the real break.
 
     Search window: (leg_start_idx, current_idx-1] — strictly inside the
     current trend and strictly before the candle being tested.
     """
     if trend == 'bullish':
-        target_type = 'low'        # Down CHoCH breaks an HL (swing low).
-        wall = floor
+        target_type = 'low'           # Down CHoCH breaks an HL (swing low).
+        opp_wall    = floor           # Wall whose break = Major CHoCH down.
+        trend_wall_side = 'ceiling'   # Wall to test for the Minor precondition.
+        trend_wall  = ceiling
     elif trend == 'bearish':
-        target_type = 'high'       # Up CHoCH breaks an LH (swing high).
-        wall = ceiling
+        target_type = 'high'          # Up CHoCH breaks an LH (swing high).
+        opp_wall    = ceiling
+        trend_wall_side = 'floor'
+        trend_wall  = floor
     else:
         return None
 
+    # 1. Major check first — opposite confirmed wall break has precedence
+    #    over any internal pivot break on the same candle.
+    if (opp_wall.get('price') is not None
+            and not opp_wall.get('is_placeholder', True)):
+        wall_pivot = {
+            'idx':   opp_wall.get('idx'),
+            'price': opp_wall['price'],
+            'ts':    opp_wall.get('ts'),
+        }
+        return (wall_pivot, 'Major', True)
+
+    # 2. Minor check — most recent unbroken lb-3 pivot inside the current
+    #    leg. Requires wall-touch precondition on the trend-direction wall.
     lo, hi = leg_start_idx + 1, current_idx - 1
     if lo > hi:
         return None
 
-    pivot = _most_recent_swing_in_window(swings_lb2, target_type, lo, hi)
-    if pivot is not None:
-        # Tier = Major if this swing is also in the lb3 pool, else Minor.
-        is_lb3 = any(s['idx'] == pivot['idx'] and s['type'] == pivot['type']
-                     for s in swings_lb3)
-        return (pivot, 'Major' if is_lb3 else 'Minor', False)
-
-    # Fall back to the opposite wall — but only if it's confirmed.
-    if wall.get('price') is None or wall.get('is_placeholder', True):
+    pivot = _most_recent_swing_in_window(swings_lb3, target_type, lo, hi)
+    if pivot is None:
         return None
-    wall_pivot = {'idx': wall.get('idx'), 'price': wall['price'], 'ts': wall.get('ts')}
-    return (wall_pivot, 'Major', True)
+
+    # Wall-touch precondition. Skipped only when we lack the inputs to
+    # evaluate it (df or atr missing) — caller always supplies them in the
+    # live path; defensive None-guard preserves the historical signature
+    # contract.
+    if df is None or atr is None or atr <= 0:
+        return None
+    if not _wall_touched_in_leg(trend_wall_side, df, leg_start_idx,
+                                current_idx, trend_wall.get('price'), atr):
+        return None
+
+    return (pivot, 'Minor', False)
 
 
 def _resolve_impulse_start(event_kind: str, direction: str,
@@ -556,10 +626,14 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
       - candle 0 (cold start, prior_state is empty/None), or
       - the candle just after prior_state['last_scanned_ts'] (incremental).
 
-    Detects BOS, Major CHoCH (lookback=3 internal pivot or wall break), and
-    Minor CHoCH (lookback=2 internal pivot break) per the locked rules.
-    Updates walls only when a wall is broken (BOS or Major CHoCH-at-wall).
-    Internal-pivot CHoCH does not move walls; Minor CHoCH does not flip trend.
+    Detects Major BOS (confirmed wall break in trend direction), Minor BOS
+    (trend-direction internal lb-3 swing break inside the current leg,
+    informational continuation flag), Major CHoCH (opposite confirmed wall
+    break), and Minor CHoCH (lookback=3 internal pivot break, gated by
+    wall-touch precondition on the trend-direction wall) per the locked
+    rules. Updates walls only when a wall is broken (Major BOS or Major
+    CHoCH-at-wall). Minor BOS and Minor CHoCH do not flip trend and do not
+    move walls.
 
     Cold start fallback: if no event fires across the entire window, walls
     fall back to window high/low and fallback_active = True.
@@ -572,9 +646,9 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
     if atr is None or atr <= 0:
         return prior_state or _empty_state()
 
-    # Two parallel swing pools (computed once per walk).
+    # Single swing pool (computed once per walk). Drives walls, BOS, and
+    # both CHoCH tiers.
     swings_lb3 = detect_swings(df, lookback=SWING_LOOKBACK)
-    swings_lb2 = detect_swings(df, lookback=MINOR_SWING_LOOKBACK)
 
     state = prior_state if prior_state else _empty_state()
     is_cold_start = (
@@ -817,11 +891,13 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
 
         close_i = float(C[i])
 
-        # 1b. Stale-wall relabel. If price has already closed beyond the
-        # non-trend-side wall by >= STALE_WALL_ATR_MULT * ATR without firing
-        # a CHoCH (e.g. no qualifying internal pivot yet), the wall is no
-        # longer respected by the market. Relabel it. No event, no flip.
-        _stale_wall_check(i, close_i)
+        # Stale-wall check is deferred to AFTER BOS/CHoCH detection on this
+        # candle. Running it first would mutate the wall to a placeholder
+        # before the event tests run, silently swallowing a Major CHoCH at
+        # wall whose displacement crossed both the stale (0.4*ATR) and CHoCH
+        # (0.6*ATR) thresholds. Event detection has first refusal; stale is
+        # the no-event cleanup. See block after `if event_kind is None:`.
+
         event_kind = None       # 'BOS' | 'CHoCH' | None
         event_tier = None       # 'Major' | 'Minor' | None  (Major for BOS)
         event_direction = None  # 'bullish' | 'bearish'
@@ -886,12 +962,59 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                     'threshold_atr': float(BOS_ATR_MULT), 'atr': float(atr),
                 })
 
+        # 2b. Minor BOS — trend-direction internal lb-3 swing break inside the
+        # current leg. Continuation signal that today's Major-BOS path misses
+        # because the wall hasn't broken yet. Same 0.4*ATR displacement bar
+        # as Major BOS. Walls do NOT move, trend does NOT flip, leg_start does
+        # NOT advance — informational sub-event inside the active leg. No
+        # wall-touch precondition (continuation doesn't require the trend to
+        # have engaged the boundary; the displacement filter alone suffices).
+        # Direction must match trend (locked rule: BOS minor or major fires
+        # only in the system-recorded trend direction).
+        if event_kind is None and trend in ('bullish', 'bearish'):
+            target_type = 'high' if trend == 'bullish' else 'low'
+            lo, hi = leg_start_idx + 1, i - 1
+            if lo <= hi:
+                pivot = _most_recent_swing_in_window(swings_lb3, target_type, lo, hi)
+                if pivot is not None:
+                    pivot_price = float(pivot['price'])
+                    if trend == 'bullish':
+                        broke = close_i > pivot_price
+                        disp = close_i - pivot_price
+                    else:
+                        broke = close_i < pivot_price
+                        disp = pivot_price - close_i
+                    if broke:
+                        if disp >= BOS_ATR_MULT * atr:
+                            event_kind = 'BOS'
+                            event_tier = 'Minor'
+                            event_direction = trend
+                            event_at_wall = False
+                            event_pivot = {
+                                'idx':   pivot['idx'],
+                                'price': pivot_price,
+                                'ts':    pivot.get('ts'),
+                            }
+                            event_displacement = disp
+                        else:
+                            _log_safe({
+                                'candle_ts': _ts_iso(df, i), 'pair': pair_name, 'timeframe': 'H1',
+                                'event_kind': 'BREAK_REJECTED', 'reject_reason': 'atr_threshold',
+                                'attempted_event': 'BOS-Minor', 'direction': trend,
+                                'swing_price': float(pivot_price), 'swing_ts': pivot.get('ts'),
+                                'close_price': float(close_i), 'displacement': float(disp),
+                                'displacement_atr': float(disp / atr),
+                                'threshold_atr': float(BOS_ATR_MULT), 'atr': float(atr),
+                                'broken_was_wall': False,
+                            })
+
         # 3. CHoCH check — only when there's an established trend AND no BOS already
         # fired this candle. Direction is AGAINST trend.
         if event_kind is None and trend in ('bullish', 'bearish'):
             choch_dir = 'bearish' if trend == 'bullish' else 'bullish'
-            picked = _pick_choch_pivot(swings_lb3, swings_lb2, trend,
-                                       leg_start_idx, i, ceiling, floor)
+            picked = _pick_choch_pivot(swings_lb3, trend,
+                                       leg_start_idx, i, ceiling, floor,
+                                       df=df, atr=atr)
             if picked is not None:
                 pivot, tier, at_wall = picked
                 pivot_price = pivot['price']
@@ -946,6 +1069,12 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                         })
 
         if event_kind is None:
+            # No BOS/CHoCH fired. Only now run the stale-wall relabel — if
+            # price has closed past the non-trend-side wall by
+            # >= STALE_WALL_ATR_MULT * ATR without a qualifying event, the
+            # wall is no longer respected and is relabelled. Geometry-only;
+            # no event, no trend flip.
+            _stale_wall_check(i, close_i)
             continue
 
         # 4. Chop flag — CHoCH only, gap from prior event in candles.
@@ -960,7 +1089,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         broken_swing_ts    = event_pivot.get('ts')
         broken_was_wall    = event_at_wall
 
-        if event_kind == 'BOS':
+        if event_kind == 'BOS' and event_tier == 'Major':
             # Trend-direction wall just broke -> tentative at break-candle extreme.
             # Opposite wall trails to deepest pullback inside just-completed leg.
             if event_direction == 'bullish':
@@ -988,56 +1117,44 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             trend = event_direction
 
         elif event_kind == 'CHoCH' and event_tier == 'Major':
-            if event_at_wall:
-                # The wall we just closed past becomes tentative.
-                # Opposite wall normally STAYS — it's the prior trend anchor
-                # and the new trend's starting extreme.
-                # EXCEPTION: chop CHoCH-at-wall (chop_this_event=True). The
-                # BOS that set the opposite wall just before was a fakeout.
-                # Reset BOTH walls so they re-anchor inside the new leg
-                # (avoids inheriting spike-derived walls like USDJPY 160.7).
-                if event_direction == 'bearish':       # down CHoCH at floor wall
-                    floor["price"] = float(df['Low'].iloc[i])
-                    floor["ts"]    = _ts_iso(df, i)
-                    floor["idx"]   = i
-                    floor["is_placeholder"] = True
-                    if chop_this_event:
-                        ceiling["price"] = float(df['High'].iloc[i])
-                        ceiling["ts"]    = _ts_iso(df, i)
-                        ceiling["idx"]   = i
-                        ceiling["is_placeholder"] = True
-                else:                                  # up CHoCH at ceiling wall
+            # Under the locked rules, Major CHoCH always fires at the opposite
+            # confirmed wall (event_at_wall=True). _pick_choch_pivot enforces
+            # this — internal-pivot CHoCH is always Minor.
+            # The broken wall becomes tentative. Opposite wall normally STAYS
+            # (it's the prior trend anchor = new trend's starting extreme).
+            # EXCEPTION: chop CHoCH-at-wall (chop_this_event=True). The BOS
+            # that set the opposite wall just before was a fakeout. Reset
+            # BOTH walls so they re-anchor inside the new leg (avoids
+            # inheriting spike-derived walls like USDJPY 160.7).
+            if event_direction == 'bearish':       # down CHoCH at floor wall
+                floor["price"] = float(df['Low'].iloc[i])
+                floor["ts"]    = _ts_iso(df, i)
+                floor["idx"]   = i
+                floor["is_placeholder"] = True
+                if chop_this_event:
                     ceiling["price"] = float(df['High'].iloc[i])
                     ceiling["ts"]    = _ts_iso(df, i)
                     ceiling["idx"]   = i
                     ceiling["is_placeholder"] = True
-                    if chop_this_event:
-                        floor["price"] = float(df['Low'].iloc[i])
-                        floor["ts"]    = _ts_iso(df, i)
-                        floor["idx"]   = i
-                        floor["is_placeholder"] = True
-            else:
-                # Internal-pivot Major CHoCH: trend flips. The wall that was
-                # "above price" in the prior trend (the bearish-trend ceiling,
-                # or the bullish-trend floor) is stale relative to the NEW
-                # trend — it never participated in the new leg. Reset it to a
-                # placeholder anchored at the CHoCH candle's matching extreme
-                # so it refreshes forward as the new leg builds.
-                # Example: USDJPY bullish CHoCH on internal pivot — old
-                # ceiling (160.7) reset to placeholder at break-candle High;
-                # then promotes to a real lb-3 swing once the new uptrend
-                # produces one. Same wall behaviour as a fresh BOS.
-                if event_direction == 'bullish':
-                    ceiling["price"] = float(df['High'].iloc[i])
-                    ceiling["ts"]    = _ts_iso(df, i)
-                    ceiling["idx"]   = i
-                    ceiling["is_placeholder"] = True
-                else:
+            else:                                  # up CHoCH at ceiling wall
+                ceiling["price"] = float(df['High'].iloc[i])
+                ceiling["ts"]    = _ts_iso(df, i)
+                ceiling["idx"]   = i
+                ceiling["is_placeholder"] = True
+                if chop_this_event:
                     floor["price"] = float(df['Low'].iloc[i])
                     floor["ts"]    = _ts_iso(df, i)
                     floor["idx"]   = i
                     floor["is_placeholder"] = True
             trend = event_direction
+
+        elif event_kind == 'BOS' and event_tier == 'Minor':
+            # Walls do NOT change. Trend does NOT flip. Leg_start does NOT
+            # advance (Minor BOS is a sub-event inside the active leg —
+            # treating it as a leg boundary would shrink the swing pool used
+            # for the next Major event). Ring-only continuation flag; OB
+            # build proceeds via smc_radar's existing event-ring consumer.
+            pass
 
         else:  # Minor CHoCH
             # Walls do NOT change. Trend does NOT flip. Informational only.
@@ -1054,15 +1171,22 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                                 if impulse_start else None)
 
         # 7. Commit event metadata + ring append.
-        last_event_type      = event_kind
-        last_event_tier      = event_tier
-        last_event_direction = event_direction
-        last_event_ts        = _ts_iso(df, i)
-        last_event_idx_iso   = _ts_iso(df, i)
-        last_event_local_idx = i
-        last_event_chop      = chop_this_event
-        leg_start_idx        = i
-        fallback_active      = False
+        # Minor BOS is a sub-event inside the active leg: it does NOT advance
+        # leg_start_idx and does NOT overwrite the last_event_* pointers
+        # (which are used downstream to identify the active leg's anchoring
+        # event). It is only appended to the events ring so consumers
+        # (smc_radar OB builder, Phase 2) can see continuation prints.
+        is_minor_bos = (event_kind == 'BOS' and event_tier == 'Minor')
+        if not is_minor_bos:
+            last_event_type      = event_kind
+            last_event_tier      = event_tier
+            last_event_direction = event_direction
+            last_event_ts        = _ts_iso(df, i)
+            last_event_idx_iso   = _ts_iso(df, i)
+            last_event_local_idx = i
+            last_event_chop      = chop_this_event
+            leg_start_idx        = i
+            fallback_active      = False
 
         _ring_append({
             'type':                 event_kind,

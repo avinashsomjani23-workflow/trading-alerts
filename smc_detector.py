@@ -297,8 +297,10 @@ def compute_bos_sequence_count(pair_name):
     Detection lives in dealing_range.py; this function does NOT walk-forward.
 
     Counter rules (matches dealing_range tier semantics):
-      - BOS                  -> increments counter
+      - Major BOS            -> increments counter
       - Major CHoCH          -> resets counter (trend flipped)
+      - Minor BOS            -> ignored (continuation sub-event inside the
+                                 active leg; not a fresh leg, no count bump)
       - Minor CHoCH          -> ignored (does NOT flip trend, does NOT reset)
 
     Returns:
@@ -325,16 +327,16 @@ def compute_bos_sequence_count(pair_name):
     if not events:
         return {'count': 1, 'trend': trend, 'count_maxed': False}
 
-    # Walk events forward; reset on Major CHoCH; increment on BOS.
+    # Walk events forward; reset on Major CHoCH; increment on Major BOS.
     count = 0
     for ev in events:
         kind = ev.get('type')
         tier = ev.get('tier')
         if kind == 'CHoCH' and tier == 'Major':
             count = 0
-        elif kind == 'BOS':
+        elif kind == 'BOS' and tier == 'Major':
             count += 1
-        # Minor CHoCH: ignored.
+        # Minor BOS, Minor CHoCH: ignored.
 
     # If no BOS has fired since last Major CHoCH, report count=1 so callers
     # treating the latest event as "the structural anchor" don't divide-by-zero.
@@ -812,9 +814,12 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     if search_lo > ob_idx:
         return not_observed
 
-    # Swing pool. CHoCH uses lb-3 only (Major-grade swings — sweep anchors
-    # should be wall-grade). BOS keeps lb-2 to catch short pullback legs;
-    # lb-3 is a subset of lb-2 so wall-grade swings are still included.
+    # Local swing pool for the sweep-search slice (computed inline; unrelated
+    # to the global lookback=3 pool used by structure detection). CHoCH uses
+    # lookback=3 in the slice — sweep anchors should be wall-grade. BOS uses
+    # lookback=2 to catch short pullback legs where lb-3 swings rarely form.
+    # lookback=3 swings are a subset of lookback=2 swings so wall-grade
+    # candidates are still considered.
     leg_df = df.iloc[search_lo:ob_idx + 1]
     sweep_lookback = 3 if event_type == 'CHoCH' else 2
     leg_swings_local = get_swing_points(leg_df, lookback=sweep_lookback)
@@ -1218,8 +1223,8 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
 
     # Structure score grid (locked):
-    #   Major CHoCH                 -> 2.5  (trend reversal confirmed)
-    #   Minor CHoCH                 -> 2.0  (lookback=2 break, weakening — not reversed)
+    #   Major CHoCH                 -> 2.5  (opposite wall break — trend reversal confirmed)
+    #   Minor CHoCH                 -> 2.0  (internal lb-3 break after wall touch — weakening, not yet reversed)
     #   BOS #1-2 since last CHoCH   -> 2.0  (early continuation, strongest)
     #   BOS #3 .. caution-1         -> 1.5  (mid-trend; commodity/index only)
     #   BOS >= caution_threshold    -> 1.0  (exhausted)
@@ -1400,7 +1405,7 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
                      "Major CHoCH — trend has reversed (lookback=3 break, reversal from premium/discount)."))
     elif bos_tag_local == 'CHoCH' and bos_tier_local == 'Minor':
         rows.append(("Structure", s, 2.5, "warn",
-                     "Minor CHoCH (lookback=2) — trend weakening, not yet reversed."))
+                     "Minor CHoCH — wall rejected then internal swing broken; trend weakening, not yet reversed."))
     elif s >= 2.0:
         rows.append(("Structure", s, 2.5, "ok",
                       f"Early continuation (BOS {seq_str} since last Major CHoCH) — smart money still loading."))

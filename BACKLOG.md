@@ -50,15 +50,18 @@ or genuine range breaks that scored marginally.
 
 ---
 
-## 2026-05-04 — Lookback policy: should range break use lookback=2 anchors?
+## 2026-05-04 — Lookback policy: should range break use lookback=2 anchors? — CLOSED 2026-05-13
 
-Currently proposed: range break uses lookback=3 (the dealing range walls).
-This is correct for stability of the major range, but may miss situations
-where lookback=2 would have caught the reversal earlier.
+Original question: range break uses lookback=3, but lookback=2 might catch
+reversals earlier.
 
-**Revisit when:** we see CHoCH fire (lookback=2) but range never breaks
-(lookback=3) and the trend genuinely reversed — meaning lookback=3 was too
-slow at the major level too.
+**Resolution (2026-05-13):** lookback=2 removed from event detection entirely.
+The system now runs on a single lookback=3 swing pool. Minor CHoCH is no
+longer a lookback=2 internal break; it is a lookback=3 internal break gated
+by a wall-touch precondition (MINOR_CHOCH_WALL_TOUCH_ATR * ATR). Major CHoCH
+is exclusively the opposite-wall break case. lookback=2 is retained only
+inside `observe_phase1_sweep` as a local sweep-search parameter for BOS
+pullback legs — unrelated to the global lb-2 pool that was removed.
 
 ---
 
