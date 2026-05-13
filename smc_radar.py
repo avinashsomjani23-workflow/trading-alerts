@@ -19,6 +19,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
 import base64
 from io import BytesIO
+import shutil
+import sys
 
 # Route runtime logs to stdout — GitHub Actions captures stdout into run logs,
 # and locally it's still readable from the terminal. The structured Phase 1
@@ -2293,33 +2295,32 @@ _OB_DROP_GATE_LABELS = {
 
 
 def _summarise_last_ob_attempt(ob_build_diagnostics):
-    """Pick the most recent OB build attempt and return a short English line.
+    """Pick the most recent meaningful OB build attempt and return a short
+    English line.
 
     Used in the 'no active OB' card so the vet can see WHY nothing is being
-    surfaced, not just that nothing is. Returns "" when there is nothing
-    informative to show.
+    surfaced. Filters out:
+      - Built (non-dropped) entries — they aren't a 'rejected attempt'.
+      - 'event_outside_window' drops — plumbing artefact (event candle rolled
+        out of the H1 fetch window), tells the vet nothing actionable.
+    Returns "" when nothing informative remains after filtering.
     """
     if not ob_build_diagnostics:
         return ""
-    # Most recent attempt = max event_ts. Diagnostics include both built
-    # (subsequently dropped by post-build mitigation) and dropped paths.
-    try:
-        sorted_diag = sorted(
-            ob_build_diagnostics,
-            key=lambda d: d.get('event_ts') or '',
-            reverse=True,
-        )
-    except Exception:
-        sorted_diag = list(ob_build_diagnostics)
-    if not sorted_diag:
+    relevant = [
+        d for d in ob_build_diagnostics
+        if d.get('drop_gate') and d.get('drop_gate') != 'event_outside_window'
+    ]
+    if not relevant:
         return ""
-    latest = sorted_diag[0]
+    try:
+        latest = max(relevant, key=lambda d: d.get('event_ts') or '')
+    except Exception:
+        latest = relevant[-1]
     gate = latest.get('drop_gate')
     ev_ts = latest.get('event_ts') or ''
     ev_type = latest.get('event_type') or '?'
     ev_dir = latest.get('event_dir') or ''
-    if not gate:
-        return ""  # outcome was 'built' and not subsequently dropped
     gate_text = _OB_DROP_GATE_LABELS.get(gate, gate.replace('_', ' '))
     try:
         ts_short = ev_ts[:10]
@@ -3807,6 +3808,93 @@ def run_radar():
     save_slate(slate)
     print(f"Phase 1 complete at {ist_time_str} IST.")
 
+    # Nightly archive: snapshot structure_state.json after the 23:00 IST scan.
+    # Copy only — live state untouched. Idempotent within the evening window.
+    _maybe_archive_state(ist_now)
+
+
+# ---------------------------------------------------------------------------
+# STATE ARCHIVAL + MANUAL RESET
+# ---------------------------------------------------------------------------
+
+STATE_ARCHIVE_DIR = os.path.join("state", "archives")
+
+
+def _archive_state_file(label_date):
+    """Copy live structure_state.json to state/archives/structure_state_<date>.json.
+
+    label_date is a `date` object — used to name the archive. Returns the
+    archive path on success, None when there is no live state file to copy.
+    Overwrites an existing archive for the same date (idempotent).
+    """
+    live_path = dealing_range.STATE_PATH
+    if not os.path.exists(live_path):
+        return None
+    os.makedirs(STATE_ARCHIVE_DIR, exist_ok=True)
+    archive_path = os.path.join(
+        STATE_ARCHIVE_DIR,
+        f"structure_state_{label_date.isoformat()}.json"
+    )
+    shutil.copy2(live_path, archive_path)
+    return archive_path
+
+
+def _maybe_archive_state(ist_now):
+    """Run an archive copy if this scan falls in the 23:00-23:59 IST window.
+
+    Triggered automatically from run_radar(). Silently no-ops outside that
+    window. Failures are logged but do NOT abort the scan — archival is
+    secondary to live state integrity.
+    """
+    if ist_now.hour != 23:
+        return
+    try:
+        archive_path = _archive_state_file(ist_now.date())
+        if archive_path:
+            print(f"  [ARCHIVE] structure_state snapshot -> {archive_path}")
+    except Exception as e:
+        logging.warning(f"Nightly state archive failed: {e}")
+        print(f"  [ARCHIVE ERR] {e}")
+
+
+def _manual_reset_state():
+    """Manually wipe structure_state.json. NEVER called automatically.
+
+    Behaviour:
+      1. Archive the current live state to state/archives/ first (safety
+         net, named with today's date + '_pre_reset' suffix).
+      2. Delete the live state file.
+      3. Exit. No scan runs.
+
+    On next scan, dealing_range.load_state() returns {} and the system
+    rebuilds walls/events from scratch on H1 data.
+    """
+    ist_now = get_ist_now()
+    live_path = dealing_range.STATE_PATH
+    print(f"[RESET] Manual state reset requested at {ist_now.isoformat()} IST.")
+    if not os.path.exists(live_path):
+        print(f"[RESET] No live state file at {live_path}. Nothing to reset.")
+        return
+    try:
+        os.makedirs(STATE_ARCHIVE_DIR, exist_ok=True)
+        backup_path = os.path.join(
+            STATE_ARCHIVE_DIR,
+            f"structure_state_{ist_now.date().isoformat()}_pre_reset.json"
+        )
+        shutil.copy2(live_path, backup_path)
+        print(f"[RESET] Backup written: {backup_path}")
+    except Exception as e:
+        print(f"[RESET] Backup FAILED ({e}). Aborting — refusing to wipe without a backup.")
+        return
+    try:
+        os.remove(live_path)
+        print(f"[RESET] Wiped {live_path}. Next scan starts with empty state.")
+    except Exception as e:
+        print(f"[RESET] Wipe FAILED: {e}")
+
 
 if __name__ == "__main__":
+    if "--reset-state" in sys.argv:
+        _manual_reset_state()
+        sys.exit(0)
     run_radar()

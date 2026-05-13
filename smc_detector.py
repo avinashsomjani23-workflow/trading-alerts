@@ -755,25 +755,36 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     """
     Phase 1 sweep observation — snapshot semantics.
 
-    Search window depends on event type:
-      - BOS:  `[impulse_start_idx, ob_idx]` — leg-anchored. The catalysing
-              sweep for a BOS is a counter-trend poke inside the pullback
-              leg, then continuation through the wall.
-      - CHoCH: `[prior_event_idx, ob_idx]` when prior_event_idx is provided
-              (lb-3 swing pool only — see notes). Falls back to the
-              leg-anchored window when no prior event exists yet. The
-              catalysing sweep for a CHoCH is typically OUTSIDE the impulse
-              leg (the prior trend's terminal extreme that price ran out
-              just before the reversal began).
+    Swings are computed on the FULL df at lookback=3 (wall-grade pivots) and
+    then filtered to the search window. Computing on the slice (the previous
+    approach) silently dropped 3 candidates at each edge of the window
+    because get_swing_points cannot confirm pivots without `lookback` candles
+    of context on both sides. Full-df detection gives every candle in the
+    window its true neighbours.
 
-    A qualifying sweep:
-      - Bullish OB: candle's low pierces a prior swing low by at least the
+    Search window:
+      - BOS:  `[impulse_start_idx, ob_idx]`. If a same-type pivot sits at or
+              just before impulse_start_idx (the leg's launch pivot), the
+              window extends back to include it — that pivot is a legitimate
+              sweep target and the impulse leg often opens with the candle
+              that pierced it.
+      - CHoCH: `[prior_event_idx, ob_idx]` when prior_event_idx is provided.
+              Falls back to the leg-anchored window when no prior event
+              exists yet. The catalysing sweep for a CHoCH is typically
+              OUTSIDE the impulse leg (the prior trend's terminal extreme
+              that price ran out just before the reversal began).
+
+    A qualifying sweep candle:
+      - Bullish OB: candle's low pierces a prior pivot LOW by at least the
         pair's wick-pierce minimum, AND closes back above that low.
-      - Bearish OB: candle's high pierces a prior swing high by the pierce
+      - Bearish OB: candle's high pierces a prior pivot HIGH by the pierce
         minimum, AND closes back below that high.
 
-    The swept swing must be the EXTREME (lowest low / highest high) of the
-    prior-swing pool that's strictly before the candidate sweep candle.
+    For each candidate candle we check ALL prior same-type pivots in the
+    window — not just the single extreme. This catches the case where the
+    real liquidity sat at a recent equal-lows cluster (e.g. 90/91/92) while
+    a deeper one-off pivot (e.g. 100) lay untouched further back. If a
+    candle pierced more than one prior pivot, the DEEPEST pierce wins.
 
     Iteration is reverse (newest candidate first); the first match wins.
 
@@ -789,79 +800,95 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
         return not_observed
     if tf_atr is None or tf_atr <= 0:
         return not_observed
-    # Need at least one candle of leg before the OB candle, OR the OB candle
-    # itself can be the sweep. Guard against impossible windows.
     if impulse_start_idx < 0 or ob_idx >= len(df) or impulse_start_idx > ob_idx:
         return not_observed
 
     H = df['High'].values.astype(float)
     L = df['Low'].values.astype(float)
-    O = df['Open'].values.astype(float)
     C = df['Close'].values.astype(float)
 
     bias_low = (direction == 'bullish')  # bullish OB -> hunt low sweeps
+    swing_type_we_want = 'low' if bias_low else 'high'
     pierce_min = SWEEP_WICK_PIERCE_MIN_ATR.get(pair_type, 0.05) * tf_atr
 
-    # Determine search window. CHoCH widens to [prior_event_idx, ob_idx] so
-    # we can find the prior-trend extreme that was swept before the flip.
-    # BOS keeps the impulse-leg window.
+    # Swing pool — computed once on the full df at lookback=3 (wall-grade).
+    # Unified across event_type: sweep anchors should be meaningful pivots
+    # regardless of BOS vs CHoCH.
+    all_swings = get_swing_points(df, lookback=3)
+    if not all_swings:
+        return not_observed
+
+    # Search window low bound.
     if event_type == 'CHoCH' and prior_event_idx is not None and prior_event_idx >= 0:
         search_lo = min(int(prior_event_idx), int(impulse_start_idx))
     else:
         search_lo = int(impulse_start_idx)
+        # BOS: extend back to include the launch pivot of the current
+        # impulse leg if one sits at or just before impulse_start_idx. The
+        # leg's first candle frequently IS the sweep of that launch pivot.
+        # We look back at most a few candles to find the nearest same-type
+        # pivot — if none is close, we don't extend (avoids dragging in
+        # historically unrelated swings).
+        LAUNCH_PIVOT_LOOKBACK = 5
+        scan_floor = max(0, search_lo - LAUNCH_PIVOT_LOOKBACK)
+        launch_candidates = [
+            s for s in all_swings
+            if s['type'] == swing_type_we_want
+            and scan_floor <= s['idx'] <= search_lo
+        ]
+        if launch_candidates:
+            launch_pivot = max(launch_candidates, key=lambda s: s['idx'])
+            search_lo = int(launch_pivot['idx'])
+
     if search_lo < 0:
         search_lo = 0
     if search_lo > ob_idx:
         return not_observed
 
-    # Local swing pool for the sweep-search slice (computed inline; unrelated
-    # to the global lookback=3 pool used by structure detection). CHoCH uses
-    # lookback=3 in the slice — sweep anchors should be wall-grade. BOS uses
-    # lookback=2 to catch short pullback legs where lb-3 swings rarely form.
-    # lookback=3 swings are a subset of lookback=2 swings so wall-grade
-    # candidates are still considered.
-    leg_df = df.iloc[search_lo:ob_idx + 1]
-    sweep_lookback = 3 if event_type == 'CHoCH' else 2
-    leg_swings_local = get_swing_points(leg_df, lookback=sweep_lookback)
-    # Translate local idx -> absolute idx in df
-    swings = [
-        {'type': s['type'], 'price': s['price'],
-         'idx': s['idx'] + search_lo,
-         'ts':  s['ts']}
-        for s in leg_swings_local
+    # Filter swings to the search window (same-type only). idx is absolute.
+    swings_in_window = [
+        s for s in all_swings
+        if s['type'] == swing_type_we_want
+        and search_lo <= s['idx'] <= ob_idx
     ]
-    if not swings:
+    if not swings_in_window:
         return not_observed
 
-    swing_type_we_want = 'low' if bias_low else 'high'
-
-    # Candidate sweep candles: include ob_idx itself (the OB candle can be
-    # the sweep candle in textbook cases). Reverse iteration -> newest first.
+    # Walk candidate sweep candles newest-first. First match wins.
     for i in range(ob_idx, search_lo - 1, -1):
-        # Find candidate swept swings: same direction, strictly before i,
-        # and the extreme so far inside [search_lo, i-1].
-        prior_swings = [s for s in swings if s['type'] == swing_type_we_want and s['idx'] < i]
+        prior_swings = [s for s in swings_in_window if s['idx'] < i]
         if not prior_swings:
             continue
 
-        if bias_low:
-            extreme = min(prior_swings, key=lambda s: s['price'])
-            level   = extreme['price']
-            pierced = (L[i] < level - pierce_min)
-            closed_back = (C[i] > level)
-        else:
-            extreme = max(prior_swings, key=lambda s: s['price'])
-            level   = extreme['price']
-            pierced = (H[i] > level + pierce_min)
-            closed_back = (C[i] < level)
+        # Find the deepest pierce among all prior same-type pivots.
+        winning_swing = None
+        winning_depth = 0.0
+        for s in prior_swings:
+            level = s['price']
+            if bias_low:
+                pierced = (L[i] < level - pierce_min) and (C[i] > level)
+                depth   = level - L[i] if pierced else 0.0
+            else:
+                pierced = (H[i] > level + pierce_min) and (C[i] < level)
+                depth   = H[i] - level if pierced else 0.0
+            if pierced and depth > winning_depth:
+                winning_swing = s
+                winning_depth = depth
 
-        if not (pierced and closed_back):
+        if winning_swing is None:
             continue
 
+        extreme = winning_swing
+        level   = extreme['price']
+
         # Qualifying sweep found. Score it using existing Phase 2 helpers so
-        # tier semantics stay consistent across phases.
+        # tier semantics stay consistent across phases. _equal_levels_score
+        # expects the full swing pool (not just same-type) so it can filter
+        # internally; pass swings_in_window's same-type set as-is since we
+        # only kept the relevant type. The helper's same-type filter is a
+        # no-op on this input.
         swept_type = 'low' if bias_low else 'high'
-        eq_score, eq_matches = _equal_levels_score(extreme, swings, pair_type, tf_atr)
+        eq_score, eq_matches = _equal_levels_score(extreme, swings_in_window, pair_type, tf_atr)
         rej_score, wb_ratio  = _rejection_score(df, i, swept_type, tf_atr)
         total = SWEEP_SCORE_BASE_MAX + eq_score + rej_score
         tier  = _sweep_tier(total)
