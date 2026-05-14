@@ -13,7 +13,7 @@
     "last_event_ts": "2026-05-13T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T10:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T11:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -137,7 +137,7 @@
     "last_event_ts": "2026-05-13T09:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T09:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T10:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T11:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -261,7 +261,7 @@
     "last_event_ts": "2026-05-13T08:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T08:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T10:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T11:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -343,9 +343,9 @@
   },
   "USDCHF": {
     "trend": "bullish",
-    "ceiling_price": 0.7826600074768066,
-    "ceiling_ts": "2026-05-13T15:00:00+00:00",
-    "ceiling_is_placeholder": true,
+    "ceiling_price": 0.7825199961662292,
+    "ceiling_ts": "2026-05-14T08:00:00+00:00",
+    "ceiling_is_placeholder": false,
     "floor_price": 0.7787500023841858,
     "floor_ts": "2026-05-12T05:00:00+00:00",
     "floor_is_placeholder": false,
@@ -355,7 +355,7 @@
     "last_event_ts": "2026-05-13T14:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T14:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T10:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T11:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -494,7 +494,7 @@
     "last_event_ts": "2026-05-13T08:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T08:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T10:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T11:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -618,7 +618,7 @@
     "last_event_ts": "2026-05-12T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-12T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T10:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T11:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
