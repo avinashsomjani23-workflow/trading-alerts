@@ -4,8 +4,8 @@
     "ceiling_price": 1.178550362586975,
     "ceiling_ts": "2026-05-11T08:00:00+00:00",
     "ceiling_is_placeholder": false,
-    "floor_price": 1.1700011491775513,
-    "floor_ts": "2026-05-13T09:00:00+00:00",
+    "floor_price": 1.1695905923843384,
+    "floor_ts": "2026-05-14T13:00:00+00:00",
     "floor_is_placeholder": true,
     "last_event_type": "BOS",
     "last_event_tier": "Major",
@@ -13,7 +13,7 @@
     "last_event_ts": "2026-05-13T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T12:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T13:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -120,6 +120,21 @@
         "impulse_start_ts": "2026-05-12T19:00:00+00:00",
         "impulse_start_price": 1.1749500036239624,
         "trend_after": "bearish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Minor",
+        "direction": "bearish",
+        "candle_ts": "2026-05-14T13:00:00+00:00",
+        "broken_swing_price": 1.1700011491775513,
+        "broken_swing_ts": "2026-05-13T09:00:00+00:00",
+        "broken_was_wall": false,
+        "displacement_atr": 0.6071626454440134,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-14T06:00:00+00:00",
+        "impulse_start_price": 1.1724703311920166,
+        "trend_after": "bearish"
       }
     ]
   },
@@ -137,7 +152,7 @@
     "last_event_ts": "2026-05-13T09:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T09:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T12:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T13:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -261,7 +276,7 @@
     "last_event_ts": "2026-05-13T08:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T08:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T12:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T13:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -355,7 +370,7 @@
     "last_event_ts": "2026-05-13T14:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T14:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T12:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T13:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -494,7 +509,7 @@
     "last_event_ts": "2026-05-13T08:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T08:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T12:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T13:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -618,7 +633,7 @@
     "last_event_ts": "2026-05-12T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-12T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T12:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T13:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
