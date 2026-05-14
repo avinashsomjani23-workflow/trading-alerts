@@ -4,7 +4,7 @@
     "ceiling_price": 1.178550362586975,
     "ceiling_ts": "2026-05-11T08:00:00+00:00",
     "ceiling_is_placeholder": false,
-    "floor_price": 1.1695905923843384,
+    "floor_price": 1.1689070463180542,
     "floor_ts": "2026-05-14T13:00:00+00:00",
     "floor_is_placeholder": true,
     "last_event_type": "BOS",
@@ -13,7 +13,7 @@
     "last_event_ts": "2026-05-13T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T14:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -152,7 +152,7 @@
     "last_event_ts": "2026-05-13T09:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T09:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T14:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -276,7 +276,7 @@
     "last_event_ts": "2026-05-13T08:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T08:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T14:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -370,7 +370,7 @@
     "last_event_ts": "2026-05-13T14:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T14:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T14:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -509,7 +509,7 @@
     "last_event_ts": "2026-05-13T08:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T08:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T14:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -633,7 +633,7 @@
     "last_event_ts": "2026-05-12T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-12T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-14T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T14:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
