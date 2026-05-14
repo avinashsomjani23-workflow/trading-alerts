@@ -13,7 +13,7 @@
     "last_event_ts": "2026-05-13T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-13T17:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T03:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -125,9 +125,9 @@
   },
   "USDJPY": {
     "trend": "bullish",
-    "ceiling_price": 157.8979949951172,
-    "ceiling_ts": "2026-05-13T12:00:00+00:00",
-    "ceiling_is_placeholder": true,
+    "ceiling_price": 157.9250030517578,
+    "ceiling_ts": "2026-05-13T17:00:00+00:00",
+    "ceiling_is_placeholder": false,
     "floor_price": 156.70700073242188,
     "floor_ts": "2026-05-12T05:00:00+00:00",
     "floor_is_placeholder": false,
@@ -137,7 +137,7 @@
     "last_event_ts": "2026-05-13T09:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T09:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-13T17:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T03:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -261,7 +261,7 @@
     "last_event_ts": "2026-05-13T08:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T08:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-13T17:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T03:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -355,7 +355,7 @@
     "last_event_ts": "2026-05-13T14:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T14:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-13T17:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T03:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -482,9 +482,9 @@
   },
   "NAS100": {
     "trend": "bullish",
-    "ceiling_price": 29496.25,
-    "ceiling_ts": "2026-05-13T17:00:00+00:00",
-    "ceiling_is_placeholder": true,
+    "ceiling_price": 29693.0,
+    "ceiling_ts": "2026-05-14T00:00:00+00:00",
+    "ceiling_is_placeholder": false,
     "floor_price": 29055.5,
     "floor_ts": "2026-05-13T00:00:00+00:00",
     "floor_is_placeholder": false,
@@ -494,7 +494,7 @@
     "last_event_ts": "2026-05-13T08:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T08:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-13T17:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T03:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -603,7 +603,7 @@
     "last_event_ts": "2026-05-12T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-12T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-13T17:00:00+00:00",
+    "last_scanned_ts": "2026-05-14T03:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
