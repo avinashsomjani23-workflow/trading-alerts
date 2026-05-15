@@ -13,24 +13,9 @@
     "last_event_ts": "2026-05-13T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-15T03:00:00+00:00",
+    "last_scanned_ts": "2026-05-15T04:00:00+00:00",
     "fallback_active": false,
     "events": [
-      {
-        "type": "BOS",
-        "tier": "Major",
-        "direction": "bullish",
-        "candle_ts": "2026-05-06T08:00:00+00:00",
-        "broken_swing_price": 1.1746740341186523,
-        "broken_swing_ts": "2026-05-06T04:00:00+00:00",
-        "broken_was_wall": true,
-        "displacement_atr": 3.241550073882773,
-        "chop": false,
-        "reversal_pct": null,
-        "impulse_start_ts": null,
-        "impulse_start_price": null,
-        "trend_after": "bullish"
-      },
       {
         "type": "BOS",
         "tier": "Major",
@@ -315,6 +300,21 @@
         "impulse_start_ts": "2026-05-14T06:00:00+00:00",
         "impulse_start_price": 1.1724703311920166,
         "trend_after": "bearish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Minor",
+        "direction": "bearish",
+        "candle_ts": "2026-05-15T04:00:00+00:00",
+        "broken_swing_price": 1.1700011491775513,
+        "broken_swing_ts": "2026-05-13T09:00:00+00:00",
+        "broken_was_wall": false,
+        "displacement_atr": 6.713591634399585,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-14T06:00:00+00:00",
+        "impulse_start_price": 1.1724703311920166,
+        "trend_after": "bearish"
       }
     ]
   },
@@ -332,7 +332,7 @@
     "last_event_ts": "2026-05-14T15:00:00+00:00",
     "last_event_idx_iso": "2026-05-14T15:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-15T03:00:00+00:00",
+    "last_scanned_ts": "2026-05-15T04:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -462,8 +462,8 @@
     "ceiling_price": 0.5943889617919922,
     "ceiling_ts": "2026-05-13T16:00:00+00:00",
     "ceiling_is_placeholder": false,
-    "floor_price": 0.5882006883621216,
-    "floor_ts": "2026-05-15T02:00:00+00:00",
+    "floor_price": 0.5880623459815979,
+    "floor_ts": "2026-05-15T04:00:00+00:00",
     "floor_is_placeholder": true,
     "last_event_type": "BOS",
     "last_event_tier": "Major",
@@ -471,7 +471,7 @@
     "last_event_ts": "2026-05-14T16:00:00+00:00",
     "last_event_idx_iso": "2026-05-14T16:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-15T03:00:00+00:00",
+    "last_scanned_ts": "2026-05-15T04:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -580,7 +580,7 @@
     "last_event_ts": "2026-05-14T15:00:00+00:00",
     "last_event_idx_iso": "2026-05-14T15:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-15T03:00:00+00:00",
+    "last_scanned_ts": "2026-05-15T04:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -734,7 +734,7 @@
     "last_event_ts": "2026-05-14T15:00:00+00:00",
     "last_event_idx_iso": "2026-05-14T15:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-15T03:00:00+00:00",
+    "last_scanned_ts": "2026-05-15T04:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -864,8 +864,8 @@
     "ceiling_price": 4775.2001953125,
     "ceiling_ts": "2026-05-07T15:00:00+00:00",
     "ceiling_is_placeholder": false,
-    "floor_price": 4611.0,
-    "floor_ts": "2026-05-15T01:00:00+00:00",
+    "floor_price": 4611.5,
+    "floor_ts": "2026-05-15T04:00:00+00:00",
     "floor_is_placeholder": true,
     "last_event_type": "CHoCH",
     "last_event_tier": "Major",
@@ -873,7 +873,7 @@
     "last_event_ts": "2026-05-15T00:00:00+00:00",
     "last_event_idx_iso": "2026-05-15T00:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-15T03:00:00+00:00",
+    "last_scanned_ts": "2026-05-15T04:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
