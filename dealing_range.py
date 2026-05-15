@@ -527,6 +527,7 @@ def _empty_state() -> Dict[str, Any]:
         "last_event_chop": False,             # True if this CHoCH fired within CHOP_LOOKBACK_CANDLES of prior event
         "last_scanned_ts": None,
         "fallback_active": False,
+        "trend_start_ts": None,               # ISO ts of the last Major CHoCH candle (or earliest candle on cold start). Anchors the opposite-wall trail across the WHOLE trend, not just the latest leg.
         "events": [],                         # ring of last EVENT_RING_MAX qualified events
     }
 
@@ -594,13 +595,18 @@ def _trail_inside_leg(side: str, swings: List[Dict[str, Any]],
     Pick the trailing wall on the OPPOSITE side of a BOS.
 
     For a bullish BOS: side='floor', returns the LOWEST confirmed swing low
-    inside (leg_start_idx, leg_end_idx). Plain English: deepest pullback
-    inside the leg = new floor.
+    inside (leg_start_idx, leg_end_idx).
 
     For a bearish BOS: side='ceiling', returns the HIGHEST confirmed swing
     high inside that range.
 
-    Strict interior — endpoints excluded (the leg-bounding swings themselves
+    The opposite wall represents the TREND ORIGIN (deepest unmitigated pullback
+    of the entire trend), not just the latest leg. Callers therefore pass
+    trend_start_idx (the most recent Major CHoCH candle, or cold-start anchor)
+    as `leg_start_idx`. SMC semantics: a CHoCH against the trend should require
+    breaking the trend's origin, not the most recent pullback.
+
+    Strict interior — endpoints excluded (the trend-bounding swings themselves
     are NOT pullbacks).
 
     Returns None if no qualifying confirmed swing exists. Caller keeps the
@@ -693,6 +699,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
     last_event_idx_iso   = state.get("last_event_idx_iso")
     last_event_chop      = bool(state.get("last_event_chop", False))
     leg_start_idx        = 0
+    trend_start_idx      = 0  # Anchor for OPPOSITE-wall trailing on BOS Major and stale-wall replacement. Resets ONLY on Major CHoCH (or cold start). leg_start_idx still advances on every Major event for promote/refresh of the trend-direction wall.
     fallback_active      = state.get("fallback_active", False)
     events_ring          = list(state.get("events", []))
 
@@ -723,6 +730,29 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
 
     if last_event_idx_iso:
         last_event_local_idx = _idx_from_ts(last_event_idx_iso)
+
+    # Resolve trend_start_idx from persisted state. Priority:
+    #   1. state['trend_start_ts'] (authoritative if present).
+    #   2. Most recent Major CHoCH ts in the events ring (back-fill for states
+    #      written before trend_start_ts was added).
+    #   3. 0 (cold start — no Major CHoCH yet; the whole window is the trend).
+    # If a ts is present but not resolvable inside df (out of window), clamp
+    # to 0 — safer to over-include than to mis-anchor inside the latest leg.
+    trend_start_ts_persisted = state.get("trend_start_ts")
+    if trend_start_ts_persisted:
+        resolved = _idx_from_ts(trend_start_ts_persisted)
+        trend_start_idx = resolved if resolved is not None else 0
+    else:
+        last_major_choch_ts: Optional[str] = None
+        for ev in reversed(events_ring):
+            if ev.get('type') == 'CHoCH' and ev.get('tier') == 'Major':
+                last_major_choch_ts = ev.get('candle_ts')
+                break
+        if last_major_choch_ts:
+            resolved = _idx_from_ts(last_major_choch_ts)
+            trend_start_idx = resolved if resolved is not None else 0
+        else:
+            trend_start_idx = 0
 
     # Promote a placeholder wall if a confirmed swing now exists in
     # (leg_start_idx, current_i].
@@ -794,12 +824,15 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                     or close_i >= floor["price"] - STALE_WALL_ATR_MULT * atr):
                 return
             new_floor_price = float(close_i)  # tentative target before swing search
-            # Most recent confirmed lb-3 swing low strictly inside the leg
-            # and STRICTLY BELOW the current floor (the wall we're discarding).
+            # Most recent confirmed lb-3 swing low strictly inside the TREND
+            # (since last Major CHoCH, not just latest leg) and STRICTLY BELOW
+            # the current floor (the wall we're discarding). Trend-scoped so
+            # the replacement floor stays anchored at trend origin, not at a
+            # mid-trend pullback.
             cand = [
                 s for s in swings_lb3
                 if s['type'] == 'low'
-                and leg_start_idx < s['idx'] <= current_i
+                and trend_start_idx < s['idx'] <= current_i
                 and s['price'] < floor["price"]
             ]
             if cand:
@@ -837,7 +870,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         cand = [
             s for s in swings_lb3
             if s['type'] == 'high'
-            and leg_start_idx < s['idx'] <= current_i
+            and trend_start_idx < s['idx'] <= current_i
             and s['price'] > ceiling["price"]
         ]
         if cand:
@@ -1091,10 +1124,28 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
 
         if event_kind == 'BOS' and event_tier == 'Major':
             # Trend-direction wall just broke -> tentative at break-candle extreme.
-            # Opposite wall trails to deepest pullback inside just-completed leg.
+            # Opposite wall = TREND ORIGIN: deepest unmitigated lb-3 swing across
+            # the whole current trend (since the last Major CHoCH), NOT just the
+            # latest leg. SMC: a counter-trend CHoCH should require breaking
+            # where the trend started, not the most recent pullback.
+            #
+            # Non-regression guard: in bullish trend, the new floor must be <=
+            # current floor (the trend cannot lose its deepest defense by
+            # extending). Mirror for bearish ceiling. The deepest-of-trend
+            # search across (trend_start_idx, i) typically satisfies this
+            # automatically, but the current wall may have been set by a
+            # rolling-extreme refresh that found a deeper low than the lb-3
+            # pool currently exposes — in that case we keep the existing wall.
             if event_direction == 'bullish':
-                trailed = _trail_inside_leg('floor', swings_lb3, leg_start_idx, i)
-                if trailed is not None:
+                trailed = _trail_inside_leg('floor', swings_lb3, trend_start_idx, i)
+                # Non-regression: confirmed floor cannot ratchet UP (would lose
+                # the deepest defense of the trend). A PLACEHOLDER floor has no
+                # such standing — any confirmed lb-3 swing replaces it cleanly.
+                if trailed is not None and (
+                    floor["price"] is None
+                    or floor.get("is_placeholder", True)
+                    or trailed["price"] <= floor["price"]
+                ):
                     floor["price"] = trailed["price"]
                     floor["ts"]    = trailed["ts"]
                     floor["idx"]   = trailed["idx"]
@@ -1104,8 +1155,14 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                 ceiling["idx"]   = i
                 ceiling["is_placeholder"] = True
             else:
-                trailed = _trail_inside_leg('ceiling', swings_lb3, leg_start_idx, i)
-                if trailed is not None:
+                trailed = _trail_inside_leg('ceiling', swings_lb3, trend_start_idx, i)
+                # Non-regression: confirmed ceiling cannot ratchet DOWN. A
+                # placeholder ceiling is replaced unconditionally.
+                if trailed is not None and (
+                    ceiling["price"] is None
+                    or ceiling.get("is_placeholder", True)
+                    or trailed["price"] >= ceiling["price"]
+                ):
                     ceiling["price"] = trailed["price"]
                     ceiling["ts"]    = trailed["ts"]
                     ceiling["idx"]   = trailed["idx"]
@@ -1126,6 +1183,21 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             # that set the opposite wall just before was a fakeout. Reset
             # BOTH walls so they re-anchor inside the new leg (avoids
             # inheriting spike-derived walls like USDJPY 160.7).
+            # Both walls become placeholders on Major CHoCH:
+            #   - Broken wall: re-anchored to break-candle extreme (the new
+            #     trend-direction wall, will trail forward as the new leg
+            #     builds).
+            #   - Surviving wall: keeps its PRICE (real lb-3 swing, prior trend
+            #     anchor) but flips to placeholder so the new trend can
+            #     re-promote / replace it as its own structure develops. Without
+            #     this, the surviving wall stays locked at the prior trend's
+            #     extreme (e.g. USDJPY 160.7) and never moves even as price
+            #     spends days far away from it. The non-regression guard on
+            #     subsequent BOS also skips placeholders, freeing the wall to
+            #     anchor at a tighter trend-internal lb-3 swing once one forms.
+            # Chop case: BOTH walls fully reset to break-candle extremes
+            # (the BOS that set the surviving wall was a fakeout — don't carry
+            # its spike price forward at all).
             if event_direction == 'bearish':       # down CHoCH at floor wall
                 floor["price"] = float(df['Low'].iloc[i])
                 floor["ts"]    = _ts_iso(df, i)
@@ -1135,6 +1207,9 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                     ceiling["price"] = float(df['High'].iloc[i])
                     ceiling["ts"]    = _ts_iso(df, i)
                     ceiling["idx"]   = i
+                    ceiling["is_placeholder"] = True
+                else:
+                    # Surviving ceiling: keep price/ts/idx, demote to placeholder.
                     ceiling["is_placeholder"] = True
             else:                                  # up CHoCH at ceiling wall
                 ceiling["price"] = float(df['High'].iloc[i])
@@ -1146,7 +1221,16 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                     floor["ts"]    = _ts_iso(df, i)
                     floor["idx"]   = i
                     floor["is_placeholder"] = True
+                else:
+                    # Surviving floor: keep price/ts/idx, demote to placeholder.
+                    floor["is_placeholder"] = True
             trend = event_direction
+            # Trend just flipped. Anchor trend_start_idx at the CHoCH candle.
+            # The surviving wall was demoted to placeholder above, so the next
+            # BOS's opposite-wall trail (which skips the non-regression guard
+            # for placeholder walls) can freely re-anchor to a real lb-3 swing
+            # built INSIDE the new trend.
+            trend_start_idx = i
 
         elif event_kind == 'BOS' and event_tier == 'Minor':
             # Walls do NOT change. Trend does NOT flip. Leg_start does NOT
@@ -1433,6 +1517,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         "last_event_chop":        bool(last_event_chop),
         "last_scanned_ts":        _ts_iso(df, n - 1),
         "fallback_active":        bool(fallback_active),
+        "trend_start_ts":         _ts_iso(df, trend_start_idx) if 0 <= trend_start_idx < n else None,
         "events":                 events_ring,
         # Non-persisted diagnostic — caller must strip before save_state().
         # See PLACEHOLDER_DIAG_KEY constant.
