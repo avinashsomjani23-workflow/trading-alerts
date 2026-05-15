@@ -13,24 +13,9 @@
     "last_event_ts": "2026-05-13T06:00:00+00:00",
     "last_event_idx_iso": "2026-05-13T06:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-15T09:00:00+00:00",
+    "last_scanned_ts": "2026-05-15T10:00:00+00:00",
     "fallback_active": false,
     "events": [
-      {
-        "type": "BOS",
-        "tier": "Minor",
-        "direction": "bearish",
-        "candle_ts": "2026-05-14T13:00:00+00:00",
-        "broken_swing_price": 1.1700011491775513,
-        "broken_swing_ts": "2026-05-13T09:00:00+00:00",
-        "broken_was_wall": false,
-        "displacement_atr": 0.6071626454440134,
-        "chop": false,
-        "reversal_pct": null,
-        "impulse_start_ts": "2026-05-14T06:00:00+00:00",
-        "impulse_start_price": 1.1724703311920166,
-        "trend_after": "bearish"
-      },
       {
         "type": "BOS",
         "tier": "Minor",
@@ -315,6 +300,21 @@
         "impulse_start_ts": "2026-05-14T06:00:00+00:00",
         "impulse_start_price": 1.1724703311920166,
         "trend_after": "bearish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Minor",
+        "direction": "bearish",
+        "candle_ts": "2026-05-15T10:00:00+00:00",
+        "broken_swing_price": 1.1700011491775513,
+        "broken_swing_ts": "2026-05-13T09:00:00+00:00",
+        "broken_was_wall": false,
+        "displacement_atr": 5.483517835178351,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-14T06:00:00+00:00",
+        "impulse_start_price": 1.1724703311920166,
+        "trend_after": "bearish"
       }
     ]
   },
@@ -332,7 +332,7 @@
     "last_event_ts": "2026-05-14T15:00:00+00:00",
     "last_event_idx_iso": "2026-05-14T15:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-15T09:00:00+00:00",
+    "last_scanned_ts": "2026-05-15T10:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -471,7 +471,7 @@
     "last_event_ts": "2026-05-14T16:00:00+00:00",
     "last_event_idx_iso": "2026-05-14T16:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-15T09:00:00+00:00",
+    "last_scanned_ts": "2026-05-15T10:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -580,7 +580,7 @@
     "last_event_ts": "2026-05-14T15:00:00+00:00",
     "last_event_idx_iso": "2026-05-14T15:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-15T09:00:00+00:00",
+    "last_scanned_ts": "2026-05-15T10:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -734,7 +734,7 @@
     "last_event_ts": "2026-05-14T15:00:00+00:00",
     "last_event_idx_iso": "2026-05-14T15:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-15T09:00:00+00:00",
+    "last_scanned_ts": "2026-05-15T10:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
@@ -864,7 +864,7 @@
     "ceiling_price": 4775.2001953125,
     "ceiling_ts": "2026-05-07T15:00:00+00:00",
     "ceiling_is_placeholder": false,
-    "floor_price": 4543.10009765625,
+    "floor_price": 4535.39990234375,
     "floor_ts": "2026-05-15T09:00:00+00:00",
     "floor_is_placeholder": true,
     "last_event_type": "CHoCH",
@@ -873,7 +873,7 @@
     "last_event_ts": "2026-05-15T00:00:00+00:00",
     "last_event_idx_iso": "2026-05-15T00:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-15T09:00:00+00:00",
+    "last_scanned_ts": "2026-05-15T10:00:00+00:00",
     "fallback_active": false,
     "events": [
       {
