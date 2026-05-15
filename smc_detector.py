@@ -379,14 +379,78 @@ def stack_labels(labels, pair_conf):
     return adjusted
 
 
-def _equal_levels_score(swept_swing, all_swings, pair_type, tf_atr):
+def is_swing_active(swing, df, pierce_min, before_idx=None):
+    """
+    A swing is ACTIVE (= unbroken AND unswept) if no candle between its
+    formation and `before_idx` has either:
+      - pierced its level by >= pierce_min (wick — drained the resting
+        liquidity sitting at the level), OR
+      - closed beyond it (body — broke the structural significance).
+
+    SMC view: a swing's value as a sweep target is the untouched stop
+    liquidity parked at it. Once price has wicked past it meaningfully,
+    those orders are filled — the level is drained and no longer a
+    valid sweep target.
+
+    Args:
+      swing:      {'type': 'high'|'low', 'price': float, 'idx': int}
+      df:         OHLC dataframe.
+      pierce_min: minimum pierce in price units to count as a sweep
+                  (typically SWEEP_WICK_PIERCE_MIN_ATR * tf_atr).
+      before_idx: only consider candles strictly before this idx.
+                  Defaults to len(df). Used so the candle currently being
+                  evaluated as a sweep candidate doesn't disqualify its
+                  own target.
+
+    Returns: bool — True if active (still valid as a sweep target).
+    """
+    if df is None or len(df) == 0 or not swing:
+        return False
+    if before_idx is None:
+        before_idx = len(df)
+    j_start = int(swing['idx']) + 1
+    j_end   = int(before_idx)
+    if j_start >= j_end:
+        return True  # nothing has happened after the swing yet
+    H = df['High'].values
+    L = df['Low'].values
+    C = df['Close'].values
+    level = float(swing['price'])
+    if swing['type'] == 'high':
+        for j in range(j_start, j_end):
+            if H[j] > level + pierce_min:  # wicked through (swept)
+                return False
+            if C[j] > level:                # closed beyond (broken)
+                return False
+    else:  # 'low'
+        for j in range(j_start, j_end):
+            if L[j] < level - pierce_min:
+                return False
+            if C[j] < level:
+                return False
+    return True
+
+
+def _equal_levels_score(swept_swing, all_swings, pair_type, tf_atr,
+                        df=None, before_idx=None,
+                        recency_floor_idx=None):
     """
     Score the 'equal highs/lows' confluence around the swept swing.
 
-    Look at the last 3 swings of the SAME type (highs for SHORT, lows for LONG)
-    that occurred at or before the swept swing's idx. Of the OTHER 2 (excluding
-    the swept swing itself), count how many sit within the pair-aware tolerance
-    of the swept swing's price.
+    SMC-faithful rules (rewritten):
+      - Pool: same-type swings within recency window. If `recency_floor_idx`
+        is provided, includes swings with idx >= recency_floor_idx. Else
+        includes swings within the last 50 candles before the swept swing.
+      - ONLY counts swings that are ACTIVE (unbroken AND unswept) as of
+        the swept swing's idx. Drained equal-level swings have no
+        liquidity left and don't add confluence.
+      - Counts how many active swings sit within the pair-aware
+        equal-level tolerance of the swept swing's price.
+      - Score is capped at 2 matches → max score 0.5 (unchanged tier semantics).
+
+    `df` is required to evaluate active-ness. If not provided, falls back
+    to the old "last 3 swings, no active filter" behaviour for backwards
+    compat with any callers that don't yet pass df (defensive).
 
     Returns:
       (score, match_count)  where score in {0.0, 0.25, 0.5}
@@ -396,16 +460,35 @@ def _equal_levels_score(swept_swing, all_swings, pair_type, tf_atr):
         return 0.0, 0
     tol_mult = SWEEP_EQUAL_LEVEL_TOLERANCE_ATR.get(pair_type, 0.25)
     tolerance = tol_mult * tf_atr
+    pierce_min = SWEEP_WICK_PIERCE_MIN_ATR.get(pair_type, 0.05) * tf_atr
+
+    swept_idx   = int(swept_swing['idx'])
+    anchor_price = float(swept_swing['price'])
+
+    # Recency window for the pool.
+    if recency_floor_idx is None:
+        recency_floor_idx = max(0, swept_idx - 50)
 
     same_type = [s for s in all_swings
-                 if s['type'] == swept_swing['type'] and s['idx'] <= swept_swing['idx']]
-    same_type.sort(key=lambda x: x['idx'], reverse=True)
-    last_three = same_type[:3]
-    others = [s for s in last_three if s['idx'] != swept_swing['idx']]
+                 if s['type'] == swept_swing['type']
+                 and recency_floor_idx <= s['idx'] <= swept_idx
+                 and s['idx'] != swept_idx]
 
-    anchor_price = swept_swing['price']
-    matches = sum(1 for s in others if abs(s['price'] - anchor_price) <= tolerance)
-    matches = min(matches, 2)  # cap (can never exceed 2 by construction; defensive)
+    if not same_type:
+        return 0.0, 0
+
+    # Filter to active (unbroken + unswept) up to the swept swing's idx.
+    # `df` is the active-ness oracle. Without df, skip the filter
+    # (degraded mode — preserves old behaviour for legacy callers).
+    if df is not None:
+        same_type = [s for s in same_type
+                     if is_swing_active(s, df, pierce_min, before_idx=swept_idx)]
+
+    if not same_type:
+        return 0.0, 0
+
+    matches = sum(1 for s in same_type if abs(s['price'] - anchor_price) <= tolerance)
+    matches = min(matches, 2)
 
     if matches == 0:
         return 0.0, 0
@@ -494,6 +577,7 @@ def grade_sweep(df, swings, anchor_idx, bias, tf_atr, pair_type, tf_label):
     """
     none_result = {
         'score': 0.0, 'tier': 'none', 'price': None, 'sweep_idx': None,
+        'swept_swing_idx': None, 'swept_swing_ts': None,
         'tf': tf_label,
         'components': {
             'base': 0.0,
@@ -526,6 +610,9 @@ def grade_sweep(df, swings, anchor_idx, bias, tf_atr, pair_type, tf_label):
     if hasattr(anchor_dt, 'tzinfo') and anchor_dt.tzinfo is not None:
         anchor_dt = anchor_dt.replace(tzinfo=None)
 
+    pierce_min = SWEEP_WICK_PIERCE_MIN_ATR.get(pair_type, 0.05) * tf_atr
+    swept_type_we_want = 'low' if bias == 'LONG' else 'high'
+
     best = None  # tuple: (score, hours_before, payload_dict)
 
     for i in range(0, upper):
@@ -541,52 +628,80 @@ def grade_sweep(df, swings, anchor_idx, bias, tf_atr, pair_type, tf_label):
         if hrs_before is None or hrs_before > SWEEP_RECENCY_TRADING_HOURS:
             continue
 
+        # Find the deepest pierce among all ACTIVE prior same-type swings.
+        # SMC: a swept swing's liquidity is gone — it can't be a sweep
+        # target again. before_idx=i ensures the candle being evaluated
+        # doesn't disqualify its own target.
+        winning_swing = None
+        winning_depth = 0.0
         for s in swings:
-            if s['idx'] >= i:
+            if s['idx'] >= i or s['type'] != swept_type_we_want:
                 continue
-            if bias == 'LONG' and s['type'] == 'low':
-                if L[i] < s['price'] and C[i] > s['price']:
-                    swept = s
-                    swept_type = 'low'
-                else:
-                    continue
-            elif bias == 'SHORT' and s['type'] == 'high':
-                if H[i] > s['price'] and C[i] < s['price']:
-                    swept = s
-                    swept_type = 'high'
-                else:
-                    continue
+            level = float(s['price'])
+            if bias == 'LONG':
+                pierced = (L[i] < level - pierce_min) and (C[i] > level)
+                depth   = level - L[i] if pierced else 0.0
             else:
+                pierced = (H[i] > level + pierce_min) and (C[i] < level)
+                depth   = H[i] - level if pierced else 0.0
+            if not pierced:
                 continue
+            if not is_swing_active(s, df, pierce_min, before_idx=i):
+                continue
+            if depth > winning_depth:
+                winning_swing = s
+                winning_depth = depth
 
-            # Score components
-            base = SWEEP_SCORE_BASE_MAX
-            eq_score, eq_matches = _equal_levels_score(swept, swings, pair_type, tf_atr)
-            rej_score, wb_ratio  = _rejection_score(df, i, swept_type, tf_atr)
-            total = base + eq_score + rej_score
+        if winning_swing is None:
+            continue
 
-            payload = {
-                'score': round(total, 3),
-                'tier':  _sweep_tier(total),
-                'price': float(swept['price']),
-                'sweep_idx': i,
-                'tf': tf_label,
-                'components': {
-                    'base': base,
-                    'equal_levels': eq_score,
-                    'equal_levels_matches': eq_matches,
-                    'rejection': rej_score,
-                    'wick_body_ratio': round(wb_ratio, 2),
-                },
-                'hours_before_anchor': round(hrs_before, 1),
-            }
+        swept = winning_swing
+        swept_type = swept_type_we_want
 
-            if best is None:
+        # Score components. Equal-levels pool is filtered to active swings
+        # via `_equal_levels_score(df=df, before_idx=i)`.
+        base = SWEEP_SCORE_BASE_MAX
+        eq_score, eq_matches = _equal_levels_score(
+            swept, swings, pair_type, tf_atr,
+            df=df, before_idx=i,
+        )
+        rej_score, wb_ratio  = _rejection_score(df, i, swept_type, tf_atr)
+        total = base + eq_score + rej_score
+
+        # Resolve swept-swing timestamp (used by chart to draw dotted line
+        # back to the level). Falls back to None if unresolvable.
+        try:
+            sw_ts = df.index[int(swept['idx'])]
+            swept_swing_ts_iso = (
+                sw_ts.isoformat() if hasattr(sw_ts, 'isoformat') else str(sw_ts)
+            )
+        except Exception:
+            swept_swing_ts_iso = None
+
+        payload = {
+            'score': round(total, 3),
+            'tier':  _sweep_tier(total),
+            'price': float(swept['price']),
+            'sweep_idx': i,
+            'swept_swing_idx': int(swept['idx']),
+            'swept_swing_ts':  swept_swing_ts_iso,
+            'tf': tf_label,
+            'components': {
+                'base': base,
+                'equal_levels': eq_score,
+                'equal_levels_matches': eq_matches,
+                'rejection': rej_score,
+                'wick_body_ratio': round(wb_ratio, 2),
+            },
+            'hours_before_anchor': round(hrs_before, 1),
+        }
+
+        if best is None:
+            best = (total, hrs_before, payload)
+        else:
+            # Higher score wins; tie -> more recent (smaller hrs_before)
+            if total > best[0] or (total == best[0] and hrs_before < best[1]):
                 best = (total, hrs_before, payload)
-            else:
-                # Higher score wins; tie -> more recent (smaller hrs_before)
-                if total > best[0] or (total == best[0] and hrs_before < best[1]):
-                    best = (total, hrs_before, payload)
 
     if best is None:
         return none_result
@@ -755,24 +870,20 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     """
     Phase 1 sweep observation — snapshot semantics.
 
-    Swings are computed on the FULL df at lookback=3 (wall-grade pivots) and
-    then filtered to the search window. Computing on the slice (the previous
-    approach) silently dropped 3 candidates at each edge of the window
-    because get_swing_points cannot confirm pivots without `lookback` candles
-    of context on both sides. Full-df detection gives every candle in the
-    window its true neighbours.
+    Swings are computed on the FULL df at lookback=3 and filtered to the
+    search window. Full-df detection gives every candle in the window its
+    true neighbours (computing on the slice silently drops 3 candidates at
+    each edge).
 
     Search window:
-      - BOS:  `[impulse_start_idx, ob_idx]`. If a same-type pivot sits at or
-              just before impulse_start_idx (the leg's launch pivot), the
-              window extends back to include it — that pivot is a legitimate
-              sweep target and the impulse leg often opens with the candle
-              that pierced it.
-      - CHoCH: `[prior_event_idx, ob_idx]` when prior_event_idx is provided.
-              Falls back to the leg-anchored window when no prior event
-              exists yet. The catalysing sweep for a CHoCH is typically
-              OUTSIDE the impulse leg (the prior trend's terminal extreme
-              that price ran out just before the reversal began).
+      - CHoCH: `[prior_event_idx, ob_idx]` when prior_event_idx is given.
+        Falls back to leg-anchored when no prior event exists.
+      - BOS:   `[prior_event_idx, ob_idx]` when prior_event_idx is given
+        (symmetric with CHoCH — covers the entire trend leg the BOS is
+        continuing). Caller passes the most recent OPPOSING-direction
+        structural event (Major/Minor BOS or Major/Minor CHoCH that
+        reversed the trend). Fallback when prior_event_idx is None or
+        unresolvable: `max(0, ob_idx - 48)` (~2 trading days of H1).
 
     A qualifying sweep candle:
       - Bullish OB: candle's low pierces a prior pivot LOW by at least the
@@ -780,13 +891,20 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
       - Bearish OB: candle's high pierces a prior pivot HIGH by the pierce
         minimum, AND closes back below that high.
 
-    For each candidate candle we check ALL prior same-type pivots in the
-    window — not just the single extreme. This catches the case where the
-    real liquidity sat at a recent equal-lows cluster (e.g. 90/91/92) while
-    a deeper one-off pivot (e.g. 100) lay untouched further back. If a
-    candle pierced more than one prior pivot, the DEEPEST pierce wins.
+    Target eligibility (SMC-faithful, NEW):
+      - Only ACTIVE swings qualify as sweep targets. Active = unbroken AND
+        unswept by any candle between the swing's birth and the candidate
+        sweep candle's idx. Drained / broken swings have no liquidity left.
+      - If no active target exists in the window for any candidate, the
+        snapshot returns `exists=False`. No fallback to swept targets.
 
-    Iteration is reverse (newest candidate first); the first match wins.
+    Selection:
+      - For each candidate candle in the window, find the deepest pierce
+        among all ACTIVE prior same-type pivots. Score the candidate.
+      - Across all candidates with a qualifying active target, the
+        HIGHEST-SCORED candidate wins. Tie-break: more recent.
+      - The OB candle itself is allowed to be the sweep candle (per ICT
+        methodology — engulfing / rejection-block patterns).
 
     Returns the snapshot dict written to ob['sweep_observed'].
     """
@@ -811,34 +929,26 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     swing_type_we_want = 'low' if bias_low else 'high'
     pierce_min = SWEEP_WICK_PIERCE_MIN_ATR.get(pair_type, 0.05) * tf_atr
 
-    # Swing pool — computed once on the full df at lookback=3 (wall-grade).
-    # Unified across event_type: sweep anchors should be meaningful pivots
-    # regardless of BOS vs CHoCH.
+    # Swing pool — computed once on the full df at lookback=3.
     all_swings = get_swing_points(df, lookback=3)
     if not all_swings:
         return not_observed
 
     # Search window low bound.
-    if event_type == 'CHoCH' and prior_event_idx is not None and prior_event_idx >= 0:
+    # Both BOS and CHoCH use [prior_event_idx, ob_idx] when prior_event_idx
+    # is provided. The "prior event" is the most recent OPPOSING-direction
+    # structural turn — for a BOS this is the last CHoCH or opposite-direction
+    # BOS that started the current trend leg; for a CHoCH it's the prior
+    # trend's terminal event. Sweep targets often sit at the very start of
+    # the current leg (the level the leg launched from), not just inside it.
+    # Fallback when prior_event_idx is unresolvable: ob_idx - 48 H1 candles
+    # (~2 trading days). Kept generous so we don't go silent on a real sweep
+    # just because the events ring rotated out the relevant turn.
+    BOS_FALLBACK_LOOKBACK = 48
+    if prior_event_idx is not None and int(prior_event_idx) >= 0:
         search_lo = min(int(prior_event_idx), int(impulse_start_idx))
     else:
-        search_lo = int(impulse_start_idx)
-        # BOS: extend back to include the launch pivot of the current
-        # impulse leg if one sits at or just before impulse_start_idx. The
-        # leg's first candle frequently IS the sweep of that launch pivot.
-        # We look back at most a few candles to find the nearest same-type
-        # pivot — if none is close, we don't extend (avoids dragging in
-        # historically unrelated swings).
-        LAUNCH_PIVOT_LOOKBACK = 5
-        scan_floor = max(0, search_lo - LAUNCH_PIVOT_LOOKBACK)
-        launch_candidates = [
-            s for s in all_swings
-            if s['type'] == swing_type_we_want
-            and scan_floor <= s['idx'] <= search_lo
-        ]
-        if launch_candidates:
-            launch_pivot = max(launch_candidates, key=lambda s: s['idx'])
-            search_lo = int(launch_pivot['idx'])
+        search_lo = max(0, int(ob_idx) - BOS_FALLBACK_LOOKBACK)
 
     if search_lo < 0:
         search_lo = 0
@@ -854,13 +964,21 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     if not swings_in_window:
         return not_observed
 
-    # Walk candidate sweep candles newest-first. First match wins.
-    for i in range(ob_idx, search_lo - 1, -1):
+    swept_type = 'low' if bias_low else 'high'
+
+    # Score every candidate. The HIGHEST-SCORED candidate with an ACTIVE
+    # (unbroken + unswept) target wins. NOT first-match.
+    # Tie-break: more recent (higher candidate idx).
+    best = None  # (total, candidate_idx, payload_dict)
+
+    for i in range(search_lo, ob_idx + 1):
         prior_swings = [s for s in swings_in_window if s['idx'] < i]
         if not prior_swings:
             continue
 
-        # Find the deepest pierce among all prior same-type pivots.
+        # Find the deepest pierce among all ACTIVE prior same-type pivots.
+        # `before_idx=i` ensures the candidate doesn't disqualify its own
+        # target by counting itself as a sweep of the level.
         winning_swing = None
         winning_depth = 0.0
         for s in prior_swings:
@@ -871,31 +989,29 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
             else:
                 pierced = (H[i] > level + pierce_min) and (C[i] < level)
                 depth   = H[i] - level if pierced else 0.0
-            if pierced and depth > winning_depth:
+            if not pierced:
+                continue
+            if not is_swing_active(s, df, pierce_min, before_idx=i):
+                continue
+            if depth > winning_depth:
                 winning_swing = s
                 winning_depth = depth
 
         if winning_swing is None:
             continue
 
-        extreme = winning_swing
-        level   = extreme['price']
-
-        # Qualifying sweep found. Score it using existing Phase 2 helpers so
-        # tier semantics stay consistent across phases. _equal_levels_score
-        # expects the full swing pool (not just same-type) so it can filter
-        # internally; pass swings_in_window's same-type set as-is since we
-        # only kept the relevant type. The helper's same-type filter is a
-        # no-op on this input.
-        swept_type = 'low' if bias_low else 'high'
-        eq_score, eq_matches = _equal_levels_score(extreme, swings_in_window, pair_type, tf_atr)
+        level = winning_swing['price']
+        eq_score, eq_matches = _equal_levels_score(
+            winning_swing, swings_in_window, pair_type, tf_atr,
+            df=df, before_idx=i,
+            recency_floor_idx=search_lo,
+        )
         rej_score, wb_ratio  = _rejection_score(df, i, swept_type, tf_atr)
         total = SWEEP_SCORE_BASE_MAX + eq_score + rej_score
         tier  = _sweep_tier(total)
 
         # Pierce distance in display units (pips for forex, points/$ for others).
         if pair_type == 'forex':
-            # 0.0001 for 5-dp, 0.01 for 3-dp JPY pairs
             pip_unit = 0.01 if pair_name == 'USDJPY' else 0.0001
         elif pair_type == 'index':
             pip_unit = 1.0
@@ -907,24 +1023,33 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
             raw_distance = H[i] - level
         wick_distance_pips = round(max(raw_distance, 0.0) / pip_unit, 2)
 
-        # Snapshot timestamp + observed-at (UTC).
         sweep_ts = df.index[i]
         try:
             sweep_ts_iso = sweep_ts.isoformat() if hasattr(sweep_ts, 'isoformat') else str(sweep_ts)
         except Exception:
             sweep_ts_iso = str(sweep_ts)
+        try:
+            swept_swing_ts = df.index[int(winning_swing['idx'])]
+            swept_swing_ts_iso = (
+                swept_swing_ts.isoformat() if hasattr(swept_swing_ts, 'isoformat')
+                else str(swept_swing_ts)
+            )
+        except Exception:
+            swept_swing_ts_iso = None
 
         context_tags = _compute_context_tags(
             level, swept_type, df, sweep_ts, pair_name, pair_type, tf_atr
         )
 
-        return {
+        payload = {
             'exists':              True,
             'tf':                  tf_label,
             'tier':                tier,
             'score':               round(total, 3),
             'price':               float(level),
             'sweep_idx':           int(i),
+            'swept_swing_idx':     int(winning_swing['idx']),
+            'swept_swing_ts':      swept_swing_ts_iso,
             'timestamp':           sweep_ts_iso,
             'wick_distance_pips':  wick_distance_pips,
             'wick_body_ratio':     round(wb_ratio, 2),
@@ -933,7 +1058,12 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
             'observed_at':         datetime.utcnow().isoformat()
         }
 
-    return not_observed
+        if best is None or total > best[0] or (total == best[0] and i > best[1]):
+            best = (total, i, payload)
+
+    if best is None:
+        return not_observed
+    return best[2]
 
 
 def select_best_sweep(h1_result, m15_result):

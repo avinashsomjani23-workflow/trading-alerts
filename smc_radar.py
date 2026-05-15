@@ -56,6 +56,18 @@ ZONE_PROXIMITY_THRESHOLDS = {
 }
 
 # ---------------------------------------------------------------------------
+# Two-OB system. OB1 (Primary) = closest bias-correct OB within
+# OB1_INNER_LIMIT_ATR x H1 ATR. OB2 (Alternative) = best Pristine OB in the
+# ring [OB1_INNER_LIMIT_ATR, OB2_OUTER_LIMIT_ATR] x H1 ATR. OB2 surfaces
+# the next zone above/below if price travels past OB1, even when no OB1
+# exists. OBs beyond OB2_OUTER_LIMIT_ATR are dropped at proximity_gate.
+# Phase 2 / Phase 3 only consume OB1 (primary). When price moves into OB2's
+# range, OB2 naturally re-classifies as OB1 on the next scan.
+# ---------------------------------------------------------------------------
+OB1_INNER_LIMIT_ATR = 4.0
+OB2_OUTER_LIMIT_ATR = 8.0
+
+# ---------------------------------------------------------------------------
 # STALENESS THRESHOLDS (B3)
 # ---------------------------------------------------------------------------
 STALENESS_HOURS = {
@@ -639,18 +651,26 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     active_obs = []
 
     for ev_pos, ev in enumerate(events):
-        # Most recent prior event's break-candle idx in the current df. Used
-        # to widen the CHoCH sweep search window backwards through the prior
-        # trend. Resolved from events[ev_pos - 1].candle_ts. None when no
-        # prior event exists yet or its candle falls outside the df window.
-        if ev_pos > 0:
-            prior_event_idx = _idx_from_ts(events[ev_pos - 1].get('candle_ts'))
-        else:
-            prior_event_idx = None
-
         ev_type = ev.get('type')           # 'BOS' | 'CHoCH'
         ev_tier = ev.get('tier')           # 'Major' | 'Minor'
         ev_dir  = ev.get('direction')      # 'bullish' | 'bearish'
+
+        # Most recent OPPOSING-direction structural event (Major/Minor BOS
+        # or Major/Minor CHoCH against this event's direction). Used to
+        # widen the sweep search window — the opposing event marks the
+        # start of the current trend leg, and the catalysing sweep often
+        # sits at or near that turn. Resolved from the events ring.
+        # None when no opposing prior event exists yet, or when its candle
+        # falls outside the df window.
+        prior_event_idx = None
+        for back_pos in range(ev_pos - 1, -1, -1):
+            cand = events[back_pos]
+            if cand.get('type') not in ('BOS', 'CHoCH'):
+                continue
+            if cand.get('direction') == ev_dir:
+                continue
+            prior_event_idx = _idx_from_ts(cand.get('candle_ts'))
+            break
         if ev_type not in ('BOS', 'CHoCH'):
             continue
 
@@ -795,16 +815,20 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                     print(_diag_short(diag))
                     continue
 
-        # Proximity gate.
+        # Proximity gate. Two-OB system: keep OBs out to OB2_OUTER_LIMIT_ATR
+        # so the outer-ring (alternative) OB is preserved. The OB1 vs OB2
+        # split happens post-dedupe via _split_primary_alternative below.
+        # Anything beyond OB2_OUTER_LIMIT_ATR is dropped — those OBs aren't
+        # actionable in the current chart context regardless of quality.
         if h1_atr_for_leg and h1_atr_for_leg > 0:
-            if abs(current_price_now - ob_proximal) > 4.0 * h1_atr_for_leg:
+            if abs(current_price_now - ob_proximal) > OB2_OUTER_LIMIT_ATR * h1_atr_for_leg:
                 diag['drop_gate'] = 'proximity_gate'
                 diag['drop_detail'] = {
                     'ob_proximal': ob_proximal,
                     'current_price': current_price_now,
                     'h1_atr': float(h1_atr_for_leg),
                     'distance_atr': abs(current_price_now - ob_proximal) / h1_atr_for_leg,
-                    'limit_atr': 4.0,
+                    'limit_atr': OB2_OUTER_LIMIT_ATR,
                 }
                 ob_build_diagnostics.append(diag)
                 print(_diag_short(diag))
@@ -848,14 +872,11 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'mitigated_at_idx': fvg_result.get('mitigated_at_idx')
         }
 
-        # Phase 1 sweep observation — snapshot semantics. Window depends on
-        # event type:
-        #   BOS:  [impulse_start_idx, ob_idx] (leg-anchored — counter-trend
-        #         sweep inside the pullback leg).
-        #   CHoCH: [prior_event_idx, ob_idx] (widened — the catalysing sweep
-        #         is the prior trend's terminal extreme, OUTSIDE the new
-        #         impulse leg). Falls back to leg-anchored when no prior
-        #         event exists in the current df window.
+        # Phase 1 sweep observation — snapshot semantics. Symmetric window
+        # for BOS and CHoCH: [prior_opposing_event_idx, ob_idx]. The opposing
+        # event marks where the current trend leg started; the catalysing
+        # sweep often sits at or near that turn. Falls back to a 48-candle
+        # lookback inside observe_phase1_sweep when prior_event_idx is None.
         try:
             sweep_obs = smc_detector.observe_phase1_sweep(
                 df, ob_idx, impulse_start_idx, ev_dir,
@@ -933,16 +954,12 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                 }
                 print(_diag_short(_d))
 
-    # Latest OB per bias; same-leg fallback only.
-    latest, filtered = {}, []
-    for ob in sorted(tracked_obs, key=lambda x: x['bos_idx'], reverse=True):
-        d = ob['direction']
-        if d not in latest:
-            latest[d] = ob
-            filtered.append(ob)
-        elif ob['impulse_start_idx'] == latest[d]['impulse_start_idx']:
-            filtered.append(ob)
-            break
+    # Two-OB system: keep ALL OBs through dedupe. The split into one
+    # primary (OB1) and one alternative (OB2) per direction happens AFTER
+    # dedupe in _split_primary_alternative. We can no longer pre-filter to
+    # "latest OB per direction" because the alternative may come from an
+    # earlier leg sitting in the 4-8 x ATR ring.
+    filtered = list(tracked_obs)
 
     # Same-leg dedupe: 4-test ladder applied in strict order.
     # Pristine > FVG-holder > Freshest > Defensive.
@@ -1015,34 +1032,142 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
 
     filtered = _dedupe_same_leg(filtered)
 
+    # Two-OB split per direction.
+    #   OB1 (Primary):     bias-correct OB closest to current price within
+    #                      OB1_INNER_LIMIT_ATR x H1 ATR. Touch state ignored
+    #                      (current behaviour preserved — Pristine or Tested
+    #                      both qualify; closest wins).
+    #   OB2 (Alternative): best Pristine OB in the outer ring
+    #                      (OB1_INNER_LIMIT_ATR, OB2_OUTER_LIMIT_ATR] x H1 ATR.
+    #                      Same direction as bias. Tested OBs do not qualify.
+    #                      Pick by confluence count, freshness tiebreak. OB2
+    #                      surfaces independently of OB1 — when no OB1 exists,
+    #                      OB2 still shows.
+    # Each OB carries 'role' = 'primary' | 'alternative' for downstream
+    # consumers (Phase 2/3 only consume primary; chart renders both).
+    cur_price = float(C[-1])
+    filtered = _split_primary_alternative(filtered, cur_price)
+
     # Strip the private dedupe hint before returning.
     for o in filtered:
         o.pop('_dedupe_thresh', None)
         o.pop('_diag_ref', None)  # TEMP DIAG — internal back-reference
 
     return {
-        "current_price": float(C[-1]),
+        "current_price": cur_price,
         "active_unmitigated_obs": filtered,
         "ob_build_diagnostics": ob_build_diagnostics,  # TEMP DIAG
     }
+
+
+def _count_confluences(ob):
+    """
+    Count distinct SMC confluences present on an OB.
+
+    Confluences considered (each contributes 1 to the count):
+      - FVG exists (any state — pristine or partial; ghost does not count)
+      - Sweep observed (active/unbroken target — already filtered by
+        observe_phase1_sweep, so any sweep present here qualifies)
+      - broken_was_wall (the BOS that birthed this OB broke a dealing-range
+        wall — meaningful structural displacement)
+
+    Used to rank OB2 candidates. Higher count wins. Tie-breaks by freshness
+    (higher bos_idx) live in the caller.
+    """
+    n = 0
+    fvg = ob.get('fvg') or {}
+    if fvg.get('exists'):
+        n += 1
+    sw = ob.get('sweep_observed') or {}
+    if sw.get('exists'):
+        n += 1
+    if ob.get('broken_was_wall'):
+        n += 1
+    return n
+
+
+def _split_primary_alternative(obs, cur_price):
+    """
+    Partition OBs into one Primary (OB1) + one Alternative (OB2) per
+    direction. Tags each kept OB with `role` ∈ {'primary', 'alternative'}
+    and stamps `_distance_atr` for downstream sorting / rendering.
+
+    Rules — see docstring at call site for full SMC rationale:
+      - Primary: bias-correct, distance ≤ OB1_INNER_LIMIT_ATR x H1 ATR,
+        closest to current price. Pristine or Tested both qualify.
+      - Alternative: bias-correct, OB1_INNER_LIMIT_ATR < distance ≤
+        OB2_OUTER_LIMIT_ATR x H1 ATR, Pristine only (touches == 0). Pick by
+        confluence count, freshness tiebreak.
+
+    OB1 and OB2 are independent — OB2 surfaces even when no OB1 exists.
+    """
+    by_dir = {}
+    for ob in obs:
+        by_dir.setdefault(ob['direction'], []).append(ob)
+
+    kept = []
+    for direction, group in by_dir.items():
+        primary = None
+        primary_dist_atr = None
+        alt_candidates = []
+
+        for ob in group:
+            atr = float(ob.get('h1_atr') or 0.0)
+            if atr <= 0:
+                continue  # cannot classify without ATR
+            dist = abs(cur_price - float(ob['proximal_line']))
+            dist_atr = dist / atr
+            ob['_distance_atr'] = round(dist_atr, 3)
+
+            if dist_atr <= OB1_INNER_LIMIT_ATR:
+                # Primary candidate: closest to price wins.
+                if primary is None or dist_atr < primary_dist_atr:
+                    primary = ob
+                    primary_dist_atr = dist_atr
+            elif dist_atr <= OB2_OUTER_LIMIT_ATR:
+                # Alternative candidate. Pristine gate.
+                if int(ob.get('touches', 0)) == 0:
+                    alt_candidates.append(ob)
+            # else: outside outer limit — should have been gated at build,
+            # defensive skip here.
+
+        if primary is not None:
+            primary['role'] = 'primary'
+            kept.append(primary)
+
+        if alt_candidates:
+            # Sort: confluence count desc, then freshness (bos_idx desc).
+            alt_candidates.sort(
+                key=lambda o: (_count_confluences(o), int(o.get('bos_idx', 0))),
+                reverse=True
+            )
+            alt = alt_candidates[0]
+            alt['role'] = 'alternative'
+            kept.append(alt)
+
+    return kept
 
 # ---------------------------------------------------------------------------
 # CHART GENERATION
 # ---------------------------------------------------------------------------
 
 def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
-                      is_invalidated=False, last_event=None):
+                      is_invalidated=False, last_event=None, alt_ob=None):
     """
     H1 zone chart. Used for active zones, invalidated zones, and structure-only
     (no zone) views.
 
     Args:
-      ob: zone dict (proximal/distal/ob_idx/fvg/etc.) OR None for structure-only.
+      ob: PRIMARY zone dict (OB1) OR None for structure-only.
       walls: dealing_range walls dict.
       is_invalidated: True to render the OB band greyed out (dead zone).
       last_event: optional dict {type, tier, direction, ts} — when ob is None,
                   used to draw a marker at the most recent BOS/CHoCH so the
                   vet can see what defined the current dealing range.
+      alt_ob: ALTERNATIVE zone dict (OB2) — same direction as ob, sits in
+              the 4-8 x H1 ATR ring from current price. Rendered with reduced
+              opacity and a "Alt" label so OB1 stays the loud focus. None
+              when no alternative exists.
 
     Visual elements:
       - Candles (thin body 0.55, fat wick 1.5) — last 130 candles + 8 right margin
@@ -1090,6 +1215,19 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
             zone_hi  = max(proximal, distal)
         else:
             proximal = distal = zone_lo = zone_hi = None
+
+        # Alt OB (OB2) — same direction, sits in the 4-8xATR ring. Optional.
+        has_alt_ob = (alt_ob is not None) and has_ob
+        if has_alt_ob:
+            alt_proximal = float(alt_ob['proximal_line'])
+            alt_distal   = float(alt_ob['distal_line'])
+            alt_zone_lo  = min(alt_proximal, alt_distal)
+            alt_zone_hi  = max(alt_proximal, alt_distal)
+            alt_ob_abs   = alt_ob.get('ob_idx')
+            alt_ob_plot_idx = (alt_ob_abs - window_start) if alt_ob_abs is not None else None
+        else:
+            alt_proximal = alt_distal = alt_zone_lo = alt_zone_hi = None
+            alt_ob_plot_idx = None
 
         # --- Walls (optional) ---
         ceiling_price = None
@@ -1140,6 +1278,9 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                 if ft is not None and fb is not None:
                     ymin_candidates.append(float(fb))
                     ymax_candidates.append(float(ft))
+        if has_alt_ob:
+            ymin_candidates.append(alt_zone_lo)
+            ymax_candidates.append(alt_zone_hi)
         ymin_candidates.append(float(C[-1]))
         ymax_candidates.append(float(C[-1]))
         if ceiling_in_view:
@@ -1234,6 +1375,42 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                     fill=False, edgecolor=ob_outline, linewidth=2.0, zorder=4,
                     linestyle='-'
                 ))
+
+            # --- Alternative zone band (OB2) ---
+            # Reduced opacity so OB1 stays the loud focus. Same band style,
+            # paler fill / paler edge. Tag "Alt" on the right edge so the
+            # vet immediately knows which zone is the alternative.
+            if has_alt_ob and alt_ob_plot_idx is not None:
+                alt_x_start = max(0, alt_ob_plot_idx - 0.5)
+                alt_width   = (n_plot + RIGHT_MARGIN - 1) - alt_x_start
+                if alt_width > 0:
+                    ax.add_patch(patches.Rectangle(
+                        (alt_x_start, alt_zone_lo), alt_width, alt_zone_hi - alt_zone_lo,
+                        facecolor='#9b59b6', alpha=0.06, zorder=1
+                    ))
+                    ax.add_patch(patches.Rectangle(
+                        (alt_x_start, alt_zone_lo), alt_width, alt_zone_hi - alt_zone_lo,
+                        fill=False, edgecolor='#bb8fce', linestyle=(0, (4, 3)),
+                        linewidth=1.0, alpha=0.55, zorder=2
+                    ))
+                    # Alt OB candle outline (lighter than primary).
+                    if 0 <= alt_ob_plot_idx < n_plot:
+                        a_h = float(H[alt_ob_plot_idx])
+                        a_l = float(L[alt_ob_plot_idx])
+                        ax.add_patch(patches.Rectangle(
+                            (alt_ob_plot_idx - 0.5, a_l), 1.0, a_h - a_l,
+                            fill=False, edgecolor='#bb8fce', linewidth=1.2,
+                            alpha=0.6, zorder=4, linestyle='-'
+                        ))
+                    # "Alt" tag on the right edge of the band, aligned to
+                    # the alt zone midline — keeps it readable.
+                    alt_mid = (alt_zone_lo + alt_zone_hi) / 2.0
+                    ax.annotate(
+                        'Alt OB', xy=(n_plot + RIGHT_MARGIN - 1, alt_mid),
+                        xytext=(-4, 0), textcoords='offset points',
+                        color='#bb8fce', fontsize=8, alpha=0.7,
+                        ha='right', va='center', zorder=5,
+                    )
 
         # --- FVG outline ---
         # Skipped entirely for structure-only (no ob) and invalidated views —
@@ -1434,42 +1611,46 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                            linewidths=1.0, zorder=6)
 
         # --- Sweep candle marker (Phase 1 sweep observation) ---
-        # Highlights the swept candle's wick in a distinct color, places a
-        # star at the wick tip, and draws a short level line at the swept
-        # price. Sweep_idx is refreshed each scan via refresh_slate_zone, so
-        # this maps to the current df frame correctly. Skipped for
-        # structure-only and invalidated views.
+        # Star at the wick tip + dotted level line from sweep candle BACK
+        # to the swept swing's idx. NO wick highlight — the bar bloom hid
+        # the candle itself. Star is drawn for EVERY tier (textbook /
+        # decent / weak); color varies so visual intensity still hints at
+        # quality, but presence is consistent.
         sw = (ob.get('sweep_observed') or {}) if (has_ob and not is_invalidated) else {}
         if sw.get('exists'):
             sw_abs_idx = sw.get('sweep_idx')
             sw_level = sw.get('price')
             sw_tier = sw.get('tier', 'weak')
+            sw_swept_idx = sw.get('swept_swing_idx')  # may be None on legacy snapshots
             SWEEP_COLOR_MAP = {
                 'textbook': '#00e5ff',
                 'decent':   '#26c6da',
                 'weak':     '#80deea',
             }
-            SWEEP_COLOR = SWEEP_COLOR_MAP.get(sw_tier, '#00e5ff')
+            SWEEP_COLOR = SWEEP_COLOR_MAP.get(sw_tier, '#80deea')
             if sw_abs_idx is not None and sw_level is not None:
                 sw_local = sw_abs_idx - window_start
                 if 0 <= sw_local < n_plot:
                     sw_h = float(H[sw_local])
                     sw_l = float(L[sw_local])
-                    # Highlight the sweep candle wick (thick line in sweep color).
-                    ax.plot([sw_local, sw_local], [sw_l, sw_h],
-                            color=SWEEP_COLOR, linewidth=2.8, alpha=0.85,
-                            zorder=7, solid_capstyle='butt')
-                    # Mark the swept wick tip with a star.
+                    # Star at the wick tip — every sweep tier.
                     wick_tip = sw_l if ob['direction'] == 'bullish' else sw_h
                     ax.scatter([sw_local], [wick_tip], marker='*', s=140,
                                color=SWEEP_COLOR, edgecolors='#001f24',
                                linewidths=0.8, zorder=8)
-                    # Short dashed line at the swept price level (extends
-                    # back from the sweep candle to show the swept swing).
-                    lvl_x_start = max(0, sw_local - 6)
-                    ax.plot([lvl_x_start, sw_local], [sw_level, sw_level],
-                            color=SWEEP_COLOR, linewidth=1.0,
-                            linestyle=(0, (3, 2)), alpha=0.7, zorder=4)
+                    # Dotted line at the swept price level — extends from
+                    # the sweep candle BACK to the swept swing's idx so
+                    # the vet can see exactly which swing was taken.
+                    # Falls back to a 6-candle stub when swept_swing_idx
+                    # isn't on the snapshot (legacy zones).
+                    if sw_swept_idx is not None:
+                        lvl_x_start = max(0, int(sw_swept_idx) - window_start)
+                    else:
+                        lvl_x_start = max(0, sw_local - 6)
+                    if lvl_x_start < sw_local:
+                        ax.plot([lvl_x_start, sw_local], [sw_level, sw_level],
+                                color=SWEEP_COLOR, linewidth=1.0,
+                                linestyle=(0, (3, 2)), alpha=0.8, zorder=4)
                     # Compact label near the wick tip.
                     label_dy = -14 if ob['direction'] == 'bullish' else 14
                     label_va = 'top' if ob['direction'] == 'bullish' else 'bottom'
@@ -1835,7 +2016,9 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
         else:
             fvg_glyph, fvg_col, fvg_title = '&ndash;', '#666', 'No FVG'
 
-        # --- Sweep cell: ★ textbook, ● decent, ○ weak, – none.
+        # --- Sweep cell: star for every sweep, color encodes tier.
+        # textbook = green, decent = yellow, weak = grey.
+        # Detail (tier name) sits in the chart legend + zone narrative.
         sw = z.get('sweep_observed') or {}
         if not sw.get('exists'):
             sw_glyph, sw_col, sw_title = '&ndash;', '#666', 'No sweep'
@@ -1844,9 +2027,9 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
             if tier == 'textbook':
                 sw_glyph, sw_col, sw_title = '&#9733;', '#27ae60', 'Textbook sweep'
             elif tier == 'decent':
-                sw_glyph, sw_col, sw_title = '&#9679;', '#f1c40f', 'Decent sweep'
+                sw_glyph, sw_col, sw_title = '&#9733;', '#f1c40f', 'Decent sweep'
             else:
-                sw_glyph, sw_col, sw_title = '&#9675;', '#888', 'Weak sweep'
+                sw_glyph, sw_col, sw_title = '&#9733;', '#888', 'Weak sweep'
 
         is_new     = z.get('is_new', False)
         is_changed = z.get('is_changed', False)
@@ -1900,8 +2083,9 @@ def _phase1_chart_legend_html(bos_tag="BOS", bos_tier="Major"):
     based on a single zone's event.
     """
     items = [
-        ('#bb8fce', 'Zone band (proximal/distal) — greyed when invalidated'),
+        ('#bb8fce', 'Primary zone band (OB1 — closest to price) / greyed when invalidated'),
         ('#d7bde2', 'OB candle outline — greyed when invalidated'),
+        ('#bb8fce', 'Alternative zone band (OB2 — best Pristine OB further out, dashed + faded)'),
         ('#2ecc71', 'FVG pristine (displacement)'),
         ('#f1c40f', 'FVG partial (proximal touched)'),
         ('#888888', 'FVG mitigated (ghost) / Invalidated zone'),
@@ -1912,7 +2096,7 @@ def _phase1_chart_legend_html(bos_tag="BOS", bos_tier="Major"):
         ('#5dade2', 'Dealing range walls (dotted=anchored, dashed=placeholder; far walls render as edge labels)'),
         ('#85c1e9', 'Equilibrium (50%)'),
         ('#d4a017', 'Swing: ▲▼ lookback-3 (structural swings — walls / BOS / CHoCH)'),
-        ('#00e5ff', 'Sweep candle (★ at wick tip, line at swept level) — Phase 1 sweep observation'),
+        ('#00e5ff', 'Sweep — ★ at wick tip + dotted line back to the swept swing (color: textbook=cyan, decent=teal, weak=pale)'),
         ('#ffffff', 'Current price'),
     ]
     rows = "".join(
@@ -2978,7 +3162,11 @@ def fresh_to_slate_zone(fresh_zone, zone_id, ist_now, current_price, dp):
         "distance_to_proximal_pips": dist_pips,
         "fvg": fresh_zone["fvg"],
         # Phase 1 sweep snapshot — preserved across scans; never re-evaluated.
-        "sweep_observed": fresh_zone.get("sweep_observed", {"exists": False})
+        "sweep_observed": fresh_zone.get("sweep_observed", {"exists": False}),
+        # Two-OB role classification — refreshed each scan as price moves.
+        # 'primary' = OB1 (closest within 4xATR), 'alternative' = OB2
+        # (best Pristine in 4-8xATR ring). Phase 2/3 only consume primary.
+        "role": fresh_zone.get("role", "primary"),
     }
 
 
@@ -3031,6 +3219,9 @@ def refresh_slate_zone(slate_zone, fresh_zone, ist_now, current_price, dp):
                                                     slate_zone.get("broken_was_wall", False))
     slate_zone["reversal_pct"]  = fresh_zone.get("reversal_pct", slate_zone.get("reversal_pct"))
     slate_zone["bos_timestamp"] = fresh_zone.get("bos_timestamp", slate_zone.get("bos_timestamp"))
+    # Two-OB role refreshed each scan — depends on current price relative
+    # to the OB's proximal_line. As price moves, OB2 may re-classify to OB1.
+    slate_zone["role"] = fresh_zone.get("role", slate_zone.get("role", "primary"))
 
 
 def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_pair, pair_type):
@@ -3080,12 +3271,14 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
             proximal = slate_zone['proximal_line']
             direction = slate_zone['direction']
 
-            # Find scan start index — from the candle AFTER OB if locatable,
-            # else whole df.
+            # Find scan start index — from the candle AFTER the BOS candle.
+            # Single source of truth: a touch is a return visit AFTER the OB
+            # is confirmed by the break. Candles inside the displacement leg
+            # (between OB and BOS) are part of the impulse, not tests.
             scan_start = 0
-            if slate_zone.get("ob_timestamp"):
+            if slate_zone.get("bos_timestamp"):
                 try:
-                    target_ts = datetime.fromisoformat(slate_zone["ob_timestamp"])
+                    target_ts = datetime.fromisoformat(slate_zone["bos_timestamp"])
                     if target_ts.tzinfo is not None:
                         target_ts = target_ts.replace(tzinfo=None)
                     ts_col = df['Datetime'] if 'Datetime' in df.columns else pd.Series(df.index)
@@ -3094,7 +3287,7 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
                         if hasattr(kt, 'tzinfo') and kt.tzinfo is not None:
                             kt = kt.replace(tzinfo=None)
                         if kt >= target_ts:
-                            scan_start = k + 1  # candles AFTER the OB candle
+                            scan_start = k + 1  # candles AFTER the BOS candle
                             break
                 except Exception:
                     scan_start = 0
@@ -3129,46 +3322,65 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
 
 def select_relevant_zone_for_pair(active_zones, current_price, dp):
     """
-    Phase 1 highlights ONE zone per pair, recomputed every scan.
+    Phase 1 highlights ONE primary zone + optionally ONE alternative zone
+    per pair, recomputed every scan.
 
-    Selection rule (locked):
-      1. If price is INSIDE any active zone (between proximal and distal,
-         inclusive), that zone wins. Tag it 'zone-in-progress'. If multiple
-         zones contain price (rare; nested zones), pick the one whose proximal
-         is closest to price.
-      2. Otherwise: pick the zone with smallest |current_price - proximal|.
+    Selection (two-OB system):
+      Primary headline (OB1):
+        1. If price is INSIDE any active primary zone, that zone wins
+           ('zone-in-progress'). Tie -> closest proximal.
+        2. Else: among primaries (role=='primary'), pick smallest distance.
+        3. Else (no primary exists this scan): fall back to the alternative
+           (role=='alternative') closest to price. This handles the case
+           where price ran past OB1 and only OB2 remains.
 
-    No bias filter (counter-trend OBs can flag the next CHoCH).
-    No pristine preference (closeness wins).
-    No hysteresis (closest each scan; flapping = real signal that price sits
-    between zones).
+      Alternative (OB2) — returned alongside for chart rendering:
+        - The single role=='alternative' zone (if any) in the same
+          direction as the chosen primary. None if no alternative or if
+          its direction conflicts.
 
-    Returns (selected_zone, in_progress_flag) or (None, False) if no zones.
+    Returns (selected_zone, in_progress_flag, alt_zone)
+            or (None, False, None) if no zones.
     """
     if not active_zones:
-        return None, False
+        return None, False, None
 
-    # In-zone check first.
+    primaries    = [z for z in active_zones if z.get('role', 'primary') == 'primary']
+    alternatives = [z for z in active_zones if z.get('role') == 'alternative']
+
     inside = []
-    for z in active_zones:
+    for z in primaries:
         prox = z['proximal_line']
         dist = z['distal_line']
-        lo, hi = (dist, prox) if z['direction'] == 'bullish' else (prox, dist)
-        # Bullish demand: distal below proximal, both below price normally.
-        # Bearish supply: proximal below distal, both above price normally.
-        # Generic containment by min/max handles both.
         z_lo = min(prox, dist)
         z_hi = max(prox, dist)
         if z_lo <= current_price <= z_hi:
             inside.append(z)
 
+    selected = None
+    in_progress = False
     if inside:
-        winner = min(inside, key=lambda z: abs(current_price - z['proximal_line']))
-        return winner, True
+        selected = min(inside, key=lambda z: abs(current_price - z['proximal_line']))
+        in_progress = True
+    elif primaries:
+        selected = min(primaries, key=lambda z: abs(current_price - z['proximal_line']))
+    elif alternatives:
+        # Fallback: only alternative zones exist this scan. Promote one to
+        # the headline so the pair isn't silently empty.
+        selected = min(alternatives, key=lambda z: abs(current_price - z['proximal_line']))
 
-    # Otherwise closest by pip distance to proximal.
-    winner = min(active_zones, key=lambda z: abs(current_price - z['proximal_line']))
-    return winner, False
+    if selected is None:
+        return None, False, None
+
+    # Pair the chosen primary with an alternative in the SAME direction.
+    alt = None
+    same_dir_alts = [a for a in alternatives
+                     if a.get('direction') == selected.get('direction')
+                     and a.get('zone_id') != selected.get('zone_id')]
+    if same_dir_alts:
+        alt = same_dir_alts[0]
+
+    return selected, in_progress, alt
 
 
 def log_unverified_drop_attempt(slate_zone, pair_name, ist_now):
@@ -3531,13 +3743,14 @@ def run_radar():
 
             if active_zones and current_price is not None:
                 # --- Active path -------------------------------------------
-                sz, in_progress = select_relevant_zone_for_pair(
+                sz, in_progress, alt_sz = select_relevant_zone_for_pair(
                     active_zones, current_price, dp
                 )
                 if sz is None:
                     continue  # defensive — active_zones non-empty so shouldn't fire
 
                 ob_for_render = _slate_zone_to_ob_shape(sz)
+                alt_ob_for_render = _slate_zone_to_ob_shape(alt_sz) if alt_sz else None
                 new_displayed_id = sz["zone_id"]
                 displayed_status = "active"
 
@@ -3569,7 +3782,8 @@ def run_radar():
                     cid = f"chart_{pair_name}_{chart_counter}"
                     chart_b64 = generate_h1_chart(
                         df, ob_for_render, dp, pair_name, ist_ts_full,
-                        walls=pair_walls
+                        walls=pair_walls,
+                        alt_ob=alt_ob_for_render,
                     )
 
                 narrative = generate_zone_narrative_with_atr(
