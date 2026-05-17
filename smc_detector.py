@@ -934,18 +934,32 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     if not all_swings:
         return not_observed
 
-    # Search window low bound.
-    # Both BOS and CHoCH use [prior_event_idx, ob_idx] when prior_event_idx
-    # is provided. The "prior event" is the most recent OPPOSING-direction
-    # structural turn — for a BOS this is the last CHoCH or opposite-direction
-    # BOS that started the current trend leg; for a CHoCH it's the prior
-    # trend's terminal event. Sweep targets often sit at the very start of
-    # the current leg (the level the leg launched from), not just inside it.
-    # Fallback when prior_event_idx is unresolvable: ob_idx - 48 H1 candles
-    # (~2 trading days). Kept generous so we don't go silent on a real sweep
-    # just because the events ring rotated out the relevant turn.
-    BOS_FALLBACK_LOOKBACK = 48
-    if prior_event_idx is not None and int(prior_event_idx) >= 0:
+    # Search window low bound — event-type specific.
+    #
+    # CHoCH: [prior_event_idx, ob_idx]. The catalysing sweep for a trend
+    # turn often sits at the prior trend's terminal extreme, so the window
+    # spans the full prior leg.
+    #
+    # BOS: [most recent counter-trend pullback extreme, ob_idx]. A BOS only
+    # hunts the liquidity of the pullback that preceded its impulse — not
+    # the liquidity at the trend leg's origin. The pullback extreme is the
+    # most recent same-direction-as-target swing (low for bullish BOS, high
+    # for bearish BOS) strictly before impulse_start_idx. Fallback when no
+    # such swing exists in the loaded data: ob_idx - 6 candles.
+    BOS_FALLBACK_LOOKBACK = 6
+    if event_type == 'BOS':
+        pullback_idx = None
+        for s in reversed(all_swings):
+            if s['type'] != swing_type_we_want:
+                continue
+            if s['idx'] < int(impulse_start_idx):
+                pullback_idx = int(s['idx'])
+                break
+        if pullback_idx is not None:
+            search_lo = pullback_idx
+        else:
+            search_lo = max(0, int(ob_idx) - BOS_FALLBACK_LOOKBACK)
+    elif prior_event_idx is not None and int(prior_event_idx) >= 0:
         search_lo = min(int(prior_event_idx), int(impulse_start_idx))
     else:
         search_lo = max(0, int(ob_idx) - BOS_FALLBACK_LOOKBACK)

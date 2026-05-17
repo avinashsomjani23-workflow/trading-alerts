@@ -1820,6 +1820,7 @@ def generate_zone_narrative(ob, name, dp, current_price):
     ratio        = round(ob['ob_body'] / ob['median_leg_body'], 2) if ob['median_leg_body'] > 0 else 0
 
     event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
+    logging.info(f"[OB_BODY_RATIO] {name} zone {ob.get('zone_id','?')}: ob_body={ob['ob_body']:.{dp}f} median_leg={ob['median_leg_body']:.{dp}f} ratio={ratio}x")
     prompt = f"""You are a veteran SMC (Smart Money Concepts) prop trader writing a zone briefing for another experienced SMC trader.
 Be direct. No fluff. No pleasantries. Four sentences only. One paragraph.
 
@@ -1828,14 +1829,13 @@ ZONE DATA — use these exact values, do not recalculate:
 - Bias: {direction} | Structure event: {event_label}
 - Proximal: {proximal:.{dp}f} | Distal: {distal:.{dp}f}
 - Zone width: {zone_pips} pips
-- OB body vs median impulse leg: {ob['ob_body']:.{dp}f} vs {ob['median_leg_body']:.{dp}f} (ratio: {ratio}x — valid because <2.0x)
 - FVG: {fvg_status}
 - Zone status: {ob['status']}
 - Current price: {current_price:.{dp}f} | Distance to proximal: {dist_pips} pips
 
 WRITE EXACTLY FOUR SENTENCES IN THIS ORDER:
 1. What structure event ({event_label}) created this zone and why institutional accumulation is likely here.
-2. OB quality: assess tightness (ratio {ratio}x), and whether pristine or tested means strength or caution.
+2. OB quality: assess whether pristine or tested means strength or caution.
 3. FVG assessment: displacement confirmation present or absent, and what that means for zone conviction.
 4. Current price context: distance to zone ({dist_pips} pips), whether price is approaching or far, and what to watch for.
 
@@ -1884,10 +1884,9 @@ def _fallback_narrative(ob, name, dp, current_price):
     else:
         fvg_line = "No FVG present — zone relies on OB alone for confluence."
     event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
+    logging.info(f"[OB_BODY_RATIO] {name} zone {ob.get('zone_id','?')}: ob_body={ob['ob_body']:.{dp}f} median_leg={ob['median_leg_body']:.{dp}f} ratio={round(ob['ob_body']/ob['median_leg_body'],2):.2f}x (fallback narrative)")
     return (
-        f"{event_label} confirmed the {ob['direction']} shift; this OB marks the last institutional "
-        f"accumulation before the break. "
-        f"OB body ratio {round(ob['ob_body']/ob['median_leg_body'],2):.2f}x vs median leg — tight and valid. "
+        f"{event_label} confirmed the {ob['direction']} shift. "
         f"{fvg_line} "
         f"Current price is {dist_pips} pips from proximal — "
         f"{'approaching zone, watch for reaction.' if dist_pips < 50 else 'still distant, no action yet.'}"
@@ -2632,6 +2631,7 @@ def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
     event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
     distance_brief = "price is INSIDE the zone (mitigation in progress)" if in_zone \
                      else f"price is {dist_pips} pips from proximal"
+    logging.info(f"[OB_BODY_RATIO] {name} zone {ob.get('zone_id','?')}: ob_body={ob['ob_body']:.{dp}f} median_leg={ob['median_leg_body']:.{dp}f} ratio={ratio}x")
     prompt = f"""You are a veteran SMC (Smart Money Concepts) prop trader writing a zone briefing for another experienced SMC trader.
 Be direct. No fluff. No pleasantries. Four sentences only. One paragraph.
 
@@ -2639,7 +2639,6 @@ ZONE DATA — use these exact values, do not recalculate. ALL distances in PIPS.
 - Pair: {name}
 - Bias: {direction} | Structure event: {event_label}
 - Zone width: {zone_pips} pips
-- OB body vs median impulse leg ratio: {ratio}x
 - FVG: {fvg_status}
 - Zone status: {ob.get('status', 'Pristine')}
 - H1 ATR: {atr_display}
@@ -2647,7 +2646,7 @@ ZONE DATA — use these exact values, do not recalculate. ALL distances in PIPS.
 
 WRITE EXACTLY FOUR SENTENCES IN THIS ORDER:
 1. What structure event ({event_label}) created this zone and why institutional accumulation is likely here.
-2. OB quality: assess tightness (ratio {ratio}x), and whether pristine or tested means strength or caution.
+2. OB quality: assess whether pristine or tested means strength or caution.
 3. FVG assessment: displacement confirmation present or absent, and what that means for zone conviction.
 4. Current price context: state distance in pips, compare to H1 ATR ({atr_display}), and what to watch for. Use only pips for distance, never raw price.
 
@@ -2708,10 +2707,9 @@ def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr):
         distance_line = f"Current price is {dist_pips} pips from proximal (H1 ATR {atr_display}) — approaching zone, watch for reaction."
     else:
         distance_line = f"Current price is {dist_pips} pips from proximal (H1 ATR {atr_display}) — still distant, no immediate action."
+    logging.info(f"[OB_BODY_RATIO] {name} zone {ob.get('zone_id','?')}: ob_body={ob['ob_body']:.{dp}f} median_leg={ob['median_leg_body']:.{dp}f} ratio={round(ob['ob_body']/ob['median_leg_body'],2):.2f}x (fallback narrative)")
     return (
-        f"{event_label} confirmed the {ob['direction']} shift; this OB marks the last institutional "
-        f"accumulation before the break. "
-        f"OB body ratio {round(ob['ob_body']/ob['median_leg_body'],2):.2f}x vs median leg. "
+        f"{event_label} confirmed the {ob['direction']} shift. "
         f"{fvg_line} "
         f"{distance_line}"
     )
