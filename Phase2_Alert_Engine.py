@@ -54,6 +54,31 @@ def score_to_int(score):
         return -1
 
 
+# Hysteresis thresholds for re-emailing the same zone. Asymmetric on purpose:
+# losing a confluence is a stronger reason to re-alert than gaining one.
+# A zone wobbling 6.4 <-> 7.0 doesn't cross either threshold and stays silent.
+SCORE_REEMAIL_UP_THRESHOLD   = 0.7   # current >= prior + 0.7 -> re-email up
+SCORE_REEMAIL_DOWN_THRESHOLD = 0.5   # current <= prior - 0.5 -> re-email down
+
+
+def hysteresis_should_reemail(current_score, prior_score):
+    """
+    Decide whether a same-zone re-sighting deserves an update email.
+
+    Returns 'up' if score crossed the upward threshold (confluence gained),
+    'down' if it crossed the downward threshold (confluence lost), or
+    None if inside the dead band (silent).
+    """
+    if prior_score is None:
+        return 'up'  # first sighting — always email (caller treats as new)
+    delta = current_score - prior_score
+    if delta >= SCORE_REEMAIL_UP_THRESHOLD:
+        return 'up'
+    if delta <= -SCORE_REEMAIL_DOWN_THRESHOLD:
+        return 'down'
+    return None
+
+
 def load_json(path, default):
     try:
         with open(path) as f:
@@ -354,9 +379,12 @@ def call_gemini_flash(pair, bias, news_headlines):
             last_err = f"{type(e).__name__}: {str(e)[:80]}"
             time.sleep(3)
 
-    # All attempts failed — log and default to safe-permissive
+    # All attempts failed — log and surface the failure HONESTLY to the
+    # trader. Previously this returned a fake "safe" summary that read like
+    # "no Tier-1 events" — misleading. macro_summary=None + macro_unavailable
+    # lets the email render a distinct "unavailable" banner.
     _log_gemini_failure(pair, last_err)
-    return {"macro_score": 1.0, "macro_summary": "Gemini API unavailable. Defaulting to safe (manual macro check recommended)."}
+    return {"macro_summary": None, "macro_unavailable": True}
 
 
 # ---------------------------------------------------------------------------
@@ -989,6 +1017,27 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
 
     sweep_breakdown_html = build_sweep_breakdown_html(data, dp)
 
+    # Macro context block. If Gemini failed, render a distinct unavailable
+    # banner so the trader knows to manually check news — NOT a fake
+    # "no events" summary that misleads.
+    if data.get('macro_unavailable'):
+        macro_html = (
+            '<div style="margin-top:12px;padding:10px 12px;background:#2d1a1a;'
+            'border-left:3px solid #e74c3c;border-radius:4px;font-size:12px;'
+            'color:#ffb3b3;line-height:1.5;">'
+            '<b style="color:#e74c3c;">&#9888; Macro Context Unavailable:</b> '
+            'Gemini API failed for this scan. Check macro news manually before '
+            'entering.</div>'
+        )
+    else:
+        _ms = data.get('macro_summary') or 'N/A'
+        macro_html = (
+            f'<div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;'
+            f'border-left:3px solid #888;border-radius:4px;font-size:12px;'
+            f'color:#bbb;line-height:1.5;">'
+            f'<b style="color:#eee;">Macro Context:</b> {_ms}</div>'
+        )
+
     return f"""<html><body style="font-family:Arial,sans-serif;background:#0d0d1a;padding:12px;margin:0;">
     <div style="max-width:650px;margin:auto;background:#13131f;border-radius:14px;overflow:hidden;">
         <div style="background:#1a1a2e;padding:14px 18px;">
@@ -1008,9 +1057,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             {m15_chart_block}
             {_chart_legend_html(bos_tag, bos_tier)}
             {sweep_breakdown_html}
-            <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #888;border-radius:4px;font-size:12px;color:#bbb;line-height:1.5;">
-                <b style="color:#eee;">Macro Context:</b> {data.get('macro_summary', 'N/A')}
-            </div>
+            {macro_html}
         </div>
     </div></body></html>"""
 
@@ -1146,6 +1193,97 @@ def _is_weekday_market_hours(ist_now):
     if wd == 6 and ist_now.hour >= 4:  # Sunday after ~04:00 IST markets reopen
         return True
     return False
+
+
+# Phase 1 freshness gate threshold. P1 runs hourly via cron-job.org. We give
+# 75 minutes of slack — one P1 cycle (60m) + 15m grace for slow runs / commit
+# lag. If active_obs.json hasn't been touched in this window during market
+# hours, P2 refuses to scan and emails a one-shot "P1 stale" warning.
+P1_FRESHNESS_MAX_AGE_HOURS = 1.25
+
+
+def check_p1_freshness(ist_now):
+    """
+    Return (is_fresh, reason). Fresh means BOTH conditions hold:
+      (a) active_obs.json was modified within P1_FRESHNESS_MAX_AGE_HOURS, AND
+      (b) the slate's slate_date matches today's trading day.
+
+    Either fails => stale. Phase 2 will skip scanning + emit one alert. Off
+    on weekends / outside market hours so we don't spam during legitimate
+    quiet periods.
+    """
+    if not _is_weekday_market_hours(ist_now):
+        return True, "off_hours"
+
+    age_hrs = _get_active_obs_mtime_hours(ist_now)
+    if age_hrs is None:
+        return False, "active_obs_missing"
+    if age_hrs > P1_FRESHNESS_MAX_AGE_HOURS:
+        return False, f"active_obs_age_{age_hrs:.1f}h_over_{P1_FRESHNESS_MAX_AGE_HOURS:.2f}h"
+
+    # Slate-date check: the file may have been touched recently (e.g. by a
+    # P1 run that crashed before writing the new slate) but still hold a
+    # stale slate_date. Compare to today's trading day.
+    try:
+        raw = load_json("active_obs.json", {})
+        slate_date = raw.get("slate_date") if isinstance(raw, dict) else None
+    except Exception:
+        slate_date = None
+    today_str = get_day_id_ist(ist_now)
+    if slate_date and slate_date != today_str:
+        return False, f"slate_date_{slate_date}_not_{today_str}"
+
+    return True, "ok"
+
+
+def emit_p1_stale_alert(ist_now, reason):
+    """
+    Send a one-shot 'P1 stale' email and persist a flag so subsequent P2
+    runs don't spam. Flag clears automatically on the next fresh scan.
+    """
+    state = load_json("p1_stale_alert_state.json", {})
+    if not isinstance(state, dict):
+        state = {}
+    if state.get("alerted"):
+        # Already notified for the current stale streak. Stay silent.
+        print(f"  [STALE] P1 still stale ({reason}); already notified — silent.")
+        return
+
+    ts_str = ist_now.strftime("%H:%M IST, %d %b")
+    subject = f"P2 PAUSED | Phase 1 data is stale | {ts_str}"
+    html = f"""<html><body style="background:#131722;font-family:Arial,sans-serif;padding:20px;">
+        <div style="max-width:640px;margin:auto;background:#1e222d;padding:20px;border-radius:8px;">
+            <div style="color:#eee;font-size:16px;font-weight:bold;margin-bottom:14px;">
+                Phase 2 paused — {ts_str}
+            </div>
+            <div style="padding:14px;background:#3a1b1b;border-left:4px solid #ef5350;border-radius:4px;color:#eee;font-size:14px;line-height:1.6;">
+                <b style="color:#ef5350;">&#9888; Phase 1 data is stale.</b><br>
+                Phase 2 refused to scan. No trade alerts will be sent until P1 recovers.<br><br>
+                <b>Reason:</b> {reason}<br>
+                <b>Action:</b> Check P1 Actions tab on GitHub. Investigate why the hourly run isn't producing fresh active_obs.json.
+            </div>
+            <div style="padding:10px 12px;margin-top:12px;background:#0d0d1a;border-left:3px solid #555;border-radius:4px;font-size:12px;color:#aaa;line-height:1.5;">
+                You will receive ONE alert per stale streak. The next P2 run that sees fresh data will resume scanning silently.
+            </div>
+        </div>
+    </body></html>"""
+    try:
+        send_email(subject, html, None, None)
+    except Exception as e:
+        print(f"  [STALE ALERT ERR] {e}")
+    state["alerted"] = True
+    state["since_ist"] = ist_now.isoformat()
+    state["reason"] = reason
+    save_json("p1_stale_alert_state.json", state)
+    print(f"  [STALE] One-shot P1-stale alert sent: {reason}")
+
+
+def clear_p1_stale_flag():
+    """Called once P1 is fresh again. Resets the one-shot alert flag."""
+    state = load_json("p1_stale_alert_state.json", {})
+    if isinstance(state, dict) and state.get("alerted"):
+        save_json("p1_stale_alert_state.json", {"alerted": False})
+        print("  [STALE] P1 fresh again — stale-alert flag cleared.")
 
 
 def collect_heartbeat_diagnostics(ist_now, active_obs):
@@ -1332,6 +1470,19 @@ if __name__ == "__main__":
     scan_start_ts = ist_now  # Captured at scan start; separate from per-alert send time.
     print(f"Phase 2 Engine started {ist_now.strftime('%H:%M')} IST")
 
+    # --- Phase 1 freshness gate -----------------------------------------
+    # Phase 2 must NEVER alert on stale Phase 1 data. If P1 hasn't refreshed
+    # active_obs.json within the freshness window during market hours, we
+    # send one warning email and exit. The flag self-clears on recovery.
+    is_fresh, fresh_reason = check_p1_freshness(ist_now)
+    if not is_fresh:
+        print(f"  [STALE GATE] Refusing to scan — {fresh_reason}")
+        emit_p1_stale_alert(ist_now, fresh_reason)
+        import sys
+        sys.exit(0)
+    else:
+        clear_p1_stale_flag()
+
     active_obs = load_slate_as_pair_map("active_obs.json")
     watch_state = load_json("active_watch_state.json", {})
     # --- Phase 2 dedup state — day-reset model ---
@@ -1385,7 +1536,11 @@ if __name__ == "__main__":
 
         radar_tf = pair_conf.get("radar_tf", "15m")
         df_m15 = fetch_with_retry(symbol, "5d", radar_tf)
-        df_h1 = fetch_with_retry(symbol, "15d", "1h")
+        # 30d H1 mirrors Phase 1's MAX_OB_AGE_DAYS window. If a zone is
+        # still active in P1's slate, its OB candle must be locatable on
+        # P2's H1 frame too — no silent fallback to "latest candle" inside
+        # the scorer.
+        df_h1 = fetch_with_retry(symbol, "30d", "1h")
         if df_m15 is None or df_h1 is None:
             print(f"  [SKIP] {name}: data unavailable after retries")
             continue
@@ -1405,6 +1560,7 @@ if __name__ == "__main__":
         surviving_obs = []
         for ob in pair_obs:
             proximal = float(ob['proximal_line'])
+            distal = float(ob['distal_line'])
             bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
             distance = abs(current_price - proximal)
             prox_cap = pair_conf["atr_multiplier"] * h1_atr
@@ -1422,6 +1578,33 @@ if __name__ == "__main__":
                 zone_outcome["result"] = "dropped_proximity"
                 scan_record["zone_outcomes"].append(zone_outcome)
                 continue
+
+            # 2. OB still-active gate. Phase 1 owns the canonical drop decision,
+            # but P1 only runs hourly. Between P1 cycles, price can close beyond
+            # the distal — that invalidates the zone. We replay candles from
+            # the OB candle to NOW on P2's H1 frame, using the same mitigation
+            # rule as P1. If invalidated, drop without scoring/alerting.
+            ob_ts_iso_gate = ob.get('ob_timestamp')
+            if ob_ts_iso_gate:
+                ob_idx_gate, on_chart_gate = smc_detector.locate_ob_candle_idx(
+                    df_h1, ob_ts_iso_gate
+                )
+                if on_chart_gate:
+                    mitigated, mit_reason, _touches = smc_detector.is_ob_mitigated_phase1(
+                        ob['direction'], distal, proximal, df_h1,
+                        start_idx=ob_idx_gate + 1,
+                    )
+                    if mitigated:
+                        zone_outcome["result"] = f"dropped_invalidated_{mit_reason}"
+                        scan_record["zone_outcomes"].append(zone_outcome)
+                        continue
+                else:
+                    # OB older than 30d H1 fetch — should be vanishingly rare
+                    # given P1's MAX_OB_AGE_DAYS guard. Skip the alert rather
+                    # than score against an OB we can't locate.
+                    zone_outcome["result"] = "dropped_ob_off_chart"
+                    scan_record["zone_outcomes"].append(zone_outcome)
+                    continue
 
             zone_outcome["result"] = "passed_to_trend_gate"
             scan_record["zone_outcomes"].append(zone_outcome)
@@ -1455,10 +1638,15 @@ if __name__ == "__main__":
 
         scan_record["trend_alignment"] = trend_alignment
 
-        # Inject fresh BOS count + ring-overflow flag onto selected zone
-        # (count meaningful when zone aligned with current H1 trend).
-        if current_trend == zone_dir:
-            selected_ob['bos_sequence_count'] = bos_counter['count']
+        # Inject fresh BOS count + ring-overflow flag onto selected zone.
+        # Structure is scored from the zone's own bos_tag/bos_tier — the
+        # zone's structural identity does not depend on whether it agrees
+        # with the current dominant trend. Trend alignment is rendered as
+        # an information-only banner in the email. Previously this injection
+        # was gated on `current_trend == zone_dir`, which silently gave
+        # counter-trend zones a phantom "BOS #1" score (the scorecard's
+        # default). Removed the gating.
+        selected_ob['bos_sequence_count'] = bos_counter['count']
         selected_ob['bos_count_maxed'] = bool(bos_counter.get('count_maxed', False))
 
         # Now score and alert only the selected zone
@@ -1518,11 +1706,10 @@ if __name__ == "__main__":
                 srcs.append("M15")
             fvg_source = "+".join(srcs) if srcs else None
 
-            gemini_risk = call_gemini_flash(name, bias, fetch_macro_news(name))
-            macro_score = gemini_risk.get('macro_score', 1.0)
-
+            # Score FIRST. Gemini macro is display-only — don't pay for the
+            # API call until we know the zone is alert-worthy.
             score_res = smc_detector.run_scorecard(
-                bias, df_h1, ob, fvg_data, current_price, pair_conf, df_m15, macro_score
+                bias, df_h1, ob, fvg_data, current_price, pair_conf, df_m15
             )
             if score_res['total'] < pair_conf["min_confidence"]:
                 scan_record["final_action"] = f"score_below_min ({score_res['total']:.1f}<{pair_conf['min_confidence']})"
@@ -1535,6 +1722,10 @@ if __name__ == "__main__":
                 append_scan_log(scan_record)
                 continue
 
+            # Score + levels passed. NOW fetch macro context — only spent on
+            # zones that will actually email.
+            gemini_risk = call_gemini_flash(name, bias, fetch_macro_news(name))
+
             # B2: Pass fvg_source, dealing_range, pd_position, plus new sweep
             # tier + components + age into scorecard rows for richer narration.
             scorecard_rows = smc_detector.generate_scorecard_rows(
@@ -1546,26 +1737,28 @@ if __name__ == "__main__":
                 sweep_hours_before_ob=score_res.get('sweep_hours_before_ob'),
                 fvg=fvg_data
             )
-            # Resolve sweep candle timestamp for chart rendering. Charts use the
-            # timestamp (not idx) because Phase 2 indices are not portable across
-            # phases or across re-fetches. sweep_idx points into the SAME df the
-            # scorer used (df_h1 for H1 sweep, df_m15 for M15 sweep), so we look
-            # up the timestamp on that df here, while still in scope.
+            # Resolve sweep candle timestamp for chart rendering.
+            #
+            # H1 sweep: consumed from P1's snapshot. P1's sweep_idx points
+            # into P1's H1 dataframe, NOT P2's (different fetches). Always
+            # use the timestamp the snapshot carries.
+            #
+            # M15 sweep: detected by P2 just now against THIS df_m15. Both
+            # the timestamp (set inside observe_phase1_sweep) and the idx
+            # are valid against P2's frame. Prefer timestamp for uniformity.
             sweep_tf_resolved = score_res.get('sweep_tf')
-            sweep_idx_resolved = score_res.get('sweep_idx')
-            sweep_ts_iso = None
-            if sweep_idx_resolved is not None:
-                try:
-                    if sweep_tf_resolved == 'H1':
-                        sw_ts = df_h1.index[int(sweep_idx_resolved)]
-                    elif sweep_tf_resolved == 'M15':
+            sweep_ts_iso = score_res.get('sweep_timestamp_iso')
+            # Legacy fallback: if timestamp missing (snapshot pre-dates this
+            # field), best-effort idx lookup. Off for H1 (cross-frame), but
+            # harmless for M15 where the idx is from this scan's frame.
+            if not sweep_ts_iso:
+                sweep_idx_resolved = score_res.get('sweep_idx')
+                if sweep_idx_resolved is not None and sweep_tf_resolved == 'M15':
+                    try:
                         sw_ts = df_m15.index[int(sweep_idx_resolved)]
-                    else:
-                        sw_ts = None
-                    if sw_ts is not None:
                         sweep_ts_iso = sw_ts.isoformat() if hasattr(sw_ts, 'isoformat') else str(sw_ts)
-                except Exception:
-                    sweep_ts_iso = None
+                    except Exception:
+                        sweep_ts_iso = None
 
             # Inject onto the ob dict so chart functions can locate the sweep
             # candle by timestamp. Non-invasive: ob is reused only for charts.
@@ -1588,7 +1781,8 @@ if __name__ == "__main__":
                 "sweep_tier": score_res.get('sweep_tier'),
                 "sweep_components": score_res.get('sweep_components'),
                 "sweep_hours_before_ob": score_res.get('sweep_hours_before_ob'),
-                "macro_summary": gemini_risk.get("macro_summary", ""),
+                "macro_summary": gemini_risk.get("macro_summary"),
+                "macro_unavailable": bool(gemini_risk.get("macro_unavailable", False)),
                 "levels": levels,
                 "ob": ob,
                 "alert_ist": ist_now.isoformat(),
@@ -1607,23 +1801,38 @@ if __name__ == "__main__":
                 key_dp = max(0, dp - 1)
                 zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}"
 
-                # Day-reset dedup with score-DELTA re-email.
-                # First sighting today → email. Re-sighting with score delta < 0.5 → silent.
-                # Re-sighting with abs delta >= 0.5 → email with UPDATED prefix + drivers line.
-                # Symmetric: covers both score increases and decreases.
+                # Asymmetric hysteresis dedup.
+                # First sighting today → email.
+                # Re-sighting inside the dead band (+0.7 / -0.5) → silent;
+                # we still track high/low water so we can see how much the
+                # score wobbled between emails (diagnostic-only).
+                # Re-sighting crossing the upward or downward threshold →
+                # email with UPDATED prefix + score-drivers line.
                 current_score_raw = float(score_res['total'])
                 current_breakdown = score_res.get('breakdown', {})
                 prior = phase2_zones.get(zone_id)
                 is_update = False
                 prior_score_raw = None
                 prior_breakdown = None
+                hi_water = current_score_raw
+                lo_water = current_score_raw
                 if prior is not None:
                     prior_score_raw = float(prior.get("score_raw", 0.0))
                     prior_breakdown = prior.get("breakdown")
-                    if abs(current_score_raw - prior_score_raw) < 0.5:
+                    prior_hi = float(prior.get("score_high_water", prior_score_raw))
+                    prior_lo = float(prior.get("score_low_water",  prior_score_raw))
+                    hi_water = max(prior_hi, current_score_raw)
+                    lo_water = min(prior_lo, current_score_raw)
+                    direction = hysteresis_should_reemail(current_score_raw, prior_score_raw)
+                    if direction is None:
+                        # Silent — but persist updated watermarks for diagnostics.
+                        prior["score_high_water"] = hi_water
+                        prior["score_low_water"]  = lo_water
+                        save_json("phase2_sent.json", phase2_state)
                         scan_record["final_action"] = (
-                            f"dedup_score_delta_below_threshold "
-                            f"({prior_score_raw:.1f}->{current_score_raw:.1f})"
+                            f"dedup_hysteresis_silent "
+                            f"({prior_score_raw:.1f}->{current_score_raw:.1f}, "
+                            f"band -{SCORE_REEMAIL_DOWN_THRESHOLD:.1f}/+{SCORE_REEMAIL_UP_THRESHOLD:.1f})"
                         )
                         append_scan_log(scan_record)
                         continue
@@ -1631,9 +1840,12 @@ if __name__ == "__main__":
 
                 # Register zone state BEFORE send. Survives mid-scan crash.
                 # Stores breakdown so future updates can show driver deltas.
+                # Watermarks reset to the current score at email time.
                 phase2_zones[zone_id] = {
                     "score_int": score_to_int(current_score_raw),
                     "score_raw": current_score_raw,
+                    "score_high_water": current_score_raw,
+                    "score_low_water":  current_score_raw,
                     "breakdown": current_breakdown,
                     "alert_ist": ist_now.isoformat(),
                     "bias": bias,
@@ -1700,28 +1912,39 @@ if __name__ == "__main__":
                 zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}"
                 watch_id = f"{name}_{round(proximal, dp)}"
 
-                # Day-reset dedup with score-DELTA re-email. Same model as limit branch.
-                # Symmetric: re-emails on abs(delta) >= 0.5 in either direction.
+                # Asymmetric hysteresis dedup. Same model as limit branch.
                 current_score_raw = float(score_res['total'])
                 current_breakdown = score_res.get('breakdown', {})
                 prior = phase2_zones.get(zone_id)
                 is_update = False
                 prior_score_raw = None
                 prior_breakdown = None
+                hi_water = current_score_raw
+                lo_water = current_score_raw
                 if prior is not None:
                     prior_score_raw = float(prior.get("score_raw", 0.0))
                     prior_breakdown = prior.get("breakdown")
-                    if abs(current_score_raw - prior_score_raw) < 0.5:
-                        # Same zone, sub-threshold delta — silent. But keep watch_state
-                        # fresh so Phase 3 keeps monitoring this zone for M5 trigger.
+                    prior_hi = float(prior.get("score_high_water", prior_score_raw))
+                    prior_lo = float(prior.get("score_low_water",  prior_score_raw))
+                    hi_water = max(prior_hi, current_score_raw)
+                    lo_water = min(prior_lo, current_score_raw)
+                    direction = hysteresis_should_reemail(current_score_raw, prior_score_raw)
+                    if direction is None:
+                        # Same zone, inside hysteresis band — silent. But keep
+                        # watch_state fresh so Phase 3 keeps monitoring, and
+                        # persist updated watermarks for diagnostics.
                         if watch_id in watch_state:
                             trade_data["alert_ist"] = watch_state[watch_id].get(
                                 "alert_ist", ist_now.isoformat()
                             )
                         watch_writes[watch_id] = trade_data
+                        prior["score_high_water"] = hi_water
+                        prior["score_low_water"]  = lo_water
+                        save_json("phase2_sent.json", phase2_state)
                         scan_record["final_action"] = (
-                            f"dedup_score_delta_below_threshold_ltf "
-                            f"({prior_score_raw:.1f}->{current_score_raw:.1f})"
+                            f"dedup_hysteresis_silent_ltf "
+                            f"({prior_score_raw:.1f}->{current_score_raw:.1f}, "
+                            f"band -{SCORE_REEMAIL_DOWN_THRESHOLD:.1f}/+{SCORE_REEMAIL_UP_THRESHOLD:.1f})"
                         )
                         append_scan_log(scan_record)
                         continue
@@ -1731,6 +1954,8 @@ if __name__ == "__main__":
                 phase2_zones[zone_id] = {
                     "score_int": score_to_int(current_score_raw),
                     "score_raw": current_score_raw,
+                    "score_high_water": current_score_raw,
+                    "score_low_water":  current_score_raw,
                     "breakdown": current_breakdown,
                     "alert_ist": ist_now.isoformat(),
                     "bias": bias,

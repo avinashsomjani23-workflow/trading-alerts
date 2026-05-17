@@ -56,11 +56,12 @@ FVG_NOISE_FLOOR_MULT = {
 #
 # H1 = 10 candles soft cap (was 7; widened because the leg-anchored window
 #      self-adjusts and 7 was occasionally tighter than the leg).
-# M15 = 28 candles (Phase 2 still uses fixed window — Phase 2 doesn't have a
-#       BOS index on M15).
+# M15 = 40 candles. Matches H1's 10-candle window in time-span (10 H1 = 40
+#       M15). Phase 2 uses a fixed window — Phase 2 doesn't have a BOS index
+#       on M15.
 # ---------------------------------------------------------------------------
 FVG_WINDOW_H1_CANDLES  = 10
-FVG_WINDOW_M15_CANDLES = 28
+FVG_WINDOW_M15_CANDLES = 40
 
 # OB candidate range cap. Reject candles where (high - low) > N x ATR.
 # Filters volatility spikes (news bars) from being picked as OBs.
@@ -541,173 +542,6 @@ def _rejection_score(df, sweep_idx, swept_type, tf_atr):
         return 0.66, ratio
     return 1.0, ratio
 
-def grade_sweep(df, swings, anchor_idx, bias, tf_atr, pair_type, tf_label):
-    """
-    Find and grade the best liquidity sweep that occurred BEFORE the anchor
-    candle (typically the OB candle's index) on this TF.
-
-    Detection (unchanged from prior logic):
-      - Bullish sweep (LONG): candle's L pierces a prior swing low AND
-        candle's C closes back above that swing low.
-      - Bearish sweep (SHORT): candle's H pierces a prior swing high AND
-        candle's C closes back below that swing high.
-
-    Recency: sweep candle must be within SWEEP_RECENCY_TRADING_HOURS trading
-    hours BEFORE the anchor candle. Trading hours = Mon-Fri, weekends excluded.
-
-    Best-of selection: among all qualifying sweeps, the one with the HIGHEST
-    final score wins. Ties broken by recency (more recent wins).
-
-    Score = base (1.0) + equal_levels (0..0.5) + rejection (0..0.5). Max 2.0.
-
-    Returns dict:
-      {
-        'score': float (0..2.0),
-        'tier':  'textbook' | 'decent' | 'weak' | 'none',
-        'price': float | None,   # the swept swing's price (the level)
-        'sweep_idx': int | None,
-        'tf': tf_label,
-        'components': {
-            'base': 1.0 | 0.0,
-            'equal_levels': float, 'equal_levels_matches': int,
-            'rejection': float, 'wick_body_ratio': float,
-        },
-        'hours_before_anchor': float | None,   # trading-hours
-      }
-    """
-    none_result = {
-        'score': 0.0, 'tier': 'none', 'price': None, 'sweep_idx': None,
-        'swept_swing_idx': None, 'swept_swing_ts': None,
-        'tf': tf_label,
-        'components': {
-            'base': 0.0,
-            'equal_levels': 0.0, 'equal_levels_matches': 0,
-            'rejection': 0.0, 'wick_body_ratio': 0.0,
-        },
-        'hours_before_anchor': None
-    }
-    if df is None or len(df) < 5 or anchor_idx is None or anchor_idx <= 0:
-        return none_result
-    if bias not in ('LONG', 'SHORT'):
-        return none_result
-    if tf_atr is None or tf_atr <= 0:
-        return none_result
-    if not swings:
-        return none_result
-
-    # Bound search: only candles strictly before anchor_idx
-    upper = min(anchor_idx, len(df))
-    H = df['High'].values
-    L = df['Low'].values
-    C = df['Close'].values
-
-    anchor_ts = df.index[anchor_idx] if anchor_idx < len(df) else df.index[-1]
-    # Normalize anchor_ts to naive datetime
-    if hasattr(anchor_ts, 'to_pydatetime'):
-        anchor_dt = anchor_ts.to_pydatetime()
-    else:
-        anchor_dt = anchor_ts
-    if hasattr(anchor_dt, 'tzinfo') and anchor_dt.tzinfo is not None:
-        anchor_dt = anchor_dt.replace(tzinfo=None)
-
-    pierce_min = SWEEP_WICK_PIERCE_MIN_ATR.get(pair_type, 0.05) * tf_atr
-    swept_type_we_want = 'low' if bias == 'LONG' else 'high'
-
-    best = None  # tuple: (score, hours_before, payload_dict)
-
-    for i in range(0, upper):
-        cand_ts = df.index[i]
-        if hasattr(cand_ts, 'to_pydatetime'):
-            cand_dt = cand_ts.to_pydatetime()
-        else:
-            cand_dt = cand_ts
-        if hasattr(cand_dt, 'tzinfo') and cand_dt.tzinfo is not None:
-            cand_dt = cand_dt.replace(tzinfo=None)
-
-        hrs_before = trading_hours_between(cand_dt, anchor_dt)
-        if hrs_before is None or hrs_before > SWEEP_RECENCY_TRADING_HOURS:
-            continue
-
-        # Find the deepest pierce among all ACTIVE prior same-type swings.
-        # SMC: a swept swing's liquidity is gone — it can't be a sweep
-        # target again. before_idx=i ensures the candle being evaluated
-        # doesn't disqualify its own target.
-        winning_swing = None
-        winning_depth = 0.0
-        for s in swings:
-            if s['idx'] >= i or s['type'] != swept_type_we_want:
-                continue
-            level = float(s['price'])
-            if bias == 'LONG':
-                pierced = (L[i] < level - pierce_min) and (C[i] > level)
-                depth   = level - L[i] if pierced else 0.0
-            else:
-                pierced = (H[i] > level + pierce_min) and (C[i] < level)
-                depth   = H[i] - level if pierced else 0.0
-            if not pierced:
-                continue
-            if not is_swing_active(s, df, pierce_min, before_idx=i):
-                continue
-            if depth > winning_depth:
-                winning_swing = s
-                winning_depth = depth
-
-        if winning_swing is None:
-            continue
-
-        swept = winning_swing
-        swept_type = swept_type_we_want
-
-        # Score components. Equal-levels pool is filtered to active swings
-        # via `_equal_levels_score(df=df, before_idx=i)`.
-        base = SWEEP_SCORE_BASE_MAX
-        eq_score, eq_matches = _equal_levels_score(
-            swept, swings, pair_type, tf_atr,
-            df=df, before_idx=i,
-        )
-        rej_score, wb_ratio  = _rejection_score(df, i, swept_type, tf_atr)
-        total = base + eq_score + rej_score
-
-        # Resolve swept-swing timestamp (used by chart to draw dotted line
-        # back to the level). Falls back to None if unresolvable.
-        try:
-            sw_ts = df.index[int(swept['idx'])]
-            swept_swing_ts_iso = (
-                sw_ts.isoformat() if hasattr(sw_ts, 'isoformat') else str(sw_ts)
-            )
-        except Exception:
-            swept_swing_ts_iso = None
-
-        payload = {
-            'score': round(total, 3),
-            'tier':  _sweep_tier(total),
-            'price': float(swept['price']),
-            'sweep_idx': i,
-            'swept_swing_idx': int(swept['idx']),
-            'swept_swing_ts':  swept_swing_ts_iso,
-            'tf': tf_label,
-            'components': {
-                'base': base,
-                'equal_levels': eq_score,
-                'equal_levels_matches': eq_matches,
-                'rejection': rej_score,
-                'wick_body_ratio': round(wb_ratio, 2),
-            },
-            'hours_before_anchor': round(hrs_before, 1),
-        }
-
-        if best is None:
-            best = (total, hrs_before, payload)
-        else:
-            # Higher score wins; tie -> more recent (smaller hrs_before)
-            if total > best[0] or (total == best[0] and hrs_before < best[1]):
-                best = (total, hrs_before, payload)
-
-    if best is None:
-        return none_result
-    return best[2]
-
-
 def _sweep_tier(score):
     """Classify final sweep score into a label for narration. Max 2.5."""
     if score >= 2.0:
@@ -866,9 +700,11 @@ def _compute_context_tags(swept_price, swept_type, df, anchor_ts,
 
 def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
                          tf_atr, pair_type, pair_name, tf_label='H1',
-                         event_type='BOS', prior_event_idx=None):
+                         event_type='BOS', prior_event_idx=None,
+                         fallback_lookback=6):
     """
-    Phase 1 sweep observation — snapshot semantics.
+    Sweep observation — uniform detection used by BOTH Phase 1 (H1 snapshot
+    at OB formation) and Phase 2 (M15 entry-time sweep).
 
     Swings are computed on the FULL df at lookback=3 and filtered to the
     search window. Full-df detection gives every candle in the window its
@@ -883,7 +719,12 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
         continuing). Caller passes the most recent OPPOSING-direction
         structural event (Major/Minor BOS or Major/Minor CHoCH that
         reversed the trend). Fallback when prior_event_idx is None or
-        unresolvable: `max(0, ob_idx - 48)` (~2 trading days of H1).
+        unresolvable: `max(0, ob_idx - fallback_lookback)`.
+
+    `fallback_lookback`: candle count used when no structural anchor is
+    available. Phase 1 (H1) uses default 6 (≈6 trading hours). Phase 2 (M15)
+    has no structural events of its own, so it always hits this fallback —
+    callers should pass a larger value (e.g. 20 M15 candles = ~5 hours).
 
     A qualifying sweep candle:
       - Bullish OB: candle's low pierces a prior pivot LOW by at least the
@@ -906,9 +747,25 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
       - The OB candle itself is allowed to be the sweep candle (per ICT
         methodology — engulfing / rejection-block patterns).
 
-    Returns the snapshot dict written to ob['sweep_observed'].
+    Returns the snapshot dict written to ob['sweep_observed'] (Phase 1) or
+    consumed live by Phase 2's M15 detection. Canonical empty shape carries
+    `components` and `hours_before_anchor` so downstream consumers can read
+    a uniform schema regardless of whether a sweep was found.
     """
-    not_observed = {'exists': False}
+    not_observed = {
+        'exists': False, 'tf': tf_label, 'tier': 'none', 'score': 0.0,
+        'price': None, 'sweep_idx': None,
+        'swept_swing_idx': None, 'swept_swing_ts': None,
+        'timestamp': None,
+        'wick_distance_pips': 0.0, 'wick_body_ratio': 0.0,
+        'equal_levels_count': 0, 'context_tags': [],
+        'components': {
+            'base': 0.0,
+            'equal_levels': 0.0, 'equal_levels_matches': 0,
+            'rejection': 0.0, 'wick_body_ratio': 0.0,
+        },
+        'hours_before_anchor': None,
+    }
 
     if df is None or len(df) == 0:
         return not_observed
@@ -945,8 +802,7 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     # the liquidity at the trend leg's origin. The pullback extreme is the
     # most recent same-direction-as-target swing (low for bullish BOS, high
     # for bearish BOS) strictly before impulse_start_idx. Fallback when no
-    # such swing exists in the loaded data: ob_idx - 6 candles.
-    BOS_FALLBACK_LOOKBACK = 6
+    # such swing exists in the loaded data: ob_idx - fallback_lookback candles.
     if event_type == 'BOS':
         pullback_idx = None
         for s in reversed(all_swings):
@@ -958,11 +814,11 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
         if pullback_idx is not None:
             search_lo = pullback_idx
         else:
-            search_lo = max(0, int(ob_idx) - BOS_FALLBACK_LOOKBACK)
+            search_lo = max(0, int(ob_idx) - int(fallback_lookback))
     elif prior_event_idx is not None and int(prior_event_idx) >= 0:
         search_lo = min(int(prior_event_idx), int(impulse_start_idx))
     else:
-        search_lo = max(0, int(ob_idx) - BOS_FALLBACK_LOOKBACK)
+        search_lo = max(0, int(ob_idx) - int(fallback_lookback))
 
     if search_lo < 0:
         search_lo = 0
@@ -1055,6 +911,25 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
             level, swept_type, df, sweep_ts, pair_name, pair_type, tf_atr
         )
 
+        # Hours from the sweep candle to the OB anchor. Trading-hours
+        # (Mon-Fri) so weekends don't inflate the gap. Used by Phase 2 to
+        # narrate sweep recency in the email.
+        try:
+            ob_ts_for_hours = df.index[int(ob_idx)]
+            if hasattr(ob_ts_for_hours, 'to_pydatetime'):
+                ob_dt_for_hours = ob_ts_for_hours.to_pydatetime()
+            else:
+                ob_dt_for_hours = ob_ts_for_hours
+            if hasattr(ob_dt_for_hours, 'tzinfo') and ob_dt_for_hours.tzinfo is not None:
+                ob_dt_for_hours = ob_dt_for_hours.replace(tzinfo=None)
+            sw_dt_for_hours = sweep_ts.to_pydatetime() if hasattr(sweep_ts, 'to_pydatetime') else sweep_ts
+            if hasattr(sw_dt_for_hours, 'tzinfo') and sw_dt_for_hours.tzinfo is not None:
+                sw_dt_for_hours = sw_dt_for_hours.replace(tzinfo=None)
+            hrs_before = trading_hours_between(sw_dt_for_hours, ob_dt_for_hours)
+            hrs_before = round(hrs_before, 1) if hrs_before is not None else None
+        except Exception:
+            hrs_before = None
+
         payload = {
             'exists':              True,
             'tf':                  tf_label,
@@ -1069,7 +944,16 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
             'wick_body_ratio':     round(wb_ratio, 2),
             'equal_levels_count':  int(eq_matches),
             'context_tags':        context_tags,
-            'observed_at':         datetime.utcnow().isoformat()
+            'observed_at':         datetime.utcnow().isoformat(),
+            # Uniform-schema fields for Phase 2 consumers.
+            'components': {
+                'base':                 SWEEP_SCORE_BASE_MAX,
+                'equal_levels':         eq_score,
+                'equal_levels_matches': int(eq_matches),
+                'rejection':            rej_score,
+                'wick_body_ratio':      round(wb_ratio, 2),
+            },
+            'hours_before_anchor': hrs_before,
         }
 
         if best is None or total > best[0] or (total == best[0] and i > best[1]):
@@ -1267,8 +1151,17 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     dp = _dp(pair_conf)
     spread_val = pair_conf.get("spread_pips", 2) * (0.0001 if dp == 5 else 0.01)
 
-    ob_top = float(ob.get('ob_high', ob.get('high', ob.get('proximal_line', 0))))
-    ob_bottom = float(ob.get('ob_low', ob.get('low', ob.get('distal_line', 0))))
+    # OB candle geometry. Phase 1's canonical fields are 'high' and 'low'
+    # (set by smc_radar.py when the OB is built). We read those directly;
+    # the previous multi-key fallback hid schema drift and could silently
+    # collapse to proximal=distal on malformed zones. Strict read: if a
+    # zone is missing 'high'/'low', return invalid rather than guess.
+    try:
+        ob_top    = float(ob['high'])
+        ob_bottom = float(ob['low'])
+    except (KeyError, TypeError, ValueError):
+        return {"valid": False,
+                "reason": "OB candle geometry missing — zone schema drift."}
 
     sl = ob_bottom - spread_val if bias == "LONG" else ob_top + spread_val
     ob_prox = ob_top if bias == "LONG" else ob_bottom
@@ -1312,6 +1205,10 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     final_entry, final_rr, entry_source, tp1 = None, 0.0, "", None
 
     def check_rr(entry_test):
+        # Walk swing targets in priority order. If none clears the 1.5R bar,
+        # return (0.0, None) so the outer guard kills the trade. The previous
+        # behaviour invented a synthetic 2.0R target when no real swing
+        # existed — veteran rule: no clean target, no trade.
         risk = abs(entry_test - sl)
         if risk == 0:
             return 0.0, None
@@ -1319,8 +1216,7 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
             rr = abs(target - entry_test) / risk
             if rr >= 1.5:
                 return rr, target
-        fallback_tp = entry_test + (risk * 2.0) if bias == "LONG" else entry_test - (risk * 2.0)
-        return 2.0, fallback_tp
+        return 0.0, None
 
     if entry_model == "forex":
         attempts = []
@@ -1338,7 +1234,13 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
         final_rr, tp1 = check_rr(final_entry)
 
     if final_entry is None or final_rr < 1.5:
-        return {"valid": False, "reason": "R:R < 1.5 on all cascade attempts"}
+        # Either no entry attempt cleared 1.5R, or there was no qualifying
+        # swing target in front of the entry. Both paths kill the trade.
+        return {
+            "valid": False,
+            "reason": "No swing target >= 1.5R in front of entry — no trade."
+            if not tp_targets else "R:R < 1.5 on all cascade attempts"
+        }
 
     # Entry-side validation (forex limit orders only).
     # A BUY LIMIT must sit at or below current price; a SELL LIMIT at or above.
@@ -1389,7 +1291,7 @@ def _killzone_hit(utc_hour, pair_type):
     return False
 
 
-def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=None, macro_score=1.0):
+def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=None):
     bos_tag = ob.get('bos_tag', 'BOS')
     pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
 
@@ -1416,46 +1318,87 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         bd = {"structure": structure_score}
 
     # ------------------------------------------------------------------
-    # Sweep — graded score (0..2.0). Anchored to the OB candle, not to
-    # current price. Phase 2 re-grades from scratch each scan.
+    # Sweep — UNIFORM detection across phases.
+    #   H1: consumed from ob['sweep_observed'] (frozen by Phase 1 at OB
+    #       formation). Phase 2 does NOT re-detect H1 sweep.
+    #   M15: detected live by Phase 2 using observe_phase1_sweep on df_m15.
+    #        Same function as P1's H1 detection — same lookback (3), same
+    #        active-swing filter, same scoring components. Only the TF and
+    #        the fallback lookback window differ.
+    #
+    # If H1 snapshot field is missing from the zone, treat as zero and log
+    # via the missing-field path (schema drift signal). We do NOT re-detect
+    # on H1; Phase 1 is the source of truth.
     # ------------------------------------------------------------------
-    h1_atr_for_sweep = compute_atr(df_h1)
-
-    # Locate OB candle index in df_h1 via its absolute timestamp.
     ob_ts_iso = ob.get('ob_timestamp')
-    ob_idx_h1 = None
-    if ob_ts_iso:
-        idx_found, on_chart = locate_ob_candle_idx(df_h1, ob_ts_iso)
-        if on_chart:
-            ob_idx_h1 = idx_found
-    if ob_idx_h1 is None:
-        # Fallback: cannot find OB on H1 -> grade against latest candle.
-        # This degrades gracefully (still pre-current-candle) but is rare.
-        ob_idx_h1 = max(1, len(df_h1) - 1)
 
-    swings_h1 = get_swing_points(df_h1, lookback=5)
-    h1_sweep = grade_sweep(df_h1, swings_h1, ob_idx_h1, bias, h1_atr_for_sweep,
-                           pair_type, tf_label="H1")
+    sweep_obs_snapshot = ob.get('sweep_observed')
+    if isinstance(sweep_obs_snapshot, dict) and sweep_obs_snapshot.get('exists'):
+        # Consume P1's frozen H1 sweep. We also carry the sweep TIMESTAMP
+        # because P1's sweep_idx points into P1's H1 dataframe, NOT P2's
+        # (different fetches, indices don't align). Chart rendering must
+        # resolve the candle by timestamp on P2's frame.
+        h1_sweep = {
+            'score':               float(sweep_obs_snapshot.get('score', 0.0)),
+            'tier':                sweep_obs_snapshot.get('tier', 'none'),
+            'price':               sweep_obs_snapshot.get('price'),
+            'sweep_idx':           sweep_obs_snapshot.get('sweep_idx'),
+            'sweep_timestamp_iso': sweep_obs_snapshot.get('timestamp'),
+            'tf':                  'H1',
+            'components':          sweep_obs_snapshot.get('components', {
+                'base': 0.0, 'equal_levels': 0.0, 'equal_levels_matches': 0,
+                'rejection': 0.0, 'wick_body_ratio': 0.0,
+            }),
+            'hours_before_anchor': sweep_obs_snapshot.get('hours_before_anchor'),
+        }
+    else:
+        h1_sweep = {
+            'score': 0.0, 'tier': 'none', 'price': None, 'sweep_idx': None,
+            'sweep_timestamp_iso': None, 'tf': 'H1',
+            'components': {'base': 0.0, 'equal_levels': 0.0, 'equal_levels_matches': 0,
+                           'rejection': 0.0, 'wick_body_ratio': 0.0},
+            'hours_before_anchor': None,
+        }
 
-    # M15: locate OB candle on M15 too. If OB lies before df_m15 starts (older
-    # than the M15 window), skip M15 sweep grading entirely — H1 carries it.
+    # M15: detect live using the SAME function P1 uses for H1.
     m15_sweep = {
-        'score': 0.0, 'tier': 'none', 'price': None, 'sweep_idx': None, 'tf': 'M15',
+        'score': 0.0, 'tier': 'none', 'price': None, 'sweep_idx': None,
+        'sweep_timestamp_iso': None, 'tf': 'M15',
         'components': {'base': 0.0, 'equal_levels': 0.0, 'equal_levels_matches': 0,
                        'rejection': 0.0, 'wick_body_ratio': 0.0},
-        'hours_before_anchor': None
+        'hours_before_anchor': None,
     }
-    if df_m15 is not None and len(df_m15) > 20:
+    if df_m15 is not None and len(df_m15) > 20 and ob_ts_iso:
         m15_atr_for_sweep = compute_atr(df_m15)
-        ob_idx_m15 = None
-        if ob_ts_iso:
-            idx_found_m15, on_chart_m15 = locate_ob_candle_idx(df_m15, ob_ts_iso)
-            if on_chart_m15:
-                ob_idx_m15 = idx_found_m15
-        if ob_idx_m15 is not None and m15_atr_for_sweep:
-            swings_m15 = get_swing_points(df_m15, lookback=4)
-            m15_sweep = grade_sweep(df_m15, swings_m15, ob_idx_m15, bias,
-                                    m15_atr_for_sweep, pair_type, tf_label="M15")
+        idx_found_m15, on_chart_m15 = locate_ob_candle_idx(df_m15, ob_ts_iso)
+        if on_chart_m15 and m15_atr_for_sweep:
+            ob_idx_m15 = idx_found_m15
+            # M15 has no structural event log of its own; the function will
+            # hit the BOS-pullback fallback path. fallback_lookback=20 ≈ 5h
+            # of M15 — captures the entry-time liquidity grab right before
+            # price taps the zone.
+            direction = 'bullish' if bias == 'LONG' else 'bearish'
+            pair_name_for_sweep = pair_conf.get('name', '') if pair_conf else ''
+            try:
+                m15_payload = observe_phase1_sweep(
+                    df_m15, ob_idx_m15, ob_idx_m15, direction,
+                    m15_atr_for_sweep, pair_type, pair_name_for_sweep,
+                    tf_label='M15', event_type='BOS',
+                    prior_event_idx=None, fallback_lookback=20,
+                )
+            except Exception:
+                m15_payload = {'exists': False}
+            if m15_payload.get('exists'):
+                m15_sweep = {
+                    'score':               float(m15_payload.get('score', 0.0)),
+                    'tier':                m15_payload.get('tier', 'none'),
+                    'price':               m15_payload.get('price'),
+                    'sweep_idx':           m15_payload.get('sweep_idx'),
+                    'sweep_timestamp_iso': m15_payload.get('timestamp'),
+                    'tf':                  'M15',
+                    'components':          m15_payload.get('components', m15_sweep['components']),
+                    'hours_before_anchor': m15_payload.get('hours_before_anchor'),
+                }
 
     chosen_sweep = select_best_sweep(h1_sweep, m15_sweep)
     bd["sweep"]  = chosen_sweep['score']
@@ -1510,14 +1453,19 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         bd["freshness"] = 0.0
 
     # Premium / Discount — REMOVED FROM SCORING (May 2026 overhaul).
-    # Geometry (range high/low/equilibrium, pd_position %) is still computed
-    # and surfaced to the email so the trader can read it; it just no longer
-    # contributes points to the scorecard. The 'pd' breakdown key is kept at
-    # 0.0 for backwards compatibility (legacy consumers reading bd["pd"]).
-    h1_atr_val = compute_atr(df_h1)
+    # Geometry is consumed from Phase 1's snapshot on the zone — Phase 1 is
+    # the single source of truth for dealing range. Phase 2 does NOT redraw.
+    # If the snapshot is missing (legacy zone written before this change),
+    # fall back to a one-shot compute so the email still renders; weekly
+    # review picks up the missing-snapshot signal via diagnostics.
     proximal = float(ob['proximal_line'])
-    dr = get_dealing_range(ob, df_h1, h1_atr_val,
-                           pair_conf=pair_conf, current_price=proximal)
+    dr = ob.get('dealing_range') if isinstance(ob, dict) else None
+    if not isinstance(dr, dict) or not dr.get('valid'):
+        # Legacy fallback — compute once. Log via the missing-snapshot path
+        # so we can detect schema drift.
+        h1_atr_val = compute_atr(df_h1)
+        dr = get_dealing_range(ob, df_h1, h1_atr_val,
+                               pair_conf=pair_conf, current_price=proximal)
     pd_position = None
     if dr.get("valid"):
         rng_width = dr["range_high"] - dr["range_low"]
@@ -1536,6 +1484,9 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         "sweep_price": sweep_price,
         "sweep_tf": sweep_tf,
         "sweep_idx": chosen_sweep.get('sweep_idx'),
+        # Authoritative for chart rendering: timestamp survives the cross-
+        # phase / cross-fetch boundary, idx does not.
+        "sweep_timestamp_iso": chosen_sweep.get('sweep_timestamp_iso'),
         "sweep_tier": chosen_sweep['tier'],
         "sweep_components": chosen_sweep['components'],
         "sweep_hours_before_ob": chosen_sweep['hours_before_anchor'],
@@ -1899,6 +1850,58 @@ def compute_h1_break_candle_span(df_h1, ob, h1_atr):
             break
     return (start_idx, resolved_idx)
     
+def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx, end_idx=None):
+    """
+    Single-source-of-truth OB mitigation check. Used by Phase 1 (canonical
+    drop reason) AND Phase 2 (mid-day still-active gate before scoring).
+
+    Replay candles in [start_idx, end_idx) and apply Phase 1 mitigation:
+      - CLOSE beyond distal -> mitigated_distal_break (zone dead).
+      - WICK into proximal counts as a touch; 3 touches -> mitigated_three_touches.
+
+    Args:
+        direction: 'bullish' | 'bearish'.
+        distal:    OB distal price.
+        proximal:  OB proximal price.
+        df:        H1 OHLC dataframe.
+        start_idx: first idx to inspect (exclusive of OB candle is up to caller).
+        end_idx:   one past last idx to inspect; defaults to len(df).
+
+    Returns:
+        (mitigated: bool, reason: Optional[str], touches: int)
+        reason in {'mitigated_distal_break', 'mitigated_three_touches'} or None.
+    """
+    if df is None or len(df) == 0:
+        return False, None, 0
+    if end_idx is None:
+        end_idx = len(df)
+    start_idx = max(0, int(start_idx))
+    end_idx = min(int(end_idx), len(df))
+    if start_idx >= end_idx:
+        return False, None, 0
+
+    C = df['Close'].values.astype(float)
+    H = df['High'].values.astype(float)
+    L = df['Low'].values.astype(float)
+
+    touches = 0
+    for m in range(start_idx, end_idx):
+        if direction == 'bullish':
+            if C[m] < distal:
+                return True, 'mitigated_distal_break', touches
+            if L[m] <= proximal:
+                touches += 1
+        else:
+            if C[m] > distal:
+                return True, 'mitigated_distal_break', touches
+            if H[m] >= proximal:
+                touches += 1
+        if touches >= 3:
+            return True, 'mitigated_three_touches', touches
+
+    return False, None, touches
+
+
 def locate_ob_candle_idx(df, ob_timestamp_iso):
     """
     Find the OB candle's positional index in `df` using its absolute timestamp.

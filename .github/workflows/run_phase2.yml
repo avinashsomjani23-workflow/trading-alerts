@@ -24,9 +24,9 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          # P2 owns: phase2_sent, heartbeat_state, gemini_failure_log.
+          # P2 owns: phase2_sent, heartbeat_state, gemini_failure_log, p1_stale_alert_state.
           # Shared (multi-writer): active_watch_state (with P3), yfinance_stale_log (P1/P3), chart_failure_log (P3).
-          ALL_FILES="phase2_sent.json active_watch_state.json heartbeat_state.json heartbeat_log.json yfinance_stale_log.json gemini_failure_log.json chart_failure_log.json phase2_scan_log.jsonl"
+          ALL_FILES="phase2_sent.json active_watch_state.json heartbeat_state.json heartbeat_log.json yfinance_stale_log.json gemini_failure_log.json chart_failure_log.json phase2_scan_log.jsonl p1_stale_alert_state.json"
           FILES=""
           for f in $ALL_FILES; do
             if [ -f "$f" ]; then FILES="$FILES $f"; fi

@@ -517,53 +517,10 @@ def _event_label(bos_tag, bos_tier):
 # Phase 2 / Phase 3 invalidation paths have their own rules (Phase 3 adds
 # an ATR buffer on M5 close). This function is Phase 1 only.
 # ---------------------------------------------------------------------------
-def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx, end_idx=None):
-    """
-    Replay candles in [start_idx, end_idx) and apply Phase 1 mitigation.
-
-    Args:
-        direction: 'bullish' | 'bearish'.
-        distal:    OB distal price.
-        proximal:  OB proximal price.
-        df:        H1 OHLC dataframe.
-        start_idx: first idx to inspect (exclusive of OB candle is up to caller).
-        end_idx:   one past last idx to inspect; defaults to len(df).
-
-    Returns:
-        (mitigated: bool, reason: Optional[str], touches: int)
-        reason ∈ {'mitigated_distal_break', 'mitigated_three_touches'} or None.
-    """
-    if df is None or len(df) == 0:
-        return False, None, 0
-    if end_idx is None:
-        end_idx = len(df)
-    start_idx = max(0, int(start_idx))
-    end_idx = min(int(end_idx), len(df))
-    if start_idx >= end_idx:
-        return False, None, 0
-
-    C = df['Close'].values.astype(float)
-    H = df['High'].values.astype(float)
-    L = df['Low'].values.astype(float)
-
-    touches = 0
-    for m in range(start_idx, end_idx):
-        if direction == 'bullish':
-            # CLOSE below distal = mitigated. Wick alone does not mitigate.
-            if C[m] < distal:
-                return True, 'mitigated_distal_break', touches
-            # Touch = wick into proximal (visit, not invalidation).
-            if L[m] <= proximal:
-                touches += 1
-        else:
-            if C[m] > distal:
-                return True, 'mitigated_distal_break', touches
-            if H[m] >= proximal:
-                touches += 1
-        if touches >= 3:
-            return True, 'mitigated_three_touches', touches
-
-    return False, None, touches
+# OB mitigation rule moved to smc_detector.is_ob_mitigated_phase1 so Phase 2
+# can call the SAME function for its mid-day still-active gate. Re-exported
+# here so existing call sites continue to work unchanged.
+is_ob_mitigated_phase1 = smc_detector.is_ob_mitigated_phase1
 
 
 def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=None):
@@ -888,6 +845,31 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             logging.warning(f"[sweep_observed] OB build failed sweep observation: {_sweep_err}")
             sweep_obs = {'exists': False}
 
+        # Dealing range snapshot — Phase 1 is the single source of truth
+        # for DR. Computed once at OB build time using this scan's H1 frame,
+        # then frozen on the zone. Phase 2 consumes ob['dealing_range']
+        # directly and does NOT recompute. Same scan, same frame, same DR.
+        ob_proximal_for_dr = ob_high if ev_dir == 'bullish' else ob_low
+        ob_for_dr = {
+            'proximal_line': ob_proximal_for_dr,
+            'distal_line':   ob_low if ev_dir == 'bullish' else ob_high,
+            'direction':     ev_dir,
+            'ob_idx':        ob_idx,
+            'bos_idx':       bos_idx,
+            'bos_swing_price': bos_swing_price,
+            'bos_tag':       ev_type,
+            'bos_tier':      ev_tier,
+        }
+        try:
+            dealing_range_snapshot = smc_detector.get_dealing_range(
+                ob_for_dr, df, h1_atr_for_leg,
+                pair_conf={'pair_type': pair_type, 'name': pair_name},
+                current_price=ob_proximal_for_dr,
+            )
+        except Exception as _dr_snap_err:
+            logging.warning(f"[dealing_range] OB snapshot failed: {_dr_snap_err}")
+            dealing_range_snapshot = {'valid': False, 'source': 'snapshot_error'}
+
         # 'bos_tag' is the legacy field name for the structural event type.
         # Kept for backwards compatibility with chart / scoring / dedupe code.
         # 'bos_tier' carries the Major / Minor distinction (Major for BOS).
@@ -916,6 +898,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'h1_atr':             float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
             'fvg':                fvg_dict,
             'sweep_observed':     sweep_obs,
+            'dealing_range':      dealing_range_snapshot,
             # TEMP DIAG — back-reference so post-build mitigation can amend
             # the right diag entry. Stripped before returning.
             '_diag_ref':          diag,
@@ -3161,6 +3144,9 @@ def fresh_to_slate_zone(fresh_zone, zone_id, ist_now, current_price, dp):
         "fvg": fresh_zone["fvg"],
         # Phase 1 sweep snapshot — preserved across scans; never re-evaluated.
         "sweep_observed": fresh_zone.get("sweep_observed", {"exists": False}),
+        # Phase 1 dealing range snapshot — single source of truth. Phase 2
+        # consumes this directly and does NOT recompute.
+        "dealing_range": fresh_zone.get("dealing_range", {"valid": False}),
         # Two-OB role classification — refreshed each scan as price moves.
         # 'primary' = OB1 (closest within 4xATR), 'alternative' = OB2
         # (best Pristine in 4-8xATR ring). Phase 2/3 only consume primary.
@@ -3209,6 +3195,12 @@ def refresh_slate_zone(slate_zone, fresh_zone, ist_now, current_price, dp):
     # and self-corrects if yfinance revises wicks.
     slate_zone["sweep_observed"] = fresh_zone.get(
         "sweep_observed", slate_zone.get("sweep_observed", {"exists": False})
+    )
+    # Dealing range — refresh with the latest snapshot. Recomputed each scan
+    # by Phase 1 against its own H1 frame; Phase 2 consumes whatever this
+    # last write produced.
+    slate_zone["dealing_range"] = fresh_zone.get(
+        "dealing_range", slate_zone.get("dealing_range", {"valid": False})
     )
     # Tier / context refresh (Major / Minor distinction may change if a
     # later re-emission upgrades the structural classification).
