@@ -13,9 +13,9 @@
     "last_event_ts": "2026-05-17T23:00:00+00:00",
     "last_event_idx_iso": "2026-05-17T23:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-18T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-18T14:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-08T06:00:00+00:00",
+    "trend_start_ts": "2026-05-08T07:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -333,9 +333,9 @@
     "last_event_ts": "2026-05-15T19:00:00+00:00",
     "last_event_idx_iso": "2026-05-15T19:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-18T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-18T14:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-08T04:00:00+00:00",
+    "trend_start_ts": "2026-05-08T05:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -488,7 +488,7 @@
     "last_event_ts": "2026-05-17T23:00:00+00:00",
     "last_event_idx_iso": "2026-05-17T23:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-18T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-18T14:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-12T06:00:00+00:00",
     "events": [
@@ -613,7 +613,7 @@
     "last_event_ts": "2026-05-15T15:00:00+00:00",
     "last_event_idx_iso": "2026-05-15T15:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-18T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-18T14:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-12T00:00:00+00:00",
     "events": [
@@ -783,9 +783,9 @@
     "last_event_ts": "2026-05-14T15:00:00+00:00",
     "last_event_idx_iso": "2026-05-14T15:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-18T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-18T14:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-08T02:00:00+00:00",
+    "trend_start_ts": "2026-05-08T03:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -914,16 +914,16 @@
     "ceiling_price": 4775.2001953125,
     "ceiling_ts": "2026-05-07T15:00:00+00:00",
     "ceiling_is_placeholder": false,
-    "floor_price": 4492.10009765625,
-    "floor_ts": "2026-05-18T01:00:00+00:00",
-    "floor_is_placeholder": true,
+    "floor_price": 4533.5,
+    "floor_ts": "2026-05-18T11:00:00+00:00",
+    "floor_is_placeholder": false,
     "last_event_type": "BOS",
     "last_event_tier": "Major",
     "last_event_direction": "bearish",
     "last_event_ts": "2026-05-18T00:00:00+00:00",
     "last_event_idx_iso": "2026-05-18T00:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-18T13:00:00+00:00",
+    "last_scanned_ts": "2026-05-18T14:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-15T00:00:00+00:00",
     "events": [
