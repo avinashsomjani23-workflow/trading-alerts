@@ -141,8 +141,10 @@ SWEEP_RECENCY_TRADING_HOURS = 10
 # observation logic is decoupled from Phase 2 grading.
 PHASE1_SWEEP_OBS_TRADING_HOURS = 72
 
-# Scoring caps for the redesigned sweep score. Sums to 2.5 by construction.
-SWEEP_SCORE_BASE_MAX        = 1.0   # presence (wick + close-back, bias-aligned, within recency)
+# Scoring caps for the sweep score. Sums to 3.0 by construction.
+# Vet's allocation: Presence carries the trade (1.5), Rejection confirms it
+# (1.0), Equal Levels is the "nice to have" bigger-pool bonus (0.5).
+SWEEP_SCORE_BASE_MAX        = 1.5   # presence (wick + close-back, bias-aligned, within recency)
 SWEEP_SCORE_EQUAL_LEVEL_MAX = 0.5   # 0 / 0.25 / 0.5 for 0 / 1 / 2 prior matches in last 3 swings
 SWEEP_SCORE_REJECTION_MAX   = 1.0   # 0 / 0.33 / 0.66 / 1.0 for wick:body ratio < 1 / 1-2 / 2-3 / >3
 
@@ -543,10 +545,10 @@ def _rejection_score(df, sweep_idx, swept_type, tf_atr):
     return 1.0, ratio
 
 def _sweep_tier(score):
-    """Classify final sweep score into a label for narration. Max 2.5."""
-    if score >= 2.0:
+    """Classify final sweep score into a label for narration. Max 3.0."""
+    if score >= 2.4:
         return 'textbook'
-    if score >= 1.5:
+    if score >= 1.8:
         return 'decent'
     if score > 0.0:
         return 'weak'
@@ -1295,24 +1297,31 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     bos_tag = ob.get('bos_tag', 'BOS')
     pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
 
-    # Structure score grid (locked):
-    #   Major CHoCH                 -> 2.5  (opposite wall break — trend reversal confirmed)
-    #   Minor CHoCH                 -> 2.0  (internal lb-3 break after wall touch — weakening, not yet reversed)
-    #   BOS #1-2 since last CHoCH   -> 2.0  (early continuation, strongest)
-    #   BOS #3 .. caution-1         -> 1.5  (mid-trend; commodity/index only)
-    #   BOS >= caution_threshold    -> 1.0  (exhausted)
+    # Structure score grid (May 2026 — out-of-10 scorecard, max 3.0):
+    #   Major CHoCH                 -> 3.0  (opposite wall break — trend reversal confirmed)
+    #   Major BOS #1-2 since CHoCH  -> 2.5  (early continuation, smart money still loading)
+    #   Minor CHoCH                 -> 2.0  (wall rejected + internal lb-3 break — trend weakening)
+    #   Minor BOS                   -> 1.5  (internal lb-3 continuation; walls don't move)
+    #   Major BOS #3 .. caution-1   -> 1.5  (mid-trend; commodity/index only)
+    #   Major BOS >= caution        -> 1.0  (exhausted)
     # Caution thresholds reflect typical pair behaviour: forex mean-reverts
     # faster, indices sustain trends longer.
     bos_tier = ob.get('bos_tier', 'Major')
     if bos_tag == 'CHoCH':
-        bd = {"structure": 2.5 if bos_tier == 'Major' else 2.0}
+        bd = {"structure": 3.0 if bos_tier == 'Major' else 2.0}
+    elif bos_tier == 'Minor':
+        # Minor BOS: continuation break of internal lb-3 swing inside the
+        # active leg. Walls don't move; trend doesn't flip. Real signal but
+        # weaker than Major BOS (no wall break) and weaker than Minor CHoCH
+        # (no preceding wall rejection).
+        bd = {"structure": 1.5}
     else:
         bos_seq = ob.get('bos_sequence_count', 1)
         caution_threshold = {'forex': 3, 'index': 5, 'commodity': 4}.get(pair_type, 3)
         if bos_seq >= caution_threshold:
             structure_score = 1.0
         elif bos_seq <= 2:
-            structure_score = 2.0
+            structure_score = 2.5
         else:
             structure_score = 1.5
         bd = {"structure": structure_score}
@@ -1405,22 +1414,21 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     sweep_price  = chosen_sweep['price']
     sweep_tf     = chosen_sweep['tf']
 
-    # FVG — independent H1 + M15 scoring (max 2.0 total).
-    # Veteran SMC: H1 FVG = macro displacement (the structural signal).
-    # M15 FVG = same displacement at higher resolution (confirms but doesn't
-    # carry alone). H1 weighted heavier; M15 weighted lighter.
+    # FVG — independent H1 + M15 scoring, summed, cap 2.0.
+    # H1 FVG = macro displacement (the structural signal).
+    # M15 FVG = micro-displacement at the same location (real confirmation,
+    # not redundant — M15 FVG can exist without H1 and vice versa).
     #
     # Per-timeframe scoring:
-    #   H1:  pristine 1.2 | partial 0.5 | full/none 0.0
-    #   M15: pristine 0.8 | partial 0.3 | full/none 0.0
+    #   H1:  pristine 1.2 | partial 0.6 | full/none 0.0
+    #   M15: pristine 0.8 | partial 0.4 | full/none 0.0
     #
-    # Mitigation = price wicked the DISTAL line (full fill of imbalance).
-    # Partial = price touched proximal but not distal (still has institutional
-    # intent, just weakened).
+    # Mitigation = price wicked the DISTAL line (full fill of imbalance) -> 0.
+    # Partial = price touched proximal but not distal (institutional intent
+    # still partially intact) -> half-credit.
     #
-    # Overlap with OB body is NOT scored. The OB→OB+N search window already
-    # enforces FVG-anchored-to-OB; overlap-vs-not is geometry of the OB candle
-    # width, not signal.
+    # 16-case combination table is fully covered by the sum rule. Max possible
+    # is 1.2 + 0.8 = 2.0; cap is never exceeded by construction.
     def _grade_single(fvg_obj, pristine_pts, partial_pts):
         if not fvg_obj or not fvg_obj.get('exists'):
             return 0.0
@@ -1438,18 +1446,20 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     if fvg and isinstance(fvg, dict) and 'exists' in fvg and fvg_h1 is None and fvg_m15 is None:
         fvg_h1 = fvg
 
-    bd["fvg"] = _grade_single(fvg_h1, 1.2, 0.5) + _grade_single(fvg_m15, 0.8, 0.3)
-    # NEW
+    bd["fvg"] = min(2.0, _grade_single(fvg_h1, 1.2, 0.6) + _grade_single(fvg_m15, 0.8, 0.4))
     # Freshness — driven by Phase 1's lifetime touch counter on the OB.
-    # 0 touches -> 0.5 (pristine, full credit)
-    # 1-2 touches -> 0.25 (partial mitigation)
-    # 3+ touches -> 0.0 (fatigued)
+    # Phase 1 invalidates OBs at 3 touches (smc_radar overuse-mitigation rule),
+    # so 3+ touches never reaches Phase 2. Scoring covers 0/1/2 only.
+    #   0 touches  -> 1.5 (pristine — single highest-edge condition in SMC)
+    #   1 touch    -> 0.75 (partial; institutional order partly filled)
+    #   2 touches  -> 0.0 (fatigued; one more touch and Phase 1 kills it)
     touches = int(ob.get('touches', 0))
     if touches == 0:
-        bd["freshness"] = 0.5
-    elif touches <= 2:
-        bd["freshness"] = 0.25
+        bd["freshness"] = 1.5
+    elif touches == 1:
+        bd["freshness"] = 0.75
     else:
+        # touches == 2; touches >= 3 invalidated upstream so won't reach here
         bd["freshness"] = 0.0
 
     # Premium / Discount — REMOVED FROM SCORING (May 2026 overhaul).
@@ -1473,8 +1483,10 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
             pd_position = (proximal - dr["range_low"]) / rng_width
     bd["pd"] = 0.0  # PD removed from scoring; display-only.
     # Killzone — UTC-based. IST conversion is for display only.
+    # Not a hard gate: out-of-killzone trades can still alert if other
+    # confluences carry the score. In-killzone is a 0.5 bonus.
     utc_hour = datetime.utcnow().hour
-    bd["killzone"] = 1.0 if _killzone_hit(utc_hour, pair_type) else 0.0
+    bd["killzone"] = 0.5 if _killzone_hit(utc_hour, pair_type) else 0.0
 
     # Macro removed from scorecard. Still surfaced as email-only context.
 
@@ -1502,8 +1514,9 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     """
     Return list of (label, score, max_score, status, explanation) for email rendering.
 
-    Scorecard maxima (May 2026 — PD removed from scoring; total 8.5):
-      Structure 2.5 | Sweep 2.5 | FVG 2.0 | Freshness 0.5 | Killzone 1.0
+    Scorecard maxima (May 2026 v2 — out-of-10 redesign):
+      Structure 3.0 | Sweep 3.0 | FVG 2.0 | Freshness 1.5 | Killzone 0.5
+      Total = 10.0. Min confidence to alert = 6.0.
     PD is rendered as a display-only row (max_score = 0) showing range
     geometry and PD% so the trader can use it for judgement, but it
     contributes no points. Macro removed from scoring; still rendered
@@ -1523,22 +1536,25 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     bos_count_maxed = bool(ob.get('bos_count_maxed', False))
     seq_str = f"#{bos_seq}+" if bos_count_maxed else f"#{bos_seq}"
     if bos_tag_local == 'CHoCH' and bos_tier_local == 'Major':
-        rows.append(("Structure", s, 2.5, "ok",
+        rows.append(("Structure", s, 3.0, "ok",
                      "Major CHoCH — trend has reversed (lookback=3 break, reversal from premium/discount)."))
     elif bos_tag_local == 'CHoCH' and bos_tier_local == 'Minor':
-        rows.append(("Structure", s, 2.5, "warn",
+        rows.append(("Structure", s, 3.0, "warn",
                      "Minor CHoCH — wall rejected then internal swing broken; trend weakening, not yet reversed."))
-    elif s >= 2.0:
-        rows.append(("Structure", s, 2.5, "ok",
+    elif bos_tag_local == 'BOS' and bos_tier_local == 'Minor':
+        rows.append(("Structure", s, 3.0, "warn",
+                     "Minor BOS — internal lookback-3 continuation break; trend alive but no wall moved."))
+    elif s >= 2.5:
+        rows.append(("Structure", s, 3.0, "ok",
                       f"Early continuation (BOS {seq_str} since last Major CHoCH) — smart money still loading."))
     elif s >= 1.5:
-        rows.append(("Structure", s, 2.5, "warn",
+        rows.append(("Structure", s, 3.0, "warn",
                       f"Mid-trend continuation (BOS {seq_str} since last Major CHoCH)."))
     elif s >= 1.0:
-        rows.append(("Structure", s, 2.5, "fail",
+        rows.append(("Structure", s, 3.0, "fail",
                       f"Late continuation (BOS {seq_str} since last Major CHoCH) — trend may be exhausted."))
     else:
-        rows.append(("Structure", s, 2.5, "fail", "No confirmed BOS or CHoCH."))
+        rows.append(("Structure", s, 3.0, "fail", "No confirmed BOS or CHoCH."))
 
     # 2. Liquidity Sweep — scorecard shows PRESENCE only.
     # Quality breakdown rendered separately above Macro Context in email.
@@ -1546,15 +1562,15 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     comps = sweep_components or {}
     presence = comps.get('base', 0.0)
     if presence > 0 and sweep_price is not None:
-        rows.append(("Liquidity Sweep", s, 2.5, "ok",
+        rows.append(("Liquidity Sweep", s, 3.0, "ok",
                      f"{sweep_tf} sweep confirmed at {sweep_price:.{dp}f}. See breakdown below charts."))
     else:
-        rows.append(("Liquidity Sweep", s, 2.5, "fail",
+        rows.append(("Liquidity Sweep", s, 3.0, "fail",
                      "No qualifying sweep within recency window before the OB."))
 
-    # 3. FVG — independent H1 + M15 (max 2.0 total).
-    # H1: pristine 1.2 | partial 0.5 | none/full 0.0
-    # M15: pristine 0.8 | partial 0.3 | none/full 0.0
+    # 3. FVG — independent H1 + M15 (max 2.0 total, summed and capped).
+    # H1: pristine 1.2 | partial 0.6 | none/full 0.0
+    # M15: pristine 0.8 | partial 0.4 | none/full 0.0
     s = breakdown.get("fvg", 0)
     fvg_h1  = fvg.get('h1')  if isinstance(fvg, dict) else None
     fvg_m15 = fvg.get('m15') if isinstance(fvg, dict) else None
@@ -1589,18 +1605,22 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     else:
         rows.append(("FVG", s, 2.0, "fail",
                      f"{desc} No qualifying displacement on either timeframe."))
-    # 4. Freshness
+    # 4. Freshness — Phase 1 invalidates at 3 touches (overuse mitigation),
+    # so the 3+ branch should not fire in practice; kept for legacy zones.
     s = breakdown.get("freshness", 0)
     touches = int(ob.get('touches', 0))
     if touches == 0:
-        rows.append(("Freshness", s, 0.5, "ok",
+        rows.append(("Freshness", s, 1.5, "ok",
                      "Pristine — zone untouched since it was formed."))
-    elif touches <= 2:
-        rows.append(("Freshness", s, 0.5, "warn",
-                     f"Tested {touches}x since formation — partial mitigation."))
+    elif touches == 1:
+        rows.append(("Freshness", s, 1.5, "warn",
+                     "Tested 1x since formation — partial mitigation."))
+    elif touches == 2:
+        rows.append(("Freshness", s, 1.5, "fail",
+                     "Tested 2x since formation — one more touch invalidates."))
     else:
-        rows.append(("Freshness", s, 0.5, "fail",
-                     f"Tested {touches}x since formation — zone fatigued."))
+        rows.append(("Freshness", s, 1.5, "fail",
+                     f"Tested {touches}x since formation — zone fatigued (legacy)."))
 
     # 5. Premium / Discount — DISPLAY ONLY (no longer contributes points).
     # Geometry (range, equilibrium, %) is surfaced for trader judgement.
@@ -1647,14 +1667,15 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
                           else "mid premium"   if pd_position is not None and pd_position >= 0.55
                           else "below equilibrium")
         rows.append(("Premium / Discount", 0.0, 0.0, "info",
-                      f"Price at {pd_pct_str} of dealing range ({zone_label}). {dr_src}{dr_tag}{chop_tag}"))
+                      f"H1 OB proximal at {pd_pct_str} of H1 dealing range ({zone_label}). {dr_src}{dr_tag}{chop_tag}"))
     
-    # 6. Killzone
+    # 6. Killzone — 0.5 bonus when inside an active session for the pair.
+    # Not a hard gate: out-of-killzone trades still alert if score reaches min.
     s = breakdown.get("killzone", 0)
-    if s >= 1.0:
-        rows.append(("Killzone", s, 1.0, "ok", "Inside active trading window."))
+    if s >= 0.5:
+        rows.append(("Killzone", s, 0.5, "ok", "Inside active trading window."))
     else:
-        rows.append(("Killzone", s, 1.0, "fail",
+        rows.append(("Killzone", s, 0.5, "fail",
                       "Outside main trading window — lower volume expected."))
 
     return rows

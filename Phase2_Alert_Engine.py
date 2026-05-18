@@ -884,7 +884,7 @@ def build_scorecard_html(rows, total):
     return f"""
     <div style="margin-bottom:14px;">
       <div style="color:#aaa;font-size:11px;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">
-        Confluence Scorecard &mdash; <span style="color:#eee;font-size:14px;font-weight:bold;">{total}/8.5</span>
+        Confluence Scorecard &mdash; <span style="color:#eee;font-size:14px;font-weight:bold;">{total}/10.0</span>
       </div>
       <table style="width:100%;border-collapse:collapse;background:#1a1a2e;border-radius:6px;">
         <tbody>{body}</tbody>
@@ -1113,10 +1113,10 @@ def build_sweep_breakdown_html(data, dp):
     return f"""
     <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #00bcd4;border-radius:4px;font-size:12px;color:#bbb;line-height:1.6;">
         <div style="color:#eee;font-weight:bold;margin-bottom:6px;letter-spacing:0.5px;">SWEEP QUALITY BREAKDOWN</div>
-        <div>{presence_icon} <b style="color:#eee;">Presence:</b> {base:.2f}/1.0 &middot; {sweep_tf} sweep at {sweep_price_str}, {hrs_str}</div>
+        <div>{presence_icon} <b style="color:#eee;">Presence:</b> {base:.2f}/1.5 &middot; {sweep_tf} sweep at {sweep_price_str}, {hrs_str}</div>
         <div>{eq_icon} <b style="color:#eee;">Equal Levels:</b> {eq_score:.2f}/0.5 &middot; {eq_label}</div>
         <div>{rej_icon} <b style="color:#eee;">Rejection Quality:</b> {rej_score:.2f}/1.0 &middot; {rej_label} (ratio {wb_ratio:.1f})</div>
-        <div style="margin-top:4px;color:#eee;"><b>Total: {total:.2f}/2.5</b></div>
+        <div style="margin-top:4px;color:#eee;"><b>Total: {total:.2f}/3.0</b></div>
     </div>"""
 def send_email(subject, html_body, h1_chart_b64, m15_chart_b64):
     for recipient in config["account"].get("alert_emails", []):
@@ -1899,7 +1899,7 @@ if __name__ == "__main__":
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
                 send_email(
-                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/8.5 | {ist_now.strftime('%H:%M IST')}",
+                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/10.0 | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
                 print(f"  [OK] {print_label}")
@@ -2008,7 +2008,7 @@ if __name__ == "__main__":
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
                 send_email(
-                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/8.5 | {ist_now.strftime('%H:%M IST')}",
+                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/10.0 | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
                 watch_writes[watch_id] = trade_data
