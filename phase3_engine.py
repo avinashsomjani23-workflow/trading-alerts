@@ -459,6 +459,109 @@ def is_invalidated(bias, current_close, distal):
 
 
 # ---------------------------------------------------------------------------
+# Phase 1 freshness gate (mirrors Phase 2's gate). Phase 3 trade triggers must
+# never fire on stale upstream data.
+# ---------------------------------------------------------------------------
+
+P1_FRESHNESS_MAX_AGE_HOURS = 1.25  # Same threshold as Phase 2; P1 runs hourly.
+
+
+def _is_weekday_market_hours(ist_now):
+    """Rough check: weekday and not deep weekend. FX runs Mon-Fri IST.
+    Mirror of Phase 2's helper; kept local to avoid an import dependency."""
+    wd = ist_now.weekday()
+    if wd < 5:
+        return True
+    if wd == 6 and ist_now.hour >= 4:
+        return True
+    return False
+
+
+def _get_active_obs_mtime_hours(ist_now):
+    """Return hours since active_obs.json was last modified. None if missing."""
+    try:
+        if not os.path.exists("active_obs.json"):
+            return None
+        mtime_utc = datetime.utcfromtimestamp(os.path.getmtime("active_obs.json"))
+        mtime_ist = mtime_utc + timedelta(hours=5, minutes=30)
+        return (ist_now - mtime_ist).total_seconds() / 3600
+    except Exception:
+        return None
+
+
+def check_p1_freshness(ist_now):
+    """
+    Return (is_fresh, reason). Fresh means active_obs.json was modified within
+    P1_FRESHNESS_MAX_AGE_HOURS during market hours. Off-hours bypass keeps the
+    gate from spamming during legitimate quiet periods.
+
+    Slate-date is NOT checked here (Phase 2's job). Phase 3 only needs to
+    confirm the underlying structure feed is alive; a stale slate during a
+    fresh mtime window is Phase 2's responsibility to flag.
+    """
+    if not _is_weekday_market_hours(ist_now):
+        return True, "off_hours"
+    age_hrs = _get_active_obs_mtime_hours(ist_now)
+    if age_hrs is None:
+        return False, "active_obs_missing"
+    if age_hrs > P1_FRESHNESS_MAX_AGE_HOURS:
+        return False, f"active_obs_age_{age_hrs:.1f}h_over_{P1_FRESHNESS_MAX_AGE_HOURS:.2f}h"
+    return True, "ok"
+
+
+def emit_p3_stale_alert(ist_now, reason):
+    """
+    Send a one-shot 'P3 paused — P1 stale' email and persist a flag so
+    subsequent P3 runs don't spam. Flag clears on the next fresh scan.
+
+    Distinct from P2's stale-alert state (different file) so P2 and P3
+    each get their own one-shot per stale streak.
+    """
+    state = load_json("p3_stale_alert_state.json", {})
+    if not isinstance(state, dict):
+        state = {}
+    if state.get("alerted"):
+        print(f"  [STALE] P1 still stale ({reason}); P3 already notified — silent.")
+        return
+
+    ts_str = ist_now.strftime("%H:%M IST, %d %b")
+    subject = f"P3 PAUSED | Phase 1 data is stale | {ts_str}"
+    html = f"""<html><body style="background:#131722;font-family:Arial,sans-serif;padding:20px;">
+        <div style="max-width:640px;margin:auto;background:#1e222d;padding:20px;border-radius:8px;">
+            <div style="color:#eee;font-size:16px;font-weight:bold;margin-bottom:14px;">
+                Phase 3 paused — {ts_str}
+            </div>
+            <div style="padding:14px;background:#3a1b1b;border-left:4px solid #ef5350;border-radius:4px;color:#eee;font-size:14px;line-height:1.6;">
+                <b style="color:#ef5350;">&#9888; Phase 1 data is stale.</b><br>
+                Phase 3 refused to fire triggers. No M5 entry alerts will be sent until P1 recovers.<br><br>
+                <b>Reason:</b> {reason}<br>
+                <b>Action:</b> Check P1 Actions tab on GitHub. Investigate why the hourly run isn't producing fresh active_obs.json.
+            </div>
+            <div style="padding:10px 12px;margin-top:12px;background:#0d0d1a;border-left:3px solid #555;border-radius:4px;font-size:12px;color:#aaa;line-height:1.5;">
+                You will receive ONE alert per stale streak. The next P3 run that sees fresh data will resume silently.
+            </div>
+        </div>
+    </body></html>"""
+    try:
+        send_email(subject, html, None)
+    except Exception as e:
+        print(f"  [STALE ALERT ERR] {e}")
+    state["alerted"] = True
+    state["since_ist"] = ist_now.isoformat()
+    state["reason"] = reason
+    save_json("p3_stale_alert_state.json", state)
+    print(f"  [STALE] One-shot P3-stale alert sent: {reason}")
+
+
+def clear_p3_stale_flag():
+    """Called once P1 is fresh again. Resets the P3 one-shot alert flag."""
+    state = load_json("p3_stale_alert_state.json", {})
+    if isinstance(state, dict) and state.get("alerted"):
+        save_json("p3_stale_alert_state.json", {"alerted": False})
+        print("  [STALE] P1 fresh again — P3 stale-alert flag cleared.")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -467,6 +570,16 @@ def run_phase3():
     ist_now = get_ist_now()
     scan_start_ts = ist_now  # Scan start; per-alert send time re-captured at email build.
     print(f"Phase 3 (M5 Trigger) started at {ist_now.strftime('%H:%M')} IST")
+
+    # Phase 1 freshness gate. Phase 3 must never fire entry triggers on stale
+    # upstream data — the watch state may reference zones P1 has already killed.
+    is_fresh, fresh_reason = check_p1_freshness(ist_now)
+    if not is_fresh:
+        print(f"  [STALE GATE] Refusing to fire triggers — {fresh_reason}")
+        emit_p3_stale_alert(ist_now, fresh_reason)
+        return
+    else:
+        clear_p3_stale_flag()
 
     watch_state = load_json("active_watch_state.json", {})
     if not watch_state:
@@ -479,6 +592,11 @@ def run_phase3():
     dollar_risk_str = f"${dollar_risk:,.0f}"
 
     keys_to_delete = []
+    # Per-watch updates we want merged into the live disk state at save time
+    # (e.g. setting tapped=True). Concurrency-safe: at save we re-read disk and
+    # apply only these field-level merges, so P2 can write fresh data mid-run
+    # without us clobbering it.
+    watch_field_updates = {}  # key -> {"tapped": True, ...}
 
     # Post-slippage RR floor: trade rejected if recomputed RR (using current M5
     # close as MARKET entry) drops below this. Veteran-tuned for Gold/NAS
@@ -514,11 +632,62 @@ def run_phase3():
             keys_to_delete.append(key)
             continue
 
-        # Tap check
-        recent_m5 = df_m5.tail(30)
-        tapped = (bias == "LONG" and recent_m5['Low'].min() <= proximal) or \
-                 (bias == "SHORT" and recent_m5['High'].max() >= proximal)
-        if not tapped:
+        # Sticky tap flag. Read once and reuse below — both the TP-side
+        # invalidation and the tap gate depend on this.
+        already_tapped = bool(data.get("tapped", False))
+
+        # TP-side invalidation. If price reached TP1 BEFORE we ever tapped the
+        # zone, the planned move has already paid out without us — the setup
+        # is consumed. Kill the watch silently.
+        #
+        # Two guards prevent murdering tight-RR setups on noise:
+        #   1. Only applies when `already_tapped` is False (a tapped watch is
+        #      "in play" — TP1 wicks are normal market noise inside the trade).
+        #   2. Requires an M5 CLOSE past TP1, not just a wick. A wick to TP1
+        #      followed by close back below (LONG case) is not enough.
+        #
+        # If TP1 is missing from the levels (legacy watch), this rule is
+        # skipped — only the distal-side invalidation applies.
+        tp1_val = phase2_levels.get('tp1')
+        if tp1_val is not None and not already_tapped:
+            try:
+                tp1_for_check = float(tp1_val)
+            except (TypeError, ValueError):
+                tp1_for_check = None
+            if tp1_for_check is not None:
+                recent_closes = df_m5['Close'].tail(30)
+                tp1_hit = False
+                if bias == "LONG":
+                    tp1_hit = bool((recent_closes >= tp1_for_check).any())
+                elif bias == "SHORT":
+                    tp1_hit = bool((recent_closes <= tp1_for_check).any())
+                if tp1_hit:
+                    print(f"  [X] {pair_name} TP1-CONSUMED (M5 close past TP1 {tp1_for_check:.{dp}f} before tap). Silent delete.")
+                    keys_to_delete.append(key)
+                    continue
+
+        # Tap check — sticky flag.
+        # Phase 3 used to recompute tap from the last 30 M5 candles (~2.5h)
+        # every scan, which meant a watch that tapped 3h ago would silently
+        # "untap" itself and miss the CHoCH that followed the second tap.
+        # Fix: once tapped, persist tapped=True onto the watch entry and
+        # treat it as sticky forever. Fresh-tap detection still uses the
+        # last 30 M5 candles to flip the flag the first time.
+        if already_tapped:
+            tapped_now = True
+        else:
+            recent_m5 = df_m5.tail(30)
+            tapped_now = (
+                (bias == "LONG" and recent_m5['Low'].min() <= proximal)
+                or (bias == "SHORT" and recent_m5['High'].max() >= proximal)
+            )
+            if tapped_now:
+                # Newly tapped this scan. Queue a field-level merge so disk
+                # state retains the flag across runs without overwriting any
+                # other fields P2 may have written.
+                watch_field_updates[key] = {"tapped": True,
+                                            "tapped_ist": ist_now.isoformat()}
+        if not tapped_now:
             print(f"  [-] {pair_name}: waiting for tap of proximal ({proximal:.{dp}f})")
             continue
 
@@ -602,16 +771,27 @@ def run_phase3():
         send_email(f"TRADE READY (M5 SNIPER) | {pair_name} | {bias}", html, chart_b64)
         keys_to_delete.append(key)
 
-    # CONCURRENCY-SAFE SAVE: re-read latest disk state, delete only our processed keys.
-    # If P2 added new keys mid-run, those additions are preserved.
+    # CONCURRENCY-SAFE SAVE: re-read latest disk state, apply field-level
+    # merges (e.g. tapped=True) FIRST, then delete only our processed keys.
+    # Field merges respect P2's mid-run writes — we never overwrite a whole
+    # entry, only the specific fields we own (tapped, tapped_ist).
     fresh_disk = load_json("active_watch_state.json", {})
+    merged = 0
+    for k, fields in watch_field_updates.items():
+        if k in keys_to_delete:
+            # Watch will be deleted in the same save; merge is moot.
+            continue
+        live = fresh_disk.get(k)
+        if isinstance(live, dict):
+            live.update(fields)
+            merged += 1
     deleted = 0
     for k in keys_to_delete:
         if k in fresh_disk:
             del fresh_disk[k]
             deleted += 1
     save_json("active_watch_state.json", fresh_disk)
-    print(f"Phase 3 complete. Watch deletions: {deleted}")
+    print(f"Phase 3 complete. Watch deletions: {deleted}. Field merges: {merged}.")
 
 
 if __name__ == "__main__":

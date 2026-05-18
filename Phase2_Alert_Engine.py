@@ -1505,23 +1505,56 @@ if __name__ == "__main__":
 
     active_obs = load_slate_as_pair_map("active_obs.json")
     watch_state = load_json("active_watch_state.json", {})
-    # --- Phase 2 dedup state — day-reset model ---
-    # Structure: { "day_id": "YYYY-MM-DD", "zones": { zone_id: {"score_int": 8, "alert_ist": "..."} } }
-    # Daily slate at 09:00 IST. Mirrors Phase 1's reset rhythm.
-    # Re-email policy: same zone re-emails ONLY when integer-floor score changes.
-    # No cooldown layer — score-change is the only re-alert trigger.
+    # --- Phase 2 dedup state — lifetime model (no daily reset) ---
+    # Structure: { "day_id": "YYYY-MM-DD",  # retained for backward-compat reads; no longer used to wipe
+    #              "zones": { zone_id: {"score_int": ..., "score_raw": ...,
+    #                                    "alert_ist": ..., "last_seen_ist": ...,
+    #                                    "breakdown": ..., ...} } }
+    #
+    # A zone's dedup entry lives as long as the zone itself lives in P1's
+    # active_obs slate. Re-emails are governed ONLY by the asymmetric
+    # hysteresis band (+0.7 / -0.5). Calendar rollovers do NOT re-spam.
+    #
+    # Stale-entry garbage collection: any entry whose last_seen_ist is older
+    # than DEDUP_STALE_DAYS days is evicted at load time. Conservative window
+    # so a transient yfinance hiccup that skips one P2 scan never evicts a
+    # live zone's dedup state.
+    DEDUP_STALE_DAYS = 7
     phase2_state = load_json("phase2_sent.json", {"day_id": None, "zones": {}})
 
     # Defensive: handle legacy schema (flat zone_id -> iso) gracefully.
     if not isinstance(phase2_state, dict) or "zones" not in phase2_state:
         phase2_state = {"day_id": None, "zones": {}}
 
-    today_id = get_day_id_ist(ist_now)
-    if phase2_state.get("day_id") != today_id:
-        prev_count = len(phase2_state.get("zones", {}))
-        print(f"  [DAY RESET] New trading day {today_id}. Wiped {prev_count} prior zones.")
-        phase2_state = {"day_id": today_id, "zones": {}}
-        save_json("phase2_sent.json", phase2_state)
+    # Stale-entry GC. An entry's freshness anchor is last_seen_ist; older
+    # entries fall back to alert_ist (entries written before this field
+    # existed).
+    stale_cutoff = ist_now - timedelta(days=DEDUP_STALE_DAYS)
+    zones_in = phase2_state.get("zones") or {}
+    zones_kept = {}
+    evicted = 0
+    for zid, entry in zones_in.items():
+        if not isinstance(entry, dict):
+            evicted += 1
+            continue
+        anchor_iso = entry.get("last_seen_ist") or entry.get("alert_ist")
+        if not anchor_iso:
+            # No anchor — keep (cannot prove stale). Will get one on next match.
+            zones_kept[zid] = entry
+            continue
+        try:
+            anchor_dt = datetime.fromisoformat(anchor_iso)
+        except Exception:
+            zones_kept[zid] = entry
+            continue
+        if anchor_dt < stale_cutoff:
+            evicted += 1
+            continue
+        zones_kept[zid] = entry
+    if evicted:
+        print(f"  [DEDUP GC] Evicted {evicted} dedup entries older than {DEDUP_STALE_DAYS}d.")
+    phase2_state["zones"] = zones_kept
+    phase2_state["day_id"] = get_day_id_ist(ist_now)  # informational only; no longer triggers wipe
 
     phase2_zones = phase2_state["zones"]
 
@@ -1848,6 +1881,9 @@ if __name__ == "__main__":
                         # Silent — but persist updated watermarks for diagnostics.
                         prior["score_high_water"] = hi_water
                         prior["score_low_water"]  = lo_water
+                        # Refresh last_seen_ist so stale-entry GC doesn't evict
+                        # a live silent-band zone.
+                        prior["last_seen_ist"] = ist_now.isoformat()
                         save_json("phase2_sent.json", phase2_state)
                         scan_record["final_action"] = (
                             f"dedup_hysteresis_silent "
@@ -1868,6 +1904,7 @@ if __name__ == "__main__":
                     "score_low_water":  current_score_raw,
                     "breakdown": current_breakdown,
                     "alert_ist": ist_now.isoformat(),
+                    "last_seen_ist": ist_now.isoformat(),
                     "bias": bias,
                     "pair": name
                 }
@@ -1960,6 +1997,9 @@ if __name__ == "__main__":
                         watch_writes[watch_id] = trade_data
                         prior["score_high_water"] = hi_water
                         prior["score_low_water"]  = lo_water
+                        # Refresh last_seen_ist so stale-entry GC doesn't evict
+                        # a live silent-band zone.
+                        prior["last_seen_ist"] = ist_now.isoformat()
                         save_json("phase2_sent.json", phase2_state)
                         scan_record["final_action"] = (
                             f"dedup_hysteresis_silent_ltf "
@@ -1978,6 +2018,7 @@ if __name__ == "__main__":
                     "score_low_water":  current_score_raw,
                     "breakdown": current_breakdown,
                     "alert_ist": ist_now.isoformat(),
+                    "last_seen_ist": ist_now.isoformat(),
                     "bias": bias,
                     "pair": name
                 }
@@ -2040,8 +2081,19 @@ if __name__ == "__main__":
 
     # CONCURRENCY-SAFE SAVE: re-read latest disk state, apply only our upserts.
     # If P3 deleted keys mid-run, those deletions are preserved.
+    #
+    # Sticky fields preserved across upserts: a small set of fields that
+    # Phase 3 owns and Phase 2 must never wipe. Currently: 'tapped',
+    # 'tapped_ist'. Without this carry-over, every P2 hourly upsert would
+    # reset Phase 3's sticky tap flag, defeating fix #5.
+    STICKY_FROM_P3 = ("tapped", "tapped_ist")
     fresh_disk = load_json("active_watch_state.json", {})
     for k, v in watch_writes.items():
+        prior = fresh_disk.get(k)
+        if isinstance(prior, dict) and isinstance(v, dict):
+            for sf in STICKY_FROM_P3:
+                if sf in prior and sf not in v:
+                    v[sf] = prior[sf]
         fresh_disk[k] = v
     save_json("active_watch_state.json", fresh_disk)
     print(f"Phase 2 complete. Watch upserts: {len(watch_writes)}")

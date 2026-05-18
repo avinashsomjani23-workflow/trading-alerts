@@ -820,12 +820,18 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'fvg_bottom':   fvg_result.get('fvg_bottom'),
             'c1_idx':       fvg_result.get('c1_idx'),
             'c3_idx':       fvg_result.get('c3_idx'),
+            # c1_timestamp is the absolute ISO timestamp of the c1 candle.
+            # Cross-phase chart rendering (Phase 2 H1 chart) must use this
+            # because c1_idx is local to P1's H1 dataframe and does not
+            # translate to P2's separate H1 fetch.
+            'c1_timestamp': fvg_result.get('c1_timestamp'),
             'was_detected': fvg_result.get('was_detected', False),
             'mitigation':   fvg_result.get('mitigation', 'none'),
             'ghost_top':    fvg_result.get('ghost_top'),
             'ghost_bottom': fvg_result.get('ghost_bottom'),
             'ghost_c1_idx': fvg_result.get('ghost_c1_idx'),
             'ghost_c3_idx': fvg_result.get('ghost_c3_idx'),
+            'ghost_c1_timestamp': fvg_result.get('ghost_c1_timestamp'),
             'mitigated_at_idx': fvg_result.get('mitigated_at_idx')
         }
 

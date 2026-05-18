@@ -131,11 +131,6 @@ PAIR_SESSION_TAGS = {
     "NAS100": ["ny"]
 }
 
-# Sweep recency cap — sweeps older than this (relative to the OB candle) are
-# market-memory stale and excluded entirely. Counted in TRADING hours only
-# (Mon-Fri, weekends excluded). 72h ≈ 3 trading days.
-SWEEP_RECENCY_TRADING_HOURS = 10
-
 # Sweep observation window for Phase 1 (display-only badge). Same 72 trading-hour
 # rule applied during OB construction. Kept as a separate constant so Phase 1
 # observation logic is decoupled from Phase 2 grading.
@@ -1028,15 +1023,22 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
     Return shape:
       Live (pristine/partial) -> {"exists": True, "fvg_top": ft, "fvg_bottom": fb,
                                   "c1_idx": k, "c3_idx": k+2,
+                                  "c1_timestamp": iso_str,
                                   "mitigation": "pristine" | "partial",
                                   "was_detected": True}
       Ghost only (full mit)   -> {"exists": False, "fvg_top": None, "fvg_bottom": None,
                                   "was_detected": True, "mitigation": "full",
                                   "ghost_top": ft, "ghost_bottom": fb,
                                   "ghost_c1_idx": k, "ghost_c3_idx": k+2,
+                                  "ghost_c1_timestamp": iso_str,
                                   "mitigated_at_idx": m}
       Nothing                 -> {"exists": False, "fvg_top": None, "fvg_bottom": None,
                                   "was_detected": False, "mitigation": "none"}
+
+    `c1_timestamp` / `ghost_c1_timestamp` carry the absolute ISO timestamp of
+    the c1 (left) candle. Cross-phase chart rendering must use the timestamp
+    because c1_idx is local to the detection df and does not translate across
+    different yfinance fetches.
     """
     _empty = {"exists": False, "fvg_top": None, "fvg_bottom": None,
               "was_detected": False, "mitigation": "none"}
@@ -1050,6 +1052,16 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
     L = df['Low'].values.astype(float)
     C = df['Close'].values.astype(float)
     n = len(df)
+
+    # Resolve a candle's absolute timestamp once per FVG return. Cross-phase
+    # callers (Phase 2 / Phase 3) cannot rely on c1_idx because their df is a
+    # different fetch than Phase 1's; the timestamp is the only stable anchor.
+    def _idx_to_iso(k):
+        try:
+            ts = df.index[int(k)]
+            return ts.isoformat() if hasattr(ts, 'isoformat') else str(ts)
+        except Exception:
+            return None
 
     # Close-based full mit for index (NAS) and commodity (Gold) — both wick
     # through levels on news without genuine fills. Forex keeps touch-based.
@@ -1101,12 +1113,14 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
                     "was_detected": True, "mitigation": "full",
                     "ghost_top": ft, "ghost_bottom": fb,
                     "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
+                    "ghost_c1_timestamp": _idx_to_iso(k),
                     "mitigated_at_idx": full_fill_idx
                 }
                 continue
             return {
                 "exists": True, "fvg_top": ft, "fvg_bottom": fb,
                 "c1_idx": k, "c3_idx": k + 2,
+                "c1_timestamp": _idx_to_iso(k),
                 "mitigation": "partial" if partial_hit else "pristine",
                 "was_detected": True
             }
@@ -1135,12 +1149,14 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
                     "was_detected": True, "mitigation": "full",
                     "ghost_top": ft, "ghost_bottom": fb,
                     "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
+                    "ghost_c1_timestamp": _idx_to_iso(k),
                     "mitigated_at_idx": full_fill_idx
                 }
                 continue
             return {
                 "exists": True, "fvg_top": ft, "fvg_bottom": fb,
                 "c1_idx": k, "c3_idx": k + 2,
+                "c1_timestamp": _idx_to_iso(k),
                 "mitigation": "partial" if partial_hit else "pristine",
                 "was_detected": True
             }
