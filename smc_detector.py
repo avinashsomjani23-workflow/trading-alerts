@@ -1856,15 +1856,18 @@ def detect_ltf_choch(df_m5, bias, bounds):
     """
     Detect M5 CHoCH where the BREAK LEVEL is near the HTF zone.
 
-    Old behavior (dropped): required the M5 swing to sit *inside* the zone.
-    This failed on tight zones (NAS100/GOLD) where M5 swings formed just outside.
+    Grace band rationale: on Gold/NAS the bounce inside an H1 OB tap commonly
+    pokes a few ticks above proximal (LONG) before rolling over to form the
+    swing low. That bounce print IS the swing high that CHoCH must break.
+    Strict zone-bound rejects it; 0.75x M5 ATR catches genuine
+    wick-just-above-proximal swings without admitting swings clearly outside
+    the reaction context.
 
-    New behavior:
-    - Scan M5 swings across the full window (no bounds filter).
-    - For LONG: the most recent swing high that gets broken must sit inside the zone
-      OR within 1x M5 ATR above the zone's top.
-    - For SHORT: the most recent swing low that gets broken must sit inside the zone
-      OR within 1x M5 ATR below the zone's bottom.
+    Logic:
+    - Scan M5 swings across the full window at lookback=3.
+    - LONG: eligible = swing highs with zone_min <= price <= zone_max + 0.75 * M5 ATR.
+      Take the most recent eligible.
+    - SHORT: mirror with zone_min - 0.75 * M5 ATR.
     - Break = current close crosses the swing level and previous close was on the other side.
     """
     if df_m5 is None or len(df_m5) < 10:
@@ -1878,12 +1881,13 @@ def detect_ltf_choch(df_m5, bias, bounds):
     C = df_m5['Close'].values
     m5_atr = compute_atr(df_m5) or 0.0
 
-    # Grace band: 1x M5 ATR above (LONG) or below (SHORT) the zone
+    # Grace band: 0.75x M5 ATR above (LONG) or below (SHORT) the zone
+    grace_mult = 0.75
     zone_max = bounds['max']
     zone_min = bounds['min']
 
     if bias == 'LONG':
-        long_grace_top = zone_max + m5_atr
+        long_grace_top = zone_max + grace_mult * m5_atr
         # Latest swing high whose PRICE sits inside zone OR within grace above it
         eligible_highs = [
             s for s in swings
@@ -1895,7 +1899,7 @@ def detect_ltf_choch(df_m5, bias, bounds):
         if C[-1] > latest['price'] and C[-2] <= latest['price']:
             return {"fired": True, "level": float(latest['price'])}
     elif bias == 'SHORT':
-        short_grace_bottom = zone_min - m5_atr
+        short_grace_bottom = zone_min - grace_mult * m5_atr
         eligible_lows = [
             s for s in swings
             if s['type'] == 'low' and short_grace_bottom <= s['price'] <= zone_max

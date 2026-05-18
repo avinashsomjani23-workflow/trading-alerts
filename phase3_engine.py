@@ -288,7 +288,8 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
             right_labels.append((sl_p, f" {sl_p:.{dp}f}", '#e74c3c'))
 
         for tp_key, tp_color in [('tp1', '#27ae60'), ('tp2', '#1abc9c')]:
-            tp_p = float(levels.get(tp_key, 0))
+            tp_raw = levels.get(tp_key)
+            tp_p = float(tp_raw) if tp_raw is not None else 0.0
             if tp_p > 0:
                 y_lo, y_hi = ax.get_ylim()
                 if y_lo <= tp_p <= y_hi:
@@ -360,37 +361,6 @@ def send_email(subject, html_body, chart_b64=None):
         except Exception as e:
             print(f"Email failed: {e}")
 
-def build_invalidation_email(pair, bias, reason, reason_detail, ob, levels, alert_ts, ist_now, pair_conf, scan_start_ist):
-    dp = pair_conf.get("decimal_places", 5)
-    sent_ist = get_ist_now().strftime('%H:%M IST')
-    scan_ist = scan_start_ist.strftime('%H:%M IST')
-    ist_str = f"Scanned {scan_ist} · Sent {sent_ist}"
-    age_hrs = 0
-    if alert_ts:
-        age_hrs = round((ist_now - alert_ts).total_seconds() / 3600, 1)
-
-    return f"""<html><body style="font-family:Arial,sans-serif;background:#0d0d1a;padding:12px;margin:0;">
-    <div style="max-width:620px;margin:auto;background:#13131f;border-radius:14px;overflow:hidden;">
-        <div style="background:#2d1a1a;padding:14px 18px;border-bottom:1px solid #4a2020;">
-            <h2 style="color:#e74c3c;margin:0;font-size:16px;">INVALIDATED: {pair} &middot; {bias}</h2>
-            <p style="color:#888;margin:4px 0 0;font-size:11px;">{ist_str}</p>
-        </div>
-        <div style="padding:16px 18px;color:#ccc;font-size:13px;line-height:1.6;">
-            <div style="background:#2d1a1a;padding:10px 14px;border-left:3px solid #e74c3c;border-radius:4px;margin-bottom:12px;">
-                <b style="color:#eee;">Reason:</b> {reason}<br>
-                <span style="color:#aaa;font-size:12px;">{reason_detail}</span>
-            </div>
-            <table style="width:100%;font-size:12px;color:#aaa;">
-                <tr><td style="padding:3px 0;">Zone proximal:</td><td style="font-family:monospace;color:#ddd;">{ob.get('proximal_line',0):.{dp}f}</td></tr>
-                <tr><td style="padding:3px 0;">Zone distal:</td><td style="font-family:monospace;color:#ddd;">{ob.get('distal_line',0):.{dp}f}</td></tr>
-                <tr><td style="padding:3px 0;">Projected entry:</td><td style="font-family:monospace;color:#ddd;">{levels.get('entry',0):.{dp}f}</td></tr>
-                <tr><td style="padding:3px 0;">Setup age:</td><td style="color:#ddd;">{age_hrs} hours</td></tr>
-            </table>
-            <p style="color:#888;font-size:11px;margin-top:12px;">Setup canceled. No further action.</p>
-        </div>
-    </div></body></html>"""
-
-
 def _chart_legend_html():
     """Colour-code legend rendered below M5 chart. Cosmetic only."""
     items = [
@@ -416,7 +386,8 @@ def _chart_legend_html():
     )
     
 def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, ist_now,
-                       dollar_risk_str, macro_summary, scan_start_ist, chart_ok=True):
+                       dollar_risk_str, macro_summary, scan_start_ist, chart_ok=True,
+                       rr_after=None):
     dp = pair_conf.get("decimal_places", 5)
     sent_ist = get_ist_now().strftime('%H:%M IST')
     scan_ist = scan_start_ist.strftime('%H:%M IST')
@@ -430,6 +401,10 @@ def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, 
     choch_line = ""
     if choch_level:
         choch_line = f"<br>M5 CHoCH level: {choch_level:.{dp}f}"
+
+    rr_line = ""
+    if rr_after is not None:
+        rr_line = f"<br>RR (post-slippage): {rr_after:.2f}"
 
     # B8: chart fallback banner
     if chart_ok:
@@ -448,10 +423,9 @@ def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, 
                 <p style="color:white;font-size:15px;font-weight:bold;margin:0;">{action_word} MARKET at {levels.get('entry'):,.{dp}f}</p>
                 <p style="color:white;margin:4px 0 0;font-size:12px;">
                     SL: {levels.get('sl'):,.{dp}f} &nbsp;|&nbsp;
-                    TP1: {levels.get('tp1'):,.{dp}f} &nbsp;|&nbsp;
-                    TP2: {levels.get('tp2'):,.{dp}f}
+                    TP1: {levels.get('tp1'):,.{dp}f}{(f" &nbsp;|&nbsp; TP2: " + format(levels.get('tp2'), f',.{dp}f')) if levels.get('tp2') is not None else ""}
                 </p>
-                <p style="color:white;margin:4px 0 0;font-size:12px;">Risk: {dollar_risk_str}</p>
+                <p style="color:white;margin:4px 0 0;font-size:12px;">Risk: {dollar_risk_str}{rr_line}</p>
             </div>
             <div style="background:#0d0d1a;padding:10px 14px;border-left:3px solid #00bcd4;border-radius:4px;font-size:12px;color:#bbb;margin-bottom:14px;line-height:1.5;">
                 <b style="color:#eee;">M5 Confluences:</b>
@@ -471,58 +445,17 @@ def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, 
 # Invalidation logic
 # ---------------------------------------------------------------------------
 
-def check_invalidation(bias, current_close, distal, m5_atr, pair_conf, alert_ts, ist_now, df_h1):
-    """Return (reason, detail) tuple if invalidated, else (None, None)."""
-    dp = pair_conf.get("decimal_places", 5)
+def is_invalidated(bias, current_close, distal):
+    """Uniform invalidation rule across all pairs: M5 close beyond H1 OB distal.
 
-    # B9: Corrupt state — timestamp missing/unparseable → force invalidation.
-    # Prevents watch entries from persisting forever if their timestamps get corrupted.
-    if alert_ts is None:
-        return (
-            "Corrupt state",
-            "Alert timestamp missing or unparseable. Forcing invalidation to prevent stuck watch entry."
-        )
-
-    # 1. ATR-buffered distal breach (with naive fallback if ATR unavailable)
-    atr_buffer = pair_conf.get("invalidation_atr_multiplier", 0.3)
-    if m5_atr is not None:
-        buf = atr_buffer * m5_atr
-        if bias == "LONG" and current_close < (distal - buf):
-            return (
-                "Distal breached with buffer",
-                f"M5 closed at {current_close:.{dp}f}, more than {atr_buffer}x M5 ATR ({buf:.{dp}f}) below distal {distal:.{dp}f}."
-            )
-        if bias == "SHORT" and current_close > (distal + buf):
-            return (
-                "Distal breached with buffer",
-                f"M5 closed at {current_close:.{dp}f}, more than {atr_buffer}x M5 ATR ({buf:.{dp}f}) above distal {distal:.{dp}f}."
-            )
-    else:
-        if bias == "LONG" and current_close < distal:
-            return ("Distal breached (naive)", f"M5 closed at {current_close:.{dp}f} below distal {distal:.{dp}f}. ATR buffer unavailable.")
-        if bias == "SHORT" and current_close > distal:
-            return ("Distal breached (naive)", f"M5 closed at {current_close:.{dp}f} above distal {distal:.{dp}f}. ATR buffer unavailable.")
-
-    # 2. Time expiry
-    max_hrs = pair_conf.get("invalidation_time_hours", 24)
-    age_hrs = (ist_now - alert_ts).total_seconds() / 3600
-    if age_hrs > max_hrs:
-        return ("Time expiry", f"Setup has been active {round(age_hrs,1)} hours without trigger (limit: {max_hrs}h).")
-
-    # 3. Opposite H1 structure shift (BOS or Major CHoCH against the bias).
-    # check_opposite_bos reads from dealing_range state (single source of truth).
-    # alert_ts is IST-naive (parsed from IST timestamps) -> subtract 5h30m
-    # to compare against UTC-naive event timestamps in state.
-    since_utc = alert_ts - timedelta(hours=5, minutes=30) if alert_ts else None
-    pair_name = pair_conf.get("name") if pair_conf else None
-    if pair_name and smc_detector.check_opposite_bos(pair_name, bias, since_ts=since_utc):
-        return (
-            "Opposite H1 structure shift",
-            "H1 printed a Break of Structure or Major CHoCH in the opposite "
-            "direction since the alert fired. The setup's foundation is broken."
-        )
-
-    return (None, None)
+    No ATR buffer, no time expiry, no opposite-structure check (handled
+    upstream / by the watch itself). Watch dies silently — no email.
+    """
+    if bias == "LONG":
+        return current_close < distal
+    if bias == "SHORT":
+        return current_close > distal
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -547,12 +480,16 @@ def run_phase3():
 
     keys_to_delete = []
 
+    # Post-slippage RR floor: trade rejected if recomputed RR (using current M5
+    # close as MARKET entry) drops below this. Veteran-tuned for Gold/NAS
+    # market-on-CHoCH-close behavior.
+    min_rr_after_slippage = config.get("phase3", {}).get("min_rr_after_slippage", 1.2)
+
     for key, data in watch_state.items():
         pair_name = data.get("pair")
         bias = data.get("bias")
         ob = data.get("ob", {})
-        levels = data.get("levels", {})
-        alert_ts = parse_iso(data.get("alert_ist"))
+        phase2_levels = data.get("levels", {}) or {}
 
         pair_conf = next((p for p in config["pairs"] if p["name"] == pair_name), None)
         if not pair_conf:
@@ -571,58 +508,9 @@ def run_phase3():
         current_close = float(df_m5['Close'].iloc[-1])
         m5_atr = smc_detector.compute_atr(df_m5)
 
-        # Fetch H1 once for opposite-BOS check
-        df_h1 = fetch_with_retry(pair_conf["symbol"], "10d", "1h")
-
-        # Invalidation first
-        inv_reason, inv_detail = check_invalidation(
-            bias, current_close, distal, m5_atr, pair_conf, alert_ts, ist_now, df_h1
-        )
-
-        if inv_reason:
-            # Entry-touched suppression: if price has already touched the projected
-            # entry since the alert fired, the trade has either filled or already
-            # played out. Invalidation emails at this point are misleading noise.
-            # We still delete the watch (no point monitoring further).
-            entry_p = float(levels.get('entry', 0))
-            entry_touched = False
-            if entry_p > 0:
-                # Bound the M5 window to candles AFTER alert_ts when possible.
-                # alert_ts is IST-naive; df_m5 index is UTC-naive. Compare in UTC.
-                try:
-                    if alert_ts is not None:
-                        alert_utc = alert_ts - timedelta(hours=5, minutes=30)
-                        m5_idx = df_m5.index
-                        if hasattr(m5_idx, 'tz_convert') and m5_idx.tz is not None:
-                            m5_idx_naive = m5_idx.tz_convert('UTC').tz_localize(None)
-                        else:
-                            m5_idx_naive = m5_idx
-                        mask = m5_idx_naive >= alert_utc
-                        post_alert = df_m5[mask] if mask.any() else df_m5.tail(0)
-                    else:
-                        post_alert = df_m5
-                except Exception:
-                    post_alert = df_m5
-
-                if not post_alert.empty:
-                    if bias == "LONG":
-                        # Buy entry sits at/above zone proximal. LONG fills when
-                        # price drops to or below entry (any low <= entry).
-                        entry_touched = bool((post_alert['Low'] <= entry_p).any())
-                    else:
-                        # SHORT fills when price rises to or above entry.
-                        entry_touched = bool((post_alert['High'] >= entry_p).any())
-
-            if entry_touched:
-                print(f"  [X] {pair_name} INVALIDATED but entry already touched — suppressing email. Reason was: {inv_reason}")
-                keys_to_delete.append(key)
-                continue
-
-            print(f"  [X] {pair_name} INVALIDATED: {inv_reason}")
-            html_inv = build_invalidation_email(
-                pair_name, bias, inv_reason, inv_detail, ob, levels, alert_ts, ist_now, pair_conf, scan_start_ts
-            )
-            send_email(f"INVALIDATED | {pair_name} | {bias}", html_inv)
+        # Invalidation: uniform rule, no email. Silent watch deletion.
+        if is_invalidated(bias, current_close, distal):
+            print(f"  [X] {pair_name} INVALIDATED (close {current_close:.{dp}f} beyond distal {distal:.{dp}f}). Silent delete.")
             keys_to_delete.append(key)
             continue
 
@@ -634,7 +522,7 @@ def run_phase3():
             print(f"  [-] {pair_name}: waiting for tap of proximal ({proximal:.{dp}f})")
             continue
 
-        # M5 CHoCH inside zone bounds (A1: grace band logic in smc_detector)
+        # M5 CHoCH inside zone bounds + 0.75x M5 ATR grace (logic in smc_detector)
         bounds = {'max': max(proximal, distal), 'min': min(proximal, distal)}
         choch_res = smc_detector.detect_ltf_choch(df_m5, bias, bounds)
 
@@ -645,43 +533,71 @@ def run_phase3():
         choch_level = choch_res.get("level")
         print(f"  [OK] LTF TRIGGER: {pair_name} M5 CHoCH at {choch_level:.{dp}f}")
 
-        # NEW
-        # M5 FVG stays: provides chart context and lets compute_dynamic_levels
-        # anchor entry precisely on the OB candle. It does NOT gate email on its
-        # own — email gating is RR-only (fresh_levels['valid']). If OB Proximal
-        # fallback yields RR >= 1.5, the alert fires regardless of M5 FVG.
-        # M5 sweep dropped entirely per design (no M5 confluences beyond FVG).
+        # M5 FVG retained for chart context only (does NOT gate the alert).
         zone_top = max(proximal, distal)
         zone_bottom = min(proximal, distal)
-
         ptype = pair_conf.get("pair_type", "forex")
         fvg_floor_mult = smc_detector.FVG_NOISE_FLOOR_MULT.get(ptype, 0.20)
         m5_atr_for_fvg = m5_atr if m5_atr else 0.0
         atr_floor_m5 = fvg_floor_mult * m5_atr_for_fvg
-
         m5_fvg = smc_detector.detect_fvg_in_zone(
             df_m5, bias, zone_top, zone_bottom, atr_floor_m5,
             pair_type=ptype
         )
-        m5_sweep_price = None  # M5 sweep not used on chart or in levels.
 
-        # Recompute levels with fresh M5 FVG — entry must land on the OB candle.
-        fresh_levels = smc_detector.compute_dynamic_levels(pair_conf, bias, ob, m5_fvg, current_close, df_m5)
-        if not fresh_levels['valid']:
-            print(f"  [!] {pair_name}: CHoCH fired but RR invalid. Skipping.")
+        # MARKET-at-current-close entry model. SL and TP1/TP2 are frozen from
+        # Phase 2 (anchored to M15-OB-if-nested-else-H1-OB distal; H1 swings).
+        # We recompute risk and RR against the actual fill price.
+        try:
+            sl = float(phase2_levels['sl'])
+            tp1 = float(phase2_levels['tp1'])
+        except (KeyError, TypeError, ValueError):
+            print(f"  [!] {pair_name}: Phase 2 levels missing sl/tp1. Skipping.")
             continue
+        tp2_raw = phase2_levels.get('tp2')
+        tp2 = float(tp2_raw) if tp2_raw is not None else None
+
+        entry = current_close
+        risk = abs(entry - sl)
+        if risk <= 0:
+            print(f"  [!] {pair_name}: zero risk at entry. Skipping.")
+            continue
+        rr_after = abs(tp1 - entry) / risk
+
+        # Sanity: entry must be on the correct side of SL given bias. If price
+        # already blew past SL between Phase 2 alert and Phase 3 fire, kill it.
+        if (bias == "LONG" and entry <= sl) or (bias == "SHORT" and entry >= sl):
+            print(f"  [X] {pair_name}: current close {entry:.{dp}f} on wrong side of SL {sl:.{dp}f}. Skipping.")
+            keys_to_delete.append(key)
+            continue
+
+        if rr_after < min_rr_after_slippage:
+            print(f"  [!] {pair_name}: RR after slippage {rr_after:.2f} < floor {min_rr_after_slippage}. Skipping.")
+            keys_to_delete.append(key)
+            continue
+
+        fresh_levels = {
+            "valid": True,
+            "entry": round(entry, dp),
+            "sl": round(sl, dp),
+            "tp1": round(tp1, dp),
+            "tp2": round(tp2, dp) if tp2 is not None else None,
+            "rr": round(rr_after, 2),
+            "entry_source": "MARKET @ M5 close"
+        }
 
         chart_b64 = generate_m5_chart(
             df_m5, f"{pair_name} M5 - Sniper Trigger",
-            fresh_levels, ob, pair_conf, m5_fvg, choch_level, m5_sweep_price
+            fresh_levels, ob, pair_conf, m5_fvg, choch_level, None
         )
         chart_ok = chart_b64 is not None
         if not chart_ok:
             _log_chart_failure(pair_name, "m5_phase3_trigger")
-            
+
         html = build_trigger_email(
             pair_name, bias, ob, fresh_levels, m5_fvg, choch_level, pair_conf,
-            ist_now, dollar_risk_str, data.get("macro_summary"), scan_start_ts, chart_ok=chart_ok
+            ist_now, dollar_risk_str, data.get("macro_summary"), scan_start_ts,
+            chart_ok=chart_ok, rr_after=rr_after
         )
         send_email(f"TRADE READY (M5 SNIPER) | {pair_name} | {bias}", html, chart_b64)
         keys_to_delete.append(key)

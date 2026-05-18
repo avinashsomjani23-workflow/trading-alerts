@@ -69,9 +69,7 @@
       "atr_multiplier": 3.5,
       "min_confidence": 6.0,
       "decimal_places": 2,
-      "spread_pips": 2.0,
-      "invalidation_atr_multiplier": 0.3,
-      "invalidation_time_hours": 24
+      "spread_pips": 2.0
     },
     {
       "symbol": "GC=F",
@@ -84,9 +82,7 @@
       "atr_multiplier": 3.5,
       "min_confidence": 6.0,
       "decimal_places": 2,
-      "spread_pips": 0.50,
-      "invalidation_atr_multiplier": 0.3,
-      "invalidation_time_hours": 24
+      "spread_pips": 0.50
     }
   ],
   "scoring": {
@@ -94,5 +90,8 @@
     "news_blackout_hours_before": 2,
     "news_blackout_hours_after": 1,
     "zone_fatigue_threshold": 5
+  },
+  "phase3": {
+    "min_rr_after_slippage": 1.2
   }
 }
