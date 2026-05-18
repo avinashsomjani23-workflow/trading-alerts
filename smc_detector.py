@@ -274,7 +274,7 @@ def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
         "last_event_type": None,
         "source": f"legacy_window_{lookback}h"
     }
-def get_swing_points(df, lookback=4, bounds=None):
+def get_swing_points(df, lookback=3, bounds=None):
     if df is None or len(df) < lookback * 2 + 1:
         return []
     H, L = df['High'].values.astype(float), df['Low'].values.astype(float)
@@ -1149,6 +1149,179 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
     if last_ghost is not None:
         return last_ghost
     return _empty
+
+
+def find_m15_ob_inside_h1(df_m15, bias, h1_ob_high, h1_ob_low):
+    """
+    Find the most recent M15 order block nested inside the H1 OB zone.
+
+    Definition (SMC, applied to M15 inside the H1 OB zone):
+      Bullish OB (LONG bias)  -> most recent BEARISH (red) M15 candle whose
+                                 full high-to-low range sits strictly inside
+                                 [h1_ob_low, h1_ob_high].
+      Bearish OB (SHORT bias) -> most recent BULLISH (green) M15 candle whose
+                                 full high-to-low range sits strictly inside
+                                 [h1_ob_low, h1_ob_high].
+
+    Strict containment: candle high <= h1 high AND candle low >= h1 low.
+    Wicks must also fit; partial overlap rejects.
+
+    Returns dict {'high': float, 'low': float, 'idx': int, 'ts': ts} or None.
+    """
+    if df_m15 is None or len(df_m15) == 0:
+        return None
+    O = df_m15['Open'].values.astype(float)
+    H = df_m15['High'].values.astype(float)
+    L = df_m15['Low'].values.astype(float)
+    C = df_m15['Close'].values.astype(float)
+    # Scan backward — most recent first.
+    for i in range(len(df_m15) - 1, -1, -1):
+        if not (L[i] >= h1_ob_low and H[i] <= h1_ob_high):
+            continue
+        is_bearish = C[i] < O[i]
+        is_bullish = C[i] > O[i]
+        if bias == "LONG" and is_bearish:
+            return {'high': float(H[i]), 'low': float(L[i]),
+                    'idx': i, 'ts': df_m15.index[i]}
+        if bias == "SHORT" and is_bullish:
+            return {'high': float(H[i]), 'low': float(L[i]),
+                    'idx': i, 'ts': df_m15.index[i]}
+    return None
+
+
+def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15):
+    """
+    Phase 2 entry / SL / TP computation.
+
+    Entry policy:
+      1. Find an M15 OB nested fully inside the H1 OB (strict containment,
+         opposite-color rule). If found, entry = M15 OB proximal.
+      2. Else fallback: entry = H1 OB proximal.
+
+    SL: entry-OB distal +/- 1x spread (M15 distal if M15 entry, H1 distal if H1 entry).
+
+    TP swings: H1 swings at lookback=3.
+      TP1 = nearest opposing H1 swing past entry that clears 1.5R. No swing
+            clearing 1.5R -> no trade.
+      TP2 = next H1 swing past TP1 (no RR gate). If no further swing,
+            fallback to dealing-range opposing extreme.
+
+    Limit-order chase guard: if the computed entry sits on the wrong side of
+    current price (LONG entry above current, SHORT entry below), the alert is
+    invalid -- price has moved through the zone.
+    """
+    dp = _dp(pair_conf)
+    spread_val = pair_conf.get("spread_pips", 2) * (0.0001 if dp == 5 else 0.01)
+
+    # H1 OB geometry. Strict read -- schema drift returns invalid rather than guess.
+    try:
+        h1_top = float(ob['high'])
+        h1_bot = float(ob['low'])
+    except (KeyError, TypeError, ValueError):
+        return {"valid": False,
+                "reason": "H1 OB geometry missing -- zone schema drift."}
+
+    # Try M15 OB nested inside H1 OB.
+    m15_ob = find_m15_ob_inside_h1(df_m15, bias, h1_top, h1_bot)
+    if m15_ob is not None:
+        ob_top, ob_bot = m15_ob['high'], m15_ob['low']
+        entry_source = "M15 OB Proximal (nested)"
+    else:
+        ob_top, ob_bot = h1_top, h1_bot
+        entry_source = "H1 OB Proximal (no M15 nest)"
+
+    # Entry = proximal of the chosen OB. SL = distal +/- 1x spread.
+    if bias == "LONG":
+        entry = ob_top
+        sl = ob_bot - spread_val
+    else:
+        entry = ob_bot
+        sl = ob_top + spread_val
+
+    # Limit-order chase guard. Tolerance = 0.5x spread for rounding/tick noise.
+    tolerance = 0.5 * spread_val
+    if bias == "LONG" and entry > current_price + tolerance:
+        return {
+            "valid": False,
+            "reason": (f"Entry {round(entry, dp)} is above current price "
+                       f"{round(current_price, dp)} -- LONG limit would chase price.")
+        }
+    if bias == "SHORT" and entry < current_price - tolerance:
+        return {
+            "valid": False,
+            "reason": (f"Entry {round(entry, dp)} is below current price "
+                       f"{round(current_price, dp)} -- SHORT limit would chase price.")
+        }
+
+    risk = abs(entry - sl)
+    if risk == 0:
+        return {"valid": False, "reason": "Zero risk -- entry == SL."}
+
+    # TP swings from H1 at lookback=3. Opposing swings only, past entry.
+    h1_swings = get_swing_points(df_h1, lookback=3)
+    if bias == "LONG":
+        opposing = [s['price'] for s in h1_swings
+                    if s['type'] == 'high' and s['price'] > entry]
+        opposing.sort()  # ascending -- nearest first
+    else:
+        opposing = [s['price'] for s in h1_swings
+                    if s['type'] == 'low' and s['price'] < entry]
+        opposing.sort(reverse=True)  # descending -- nearest first
+
+    # TP1: nearest opposing swing past entry clearing 1.5R.
+    tp1 = None
+    tp1_rr = 0.0
+    tp1_idx_in_opposing = None
+    for i, target in enumerate(opposing):
+        rr = abs(target - entry) / risk
+        if rr >= 1.5:
+            tp1 = target
+            tp1_rr = rr
+            tp1_idx_in_opposing = i
+            break
+
+    if tp1 is None:
+        return {
+            "valid": False,
+            "reason": ("No opposing H1 swing >= 1.5R past entry -- no trade."
+                       if not opposing else
+                       "All opposing H1 swings past entry yield R:R < 1.5.")
+        }
+
+    # TP2: next opposing swing past TP1. No RR gate.
+    tp2 = None
+    if tp1_idx_in_opposing + 1 < len(opposing):
+        tp2 = opposing[tp1_idx_in_opposing + 1]
+    else:
+        # Fallback: dealing range opposing extreme.
+        dr = ob.get('dealing_range') if isinstance(ob, dict) else None
+        if isinstance(dr, dict):
+            try:
+                if bias == "LONG":
+                    candidate = float(dr['range_high'])
+                    if candidate > tp1:
+                        tp2 = candidate
+                else:
+                    candidate = float(dr['range_low'])
+                    if candidate < tp1:
+                        tp2 = candidate
+            except (KeyError, TypeError, ValueError):
+                tp2 = None
+
+    out = {
+        "valid": True,
+        "entry": round(entry, dp),
+        "sl": round(sl, dp),
+        "tp1": round(tp1, dp),
+        "rr": round(tp1_rr, 2),
+        "entry_source": entry_source,
+    }
+    if tp2 is not None:
+        out["tp2"] = round(tp2, dp)
+        out["tp2_rr"] = round(abs(tp2 - entry) / risk, 2)
+    return out
+
+
 def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     dp = _dp(pair_conf)
     spread_val = pair_conf.get("spread_pips", 2) * (0.0001 if dp == 5 else 0.01)

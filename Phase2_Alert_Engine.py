@@ -606,7 +606,8 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                         fill=False, edgecolor=bos_color, linewidth=1.5, zorder=5
                     ))
 
-        # --- Right-edge tags: ENTRY, SL, TP1 only (numbers only, colour-matched) ---
+        # --- Right-edge tags: ENTRY, SL, TP1, TP2 (numbers only, colour-matched) ---
+        tp2_p = float(levels.get('tp2', 0)) if isinstance(levels, dict) else 0
         right_labels = []
         if entry_p > 0:
             right_labels.append((entry_p, f" {entry_p:.{dp}f}", '#e67e22'))
@@ -614,6 +615,8 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             right_labels.append((sl_p, f" {sl_p:.{dp}f}", '#e74c3c'))
         if tp1_p > 0:
             right_labels.append((tp1_p, f" {tp1_p:.{dp}f}", '#27ae60'))
+        if tp2_p > 0:
+            right_labels.append((tp2_p, f" {tp2_p:.{dp}f}", '#1e8449'))
         right_stacked = smc_detector.stack_labels(right_labels, pair_conf)
         for adj_price, text, color in right_stacked:
             ax.text(n + 1, adj_price, text, color=color, fontsize=10, va='center',
@@ -786,8 +789,9 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
                         fill=False, edgecolor='#ffffff', linewidth=1.5, zorder=5
                     ))
 
-        # --- Right-edge tags: ENTRY, SL, TP1 only (numbers only, colour-matched) ---
+        # --- Right-edge tags: ENTRY, SL, TP1, TP2 (numbers only, colour-matched) ---
         tp1_p = float(levels.get('tp1', 0))
+        tp2_p = float(levels.get('tp2', 0)) if isinstance(levels, dict) else 0
         right_labels = []
         if entry_p > 0:
             right_labels.append((entry_p, f" {entry_p:.{dp}f}", '#e67e22'))
@@ -818,6 +822,19 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
             else:
                 ax.axhline(y=tp1_p, color='#27ae60', linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
                 right_labels.append((tp1_p, f" {tp1_p:.{dp}f}", '#27ae60'))
+
+        # TP2: line if visible, arrow if outside (same logic as TP1, darker green)
+        if tp2_p > 0:
+            y_lo, y_hi = ax.get_ylim()
+            if tp2_p > y_hi:
+                ax.text(n + 1, y_hi - pad * 0.6, f" \u2191 {tp2_p:.{dp}f}",
+                        color='#1e8449', fontsize=10, va='top', fontweight='bold', zorder=5)
+            elif tp2_p < y_lo:
+                ax.text(n + 1, y_lo + pad * 0.6, f" \u2193 {tp2_p:.{dp}f}",
+                        color='#1e8449', fontsize=10, va='bottom', fontweight='bold', zorder=5)
+            else:
+                ax.axhline(y=tp2_p, color='#1e8449', linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
+                right_labels.append((tp2_p, f" {tp2_p:.{dp}f}", '#1e8449'))
 
         right_stacked = smc_detector.stack_labels(right_labels, pair_conf)
         for adj_price, text, color in right_stacked:
@@ -908,6 +925,7 @@ def _chart_legend_html(bos_tag="BOS", bos_tier="Major"):
         ('#e67e22', 'Entry'),
         ('#e74c3c', 'Stop loss'),
         ('#27ae60', 'TP1'),
+        ('#1e8449', 'TP2'),
         ('#5dade2', 'Equilibrium (50% of range)'),
         ('#00e5ff', 'Liquidity sweep (wick highlight)'),
     ]
@@ -937,13 +955,15 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     entry_model = pair_conf.get('entry_model', 'limit')
     if entry_model == "limit":
         action_word = "SELL LIMIT" if bias == "SHORT" else "BUY LIMIT"
+        tp2_val = levels.get('tp2')
+        tp2_html = f"TP2: {tp2_val:,.{dp}f} &nbsp;|&nbsp; " if tp2_val is not None else ""
         action_block = f"""
             <div style="background:#27ae60;padding:14px 18px;border-radius:10px;margin-bottom:14px;">
                 <p style="color:white;font-size:15px;font-weight:bold;margin:0;">{action_word} at {levels.get('entry'):,.{dp}f}</p>
                 <p style="color:white;margin:4px 0 0;font-size:12px;">
                     SL: {levels.get('sl'):,.{dp}f} &nbsp;|&nbsp;
                     TP1: {levels.get('tp1'):,.{dp}f} &nbsp;|&nbsp;
-                    Risk: {dollar_risk_str}
+                    {tp2_html}Risk: {dollar_risk_str}
                 </p>
             </div>"""
     else:
@@ -959,7 +979,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
                 <p style="color:white;margin:2px 0 0;font-size:11px;opacity:0.9;">
                     Projected SL: {levels.get('sl'):,.{dp}f} &nbsp;|&nbsp;
                     TP1: {levels.get('tp1'):,.{dp}f} &nbsp;|&nbsp;
-                    Risk: {dollar_risk_str}
+                    {(f"TP2: {levels.get('tp2'):,.{dp}f} &nbsp;|&nbsp; " if levels.get('tp2') is not None else "")}Risk: {dollar_risk_str}
                 </p>
                 <p style="color:white;margin:4px 0 0;font-size:11px;opacity:0.85;">
                     Final entry will be confirmed at M5 CHoCH inside the zone.
@@ -1716,7 +1736,7 @@ if __name__ == "__main__":
                 append_scan_log(scan_record)
                 continue
 
-            levels = smc_detector.compute_dynamic_levels(pair_conf, bias, ob, fvg_data, current_price, df_m15)
+            levels = smc_detector.compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15)
             if not levels['valid']:
                 scan_record["final_action"] = "levels_invalid"
                 append_scan_log(scan_record)
