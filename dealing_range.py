@@ -94,6 +94,17 @@ try:
 except Exception:
     _event_logger = None
 
+# Optional debug-module override hook. The debug package is a sidecar
+# (read-only against Phase 1); the only point of contact is here, where
+# an operator-issued one-shot override file can request a forced range
+# rebuild from a specific timestamp. Import + call are wrapped — if the
+# package is absent OR raises for any reason, this resolves to None and
+# Phase 1 runs exactly as before.
+try:
+    from debug import overrides as _debug_overrides  # type: ignore
+except Exception:
+    _debug_overrides = None
+
 # --- Tunables (locked) -------------------------------------------------------
 
 # Single swing pool. lookback=3 wall-grade swings drive walls, BOS detection,
@@ -1540,6 +1551,23 @@ def update_pair(df, prior_state: Optional[Dict[str, Any]],
     if df is None or len(df) < (SWING_LOOKBACK * 2 + 5):
         return prior_state or _empty_state()
 
+    pair_name = (pair_conf or {}).get("name") if pair_conf else None
+
+    # Debug-module override hook (sidecar, one-shot, read-and-delete).
+    # If an operator has issued force_new_range for this pair, trim df to
+    # candles >= force_from_ts and force a cold rebuild. Wrapped — any
+    # failure is silently ignored so Phase 1 cannot break on debug code.
+    if _debug_overrides is not None and pair_name:
+        try:
+            ov = _debug_overrides.consume_override(pair_name)
+            if ov:
+                trimmed = _trim_df_from(df, ov.get("force_new_range_from"))
+                if trimmed is not None and len(trimmed) >= (SWING_LOOKBACK * 2 + 5):
+                    df = trimmed
+                    prior_state = None  # force cold-start rebuild from this point
+        except Exception:
+            pass
+
     # For cold-start cap the window. After cold-start, the full df is fine
     # because incremental walk only processes new candles.
     is_cold = (
@@ -1547,12 +1575,35 @@ def update_pair(df, prior_state: Optional[Dict[str, Any]],
         or prior_state.get("ceiling_price") is None
         or prior_state.get("floor_price") is None
     )
-    pair_name = (pair_conf or {}).get("name") if pair_conf else None
     if is_cold:
         df_used = df.tail(COLDSTART_WINDOW_H1).copy().reset_index(drop=True) \
                   if len(df) > COLDSTART_WINDOW_H1 else df
         return _walk_forward(df_used, prior_state=None, pair_name=pair_name)
     return _walk_forward(df, prior_state=prior_state, pair_name=pair_name)
+
+
+def _trim_df_from(df, force_from_iso: Optional[str]):
+    """Return df sliced to rows with ts >= force_from_iso. None if invalid.
+
+    Defensive: if the ts column isn't recognisable or no rows match, returns
+    None and the caller falls back to normal flow. Uses _ts_iso so this stays
+    consistent with how Phase 1 reads timestamps elsewhere.
+    """
+    if not force_from_iso:
+        return None
+    try:
+        n = len(df)
+        keep_from = None
+        for i in range(n):
+            ts = _ts_iso(df, i)
+            if ts and ts >= force_from_iso:
+                keep_from = i
+                break
+        if keep_from is None:
+            return None
+        return df.iloc[keep_from:].copy().reset_index(drop=True)
+    except Exception:
+        return None
 
 
 # --- Public API used by Phase 1 + Phase 2 (read-only) ------------------------
