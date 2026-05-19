@@ -172,6 +172,51 @@ def append_scan_log(entry):
     except Exception as e:
         print(f"  [SCANLOG ERR] {e}")
 
+
+SCAN_LOG_RETENTION_DAYS = 14
+
+
+def rotate_scan_log(ist_now):
+    """Trim phase2_scan_log.jsonl to entries within retention window.
+
+    Called once at P2 start. Filters lines by their 'ts_ist' field; entries
+    older than SCAN_LOG_RETENTION_DAYS are dropped. Unparseable lines are
+    kept (we don't silently delete data we can't read).
+    """
+    path = "phase2_scan_log.jsonl"
+    if not os.path.exists(path):
+        return
+    try:
+        cutoff = ist_now - timedelta(days=SCAN_LOG_RETENTION_DAYS)
+        kept = []
+        dropped = 0
+        with open(path) as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                    ts_str = entry.get("ts_ist")
+                    if ts_str:
+                        ts = datetime.fromisoformat(ts_str)
+                        if ts < cutoff:
+                            dropped += 1
+                            continue
+                except Exception:
+                    pass  # unparseable — keep it
+                kept.append(line)
+        if dropped == 0:
+            return
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            for line in kept:
+                f.write(line + "\n")
+        os.replace(tmp, path)
+        print(f"  [SCANLOG ROT] Dropped {dropped} entries older than {SCAN_LOG_RETENTION_DAYS}d.")
+    except Exception as e:
+        print(f"  [SCANLOG ROT ERR] {e}")
+
 def clean_df(df):
     if df is None or df.empty:
         return None
@@ -325,6 +370,22 @@ def _log_chart_failure(pair, chart_type):
         save_json("chart_failure_log.json", log)
     except Exception as e:
         print(f"  [LOG ERR] chart log: {e}")
+
+
+def _log_smtp_failure(recipient, reason):
+    """Log SMTP send failures so heartbeat can surface them. Without this,
+    a bad app password or transient SMTP outage produces a silent system."""
+    try:
+        log = load_json("smtp_failure_log.json", [])
+        log.append({
+            "ts": get_ist_now().isoformat(),
+            "recipient": recipient,
+            "reason": reason
+        })
+        log = log[-200:]
+        save_json("smtp_failure_log.json", log)
+    except Exception as e:
+        print(f"  [LOG ERR] smtp log: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -1211,7 +1272,9 @@ def send_email(subject, html_body, h1_chart_b64, m15_chart_b64):
                 server.login(GMAIL_ADDRESS, GMAIL_PASS)
                 server.sendmail(GMAIL_ADDRESS, recipient, msg.as_string())
         except Exception as e:
-            print(f"Email failed: {e}")
+            reason = f"{type(e).__name__}: {str(e)[:120]}"
+            print(f"Email failed: {reason}")
+            _log_smtp_failure(recipient, reason)
 
 
 # ---------------------------------------------------------------------------
@@ -1419,6 +1482,18 @@ def collect_heartbeat_diagnostics(ist_now, active_obs):
             "action": "Check chart_failure_log.json. Charts failing silently; emails still send with banner."
         })
 
+    # Rule 7: SMTP failures in window. Even one means an alert may have been
+    # dropped silently. The heartbeat itself rides the same SMTP path, so the
+    # log file is the only reliable signal of a degraded send path.
+    smtp_fails = _count_recent_log_entries(
+        "smtp_failure_log.json", HEARTBEAT_WINDOW_HOURS, ist_now
+    )
+    if smtp_fails >= 1:
+        issues.append({
+            "title": f"{smtp_fails} SMTP send failures in last {HEARTBEAT_WINDOW_HOURS}h",
+            "action": "Check smtp_failure_log.json. Likely bad GMAIL_APP_PASSWORD or Gmail outage. Alerts may have been lost."
+        })
+
     return {
         "issues": issues,
         "ob_count": ob_count,
@@ -1426,6 +1501,7 @@ def collect_heartbeat_diagnostics(ist_now, active_obs):
         "gemini_fails": gemini_fails,
         "yf_stale": yf_stale,
         "chart_fails": chart_fails,
+        "smtp_fails": smtp_fails,
     }
 
 
@@ -1433,6 +1509,12 @@ def build_heartbeat_email_html(diag, ist_now):
     """Return (subject, html_body)."""
     issues = diag["issues"]
     ts_str = ist_now.strftime("%H:%M IST, %d %b")
+    # Guard formatting against None ob_age_hrs (active_obs.json missing).
+    # Previous code formatted '.1f' unconditionally and crashed the heartbeat
+    # in the exact scenario where it was most needed.
+    ob_age_str = (f"{diag['ob_age_hrs']:.1f}h" if diag['ob_age_hrs'] is not None
+                  else "unknown")
+    smtp_fails = diag.get('smtp_fails', 0)
 
     if not issues:
         subject = f"P2 HEARTBEAT | {ts_str} | ✅ ALL CLEAR"
@@ -1444,8 +1526,8 @@ def build_heartbeat_email_html(diag, ist_now):
             </div>
             <div style="padding:10px 12px;margin-top:12px;background:#0d0d1a;border-left:3px solid #555;border-radius:4px;font-size:12px;color:#aaa;line-height:1.5;">
                 <b style="color:#ccc;">FYI:</b>
-                P1 last updated active_obs.json {diag['ob_age_hrs']:.1f}h ago.
-                Gemini failures: {diag['gemini_fails']}. yfinance stale: {diag['yf_stale']}. Chart failures: {diag['chart_fails']}.
+                P1 last updated active_obs.json {ob_age_str} ago.
+                Gemini failures: {diag['gemini_fails']}. yfinance stale: {diag['yf_stale']}. Chart failures: {diag['chart_fails']}. SMTP failures: {smtp_fails}.
             </div>
         """
     else:
@@ -1463,8 +1545,8 @@ def build_heartbeat_email_html(diag, ist_now):
             <div style="padding:10px 12px;margin-top:12px;background:#0d0d1a;border-left:3px solid #555;border-radius:4px;font-size:12px;color:#aaa;line-height:1.5;">
                 <b style="color:#ccc;">Context:</b>
                 Active zones: {diag['ob_count']}.
-                P1 last update: {diag['ob_age_hrs']:.1f}h ago.{'' if diag['ob_age_hrs'] is not None else ' (unknown)'}
-                Gemini fails (3h): {diag['gemini_fails']}. yfinance stale (3h): {diag['yf_stale']}. Chart fails (3h): {diag['chart_fails']}.
+                P1 last update: {ob_age_str} ago.
+                Gemini fails (3h): {diag['gemini_fails']}. yfinance stale (3h): {diag['yf_stale']}. Chart fails (3h): {diag['chart_fails']}. SMTP fails (3h): {smtp_fails}.
             </div>
         """
 
@@ -1519,6 +1601,7 @@ def send_heartbeat_if_due(ist_now, active_obs):
                 "gemini_fails_3h": diag["gemini_fails"],
                 "yfinance_stale_3h": diag["yf_stale"],
                 "chart_fails_3h": diag["chart_fails"],
+                "smtp_fails_3h": diag.get("smtp_fails", 0),
                 "issue_count": len(diag["issues"]),
                 "issues": [{"title": i["title"], "action": i["action"]} for i in diag["issues"]],
             }
@@ -1560,8 +1643,46 @@ if __name__ == "__main__":
     else:
         clear_p1_stale_flag()
 
+    # Rotate scan log first so a long-running system doesn't accumulate
+    # unbounded JSONL. Keeps last 14 days.
+    rotate_scan_log(ist_now)
+
     active_obs = load_slate_as_pair_map("active_obs.json")
     watch_state = load_json("active_watch_state.json", {})
+
+    # --- active_watch_state stale-entry GC ---
+    # Evict watches whose first_seen_ist (or legacy alert_ist) is older than
+    # WATCH_STATE_RETENTION_DAYS. A 15-day-old zone is no longer a respectable
+    # SMC setup; if price returns, P2 will re-register it fresh on next scan.
+    # Anchor on first_seen rather than last_seen so a re-emailed wobbling zone
+    # eventually expires regardless of refresh activity.
+    WATCH_STATE_RETENTION_DAYS = 15
+    watch_cutoff = ist_now - timedelta(days=WATCH_STATE_RETENTION_DAYS)
+    watch_kept = {}
+    watch_evicted = 0
+    for k, v in (watch_state or {}).items():
+        if not isinstance(v, dict):
+            watch_evicted += 1
+            continue
+        anchor_iso = v.get("first_seen_ist") or v.get("alert_ist")
+        if not anchor_iso:
+            watch_kept[k] = v
+            continue
+        try:
+            anchor_dt = datetime.fromisoformat(anchor_iso)
+        except Exception:
+            watch_kept[k] = v
+            continue
+        if anchor_dt < watch_cutoff:
+            watch_evicted += 1
+            continue
+        watch_kept[k] = v
+    if watch_evicted:
+        print(f"  [WATCH GC] Evicted {watch_evicted} watches older than {WATCH_STATE_RETENTION_DAYS}d.")
+        # Persist eviction immediately so an orphaned key can't sneak back via
+        # the end-of-scan concurrency-safe merge.
+        save_json("active_watch_state.json", watch_kept)
+    watch_state = watch_kept
     # --- Phase 2 dedup state — lifetime model (no daily reset) ---
     # Structure: { "day_id": "YYYY-MM-DD",  # retained for backward-compat reads; no longer used to wipe
     #              "zones": { zone_id: {"score_int": ..., "score_raw": ...,
@@ -1906,10 +2027,15 @@ if __name__ == "__main__":
             if entry_model == "limit":
                 # Structural dedup key: uses BOS swing price (stable across scans)
                 # instead of OB proximal (which drifts as Phase 1 reselects OB candle).
+                # ob_timestamp hour-bucket disambiguates two structurally distinct
+                # zones that happen to share a swing price (e.g. re-CHoCH at the
+                # same level after a Major CHoCH wipe).
                 bos_swing_px = float(ob.get('bos_swing_price', proximal))
                 bos_tag = ob.get('bos_tag', 'BOS')
                 key_dp = max(0, dp - 1)
-                zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}"
+                ob_ts_iso = ob.get('ob_timestamp') or ''
+                ts_bucket = ob_ts_iso[:13] if len(ob_ts_iso) >= 13 else ob_ts_iso
+                zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}_{ts_bucket}"
 
                 # Asymmetric hysteresis dedup.
                 # First sighting today → email.
@@ -1951,9 +2077,11 @@ if __name__ == "__main__":
                         continue
                     is_update = True
 
-                # Register zone state BEFORE send. Survives mid-scan crash.
-                # Stores breakdown so future updates can show driver deltas.
-                # Watermarks reset to the current score at email time.
+                # Register zone state in-memory. Persisted AFTER send_email so
+                # a crash mid-send re-attempts the alert next scan (duplicate
+                # is recoverable; silent loss is not). Stores breakdown so
+                # future updates can show driver deltas. Watermarks reset to
+                # the current score at email time.
                 phase2_zones[zone_id] = {
                     "score_int": score_to_int(current_score_raw),
                     "score_raw": current_score_raw,
@@ -1965,7 +2093,6 @@ if __name__ == "__main__":
                     "bias": bias,
                     "pair": name
                 }
-                save_json("phase2_sent.json", phase2_state)
                 # Limit zones do NOT write to active_watch_state.json.
                 # Phase 3 only handles ltf_choch zones (NAS100, GOLD).
                 m15_chart_ob = build_m15_chart_ob(ob, levels)
@@ -2018,15 +2145,31 @@ if __name__ == "__main__":
                     f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/10.0 | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
+                # Persist dedup state AFTER send. See comment above.
+                save_json("phase2_sent.json", phase2_state)
                 print(f"  [OK] {print_label}")
                 scan_record["final_action"] = log_action
                 append_scan_log(scan_record)
             elif entry_model == "ltf_choch":
+                # Structural dedup key: BOS swing price + ob_timestamp hour-bucket.
+                # watch_id reuses the same recipe so Phase 3's watch survives
+                # P1 reselecting the OB candle within the same structural zone.
+                # Previously watch_id was keyed on proximal, which drifted with
+                # every P1 OB-candle reselection and orphaned the prior watch.
                 bos_swing_px = float(ob.get('bos_swing_price', proximal))
                 bos_tag = ob.get('bos_tag', 'BOS')
                 key_dp = max(0, dp - 1)
-                zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}"
-                watch_id = f"{name}_{round(proximal, dp)}"
+                ob_ts_iso = ob.get('ob_timestamp') or ''
+                ts_bucket = ob_ts_iso[:13] if len(ob_ts_iso) >= 13 else ob_ts_iso
+                zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}_{ts_bucket}"
+                watch_id = zone_id  # same recipe; stable across OB reselection
+
+                # Preserve first_seen_ist anchor for 15d watch-state GC.
+                # New watch -> now. Existing watch -> carry through.
+                prior_watch = watch_state.get(watch_id) if isinstance(watch_state, dict) else None
+                first_seen_ist = (prior_watch.get("first_seen_ist") if isinstance(prior_watch, dict)
+                                  else None) or ist_now.isoformat()
+                trade_data["first_seen_ist"] = first_seen_ist
 
                 # Asymmetric hysteresis dedup. Same model as limit branch.
                 current_score_raw = float(score_res['total'])
@@ -2069,7 +2212,7 @@ if __name__ == "__main__":
                         continue
                     is_update = True
 
-                # Register zone state BEFORE send.
+                # Register zone state in-memory. Persisted AFTER send_email.
                 phase2_zones[zone_id] = {
                     "score_int": score_to_int(current_score_raw),
                     "score_raw": current_score_raw,
@@ -2081,7 +2224,6 @@ if __name__ == "__main__":
                     "bias": bias,
                     "pair": name
                 }
-                save_json("phase2_sent.json", phase2_state)
 
                 m15_chart_ob = build_m15_chart_ob(ob, levels)
                 h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
@@ -2133,6 +2275,8 @@ if __name__ == "__main__":
                     f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/10.0 | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
+                # Persist dedup state AFTER send. See comment in limit branch.
+                save_json("phase2_sent.json", phase2_state)
                 watch_writes[watch_id] = trade_data
                 print(f"  [>] {print_label}")
                 scan_record["final_action"] = log_action

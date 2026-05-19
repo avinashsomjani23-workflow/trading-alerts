@@ -1295,9 +1295,18 @@ def find_m15_ob_inside_h1(df_m15, bias, h1_ob_high, h1_ob_low):
     L = df_m15['Low'].values.astype(float)
     C = df_m15['Close'].values.astype(float)
     # Scan backward — most recent first.
+    # Body-size filter mirrors Phase 1's is_valid_ob_candle (smc_radar.py:481):
+    # body must exceed 20% of candle range. Below that is near-doji territory
+    # with no directional intent — not a true OB.
     for i in range(len(df_m15) - 1, -1, -1):
         if not (L[i] >= h1_ob_low and H[i] <= h1_ob_high):
             continue
+        rng = H[i] - L[i]
+        if rng <= 0:
+            continue
+        body = abs(C[i] - O[i])
+        if body <= rng * 0.20:
+            continue  # near-doji — skip, keep walking back
         is_bearish = C[i] < O[i]
         is_bullish = C[i] > O[i]
         if bias == "LONG" and is_bearish:
@@ -1335,7 +1344,11 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15):
     invalid -- price has moved through the zone.
     """
     dp = _dp(pair_conf)
-    spread_val = pair_conf.get("spread_pips", 2) * (0.0001 if dp == 5 else 0.01)
+    # Spread unit per decimal_places. dp=5 forex (0.0001/pip), dp=3 JPY (0.01/pip),
+    # dp=2 commodity/index (1.0/point). Hard-coded forex-only fallback collapsed
+    # GOLD/NAS spread to 0.005/0.02 -- effectively no SL buffer.
+    _pip_for_dp = {5: 0.0001, 3: 0.01, 2: 1.0}.get(dp, 0.0001)
+    spread_val = pair_conf.get("spread_pips", 2) * _pip_for_dp
 
     # H1 OB geometry. Strict read -- schema drift returns invalid rather than guess.
     try:
