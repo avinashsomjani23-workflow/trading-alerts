@@ -225,6 +225,89 @@ def replay_pair(
             state.alerted_zones[pair_name].add(zone_id)
 
 
+def replay_phase3_watch(
+    alert: Dict[str, Any],
+    pair_conf: Dict[str, Any],
+    df_m5: pd.DataFrame,
+    walk_end_ts: pd.Timestamp,
+    m5_tap_window: int = 30,
+) -> Optional[Dict[str, Any]]:
+    """Given a Phase 2 alert that qualified for Phase 3, walk M5 bars forward
+    and return a Phase 3 trigger event when tap + M5 CHoCH fires, or None
+    if the watch expires or OB is invalidated first.
+
+    Mirrors live run_phase3() logic: tap check → CHoCH via detect_ltf_choch
+    → RR gate → yield trigger.
+
+    Returns a trigger dict or None.
+    """
+    ob = alert["ob"]
+    bias = "LONG" if ob.get("direction") == "bullish" else "SHORT"
+    proximal = float(ob["proximal_line"])
+    distal = float(ob["distal_line"])
+    alert_ts = pd.Timestamp(alert["ts"])
+    if alert_ts.tzinfo is None:
+        alert_ts = alert_ts.tz_localize("UTC")
+
+    bounds = {"max": max(proximal, distal), "min": min(proximal, distal)}
+
+    # Walk M5 bars from alert_ts onward.
+    if df_m5 is None or df_m5.empty:
+        return None
+    future_m5 = df_m5.loc[alert_ts:walk_end_ts]
+    if future_m5.empty:
+        return None
+
+    tapped = False
+    for i, (m5_ts, bar) in enumerate(future_m5.iterrows()):
+        m5_slice = _slice_up_to(df_m5, m5_ts)
+        _assert_no_lookahead(m5_slice, m5_ts, "M5-P3")
+
+        current_close = float(bar["Close"])
+
+        # Invalidation: M5 close beyond H1 OB distal.
+        if bias == "LONG" and current_close < distal:
+            return None
+        if bias == "SHORT" and current_close > distal:
+            return None
+
+        # Tap: proximal touched.
+        if not tapped:
+            recent = m5_slice.tail(m5_tap_window)
+            if (bias == "LONG" and recent["Low"].min() <= proximal) or \
+               (bias == "SHORT" and recent["High"].max() >= proximal):
+                tapped = True
+
+        if not tapped:
+            continue
+
+        # M5 CHoCH via live function.
+        try:
+            choch_res = smc_detector.detect_ltf_choch(m5_slice, bias, bounds)
+        except Exception as e:
+            print(f"  [P3 CHoCH ERR] {alert['pair']} @ {m5_ts}: {e}")
+            continue
+
+        if not choch_res.get("fired"):
+            continue
+
+        choch_level = float(choch_res["level"])
+        return {
+            "kind": "phase3_trigger",
+            "pair": alert["pair"],
+            "ts": m5_ts,
+            "alert_ts": alert["ts"],
+            "ob": ob,
+            "bias": bias,
+            "choch_level": choch_level,
+            "current_price": current_close,
+            "h1_atr": alert.get("h1_atr"),
+            "walls": alert.get("walls"),
+        }
+
+    return None
+
+
 def _normalize_obs_result(result: Any) -> List[Dict[str, Any]]:
     """detect_smc_radar's return signature varies. Normalise to OB list."""
     if result is None:

@@ -23,6 +23,8 @@ import pandas as pd
 from backtest import data_loader, replay_engine, trade_simulator, reporting
 from backtest import reporting_email
 
+PHASE3_PAIRS = {"NAS100", "GOLD"}
+
 
 def _load_config() -> dict:
     with open(_REPO_ROOT / "config.json") as f:
@@ -70,10 +72,10 @@ def run(start: datetime, end: datetime, pair_names: list,
         # For backtesting, treat NAS/XAU as M15 if M5 doesn't cover the window.
         trigger = df_m15
         used_phase3 = False
-        if df_m5 is not None and not df_m5.empty:
+        if name in PHASE3_PAIRS and df_m5 is not None and not df_m5.empty:
             if df_m5.index.min() <= walk_start_ts:
-                trigger = df_m5
-                used_phase3 = pair_conf["name"] in ("NAS100", "GOLD")
+                used_phase3 = True
+                # trigger stays M15 — Phase 3 uses its own M5 walk internally
         print(f"  trigger TF: {'M5' if trigger is df_m5 else 'M15'}"
               f" {'(Phase 3 model)' if used_phase3 else '(Phase 2 model)'}")
 
@@ -101,14 +103,30 @@ def run(start: datetime, end: datetime, pair_names: list,
             )
             if score < pair_conf.get("min_confidence", 6.0):
                 continue
-            trade = trade_simulator.simulate_trade(
-                alert, pair_conf, df_h1, trigger, risk_gbp=risk_gbp
-            )
-            if trade:
-                trade["score"] = score
-                trade["score_breakdown"] = breakdown
-                trade["model"] = "phase3" if used_phase3 else "phase2"
-                all_trades.append(trade)
+
+            if used_phase3 and df_m5 is not None and not df_m5.empty:
+                # Phase 3 path: walk M5 for tap + CHoCH trigger, then simulate.
+                p3_trigger = replay_engine.replay_phase3_watch(
+                    alert, pair_conf, df_m5, walk_end_ts
+                )
+                if p3_trigger:
+                    trade = trade_simulator.simulate_phase3_trade(
+                        p3_trigger, pair_conf, df_h1, df_m15, df_m5,
+                        risk_gbp=risk_gbp
+                    )
+                    if trade:
+                        trade["score"] = score
+                        trade["score_breakdown"] = breakdown
+                        all_trades.append(trade)
+            else:
+                # Phase 2 path: limit-order on M15.
+                trade = trade_simulator.simulate_trade(
+                    alert, pair_conf, df_h1, trigger, risk_gbp=risk_gbp
+                )
+                if trade:
+                    trade["score"] = score
+                    trade["score_breakdown"] = breakdown
+                    all_trades.append(trade)
 
         print(f"  {name}: {sum(1 for t in all_trades if t['pair'] == name)} simulated trades")
 
