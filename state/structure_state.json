@@ -13,9 +13,9 @@
     "last_event_ts": "2026-05-19T09:00:00+00:00",
     "last_event_idx_iso": "2026-05-19T09:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T11:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T12:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-11T05:00:00+00:00",
+    "trend_start_ts": "2026-05-11T06:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -333,9 +333,9 @@
     "last_event_ts": "2026-05-19T09:00:00+00:00",
     "last_event_idx_iso": "2026-05-19T09:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T11:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T12:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-11T04:00:00+00:00",
+    "trend_start_ts": "2026-05-11T05:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -518,7 +518,7 @@
     "last_event_ts": "2026-05-19T05:00:00+00:00",
     "last_event_idx_iso": "2026-05-19T05:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T11:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T12:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-12T06:00:00+00:00",
     "events": [
@@ -658,7 +658,7 @@
     "last_event_ts": "2026-05-15T15:00:00+00:00",
     "last_event_idx_iso": "2026-05-15T15:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T11:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T12:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-12T00:00:00+00:00",
     "events": [
@@ -856,6 +856,21 @@
         "impulse_start_ts": "2026-05-19T08:00:00+00:00",
         "impulse_start_price": 0.78507000207901,
         "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Minor",
+        "direction": "bullish",
+        "candle_ts": "2026-05-19T12:00:00+00:00",
+        "broken_swing_price": 0.7860999703407288,
+        "broken_swing_ts": "2026-05-18T19:00:00+00:00",
+        "broken_was_wall": false,
+        "displacement_atr": 1.5090376035691524,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-19T08:00:00+00:00",
+        "impulse_start_price": 0.78507000207901,
+        "trend_after": "bullish"
       }
     ]
   },
@@ -873,7 +888,7 @@
     "last_event_ts": "2026-05-18T18:00:00+00:00",
     "last_event_idx_iso": "2026-05-18T18:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T11:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T12:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-18T18:00:00+00:00",
     "events": [
@@ -1028,7 +1043,7 @@
     "last_event_ts": "2026-05-18T00:00:00+00:00",
     "last_event_idx_iso": "2026-05-18T00:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T11:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T12:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-15T00:00:00+00:00",
     "events": [
