@@ -326,28 +326,40 @@ def replay_phase3_watch(
 
 
 def _normalize_obs_result(result: Any) -> List[Dict[str, Any]]:
-    """detect_smc_radar's return signature varies. Normalise to OB list."""
+    """detect_smc_radar's return signature — normalise to OB list.
+
+    Live return shape (confirmed from source):
+      {"current_price": float,
+       "active_unmitigated_obs": [ob, ...],
+       "ob_build_diagnostics": [...]}
+    """
     if result is None:
         return []
     if isinstance(result, dict):
-        # Common shapes: {"obs": [...]} or {"primary": ob, "alternative": ob}
-        if "obs" in result and isinstance(result["obs"], list):
-            return result["obs"]
-        obs = []
+        # Primary shape used by live smc_radar.detect_smc_radar
+        if "active_unmitigated_obs" in result:
+            obs = result["active_unmitigated_obs"]
+            if isinstance(obs, list):
+                return [o for o in obs if isinstance(o, dict) and o.get("proximal_line")]
+        # Fallback shapes (future-proofing)
+        for key in ("obs", "active_obs"):
+            if key in result and isinstance(result[key], list):
+                return [o for o in result[key]
+                        if isinstance(o, dict) and o.get("proximal_line")]
         for k in ("primary", "alternative", "ob1", "ob2"):
             v = result.get(k)
             if isinstance(v, dict) and v.get("proximal_line"):
-                obs.append(v)
+                pass  # collected below
+        obs = [result[k] for k in ("primary", "alternative", "ob1", "ob2")
+               if isinstance(result.get(k), dict) and result[k].get("proximal_line")]
         if obs:
             return obs
-        # Single OB dict?
         if result.get("proximal_line"):
             return [result]
         return []
     if isinstance(result, list):
         return [o for o in result if isinstance(o, dict) and o.get("proximal_line")]
     if isinstance(result, tuple):
-        # e.g. (obs_list, diagnostics)
         for item in result:
             if isinstance(item, list):
                 return [o for o in item if isinstance(o, dict) and o.get("proximal_line")]
