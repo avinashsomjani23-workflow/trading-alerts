@@ -17,7 +17,7 @@ from pathlib import Path
 def send_report(run_dir: Path, recipient: str = None, subject_suffix: str = "") -> bool:
     sender = os.environ.get("GMAIL_ADDRESS")
     password = os.environ.get("GMAIL_APP_PASSWORD")
-    to = recipient or os.environ.get("BACKTEST_EMAIL", "avinash.somjani98@gmail.com")
+    to = recipient or os.environ.get("BACKTEST_EMAIL") or os.environ.get("GMAIL_ADDRESS", "avinash.somjani98@gmail.com")
     if not sender or not password:
         print("  [email skipped] GMAIL_ADDRESS / GMAIL_APP_PASSWORD not set")
         return False
