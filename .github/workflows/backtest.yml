@@ -53,7 +53,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BACKTEST_EMAIL: ${{ secrets.BACKTEST_EMAIL }}
         run: |
-          ARGS="--start ${{ inputs.start_date }} --end ${{ inputs.end_date }} --regime ${{ inputs.regime }} --pairs ${{ inputs.pairs }} --risk-gbp ${{ inputs.risk_gbp }}"
+          ARGS="--start ${{ inputs.start_date }} --end ${{ inputs.end_date }} --regime ${{ inputs.regime }} --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_gbp }}"
           if [ "${{ inputs.send_email }}" = "true" ]; then
             ARGS="$ARGS --email"
           fi
