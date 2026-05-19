@@ -1259,7 +1259,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                 if _le_bws_y_f is not None and _wall_in_view(_le_bws_y_f):
                     ymin_candidates.append(_le_bws_y_f)
                     ymax_candidates.append(_le_bws_y_f)
-                    _off_window_bws_for_y = _le_bws_y_f
+                    _off_window_bws_for_y = _le_bws_y_f  # kept for off-window branch only
 
         y_min_raw = min(ymin_candidates)
         y_max_raw = max(ymax_candidates)
@@ -1485,6 +1485,24 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                             ha='left', va='top', zorder=7,
                             bbox=dict(facecolor='#131722', edgecolor='none',
                                       pad=1.5, alpha=0.78))
+                    # Broken-swing level: horizontal dashed line so the vet
+                    # can see exactly what price level the event broke.
+                    if le_bws is not None:
+                        try:
+                            le_bws_f = float(le_bws)
+                        except Exception:
+                            le_bws_f = None
+                        if le_bws_f is not None and _wall_in_view(le_bws_f):
+                            ax.axhline(y=le_bws_f, color=ev_color,
+                                       linewidth=0.8, linestyle='--',
+                                       alpha=0.55, zorder=2)
+                            ax.text(n_plot - 1, le_bws_f,
+                                    f"  broken {le_bws_f:.5g}",
+                                    color=ev_color, fontsize=7,
+                                    ha='left', va='center', zorder=7,
+                                    bbox=dict(facecolor='#131722',
+                                              edgecolor='none',
+                                              pad=1.0, alpha=0.78))
             elif le_bws is not None:
                 # Event is off-window. Draw the broken-swing as a horizontal
                 # level with a left-edge "N candles ago" label so the vet
