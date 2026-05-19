@@ -18,6 +18,24 @@
       "last_seen_ist": "2026-05-19T18:51:34.761138",
       "bias": "LONG",
       "pair": "USDCHF"
+    },
+    "GOLD_SHORT_BOS_4533.5": {
+      "score_int": 6,
+      "score_raw": 6.5,
+      "score_high_water": 6.5,
+      "score_low_water": 6.5,
+      "breakdown": {
+        "structure": 2.5,
+        "sweep": 0.0,
+        "fvg": 2.0,
+        "freshness": 1.5,
+        "pd": 0.0,
+        "killzone": 0.5
+      },
+      "alert_ist": "2026-05-19T20:06:35.000655",
+      "last_seen_ist": "2026-05-19T20:06:35.000655",
+      "bias": "SHORT",
+      "pair": "GOLD"
     }
   }
 }
