@@ -1,4 +1,23 @@
 {
   "day_id": "2026-05-19",
-  "zones": {}
+  "zones": {
+    "USDCHF_LONG_BOS_0.7861": {
+      "score_int": 6,
+      "score_raw": 6.4,
+      "score_high_water": 6.4,
+      "score_low_water": 6.4,
+      "breakdown": {
+        "structure": 1.5,
+        "sweep": 1.5,
+        "fvg": 1.4,
+        "freshness": 1.5,
+        "pd": 0.0,
+        "killzone": 0.5
+      },
+      "alert_ist": "2026-05-19T16:06:29.311000",
+      "last_seen_ist": "2026-05-19T18:06:31.346373",
+      "bias": "LONG",
+      "pair": "USDCHF"
+    }
+  }
 }
