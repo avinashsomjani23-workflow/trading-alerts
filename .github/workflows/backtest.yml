@@ -20,7 +20,7 @@ on:
         required: false
         default: "EURUSD,NZDUSD,USDJPY,USDCHF,NAS100,GOLD"
       risk_gbp:
-        description: "Risk per trade in GBP (1R)"
+        description: "Risk per trade in USD (1R)"
         required: false
         default: "250"
       send_email:

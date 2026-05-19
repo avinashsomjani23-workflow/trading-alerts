@@ -36,7 +36,7 @@ def _parse_date(s: str) -> datetime:
 
 
 def run(start: datetime, end: datetime, pair_names: list,
-        regime: str = "unspecified", risk_gbp: float = 250.0,
+        regime: str = "unspecified", risk_usd: float = 250.0,
         send_email: bool = False) -> Path:
     cfg = _load_config()
 
@@ -115,7 +115,7 @@ def run(start: datetime, end: datetime, pair_names: list,
                 if p3_trigger:
                     trade = trade_simulator.simulate_phase3_trade(
                         p3_trigger, pair_conf, df_h1, df_m15, df_m5,
-                        risk_gbp=risk_gbp
+                        risk_usd=risk_usd
                     )
                     if trade:
                         trade["score"] = score
@@ -124,7 +124,7 @@ def run(start: datetime, end: datetime, pair_names: list,
             else:
                 # Phase 2 path: limit-order on M15.
                 trade = trade_simulator.simulate_trade(
-                    alert, pair_conf, df_h1, trigger, risk_gbp=risk_gbp
+                    alert, pair_conf, df_h1, trigger, risk_usd=risk_usd
                 )
                 if trade:
                     trade["score"] = score
@@ -141,7 +141,7 @@ def run(start: datetime, end: datetime, pair_names: list,
         "pairs": pair_names,
         "generated_utc": datetime.now(timezone.utc).isoformat(),
     }
-    out_dir = reporting.write_report(run_id, all_trades, all_alerts, meta, risk_gbp=risk_gbp)
+    out_dir = reporting.write_report(run_id, all_trades, all_alerts, meta, risk_usd=risk_usd)
     print(f"\nReport written to {out_dir}")
 
     if send_email:
@@ -157,14 +157,14 @@ def main():
     ap.add_argument("--pairs", default="EURUSD,NZDUSD,USDJPY,USDCHF,NAS100,GOLD",
                     help="Comma-separated pair names")
     ap.add_argument("--regime", default="unspecified", choices=["war", "bau", "unspecified"])
-    ap.add_argument("--risk-gbp", type=float, default=250.0)
+    ap.add_argument("--risk-usd", type=float, default=250.0)
     ap.add_argument("--email", action="store_true", help="Send report email")
     args = ap.parse_args()
 
     start = _parse_date(args.start)
     end = _parse_date(args.end)
     pairs = [p.strip() for p in args.pairs.split(",") if p.strip()]
-    run(start, end, pairs, regime=args.regime, risk_gbp=args.risk_gbp,
+    run(start, end, pairs, regime=args.regime, risk_usd=args.risk_usd,
         send_email=args.email)
 
 

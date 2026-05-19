@@ -62,7 +62,7 @@ def _flag_vet_review(trade: Dict[str, Any]) -> Tuple[bool, str]:
     return False, ""
 
 
-def _aggregate(trades: List[Dict[str, Any]], risk_gbp: float) -> Dict[str, Any]:
+def _aggregate(trades: List[Dict[str, Any]], risk_usd: float) -> Dict[str, Any]:
     if not trades:
         return {"trades": 0}
     df = pd.DataFrame(trades)
@@ -70,7 +70,7 @@ def _aggregate(trades: List[Dict[str, Any]], risk_gbp: float) -> Dict[str, Any]:
     losses = df[df["r_realised"] < 0]
     bes = df[df["r_realised"] == 0]
     expectancy = float(df["r_realised"].mean())
-    total_pnl = float(df["pnl_gbp"].sum())
+    total_pnl = float(df["pnl_usd"].sum())
     avg_win_r = float(wins["r_realised"].mean()) if len(wins) else 0.0
     avg_loss_r = float(losses["r_realised"].mean()) if len(losses) else 0.0
     avg_win_mfe_r = float(wins["mfe_r"].mean()) if len(wins) else 0.0
@@ -83,21 +83,21 @@ def _aggregate(trades: List[Dict[str, Any]], risk_gbp: float) -> Dict[str, Any]:
         "breakevens": int(len(bes)),
         "win_rate": round(len(wins) / len(df) * 100, 1) if len(df) else 0,
         "expectancy_r": round(expectancy, 3),
-        "expectancy_gbp": round(expectancy * risk_gbp, 2),
-        "pnl_gbp": round(total_pnl, 2),
+        "expectancy_usd": round(expectancy * risk_usd, 2),
+        "pnl_usd": round(total_pnl, 2),
         "avg_win_r": round(avg_win_r, 3),
         "avg_loss_r": round(avg_loss_r, 3),
-        "avg_win_gbp": round(avg_win_r * risk_gbp, 2),
-        "avg_loss_gbp": round(avg_loss_r * risk_gbp, 2),
+        "avg_win_usd": round(avg_win_r * risk_usd, 2),
+        "avg_loss_usd": round(avg_loss_r * risk_usd, 2),
         "avg_win_mfe_r": round(avg_win_mfe_r, 3),
-        "avg_win_mfe_gbp": round(avg_win_mfe_r * risk_gbp, 2),
+        "avg_win_mfe_usd": round(avg_win_mfe_r * risk_usd, 2),
         "avg_loss_mae_r": round(avg_loss_mae_r, 3),
         "tp_capture_pct": int(capture_pct),
         "sl_collisions": int(df["sl_collision"].sum()),
     }
 
 
-def _per_pair(trades: List[Dict[str, Any]], risk_gbp: float) -> List[Dict[str, Any]]:
+def _per_pair(trades: List[Dict[str, Any]], risk_usd: float) -> List[Dict[str, Any]]:
     if not trades:
         return []
     df = pd.DataFrame(trades)
@@ -107,14 +107,14 @@ def _per_pair(trades: List[Dict[str, Any]], risk_gbp: float) -> List[Dict[str, A
         out.append({
             "pair": pair,
             "trades": int(len(sub)),
-            "pnl_gbp": round(float(sub["pnl_gbp"].sum()), 2),
+            "pnl_usd": round(float(sub["pnl_usd"].sum()), 2),
             "win_rate": round(len(wins) / len(sub) * 100, 0) if len(sub) else 0,
         })
-    out.sort(key=lambda r: r["pnl_gbp"], reverse=True)
+    out.sort(key=lambda r: r["pnl_usd"], reverse=True)
     return out
 
 
-def _per_session(trades: List[Dict[str, Any]], risk_gbp: float) -> List[Dict[str, Any]]:
+def _per_session(trades: List[Dict[str, Any]], risk_usd: float) -> List[Dict[str, Any]]:
     if not trades:
         return []
     df = pd.DataFrame(trades)
@@ -125,7 +125,7 @@ def _per_session(trades: List[Dict[str, Any]], risk_gbp: float) -> List[Dict[str
         out.append({
             "session": session,
             "trades": int(len(sub)),
-            "pnl_gbp": round(float(sub["pnl_gbp"].sum()), 2),
+            "pnl_usd": round(float(sub["pnl_usd"].sum()), 2),
             "win_rate": round(len(wins) / len(sub) * 100, 0) if len(sub) else 0,
         })
     order = {"London": 0, "NY": 1, "Asia": 2, "Other": 3, "Unknown": 4}
@@ -133,7 +133,7 @@ def _per_session(trades: List[Dict[str, Any]], risk_gbp: float) -> List[Dict[str
     return out
 
 
-def _review_list(trades: List[Dict[str, Any]], risk_gbp: float) -> Dict[str, List[Dict[str, Any]]]:
+def _review_list(trades: List[Dict[str, Any]], risk_usd: float) -> Dict[str, List[Dict[str, Any]]]:
     left_money = []
     nearly_won = []
     for t in trades:
@@ -145,9 +145,9 @@ def _review_list(trades: List[Dict[str, Any]], risk_gbp: float) -> Dict[str, Lis
             "alert_ts": t["alert_ts"],
             "direction": t["direction"],
             "r_booked": t["r_realised"],
-            "gbp_booked": t["pnl_gbp"],
+            "usd_booked": t["pnl_usd"],
             "mfe_r": t["mfe_r"],
-            "mfe_gbp": round(t["mfe_r"] * risk_gbp, 0),
+            "mfe_usd": round(t["mfe_r"] * risk_usd, 0),
             "reason": reason,
         }
         if "left_money" in reason:
@@ -171,7 +171,7 @@ def _excel(trades: List[Dict[str, Any]], path: Path, summary: Dict[str, Any]) ->
     # Reorder to put most useful columns left.
     front = [c for c in [
         "pair", "alert_ts", "session", "direction", "bias",
-        "r_realised", "pnl_gbp", "mfe_r", "mae_r",
+        "r_realised", "pnl_usd", "mfe_r", "mae_r",
         "exit_reason", "tp1_hit", "vet_review", "vet_review_reason",
         "score", "model", "hold_minutes",
         "entry", "sl_initial", "tp1", "tp2", "exit_price",
@@ -192,19 +192,19 @@ def _excel(trades: List[Dict[str, Any]], path: Path, summary: Dict[str, Any]) ->
 
 def _fmt_money(amount: float) -> str:
     sign = "+" if amount >= 0 else "-"
-    return f"{sign}£{abs(amount):,.0f}"
+    return f"{sign}${abs(amount):,.0f}"
 
 
 def _section(name: str, trades: List[Dict[str, Any]], summary: Dict[str, Any],
-             risk_gbp: float) -> str:
+             risk_usd: float) -> str:
     if summary.get("trades", 0) == 0:
         return f"""
         <h2>{name}</h2>
         <p style="color:#888;">No trades this run.</p>
         """
 
-    pp = _per_pair(trades, risk_gbp)
-    ps = _per_session(trades, risk_gbp)
+    pp = _per_pair(trades, risk_usd)
+    ps = _per_session(trades, risk_usd)
 
     # Plain-English exit analysis
     exit_block = ""
@@ -219,8 +219,8 @@ def _section(name: str, trades: List[Dict[str, Any]], summary: Dict[str, Any],
             verdict = "→ TPs too tight. Significant money left on the table."
         exit_block += f"""
         <p><b>When you won:</b> price kept going on average to
-           <b>{_fmt_money(summary['avg_win_mfe_gbp'])}</b> before reversing.
-           You booked <b>{_fmt_money(summary['avg_win_gbp'])}</b>.
+           <b>{_fmt_money(summary['avg_win_mfe_usd'])}</b> before reversing.
+           You booked <b>{_fmt_money(summary['avg_win_usd'])}</b>.
            You captured roughly <b>{summary['tp_capture_pct']}%</b> of the available move.
            {verdict}</p>
         """
@@ -234,15 +234,15 @@ def _section(name: str, trades: List[Dict[str, Any]], summary: Dict[str, Any],
             mae_verdict = "→ Many trades stopped out shallow. SL may be too tight."
         exit_block += f"""
         <p><b>When you lost:</b> price pushed an average
-           <b>{_fmt_money(summary['avg_loss_mae_r'] * risk_gbp)}</b> against you
-           before stopping out at <b>{_fmt_money(summary['avg_loss_gbp'])}</b>.
+           <b>{_fmt_money(summary['avg_loss_mae_r'] * risk_usd)}</b> against you
+           before stopping out at <b>{_fmt_money(summary['avg_loss_usd'])}</b>.
            {mae_verdict}</p>
         """
 
     # Per-pair table
     pair_rows = "".join(
         f"<tr><td>{r['pair']}</td><td>{r['trades']}</td>"
-        f"<td style='color:{'#27ae60' if r['pnl_gbp']>=0 else '#e74c3c'};'>{_fmt_money(r['pnl_gbp'])}</td>"
+        f"<td style='color:{'#27ae60' if r['pnl_usd']>=0 else '#e74c3c'};'>{_fmt_money(r['pnl_usd'])}</td>"
         f"<td>{r['win_rate']:.0f}%</td></tr>"
         for r in pp
     )
@@ -257,7 +257,7 @@ def _section(name: str, trades: List[Dict[str, Any]], summary: Dict[str, Any],
     # Per-session table
     sess_rows = "".join(
         f"<tr><td>{r['session']}</td><td>{r['trades']}</td>"
-        f"<td style='color:{'#27ae60' if r['pnl_gbp']>=0 else '#e74c3c'};'>{_fmt_money(r['pnl_gbp'])}</td>"
+        f"<td style='color:{'#27ae60' if r['pnl_usd']>=0 else '#e74c3c'};'>{_fmt_money(r['pnl_usd'])}</td>"
         f"<td>{r['win_rate']:.0f}%</td></tr>"
         for r in ps
     )
@@ -272,11 +272,11 @@ def _section(name: str, trades: List[Dict[str, Any]], summary: Dict[str, Any],
     return f"""
     <h2>{name}</h2>
     <p style="font-size:15px;">
-      <b>Money:</b> {_fmt_money(summary['pnl_gbp'])} over {summary['trades']} trades<br>
-      <b>Per trade:</b> {_fmt_money(summary['expectancy_gbp'])} average
+      <b>Money:</b> {_fmt_money(summary['pnl_usd'])} over {summary['trades']} trades<br>
+      <b>Per trade:</b> {_fmt_money(summary['expectancy_usd'])} average
          ({summary['expectancy_r']:+.2f}R)<br>
-      <b>Won:</b> {summary['wins']} trades · avg win {_fmt_money(summary['avg_win_gbp'])}<br>
-      <b>Lost:</b> {summary['losses']} trades · avg loss {_fmt_money(summary['avg_loss_gbp'])}
+      <b>Won:</b> {summary['wins']} trades · avg win {_fmt_money(summary['avg_win_usd'])}<br>
+      <b>Lost:</b> {summary['losses']} trades · avg loss {_fmt_money(summary['avg_loss_usd'])}
     </p>
 
     <h3>Were exits the right size?</h3>
@@ -287,9 +287,9 @@ def _section(name: str, trades: List[Dict[str, Any]], summary: Dict[str, Any],
     """
 
 
-def _review_section(forex_trades, nas_trades, risk_gbp: float) -> str:
+def _review_section(forex_trades, nas_trades, risk_usd: float) -> str:
     all_t = forex_trades + nas_trades
-    review = _review_list(all_t, risk_gbp)
+    review = _review_list(all_t, risk_usd)
     if not review["left_money"] and not review["nearly_won"]:
         return """
         <h2>What to review</h2>
@@ -299,8 +299,8 @@ def _review_section(forex_trades, nas_trades, risk_gbp: float) -> str:
     if review["left_money"]:
         items = "".join(
             f"<li>{r['pair']} {r['direction']} {r['alert_ts'][:16]} — "
-            f"booked {_fmt_money(r['gbp_booked'])} ({r['r_booked']:+.1f}R), "
-            f"price went to {_fmt_money(r['mfe_gbp'])} ({r['mfe_r']:+.1f}R)</li>"
+            f"booked {_fmt_money(r['usd_booked'])} ({r['r_booked']:+.1f}R), "
+            f"price went to {_fmt_money(r['mfe_usd'])} ({r['mfe_r']:+.1f}R)</li>"
             for r in review["left_money"]
         )
         blocks.append(f"""
@@ -327,7 +327,7 @@ def write_report(
     trades: List[Dict[str, Any]],
     raw_alerts: List[Dict[str, Any]],
     meta: Dict[str, Any],
-    risk_gbp: float = 250.0,
+    risk_usd: float = 250.0,
 ) -> Path:
     out_dir = Path(__file__).parent / "results" / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -335,8 +335,8 @@ def write_report(
     forex_trades = [t for t in trades if t["pair"] in FOREX_PAIRS]
     nas_trades = [t for t in trades if t["pair"] in NAS_XAU_PAIRS]
 
-    fx_sum = _aggregate(forex_trades, risk_gbp)
-    nx_sum = _aggregate(nas_trades, risk_gbp)
+    fx_sum = _aggregate(forex_trades, risk_usd)
+    nx_sum = _aggregate(nas_trades, risk_usd)
 
     _excel(forex_trades, out_dir / "forex_trades.xlsx", fx_sum)
     _excel(nas_trades, out_dir / "nas_xau_trades.xlsx", nx_sum)
@@ -350,14 +350,14 @@ def write_report(
         "meta": meta,
         "forex": fx_sum,
         "nas_xau": nx_sum,
-        "risk_per_trade_gbp": risk_gbp,
+        "risk_per_trade_usd": risk_usd,
     }
     with open(out_dir / "summary.json", "w") as f:
         json.dump(summary_full, f, indent=2, default=str)
 
-    fx_section = _section("Forex", forex_trades, fx_sum, risk_gbp)
-    nx_section = _section("NAS100 + Gold", nas_trades, nx_sum, risk_gbp)
-    review_section = _review_section(forex_trades, nas_trades, risk_gbp)
+    fx_section = _section("Forex", forex_trades, fx_sum, risk_usd)
+    nx_section = _section("NAS100 + Gold", nas_trades, nx_sum, risk_usd)
+    review_section = _review_section(forex_trades, nas_trades, risk_usd)
 
     html = f"""<html><head><meta charset="utf-8"><style>
     body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -380,7 +380,7 @@ def write_report(
     <h1>Backtest Result &mdash; {meta.get('start')} to {meta.get('end')}</h1>
     <div class="meta">
       <b>Regime:</b> {meta.get('regime', 'unspecified')} &middot;
-      <b>1R = £{risk_gbp:.0f}</b> &middot;
+      <b>1R = ${risk_usd:.0f}</b> &middot;
       <b>Pairs:</b> {', '.join(meta.get('pairs', []))}
     </div>
 

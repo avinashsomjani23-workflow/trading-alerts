@@ -56,8 +56,8 @@ trusting any number it produces.
 
 - **Whether a vet would have taken the trade.** Mechanical grading only.
 - **System stability under real news flow.** Bars don't carry sentiment.
-- **Performance under different account sizes.** £-P&L is computed from
-  a fixed risk amount (default £250/trade), not from a balance curve with
+- **Performance under different account sizes.** $-P&L is computed from
+  a fixed risk amount (default $250/trade), not from a balance curve with
   compounding.
 - **Slippage in fast markets.** Real fills can be 5-15 pips off the
   modelled price during news.

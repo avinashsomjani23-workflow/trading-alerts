@@ -27,8 +27,9 @@ import smc_detector  # live module, read-only
 
 
 MAX_HOLD_HOURS = 72            # time-stop
-DEFAULT_RISK_GBP = 250.0       # 1R = £250
+DEFAULT_RISK_USD = 250.0       # 1R = $250
 MIN_RR_AFTER_SLIPPAGE = 1.2    # mirrors live phase3 config
+
 
 
 def compute_levels(pair_conf, bias, ob, current_price, df_h1, df_trigger):
@@ -111,7 +112,7 @@ def simulate_trade(
     pair_conf: Dict[str, Any],
     df_h1: pd.DataFrame,
     df_trigger: pd.DataFrame,
-    risk_gbp: float = DEFAULT_RISK_GBP,
+    risk_usd: float = DEFAULT_RISK_USD,
 ) -> Optional[Dict[str, Any]]:
     """Walk df_trigger forward from alert.ts and return trade outcome dict.
 
@@ -232,7 +233,7 @@ def simulate_trade(
         mfe_r = (entry - mfe_price) / r_distance
         mae_r = (mae_price - entry) / r_distance * -1
 
-    pnl_gbp = round(r_realised * risk_gbp, 2)
+    pnl_usd = round(r_realised * risk_usd, 2)
     hold_minutes = int((exit_ts - fill_ts).total_seconds() / 60) if fill_ts else 0
 
     return _build_result(
@@ -247,7 +248,7 @@ def simulate_trade(
         exit_price=exit_price,
         tp1_hit=tp1_hit,
         r_realised=r_realised,
-        pnl_gbp=pnl_gbp,
+        pnl_usd=pnl_usd,
         mfe_r=mfe_r,
         mae_r=mae_r,
         hold_minutes=hold_minutes,
@@ -262,7 +263,7 @@ def simulate_phase3_trade(
     df_h1: pd.DataFrame,
     df_m15: pd.DataFrame,
     df_m5: pd.DataFrame,
-    risk_gbp: float = DEFAULT_RISK_GBP,
+    risk_usd: float = DEFAULT_RISK_USD,
 ) -> Optional[Dict[str, Any]]:
     """Simulate a Phase 3 trade from a phase3_trigger event.
 
@@ -385,7 +386,7 @@ def simulate_phase3_trade(
         mfe_r = (entry - mfe_price) / risk
         mae_r = (mae_price - entry) / risk * -1
 
-    pnl_gbp = round(r_realised * risk_gbp, 2)
+    pnl_usd = round(r_realised * risk_usd, 2)
     hold_minutes = int((exit_ts - fill_ts).total_seconds() / 60) if fill_ts else 0
 
     return _build_result(
@@ -400,7 +401,7 @@ def simulate_phase3_trade(
         exit_price=exit_price,
         tp1_hit=tp1_hit,
         r_realised=r_realised,
-        pnl_gbp=pnl_gbp,
+        pnl_usd=pnl_usd,
         mfe_r=mfe_r,
         mae_r=mae_r,
         hold_minutes=hold_minutes,
@@ -411,7 +412,7 @@ def simulate_phase3_trade(
 
 
 def _build_result(pair, bias, ob, levels, alert_ts, fill_ts, exit_ts,
-                  exit_reason, exit_price, tp1_hit, r_realised, pnl_gbp,
+                  exit_reason, exit_price, tp1_hit, r_realised, pnl_usd,
                   mfe_r, mae_r, hold_minutes, sl_collision, model, extra=None):
     _entry = float(levels.get("entry", 0))
     _sl    = float(levels.get("sl", 0))
@@ -433,7 +434,7 @@ def _build_result(pair, bias, ob, levels, alert_ts, fill_ts, exit_ts,
         "exit_reason": exit_reason,
         "tp1_hit": tp1_hit,
         "r_realised": round(r_realised, 3),
-        "pnl_gbp": pnl_gbp,
+        "pnl_usd": pnl_usd,
         "mfe_r": round(mfe_r, 3),
         "mae_r": round(mae_r, 3),
         "hold_minutes": hold_minutes,
