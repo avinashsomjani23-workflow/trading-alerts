@@ -5,3 +5,7 @@ smc_radar.log
 logs/
 phase2_scan_log.jsonl
 .claude/settings.local.json
+backtest/cache/
+backtest/results/
+backtest/logs/
+backtest/state/
