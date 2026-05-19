@@ -26,8 +26,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-05-19T09:03:37.167150",
           "first_seen_label": "09:03 IST",
-          "last_seen_iso": "2026-05-19T11:03:33.528566",
-          "last_seen_label": "11:03 IST",
+          "last_seen_iso": "2026-05-19T12:03:39.317394",
+          "last_seen_label": "12:03 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-05-14T08:00:00+00:00",
           "direction": "bullish",
@@ -42,16 +42,16 @@
           "low": 0.7817400097846985,
           "ob_body": 0.0003300309181213379,
           "median_leg_body": 0.000250011682510376,
-          "bos_idx": 88,
-          "ob_idx": 81,
-          "impulse_start_idx": 79,
+          "bos_idx": 87,
+          "ob_idx": 80,
+          "impulse_start_idx": 78,
           "impulse_start_price": 0.7807300090789795,
           "bos_swing_price": 0.7825199961662292,
           "touches": 0,
           "status_label": "Pristine",
-          "h1_atr": 0.0008299904210226876,
-          "current_price_at_scan": 0.7859299778938293,
-          "distance_to_proximal_pips": 34.1,
+          "h1_atr": 0.0008171328476497105,
+          "current_price_at_scan": 0.7855299711227417,
+          "distance_to_proximal_pips": 30.1,
           "fvg": {
             "exists": false,
             "fvg_top": null,
@@ -63,10 +63,10 @@
             "mitigation": "full",
             "ghost_top": 0.7829399704933167,
             "ghost_bottom": 0.7828400135040283,
-            "ghost_c1_idx": 86,
-            "ghost_c3_idx": 88,
-            "ghost_c1_timestamp": "86",
-            "mitigated_at_idx": 89
+            "ghost_c1_idx": 85,
+            "ghost_c3_idx": 87,
+            "ghost_c1_timestamp": "85",
+            "mitigated_at_idx": 88
           },
           "sweep_observed": {
             "exists": false,
@@ -101,7 +101,7 @@
             "last_event_type": "BOS",
             "source": "structural_walls"
           },
-          "role": "alternative"
+          "role": "primary"
         }
       ],
       "last_displayed_zone_id": "CHF01"
