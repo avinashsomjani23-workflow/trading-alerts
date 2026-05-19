@@ -64,20 +64,32 @@ def run(start: datetime, end: datetime, pair_names: list,
         df_m15 = data_loader.load_bars(symbol, "15m", fetch_start, end)
         df_m5 = data_loader.load_bars(symbol, "5m", fetch_start, end)
 
-        if df_h1 is None or df_m15 is None:
-            print(f"  [skip {name}] H1 or M15 unavailable for window")
+        if df_h1 is None:
+            print(f"  [skip {name}] H1 unavailable for window")
             continue
 
-        # Choose trigger TF: M5 if available + recent enough, else M15.
-        # For backtesting, treat NAS/XAU as M15 if M5 doesn't cover the window.
-        trigger = df_m15
+        # Determine simulation mode.
+        # M15 and M5 are limited to ~60 days by Yahoo Finance.
+        # For older weeks only H1 is available — fall back to H1-only mode.
+        m15_covers_window = (
+            df_m15 is not None and not df_m15.empty
+            and df_m15.index.min() <= walk_start_ts
+        )
         used_phase3 = False
-        if name in PHASE3_PAIRS and df_m5 is not None and not df_m5.empty:
-            if df_m5.index.min() <= walk_start_ts:
-                used_phase3 = True
-                # trigger stays M15 — Phase 3 uses its own M5 walk internally
-        print(f"  trigger TF: {'M5' if trigger is df_m5 else 'M15'}"
-              f" {'(Phase 3 model)' if used_phase3 else '(Phase 2 model)'}")
+        h1_only_mode = not m15_covers_window
+
+        if h1_only_mode:
+            trigger = df_h1
+            print(f"  [H1-ONLY MODE] M15 unavailable for this period "
+                  f"(yfinance 60d limit). Simulating on H1 bars. "
+                  f"Results are less granular — read in context.")
+        else:
+            trigger = df_m15
+            if name in PHASE3_PAIRS and df_m5 is not None and not df_m5.empty:
+                if df_m5.index.min() <= walk_start_ts:
+                    used_phase3 = True
+            print(f"  trigger TF: M15"
+                  f" {'(Phase 3 model)' if used_phase3 else '(Phase 2 model)'}")
 
         alerts_for_pair = []
         for event in replay_engine.replay_pair(
@@ -104,11 +116,13 @@ def run(start: datetime, end: datetime, pair_names: list,
             if score < pair_conf.get("min_confidence", 6.0):
                 continue
 
-            if used_phase3 and df_m5 is not None and not df_m5.empty:
-                # Pass H1 frame so replay_phase3_watch can re-check OB liveness
-                # at M5 trigger time (mirrors live Fix 1+12).
+            if h1_only_mode:
+                # H1-only fallback: M15 not available for this period.
+                trade = trade_simulator.simulate_trade_h1only(
+                    alert, pair_conf, df_h1, risk_usd=risk_usd
+                )
+            elif used_phase3 and df_m5 is not None and not df_m5.empty:
                 alert["_df_h1"] = df_h1
-                # Phase 3 path: walk M5 for tap + CHoCH trigger, then simulate.
                 p3_trigger = replay_engine.replay_phase3_watch(
                     alert, pair_conf, df_m5, walk_end_ts
                 )
@@ -117,19 +131,16 @@ def run(start: datetime, end: datetime, pair_names: list,
                         p3_trigger, pair_conf, df_h1, df_m15, df_m5,
                         risk_usd=risk_usd
                     )
-                    if trade:
-                        trade["score"] = score
-                        trade["score_breakdown"] = breakdown
-                        all_trades.append(trade)
+                else:
+                    trade = None
             else:
-                # Phase 2 path: limit-order on M15.
                 trade = trade_simulator.simulate_trade(
                     alert, pair_conf, df_h1, trigger, risk_usd=risk_usd
                 )
-                if trade:
-                    trade["score"] = score
-                    trade["score_breakdown"] = breakdown
-                    all_trades.append(trade)
+            if trade:
+                trade["score"] = score
+                trade["score_breakdown"] = breakdown
+                all_trades.append(trade)
 
         print(f"  {name}: {sum(1 for t in all_trades if t['pair'] == name)} simulated trades")
 

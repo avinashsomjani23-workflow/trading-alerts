@@ -359,6 +359,19 @@ def write_report(
     nx_section = _section("NAS100 + Gold", nas_trades, nx_sum, risk_usd)
     review_section = _review_section(forex_trades, nas_trades, risk_usd)
 
+    h1_only_used = any(t.get("model") == "h1_only" for t in trades)
+    h1_only_banner = ""
+    if h1_only_used:
+        h1_only_banner = """
+    <div class="h1only">
+      <b>H1-only mode was used for some or all trades.</b>
+      Yahoo Finance does not provide 15m data beyond 60 days.
+      For this period, entry and exit simulation ran on hourly bars.
+      Structure detection quality is identical — only entry/exit
+      resolution is lower. Each trade row has a <code>model</code>
+      column: <code>h1_only</code> vs <code>phase2</code>.
+    </div>"""
+
     html = f"""<html><head><meta charset="utf-8"><style>
     body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             max-width: 820px; margin: 24px auto; color: #1a1a1a; padding: 0 16px; }}
@@ -375,6 +388,8 @@ def write_report(
              font-size: 13px; margin-bottom: 16px; }}
     .caveat {{ background: #fff8e6; border-left: 3px solid #f1c40f;
                padding: 10px 14px; border-radius: 4px; font-size: 13px; }}
+    .h1only {{ background: #fff0f0; border-left: 3px solid #e74c3c;
+               padding: 10px 14px; border-radius: 4px; font-size: 13px; margin-top: 10px; }}
     </style></head><body>
 
     <h1>Backtest Result &mdash; {meta.get('start')} to {meta.get('end')}</h1>
@@ -390,6 +405,7 @@ def write_report(
       5-10% lower than shown. Same-bar SL+TP collisions resolve as SL hit
       first (pessimistic). Data is yfinance — broker bars may differ slightly.
     </div>
+    {h1_only_banner}
 
     {fx_section}
     {nx_section}

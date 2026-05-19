@@ -29,9 +29,9 @@ CACHE_DIR.mkdir(exist_ok=True, parents=True)
 
 # yfinance interval limits (from yfinance docs, conservative).
 INTERVAL_MAX_DAYS = {
-    "5m":  58,    # ~60d max, we use 58 to be safe
-    "15m": 720,   # ~730d, same as 1h
-    "1h":  720,   # 730d advertised
+    "5m":  58,    # Yahoo Finance hard limit: 60d intraday
+    "15m": 58,    # Yahoo Finance hard limit: 60d intraday (same family as 5m)
+    "1h":  720,   # Yahoo Finance limit: 730d
 }
 
 INTERVAL_TIMEDELTA = {

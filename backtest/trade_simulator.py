@@ -107,6 +107,26 @@ def score_ob_confluences(ob, pair_conf, current_price, h1_atr, walls):
     return round(score, 2), breakdown
 
 
+def simulate_trade_h1only(
+    alert: Dict[str, Any],
+    pair_conf: Dict[str, Any],
+    df_h1: pd.DataFrame,
+    risk_usd: float = DEFAULT_RISK_USD,
+) -> Optional[Dict[str, Any]]:
+    """H1-only fallback simulation — used when M15 data is unavailable
+    (yfinance 60d intraday limit means weeks > 60d ago have no M15).
+
+    Uses H1 bars for both level computation and trade walk. Less granular
+    than M15 — one H1 bar = up to 4 M15 bars — so same-bar SL+TP
+    collisions are more frequent. Pessimistic SL-first rule mitigates this.
+    Report labels every such trade 'h1_only' so results are read in context.
+    """
+    result = simulate_trade(alert, pair_conf, df_h1, df_h1, risk_usd=risk_usd)
+    if result:
+        result["model"] = "h1_only"
+    return result
+
+
 def simulate_trade(
     alert: Dict[str, Any],
     pair_conf: Dict[str, Any],
