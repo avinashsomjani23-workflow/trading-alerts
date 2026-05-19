@@ -422,6 +422,38 @@ def _fig_to_b64(fig):
     return b64
 
 
+def build_m15_chart_ob(h1_ob, levels):
+    """
+    When a nested M15 OB was found inside the H1 OB, the M15 chart and the
+    email zone label must mark the M15 OB (that's where we actually enter),
+    NOT the H1 OB. This builds a shallow overlay dict: it inherits H1's
+    metadata (BOS line, FVG, sweep, direction) but overrides the geometry
+    fields (proximal/distal/high/low/ob_timestamp) to the M15 OB.
+
+    Returns the overlay dict, or the original H1 ob if no M15 OB nested.
+    Rule per project owner: BOS/CHoCH stays H1; only geometry switches.
+    """
+    m15_ob = levels.get("m15_ob") if isinstance(levels, dict) else None
+    if not m15_ob:
+        return h1_ob
+    direction = h1_ob.get("direction")  # bullish / bearish
+    m15_high = float(m15_ob["high"])
+    m15_low  = float(m15_ob["low"])
+    # proximal_line is set the same way Phase 1 sets it on the H1 OB:
+    # bullish -> high, bearish -> low. See smc_radar.py:866.
+    if direction == "bullish":
+        prox, dist = m15_high, m15_low
+    else:
+        prox, dist = m15_low, m15_high
+    overlay = dict(h1_ob)
+    overlay["proximal_line"] = prox
+    overlay["distal_line"]   = dist
+    overlay["high"]          = m15_high
+    overlay["low"]           = m15_low
+    overlay["ob_timestamp"]  = m15_ob["ts"]
+    return overlay
+
+
 def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=None):
     try:
         dp = pair_conf.get("decimal_places", 5)
@@ -631,7 +663,7 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             left_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_color))
         left_stacked = smc_detector.stack_labels(left_labels, pair_conf)
         for adj_price, text, color in left_stacked:
-            ax.text(-1, adj_price, text, color=color, fontsize=10, va='center',
+            ax.text(-1, adj_price, text, color=color, fontsize=8, va='center',
                     ha='left', fontweight='bold', zorder=5,
                     bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
 
@@ -643,7 +675,7 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             center_labels.append((dr_eq, f"{dr_eq:.{dp}f}", '#5dade2'))
         center_stacked = smc_detector.stack_labels(center_labels, pair_conf)
         for adj_price, text, color in center_stacked:
-            ax.text(mid_x, adj_price, text, color=color, fontsize=10, va='center',
+            ax.text(mid_x, adj_price, text, color=color, fontsize=8, va='center',
                     ha='center', fontweight='bold', zorder=5,
                     bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
 
@@ -772,12 +804,14 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
 
         # --- Entry / SL horizontal lines ---
+        # Dashed to match H1 chart; solid lines were visually competing
+        # with TP lines and crowding the small M15 chart.
         entry_p = float(levels.get('entry', 0))
         sl_p = float(levels.get('sl', 0))
         if entry_p > 0:
-            ax.axhline(y=entry_p, color='#e67e22', linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
+            ax.axhline(y=entry_p, color='#e67e22', linestyle='--', linewidth=1.1, alpha=0.85, zorder=4)
         if sl_p > 0:
-            ax.axhline(y=sl_p, color='#e74c3c', linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
+            ax.axhline(y=sl_p, color='#e74c3c', linestyle='--', linewidth=1.1, alpha=0.85, zorder=4)
 
         # --- Current price line ---
         current = float(df_plot['Close'].iloc[-1])
@@ -828,8 +862,8 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
                 ax.text(n + 1, y_lo + pad * 0.3, f" \u2193 {tp1_p:.{dp}f}",
                         color='#27ae60', fontsize=10, va='bottom', fontweight='bold', zorder=5)
             else:
-                ax.axhline(y=tp1_p, color='#27ae60', linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
-                right_labels.append((tp1_p, f" {tp1_p:.{dp}f}", '#27ae60'))
+                ax.axhline(y=tp1_p, color='#2ecc71', linestyle='-', linewidth=1.5, alpha=0.95, zorder=4)
+                right_labels.append((tp1_p, f" {tp1_p:.{dp}f}", '#2ecc71'))
 
         # TP2: line if visible, arrow if outside (same logic as TP1, darker green)
         if tp2_p > 0:
@@ -841,8 +875,8 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
                 ax.text(n + 1, y_lo + pad * 0.6, f" \u2193 {tp2_p:.{dp}f}",
                         color='#1e8449', fontsize=10, va='bottom', fontweight='bold', zorder=5)
             else:
-                ax.axhline(y=tp2_p, color='#1e8449', linestyle='-', linewidth=1.3, alpha=0.85, zorder=4)
-                right_labels.append((tp2_p, f" {tp2_p:.{dp}f}", '#1e8449'))
+                ax.axhline(y=tp2_p, color='#27ae60', linestyle='-', linewidth=1.5, alpha=0.95, zorder=4)
+                right_labels.append((tp2_p, f" {tp2_p:.{dp}f}", '#27ae60'))
 
         right_stacked = smc_detector.stack_labels(right_labels, pair_conf)
         for adj_price, text, color in right_stacked:
@@ -858,7 +892,7 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
             left_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_color))
         left_stacked = smc_detector.stack_labels(left_labels, pair_conf)
         for adj_price, text, color in left_stacked:
-            ax.text(-1, adj_price, text, color=color, fontsize=10, va='center',
+            ax.text(-1, adj_price, text, color=color, fontsize=8, va='center',
                     ha='left', fontweight='bold', zorder=5,
                     bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
 
@@ -870,7 +904,7 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
             center_labels.append((dr_eq, f"{dr_eq:.{dp}f}", '#5dade2'))
         center_stacked = smc_detector.stack_labels(center_labels, pair_conf)
         for adj_price, text, color in center_stacked:
-            ax.text(mid_x, adj_price, text, color=color, fontsize=10, va='center',
+            ax.text(mid_x, adj_price, text, color=color, fontsize=8, va='center',
                     ha='center', fontweight='bold', zorder=5,
                     bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
 
@@ -983,8 +1017,11 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
                 </p>
             </div>"""
     else:
-        proximal = float(ob.get('proximal_line', 0))
-        distal = float(ob.get('distal_line', 0))
+        # Zone label shows the OB we ACTUALLY enter on -- M15 OB if nested,
+        # else H1 OB. Matches what the M15 chart marks.
+        zone_ob = data.get('m15_chart_ob') or ob
+        proximal = float(zone_ob.get('proximal_line', 0))
+        distal = float(zone_ob.get('distal_line', 0))
         action_block = f"""
             <div style="background:#e67e22;padding:14px 18px;border-radius:10px;margin-bottom:14px;">
                 <p style="color:white;font-size:15px;font-weight:bold;margin:0;">APPROACHING &mdash; WAIT FOR M5 CHoCH</p>
@@ -1931,12 +1968,14 @@ if __name__ == "__main__":
                 save_json("phase2_sent.json", phase2_state)
                 # Limit zones do NOT write to active_watch_state.json.
                 # Phase 3 only handles ltf_choch zones (NAS100, GOLD).
+                m15_chart_ob = build_m15_chart_ob(ob, levels)
                 h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
                                              f"{name} H1 - {bias} zone context", levels, dr)
                 m15_chart = generate_m15_chart(
                     df_m15, f"{name} M15 - Approach and entry",
-                    levels, ob, pair_conf, fvg_data.get('m15') if isinstance(fvg_data, dict) and 'm15' in fvg_data else fvg_data, score_res.get('sweep_price'), dr
+                    levels, m15_chart_ob, pair_conf, fvg_data.get('m15') if isinstance(fvg_data, dict) and 'm15' in fvg_data else fvg_data, score_res.get('sweep_price'), dr
                 )
+                trade_data["m15_chart_ob"] = m15_chart_ob
 
                 h1_ok = h1_chart is not None
                 m15_ok = m15_chart is not None
@@ -2044,12 +2083,14 @@ if __name__ == "__main__":
                 }
                 save_json("phase2_sent.json", phase2_state)
 
+                m15_chart_ob = build_m15_chart_ob(ob, levels)
                 h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
                                              f"{name} H1 - {bias} zone context", levels, dr)
                 m15_chart = generate_m15_chart(
                     df_m15, f"{name} M15 - Approach",
-                    levels, ob, pair_conf, fvg_data.get('m15') if isinstance(fvg_data, dict) and 'm15' in fvg_data else fvg_data, score_res.get('sweep_price'), dr
+                    levels, m15_chart_ob, pair_conf, fvg_data.get('m15') if isinstance(fvg_data, dict) and 'm15' in fvg_data else fvg_data, score_res.get('sweep_price'), dr
                 )
+                trade_data["m15_chart_ob"] = m15_chart_ob
 
                 h1_ok = h1_chart is not None
                 m15_ok = m15_chart is not None

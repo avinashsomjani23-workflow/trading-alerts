@@ -1440,6 +1440,15 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15):
         "rr": round(tp1_rr, 2),
         "entry_source": entry_source,
     }
+    # Pass back the nested M15 OB (if any) so downstream chart/email
+    # rendering can mark the actual entry zone instead of the H1 OB.
+    # None when no M15 OB nested -- callers fall back to the H1 OB.
+    if m15_ob is not None:
+        out["m15_ob"] = {
+            "high": float(m15_ob["high"]),
+            "low":  float(m15_ob["low"]),
+            "ts":   m15_ob["ts"].isoformat() if hasattr(m15_ob["ts"], "isoformat") else str(m15_ob["ts"]),
+        }
     if tp2 is not None:
         out["tp2"] = round(tp2, dp)
         out["tp2_rr"] = round(abs(tp2 - entry) / risk, 2)
