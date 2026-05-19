@@ -940,6 +940,31 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
         if winning_swing is None:
             continue
 
+        # ------------------------------------------------------------------
+        # Sweep-candle survivorship — SMC-faithful right-side check.
+        #
+        # The sweep candle's pierce extreme must remain the extreme of the
+        # leg from the sweep candle through to the OB candle (inclusive).
+        # If any later candle in [i+1, ob_idx] wicks STRICTLY deeper than
+        # the sweep candle's pierce extreme, the original "sweep" was just
+        # a wick on the way to a real extreme — fresh liquidity has been
+        # parked beyond it and the impulse into the OB is not fueled by
+        # this candidate's stop-run. Reject and let the loop find the
+        # genuine sweep candle (which may be the OB candle itself —
+        # engulfing / rejection-block pattern, already supported).
+        #
+        # Strictly deeper only: equal-depth later candles are allowed
+        # (they form the "equal levels" confluence the scorer rewards).
+        # ------------------------------------------------------------------
+        if bias_low:
+            sweep_extreme = L[i]
+            disqualified  = any(L[j] < sweep_extreme for j in range(i + 1, ob_idx + 1))
+        else:
+            sweep_extreme = H[i]
+            disqualified  = any(H[j] > sweep_extreme for j in range(i + 1, ob_idx + 1))
+        if disqualified:
+            continue
+
         level = winning_swing['price']
         eq_score, eq_matches = _equal_levels_score(
             winning_swing, swings_in_window, pair_type, tf_atr,
