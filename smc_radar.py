@@ -2414,14 +2414,53 @@ def _summarise_last_ob_attempt(ob_build_diagnostics):
     ev_ts = latest.get('event_ts') or ''
     ev_type = latest.get('event_type') or '?'
     ev_dir = latest.get('event_dir') or ''
-    gate_text = _OB_DROP_GATE_LABELS.get(gate, gate.replace('_', ' '))
+    detail = latest.get('drop_detail') or {}
     try:
         ts_short = ev_ts[:10]
     except Exception:
         ts_short = str(ev_ts)
+
+    # Build a gate-specific reason from drop_detail so the vet can see WHY,
+    # not just WHICH gate fired. For no_qualifying_ob_candle, the leg had
+    # candidates but each was killed by size or doji filters — that's a real
+    # signal about volatility, not an opaque "no candle qualified".
+    if gate == 'no_qualifying_ob_candle':
+        opposing = int(detail.get('opposing_candles_in_leg') or 0)
+        oversized = int(detail.get('oversized_rejected') or 0)
+        doji = int(detail.get('doji_rejected') or 0)
+        leg_len = int(detail.get('leg_len') or 0)
+        if opposing == 0:
+            reason = (
+                f"impulse leg had no opposing candle ({leg_len}-candle leg, "
+                f"all in trend direction)"
+            )
+        else:
+            parts = []
+            if oversized:
+                parts.append(f"{oversized} rejected (body > 2x H1 ATR)")
+            if doji:
+                parts.append(f"{doji} rejected (near-doji)")
+            sub = "; ".join(parts) if parts else "all failed body/wick checks"
+            reason = (
+                f"{opposing} opposing candle(s) found in {leg_len}-candle leg — {sub}"
+            )
+    elif gate == 'post_build_mitigation':
+        touches = detail.get('touches')
+        reason = (
+            f"OB built then mitigated ({touches} touches)"
+            if touches is not None else "OB built then mitigated"
+        )
+    elif gate == 'degenerate_leg':
+        leg_len = detail.get('leg_len')
+        reason = (
+            f"impulse leg too short ({leg_len} candle(s))"
+            if leg_len is not None else "impulse leg too short to form an OB"
+        )
+    else:
+        reason = _OB_DROP_GATE_LABELS.get(gate, gate.replace('_', ' '))
+
     return (
-        f"Last OB attempt: {ev_type} {ev_dir} on {ts_short} — "
-        f"dropped: {gate_text}."
+        f"Last OB attempt: {ev_type} {ev_dir} on {ts_short} — dropped: {reason}."
     )
 
 
@@ -2455,10 +2494,26 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
         else:
             ev_name = f"{le_tier} CHoCH"
         le_label = f"{ev_name} {le_dir} on {ts_short}"
+
+    # Facts only — dealing range bounds + H1 trend. No generic guidance about
+    # what "might" happen next; the OB-attempt line below tells the vet what
+    # the system tried and rejected.
+    w = walls or {}
+    ceil_px = w.get('ceiling_price')
+    floor_px = w.get('floor_price')
+    trend = w.get('trend')
+    range_parts = []
+    if ceil_px is not None and floor_px is not None:
+        range_parts.append(
+            f"DR {floor_px:.{dp}f} → {ceil_px:.{dp}f} "
+            f"({ceil_px - floor_px:.{dp}f} pts)"
+        )
+    if trend:
+        range_parts.append(f"H1 trend: {trend}")
+    range_line = " &middot; ".join(range_parts) if range_parts else ""
     caption = (
-        f"No active OB. Last structure event: {le_label}. "
-        f"Wait for price to return into the dealing range — could form a "
-        f"continuation OB on the next leg, or a CHoCH if the range fails."
+        f"No active OB. Last structure event: {le_label}."
+        + (f" {range_line}." if range_line else "")
     )
     ob_attempt_line = _summarise_last_ob_attempt(ob_build_diagnostics)
     attempt_html = (
