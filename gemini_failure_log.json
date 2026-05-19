@@ -198,5 +198,10 @@
     "ts": "2026-05-19T15:21:37.817948",
     "pair": "USDCHF",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-05-19T18:06:34.511934",
+    "pair": "USDCHF",
+    "reason": "no candidates field, attempt 3"
   }
 ]
