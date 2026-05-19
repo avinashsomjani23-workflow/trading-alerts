@@ -13,9 +13,9 @@
     "last_event_ts": "2026-05-17T23:00:00+00:00",
     "last_event_idx_iso": "2026-05-17T23:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T03:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T04:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-08T20:00:00+00:00",
+    "trend_start_ts": "2026-05-08T21:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -333,9 +333,9 @@
     "last_event_ts": "2026-05-15T19:00:00+00:00",
     "last_event_idx_iso": "2026-05-15T19:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T03:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T04:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-08T18:00:00+00:00",
+    "trend_start_ts": "2026-05-08T19:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -503,7 +503,7 @@
     "last_event_ts": "2026-05-17T23:00:00+00:00",
     "last_event_idx_iso": "2026-05-17T23:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T03:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T04:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-12T06:00:00+00:00",
     "events": [
@@ -628,7 +628,7 @@
     "last_event_ts": "2026-05-15T15:00:00+00:00",
     "last_event_idx_iso": "2026-05-15T15:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T03:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T04:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-12T00:00:00+00:00",
     "events": [
@@ -798,7 +798,7 @@
     "last_event_ts": "2026-05-18T18:00:00+00:00",
     "last_event_idx_iso": "2026-05-18T18:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T03:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T04:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-18T18:00:00+00:00",
     "events": [
@@ -953,7 +953,7 @@
     "last_event_ts": "2026-05-18T00:00:00+00:00",
     "last_event_idx_iso": "2026-05-18T00:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T03:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T04:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-15T00:00:00+00:00",
     "events": [
