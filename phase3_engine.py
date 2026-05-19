@@ -714,18 +714,29 @@ def run_phase3():
             pair_type=ptype
         )
 
-        # MARKET-at-current-close entry model. SL and TP1/TP2 are frozen from
-        # Phase 2 (anchored to M15-OB-if-nested-else-H1-OB distal; H1 swings).
-        # We recompute risk and RR against the actual fill price.
-        try:
-            sl = float(phase2_levels['sl'])
-            tp1 = float(phase2_levels['tp1'])
-        except (KeyError, TypeError, ValueError):
-            print(f"  [!] {pair_name}: Phase 2 levels missing sl/tp1. Skipping.")
+        # Recompute levels fresh at trigger time using current H1 + M15 data.
+        # Never use frozen Phase 2 levels — they may be days old and computed
+        # by a superseded code path. SL and TPs must reflect live market structure.
+        df_h1 = fetch_with_retry(pair_conf["symbol"], "60d", "1h")
+        df_m15 = fetch_with_retry(pair_conf["symbol"], "10d", "15m")
+        if df_h1 is None or df_h1.empty or df_m15 is None or df_m15.empty:
+            print(f"  [!] {pair_name}: could not fetch H1/M15 for level recompute. Skipping.")
             continue
-        tp2_raw = phase2_levels.get('tp2')
+
+        fresh_computed = smc_detector.compute_phase2_levels(
+            pair_conf, bias, ob, current_close, df_h1, df_m15
+        )
+        if not fresh_computed.get("valid"):
+            print(f"  [X] {pair_name}: fresh level recompute invalid ({fresh_computed.get('reason')}). Killing watch.")
+            keys_to_delete.append(key)
+            continue
+
+        sl  = float(fresh_computed['sl'])
+        tp1 = float(fresh_computed['tp1'])
+        tp2_raw = fresh_computed.get('tp2')
         tp2 = float(tp2_raw) if tp2_raw is not None else None
 
+        # MARKET entry: fill at current M5 close, recompute risk/RR from fresh levels.
         entry = current_close
         risk = abs(entry - sl)
         if risk <= 0:
@@ -733,15 +744,15 @@ def run_phase3():
             continue
         rr_after = abs(tp1 - entry) / risk
 
-        # Sanity: entry must be on the correct side of SL given bias. If price
-        # already blew past SL between Phase 2 alert and Phase 3 fire, kill it.
+        # Sanity: entry must be on the correct side of SL. If price blew past
+        # SL before we triggered, kill the watch.
         if (bias == "LONG" and entry <= sl) or (bias == "SHORT" and entry >= sl):
-            print(f"  [X] {pair_name}: current close {entry:.{dp}f} on wrong side of SL {sl:.{dp}f}. Skipping.")
+            print(f"  [X] {pair_name}: current close {entry:.{dp}f} on wrong side of SL {sl:.{dp}f}. Killing watch.")
             keys_to_delete.append(key)
             continue
 
         if rr_after < min_rr_after_slippage:
-            print(f"  [!] {pair_name}: RR after slippage {rr_after:.2f} < floor {min_rr_after_slippage}. Skipping.")
+            print(f"  [!] {pair_name}: RR after slippage {rr_after:.2f} < floor {min_rr_after_slippage}. Killing watch.")
             keys_to_delete.append(key)
             continue
 

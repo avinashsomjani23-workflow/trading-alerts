@@ -738,40 +738,6 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         diag['ob_proximal'] = ob_proximal
         diag['ob_distal'] = ob_low if ev_dir == 'bullish' else ob_high
 
-        # PD-array gate. Vet rule: bullish OBs are only valid when the
-        # entry side (proximal) sits in the discount half of the dealing
-        # range; bearish OBs only valid in the premium half. Applied to
-        # all OBs (BOS and CHoCH alike) — buying in premium / selling in
-        # discount is the wrong side of the range regardless of event.
-        # Fails open when geometry is unavailable (no walls / cold-start
-        # fallback / either wall is placeholder): we cannot trust the gate
-        # against a tentative wall — the eq line moves as the wall promotes,
-        # so a transient narrow range right after a CHoCH would wrongly
-        # reject OBs that sit fine relative to the eventual confirmed range.
-        if walls:
-            pd_info = dealing_range.compute_pd_position(ob_proximal, walls)
-            walls_both_confirmed = (
-                not walls.get('ceiling_is_placeholder', True)
-                and not walls.get('floor_is_placeholder', True)
-            )
-            if (pd_info.get('valid')
-                    and not pd_info.get('fallback_active')
-                    and walls_both_confirmed):
-                eq = pd_info['equilibrium']
-                if (ev_dir == 'bullish' and ob_proximal > eq) or \
-                   (ev_dir == 'bearish' and ob_proximal < eq):
-                    diag['drop_gate'] = 'pd_array_gate'
-                    diag['drop_detail'] = {
-                        'ob_proximal': ob_proximal,
-                        'equilibrium': float(eq),
-                        'ceiling': walls.get('ceiling_price'),
-                        'floor':   walls.get('floor_price'),
-                        'wrong_half': 'premium' if ev_dir == 'bullish' else 'discount',
-                    }
-                    ob_build_diagnostics.append(diag)
-                    print(_diag_short(diag))
-                    continue
-
         # Proximity gate. Two-OB system: keep OBs out to OB2_OUTER_LIMIT_ATR
         # so the outer-ring (alternative) OB is preserved. The OB1 vs OB2
         # split happens post-dedupe via _split_primary_alternative below.
@@ -3231,12 +3197,10 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
       'mitigated_three_touches'
       'structure_supplanted'
       'aged_out_of_window'
+      'out_of_proximity'
       'data_unavailable'
       'data_stale'
       None  -> zone should NOT be dropped; caller keeps it alive and logs.
-
-    Note: proximity gating was removed. Phase 1 surfaces all 6 pairs every run;
-    only invalidation drops a zone.
     """
     # --- data_unavailable handled by caller before this is called ---
 
@@ -3256,6 +3220,16 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
                 return "aged_out_of_window"
         except Exception:
             pass  # if we can't compare, fall through to other checks
+
+    # --- out_of_proximity ---
+    # Drop zones that have drifted beyond OB2_OUTER_LIMIT_ATR from current
+    # price. Replaces the daily slate wipe's cleanup of distant zones.
+    # Only fires when h1_atr is known and positive.
+    if h1_atr and h1_atr > 0 and current_price is not None:
+        proximal = slate_zone.get('proximal_line')
+        if proximal is not None:
+            if abs(current_price - proximal) > OB2_OUTER_LIMIT_ATR * h1_atr:
+                return 'out_of_proximity'
 
     # --- mitigated_distal_break / mitigated_three_touches ---
     # Uses is_ob_mitigated_phase1 — single source of truth for Phase 1.
@@ -3422,17 +3396,16 @@ def run_radar():
     # Per-pair scan records accumulated across the scan; written once at end.
     phase1_scan_records = []
 
-    # --- LOAD SLATE; START FRESH IF NEW TRADING DAY ---
+    # --- LOAD SLATE; UPDATE DATE IF NEW TRADING DAY (zones persist across days) ---
     slate = load_slate()
-    is_new_slate = (slate.get("slate_date") != today_str)
-    if is_new_slate:
-        slate = init_fresh_slate(ist_now, pair_names)
-        print(f"  [SLATE] New trading day {today_str} — slate reset, counters at zero.")
-    else:
-        # Mark every existing zone is_new_this_scan = False at start of scan.
-        for pname, pblock in slate.get("pairs", {}).items():
-            for z in pblock.get("zones", []):
-                z["is_new_this_scan"] = False
+    if slate.get("slate_date") != today_str:
+        slate["slate_date"] = today_str
+        slate["slate_started_iso"] = ist_now.isoformat()
+        print(f"  [SLATE] New trading day {today_str} — date updated, zones carried forward.")
+    # Mark every existing zone is_new_this_scan = False at start of scan.
+    for pname, pblock in slate.get("pairs", {}).items():
+        for z in pblock.get("zones", []):
+            z["is_new_this_scan"] = False
 
     # Ensure all configured pairs have a block (handles config additions mid-day).
     for name in pair_names:
@@ -4013,8 +3986,9 @@ def run_radar():
     # Single fsync, single rotation check. File path = current month.
     _write_phase1_scan_records(phase1_scan_records, ist_now)
 
-    # Persist slate (overwrites file — but only mutates within-day, never resets
-    # mid-day; new-day reset happens via slate_date check at scan start).
+    # Persist slate. Zones accumulate across days; only invalidation drops them.
+    # slate_date is updated on day rollover (for Phase 2 freshness gate) without
+    # wiping zones.
     save_slate(slate)
     print(f"Phase 1 complete at {ist_time_str} IST.")
 

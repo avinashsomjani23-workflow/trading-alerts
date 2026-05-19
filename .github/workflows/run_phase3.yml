@@ -1,11 +1,6 @@
 name: P3_Trigger
 on:
   workflow_dispatch:
-  schedule:
-    # Every 5 minutes. GitHub cron is minute-resolution; the +25s offset past
-    # the M5 bar close (to let yfinance settle the just-closed bar) is applied
-    # via a sleep in the run step.
-    - cron: '*/5 * * * *'
 jobs:
   run-p3:
     runs-on: ubuntu-latest

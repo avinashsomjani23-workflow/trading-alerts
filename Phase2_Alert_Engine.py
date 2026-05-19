@@ -1441,8 +1441,11 @@ def send_heartbeat_if_due(ist_now, active_obs):
                 pass  # Corrupt timestamp -> treat as due
 
         diag = collect_heartbeat_diagnostics(ist_now, active_obs)
-        subject, html = build_heartbeat_email_html(diag, ist_now)
-        send_email(subject, html, None, None)
+        email_sent = False
+        if diag["issues"]:
+            subject, html = build_heartbeat_email_html(diag, ist_now)
+            send_email(subject, html, None, None)
+            email_sent = True
 
         hb_state["last_sent_ist"] = ist_now.isoformat()
         save_json("heartbeat_state.json", hb_state)
@@ -1475,7 +1478,8 @@ def send_heartbeat_if_due(ist_now, active_obs):
         except Exception as e:
             print(f"  [HEARTBEAT LOG ERR] {e}")
 
-        print(f"  [HEARTBEAT] Sent. Issues: {len(diag['issues'])}. OB count: {diag['ob_count']}.")
+        status = "Sent" if email_sent else "Silent (all clear)"
+        print(f"  [HEARTBEAT] {status}. Issues: {len(diag['issues'])}. OB count: {diag['ob_count']}.")
     except Exception as e:
         print(f"  [HEARTBEAT ERR] {e}")
 
