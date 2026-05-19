@@ -3,10 +3,66 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 
+# ============================================================================
+# PHASE SCOPE MAP — read this before editing any function or constant below.
+# ============================================================================
+# This module is the historical shared detection library. The phase
+# boundaries are convention only — there is no language-level isolation.
+# Touching a function without checking its scope label can silently break
+# a phase that imports it. Every public function and module-level constant
+# carries one of the scope labels defined here.
+#
+# Scope labels:
+#
+#   PHASE 1 ONLY      — called only by smc_radar.py (Phase 1 scout).
+#                       Safe to edit without checking Phase 2/3.
+#
+#   PHASE 2 ONLY      — called only by Phase2_Alert_Engine.py.
+#                       Safe to edit without checking Phase 1/3.
+#
+#   PHASE 3 ONLY      — called only by phase3_engine.py.
+#                       Safe to edit without checking Phase 1/2.
+#
+#   SHARED P1+P2      — called by Phase 1 and Phase 2 only. Behavior change
+#                       ripples to both. Phase 3 unaffected.
+#
+#   SHARED P2+P3      — called by Phase 2 and Phase 3 only. Phase 1 unaffected.
+#
+#   SHARED P1+P2+P3   — called by all three phases. Highest blast radius.
+#                       Detection uniformity across phases depends on this
+#                       single definition staying consistent. Any signature
+#                       or behavior change must be verified at every callsite.
+#
+#   INTERNAL          — private helper (leading underscore) or non-public
+#                       function used by other functions in this file only.
+#                       No phase imports it directly.
+#
+#   UNUSED            — defined but no callsite anywhere in the codebase.
+#                       Safe to delete; kept for now to avoid churn risk.
+#
+# Editing protocol:
+#   1. Check the scope label on the thing you are editing.
+#   2. Verify the label is still accurate — grep the symbol across
+#      smc_radar.py, Phase2_Alert_Engine.py, phase3_engine.py.
+#      If the label is stale, fix it as part of the same edit.
+#   3. For SHARED labels, walk every callsite and confirm the change is
+#      intended for all callers. Different phases use different timeframes
+#      (Phase 1 = H1, Phase 2 = M15, Phase 3 = M5) but call the same
+#      function — make sure the change is timeframe-agnostic.
+#   4. Never copy a SHARED function into a phase file to "isolate" it.
+#      That destroys detection uniformity. Phases are isolated by which
+#      functions they call, not by duplication.
+# ============================================================================
+
+
+# INTERNAL — decimal places helper, used inside this file for price rounding.
 def _dp(pair_conf):
     return pair_conf.get("decimal_places", 5)
 
 
+# SHARED P1+P2+P3 — ATR computation. Called by Phase 1 (H1), Phase 2 (H1+M15),
+# Phase 3 (M5). Timeframe is determined by the df passed in. Behavior change
+# affects FVG noise floor, OB filtering, and proximity calculations everywhere.
 def compute_atr(df, period=14):
     """ATR computation used across phases."""
     if df is None or len(df) < period + 1:
@@ -24,9 +80,10 @@ def compute_atr(df, period=14):
 
 
 # ---------------------------------------------------------------------------
-# Dealing range lookback per pair type (in H1 candles).
-# Trader-set: Forex 5 trading days, Index 3 days, Gold 5 days.
-# 1 trading day = 24 H1 candles. Weekend candles already excluded by yfinance.
+# PHASE 1 ONLY — Dealing range lookback per pair type (in H1 candles).
+# Used internally by get_dealing_range(). Trader-set: Forex 5 trading days,
+# Index 3 days, Gold 5 days. 1 trading day = 24 H1 candles. Weekend candles
+# already excluded by yfinance.
 # ---------------------------------------------------------------------------
 DEALING_RANGE_LOOKBACK_H1 = {
     "forex": 120,
@@ -35,12 +92,11 @@ DEALING_RANGE_LOOKBACK_H1 = {
 }
 
 # ---------------------------------------------------------------------------
-# FVG noise floor multipliers (pair-type aware).
-# Applied to the TF's ATR — e.g. M15 ATR for Phase 2 M15 FVG, M5 ATR for Phase 3.
-# ---------------------------------------------------------------------------
-# FVG noise floor multipliers (pair-type aware, TF-agnostic).
+# SHARED P1+P2+P3 — FVG noise floor multipliers (pair-type aware, TF-agnostic).
 # Multiplier applies to whatever TF ATR the caller passes in:
 #   Phase 1 -> H1 ATR  |  Phase 2 -> M15 ATR  |  Phase 3 -> M5 ATR
+# Any change here shifts FVG detection thresholds across all three phases.
+# ---------------------------------------------------------------------------
 FVG_NOISE_FLOOR_MULT = {
     "forex":     0.08,
     "index":     0.15,
@@ -60,10 +116,12 @@ FVG_NOISE_FLOOR_MULT = {
 #       M15). Phase 2 uses a fixed window — Phase 2 doesn't have a BOS index
 #       on M15.
 # ---------------------------------------------------------------------------
+# PHASE 1 ONLY — H1 FVG window soft cap.
 FVG_WINDOW_H1_CANDLES  = 10
+# PHASE 2 ONLY — M15 FVG window soft cap.
 FVG_WINDOW_M15_CANDLES = 40
 
-# OB candidate range cap. Reject candles where (high - low) > N x ATR.
+# PHASE 1 ONLY — OB candidate range cap. Reject candles where (high - low) > N x ATR.
 # Filters volatility spikes (news bars) from being picked as OBs.
 # Adopted from LuxAlgo SMC ob_coord. Not the inverse of the removed 1.5x
 # median minimum — that one rejected small candles; this rejects oversized.
@@ -79,13 +137,14 @@ OB_MAX_RANGE_ATR_MULT = 2.0
 # pip spread between forex lows still reads as "equal" in practice. Also
 # reused as the context-tag proximity band (prior-day H/L, session H/L).
 # ---------------------------------------------------------------------------
+# INTERNAL — consumed by sweep scoring helpers below.
 SWEEP_EQUAL_LEVEL_TOLERANCE_ATR = {
     "forex":     0.30,
     "index":     0.40,
     "commodity": 0.40
 }
 
-# Wick pierce minimum — the sweep wick must extend BEYOND the swept level by
+# INTERNAL — wick pierce minimum — the sweep wick must extend BEYOND the swept level by
 # at least this multiple of the TF ATR. Decoupled from equal-level tolerance:
 # they measure different things (level identity vs. clear pierce). A below-
 # noise poke is not a sweep.
@@ -95,8 +154,8 @@ SWEEP_WICK_PIERCE_MIN_ATR = {
     "commodity": 0.08
 }
 
-# Round-number grid used by Phase 1 context tagging. Tight tolerance — being
-# "near a round number" must mean within a few pips, not 30. yfinance wick
+# INTERNAL — round-number grid used by Phase 1 context tagging. Tight tolerance —
+# being "near a round number" must mean within a few pips, not 30. yfinance wick
 # revisions are typically sub-pip, well inside this band; weekly_review must
 # log tag accuracy to confirm the band holds up.
 ROUND_NUMBER_GRID = {
@@ -112,7 +171,7 @@ ROUND_NUMBER_TOLERANCE = {
     "commodity": 0.50      # $0.50
 }
 
-# Session windows in UTC. Asia wraps midnight (22 prev-day -> 07 same-day).
+# INTERNAL — session windows in UTC. Asia wraps midnight (22 prev-day -> 07 same-day).
 # Phase 1 displays IST equivalents in the email but computes in UTC.
 # Asia    ~03:30-12:30 IST | London ~12:30-17:30 IST | NY ~17:30-22:30 IST
 SESSION_WINDOWS_UTC = {
@@ -121,7 +180,7 @@ SESSION_WINDOWS_UTC = {
     "ny":     (12, 17)
 }
 
-# Per-pair session tags shown in Phase 1 sweep badge (handoff table).
+# INTERNAL — per-pair session tags shown in Phase 1 sweep badge (handoff table).
 PAIR_SESSION_TAGS = {
     "EURUSD": ["asia", "london"],
     "USDJPY": ["asia", "london"],
@@ -131,23 +190,25 @@ PAIR_SESSION_TAGS = {
     "NAS100": ["ny"]
 }
 
-# Sweep observation window for Phase 1 (display-only badge). Same 72 trading-hour
-# rule applied during OB construction. Kept as a separate constant so Phase 1
-# observation logic is decoupled from Phase 2 grading.
+# PHASE 1 ONLY — Sweep observation window for the Phase 1 display-only badge.
+# Same 72 trading-hour rule applied during OB construction. Kept as a separate
+# constant so Phase 1 observation logic is decoupled from Phase 2 grading.
 PHASE1_SWEEP_OBS_TRADING_HOURS = 72
 
-# Scoring caps for the sweep score. Sums to 3.0 by construction.
-# Vet's allocation: Presence carries the trade (1.5), Rejection confirms it
-# (1.0), Equal Levels is the "nice to have" bigger-pool bonus (0.5).
+# INTERNAL — scoring caps for the sweep score. Consumed by run_scorecard()
+# (Phase 2 only). Sums to 3.0 by construction. Vet's allocation: Presence
+# carries the trade (1.5), Rejection confirms it (1.0), Equal Levels is the
+# "nice to have" bigger-pool bonus (0.5).
 SWEEP_SCORE_BASE_MAX        = 1.5   # presence (wick + close-back, bias-aligned, within recency)
 SWEEP_SCORE_EQUAL_LEVEL_MAX = 0.5   # 0 / 0.25 / 0.5 for 0 / 1 / 2 prior matches in last 3 swings
 SWEEP_SCORE_REJECTION_MAX   = 1.0   # 0 / 0.33 / 0.66 / 1.0 for wick:body ratio < 1 / 1-2 / 2-3 / >3
 
-# When both H1 and M15 sweeps are detected, M15 only outranks H1 if it scores
-# at least this multiple of the H1 score. Mitigates M15 noise outvoting H1 signal.
+# INTERNAL — when both H1 and M15 sweeps are detected, M15 only outranks H1 if
+# it scores at least this multiple of the H1 score. Consumed by sweep scoring.
 SWEEP_M15_OVER_H1_BUFFER = 1.10
 
 
+# UNUSED — defined but no callsite anywhere. Safe to delete; left for now.
 def trading_hours_between(ts_earlier, ts_later):
     """
     Count Mon–Fri hours between two timestamps. Both treated as naive UTC.
@@ -184,6 +245,8 @@ def trading_hours_between(ts_earlier, ts_later):
     except Exception:
         return None
 
+# PHASE 1 ONLY — fetches dealing range walls (structural state primary,
+# legacy lookback fallback). Called only by smc_radar.py.
 def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
     """
     Wrapper over dealing_range.py — the new single-source-of-truth module.
@@ -269,6 +332,8 @@ def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
         "last_event_type": None,
         "source": f"legacy_window_{lookback}h"
     }
+# PHASE 1 ONLY — extracts swing highs/lows for context tagging in smc_radar.py.
+# Default lookback was changed 4->3 in commit 8300876 (2026-05-18).
 def get_swing_points(df, lookback=3, bounds=None):
     if df is None or len(df) < lookback * 2 + 1:
         return []
@@ -288,6 +353,8 @@ def get_swing_points(df, lookback=3, bounds=None):
     return sorted(swings, key=lambda s: s["idx"])
 
 
+# PHASE 2 ONLY — counts BOS events since last Major CHoCH. Reads dealing_range
+# event state. Called only by Phase2_Alert_Engine.py.
 def compute_bos_sequence_count(pair_name):
     """Count BOS events since the most recent Major CHoCH for the given pair.
 
@@ -344,6 +411,9 @@ def compute_bos_sequence_count(pair_name):
     count_maxed = (len(events) >= _dr.EVENT_RING_MAX)
     return {'count': count, 'trend': trend, 'count_maxed': count_maxed}
 
+# SHARED P1+P2+P3 — chart label stacking utility. Used by every chart-rendering
+# path across all three phases. Cosmetic only — chart label overlap if broken,
+# but alerts still fire correctly.
 def stack_labels(labels, pair_conf):
     """
     Prevent label overlap on charts by offsetting prices that are too close.
@@ -377,6 +447,7 @@ def stack_labels(labels, pair_conf):
     return adjusted
 
 
+# INTERNAL — swing liveness check used by sweep scoring helpers in this file.
 def is_swing_active(swing, df, pierce_min, before_idx=None):
     """
     A swing is ACTIVE (= unbroken AND unswept) if no candle between its
@@ -695,6 +766,8 @@ def _compute_context_tags(swept_price, swept_type, df, anchor_ts,
     return tags
 
 
+# PHASE 1 ONLY — Phase 1 sweep observation (display badge in scout email).
+# Called only by smc_radar.py.
 def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
                          tf_atr, pair_type, pair_name, tf_label='H1',
                          event_type='BOS', prior_event_idx=None,
@@ -961,6 +1034,7 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     return best[2]
 
 
+# UNUSED — defined but no callsite anywhere. Safe to delete; left for now.
 def select_best_sweep(h1_result, m15_result):
     """
     Choose between H1 and M15 sweep results applying the M15-over-H1 buffer.
@@ -988,6 +1062,10 @@ def select_best_sweep(h1_result, m15_result):
 
 # NEW
 # NEW
+# SHARED P1+P2+P3 — 3-candle FVG detection inside a zone. Called by:
+#   Phase 1 (H1 FVG inside dealing range), Phase 2 (M15 FVG for scorecard input),
+#   Phase 3 (M5 FVG for chart context). Timeframe determined by caller's df.
+#   Any change to detection logic affects FVG identification in all three phases.
 def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
                        leg_start_idx=None, leg_end_idx=None,
                        pair_type="forex"):
@@ -1167,6 +1245,7 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
     return _empty
 
 
+# UNUSED — defined but no callsite anywhere. Safe to delete; left for now.
 def find_m15_ob_inside_h1(df_m15, bias, h1_ob_high, h1_ob_low):
     """
     Find the most recent M15 order block nested inside the H1 OB zone.
@@ -1205,6 +1284,10 @@ def find_m15_ob_inside_h1(df_m15, bias, h1_ob_high, h1_ob_low):
     return None
 
 
+# SHARED P2+P3 — computes SL/TP1/TP2 from H1/M15 structure. Called by:
+#   Phase 2 (level computation at scan time), Phase 3 (fresh recomputation at
+#   trigger time). Phase 1 does NOT call this. Name is historical — despite
+#   "phase2" in the name, Phase 3 also depends on it for trigger-time levels.
 def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15):
     """
     Phase 2 entry / SL / TP computation.
@@ -1338,6 +1421,7 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15):
     return out
 
 
+# UNUSED — defined but no callsite anywhere. Safe to delete; left for now.
 def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
     dp = _dp(pair_conf)
     spread_val = pair_conf.get("spread_pips", 2) * (0.0001 if dp == 5 else 0.01)
@@ -1482,6 +1566,7 @@ def _killzone_hit(utc_hour, pair_type):
     return False
 
 
+# PHASE 2 ONLY — sweep quality scorecard. Called only by Phase2_Alert_Engine.py.
 def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=None):
     bos_tag = ob.get('bos_tag', 'BOS')
     pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
@@ -1696,6 +1781,7 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     }
 
 
+# PHASE 2 ONLY — generates scorecard HTML rows for Phase 2 alert email.
 def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_conf,
                             dealing_range=None, fvg_source=None, pd_position=None,
                             sweep_tier=None, sweep_components=None,
@@ -1868,6 +1954,7 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
                       "Outside main trading window — lower volume expected."))
 
     return rows
+# PHASE 3 ONLY — detects M5 CHoCH inside H1 zone bounds (Phase 3 entry trigger).
 def detect_ltf_choch(df_m5, bias, bounds):
     """
     Detect M5 CHoCH where the BREAK LEVEL is near the HTF zone.
@@ -1929,6 +2016,7 @@ def detect_ltf_choch(df_m5, bias, bounds):
     return {"fired": False, "level": None}
 
 
+# UNUSED — defined but no callsite anywhere. Safe to delete; left for now.
 def check_opposite_bos(pair_name, bias, since_ts=None):
     """Return True if a structural event opposite to `bias` has fired since
     `since_ts` for the given pair.
@@ -1989,6 +2077,8 @@ def check_opposite_bos(pair_name, bias, since_ts=None):
             return True
 
     return False
+# SHARED P1+P2 — H1 break candle span for BOS distance. Phase 1 uses it for
+# context tagging; Phase 2 uses it for chart annotation. Phase 3 unaffected.
 def compute_h1_break_candle_span(df_h1, ob, h1_atr):
     """
     Return (start_idx, end_idx) of consecutive H1 candles from the first
@@ -2064,6 +2154,9 @@ def compute_h1_break_candle_span(df_h1, ob, h1_atr):
             break
     return (start_idx, resolved_idx)
     
+# SHARED P1+P2 — OB mitigation check (close beyond distal OR 3 wick touches).
+# Phase 1 uses it inside determine_drop_reason(); Phase 2 uses it as a
+# mitigation gate before alerting. Despite the name, this is NOT Phase 1 only.
 def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx, end_idx=None):
     """
     Single-source-of-truth OB mitigation check. Used by Phase 1 (canonical
@@ -2116,6 +2209,9 @@ def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx, end_idx=N
     return False, None, touches
 
 
+# SHARED P2+P3 — locates a candle by ISO timestamp on a fetched df. Used by
+# Phase 2 and Phase 3 for charting (locating OB / sweep / C1 candles). Phase 1
+# does not call this; Phase 1 uses local idx values from its own df.
 def locate_ob_candle_idx(df, ob_timestamp_iso):
     """
     Find the OB candle's positional index in `df` using its absolute timestamp.
