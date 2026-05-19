@@ -2015,9 +2015,9 @@ def detect_ltf_choch(df_m5, bias, bounds):
 
     Logic:
     - Scan M5 swings across the full window at lookback=3.
-    - LONG: eligible = swing highs with zone_min <= price <= zone_max + 0.75 * M5 ATR.
-      Take the most recent eligible.
-    - SHORT: mirror with zone_min - 0.75 * M5 ATR.
+    - LONG: take the single most recent M5 swing high. If it sits within
+      zone_min to zone_max + 0.75 * M5 ATR, check for break. If not, no fire.
+    - SHORT: mirror — single most recent swing low.
     - Break = current close crosses the swing level and previous close was on the other side.
     """
     if df_m5 is None or len(df_m5) < 10:
@@ -2025,7 +2025,7 @@ def detect_ltf_choch(df_m5, bias, bounds):
 
     # Swings across full window — no bounds filter
     swings = get_swing_points(df_m5, lookback=3)
-    if len(swings) < 2:
+    if len(swings) < 1:
         return {"fired": False, "level": None}
 
     C = df_m5['Close'].values
@@ -2038,25 +2038,25 @@ def detect_ltf_choch(df_m5, bias, bounds):
 
     if bias == 'LONG':
         long_grace_top = zone_max + grace_mult * m5_atr
-        # Latest swing high whose PRICE sits inside zone OR within grace above it
-        eligible_highs = [
-            s for s in swings
-            if s['type'] == 'high' and zone_min <= s['price'] <= long_grace_top
-        ]
-        if not eligible_highs:
+        # Only the single most recent swing high. If it is outside the grace
+        # band the market structure is not in reaction context — no fire.
+        all_highs = [s for s in swings if s['type'] == 'high']
+        if not all_highs:
             return {"fired": False, "level": None}
-        latest = eligible_highs[-1]
+        latest = all_highs[-1]
+        if not (zone_min <= latest['price'] <= long_grace_top):
+            return {"fired": False, "level": None}
         if C[-1] > latest['price'] and C[-2] <= latest['price']:
             return {"fired": True, "level": float(latest['price'])}
     elif bias == 'SHORT':
         short_grace_bottom = zone_min - grace_mult * m5_atr
-        eligible_lows = [
-            s for s in swings
-            if s['type'] == 'low' and short_grace_bottom <= s['price'] <= zone_max
-        ]
-        if not eligible_lows:
+        # Only the single most recent swing low.
+        all_lows = [s for s in swings if s['type'] == 'low']
+        if not all_lows:
             return {"fired": False, "level": None}
-        latest = eligible_lows[-1]
+        latest = all_lows[-1]
+        if not (short_grace_bottom <= latest['price'] <= zone_max):
+            return {"fired": False, "level": None}
         if C[-1] < latest['price'] and C[-2] >= latest['price']:
             return {"fired": True, "level": float(latest['price'])}
 

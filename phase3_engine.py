@@ -5,6 +5,8 @@ import json
 import os
 import smtplib
 import time
+import requests
+import xml.etree.ElementTree as ET
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -22,6 +24,7 @@ with open("config.json") as f:
 
 GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "avinash.somjani23@gmail.com")
 GMAIL_PASS = os.environ.get("GMAIL_APP_PASSWORD", "dummy")
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "dummy")
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +98,7 @@ def _check_staleness(df, interval):
         max_age = STALENESS_HOURS.get(interval, 2.0)
         return age_hours > max_age, age_hours
     except Exception:
-        return False, None
+        return True, None
 
 
 def _log_stale_skip(symbol, interval, reason, age_hours):
@@ -126,6 +129,148 @@ def _log_chart_failure(pair, chart_type):
         save_json("chart_failure_log.json", log)
     except Exception as e:
         print(f"  [LOG ERR] chart log: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Macro news + Gemini (mirrors Phase 2 — same functions, same log file)
+# ---------------------------------------------------------------------------
+
+def _log_gemini_failure(pair, reason):
+    try:
+        log = load_json("gemini_failure_log.json", [])
+        log.append({"ts": get_ist_now().isoformat(), "pair": pair, "reason": reason})
+        save_json("gemini_failure_log.json", log[-200:])
+    except Exception as e:
+        print(f"  [LOG ERR] gemini log: {e}")
+
+
+def fetch_macro_news(pair_name):
+    try:
+        r = requests.get("https://www.forexlive.com/feed/news", timeout=10)
+        headlines = [
+            f"- {item.find('title').text}"
+            for item in ET.fromstring(r.content).findall('.//item')[:10]
+        ]
+        return "\n".join(headlines)
+    except Exception:
+        return "Could not fetch latest news."
+
+
+def call_gemini_flash(pair, bias, news_headlines):
+    prompt = f"""
+    You are a Macro Context Writer. DO NOT analyze the chart. DO NOT score the trade.
+    Your only job is to summarize macro risk for the trader to read.
+    TRADE DETAILS: Pair: {pair} | Direction: {bias}
+    RECENT NEWS: {news_headlines}
+
+    TASK:
+    Identify any Tier-1 economic events (e.g., CPI, NFP) affecting {pair} and
+    summarize them in plain language. The trader will decide what to do with this.
+
+    OUTPUT FORMAT (Strict JSON):
+    {{
+        "macro_summary": "Exactly 2 concise sentences summarizing the macro risk specific to {pair}. If no Tier-1 events, say so explicitly."
+    }}
+    """
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
+    body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "temperature": 0.15,
+            "thinkingConfig": {"thinkingBudget": 0}
+        }
+    }
+    last_err = "unknown"
+    for attempt in range(3):
+        try:
+            r = requests.post(url, json=body, timeout=20).json()
+            if "candidates" in r:
+                return json.loads(r["candidates"][0]["content"]["parts"][0]["text"].strip())
+            last_err = f"no candidates field, attempt {attempt + 1}"
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {str(e)[:80]}"
+            time.sleep(3)
+    _log_gemini_failure(pair, last_err)
+    return {"macro_summary": None, "macro_unavailable": True}
+
+
+# ---------------------------------------------------------------------------
+# State helpers
+# ---------------------------------------------------------------------------
+
+def _strip_live_bar(df, tf_minutes):
+    """Return df with the last bar removed if it is still within its time window.
+
+    yfinance always includes the currently-forming bar. Using its partial close
+    for CHoCH detection can fire a signal that retraces before the bar closes.
+    """
+    if df is None or len(df) < 2:
+        return df
+    try:
+        last_ts = df.index[-1]
+        if hasattr(last_ts, 'tz_convert') and last_ts.tzinfo is not None:
+            last_utc = last_ts.tz_convert('UTC').tz_localize(None).to_pydatetime()
+        elif hasattr(last_ts, 'to_pydatetime'):
+            last_utc = last_ts.to_pydatetime()
+            if last_utc.tzinfo is not None:
+                last_utc = last_utc.replace(tzinfo=None)
+        else:
+            last_utc = last_ts
+        if (datetime.utcnow() - last_utc).total_seconds() < tf_minutes * 60:
+            return df.iloc[:-1]
+    except Exception:
+        pass
+    return df
+
+
+def _is_ob_active_in_slate(pair_name, ob):
+    """Return True if the watch's OB is still status=active in active_obs.json.
+
+    Fail-open: if the file is unreadable or schema is unrecognised, returns True
+    so a parse error never silently blocks a valid trigger.
+    """
+    try:
+        raw = load_json("active_obs.json", {})
+        if not isinstance(raw, dict):
+            return True
+        if "pairs" in raw and isinstance(raw.get("pairs"), dict):
+            pair_block = raw["pairs"].get(pair_name, {})
+            zones = pair_block.get("zones", []) if isinstance(pair_block, dict) else []
+        else:
+            zones = raw.get(pair_name, [])
+        if not isinstance(zones, list):
+            return True
+        proximal = float(ob.get("proximal_line", 0))
+        distal = float(ob.get("distal_line", 0))
+        for zone in zones:
+            if not isinstance(zone, dict) or zone.get("status") != "active":
+                continue
+            try:
+                if (abs(float(zone.get("proximal_line", float('nan'))) - proximal) < 1e-8 and
+                        abs(float(zone.get("distal_line", float('nan'))) - distal) < 1e-8):
+                    return True
+            except (TypeError, ValueError):
+                continue
+        return False
+    except Exception as e:
+        print(f"  [WARN] OB liveness check error: {e}. Allowing trigger.")
+        return True
+
+
+def _persist_triggered_flag(key):
+    """Write triggered=True to disk immediately after email send.
+
+    Prevents double-fire if P3 crashes between email and the end-of-run save.
+    The next P3 run will see triggered=True and skip this key.
+    """
+    try:
+        disk = load_json("active_watch_state.json", {})
+        if key in disk and isinstance(disk[key], dict):
+            disk[key]["triggered"] = True
+            save_json("active_watch_state.json", disk)
+    except Exception as e:
+        print(f"  [WARN] Could not persist triggered flag for {key}: {e}")
 
 
 def fetch_with_retry(symbol, period, interval, retries=2):
@@ -367,6 +512,13 @@ def send_email(subject, html_body, chart_b64=None):
                 server.sendmail(GMAIL_ADDRESS, recipient, msg.as_string())
         except Exception as e:
             print(f"Email failed: {e}")
+            try:
+                log = load_json("smtp_failure_log.json", [])
+                log.append({"ts": get_ist_now().isoformat(), "recipient": recipient,
+                             "subject": subject, "error": str(e)})
+                save_json("smtp_failure_log.json", log[-200:])
+            except Exception as log_err:
+                print(f"  [LOG ERR] smtp log: {log_err}")
 
 def _chart_legend_html():
     """Colour-code legend rendered below M5 chart. Cosmetic only."""
@@ -394,7 +546,7 @@ def _chart_legend_html():
     
 def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, ist_now,
                        dollar_risk_str, macro_summary, scan_start_ist, chart_ok=True,
-                       rr_after=None):
+                       rr_after=None, macro_unavailable=False):
     dp = pair_conf.get("decimal_places", 5)
     sent_ist = get_ist_now().strftime('%H:%M IST')
     scan_ist = scan_start_ist.strftime('%H:%M IST')
@@ -412,6 +564,22 @@ def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, 
     rr_line = ""
     if rr_after is not None:
         rr_line = f"<br>RR (post-slippage): {rr_after:.2f}"
+
+    # Macro block — red banner if Gemini failed, normal block if available.
+    if macro_unavailable:
+        macro_block = (
+            '<div style="padding:10px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;'
+            'border-radius:4px;font-size:12px;color:#ffb3b3;line-height:1.5;">'
+            '<b style="color:#e74c3c;">&#9888; Macro Context Unavailable:</b> '
+            'Gemini API failed at trigger time. Check macro news manually before entering.</div>'
+        )
+    else:
+        _ms = macro_summary or 'N/A'
+        macro_block = (
+            f'<div style="padding:10px 12px;background:#0d0d1a;border-left:3px solid #888;'
+            f'border-radius:4px;font-size:12px;color:#bbb;line-height:1.5;">'
+            f'<b style="color:#eee;">Macro Context:</b> {_ms}</div>'
+        )
 
     # B8: chart fallback banner
     if chart_ok:
@@ -441,9 +609,7 @@ def build_trigger_email(pair, bias, ob, levels, m5_fvg, choch_level, pair_conf, 
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">M5 Execution Chart</div>
             {chart_block}
             {_chart_legend_html()}
-            <div style="padding:10px 12px;background:#0d0d1a;border-left:3px solid #888;border-radius:4px;font-size:12px;color:#bbb;line-height:1.5;">
-                <b style="color:#eee;">Macro Context:</b> {macro_summary or 'N/A'}
-            </div>
+            {macro_block}
         </div>
     </div></body></html>"""
 
@@ -620,6 +786,21 @@ def run_phase3():
         if not pair_conf:
             continue
 
+        # Already triggered in a prior run that crashed before final save.
+        if data.get("triggered"):
+            print(f"  [SKIP] {key}: already triggered. Queuing cleanup.")
+            keys_to_delete.append(key)
+            continue
+
+        # Global expiry: 15 days from first_seen_ist regardless of tap/choch state.
+        first_seen_str = data.get("first_seen_ist")
+        if first_seen_str:
+            first_seen = parse_iso(first_seen_str)
+            if first_seen and (ist_now - first_seen).days >= 15:
+                print(f"  [X] {pair_name}: watch expired (15 days since first_seen_ist). Silent delete.")
+                keys_to_delete.append(key)
+                continue
+
         dp = pair_conf.get("decimal_places", 5)
         proximal = float(ob.get("proximal_line", 0))
         distal = float(ob.get("distal_line", 0))
@@ -698,9 +879,14 @@ def run_phase3():
             print(f"  [-] {pair_name}: waiting for tap of proximal ({proximal:.{dp}f})")
             continue
 
-        # M5 CHoCH inside zone bounds + 0.75x M5 ATR grace (logic in smc_detector)
+        # M5 CHoCH — use only confirmed closed bars. The live bar's partial close
+        # can cross a swing level and retrace within the same 5-minute window.
         bounds = {'max': max(proximal, distal), 'min': min(proximal, distal)}
-        choch_res = smc_detector.detect_ltf_choch(df_m5, bias, bounds)
+        df_m5_closed = _strip_live_bar(df_m5, 5)
+        if df_m5_closed is None or len(df_m5_closed) < 10:
+            print(f"  [-] {pair_name}: insufficient closed M5 bars for CHoCH check")
+            continue
+        choch_res = smc_detector.detect_ltf_choch(df_m5_closed, bias, bounds)
 
         if not choch_res.get("fired"):
             print(f"  [-] {pair_name}: tapped but M5 CHoCH not yet fired")
@@ -708,6 +894,14 @@ def run_phase3():
 
         choch_level = choch_res.get("level")
         print(f"  [OK] LTF TRIGGER: {pair_name} M5 CHoCH at {choch_level:.{dp}f}")
+
+        # OB liveness: confirm P1 hasn't dropped this zone via 3-touch or other
+        # mitigation rule since the watch was written. The P1 freshness gate
+        # only proves P1 ran recently — it doesn't verify this specific OB survived.
+        if not _is_ob_active_in_slate(pair_name, ob):
+            print(f"  [X] {pair_name}: H1 OB no longer active in P1 slate. Killing watch.")
+            keys_to_delete.append(key)
+            continue
 
         # M5 FVG retained for chart context only (does NOT gate the alert).
         zone_top = max(proximal, distal)
@@ -774,6 +968,13 @@ def run_phase3():
             "entry_source": "LIMIT @ M5 CHoCH level"
         }
 
+        # Fetch fresh macro at trigger time — the P2 watch entry's macro_summary
+        # may be hours old. Red banner rendered in email if Gemini fails.
+        print(f"  [MACRO] Fetching fresh macro context for {pair_name}...")
+        gemini_risk = call_gemini_flash(pair_name, bias, fetch_macro_news(pair_name))
+        live_macro_summary = gemini_risk.get("macro_summary")
+        live_macro_unavailable = bool(gemini_risk.get("macro_unavailable", False))
+
         chart_b64 = generate_m5_chart(
             df_m5, f"{pair_name} M5 - Sniper Trigger",
             fresh_levels, ob, pair_conf, m5_fvg, choch_level, None
@@ -784,10 +985,11 @@ def run_phase3():
 
         html = build_trigger_email(
             pair_name, bias, ob, fresh_levels, m5_fvg, choch_level, pair_conf,
-            ist_now, dollar_risk_str, data.get("macro_summary"), scan_start_ts,
-            chart_ok=chart_ok, rr_after=rr_after
+            ist_now, dollar_risk_str, live_macro_summary, scan_start_ts,
+            chart_ok=chart_ok, rr_after=rr_after, macro_unavailable=live_macro_unavailable
         )
         send_email(f"TRADE READY (M5 SNIPER) | {pair_name} | {bias}", html, chart_b64)
+        _persist_triggered_flag(key)
         keys_to_delete.append(key)
 
     # CONCURRENCY-SAFE SAVE: re-read latest disk state, apply field-level
