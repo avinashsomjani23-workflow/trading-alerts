@@ -105,6 +105,9 @@ def run(start: datetime, end: datetime, pair_names: list,
                 continue
 
             if used_phase3 and df_m5 is not None and not df_m5.empty:
+                # Pass H1 frame so replay_phase3_watch can re-check OB liveness
+                # at M5 trigger time (mirrors live Fix 1+12).
+                alert["_df_h1"] = df_h1
                 # Phase 3 path: walk M5 for tap + CHoCH trigger, then simulate.
                 p3_trigger = replay_engine.replay_phase3_watch(
                     alert, pair_conf, df_m5, walk_end_ts

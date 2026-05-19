@@ -281,7 +281,24 @@ def replay_phase3_watch(
         if not tapped:
             continue
 
-        # M5 CHoCH via live function.
+        # OB liveness: re-check mitigation on H1 at this M5 timestamp.
+        # Mirrors live Fix 1+12: confirms P1 hasn't 3-touch mitigated the OB
+        # between the H1 alert and now. Use the full H1 up to this moment.
+        h1_at_trigger = _slice_up_to(
+            # df_h1 not passed into this function — resolve from alert context.
+            # We store it on the alert dict in run_backtest.py via extra key.
+            alert.get("_df_h1"),
+            m5_ts,
+        ) if alert.get("_df_h1") is not None else None
+        if h1_at_trigger is not None and not h1_at_trigger.empty:
+            mit, _ = _is_ob_mitigated_replay(
+                ob.get("direction"), float(ob["distal_line"]),
+                float(ob["proximal_line"]), h1_at_trigger, ob.get("ob_timestamp")
+            )
+            if mit:
+                return None  # OB mitigated on H1 before M5 CHoCH could fire
+
+        # M5 CHoCH via live function (already uses single most-recent swing per Fix 5).
         try:
             choch_res = smc_detector.detect_ltf_choch(m5_slice, bias, bounds)
         except Exception as e:
