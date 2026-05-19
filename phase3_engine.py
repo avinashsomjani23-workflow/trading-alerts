@@ -743,8 +743,9 @@ def run_phase3():
         tp2_raw = fresh_computed.get('tp2')
         tp2 = float(tp2_raw) if tp2_raw is not None else None
 
-        # MARKET entry: fill at current M5 close, recompute risk/RR from fresh levels.
-        entry = current_close
+        # Entry at the broken swing high/low (CHoCH level), not the close of the
+        # break candle. Cleaner: the structural level is the retest target.
+        entry = choch_level
         risk = abs(entry - sl)
         if risk <= 0:
             print(f"  [!] {pair_name}: zero risk at entry. Skipping.")
@@ -770,7 +771,7 @@ def run_phase3():
             "tp1": round(tp1, dp),
             "tp2": round(tp2, dp) if tp2 is not None else None,
             "rr": round(rr_after, 2),
-            "entry_source": "MARKET @ M5 close"
+            "entry_source": "LIMIT @ M5 CHoCH level"
         }
 
         chart_b64 = generate_m5_chart(
