@@ -4,7 +4,7 @@
     "ceiling_price": 1.1791062355041504,
     "ceiling_ts": "2026-05-08T20:00:00+00:00",
     "ceiling_is_placeholder": false,
-    "floor_price": 1.16225004196167,
+    "floor_price": 1.161440134048462,
     "floor_ts": "2026-05-19T10:00:00+00:00",
     "floor_is_placeholder": true,
     "last_event_type": "BOS",
@@ -13,9 +13,9 @@
     "last_event_ts": "2026-05-19T09:00:00+00:00",
     "last_event_idx_iso": "2026-05-19T09:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T10:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T11:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-11T04:00:00+00:00",
+    "trend_start_ts": "2026-05-11T05:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -321,7 +321,7 @@
   },
   "USDJPY": {
     "trend": "bullish",
-    "ceiling_price": 159.1060028076172,
+    "ceiling_price": 159.17799377441406,
     "ceiling_ts": "2026-05-19T10:00:00+00:00",
     "ceiling_is_placeholder": true,
     "floor_price": 156.4250030517578,
@@ -333,9 +333,9 @@
     "last_event_ts": "2026-05-19T09:00:00+00:00",
     "last_event_idx_iso": "2026-05-19T09:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T10:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T11:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-11T03:00:00+00:00",
+    "trend_start_ts": "2026-05-11T04:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -509,8 +509,8 @@
     "ceiling_price": 0.5967655777931213,
     "ceiling_ts": "2026-05-13T01:00:00+00:00",
     "ceiling_is_placeholder": false,
-    "floor_price": 0.5841121673583984,
-    "floor_ts": "2026-05-19T09:00:00+00:00",
+    "floor_price": 0.5840098261833191,
+    "floor_ts": "2026-05-19T10:00:00+00:00",
     "floor_is_placeholder": true,
     "last_event_type": "BOS",
     "last_event_tier": "Major",
@@ -518,7 +518,7 @@
     "last_event_ts": "2026-05-19T05:00:00+00:00",
     "last_event_idx_iso": "2026-05-19T05:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T10:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T11:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-12T06:00:00+00:00",
     "events": [
@@ -658,7 +658,7 @@
     "last_event_ts": "2026-05-15T15:00:00+00:00",
     "last_event_idx_iso": "2026-05-15T15:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T10:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T11:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-12T00:00:00+00:00",
     "events": [
@@ -841,6 +841,21 @@
         "impulse_start_ts": "2026-05-18T21:00:00+00:00",
         "impulse_start_price": 0.7835100293159485,
         "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Minor",
+        "direction": "bullish",
+        "candle_ts": "2026-05-19T11:00:00+00:00",
+        "broken_swing_price": 0.7860999703407288,
+        "broken_swing_ts": "2026-05-18T19:00:00+00:00",
+        "broken_was_wall": false,
+        "displacement_atr": 1.3925002536945945,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-19T08:00:00+00:00",
+        "impulse_start_price": 0.78507000207901,
+        "trend_after": "bullish"
       }
     ]
   },
@@ -858,7 +873,7 @@
     "last_event_ts": "2026-05-18T18:00:00+00:00",
     "last_event_idx_iso": "2026-05-18T18:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T10:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T11:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-18T18:00:00+00:00",
     "events": [
@@ -1013,7 +1028,7 @@
     "last_event_ts": "2026-05-18T00:00:00+00:00",
     "last_event_idx_iso": "2026-05-18T00:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-19T10:00:00+00:00",
+    "last_scanned_ts": "2026-05-19T11:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-15T00:00:00+00:00",
     "events": [
