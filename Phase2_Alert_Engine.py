@@ -622,19 +622,27 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             ax.text(n + 1, adj_price, text, color=color, fontsize=10, va='center',
                     fontweight='bold', zorder=5)
 
-        # --- Mid-chart tags: proximal, distal, BOS/CHoCH, current, EQ (numbers only, colour-matched) ---
-        mid_x = n / 2.0
-        mid_labels = []
+        # --- Left-edge tags: proximal, distal, BOS/CHoCH ---
+        left_labels = []
         if zone_hi > 0:
-            mid_labels.append((proximal, f"{proximal:.{dp}f}", '#bb8fce'))
-            mid_labels.append((distal, f"{distal:.{dp}f}", '#bb8fce'))
+            left_labels.append((proximal, f"{proximal:.{dp}f}", '#bb8fce'))
+            left_labels.append((distal, f"{distal:.{dp}f}", '#bb8fce'))
         if bos_price > 0:
-            mid_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_color))
-        mid_labels.append((current, f"{current:.{dp}f}", '#ffffff'))
+            left_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_color))
+        left_stacked = smc_detector.stack_labels(left_labels, pair_conf)
+        for adj_price, text, color in left_stacked:
+            ax.text(-1, adj_price, text, color=color, fontsize=10, va='center',
+                    ha='left', fontweight='bold', zorder=5,
+                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
+
+        # --- Mid-chart tags: current price, EQ ---
+        mid_x = n / 2.0
+        center_labels = []
+        center_labels.append((current, f"{current:.{dp}f}", '#ffffff'))
         if dr_eq is not None:
-            mid_labels.append((dr_eq, f"{dr_eq:.{dp}f}", '#5dade2'))
-        mid_stacked = smc_detector.stack_labels(mid_labels, pair_conf)
-        for adj_price, text, color in mid_stacked:
+            center_labels.append((dr_eq, f"{dr_eq:.{dp}f}", '#5dade2'))
+        center_stacked = smc_detector.stack_labels(center_labels, pair_conf)
+        for adj_price, text, color in center_stacked:
             ax.text(mid_x, adj_price, text, color=color, fontsize=10, va='center',
                     ha='center', fontweight='bold', zorder=5,
                     bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
@@ -841,19 +849,27 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
             ax.text(n + 1, adj_price, text, color=color, fontsize=10, va='center',
                     fontweight='bold', zorder=5)
 
-        # --- Mid-chart tags: proximal, distal, BOS/CHoCH, current, EQ ---
-        mid_x = n / 2.0
-        mid_labels = []
+        # --- Left-edge tags: proximal, distal, BOS/CHoCH ---
+        left_labels = []
         if zone_hi > 0:
-            mid_labels.append((proximal, f"{proximal:.{dp}f}", '#bb8fce'))
-            mid_labels.append((distal, f"{distal:.{dp}f}", '#bb8fce'))
+            left_labels.append((proximal, f"{proximal:.{dp}f}", '#bb8fce'))
+            left_labels.append((distal, f"{distal:.{dp}f}", '#bb8fce'))
         if bos_price > 0:
-            mid_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_color))
-        mid_labels.append((current, f"{current:.{dp}f}", '#ffffff'))
+            left_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_color))
+        left_stacked = smc_detector.stack_labels(left_labels, pair_conf)
+        for adj_price, text, color in left_stacked:
+            ax.text(-1, adj_price, text, color=color, fontsize=10, va='center',
+                    ha='left', fontweight='bold', zorder=5,
+                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
+
+        # --- Mid-chart tags: current price, EQ ---
+        mid_x = n / 2.0
+        center_labels = []
+        center_labels.append((current, f"{current:.{dp}f}", '#ffffff'))
         if dr_eq is not None:
-            mid_labels.append((dr_eq, f"{dr_eq:.{dp}f}", '#5dade2'))
-        mid_stacked = smc_detector.stack_labels(mid_labels, pair_conf)
-        for adj_price, text, color in mid_stacked:
+            center_labels.append((dr_eq, f"{dr_eq:.{dp}f}", '#5dade2'))
+        center_stacked = smc_detector.stack_labels(center_labels, pair_conf)
+        for adj_price, text, color in center_stacked:
             ax.text(mid_x, adj_price, text, color=color, fontsize=10, va='center',
                     ha='center', fontweight='bold', zorder=5,
                     bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))

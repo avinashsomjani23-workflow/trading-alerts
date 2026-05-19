@@ -307,17 +307,24 @@ def generate_m5_chart(df_m5, title, levels, ob, pair_conf, m5_fvg, choch_level, 
             ax.text(n + 1, adj_price, text, color=color, fontsize=10,
                     va='center', fontweight='bold', zorder=5)
 
-        # --- Mid-chart tags: proximal, distal, CHoCH, current (numbers only, colour-matched) ---
-        mid_x = n / 2.0
-        mid_labels = []
+        # --- Left-edge tags: proximal, distal, CHoCH ---
+        left_labels = []
         if zone_hi > 0:
-            mid_labels.append((proximal, f"{proximal:.{dp}f}", '#bb8fce'))
-            mid_labels.append((distal, f"{distal:.{dp}f}", '#bb8fce'))
+            left_labels.append((proximal, f"{proximal:.{dp}f}", '#bb8fce'))
+            left_labels.append((distal, f"{distal:.{dp}f}", '#bb8fce'))
         if choch_level is not None and choch_level > 0:
-            mid_labels.append((float(choch_level), f"{float(choch_level):.{dp}f}", '#e91e63'))
-        mid_labels.append((current, f"{current:.{dp}f}", '#ffffff'))
-        mid_stacked = smc_detector.stack_labels(mid_labels, pair_conf)
-        for adj_price, text, color in mid_stacked:
+            left_labels.append((float(choch_level), f"{float(choch_level):.{dp}f}", '#e91e63'))
+        left_stacked = smc_detector.stack_labels(left_labels, pair_conf)
+        for adj_price, text, color in left_stacked:
+            ax.text(-1, adj_price, text, color=color, fontsize=10, va='center',
+                    ha='left', fontweight='bold', zorder=5,
+                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
+
+        # --- Mid-chart tags: current price ---
+        mid_x = n / 2.0
+        center_labels = [(current, f"{current:.{dp}f}", '#ffffff')]
+        center_stacked = smc_detector.stack_labels(center_labels, pair_conf)
+        for adj_price, text, color in center_stacked:
             ax.text(mid_x, adj_price, text, color=color, fontsize=10, va='center',
                     ha='center', fontweight='bold', zorder=5,
                     bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))

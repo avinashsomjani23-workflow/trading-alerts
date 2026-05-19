@@ -1630,14 +1630,24 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
         pair_conf_shim = {"decimal_places": dp, "pair_type": pair_type_guess}
 
         mid_x = n_plot / 2.0
-        mid_labels = [(current_price, f"{current_price:.{dp}f}", '#ffffff')]
+
+        # --- Left-edge tags: proximal, distal, BOS/CHoCH ---
+        left_labels = []
         if has_ob:
             zone_label_color = '#888888' if is_invalidated else '#bb8fce'
-            mid_labels.append((proximal, f"{proximal:.{dp}f}", zone_label_color))
-            mid_labels.append((distal,   f"{distal:.{dp}f}",   zone_label_color))
+            left_labels.append((proximal, f"{proximal:.{dp}f}", zone_label_color))
+            left_labels.append((distal,   f"{distal:.{dp}f}",   zone_label_color))
             if bos_price is not None:
                 bos_label_color = '#888888' if is_invalidated else bos_color
-                mid_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_label_color))
+                left_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_label_color))
+        left_stacked = smc_detector.stack_labels(left_labels, pair_conf_shim)
+        for adj_price, text, color in left_stacked:
+            ax.text(-1, adj_price, text, color=color, fontsize=10, va='center',
+                    ha='left', fontweight='bold', zorder=7,
+                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.78))
+
+        # --- Mid-chart tags: current price, DR walls, EQ ---
+        mid_labels = [(current_price, f"{current_price:.{dp}f}", '#ffffff')]
         # Wall labels go in mid-chart ONLY when the wall is on-chart. Off-
         # chart walls get edge annotations below.
         if ceiling_price is not None and ceiling_in_view:
@@ -2081,47 +2091,10 @@ def _render_sweep_observation_html(sweep_obs, dp):
     tier = sweep_obs.get('tier', 'weak')
     tier_color = {'textbook': '#27ae60', 'decent': '#e67e22', 'weak': '#888'}.get(tier, '#888')
     tier_emoji = {'textbook': '🎯', 'decent': '◐', 'weak': '·'}.get(tier, '·')
-    tier_explainer = {
-        'textbook': 'Strong rejection wick with multiple prior swings at the same level.',
-        'decent':   'Either strong rejection OR equal-level cluster — one of the two signals.',
-        'weak':     'Sweep present but minimal rejection and no equal-level cluster.'
-    }.get(tier, '')
-
-    ts_raw = sweep_obs.get('timestamp', '')
-    ts_short = ''
-    try:
-        if ts_raw:
-            ts_short = datetime.fromisoformat(ts_raw.replace('Z', '')).strftime('%H:%M UTC on %d-%b')
-    except Exception:
-        ts_short = ts_raw[:16] if ts_raw else ''
-
-    tag_pretty = {
-        'round_number':    'round number',
-        'prior_day_high':  'prior day high',
-        'prior_day_low':   'prior day low',
-        'asia_high':       'Asia high',
-        'asia_low':        'Asia low',
-        'london_high':     'London high',
-        'london_low':      'London low',
-        'ny_high':         'NY high',
-        'ny_low':          'NY low'
-    }
-    tags = sweep_obs.get('context_tags', []) or []
-    tags_text = ', '.join(tag_pretty.get(t, t) for t in tags) if tags else 'none'
-    wick_pips = sweep_obs.get('wick_distance_pips', 0)
-    wick_body = sweep_obs.get('wick_body_ratio', 0)
-    eq_count  = sweep_obs.get('equal_levels_count', 0)
 
     return (
         f"Sweep: <span style='color:{tier_color};'>"
-        f"{tier_emoji} {tier.title()} ({sweep_obs.get('tf', 'H1')} "
-        f"@ {sweep_obs.get('price', 0):.{dp}f} at {ts_short})</span>"
-        f"<div style='font-size:10px;color:#aaa;margin-top:3px;line-height:1.5;'>"
-        f"Wick {wick_pips} past level &middot; wick:body {wick_body}x &middot; "
-        f"equal levels {eq_count}<br>"
-        f"Context: {tags_text}<br>"
-        f"<span style='color:#888;font-style:italic;'>{tier_explainer}</span>"
-        f"</div>"
+        f"{tier_emoji} {tier.title()}</span>"
     )
 
 
@@ -2131,24 +2104,11 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
     stat_color = '#27ae60' if 'Pristine' in ob['status'] else '#e67e22'
     mit = ob['fvg'].get('mitigation', 'none')
     if ob['fvg'].get('exists') and mit == 'partial':
-        # Partial — price crossed proximal but not distal. Amber (caution).
-        fvg_line = (
-            f"FVG: <span style='color:#f1c40f;'>◐ Partial "
-            f"{ob['fvg']['fvg_bottom']:.{dp}f} – {ob['fvg']['fvg_top']:.{dp}f}</span>"
-        )
+        fvg_line = "FVG: <span style='color:#f1c40f;'>◐ Partial</span>"
     elif ob['fvg'].get('exists'):
-        # Pristine — untouched. Dark green.
-        fvg_line = (
-            f"FVG: <span style='color:#27ae60;'>✓ {ob['fvg']['fvg_bottom']:.{dp}f} – "
-            f"{ob['fvg']['fvg_top']:.{dp}f}</span>"
-        )
+        fvg_line = "FVG: <span style='color:#27ae60;'>✓ Pristine</span>"
     elif ob['fvg'].get('was_detected'):
-        gb = ob['fvg'].get('ghost_bottom')
-        gt = ob['fvg'].get('ghost_top')
-        fvg_line = (
-            f"FVG: <span style='color:#888;'>✗ Mitigated "
-            f"({gb:.{dp}f} – {gt:.{dp}f})</span>"
-        )
+        fvg_line = "FVG: <span style='color:#888;'>✗ Mitigated</span>"
     else:
         fvg_line = "FVG: <span style='color:#888;'>None</span>"
 
@@ -2184,12 +2144,6 @@ def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_i
       </div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;">
         <span style="font-size:11px;color:#aaa;">
-          <b style="color:#bb8fce;">Proximal</b> {ob['proximal_line']:.{dp}f}
-        </span>
-        <span style="font-size:11px;color:#aaa;">
-          <b style="color:#bb8fce;">Distal</b> {ob['distal_line']:.{dp}f}
-        </span>
-        <span style="font-size:11px;color:#aaa;">
           <b>Width</b> {zone_pips} pips
         </span>
         <span style="font-size:11px;color:{stat_color};">
@@ -2220,22 +2174,11 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
     fvg = sz.get('fvg', {})
     mit = fvg.get('mitigation', 'none')
     if fvg.get('exists') and mit == 'partial':
-        fvg_line = (
-            f"FVG: <span style='color:#f1c40f;'>◐ Partial "
-            f"{fvg['fvg_bottom']:.{dp}f} – {fvg['fvg_top']:.{dp}f}</span>"
-        )
+        fvg_line = "FVG: <span style='color:#f1c40f;'>◐ Partial</span>"
     elif fvg.get('exists'):
-        fvg_line = (
-            f"FVG: <span style='color:#27ae60;'>✓ {fvg['fvg_bottom']:.{dp}f} – "
-            f"{fvg['fvg_top']:.{dp}f}</span>"
-        )
+        fvg_line = "FVG: <span style='color:#27ae60;'>✓ Pristine</span>"
     elif fvg.get('was_detected'):
-        gb = fvg.get('ghost_bottom')
-        gt = fvg.get('ghost_top')
-        fvg_line = (
-            f"FVG: <span style='color:#888;'>✗ Mitigated "
-            f"({gb:.{dp}f} – {gt:.{dp}f})</span>"
-        )
+        fvg_line = "FVG: <span style='color:#888;'>✗ Mitigated</span>"
     else:
         fvg_line = "FVG: <span style='color:#888;'>None</span>"
 
@@ -2290,12 +2233,6 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
         <span style="font-size:10px;color:#666;">{ist_timestamp} IST</span>
       </div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;">
-        <span style="font-size:11px;color:#aaa;">
-          <b style="color:#bb8fce;">Proximal</b> {sz['proximal_line']:.{dp}f}
-        </span>
-        <span style="font-size:11px;color:#aaa;">
-          <b style="color:#bb8fce;">Distal</b> {sz['distal_line']:.{dp}f}
-        </span>
         <span style="font-size:11px;color:#aaa;">
           <b>Width</b> {zone_pips} pips
         </span>
