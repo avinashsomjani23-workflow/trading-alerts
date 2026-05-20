@@ -75,20 +75,47 @@ jobs:
           set -e
           RUN_ID="${{ inputs.regime }}_$(echo ${{ inputs.start_date }} | tr -d -)_$(echo ${{ inputs.end_date }} | tr -d -)"
           LOG_DIR="backtest/results/$RUN_ID"
-          # Only the logs travel back into the repo — Excel/HTML/raw_alerts stay
-          # in the artifact (they're big, binary, and would bloat the repo).
           if [ ! -f "$LOG_DIR/run_log.jsonl" ] && [ ! -f "$LOG_DIR/console.log" ]; then
             echo "No logs to commit for $RUN_ID"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Pull latest in case live system pushed P1/P2/P3 state during the run.
-          git pull --rebase origin main || true
-          git add -f "$LOG_DIR/run_log.jsonl" "$LOG_DIR/console.log" "$LOG_DIR/summary.json" 2>/dev/null || true
-          if git diff --cached --quiet; then
-            echo "Nothing to commit"
-            exit 0
-          fi
-          git commit -m "Backtest logs: $RUN_ID [skip ci]"
-          git push origin HEAD:main
+
+          # Isolate the log files from any other dirty workspace state (the
+          # backtest run may have touched live state JSONs as a side effect —
+          # we do NOT want those carried in this commit).
+          mkdir -p /tmp/bt_logs
+          cp -f "$LOG_DIR/run_log.jsonl"  /tmp/bt_logs/ 2>/dev/null || true
+          cp -f "$LOG_DIR/console.log"    /tmp/bt_logs/ 2>/dev/null || true
+          cp -f "$LOG_DIR/summary.json"   /tmp/bt_logs/ 2>/dev/null || true
+
+          # Reset workspace to clean HEAD so unrelated dirty files don't block
+          # the rebase. Logs are safe in /tmp.
+          git reset --hard HEAD
+          git clean -fd
+
+          # Retry push up to 5 times to handle races with live system commits
+          # (live phases 1/2/3 push state JSONs every few minutes).
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p "$LOG_DIR"
+            cp -f /tmp/bt_logs/run_log.jsonl  "$LOG_DIR/" 2>/dev/null || true
+            cp -f /tmp/bt_logs/console.log    "$LOG_DIR/" 2>/dev/null || true
+            cp -f /tmp/bt_logs/summary.json   "$LOG_DIR/" 2>/dev/null || true
+            git add -f "$LOG_DIR/run_log.jsonl" "$LOG_DIR/console.log" "$LOG_DIR/summary.json" 2>/dev/null || true
+            if git diff --cached --quiet; then
+              echo "Nothing to commit"
+              exit 0
+            fi
+            git commit -m "Backtest logs: $RUN_ID [skip ci]"
+            if git push origin HEAD:main; then
+              echo "Push succeeded on attempt $attempt"
+              exit 0
+            fi
+            echo "Push attempt $attempt rejected — refetching and retrying..."
+            sleep 3
+          done
+          echo "ERROR: push failed after 5 attempts"
+          exit 1
