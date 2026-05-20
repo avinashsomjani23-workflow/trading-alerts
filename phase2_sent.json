@@ -1,5 +1,5 @@
 {
-  "day_id": "2026-05-19",
+  "day_id": "2026-05-20",
   "zones": {
     "USDCHF_LONG_BOS_0.7861": {
       "score_int": 6,
@@ -34,6 +34,24 @@
       },
       "alert_ist": "2026-05-19T20:06:35.000655",
       "last_seen_ist": "2026-05-19T23:51:29.433285",
+      "bias": "SHORT",
+      "pair": "GOLD"
+    },
+    "GOLD_SHORT_BOS_4533.5_2026-05-19T12": {
+      "score_int": 6,
+      "score_raw": 6.0,
+      "score_high_water": 6.0,
+      "score_low_water": 6.0,
+      "breakdown": {
+        "structure": 2.5,
+        "sweep": 0.0,
+        "fvg": 2.0,
+        "freshness": 1.5,
+        "pd": 0.0,
+        "killzone": 0.0
+      },
+      "alert_ist": "2026-05-20T09:06:28.984028",
+      "last_seen_ist": "2026-05-20T09:06:28.984028",
       "bias": "SHORT",
       "pair": "GOLD"
     }
