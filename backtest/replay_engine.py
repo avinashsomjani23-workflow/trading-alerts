@@ -164,8 +164,13 @@ def replay_pair(
                 print(f"  [DR ERROR] {pair_name} @ {h1_ts}: {e}")
             continue
 
-        walls = (new_state or {}).get("walls", {}) if new_state else {}
-        events = (new_state or {}).get("event_ring", []) if new_state else []
+        # dealing_range.update_pair returns the walls state dict at the top
+        # level (ceiling_price, floor_price, trend, events, ...). Live smc_radar
+        # passes the whole state as `walls=` and reads events from state['events'].
+        # Earlier code looked for non-existent sub-keys 'walls' and 'event_ring'
+        # which silently passed empty events → 0 OBs → 0 alerts on every run.
+        walls = new_state or {}
+        events = walls.get("events", [])
         if events:
             diag["bars_with_events"] += 1
 
