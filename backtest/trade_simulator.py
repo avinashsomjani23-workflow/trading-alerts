@@ -48,6 +48,81 @@ def compute_levels(pair_conf, bias, ob, current_price, df_h1, df_trigger):
         return None
 
 
+def score_alert_via_live(alert, pair_conf, df_h1, df_m15):
+    """Score an alert using live smc_detector.run_scorecard — the exact same
+    code path Phase2_Alert_Engine.py uses (see lines 1895-1944).
+
+    Slices df_h1 / df_m15 up to the alert's timestamp first to prevent
+    lookahead. M15 FVG is detected on the slice using live detect_fvg_in_zone,
+    H1 FVG is read from the OB (frozen by Phase 1 at OB formation).
+
+    Replaces the hand-rolled score_ob_confluences which drifted from live and
+    consistently underscored (wrong sweep key, missing freshness scale, kept
+    removed PD bonus, wrong structure max). That drift was why every
+    backtest produced 0 trades from non-zero alerts.
+
+    Returns (total_score: float, breakdown: dict).
+    """
+    ob = alert["ob"]
+    bias = "LONG" if ob.get("direction") == "bullish" else "SHORT"
+    alert_ts = pd.Timestamp(alert["ts"])
+    if alert_ts.tzinfo is None:
+        alert_ts = alert_ts.tz_localize("UTC")
+    current_price = alert["current_price"]
+
+    h1_slice = df_h1.loc[:alert_ts]
+    m15_slice = df_m15.loc[:alert_ts] if df_m15 is not None else None
+
+    # M15 FVG — mirror Phase2_Alert_Engine.py:1914-1924.
+    fvg_m15 = {"exists": False, "was_detected": False, "mitigation": "none"}
+    if m15_slice is not None and len(m15_slice) > 20:
+        ob_ts_iso = ob.get("ob_timestamp")
+        if ob_ts_iso:
+            try:
+                idx_found, on_chart = smc_detector.locate_ob_candle_idx(
+                    m15_slice, ob_ts_iso
+                )
+                if on_chart:
+                    ptype = pair_conf.get("pair_type", "forex")
+                    floor_mult = smc_detector.FVG_NOISE_FLOOR_MULT.get(ptype, 0.20)
+                    m15_atr = smc_detector.compute_atr(m15_slice) or 0.0
+                    atr_floor = floor_mult * m15_atr
+                    if atr_floor > 0:
+                        distal = float(ob["distal_line"])
+                        proximal = float(ob["proximal_line"])
+                        zone_top = max(distal, proximal)
+                        zone_bottom = min(distal, proximal)
+                        end_idx = min(
+                            idx_found + smc_detector.FVG_WINDOW_M15_CANDLES,
+                            len(m15_slice) - 1
+                        )
+                        fvg_m15 = smc_detector.detect_fvg_in_zone(
+                            m15_slice, bias, zone_top, zone_bottom, atr_floor,
+                            leg_start_idx=idx_found, leg_end_idx=end_idx,
+                            pair_type=ptype,
+                        )
+            except Exception as e:
+                log_event("m15_fvg_error", level="warn",
+                          pair=alert.get("pair"),
+                          error=f"{type(e).__name__}: {e}")
+
+    fvg_h1 = ob.get("fvg", {"exists": False, "was_detected": False,
+                            "mitigation": "none"})
+    fvg_data = {"h1": fvg_h1, "m15": fvg_m15}
+
+    try:
+        score_res = smc_detector.run_scorecard(
+            bias, h1_slice, ob, fvg_data, current_price, pair_conf, m15_slice
+        )
+    except Exception as e:
+        log_event("scorecard_error", level="error",
+                  pair=alert.get("pair"),
+                  error=f"{type(e).__name__}: {e}")
+        return 0.0, {}
+
+    return float(score_res.get("total", 0.0)), dict(score_res.get("breakdown", {}))
+
+
 def score_ob_confluences(ob, pair_conf, current_price, h1_atr, walls):
     """Mirror of live Phase 2 confluence scoring. See KNOWN_LIMITATIONS.md.
 

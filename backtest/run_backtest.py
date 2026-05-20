@@ -141,12 +141,25 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
                   alerts=len(alerts_for_pair), mode=("h1_only" if h1_only_mode else ("phase3" if used_phase3 else "phase2")))
         print(f"  {name}: {len(alerts_for_pair)} would-be alerts")
 
+        min_conf = pair_conf.get("min_confidence", 6.0)
         for alert in alerts_for_pair:
-            score, breakdown = trade_simulator.score_ob_confluences(
-                alert["ob"], pair_conf, alert["current_price"],
-                alert["h1_atr"], alert["walls"]
+            # Use live smc_detector.run_scorecard (same path Phase2 uses) so
+            # backtest scoring stays in lockstep with live as scoring evolves.
+            score, breakdown = trade_simulator.score_alert_via_live(
+                alert, pair_conf, df_h1, df_m15
             )
-            if score < pair_conf.get("min_confidence", 6.0):
+            passed = score >= min_conf
+            log_event("alert_scored", pair=name,
+                      ts=str(alert["ts"]),
+                      ob_ts=alert["ob"].get("ob_timestamp"),
+                      direction=alert["ob"].get("direction"),
+                      bos_tag=alert["ob"].get("bos_tag"),
+                      bos_tier=alert["ob"].get("bos_tier"),
+                      score=round(score, 2),
+                      min_conf=min_conf,
+                      passed=passed,
+                      breakdown={k: round(float(v), 2) for k, v in breakdown.items()})
+            if not passed:
                 continue
 
             if h1_only_mode:
@@ -164,15 +177,33 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
                         p3_trigger, pair_conf, df_h1, df_m15, df_m5,
                         risk_usd=risk_usd
                     )
+                    if trade is None:
+                        log_event("trade_sim_none", level="warn", pair=name,
+                                  alert_ts=str(alert["ts"]), model="phase3",
+                                  reason="phase3_sim_returned_none")
                 else:
                     trade = None
+                    log_event("trade_sim_none", level="warn", pair=name,
+                              alert_ts=str(alert["ts"]), model="phase3",
+                              reason="m5_choch_not_fired_in_window")
             else:
                 trade = trade_simulator.simulate_trade(
                     alert, pair_conf, df_h1, trigger, risk_usd=risk_usd
                 )
+                if trade is None:
+                    log_event("trade_sim_none", level="warn", pair=name,
+                              alert_ts=str(alert["ts"]), model="phase2",
+                              reason="phase2_sim_returned_none")
             if trade:
                 trade["score"] = score
                 trade["score_breakdown"] = breakdown
+                log_event("trade_simulated", pair=name,
+                          alert_ts=str(alert["ts"]),
+                          score=round(score, 2),
+                          model=trade.get("model"),
+                          exit_reason=trade.get("exit_reason"),
+                          r_realised=trade.get("r_realised"),
+                          pnl_usd=trade.get("pnl_usd"))
                 all_trades.append(trade)
 
         n_trades_pair = sum(1 for t in all_trades if t['pair'] == name)
