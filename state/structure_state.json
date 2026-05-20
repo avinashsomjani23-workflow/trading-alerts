@@ -13,9 +13,9 @@
     "last_event_ts": "2026-05-20T08:00:00+00:00",
     "last_event_idx_iso": "2026-05-20T08:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-20T15:00:00+00:00",
+    "last_scanned_ts": "2026-05-20T16:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-12T09:00:00+00:00",
+    "trend_start_ts": "2026-05-12T10:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -333,9 +333,9 @@
     "last_event_ts": "2026-05-19T09:00:00+00:00",
     "last_event_idx_iso": "2026-05-19T09:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-20T15:00:00+00:00",
+    "last_scanned_ts": "2026-05-20T16:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-12T08:00:00+00:00",
+    "trend_start_ts": "2026-05-12T09:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -518,9 +518,9 @@
     "last_event_ts": "2026-05-19T05:00:00+00:00",
     "last_event_idx_iso": "2026-05-19T05:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-20T15:00:00+00:00",
+    "last_scanned_ts": "2026-05-20T16:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-12T09:00:00+00:00",
+    "trend_start_ts": "2026-05-12T10:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -658,9 +658,9 @@
     "last_event_ts": "2026-05-20T01:00:00+00:00",
     "last_event_idx_iso": "2026-05-20T01:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-20T15:00:00+00:00",
+    "last_scanned_ts": "2026-05-20T16:00:00+00:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-12T09:00:00+00:00",
+    "trend_start_ts": "2026-05-12T10:00:00+00:00",
     "events": [
       {
         "type": "BOS",
@@ -906,11 +906,11 @@
   },
   "NAS100": {
     "trend": "bullish",
-    "ceiling_price": 29395.5,
-    "ceiling_ts": "2026-05-20T15:00:00+00:00",
+    "ceiling_price": 29337.5,
+    "ceiling_ts": "2026-05-20T16:00:00+00:00",
     "ceiling_is_placeholder": true,
-    "floor_price": 28797.25,
-    "floor_ts": "2026-05-20T00:00:00+00:00",
+    "floor_price": 29225.75,
+    "floor_ts": "2026-05-20T16:00:00+00:00",
     "floor_is_placeholder": true,
     "last_event_type": "CHoCH",
     "last_event_tier": "Major",
@@ -918,7 +918,7 @@
     "last_event_ts": "2026-05-20T15:00:00+00:00",
     "last_event_idx_iso": "2026-05-20T15:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-20T15:00:00+00:00",
+    "last_scanned_ts": "2026-05-20T16:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-20T15:00:00+00:00",
     "events": [
@@ -1103,7 +1103,7 @@
     "last_event_ts": "2026-05-19T13:00:00+00:00",
     "last_event_idx_iso": "2026-05-19T13:00:00+00:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-05-20T15:00:00+00:00",
+    "last_scanned_ts": "2026-05-20T16:00:00+00:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-15T00:00:00+00:00",
     "events": [
