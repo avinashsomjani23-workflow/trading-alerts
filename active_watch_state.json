@@ -22,8 +22,8 @@
       "wick_body_ratio": 0.0
     },
     "sweep_hours_before_ob": null,
-    "macro_summary": null,
-    "macro_unavailable": true,
+    "macro_summary": "There are no Tier-1 economic events directly affecting GOLD today. European inflation data and German producer prices indicate ongoing inflationary pressures in the Euro area, which could indirectly influence global risk sentiment.",
+    "macro_unavailable": false,
     "levels": {
       "valid": true,
       "entry": 4530.3,
