@@ -25,6 +25,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 import smc_detector  # live module, read-only
 
+from backtest.run_logger import log_event
+
 
 MAX_HOLD_HOURS = 72            # time-stop
 DEFAULT_RISK_USD = 250.0       # 1R = $250
@@ -40,7 +42,9 @@ def compute_levels(pair_conf, bias, ob, current_price, df_h1, df_trigger):
         )
         return levels if isinstance(levels, dict) else None
     except Exception as e:
-        print(f"  [LEVELS ERROR] {pair_conf.get('name')}: {e}")
+        log_event("levels_error", level="error",
+                  pair=pair_conf.get("name"),
+                  error=f"{type(e).__name__}: {e}")
         return None
 
 
@@ -313,7 +317,8 @@ def simulate_phase3_trade(
             pair_conf, bias, ob, choch_level, h1_slice, m15_slice
         )
     except Exception as e:
-        print(f"  [P3 LEVELS ERR] {pair}: {e}")
+        log_event("p3_levels_error", level="error", pair=pair,
+                  error=f"{type(e).__name__}: {e}")
         return None
 
     if not levels or not levels.get("valid", True):

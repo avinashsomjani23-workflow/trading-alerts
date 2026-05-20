@@ -31,6 +31,8 @@ import dealing_range          # live module — read-only use
 import smc_radar              # live module — read-only use
 import smc_detector           # live module — read-only use
 
+from backtest.run_logger import log_event
+
 
 class ReplayState:
     """Per-pair in-memory state across the walk.
@@ -160,8 +162,9 @@ def replay_pair(
         except Exception as e:
             # Detection errors shouldn't abort the whole walk — log and skip bar.
             diag["dr_errors"] += 1
-            if diag["dr_errors"] <= 3:
-                print(f"  [DR ERROR] {pair_name} @ {h1_ts}: {e}")
+            log_event("dr_error", level="error", echo=(diag["dr_errors"] <= 3),
+                      pair=pair_name, ts=str(h1_ts),
+                      error=f"{type(e).__name__}: {e}")
             continue
 
         # dealing_range.update_pair returns the walls state dict at the top
@@ -185,8 +188,9 @@ def replay_pair(
             )
         except Exception as e:
             diag["radar_errors"] += 1
-            if diag["radar_errors"] <= 3:
-                print(f"  [RADAR ERROR] {pair_name} @ {h1_ts}: {e}")
+            log_event("radar_error", level="error", echo=(diag["radar_errors"] <= 3),
+                      pair=pair_name, ts=str(h1_ts),
+                      error=f"{type(e).__name__}: {e}")
             continue
 
         if not obs_result:
@@ -263,6 +267,21 @@ def replay_pair(
     closest = diag["closest_dist_atr_seen"]
     closest_str = f"{closest:.2f}×ATR" if closest is not None else "n/a"
     atr_mult = pair_conf.get("atr_multiplier", "?")
+    log_event(
+        "pair_funnel",
+        pair=pair_name,
+        bars_walked=diag["bars_walked"],
+        warmup_skipped=diag["warmup_skipped"],
+        dr_errors=diag["dr_errors"],
+        radar_errors=diag["radar_errors"],
+        bars_with_events=diag["bars_with_events"],
+        bars_with_obs=diag["bars_with_obs_returned"],
+        new_obs=diag["new_obs_added"],
+        prox_checks=diag["prox_checks"],
+        closest_dist_atr=(round(closest, 3) if closest is not None else None),
+        atr_multiplier_cap=atr_mult,
+        alerts=diag["alerts_emitted"],
+    )
     print(
         f"  [DIAG {pair_name}] walked={diag['bars_walked']} "
         f"warmup_skip={diag['warmup_skipped']} "

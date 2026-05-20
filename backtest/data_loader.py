@@ -23,6 +23,8 @@ from typing import Optional, Dict, Any
 import pandas as pd
 import yfinance as yf
 
+from backtest.run_logger import log_event
+
 
 CACHE_DIR = Path(__file__).parent / "cache"
 CACHE_DIR.mkdir(exist_ok=True, parents=True)
@@ -94,6 +96,8 @@ def _fetch_chunk(symbol: str, interval: str, start: datetime, end: datetime,
             last_err = f"{type(e).__name__}: {e}"
         if attempt < retries - 1:
             time.sleep(2 ** attempt)
+    log_event("fetch_fail", level="warn", symbol=symbol, interval=interval,
+              start=str(start.date()), end=str(end.date()), error=str(last_err))
     print(f"  [fetch fail] {symbol} {interval} {start.date()}..{end.date()}: {last_err}")
     return None
 
@@ -162,10 +166,15 @@ def load_bars(symbol: str, interval: str, start: datetime,
     earliest_allowed = datetime.now(timezone.utc) - timedelta(days=max_lookback_days)
     if needed_start < earliest_allowed:
         needed_start = earliest_allowed
+        log_event("yfinance_clamp", level="warn", symbol=symbol, interval=interval,
+                  clamped_start=str(needed_start.date()),
+                  max_lookback_days=max_lookback_days)
         print(f"  [clamp] {symbol} {interval} start clamped to "
               f"{needed_start.date()} (yfinance {max_lookback_days}d limit)")
 
     if needed_start >= needed_end:
+        log_event("yfinance_skip", level="warn", symbol=symbol, interval=interval,
+                  reason="range_outside_yfinance_window")
         print(f"  [skip] {symbol} {interval}: requested range entirely outside yfinance window")
         return None
 
