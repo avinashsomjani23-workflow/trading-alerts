@@ -34,6 +34,8 @@ jobs:
   backtest:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: write   # needed to push run_log.jsonl + console.log back to main
     steps:
       - uses: actions/checkout@v4
 
@@ -66,3 +68,27 @@ jobs:
           name: backtest-${{ inputs.regime }}-${{ inputs.start_date }}-${{ inputs.end_date }}
           path: backtest/results/
           retention-days: 30
+
+      - name: Commit run log back to repo
+        if: always()
+        run: |
+          set -e
+          RUN_ID="${{ inputs.regime }}_$(echo ${{ inputs.start_date }} | tr -d -)_$(echo ${{ inputs.end_date }} | tr -d -)"
+          LOG_DIR="backtest/results/$RUN_ID"
+          # Only the logs travel back into the repo — Excel/HTML/raw_alerts stay
+          # in the artifact (they're big, binary, and would bloat the repo).
+          if [ ! -f "$LOG_DIR/run_log.jsonl" ] && [ ! -f "$LOG_DIR/console.log" ]; then
+            echo "No logs to commit for $RUN_ID"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Pull latest in case live system pushed P1/P2/P3 state during the run.
+          git pull --rebase origin main || true
+          git add -f "$LOG_DIR/run_log.jsonl" "$LOG_DIR/console.log" "$LOG_DIR/summary.json" 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+            exit 0
+          fi
+          git commit -m "Backtest logs: $RUN_ID [skip ci]"
+          git push origin HEAD:main
