@@ -1731,7 +1731,19 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
                 }
 
     chosen_sweep = select_best_sweep(h1_sweep, m15_sweep)
-    bd["sweep"]  = chosen_sweep['score']
+    # Non-JPY forex collapse: sweep is presence-only (1.0 if a qualifying
+    # sweep exists, else 0.0). Equal-levels and rejection-quality components
+    # are detected and rendered but do NOT add points on these pairs.
+    # Rationale: spot forex has no centralized stop pool, so a qualifying
+    # sweep's *fact* carries some signal but its quality grading is noise.
+    # JPY keeps full 3.0 (BoJ levels, carry-flow stops are real). Gold/NAS
+    # keep full 3.0 (indices/commodities behave like the original SMC model).
+    pair_name_for_sweep_scoring = pair_conf.get('name', '') if pair_conf else ''
+    is_non_jpy_forex = (pair_type == 'forex' and 'JPY' not in pair_name_for_sweep_scoring)
+    if is_non_jpy_forex:
+        bd["sweep"] = 1.0 if chosen_sweep['tier'] != 'none' else 0.0
+    else:
+        bd["sweep"] = chosen_sweep['score']
     sweep_price  = chosen_sweep['price']
     sweep_tf     = chosen_sweep['tf']
 
@@ -1836,9 +1848,13 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     """
     Return list of (label, score, max_score, status, explanation) for email rendering.
 
-    Scorecard maxima (May 2026 v2 — out-of-10 redesign):
-      Structure 3.0 | Sweep 3.0 | FVG 2.0 | Freshness 1.5 | Killzone 0.5
-      Total = 10.0. Min confidence to alert = 6.0.
+    Scorecard maxima:
+      Non-JPY forex (EURUSD, NZDUSD, USDCHF):
+        Structure 3.0 | Sweep 1.0 (presence-only) | FVG 2.0 | Freshness 1.5 | Killzone 0.5
+        Total = 8.0. Min confidence = 4.0.
+      JPY / Gold / NAS:
+        Structure 3.0 | Sweep 3.0 | FVG 2.0 | Freshness 1.5 | Killzone 0.5
+        Total = 10.0. Min confidence = 6.0.
     PD is rendered as a display-only row (max_score = 0) showing range
     geometry and PD% so the trader can use it for judgement, but it
     contributes no points. Macro removed from scoring; still rendered
@@ -1880,14 +1896,18 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
 
     # 2. Liquidity Sweep — scorecard shows PRESENCE only.
     # Quality breakdown rendered separately above Macro Context in email.
+    # Max is 1.0 (presence-only) for non-JPY forex, 3.0 elsewhere.
     s = breakdown.get("sweep", 0)
     comps = sweep_components or {}
     presence = comps.get('base', 0.0)
+    pair_name_for_row = pair_conf.get('name', '') if pair_conf else ''
+    pair_type_for_row = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
+    sweep_max = 1.0 if (pair_type_for_row == 'forex' and 'JPY' not in pair_name_for_row) else 3.0
     if presence > 0 and sweep_price is not None:
-        rows.append(("Liquidity Sweep", s, 3.0, "ok",
+        rows.append(("Liquidity Sweep", s, sweep_max, "ok",
                      f"{sweep_tf} sweep confirmed at {sweep_price:.{dp}f}. See breakdown below charts."))
     else:
-        rows.append(("Liquidity Sweep", s, 3.0, "fail",
+        rows.append(("Liquidity Sweep", s, sweep_max, "fail",
                      "No qualifying sweep within recency window before the OB."))
 
     # 3. FVG — independent H1 + M15 (max 2.0 total, summed and capped).

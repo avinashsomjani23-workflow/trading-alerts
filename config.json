@@ -15,7 +15,7 @@
       "radar_tf": "15m",
       "trigger_tf": "15m",
       "atr_multiplier": 3.0,
-      "min_confidence": 6.0,
+      "min_confidence": 4.0,
       "decimal_places": 5,
       "spread_pips": 2.0
     },
@@ -41,7 +41,7 @@
       "radar_tf": "15m",
       "trigger_tf": "15m",
       "atr_multiplier": 3.0,
-      "min_confidence": 6.0,
+      "min_confidence": 4.0,
       "decimal_places": 5,
       "spread_pips": 4.0
     },
@@ -54,7 +54,7 @@
       "radar_tf": "15m",
       "trigger_tf": "15m",
       "atr_multiplier": 3.0,
-      "min_confidence": 6.0,
+      "min_confidence": 4.0,
       "decimal_places": 5,
       "spread_pips": 2.0
     },

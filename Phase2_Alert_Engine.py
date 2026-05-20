@@ -986,7 +986,7 @@ def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_pri
 # Email assembly
 # ---------------------------------------------------------------------------
 
-def build_scorecard_html(rows, total):
+def build_scorecard_html(rows, total, total_max=10.0):
     body = ""
     for label, score, max_score, status, expl in rows:
         if status == "info":
@@ -1012,7 +1012,7 @@ def build_scorecard_html(rows, total):
     return f"""
     <div style="margin-bottom:14px;">
       <div style="color:#aaa;font-size:11px;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">
-        Confluence Scorecard &mdash; <span style="color:#eee;font-size:14px;font-weight:bold;">{total}/10.0</span>
+        Confluence Scorecard &mdash; <span style="color:#eee;font-size:14px;font-weight:bold;">{total}/{total_max}</span>
       </div>
       <table style="width:100%;border-collapse:collapse;background:#1a1a2e;border-radius:6px;">
         <tbody>{body}</tbody>
@@ -1100,7 +1100,12 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
                 </p>
             </div>"""
 
-    scorecard_html = build_scorecard_html(scorecard_rows, total_score)
+    # Total max is 8.0 for non-JPY forex (sweep collapsed to presence-only 1.0),
+    # 10.0 elsewhere. Mirrors the scoring rule in smc_detector.run_scorecard.
+    _pname = pair_conf.get('name', '') if pair_conf else ''
+    _ptype = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
+    total_max_for_card = 8.0 if (_ptype == 'forex' and 'JPY' not in _pname) else 10.0
+    scorecard_html = build_scorecard_html(scorecard_rows, total_score, total_max_for_card)
 
     distance_html = f"""
     <div style="margin-bottom:12px;padding:8px 12px;background:#0d0d1a;border-left:3px solid #00bcd4;border-radius:4px;font-size:12px;color:#bbb;">
@@ -2141,8 +2146,9 @@ if __name__ == "__main__":
                     atr_label, distance_str, dollar_risk_str, scan_start_ts,
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
+                _subj_max = 8.0 if (pair_conf.get('pair_type') == 'forex' and 'JPY' not in name) else 10.0
                 send_email(
-                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/10.0 | {ist_now.strftime('%H:%M IST')}",
+                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/{_subj_max} | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
                 # Persist dedup state AFTER send. See comment above.
@@ -2271,8 +2277,9 @@ if __name__ == "__main__":
                     atr_label, distance_str, dollar_risk_str, scan_start_ts,
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
+                _subj_max = 8.0 if (pair_conf.get('pair_type') == 'forex' and 'JPY' not in name) else 10.0
                 send_email(
-                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/10.0 | {ist_now.strftime('%H:%M IST')}",
+                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/{_subj_max} | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
                 )
                 # Persist dedup state AFTER send. See comment in limit branch.
