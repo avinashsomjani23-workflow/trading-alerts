@@ -12,10 +12,26 @@
       "NAS100",
       "GOLD"
     ],
-    "generated_utc": "2026-05-20T05:52:36.186779+00:00"
+    "generated_utc": "2026-05-20T06:10:24.369327+00:00"
   },
   "forex": {
-    "trades": 0
+    "trades": 4,
+    "wins": 2,
+    "losses": 2,
+    "breakevens": 0,
+    "win_rate": 50.0,
+    "expectancy_r": 1.305,
+    "expectancy_usd": 326.19,
+    "pnl_usd": 1304.97,
+    "avg_win_r": 3.609,
+    "avg_loss_r": -1.0,
+    "avg_win_usd": 902.37,
+    "avg_loss_usd": -250.0,
+    "avg_win_mfe_r": 3.732,
+    "avg_win_mfe_usd": 932.88,
+    "avg_loss_mae_r": -1.672,
+    "tp_capture_pct": 97,
+    "sl_collisions": 0
   },
   "nas_xau": {
     "trades": 0
