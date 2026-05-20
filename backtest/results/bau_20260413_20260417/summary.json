@@ -1,0 +1,24 @@
+{
+  "run_id": "bau_20260413_20260417",
+  "meta": {
+    "start": "2026-04-13",
+    "end": "2026-04-17",
+    "regime": "bau",
+    "pairs": [
+      "EURUSD",
+      "NZDUSD",
+      "USDJPY",
+      "USDCHF",
+      "NAS100",
+      "GOLD"
+    ],
+    "generated_utc": "2026-05-20T05:52:36.186779+00:00"
+  },
+  "forex": {
+    "trades": 0
+  },
+  "nas_xau": {
+    "trades": 0
+  },
+  "risk_per_trade_usd": 250.0
+}
