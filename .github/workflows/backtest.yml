@@ -86,9 +86,10 @@ jobs:
           # backtest run may have touched live state JSONs as a side effect —
           # we do NOT want those carried in this commit).
           mkdir -p /tmp/bt_logs
-          cp -f "$LOG_DIR/run_log.jsonl"  /tmp/bt_logs/ 2>/dev/null || true
-          cp -f "$LOG_DIR/console.log"    /tmp/bt_logs/ 2>/dev/null || true
-          cp -f "$LOG_DIR/summary.json"   /tmp/bt_logs/ 2>/dev/null || true
+          cp -f "$LOG_DIR/run_log.jsonl"      /tmp/bt_logs/ 2>/dev/null || true
+          cp -f "$LOG_DIR/console.log"        /tmp/bt_logs/ 2>/dev/null || true
+          cp -f "$LOG_DIR/summary.json"       /tmp/bt_logs/ 2>/dev/null || true
+          cp -f "$LOG_DIR/zone_register.json" /tmp/bt_logs/ 2>/dev/null || true
 
           # Reset workspace to clean HEAD so unrelated dirty files don't block
           # the rebase. Logs are safe in /tmp.
@@ -101,10 +102,11 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             mkdir -p "$LOG_DIR"
-            cp -f /tmp/bt_logs/run_log.jsonl  "$LOG_DIR/" 2>/dev/null || true
-            cp -f /tmp/bt_logs/console.log    "$LOG_DIR/" 2>/dev/null || true
-            cp -f /tmp/bt_logs/summary.json   "$LOG_DIR/" 2>/dev/null || true
-            git add -f "$LOG_DIR/run_log.jsonl" "$LOG_DIR/console.log" "$LOG_DIR/summary.json" 2>/dev/null || true
+            cp -f /tmp/bt_logs/run_log.jsonl      "$LOG_DIR/" 2>/dev/null || true
+            cp -f /tmp/bt_logs/console.log        "$LOG_DIR/" 2>/dev/null || true
+            cp -f /tmp/bt_logs/summary.json       "$LOG_DIR/" 2>/dev/null || true
+            cp -f /tmp/bt_logs/zone_register.json "$LOG_DIR/" 2>/dev/null || true
+            git add -f "$LOG_DIR/run_log.jsonl" "$LOG_DIR/console.log" "$LOG_DIR/summary.json" "$LOG_DIR/zone_register.json" 2>/dev/null || true
             if git diff --cached --quiet; then
               echo "Nothing to commit"
               exit 0

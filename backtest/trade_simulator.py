@@ -227,7 +227,9 @@ def simulate_trade(
 ) -> Optional[Dict[str, Any]]:
     """Walk df_trigger forward from alert.ts and return trade outcome dict.
 
-    Returns None if levels invalid or no fill within hold window.
+    Returns None if levels invalid or no fill within hold window. The specific
+    reason is emitted as a structured `sim_none_detail` log event so the
+    caller can attribute the funnel collapse without guessing.
     """
     ob = alert["ob"]
     pair = alert["pair"]
@@ -237,6 +239,8 @@ def simulate_trade(
     bias = "LONG" if ob.get("direction") == "bullish" else "SHORT"
     levels = compute_levels(pair_conf, bias, ob, current_price, df_h1, df_trigger)
     if not levels or not levels.get("valid", True):
+        log_event("sim_none_detail", level="warn", pair=pair, model="phase2",
+                  alert_ts=str(alert_ts), reason="levels_invalid_or_missing")
         return None
 
     entry = float(levels.get("entry", 0))
@@ -244,15 +248,23 @@ def simulate_trade(
     tp1   = float(levels.get("tp1", 0))
     tp2   = float(levels.get("tp2", 0)) if levels.get("tp2") else None
     if entry <= 0 or sl <= 0 or tp1 <= 0:
+        log_event("sim_none_detail", level="warn", pair=pair, model="phase2",
+                  alert_ts=str(alert_ts), reason="zero_or_negative_level",
+                  entry=entry, sl=sl, tp1=tp1)
         return None
 
     r_distance = abs(entry - sl)
     if r_distance <= 0:
+        log_event("sim_none_detail", level="warn", pair=pair, model="phase2",
+                  alert_ts=str(alert_ts), reason="r_distance_zero",
+                  entry=entry, sl=sl)
         return None
 
     # Walk M15/M5 bars from alert_ts onward.
     future = df_trigger.loc[alert_ts:]
     if future.empty:
+        log_event("sim_none_detail", level="warn", pair=pair, model="phase2",
+                  alert_ts=str(alert_ts), reason="no_future_bars_after_alert")
         return None
 
     deadline = alert_ts + timedelta(hours=MAX_HOLD_HOURS)
@@ -325,6 +337,9 @@ def simulate_trade(
             sl = entry
 
     if not filled:
+        log_event("sim_none_detail", level="warn", pair=pair, model="phase2",
+                  alert_ts=str(alert_ts), reason="never_filled_in_72h",
+                  entry=entry, bars_walked=int(len(future)))
         return None
 
     if exit_reason is None:
@@ -397,6 +412,8 @@ def simulate_phase3_trade(
     m15_slice = df_m15.loc[:trigger_ts] if df_m15 is not None else None
 
     if h1_slice is None or h1_slice.empty or m15_slice is None or m15_slice.empty:
+        log_event("sim_none_detail", level="warn", pair=pair, model="phase3",
+                  alert_ts=str(trigger_ts), reason="missing_h1_or_m15_slice")
         return None
 
     try:
@@ -409,6 +426,8 @@ def simulate_phase3_trade(
         return None
 
     if not levels or not levels.get("valid", True):
+        log_event("sim_none_detail", level="warn", pair=pair, model="phase3",
+                  alert_ts=str(trigger_ts), reason="levels_invalid_or_missing")
         return None
 
     entry = choch_level  # market entry at CHoCH level
@@ -417,15 +436,24 @@ def simulate_phase3_trade(
     tp2   = float(levels.get("tp2")) if levels.get("tp2") else None
 
     if sl <= 0 or tp1 <= 0:
+        log_event("sim_none_detail", level="warn", pair=pair, model="phase3",
+                  alert_ts=str(trigger_ts), reason="zero_or_negative_level",
+                  entry=entry, sl=sl, tp1=tp1)
         return None
 
     risk = abs(entry - sl)
     if risk <= 0:
+        log_event("sim_none_detail", level="warn", pair=pair, model="phase3",
+                  alert_ts=str(trigger_ts), reason="risk_zero",
+                  entry=entry, sl=sl)
         return None
 
     # RR gate: mirrors live min_rr_after_slippage check.
     rr = abs(tp1 - entry) / risk
     if rr < MIN_RR_AFTER_SLIPPAGE:
+        log_event("sim_none_detail", level="warn", pair=pair, model="phase3",
+                  alert_ts=str(trigger_ts), reason="rr_below_min_after_slippage",
+                  rr=round(rr, 3), min_rr=MIN_RR_AFTER_SLIPPAGE)
         return None
 
     # Walk M5 bars forward.

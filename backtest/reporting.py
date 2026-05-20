@@ -322,12 +322,70 @@ def _review_section(forex_trades, nas_trades, risk_usd: float) -> str:
     return f"<h2>What to review</h2>{''.join(blocks)}"
 
 
+def _zones_excel(zones: List[Dict[str, Any]], path: Path) -> None:
+    """Write the full zone register — every OB that entered the active list
+    during the walk, with disposition (alerted? traded? mitigated? sim failed?).
+    """
+    if not zones:
+        pd.DataFrame([{"info": "no zones registered this run"}]).to_excel(path, index=False)
+        return
+    rows = []
+    for z in zones:
+        bd = z.get("breakdown") or {}
+        rows.append({
+            "pair": z.get("pair"),
+            "ob_timestamp": z.get("ob_timestamp"),
+            "direction": z.get("direction"),
+            "bos_tag": z.get("bos_tag"),
+            "bos_tier": z.get("bos_tier"),
+            "proximal": z.get("proximal"),
+            "distal": z.get("distal"),
+            "first_seen_ts": z.get("first_seen_ts"),
+            "first_seen_price": z.get("first_seen_price"),
+            "approached": bool(z.get("approached", False)),
+            "approach_ts": z.get("approach_ts"),
+            "approach_price": z.get("approach_price"),
+            "score": z.get("score"),
+            "min_conf": z.get("min_conf"),
+            "score_passed": z.get("score_passed"),
+            "alerted": bool(z.get("alerted", False)),
+            "alert_ts": z.get("alert_ts"),
+            "structure": bd.get("structure"),
+            "sweep": bd.get("sweep"),
+            "fvg": bd.get("fvg"),
+            "freshness": bd.get("freshness"),
+            "killzone": bd.get("killzone"),
+            "outcome": z.get("outcome"),
+            "outcome_reason": z.get("outcome_reason"),
+            "mitigated_ts": z.get("mitigated_ts"),
+            "model": z.get("model"),
+            "fill_ts": z.get("fill_ts"),
+            "exit_ts": z.get("exit_ts"),
+            "r_realised": z.get("r_realised"),
+            "pnl_usd": z.get("pnl_usd"),
+        })
+    df = pd.DataFrame(rows)
+    # Sort by pair then first_seen_ts for readability.
+    if "first_seen_ts" in df.columns:
+        df = df.sort_values(["pair", "first_seen_ts"]).reset_index(drop=True)
+    try:
+        # Outcome breakdown summary sheet.
+        outcome_counts = df.groupby(["pair", "outcome"]).size().reset_index(name="count")
+        with pd.ExcelWriter(path, engine="openpyxl") as xw:
+            df.to_excel(xw, sheet_name="Zones", index=False)
+            outcome_counts.to_excel(xw, sheet_name="Outcome breakdown", index=False)
+    except Exception as e:
+        print(f"  [zone register excel fail, writing csv]: {e}")
+        df.to_csv(path.with_suffix(".csv"), index=False)
+
+
 def write_report(
     run_id: str,
     trades: List[Dict[str, Any]],
     raw_alerts: List[Dict[str, Any]],
     meta: Dict[str, Any],
     risk_usd: float = 250.0,
+    zones: List[Dict[str, Any]] = None,
 ) -> Path:
     out_dir = Path(__file__).parent / "results" / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -340,6 +398,11 @@ def write_report(
 
     _excel(forex_trades, out_dir / "forex_trades.xlsx", fx_sum)
     _excel(nas_trades, out_dir / "nas_xau_trades.xlsx", nx_sum)
+    _zones_excel(zones or [], out_dir / "zone_register.xlsx")
+
+    # Also write the zones as JSON so machine consumers (incl. me) can grep it.
+    with open(out_dir / "zone_register.json", "w") as f:
+        json.dump(zones or [], f, indent=2, default=str)
 
     with open(out_dir / "raw_alerts.jsonl", "w") as f:
         for a in raw_alerts:

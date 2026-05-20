@@ -33,8 +33,8 @@ def send_report(run_dir: Path, recipient: str = None, subject_suffix: str = "") 
     msg["To"] = to
     msg.attach(MIMEText(html_path.read_text(encoding="utf-8"), "html"))
 
-    for xl in ("forex_trades.xlsx", "nas_xau_trades.xlsx", "summary.json",
-               "run_log.jsonl", "console.log"):
+    for xl in ("forex_trades.xlsx", "nas_xau_trades.xlsx", "zone_register.xlsx",
+               "summary.json", "run_log.jsonl", "console.log"):
         p = run_dir / xl
         if not p.exists():
             continue

@@ -204,14 +204,22 @@ def replay_pair(
 
         current_price = float(h1_slice["Close"].iloc[-1])
 
-        # Drop mitigated OBs from active list.
+        # Drop mitigated OBs from active list. Yield a diagnostic event so the
+        # zone register knows which OBs died and why (vs being alerted/traded).
         kept = []
         for ob in state.active_obs[pair_name]:
-            mitigated, reason = _is_ob_mitigated_replay(
+            mitigated, mit_reason = _is_ob_mitigated_replay(
                 ob.get("direction"), float(ob["distal_line"]),
                 float(ob["proximal_line"]), h1_slice, ob.get("ob_timestamp")
             )
             if mitigated:
+                yield {
+                    "kind": "ob_mitigated",
+                    "pair": pair_name,
+                    "ts": h1_ts,
+                    "ob": ob,
+                    "reason": mit_reason or "mitigated",
+                }
                 continue
             kept.append(ob)
         state.active_obs[pair_name] = kept

@@ -75,9 +75,30 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
     state = replay_engine.ReplayState()
     all_alerts = []
     all_trades = []
+    # Zone register: every OB ever seen during the walk, indexed by
+    # (pair, ob_timestamp). Tracks the full lifecycle of each zone:
+    # detected -> approached -> alerted -> scored -> traded/failed/mitigated.
+    zone_register = {}
 
     walk_start_ts = pd.Timestamp(start)
     walk_end_ts = pd.Timestamp(end)
+
+    # Up-front H1-only decision: if the walk window starts more than the
+    # yfinance intraday limit (58 days) ago, M15/M5 cannot cover it. Force
+    # H1-only mode for the entire run, for every pair, and skip the wasted
+    # M15/M5 fetches. The per-pair m15_covers_window check below still runs
+    # as a belt-and-braces guard for the boundary case (~58d window).
+    YF_INTRADAY_LIMIT_DAYS = 58
+    days_back_to_start = (datetime.now(timezone.utc) - start).days
+    force_h1_only_for_run = days_back_to_start > YF_INTRADAY_LIMIT_DAYS
+    if force_h1_only_for_run:
+        log_event("h1_only_mode_forced", level="warn",
+                  reason="window_start_beyond_yfinance_intraday_limit",
+                  days_back=days_back_to_start,
+                  limit_days=YF_INTRADAY_LIMIT_DAYS)
+        print(f"\n[H1-ONLY MODE for ENTIRE RUN] start is {days_back_to_start}d ago "
+              f"(yfinance intraday limit is {YF_INTRADAY_LIMIT_DAYS}d). "
+              f"Skipping M15/M5 fetches; trading H1 bars only.")
 
     for pair_conf in pairs_to_run:
         name = pair_conf["name"]
@@ -85,8 +106,12 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
         print(f"\n=== {name} ({symbol}) ===")
 
         df_h1 = data_loader.load_bars(symbol, "1h", fetch_start, end)
-        df_m15 = data_loader.load_bars(symbol, "15m", fetch_start, end)
-        df_m5 = data_loader.load_bars(symbol, "5m", fetch_start, end)
+        if force_h1_only_for_run:
+            df_m15 = None
+            df_m5 = None
+        else:
+            df_m15 = data_loader.load_bars(symbol, "15m", fetch_start, end)
+            df_m5 = data_loader.load_bars(symbol, "5m", fetch_start, end)
 
         if df_h1 is None:
             log_event("pair_skip", level="warn", pair=name,
@@ -111,6 +136,10 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
 
         if h1_only_mode:
             trigger = df_h1
+            log_event("h1_only_mode", level="warn", pair=name,
+                      reason="m15_unavailable_for_walk_start",
+                      walk_start=str(walk_start_ts),
+                      m15_first=(str(df_m15.index.min()) if df_m15 is not None and not df_m15.empty else None))
             print(f"  [H1-ONLY MODE] M15 unavailable for this period "
                   f"(yfinance 60d limit). Simulating on H1 bars. "
                   f"Results are less granular — read in context.")
@@ -126,15 +155,73 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
         for event in replay_engine.replay_pair(
             pair_conf, df_h1, df_m15, df_m5, state, walk_start_ts, walk_end_ts
         ):
-            if event["kind"] == "alert":
+            ob = event.get("ob", {}) or {}
+            zone_id = (event["pair"], ob.get("ob_timestamp"))
+            kind = event["kind"]
+            if kind == "ob_seen":
+                # First time this zone enters the active list. Register it.
+                zone_register.setdefault(zone_id, {
+                    "pair": event["pair"],
+                    "ob_timestamp": ob.get("ob_timestamp"),
+                    "direction": ob.get("direction"),
+                    "bos_tag": ob.get("bos_tag"),
+                    "bos_tier": ob.get("bos_tier"),
+                    "proximal": ob.get("proximal_line"),
+                    "distal": ob.get("distal_line"),
+                    "first_seen_ts": str(event["ts"]),
+                    "first_seen_price": event.get("current_price"),
+                    "alerted": False,
+                    "alert_ts": None,
+                    "score": None,
+                    "score_passed": None,
+                    "breakdown": None,
+                    "outcome": "detected_only",
+                    "outcome_reason": "in_active_list_no_proximity",
+                    "pnl_usd": None,
+                    "r_realised": None,
+                })
+            elif kind == "ob_mitigated":
+                z = zone_register.get(zone_id)
+                if z is not None and z["outcome"] in ("detected_only", "approached"):
+                    z["outcome"] = "mitigated"
+                    z["outcome_reason"] = event.get("reason", "mitigated")
+                    z["mitigated_ts"] = str(event["ts"])
+            elif kind == "alert":
                 alerts_for_pair.append(event)
+                # Mark the zone as approached (proximity check passed).
+                z = zone_register.setdefault(zone_id, {
+                    "pair": event["pair"],
+                    "ob_timestamp": ob.get("ob_timestamp"),
+                    "direction": ob.get("direction"),
+                    "bos_tag": ob.get("bos_tag"),
+                    "bos_tier": ob.get("bos_tier"),
+                    "proximal": ob.get("proximal_line"),
+                    "distal": ob.get("distal_line"),
+                    "first_seen_ts": str(event["ts"]),
+                    "first_seen_price": event.get("current_price"),
+                    "alerted": False,
+                    "alert_ts": None,
+                    "score": None,
+                    "score_passed": None,
+                    "breakdown": None,
+                    "outcome": "detected_only",
+                    "outcome_reason": "in_active_list_no_proximity",
+                    "pnl_usd": None,
+                    "r_realised": None,
+                })
+                z["approached"] = True
+                z["approach_ts"] = str(event["ts"])
+                z["approach_price"] = event.get("current_price")
+                if z["outcome"] == "detected_only":
+                    z["outcome"] = "approached"
+                    z["outcome_reason"] = "score_pending"
                 all_alerts.append({
                     "pair": event["pair"],
                     "ts": str(event["ts"]),
-                    "ob_timestamp": event["ob"].get("ob_timestamp"),
-                    "direction": event["ob"].get("direction"),
-                    "bos_tag": event["ob"].get("bos_tag"),
-                    "bos_tier": event["ob"].get("bos_tier"),
+                    "ob_timestamp": ob.get("ob_timestamp"),
+                    "direction": ob.get("direction"),
+                    "bos_tag": ob.get("bos_tag"),
+                    "bos_tier": ob.get("bos_tier"),
                 })
 
         log_event("pair_alerts_scored", pair=name,
@@ -159,6 +246,20 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
                       min_conf=min_conf,
                       passed=passed,
                       breakdown={k: round(float(v), 2) for k, v in breakdown.items()})
+
+            zone_id = (alert["pair"], alert["ob"].get("ob_timestamp"))
+            zr = zone_register.get(zone_id)
+            if zr is not None:
+                zr["score"] = round(score, 2)
+                zr["score_passed"] = passed
+                zr["min_conf"] = min_conf
+                zr["breakdown"] = {k: round(float(v), 2) for k, v in breakdown.items()}
+                zr["alerted"] = passed
+                zr["alert_ts"] = str(alert["ts"]) if passed else None
+                if not passed:
+                    zr["outcome"] = "approached_score_failed"
+                    zr["outcome_reason"] = f"score_{score:.2f}_below_{min_conf}"
+
             if not passed:
                 continue
 
@@ -205,6 +306,27 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
                           r_realised=trade.get("r_realised"),
                           pnl_usd=trade.get("pnl_usd"))
                 all_trades.append(trade)
+                if zr is not None:
+                    zr["outcome"] = f"traded_{trade.get('exit_reason', 'unknown')}"
+                    zr["outcome_reason"] = trade.get("exit_reason", "")
+                    zr["pnl_usd"] = trade.get("pnl_usd")
+                    zr["r_realised"] = trade.get("r_realised")
+                    zr["model"] = trade.get("model")
+                    zr["fill_ts"] = trade.get("fill_ts")
+                    zr["exit_ts"] = trade.get("exit_ts")
+            else:
+                # Sim returned None — the granular reason was already logged
+                # inside simulate_trade / simulate_phase3_trade via sim_none_detail.
+                # Mark the zone as alerted but not traded.
+                if zr is not None:
+                    if h1_only_mode:
+                        zr["outcome"] = "alerted_sim_none_h1only"
+                    elif used_phase3 and df_m5 is not None and not df_m5.empty:
+                        zr["outcome"] = "alerted_sim_none_phase3"
+                    else:
+                        zr["outcome"] = "alerted_sim_none_phase2"
+                    # The specific reason is in run_log.jsonl under sim_none_detail.
+                    zr["outcome_reason"] = "see_sim_none_detail_in_run_log"
 
         n_trades_pair = sum(1 for t in all_trades if t['pair'] == name)
         log_event("pair_trades_simulated", pair=name, trades=n_trades_pair)
@@ -217,9 +339,14 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
         "pairs": pair_names,
         "generated_utc": datetime.now(timezone.utc).isoformat(),
     }
-    report_dir = reporting.write_report(run_id, all_trades, all_alerts, meta, risk_usd=risk_usd)
+    zones_list = list(zone_register.values())
+    report_dir = reporting.write_report(
+        run_id, all_trades, all_alerts, meta,
+        risk_usd=risk_usd, zones=zones_list,
+    )
     log_event("report_written", path=str(report_dir),
-              total_alerts=len(all_alerts), total_trades=len(all_trades))
+              total_alerts=len(all_alerts), total_trades=len(all_trades),
+              total_zones_registered=len(zones_list))
     print(f"\nReport written to {report_dir}")
 
     if send_email:
