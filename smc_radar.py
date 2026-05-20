@@ -65,7 +65,7 @@ ZONE_PROXIMITY_THRESHOLDS = {
 # range, OB2 naturally re-classifies as OB1 on the next scan.
 # ---------------------------------------------------------------------------
 OB1_INNER_LIMIT_ATR = 4.0
-OB2_OUTER_LIMIT_ATR = 8.0
+OB2_OUTER_LIMIT_ATR = 12.0
 
 # ---------------------------------------------------------------------------
 # STALENESS THRESHOLDS (B3)
@@ -1001,7 +1001,8 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     # Each OB carries 'role' = 'primary' | 'alternative' for downstream
     # consumers (Phase 2/3 only consume primary; chart renders both).
     cur_price = float(C[-1])
-    filtered = _split_primary_alternative(filtered, cur_price)
+    h1_trend = (walls or {}).get('trend')  # 'bullish' | 'bearish' | None
+    filtered = _split_primary_alternative(filtered, cur_price, h1_trend)
 
     # Strip the private dedupe hint before returning.
     for o in filtered:
@@ -1041,64 +1042,66 @@ def _count_confluences(ob):
     return n
 
 
-def _split_primary_alternative(obs, cur_price):
+def _split_primary_alternative(obs, cur_price, h1_trend=None):
     """
-    Partition OBs into one Primary (OB1) + one Alternative (OB2) per
-    direction. Tags each kept OB with `role` ∈ {'primary', 'alternative'}
-    and stamps `_distance_atr` for downstream sorting / rendering.
+    Pick one global OB1 (Primary) + one global OB2 (Alternative) across ALL
+    directions. No type filter — buy and sell zones compete together.
 
-    Rules — see docstring at call site for full SMC rationale:
-      - Primary: bias-correct, distance ≤ OB1_INNER_LIMIT_ATR x H1 ATR,
-        closest to current price. Pristine or Tested both qualify.
-      - Alternative: bias-correct, OB1_INNER_LIMIT_ATR < distance ≤
-        OB2_OUTER_LIMIT_ATR x H1 ATR, Pristine only (touches == 0). Pick by
-        confluence count, freshness tiebreak.
+    OB1: closest OB of any type to current price, within OB1_INNER_LIMIT_ATR
+         x H1 ATR. Pristine or Tested both qualify.
 
-    OB1 and OB2 are independent — OB2 surfaces even when no OB1 exists.
+    OB2: best Pristine OB (touches == 0) in the outer ring
+         (OB1_INNER_LIMIT_ATR, OB2_OUTER_LIMIT_ATR] x H1 ATR, excluding
+         whatever was picked as OB1. Sort key: confluence count desc, then
+         trend alignment (with-trend preferred), then freshness (bos_idx desc).
+
+    OB2 is independent of OB1 — may be a different direction. OB2 surfaces
+    even when no OB1 exists.
     """
-    by_dir = {}
+    primary = None
+    primary_dist_atr = None
+    alt_candidates = []
+
     for ob in obs:
-        by_dir.setdefault(ob['direction'], []).append(ob)
+        atr = float(ob.get('h1_atr') or 0.0)
+        if atr <= 0:
+            continue
+        dist = abs(cur_price - float(ob['proximal_line']))
+        dist_atr = dist / atr
+        ob['_distance_atr'] = round(dist_atr, 3)
+
+        if dist_atr <= OB1_INNER_LIMIT_ATR:
+            if primary is None or dist_atr < primary_dist_atr:
+                primary = ob
+                primary_dist_atr = dist_atr
+        elif dist_atr <= OB2_OUTER_LIMIT_ATR:
+            if int(ob.get('touches', 0)) == 0:
+                alt_candidates.append(ob)
 
     kept = []
-    for direction, group in by_dir.items():
-        primary = None
-        primary_dist_atr = None
-        alt_candidates = []
+    if primary is not None:
+        primary['role'] = 'primary'
+        kept.append(primary)
 
-        for ob in group:
-            atr = float(ob.get('h1_atr') or 0.0)
-            if atr <= 0:
-                continue  # cannot classify without ATR
-            dist = abs(cur_price - float(ob['proximal_line']))
-            dist_atr = dist / atr
-            ob['_distance_atr'] = round(dist_atr, 3)
+    # Exclude OB1 from alt pool (by zone_id if available, else by identity).
+    primary_id = (primary or {}).get('zone_id')
+    if primary_id:
+        alt_candidates = [o for o in alt_candidates if o.get('zone_id') != primary_id]
+    elif primary is not None:
+        alt_candidates = [o for o in alt_candidates if o is not primary]
 
-            if dist_atr <= OB1_INNER_LIMIT_ATR:
-                # Primary candidate: closest to price wins.
-                if primary is None or dist_atr < primary_dist_atr:
-                    primary = ob
-                    primary_dist_atr = dist_atr
-            elif dist_atr <= OB2_OUTER_LIMIT_ATR:
-                # Alternative candidate. Pristine gate.
-                if int(ob.get('touches', 0)) == 0:
-                    alt_candidates.append(ob)
-            # else: outside outer limit — should have been gated at build,
-            # defensive skip here.
+    if alt_candidates:
+        def _alt_sort_key(o):
+            confluences = _count_confluences(o)
+            # With-trend scores 1, against-trend or unknown scores 0.
+            with_trend = 1 if (h1_trend and o.get('direction') == h1_trend) else 0
+            freshness = int(o.get('bos_idx', 0))
+            return (confluences, with_trend, freshness)
 
-        if primary is not None:
-            primary['role'] = 'primary'
-            kept.append(primary)
-
-        if alt_candidates:
-            # Sort: confluence count desc, then freshness (bos_idx desc).
-            alt_candidates.sort(
-                key=lambda o: (_count_confluences(o), int(o.get('bos_idx', 0))),
-                reverse=True
-            )
-            alt = alt_candidates[0]
-            alt['role'] = 'alternative'
-            kept.append(alt)
+        alt_candidates.sort(key=_alt_sort_key, reverse=True)
+        alt = alt_candidates[0]
+        alt['role'] = 'alternative'
+        kept.append(alt)
 
     return kept
 
@@ -3352,13 +3355,14 @@ def select_relevant_zone_for_pair(active_zones, current_price, dp):
     if selected is None:
         return None, False, None
 
-    # Pair the chosen primary with an alternative in the SAME direction.
+    # Return the alternative zone (OB2). Direction may differ from OB1 —
+    # no type filter applied. OB2 was already picked globally as the best
+    # pristine zone in the outer ring by _split_primary_alternative.
     alt = None
-    same_dir_alts = [a for a in alternatives
-                     if a.get('direction') == selected.get('direction')
-                     and a.get('zone_id') != selected.get('zone_id')]
-    if same_dir_alts:
-        alt = same_dir_alts[0]
+    valid_alts = [a for a in alternatives
+                  if a.get('zone_id') != selected.get('zone_id')]
+    if valid_alts:
+        alt = valid_alts[0]
 
     return selected, in_progress, alt
 
