@@ -121,10 +121,26 @@ def replay_pair(
     # Need >= 50 H1 bars of history before the walk start for reliable structure.
     MIN_WARMUP = 50
 
+    # Diagnostic counters — printed at end of walk to show where the funnel collapses.
+    diag = {
+        "bars_walked": 0,
+        "warmup_skipped": 0,
+        "dr_errors": 0,
+        "radar_errors": 0,
+        "bars_with_events": 0,
+        "bars_with_obs_returned": 0,
+        "new_obs_added": 0,
+        "alerts_emitted": 0,
+        "prox_checks": 0,
+        "closest_dist_atr_seen": None,  # min (distance / h1_atr) ever observed
+    }
+
     for h1_ts in h1_in_window.index:
+        diag["bars_walked"] += 1
         h1_slice = _slice_up_to(df_h1, h1_ts)
         _assert_no_lookahead(h1_slice, h1_ts, "H1")
         if len(h1_slice) < MIN_WARMUP:
+            diag["warmup_skipped"] += 1
             continue
 
         m15_slice = _slice_up_to(df_m15, h1_ts) if df_m15 is not None else None
@@ -143,11 +159,15 @@ def replay_pair(
             state.dr_state[pair_name] = new_state
         except Exception as e:
             # Detection errors shouldn't abort the whole walk — log and skip bar.
-            print(f"  [DR ERROR] {pair_name} @ {h1_ts}: {e}")
+            diag["dr_errors"] += 1
+            if diag["dr_errors"] <= 3:
+                print(f"  [DR ERROR] {pair_name} @ {h1_ts}: {e}")
             continue
 
         walls = (new_state or {}).get("walls", {}) if new_state else {}
         events = (new_state or {}).get("event_ring", []) if new_state else []
+        if events:
+            diag["bars_with_events"] += 1
 
         # --- Step 2: detect OBs ----------------------------------------------
         try:
@@ -159,7 +179,9 @@ def replay_pair(
                 pair_name=pair_name,
             )
         except Exception as e:
-            print(f"  [RADAR ERROR] {pair_name} @ {h1_ts}: {e}")
+            diag["radar_errors"] += 1
+            if diag["radar_errors"] <= 3:
+                print(f"  [RADAR ERROR] {pair_name} @ {h1_ts}: {e}")
             continue
 
         if not obs_result:
@@ -169,6 +191,7 @@ def replay_pair(
         obs = _normalize_obs_result(obs_result)
         if not obs:
             continue
+        diag["bars_with_obs_returned"] += 1
 
         current_price = float(h1_slice["Close"].iloc[-1])
 
@@ -190,6 +213,7 @@ def replay_pair(
             if ob.get("ob_timestamp") in existing_ts:
                 continue
             state.active_obs[pair_name].append(ob)
+            diag["new_obs_added"] += 1
             yield {
                 "kind": "ob_seen",
                 "pair": pair_name,
@@ -210,8 +234,15 @@ def replay_pair(
                 continue
             proximal = float(ob["proximal_line"])
             distance = abs(current_price - proximal)
+            diag["prox_checks"] += 1
+            if h1_atr > 0:
+                dist_in_atr = distance / h1_atr
+                if (diag["closest_dist_atr_seen"] is None
+                        or dist_in_atr < diag["closest_dist_atr_seen"]):
+                    diag["closest_dist_atr_seen"] = dist_in_atr
             if distance > prox_cap:
                 continue
+            diag["alerts_emitted"] += 1
             yield {
                 "kind": "alert",
                 "pair": pair_name,
@@ -223,6 +254,21 @@ def replay_pair(
                 "m15_slice_end": m15_slice.index[-1] if m15_slice is not None and not m15_slice.empty else None,
             }
             state.alerted_zones[pair_name].add(zone_id)
+
+    closest = diag["closest_dist_atr_seen"]
+    closest_str = f"{closest:.2f}×ATR" if closest is not None else "n/a"
+    atr_mult = pair_conf.get("atr_multiplier", "?")
+    print(
+        f"  [DIAG {pair_name}] walked={diag['bars_walked']} "
+        f"warmup_skip={diag['warmup_skipped']} "
+        f"dr_err={diag['dr_errors']} radar_err={diag['radar_errors']} "
+        f"bars_with_events={diag['bars_with_events']} "
+        f"bars_with_obs={diag['bars_with_obs_returned']} "
+        f"new_obs={diag['new_obs_added']} "
+        f"prox_checks={diag['prox_checks']} "
+        f"closest={closest_str} (cap={atr_mult}×ATR) "
+        f"alerts={diag['alerts_emitted']}"
+    )
 
 
 def replay_phase3_watch(
