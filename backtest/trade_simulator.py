@@ -120,7 +120,19 @@ def score_alert_via_live(alert, pair_conf, df_h1, df_m15):
                   error=f"{type(e).__name__}: {e}")
         return 0.0, {}
 
-    return float(score_res.get("total", 0.0)), dict(score_res.get("breakdown", {}))
+    breakdown = dict(score_res.get("breakdown", {}))
+
+    # run_scorecard computes killzone from datetime.utcnow() (wallclock at
+    # run time). In backtest we replay historical bars, so wallclock is wrong
+    # for every bar by construction. Override with the alert's bar hour, which
+    # is the intended semantic. Live accidentally gets this right because
+    # run-time ≈ alert-time; backtest needs the explicit fix.
+    pair_type = pair_conf.get("pair_type", "forex")
+    breakdown["killzone"] = (
+        0.5 if smc_detector._killzone_hit(alert_ts.hour, pair_type) else 0.0
+    )
+    total = round(sum(float(v) for v in breakdown.values()), 1)
+    return total, breakdown
 
 
 def score_ob_confluences(ob, pair_conf, current_price, h1_atr, walls):
