@@ -1,0 +1,40 @@
+{
+  "run_id": "war_20260505_20260509",
+  "meta": {
+    "start": "2026-05-05",
+    "end": "2026-05-09",
+    "regime": "war",
+    "pairs": [
+      "EURUSD",
+      "NZDUSD",
+      "USDJPY",
+      "USDCHF",
+      "NAS100",
+      "GOLD"
+    ],
+    "generated_utc": "2026-05-20T06:25:47.419763+00:00"
+  },
+  "forex": {
+    "trades": 2,
+    "wins": 1,
+    "losses": 1,
+    "breakevens": 0,
+    "win_rate": 50.0,
+    "expectancy_r": 0.642,
+    "expectancy_usd": 160.5,
+    "pnl_usd": 320.9,
+    "avg_win_r": 2.284,
+    "avg_loss_r": -1.0,
+    "avg_win_usd": 571.0,
+    "avg_loss_usd": -250.0,
+    "avg_win_mfe_r": 2.284,
+    "avg_win_mfe_usd": 571.0,
+    "avg_loss_mae_r": -1.457,
+    "tp_capture_pct": 100,
+    "sl_collisions": 0
+  },
+  "nas_xau": {
+    "trades": 0
+  },
+  "risk_per_trade_usd": 250.0
+}
