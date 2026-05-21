@@ -690,5 +690,25 @@
     "smtp_fails_3h": 0,
     "issue_count": 0,
     "issues": []
+  },
+  {
+    "ts": "2026-05-21T15:06:35.272668",
+    "ts_human": "15:06 IST, 21 May 2026",
+    "ob_count_total": 10,
+    "ob_count_per_pair": {
+      "EURUSD": 2,
+      "USDJPY": 2,
+      "NZDUSD": 1,
+      "USDCHF": 1,
+      "NAS100": 3,
+      "GOLD": 1
+    },
+    "ob_age_hrs": 0.006094561388888889,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
   }
 ]
