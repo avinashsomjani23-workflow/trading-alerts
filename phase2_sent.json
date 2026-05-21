@@ -77,7 +77,7 @@
       "score_int": 5,
       "score_raw": 5.1,
       "score_high_water": 5.1,
-      "score_low_water": 5.1,
+      "score_low_water": 4.7,
       "breakdown": {
         "structure": 1.5,
         "sweep": 0.0,
@@ -87,7 +87,7 @@
         "killzone": 0.5
       },
       "alert_ist": "2026-05-20T20:51:32.258511",
-      "last_seen_ist": "2026-05-20T22:21:34.686826",
+      "last_seen_ist": "2026-05-21T23:36:33.364251",
       "bias": "SHORT",
       "pair": "EURUSD"
     },
