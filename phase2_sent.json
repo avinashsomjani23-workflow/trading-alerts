@@ -90,6 +90,42 @@
       "last_seen_ist": "2026-05-20T22:21:34.686826",
       "bias": "SHORT",
       "pair": "EURUSD"
+    },
+    "EURUSD_SHORT_BOS_1.16_2026-05-21T09": {
+      "score_int": 5,
+      "score_raw": 5.5,
+      "score_high_water": 5.5,
+      "score_low_water": 5.5,
+      "breakdown": {
+        "structure": 1.5,
+        "sweep": 0.0,
+        "fvg": 2.0,
+        "freshness": 1.5,
+        "pd": 0.0,
+        "killzone": 0.5
+      },
+      "alert_ist": "2026-05-21T19:06:32.727594",
+      "last_seen_ist": "2026-05-21T19:06:32.727594",
+      "bias": "SHORT",
+      "pair": "EURUSD"
+    },
+    "USDCHF_LONG_BOS_0.7885_2026-05-21T09": {
+      "score_int": 5,
+      "score_raw": 5.5,
+      "score_high_water": 5.5,
+      "score_low_water": 5.5,
+      "breakdown": {
+        "structure": 1.5,
+        "sweep": 0.0,
+        "fvg": 2.0,
+        "freshness": 1.5,
+        "pd": 0.0,
+        "killzone": 0.5
+      },
+      "alert_ist": "2026-05-21T19:06:32.727594",
+      "last_seen_ist": "2026-05-21T19:06:32.727594",
+      "bias": "LONG",
+      "pair": "USDCHF"
     }
   }
 }
