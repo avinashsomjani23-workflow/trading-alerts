@@ -99,7 +99,21 @@ With fewer trades, luck looks like skill. A single good week can make a broken s
 
 Consider: if the true win rate is 50% and you run 20 trades, a run of good luck could show 65%+ easily. With 200 trades, statistical noise shrinks enough that the real win rate becomes clear. 200 trades is the minimum for conclusions you can act on with reasonable confidence.
 
-At roughly 13–20 trades per week across 15 weeks, the target of 200+ trades is achievable.
+---
+
+## ⚠️ Execution risk #1 — trade frequency is unknown until the system runs
+
+**The 200-trade target assumes roughly 13–20 filled trades per week. This has no data behind it yet.** If the system fires 6 filled trades per week on average, 15 weeks produces ~90 trades — not enough to conclude anything.
+
+**Checkpoint rule:** After Group 1 completes (6 weeks), count total filled trades.
+
+| Avg filled trades/week | 15-week projection | Action |
+|----------------------|-------------------|--------|
+| ≥ 14 | 210+ | On track. Proceed. |
+| 10–13 | 150–195 | Add 2–3 more weeks before Group 2. Re-check projection. |
+| < 10 | < 150 | Stop. Investigate why the system is not firing. Likely a detection issue, not a strategy issue. Fix before continuing. |
+
+Do not proceed to Group 2 until you have a trade frequency estimate from real Group 1 data.
 
 ---
 
@@ -154,9 +168,9 @@ python backtest/run_backtest.py --start 2025-04-07 --end 2025-04-11 --regime war
 
 | # | Start | End | Regime | Market type | Why this week |
 |---|-------|-----|--------|-------------|---------------|
-| 7 | 2025-05-12 | 2025-05-16 | `bau` | BAU — post-tariff settle | Markets finding new equilibrium after the shock. Tests OB validity in a regime change. |
-| 8 | 2025-07-07 | 2025-07-11 | `bau` | BAU — mid-summer normal | Seasonal low activity. Clean test of whether system fires selectively in quiet conditions. |
-| 9 | 2025-09-08 | 2025-09-12 | `bau` | BAU — autumn start | Q3 close, moderate trending conditions. |
+| 7 | 2025-05-12 | 2025-05-16 | `bau` | BAU — post-tariff settle | Markets finding new equilibrium after the shock. Tests OB validity in a regime transition. |
+| 8 | 2025-07-07 | 2025-07-11 | `bau` | BAU — mid-summer normal | Seasonal low activity. Clean test of whether system fires selectively when it should stay quiet. |
+| 9 | 2025-09-15 | 2025-09-19 | `war` | War — Fed rate decision week | September FOMC meeting. Major institutional repositioning across all pairs. The only war week in OOS — necessary to catch whether system edge holds under event-driven flow. |
 | 10 | 2025-10-27 | 2025-10-31 | `bau` | BAU — late Q4 | Pre-Fed October, typical institutional positioning week. |
 | 11 | 2025-11-17 | 2025-11-21 | `bau` | BAU — pre-holiday | Liquidity beginning to thin ahead of December. |
 
@@ -164,7 +178,7 @@ Commands for Group 2:
 ```
 python backtest/run_backtest.py --start 2025-05-12 --end 2025-05-16 --regime bau --email
 python backtest/run_backtest.py --start 2025-07-07 --end 2025-07-11 --regime bau --email
-python backtest/run_backtest.py --start 2025-09-08 --end 2025-09-12 --regime bau --email
+python backtest/run_backtest.py --start 2025-09-15 --end 2025-09-19 --regime war --email
 python backtest/run_backtest.py --start 2025-10-27 --end 2025-10-31 --regime bau --email
 python backtest/run_backtest.py --start 2025-11-17 --end 2025-11-21 --regime bau --email
 ```
@@ -276,12 +290,20 @@ Group 1 → Group 2 → Group 3 should all be positive. If Group 1 is strong but
 
 ### GREEN — trade the funded account
 
-All of these must be true:
-- Overall expectancy above +0.3R
-- Win rate 45% or higher across the full 200+ trade dataset
-- Higher scores consistently produce better outcomes than lower scores
-- At least 3 pair × session cells have 20+ trades and positive expectancy
-- Performance is positive in all three groups (not just Group 1)
+**Forex pairs (EURUSD, NZDUSD, USDJPY, USDCHF):**
+- Expectancy ≥ +0.3R
+- Win rate ≥ 45%
+- 95% CI lower bound above zero
+
+**Gold (XAUUSD) and NAS100 — higher bar, different cost structure:**
+- Expectancy ≥ +0.5R (Gold and NAS100 have significantly wider spreads and higher slippage than Forex. A +0.3R edge on paper may be zero or negative after real-world costs.)
+- Win rate ≥ 50%
+- 95% CI lower bound above zero
+
+**Both instrument groups must also satisfy:**
+- Score predicts results in the right direction (higher score → better trades)
+- At least 3 pair × session cells have 20+ trades and positive expectancy with CI above zero
+- Performance positive in all three groups
 
 **What you do:** Trade only the validated pair × session cells at the score threshold the data supports. No other setups.
 
@@ -336,6 +358,21 @@ Update after every run. BACKTEST_LOG.md has the detail; this is the quick-look s
 | 14 | 2026-04-13 | 3 | bau | BAU | Re-run (mode fix) | — | — | — | |
 | 15 | 2026-05-05 | 3 | war | Active | Re-run (mode fix) | — | — | — | |
 | **Total** | | | | | | — | — | — | **Target: 200+ filled trades** |
+
+---
+
+## Regime label verification
+
+Regime labels (BAU/war) in the plan are **pre-assigned based on known calendar events**, not verified from actual price data. A "BAU" week with a surprise macro print mid-week may behave like a war week.
+
+**Post-run check (required for every run):**
+After each run completes, look at the exit reason distribution in the HTML report:
+- If > 60% of trades hit stop-loss: the week was more volatile than its BAU label suggests
+- If average MAE on losing trades exceeds 1.2R: price was moving fast and far — atypical for BAU
+
+If a BAU-labelled week shows these signals, flag it in the registry notes as "reclassified: likely war" and interpret results accordingly. The `aggregate_runs.py` script does this check automatically and lists any flagged weeks in the VERDICT.md.
+
+Full ATR-based automated regime classification is a planned enhancement. For now, exit-reason distribution is the proxy.
 
 ---
 
