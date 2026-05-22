@@ -1787,23 +1787,41 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     # not redundant — M15 FVG can exist without H1 and vice versa).
     #
     # Per-timeframe scoring:
-    #   H1:  pristine 1.2 | partial 0.6 | full/none 0.0
-    #   M15: pristine 0.8 | partial 0.4 | full/none 0.0
+    #   H1:  pristine 1.2 | partial 0.6 | mitigated (was_detected) 0.3 | none 0.0
+    #   M15: pristine 0.8 | partial 0.4 | mitigated (was_detected) 0.2 | none 0.0
     #
-    # Mitigation = price wicked the DISTAL line (full fill of imbalance) -> 0.
-    # Partial = price touched proximal but not distal (institutional intent
-    # still partially intact) -> half-credit.
+    # Grading rationale: FVG is evidence of institutional displacement at OB
+    # formation. By the time price returns to the OB (alert moment), the FVG
+    # is typically filled — so a strict `exists=True` gate scored ~0% on
+    # backtests. Smart fix: read `was_detected` (does the radar's frozen
+    # snapshot show an FVG ever formed?) and grade by current mitigation:
+    #   - 'none' / 'pristine': fresh imbalance still intact -> full credit
+    #   - 'partial': institutional intent partly filled -> half credit
+    #   - 'full': displacement happened, imbalance rebalanced -> quarter
+    #     credit (historical evidence still counts; the move was real)
+    #   - never detected (was_detected=False): no credit
     #
     # 16-case combination table is fully covered by the sum rule. Max possible
     # is 1.2 + 0.8 = 2.0; cap is never exceeded by construction.
     def _grade_single(fvg_obj, pristine_pts, partial_pts):
-        if not fvg_obj or not fvg_obj.get('exists'):
+        if not fvg_obj:
             return 0.0
-        mit = fvg_obj.get('mitigation', 'pristine')
-        if mit == 'partial':
-            return partial_pts
-        # 'pristine' (or anything else with exists=True) -> full credit
-        return pristine_pts
+        # Currently-valid imbalance: full credit, with partial half-credit.
+        if fvg_obj.get('exists'):
+            mit = fvg_obj.get('mitigation', 'pristine')
+            if mit == 'partial':
+                return partial_pts
+            return pristine_pts
+        # No longer present, but the radar recorded that it formed.
+        # Mitigation tells us how the imbalance was consumed.
+        if fvg_obj.get('was_detected'):
+            mit = fvg_obj.get('mitigation', 'full')
+            if mit == 'partial':
+                return partial_pts
+            if mit == 'full':
+                return round(pristine_pts * 0.25, 2)
+            return pristine_pts
+        return 0.0
 
     fvg_h1  = fvg.get('h1')  if isinstance(fvg, dict) else None
     fvg_m15 = fvg.get('m15') if isinstance(fvg, dict) else None

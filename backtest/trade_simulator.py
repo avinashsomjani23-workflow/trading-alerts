@@ -583,7 +583,7 @@ def _build_result(pair, bias, ob, levels, alert_ts, fill_ts, exit_ts,
         "bos_tag": ob.get("bos_tag"),
         "bos_tier": ob.get("bos_tier"),
         "fvg_present": bool((ob.get("fvg") or {}).get("exists")),
-        "sweep_present": bool(ob.get("sweep_timestamp")),
+        "sweep_present": bool((ob.get("sweep_observed") or {}).get("exists")),
     }
     if extra:
         result.update(extra)

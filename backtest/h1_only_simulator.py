@@ -471,7 +471,7 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "bos_tag":       bos_tag,
         "bos_tier":      bos_tier,
         "fvg_present":   bool((ob.get("fvg") or {}).get("exists")),
-        "sweep_present": bool(ob.get("sweep_timestamp")),
+        "sweep_present": bool((ob.get("sweep_observed") or {}).get("exists")),
     }
 
 
