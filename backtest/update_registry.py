@@ -172,9 +172,17 @@ def _extract_metrics(run_dir: Path, summary: Dict[str, Any]) -> Dict[str, Any]:
     per_pair = summary.get("per_pair_proximal_tp2", [])
     score_buckets = summary.get("score_buckets_tp2", [])
 
-    max_dd = _max_drawdown(trades_df)
-    streak = _longest_losing_streak(trades_df)
-    session_data = _session_breakdown(trades_df)
+    # Registry headline metrics (filled_trades, win_rate, expectancy) all come
+    # from the proximal scoreboard. Drawdown, streak, and session breakdown must
+    # use the SAME population — otherwise we mix two entry zones in one record
+    # and the numbers contradict each other.
+    if trades_df is not None and "entry_zone" in trades_df.columns:
+        prox_df = trades_df[trades_df["entry_zone"] == "proximal"]
+    else:
+        prox_df = trades_df
+    max_dd = _max_drawdown(prox_df)
+    streak = _longest_losing_streak(prox_df)
+    session_data = _session_breakdown(prox_df)
 
     return {
         "total_rows": total_trade_rows,

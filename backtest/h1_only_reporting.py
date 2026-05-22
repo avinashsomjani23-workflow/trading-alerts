@@ -474,8 +474,18 @@ def _validate_trades(trades: List[Dict[str, Any]]) -> List[str]:
 def _validation_html(trades: List[Dict[str, Any]]) -> str:
     violations = _validate_trades(trades)
     if not violations:
-        n = len([t for t in trades if t.get("exit_reason") != "never_filled"])
-        return (f"<p style='color:#27ae60;'>✓ All {n} filled trades passed validation — "
+        # Validation runs over BOTH entry zones (it's a sim-integrity check),
+        # so the count here is rows across proximal + 50pct, NOT the headline
+        # filled-trade count (proximal only). Make that explicit so the number
+        # doesn't appear to contradict the headline.
+        n_prox = len([t for t in trades
+                      if t.get("exit_reason") != "never_filled"
+                      and t.get("entry_zone") == "proximal"])
+        n_mid  = len([t for t in trades
+                      if t.get("exit_reason") != "never_filled"
+                      and t.get("entry_zone") == "50pct"])
+        return (f"<p style='color:#27ae60;'>✓ All filled trade rows passed validation "
+                f"({n_prox} proximal + {n_mid} 50pct) — "
                 f"entry/SL/TP levels are correctly ordered, and exit outcomes match exit reasons.</p>")
     items = "".join(f"<li style='color:#e74c3c;font-family:monospace;font-size:12px;'>{v}</li>"
                     for v in violations)
@@ -1002,7 +1012,11 @@ def write_h1_only_report(
     fill_mid  = _fill_rate(trades, "50pct")
 
     score_buckets = _score_buckets(prox_trades, "r_if_exit_tp2")
-    exit_counts   = _exit_reason_counts(trades)
+    # Exit counts must be scoped per entry-zone — the headline counts proximal
+    # trades only, so mixing zones here makes the "How trades closed" line
+    # contradict the headline (e.g. 21 filled but 29 SL hits across both zones).
+    exit_counts_prox = _exit_reason_counts(prox_trades)
+    exit_counts_mid  = _exit_reason_counts(mid_trades)
 
     summary = {
         "run_id":              run_id,
@@ -1011,7 +1025,8 @@ def write_h1_only_report(
         "total_trade_rows":    len(trades),
         "fill_rate_proximal":  fill_prox,
         "fill_rate_50pct":     fill_mid,
-        "exit_reason_counts":  exit_counts,
+        "exit_reason_counts_proximal": exit_counts_prox,
+        "exit_reason_counts_50pct":    exit_counts_mid,
         "scoreboards": {
             "proximal_exit_tp1":  sb_prox_tp1,
             "proximal_exit_tp2":  sb_prox_tp2,
@@ -1048,9 +1063,12 @@ def write_h1_only_report(
         "timeout": "Time limit", "window_end": "End of window",
         "sl_collision": "SL+TP same bar", "never_filled": "Never filled",
     }
+    # Email shows the proximal breakdown only — same population as the
+    # headline (n filled trades, wins, losses, narrative). The 50pct breakdown
+    # lives in summary.json under exit_reason_counts_50pct for offline review.
     exit_breakdown = " &middot; ".join(
         f"<b>{exit_reason_plain.get(k, k)}: {v}</b>"
-        for k, v in sorted(exit_counts.items())
+        for k, v in sorted(exit_counts_prox.items())
     )
 
     score_verdict = _score_verdict_text(score_buckets)
