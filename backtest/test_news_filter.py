@@ -309,6 +309,48 @@ def test_metric_exclusion_invariant():
     return ok
 
 
+def test_tz_pad_helper_accepts_both():
+    """_run_h1_only pads the news fetch range by 1 day on each side. The pad
+    builder must accept both tz-aware and naive inputs because the start/end
+    parameters come from argparse via _parse_date in one branch and from
+    pd.Timestamp construction in another. A regression broke this in CI:
+    `Timestamp.tz_localize` raises on already-aware values."""
+    print("\n== test_tz_pad_helper_accepts_both ==")
+    import pandas as pd
+    from datetime import datetime, timezone
+
+    # The exact helper defined in _run_h1_only (kept in sync; if the
+    # function changes, mirror it here).
+    def _to_utc(ts):
+        t = pd.Timestamp(ts)
+        return t.tz_localize("UTC") if t.tzinfo is None else t.tz_convert("UTC")
+
+    ok = True
+    # tz-aware datetime (the CI failure case)
+    aware = datetime(2024, 11, 4, tzinfo=timezone.utc)
+    try:
+        out = _to_utc(aware)
+        ok &= check(out.tzinfo is not None, "aware -> still aware")
+    except Exception as e:
+        ok &= check(False, f"aware input crashed: {type(e).__name__}: {e}")
+
+    # naive datetime
+    naive = datetime(2024, 11, 4)
+    try:
+        out = _to_utc(naive)
+        ok &= check(out.tzinfo is not None, "naive -> localized to UTC")
+    except Exception as e:
+        ok &= check(False, f"naive input crashed: {type(e).__name__}: {e}")
+
+    # string
+    try:
+        out = _to_utc("2024-11-04")
+        ok &= check(out.tzinfo is not None, "string -> localized to UTC")
+    except Exception as e:
+        ok &= check(False, f"string input crashed: {type(e).__name__}: {e}")
+    return ok
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -321,6 +363,7 @@ def main():
         ("test_currency_filter",           test_currency_filter()),
         ("test_audit_event_returned",      test_audit_event_returned()),
         ("test_naive_datetime_rejected",   test_naive_datetime_rejected()),
+        ("test_tz_pad_helper_accepts_both", test_tz_pad_helper_accepts_both()),
         ("test_metric_exclusion_invariant", test_metric_exclusion_invariant()),
     ]
     print("\n=== SUMMARY ===")

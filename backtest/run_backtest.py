@@ -421,8 +421,13 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
     # News blackout filter. Fetch FF (scheduled) + GDELT (geopolitical) for
     # the full backtest range plus a 1-day pad on each side (events at the
     # range edges still need their ±30min window evaluated).
-    news_start = pd.Timestamp(start).tz_localize("UTC") - timedelta(days=1)
-    news_end   = pd.Timestamp(end).tz_localize("UTC") + timedelta(days=1)
+    # `start`/`end` from argparse via _parse_date are already tz-aware UTC,
+    # so localize only when naive (defensive — never double-localize).
+    def _to_utc(ts):
+        t = pd.Timestamp(ts)
+        return t.tz_localize("UTC") if t.tzinfo is None else t.tz_convert("UTC")
+    news_start = _to_utc(start) - timedelta(days=1)
+    news_end   = _to_utc(end)   + timedelta(days=1)
     news_data = news_filter.fetch_events(
         news_start.to_pydatetime(), news_end.to_pydatetime(),
         sources=("ff", "gdelt"),
