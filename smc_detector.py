@@ -1461,25 +1461,14 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15,
             "sl": round(sl, dp),
         }
 
-    # TP2: next opposing swing past TP1. No RR gate.
+    # TP2: next opposing swing past TP1. No RR gate, no fallback.
+    # Textbook SMC: TP2 is the next real liquidity pool past TP1. If none
+    # exists in the swing series, the trade rides TP1 -> BE-stop (handled
+    # by the simulator). Synthesising TP2 from the dealing range produced
+    # collisions with TP1 after rounding and is not how a vet sets targets.
     tp2 = None
     if tp1_idx_in_opposing + 1 < len(opposing):
         tp2 = opposing[tp1_idx_in_opposing + 1]
-    else:
-        # Fallback: dealing range opposing extreme.
-        dr = ob.get('dealing_range') if isinstance(ob, dict) else None
-        if isinstance(dr, dict):
-            try:
-                if bias == "LONG":
-                    candidate = float(dr['range_high'])
-                    if candidate > tp1:
-                        tp2 = candidate
-                else:
-                    candidate = float(dr['range_low'])
-                    if candidate < tp1:
-                        tp2 = candidate
-            except (KeyError, TypeError, ValueError):
-                tp2 = None
 
     out = {
         "valid": True,
@@ -1498,9 +1487,18 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15,
             "low":  float(m15_ob["low"]),
             "ts":   m15_ob["ts"].isoformat() if hasattr(m15_ob["ts"], "isoformat") else str(m15_ob["ts"]),
         }
+    # Post-rounding direction check. Pre-round, the swing list ordering
+    # guarantees tp2 > tp1 (LONG) or tp2 < tp1 (SHORT). After rounding to
+    # `dp` decimals, two nearby swings can collapse to the same price
+    # (e.g. 1.23459 and 1.23456 both round to 1.23456 at dp=5).
+    # If that happens, drop TP2 -- the trade still has TP1 + BE-stop policy.
     if tp2 is not None:
-        out["tp2"] = round(tp2, dp)
-        out["tp2_rr"] = round(abs(tp2 - entry) / risk, 2)
+        tp1_r = round(tp1, dp)
+        tp2_r = round(tp2, dp)
+        if (bias == "LONG" and tp2_r > tp1_r) or (bias == "SHORT" and tp2_r < tp1_r):
+            out["tp2"] = tp2_r
+            out["tp2_rr"] = round(abs(tp2 - entry) / risk, 2)
+        # else: tp2 collapsed onto tp1 (or wrong side) -> emit no tp2.
     return out
 
 

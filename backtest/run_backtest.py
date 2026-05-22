@@ -25,6 +25,7 @@ from backtest import reporting_email
 from backtest import h1_only_simulator
 from backtest import h1_only_reporting
 from backtest.run_logger import RunLogger, log_event
+import news_filter
 
 PHASE3_PAIRS = {"NAS100", "GOLD"}
 RESULTS_ROOT = _REPO_ROOT / "backtest" / "results"
@@ -417,6 +418,23 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
           f"pairs={pair_names} risk_per_trade=${risk_usd:.0f}")
     print(f"  No M15/M5 fetches. No scoring gate. Dual entry per OB.")
 
+    # News blackout filter. Fetch FF (scheduled) + GDELT (geopolitical) for
+    # the full backtest range plus a 1-day pad on each side (events at the
+    # range edges still need their ±30min window evaluated).
+    news_start = pd.Timestamp(start).tz_localize("UTC") - timedelta(days=1)
+    news_end   = pd.Timestamp(end).tz_localize("UTC") + timedelta(days=1)
+    news_data = news_filter.fetch_events(
+        news_start.to_pydatetime(), news_end.to_pydatetime(),
+        sources=("ff", "gdelt"),
+    )
+    news_events = news_data["events"]
+    news_coverage = news_data["coverage"]
+    print(f"  News: {len(news_events)} High-impact events fetched "
+          f"(coverage: {news_coverage})")
+    log_event("news_fetched", level="info",
+              events=len(news_events), coverage=news_coverage,
+              range=f"{news_start.isoformat()}..{news_end.isoformat()}")
+
     for pair_conf in pairs_to_run:
         name = pair_conf["name"]
         symbol = pair_conf["symbol"]
@@ -455,13 +473,37 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         print(f"  {name}: {len(alerts_for_pair)} OB-touch alerts")
 
         n_trades_for_pair = 0
+        n_blocked_for_pair = 0
         for alert in alerts_for_pair:
             rows = h1_only_simulator.simulate_h1_only_dual(
                 alert, pair_conf, df_h1, risk_usd=risk_usd,
             )
+            # News blackout tagging. Option B: simulate every alert; tag
+            # blocked rows so they appear in Excel for audit but are
+            # excluded from every aggregate metric (handled in reporting).
+            #
+            # The blackout check uses the alert timestamp, not the fill
+            # timestamp, because that is the moment we would (live) decide
+            # whether to place the limit order.
+            alert_ts = alert["ts"]
+            if not isinstance(alert_ts, pd.Timestamp):
+                alert_ts = pd.Timestamp(alert_ts)
+            if alert_ts.tzinfo is None:
+                alert_ts = alert_ts.tz_localize("UTC")
+            blocked, src_event = news_filter.is_news_blackout(
+                alert_ts.to_pydatetime(), name, news_events,
+                window_minutes=30,
+            )
             for row in rows:
+                row["news_blocked"]        = bool(blocked)
+                row["news_event_title"]    = src_event["title"]    if blocked else ""
+                row["news_event_currency"] = src_event["currency"] if blocked else ""
+                row["news_event_source"]   = src_event["source"]   if blocked else ""
+                row["news_event_ts"]       = src_event["ts_utc"].isoformat() if blocked else ""
                 all_trades.append(row)
                 n_trades_for_pair += 1
+                if blocked:
+                    n_blocked_for_pair += 1
                 log_event("trade_simulated", pair=name,
                           alert_ts=str(alert["ts"]),
                           entry_zone=row.get("entry_zone"),
@@ -471,12 +513,18 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                           r_realised=row.get("r_realised"),
                           r_if_exit_tp1=row.get("r_if_exit_tp1"),
                           r_if_exit_tp2=row.get("r_if_exit_tp2"),
-                          pnl_usd=row.get("pnl_usd"))
+                          pnl_usd=row.get("pnl_usd"),
+                          news_blocked=bool(blocked),
+                          news_event_title=row.get("news_event_title"),
+                          news_event_source=row.get("news_event_source"))
 
-        log_event("pair_trades_simulated", pair=name, trades=n_trades_for_pair)
+        log_event("pair_trades_simulated", pair=name,
+                  trades=n_trades_for_pair,
+                  news_blocked=n_blocked_for_pair)
         print(f"  {name}: {n_trades_for_pair} simulated trade rows "
-              f"(2 per qualified OB-touch)")
+              f"(2 per qualified OB-touch; {n_blocked_for_pair} news-blocked)")
 
+    n_blocked_total = sum(1 for t in all_trades if t.get("news_blocked"))
     meta = {
         "start": start.strftime("%Y-%m-%d"),
         "end": end.strftime("%Y-%m-%d"),
@@ -484,6 +532,13 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         "mode": "h1_only",
         "pairs": pair_names,
         "generated_utc": datetime.now(timezone.utc).isoformat(),
+        # News filter metadata. Coverage is per-source. Blocked trades are
+        # excluded from every aggregate metric in the report but kept in
+        # Excel for audit.
+        "news_coverage":        news_coverage,
+        "news_events_fetched":  len(news_events),
+        "news_blocked_rows":    n_blocked_total,
+        "news_window_minutes":  30,
     }
     report_dir = h1_only_reporting.write_h1_only_report(
         run_id, all_trades, all_alerts, meta, risk_usd=risk_usd,

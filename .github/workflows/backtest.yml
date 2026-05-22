@@ -59,6 +59,11 @@ jobs:
         # path or the dual-entry simulator before we spend cycles on a full run.
         run: python -m backtest.test_h1_only
 
+      - name: Run news filter sanity test (metric-exclusion invariant)
+        # Proves news-blocked trades never leak into any aggregate metric.
+        # Adding extreme-outcome blocked rows must not move P&L, WR, RR, etc.
+        run: python -m backtest.test_news_filter
+
       - name: Run backtest
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}

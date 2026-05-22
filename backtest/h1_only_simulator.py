@@ -232,6 +232,18 @@ def _simulate_single_entry(
                   reason="zero_r_distance")
         return None
 
+    # Defense in depth: drop the trade if TP2 is on the wrong side of TP1.
+    # compute_phase2_levels already filters this; this guard catches any
+    # future regression or forced-TP path where the upstream check is bypassed.
+    if tp2 is not None:
+        bad = (bias == "LONG" and tp2 <= tp1) or (bias == "SHORT" and tp2 >= tp1)
+        if bad:
+            log_event("h1only_sim_skip", level="error", pair=pair,
+                      entry_zone=entry_zone, alert_ts=str(alert_ts),
+                      reason="tp_order_invalid",
+                      tp1=tp1, tp2=tp2, bias=bias)
+            return None
+
     # Walk H1 bars from alert_ts forward up to MAX_HOLD_H1_BARS bars.
     future = df_h1.loc[alert_ts:]
     if future.empty:

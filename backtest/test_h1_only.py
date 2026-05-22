@@ -246,11 +246,55 @@ def test_dual_simulator_columns():
     return ok
 
 
+def test_tp2_ordering_invariant():
+    """TP2, when present, must be strictly past TP1 by direction. Covers both
+    bullish (TP2 > TP1) and bearish (TP2 < TP1) cases. Guards against a
+    regression of the rounding-collision / dealing-range-fallback bug."""
+    print("\n== test_tp2_ordering_invariant ==")
+    df_h1 = _synth_h1_df()
+    pair_conf = _synth_pair_conf()
+
+    ok = True
+    for bias_label, direction, ts_idx in [("LONG", "bullish", -150), ("SHORT", "bearish", -150)]:
+        ob = _synth_ob_bullish(df_h1, ts_idx=ts_idx)
+        if direction == "bearish":
+            px = float(df_h1["Close"].iloc[ts_idx])
+            bot = px + 0.0005
+            top = bot + 0.0018
+            ob["direction"]     = "bearish"
+            ob["high"]          = top
+            ob["low"]           = bot
+            ob["proximal_line"] = bot
+            ob["distal_line"]   = top
+            current_price = bot
+        else:
+            current_price = ob["proximal_line"]
+
+        for zone in ("proximal", "50pct"):
+            lv = smc_detector.compute_phase2_levels(
+                pair_conf, bias_label, ob, current_price, df_h1, df_m15=None,
+                h1_only=True, entry_zone=zone,
+            )
+            if not (isinstance(lv, dict) and lv.get("valid")):
+                continue
+            tp1 = lv.get("tp1")
+            tp2 = lv.get("tp2")
+            if tp2 is None:
+                ok &= check(True, f"{bias_label}/{zone}: tp2=None (no second swing) - acceptable")
+                continue
+            if bias_label == "LONG":
+                ok &= check(tp2 > tp1, f"LONG/{zone}: tp2 ({tp2}) > tp1 ({tp1})")
+            else:
+                ok &= check(tp2 < tp1, f"SHORT/{zone}: tp2 ({tp2}) < tp1 ({tp1})")
+    return ok
+
+
 def main():
     results = [
-        ("test_no_m15_no_crash",       test_no_m15_no_crash()),
-        ("test_levels_dual_entry",     test_levels_dual_entry()),
+        ("test_no_m15_no_crash",        test_no_m15_no_crash()),
+        ("test_levels_dual_entry",      test_levels_dual_entry()),
         ("test_dual_simulator_columns", test_dual_simulator_columns()),
+        ("test_tp2_ordering_invariant", test_tp2_ordering_invariant()),
     ]
     print("\n=== SUMMARY ===")
     fail = 0

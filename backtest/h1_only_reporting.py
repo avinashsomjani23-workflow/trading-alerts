@@ -160,54 +160,68 @@ def _flag_vet_review(t: Dict[str, Any]) -> Tuple[bool, str]:
 
 
 # ---------------------------------------------------------------------------
-# Pair × Session 2D grid
+# By-pair and by-session flat tables (replaces the sparse 2D grid)
 # ---------------------------------------------------------------------------
 
 _SESSION_ORDER = ["Asia", "London", "NY", "Other"]
 
-def _pair_session_grid_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+
+def _flat_breakdown_row(label: str, sub: pd.DataFrame, r_col: str) -> str:
+    """One row in a flat breakdown table. Cells with <3 trades render as
+    'not enough' so the eye doesn't anchor on noise."""
+    n = len(sub)
+    if n == 0:
+        return f"<tr><td><b>{label}</b></td><td>0</td><td>—</td><td>—</td></tr>"
+    wins = (sub[r_col] > 0).sum()
+    wr   = wins / n * 100
+    exp  = sub[r_col].mean()
+    if n < 3:
+        return (f"<tr style='color:#888;'>"
+                f"<td><b>{label}</b></td><td>{n}</td>"
+                f"<td>—</td><td>—</td></tr>")
+    if wr >= 50:
+        bg = "#eafaf1"
+    elif wr >= 40:
+        bg = "#fef9e7"
+    else:
+        bg = "#fdf2f2"
+    sign = "+" if exp >= 0 else ""
+    return (f"<tr style='background:{bg};'>"
+            f"<td><b>{label}</b></td>"
+            f"<td>{n}</td>"
+            f"<td>{wr:.0f}%</td>"
+            f"<td>{sign}{exp:.2f}R</td></tr>")
+
+
+def _by_pair_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    """Win rate / avg R / trade count, by pair (all sessions combined)."""
     filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
     if not filled:
         return "<p style='color:#888;'>No filled trades.</p>"
     df = pd.DataFrame(filled)
-    if "pair" not in df.columns or "session" not in df.columns or r_col not in df.columns:
-        return "<p style='color:#888;'>Session or pair data missing.</p>"
+    if "pair" not in df.columns or r_col not in df.columns:
+        return "<p style='color:#888;'>Pair data missing.</p>"
 
-    pairs    = sorted(df["pair"].unique())
-    sessions = [s for s in _SESSION_ORDER if s in df["session"].unique()]
+    pairs = sorted(df["pair"].unique())
+    header = "<tr><th>Pair</th><th>Trades</th><th>Win rate</th><th>Avg R</th></tr>"
+    rows = "".join(_flat_breakdown_row(p, df[df["pair"] == p], r_col)
+                   for p in pairs)
+    return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>"
 
-    def _cell(sub: pd.DataFrame) -> str:
-        n = len(sub)
-        if n < 3:
-            return f"<td style='color:#bbb;text-align:center;'>—<br><small>{n}t</small></td>"
-        wr  = (sub[r_col] > 0).mean() * 100
-        exp = sub[r_col].mean()
-        if wr >= 50:
-            bg = "#eafaf1"
-        elif wr >= 40:
-            bg = "#fef9e7"
-        else:
-            bg = "#fdf2f2"
-        sign = "+" if exp >= 0 else ""
-        return (f"<td style='background:{bg};text-align:center;'>"
-                f"<b>{wr:.0f}%</b><br>"
-                f"<small>{sign}{exp:.2f}R &middot; {n}t</small></td>")
 
-    header = "<tr><th>Pair</th>" + "".join(f"<th>{s}</th>" for s in sessions) + "</tr>"
-    rows   = ""
-    for pair in pairs:
-        pair_df = df[df["pair"] == pair]
-        row = f"<tr><td><b>{pair}</b></td>"
-        for sess in sessions:
-            sub = pair_df[pair_df["session"] == sess]
-            row += _cell(sub)
-        row += "</tr>"
-        rows += row
+def _by_session_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    """Win rate / avg R / trade count, by trading session (all pairs combined)."""
+    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    if not filled:
+        return "<p style='color:#888;'>No filled trades.</p>"
+    df = pd.DataFrame(filled)
+    if "session" not in df.columns or r_col not in df.columns:
+        return "<p style='color:#888;'>Session data missing.</p>"
 
-    legend = ("<p style='font-size:11px;color:#888;margin-top:6px;'>"
-              "🟢 ≥ 50% win rate &nbsp; 🟡 40–49% &nbsp; 🔴 &lt; 40% &nbsp;"
-              "— = fewer than 3 trades (not enough to conclude)</p>")
-    return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>{legend}"
+    header = "<tr><th>Session</th><th>Trades</th><th>Win rate</th><th>Avg R</th></tr>"
+    rows = "".join(_flat_breakdown_row(s, df[df["session"] == s], r_col)
+                   for s in _SESSION_ORDER if s in df["session"].unique())
+    return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>"
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +284,167 @@ def _confluence_per_pair_html(trades: List[Dict[str, Any]], r_col: str) -> str:
             "Win rate when that confluence was present. ↑ = helped vs without it, "
             "↓ = hurt. — = fewer than 3 trades with this confluence.</p>")
     return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>{note}"
+
+
+# ---------------------------------------------------------------------------
+# News blackout report section
+# ---------------------------------------------------------------------------
+
+def _news_blackout_html(blocked_trades: List[Dict[str, Any]],
+                        meta: Dict[str, Any]) -> str:
+    """Renders the news-blackout audit section: how many rows were dropped,
+    which events caused each, coverage of the upstream feeds.
+
+    These trades do NOT appear in any aggregate metric above this section --
+    they are listed here only so the user can verify the filter is acting
+    correctly. Every entry shows the source event so blocks are auditable.
+    """
+    n = len(blocked_trades)
+    coverage = meta.get("news_coverage", {}) or {}
+    coverage_str = ", ".join(
+        f"{src}: {'ok' if ok else 'PARTIAL — fetch failed'}"
+        for src, ok in coverage.items()
+    ) if coverage else "not run"
+    n_events = meta.get("news_events_fetched", 0)
+    window   = meta.get("news_window_minutes", 30)
+
+    header = (
+        f"<p style='font-size:12px;color:#666;margin-bottom:8px;'>"
+        f"Trades whose alert timestamp fell within &plusmn;{window} min of a "
+        f"High-impact news event for any currency in the pair. These rows "
+        f"are <b>excluded from every aggregate metric above</b> (P&amp;L, WR, "
+        f"RR, expectancy, by-pair, by-session, killzone, structure, score). "
+        f"They appear in <code>trades.xlsx</code> with column <code>news_blocked=True</code> "
+        f"for audit only."
+        f"</p>"
+        f"<p style='font-size:11px;color:#888;margin-bottom:10px;'>"
+        f"Feed coverage: {coverage_str}. Events fetched: {n_events}."
+        f"</p>"
+    )
+
+    if n == 0:
+        return header + (
+            "<p style='color:#27ae60;'>"
+            "No trades were filtered this week."
+            "</p>"
+        )
+
+    # Deduplicate by (pair, alert_ts, event_ts) so we show one entry per
+    # alert (proximal+50pct share the same news block).
+    seen = set()
+    unique_rows = []
+    for t in blocked_trades:
+        key = (t.get("pair"), t.get("alert_ts"), t.get("news_event_ts"))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_rows.append(t)
+
+    rows_html = ""
+    for t in unique_rows:
+        rows_html += (
+            f"<tr>"
+            f"<td>{t.get('pair', '?')}</td>"
+            f"<td>{t.get('alert_ts', '?')}</td>"
+            f"<td>{t.get('news_event_currency', '?')}</td>"
+            f"<td>{t.get('news_event_title', '?')}</td>"
+            f"<td>{t.get('news_event_source', '?')}</td>"
+            f"<td style='font-family:monospace;font-size:11px;'>{t.get('news_event_ts', '?')}</td>"
+            f"</tr>"
+        )
+
+    return header + (
+        f"<p style='font-size:13px;margin-bottom:8px;'>"
+        f"<b>{n} trade row(s) filtered</b> across {len(unique_rows)} unique alert(s)."
+        f"</p>"
+        f"<table><thead>"
+        f"<tr><th>Pair</th><th>Alert ts (UTC)</th><th>Ccy</th>"
+        f"<th>Event</th><th>Source</th><th>Event ts (UTC)</th></tr>"
+        f"</thead><tbody>{rows_html}</tbody></table>"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Killzone diagnostic: are wins concentrated inside the killzone vs losses?
+# ---------------------------------------------------------------------------
+
+def _killzone_split_html(trades: List[Dict[str, Any]]) -> str:
+    """Two-line diagnostic: % of wins in killzone vs % of losses in killzone.
+
+    Killzone label comes from killzone_pts in the score breakdown (>0 = in).
+    A useful killzone should show wins clustering in-killzone and losses
+    clustering outside. If wins% and losses% are both ~50/50, the killzone
+    isn't separating signal from noise.
+    """
+    filled = [t for t in trades
+              if t.get("exit_reason") not in ("never_filled",)
+              and t.get("entry_zone") == "proximal"]
+    if not filled:
+        return "<p style='color:#888;'>No filled trades.</p>"
+
+    wins  = [t for t in filled if (t.get("r_realised") or 0) > 0]
+    losses = [t for t in filled if (t.get("r_realised") or 0) <= 0]
+
+    def _in_kz(t):
+        return (t.get("killzone_pts") or 0) > 0
+
+    n_w, n_l = len(wins), len(losses)
+    w_in = sum(1 for t in wins   if _in_kz(t))
+    l_in = sum(1 for t in losses if _in_kz(t))
+
+    def _pct(num, denom):
+        return f"{num / denom * 100:.0f}%" if denom else "—"
+
+    # Expectancy split (uses r_realised under default policy)
+    in_kz  = [t for t in filled if _in_kz(t)]
+    out_kz = [t for t in filled if not _in_kz(t)]
+    def _exp(rows):
+        return sum((t.get("r_realised") or 0) for t in rows) / len(rows) if rows else None
+    def _wr(rows):
+        return sum(1 for t in rows if (t.get("r_realised") or 0) > 0) / len(rows) * 100 if rows else None
+
+    e_in, e_out = _exp(in_kz), _exp(out_kz)
+    wr_in, wr_out = _wr(in_kz), _wr(out_kz)
+
+    rows = (
+        f"<tr><td><b>Wins</b></td><td>{n_w}</td>"
+        f"<td>{w_in} ({_pct(w_in, n_w)})</td>"
+        f"<td>{n_w - w_in} ({_pct(n_w - w_in, n_w)})</td></tr>"
+        f"<tr><td><b>Losses</b></td><td>{n_l}</td>"
+        f"<td>{l_in} ({_pct(l_in, n_l)})</td>"
+        f"<td>{n_l - l_in} ({_pct(n_l - l_in, n_l)})</td></tr>"
+    )
+
+    def _fmt_r(v):
+        if v is None: return "—"
+        sign = "+" if v >= 0 else ""
+        return f"{sign}{v:.2f}R"
+
+    expectancy_line = (
+        f"<p style='font-size:13px;color:#555;margin-top:8px;'>"
+        f"<b>In-killzone</b>: n={len(in_kz)}, "
+        f"win rate {wr_in:.0f}%, expectancy {_fmt_r(e_in)} &nbsp;|&nbsp; "
+        f"<b>Outside killzone</b>: n={len(out_kz)}, "
+        f"win rate {wr_out:.0f}%, expectancy {_fmt_r(e_out)}"
+        f"</p>" if (in_kz and out_kz)
+        else f"<p style='font-size:13px;color:#888;margin-top:8px;'>"
+        f"Single-bucket dataset — need trades in both buckets for split.</p>"
+    )
+
+    return (
+        f"<p style='font-size:12px;color:#666;margin-bottom:10px;'>"
+        f"Where are the wins coming from — inside or outside killzone hours? "
+        f"If wins cluster in-killzone and losses cluster outside, the killzone "
+        f"is doing real work. If both split ~50/50, killzone isn't separating signal."
+        f"</p>"
+        f"<table><thead>"
+        f"<tr><th>Outcome</th><th>Total</th><th>In killzone</th><th>Outside killzone</th></tr>"
+        f"</thead><tbody>{rows}</tbody></table>"
+        f"{expectancy_line}"
+        f"<p style='font-size:11px;color:#aaa;margin-top:4px;'>"
+        f"Killzone = UTC 06:00–18:00 (forex/commodity) or 13:00–20:00 (NAS100)."
+        f"</p>"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -522,6 +697,14 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
         def _v(d, k, default=""):
             return d.get(k, default)
 
+        # News flag is set at the alert level, so prox and 50pct always
+        # share the same value. Take from prox first; fall back to mid.
+        news_blocked = bool(_v(prox, "news_blocked") or _v(mid, "news_blocked"))
+        news_event_title    = _v(prox, "news_event_title")    or _v(mid, "news_event_title")
+        news_event_currency = _v(prox, "news_event_currency") or _v(mid, "news_event_currency")
+        news_event_source   = _v(prox, "news_event_source")   or _v(mid, "news_event_source")
+        news_event_ts       = _v(prox, "news_event_ts")       or _v(mid, "news_event_ts")
+
         rows.append({
             "Pair":                    pair,
             "OB Formed (UTC)":         _v(prox, "ob_timestamp"),
@@ -551,6 +734,13 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
             "FVG Present":             "Yes" if _v(prox, "fvg_present") else "No",
             "Sweep Present":           "Yes" if _v(prox, "sweep_present") else "No",
             "Confluences Active":      _v(prox, "confluences_present"),
+            # News blackout audit columns. If "Yes" in News Blocked, this
+            # row was excluded from every aggregate metric in the email.
+            "News Blocked":            "Yes" if news_blocked else "No",
+            "News Event":              news_event_title,
+            "News Currency":           news_event_currency,
+            "News Source":             news_event_source,
+            "News Event Time (UTC)":   news_event_ts,
         })
 
     return pd.DataFrame(rows)
@@ -583,6 +773,10 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "freshness_pts", "killzone_pts", "confluences_present",
         "sl_collision", "model", "ob_timestamp", "bos_tag", "bos_tier",
         "fvg_present", "sweep_present",
+        # News blackout audit columns. news_blocked=True means this row
+        # was excluded from every aggregate metric in summary.json.
+        "news_blocked", "news_event_title", "news_event_currency",
+        "news_event_source", "news_event_ts",
     ]
     df = pd.DataFrame(trades)
     cols_present = [c for c in front_cols if c in df.columns]
@@ -622,6 +816,11 @@ _EXCEL_COL_NAMES = {
     "vet_review_reason": "Why Worth Reviewing",
     "alert_ts":          "Alert Time (UTC)",
     "exit_ts":           "Trade Closed (UTC)",
+    "news_blocked":         "News Blocked",
+    "news_event_title":     "News Event",
+    "news_event_currency":  "News Currency",
+    "news_event_source":    "News Source",
+    "news_event_ts":        "News Event Time (UTC)",
 }
 
 _EXIT_LABELS = {
@@ -735,6 +934,18 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
                         if rev_val == "Yes":
                             for cell in row:
                                 cell.fill = PatternFill("solid", fgColor="FFEB9C")
+
+                # News-blocked rows: lavender highlight applied AFTER P&L /
+                # reviewing colors, so the eye sees "this row was excluded"
+                # regardless of its hypothetical outcome. Search by header.
+                nb_col = headers.index("News Blocked") + 1 if "News Blocked" in headers else None
+                if nb_col:
+                    news_fill = PatternFill("solid", fgColor="E8DAEF")  # light purple
+                    for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row), start=2):
+                        val = ws.cell(row=row_idx, column=nb_col).value
+                        if val in (True, "True", "Yes", 1, "1"):
+                            for cell in row:
+                                cell.fill = news_fill
 
                 # Column widths.
                 col_widths = {
@@ -997,6 +1208,15 @@ def write_h1_only_report(
     out_dir = Path(__file__).parent / "results" / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # News-blocked trades are kept in `trades_all` for Excel/CSV audit
+    # (so the user can see what was filtered and why) but are STRIPPED
+    # from `trades` -- the variable every metric path uses below. This is
+    # the single point of exclusion: no aggregate calculation should ever
+    # see a blocked row.
+    trades_all = list(trades)
+    trades     = [t for t in trades_all if not t.get("news_blocked")]
+    blocked_trades = [t for t in trades_all if t.get("news_blocked")]
+
     prox_trades = [t for t in trades if t.get("entry_zone") == "proximal"]
     mid_trades  = [t for t in trades if t.get("entry_zone") == "50pct"]
 
@@ -1018,6 +1238,23 @@ def write_h1_only_report(
     exit_counts_prox = _exit_reason_counts(prox_trades)
     exit_counts_mid  = _exit_reason_counts(mid_trades)
 
+    # News-blackout audit. Every blocked row is listed (without the trade
+    # outcome — that would imply we counted it; we did not). The list is
+    # intentionally redundant with the Excel sheet so the user can grep
+    # summary.json for a specific event without opening the workbook.
+    blocked_audit = [
+        {
+            "pair":     t.get("pair"),
+            "alert_ts": t.get("alert_ts"),
+            "entry_zone": t.get("entry_zone"),
+            "event_title":    t.get("news_event_title"),
+            "event_currency": t.get("news_event_currency"),
+            "event_source":   t.get("news_event_source"),
+            "event_ts":       t.get("news_event_ts"),
+        }
+        for t in blocked_trades
+    ]
+
     summary = {
         "run_id":              run_id,
         "meta":                meta,
@@ -1037,11 +1274,19 @@ def write_h1_only_report(
         "per_pair_50pct_tp2":    _per_pair_breakdown(mid_trades, "r_if_exit_tp2", risk_usd),
         "score_buckets_tp1":     _score_buckets(prox_trades, "r_if_exit_tp1"),
         "score_buckets_tp2":     score_buckets,
+        # News-blackout exclusion. blocked_trade_rows is the count of
+        # trade rows (proximal + 50pct, so it can be up to 2x distinct alerts)
+        # that were dropped from all metric calculations.
+        "news_blocked_trade_rows": len(blocked_trades),
+        "news_blocked_audit":      blocked_audit,
     }
 
-    # Files.
-    _trades_csv(trades, out_dir / "trades.csv")
-    excel_ok = _try_excel(trades, out_dir / "trades.xlsx") is not None
+    # Files. Use trades_all for CSV and Excel so blocked rows appear in
+    # the audit outputs (column news_blocked + event metadata). Metrics
+    # were computed above on the filtered `trades`, so summary stats are
+    # unaffected by this.
+    _trades_csv(trades_all, out_dir / "trades.csv")
+    excel_ok = _try_excel(trades_all, out_dir / "trades.xlsx") is not None
     with open(out_dir / "raw_alerts.jsonl", "w") as f:
         for a in raw_alerts:
             f.write(json.dumps(a, default=str) + "\n")
@@ -1070,6 +1315,25 @@ def write_h1_only_report(
         f"<b>{exit_reason_plain.get(k, k)}: {v}</b>"
         for k, v in sorted(exit_counts_prox.items())
     )
+
+    # Hypothetical TP1-only-exit comparison. Default policy rides to TP2
+    # after moving SL to BE on TP1 touch. The "if we'd banked at TP1" view
+    # answers: would a more conservative exit policy have given more total R?
+    _prox_filled = [t for t in prox_trades if t.get("exit_reason") != "never_filled"]
+    if _prox_filled:
+        sum_tp2 = sum((t.get("r_if_exit_tp2") or 0) for t in _prox_filled)
+        sum_tp1 = sum((t.get("r_if_exit_tp1") or 0) for t in _prox_filled)
+        n_prox = len(_prox_filled)
+        # Format as +X.XR with sign
+        def _f(v): return f"{'+' if v >= 0 else ''}{v:.1f}R"
+        tp1_vs_tp2_line = (
+            f"<p style='font-size:12px;color:#888;margin-top:2px;'>"
+            f"If we'd banked at TP1 instead of riding to TP2: "
+            f"total {_f(sum_tp1)} across {n_prox} trades "
+            f"(vs current TP2-ride policy: {_f(sum_tp2)}).</p>"
+        )
+    else:
+        tp1_vs_tp2_line = ""
 
     score_verdict = _score_verdict_text(score_buckets)
 
@@ -1178,20 +1442,37 @@ def write_h1_only_report(
   <p style="font-size:12px;color:#888;margin-top:4px;">
     How trades closed: {exit_breakdown}
   </p>
+  {tp1_vs_tp2_line}
 </div>
 
-<!-- SECTION 2: WHERE IT WORKED — pair × session grid -->
+<!-- SECTION 2: WHERE IT WORKED — by pair and by session (flat) -->
 <div class="section">
-  <h2>Where it worked — pair × session (proximal entry)</h2>
+  <h2>Where it worked — by pair</h2>
   <p style="font-size:12px;color:#666;margin-bottom:10px;">
-    Each cell shows win rate / avg R / trade count for that pair + session combination.
-    Cells with fewer than 3 trades are shown as — (not enough data).
+    Win rate, average R and trade count per pair (all sessions combined).
+    Rows with fewer than 3 trades show count only — not enough data to read.
   </p>
-  {_pair_session_grid_html(prox_trades, "r_if_exit_tp2")}
+  {_by_pair_html(prox_trades, "r_if_exit_tp2")}
+</div>
+
+<div class="section">
+  <h2>Where it worked — by session</h2>
+  <p style="font-size:12px;color:#666;margin-bottom:10px;">
+    Same view, sliced by trading session (all pairs combined).
+    The pair × session cross-tab will return once we have enough trades
+    for each cell to be statistically meaningful.
+  </p>
+  {_by_session_html(prox_trades, "r_if_exit_tp2")}
   <p style="font-size:11px;color:#aaa;margin-top:10px;">
     Day of week is tracked in the Excel (Zone Register tab) and will be analysed
     in the aggregate report after enough runs accumulate.
   </p>
+</div>
+
+<!-- SECTION 2b: KILLZONE WIN/LOSS SPLIT -->
+<div class="section">
+  <h2>Killzone — wins vs losses</h2>
+  {_killzone_split_html(prox_trades)}
 </div>
 
 <!-- SECTION 3: SCORE -->
@@ -1243,12 +1524,18 @@ def write_h1_only_report(
   {_vet_review_html(prox_trades)}
 </div>
 
+<!-- SECTION 7b: NEWS BLACKOUT AUDIT -->
+<div class="section">
+  <h2>News blackout — trades filtered</h2>
+  {_news_blackout_html(blocked_trades, meta)}
+</div>
+
 <!-- SECTION 8: FILES -->
 <div class="section">
   <h2>What's attached</h2>
   <ul style="padding-left:18px;font-size:13px;">
-    <li><b>trades.xlsx — Trades tab:</b> {"every filled trade, plain-English headers, day of week, color-coded P&L, amber highlights on flagged trades" if excel_ok else "<span style='color:#e74c3c;'>FAILED — openpyxl not installed. Use trades.csv instead.</span>"}</li>
-    <li><b>trades.xlsx — Zone Register tab:</b> one row per OB, both entry zones side by side — use this to verify entry/SL/TP levels and fill logic</li>
+    <li><b>trades.xlsx — Trades tab:</b> {"every filled trade, plain-English headers, day of week, color-coded P&L, amber highlights on flagged trades. News-blocked rows are highlighted and marked in column News Blocked." if excel_ok else "<span style='color:#e74c3c;'>FAILED — openpyxl not installed. Use trades.csv instead.</span>"}</li>
+    <li><b>trades.xlsx — Zone Register tab:</b> one row per OB, both entry zones side by side — use this to verify entry/SL/TP levels and fill logic. Includes News Blocked + event details columns.</li>
     <li><b>trades.csv</b> — machine-readable column names, used by aggregate_runs.py</li>
     <li><b>summary.json</b> — all metrics in structured format</li>
     <li><b>run_log.jsonl + console.log</b> — full diagnostic log</li>
