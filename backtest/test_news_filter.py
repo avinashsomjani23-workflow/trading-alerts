@@ -133,9 +133,9 @@ def test_naive_datetime_rejected():
 # ---------------------------------------------------------------------------
 
 def _synth_trade(pair, alert_ts, entry_zone, exit_reason, r,
-                 *, killzone=True, news_blocked=False,
+                 *, killzone=True, news_blocked=False, ist_blocked=False,
                  news_event_title="", session="London", bos_tag="BOS",
-                 bos_tier="Major"):
+                 bos_tier="Major", alert_utc_hour=8):
     """Builds a minimal trade row with all keys the report needs."""
     return {
         "pair":              pair,
@@ -181,6 +181,8 @@ def _synth_trade(pair, alert_ts, entry_zone, exit_reason, r,
         "news_event_currency":  "USD" if news_blocked else "",
         "news_event_source":    "ff" if news_blocked else "",
         "news_event_ts":        "2026-05-07T13:30:00+00:00" if news_blocked else "",
+        "ist_blocked":          ist_blocked,
+        "alert_utc_hour":       alert_utc_hour,
     }
 
 
@@ -231,6 +233,8 @@ def _build_summary(trades):
 
 def _extract_metrics(summary):
     """Pull every aggregate metric we care about into a flat dict."""
+    sb_prox     = summary["scoreboards"]["proximal_realised"]
+    sb_mid      = summary["scoreboards"]["fifty_pct_realised"]
     sb_prox_tp2 = summary["scoreboards"]["proximal_exit_tp2"]
     sb_mid_tp2  = summary["scoreboards"]["fifty_pct_exit_tp2"]
     sb_prox_tp1 = summary["scoreboards"]["proximal_exit_tp1"]
@@ -241,6 +245,12 @@ def _extract_metrics(summary):
         "fill_rate_50pct":               summary["fill_rate_50pct"],
         "exit_reason_counts_proximal":   summary["exit_reason_counts_proximal"],
         "exit_reason_counts_50pct":      summary["exit_reason_counts_50pct"],
+        "prox_pnl":                      sb_prox.get("total_pnl_usd"),
+        "prox_wr":                       sb_prox.get("win_rate_pct"),
+        "prox_exp":                      sb_prox.get("expectancy_r"),
+        "prox_trades":                   sb_prox.get("trades"),
+        "mid_pnl":                       sb_mid.get("total_pnl_usd"),
+        "mid_wr":                        sb_mid.get("win_rate_pct"),
         "prox_tp2_pnl":                  sb_prox_tp2.get("total_pnl_usd"),
         "prox_tp2_wr":                   sb_prox_tp2.get("win_rate_pct"),
         "prox_tp2_exp":                  sb_prox_tp2.get("expectancy_r"),
@@ -252,10 +262,12 @@ def _extract_metrics(summary):
         "mid_tp2_pnl":                   sb_mid_tp2.get("total_pnl_usd"),
         "mid_tp2_wr":                    sb_mid_tp2.get("win_rate_pct"),
         "mid_tp1_pnl":                   sb_mid_tp1.get("total_pnl_usd"),
-        "per_pair_proximal_tp2":         summary["per_pair_proximal_tp2"],
-        "per_pair_50pct_tp2":            summary["per_pair_50pct_tp2"],
-        "score_buckets_tp1":             summary["score_buckets_tp1"],
-        "score_buckets_tp2":             summary["score_buckets_tp2"],
+        "per_pair_proximal_realised":    summary["per_pair_proximal_realised"],
+        "per_pair_50pct_realised":       summary["per_pair_50pct_realised"],
+        "per_session_proximal_realised": summary["per_session_proximal_realised"],
+        "per_session_50pct_realised":    summary["per_session_50pct_realised"],
+        "score_buckets_proximal_realised": summary["score_buckets_proximal_realised"],
+        "score_buckets_50pct_realised":    summary["score_buckets_50pct_realised"],
     }
 
 

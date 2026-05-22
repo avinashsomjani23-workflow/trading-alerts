@@ -167,18 +167,15 @@ _SESSION_ORDER = ["Asia", "London", "NY", "Other"]
 
 
 def _flat_breakdown_row(label: str, sub: pd.DataFrame, r_col: str) -> str:
-    """One row in a flat breakdown table. Cells with <3 trades render as
-    'not enough' so the eye doesn't anchor on noise."""
+    """One row in a flat breakdown table. Low-n cells are faded so the eye
+    sees the number is thin without losing the data point."""
     n = len(sub)
     if n == 0:
-        return f"<tr><td><b>{label}</b></td><td>0</td><td>—</td><td>—</td></tr>"
+        return (f"<tr style='color:#bbb;'>"
+                f"<td><b>{label}</b></td><td>0</td><td>—</td><td>—</td></tr>")
     wins = (sub[r_col] > 0).sum()
     wr   = wins / n * 100
     exp  = sub[r_col].mean()
-    if n < 3:
-        return (f"<tr style='color:#888;'>"
-                f"<td><b>{label}</b></td><td>{n}</td>"
-                f"<td>—</td><td>—</td></tr>")
     if wr >= 50:
         bg = "#eafaf1"
     elif wr >= 40:
@@ -186,7 +183,9 @@ def _flat_breakdown_row(label: str, sub: pd.DataFrame, r_col: str) -> str:
     else:
         bg = "#fdf2f2"
     sign = "+" if exp >= 0 else ""
-    return (f"<tr style='background:{bg};'>"
+    # Low-n rows render faded -- number is shown but de-emphasised.
+    opacity = "opacity:0.55;" if n < 3 else ""
+    return (f"<tr style='background:{bg};{opacity}'>"
             f"<td><b>{label}</b></td>"
             f"<td>{n}</td>"
             f"<td>{wr:.0f}%</td>"
@@ -222,6 +221,216 @@ def _by_session_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     rows = "".join(_flat_breakdown_row(s, df[df["session"] == s], r_col)
                    for s in _SESSION_ORDER if s in df["session"].unique())
     return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>"
+
+
+def _pair_session_matrix_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    """Pair x Session cross-tab. Pairs are rows, sessions are columns.
+    Each cell shows trade count on top, WR and avg R below.
+
+    Color encodes WR (green >=50, amber 40-50, red <40). Low-n cells (n<3)
+    are faded so the eye sees the thin sample without losing the data point.
+    Right-most column and bottom row show pair-totals and session-totals so
+    weeks with only one trade per (pair, session) still produce a readable
+    pair-level row.
+    """
+    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    if not filled:
+        return "<p style='color:#888;'>No filled trades.</p>"
+    df = pd.DataFrame(filled)
+    if "pair" not in df.columns or "session" not in df.columns \
+            or r_col not in df.columns:
+        return "<p style='color:#888;'>Pair/session data missing.</p>"
+
+    pairs = sorted(df["pair"].unique())
+    sessions = [s for s in _SESSION_ORDER if s in df["session"].unique()]
+    if not sessions:
+        return "<p style='color:#888;'>No session data.</p>"
+
+    def _cell(sub: pd.DataFrame) -> str:
+        n = len(sub)
+        if n == 0:
+            return ("<td style='text-align:center;color:#ccc;font-size:11px;'>"
+                    "&mdash;</td>")
+        wins = (sub[r_col] > 0).sum()
+        wr = wins / n * 100
+        exp = sub[r_col].mean()
+        if wr >= 50:
+            bg = "#eafaf1"
+        elif wr >= 40:
+            bg = "#fef9e7"
+        else:
+            bg = "#fdf2f2"
+        opacity = "opacity:0.55;" if n < 3 else ""
+        sign = "+" if exp >= 0 else ""
+        return (f"<td style='background:{bg};{opacity}text-align:center;'>"
+                f"<div style='font-size:11px;color:#888;'>{n}t</div>"
+                f"<div style='font-weight:600;'>{wr:.0f}%</div>"
+                f"<div style='font-size:11px;'>{sign}{exp:.2f}R</div>"
+                f"</td>")
+
+    # Header row.
+    header = "<tr><th>Pair</th>"
+    for s in sessions:
+        header += f"<th style='text-align:center;'>{s}</th>"
+    header += "<th style='text-align:center;background:#34495e;'>All</th></tr>"
+
+    rows_html = ""
+    for pair in pairs:
+        pair_df = df[df["pair"] == pair]
+        row = f"<tr><td><b>{pair}</b></td>"
+        for s in sessions:
+            row += _cell(pair_df[pair_df["session"] == s])
+        row += _cell(pair_df).replace("background:#eafaf1",
+                                       "background:#eafaf1;border-left:2px solid #34495e") \
+                              .replace("background:#fef9e7",
+                                       "background:#fef9e7;border-left:2px solid #34495e") \
+                              .replace("background:#fdf2f2",
+                                       "background:#fdf2f2;border-left:2px solid #34495e")
+        row += "</tr>"
+        rows_html += row
+
+    # Bottom totals row -- session totals across all pairs.
+    totals_row = "<tr><td style='background:#34495e;color:#fff;'><b>All</b></td>"
+    for s in sessions:
+        sess_df = df[df["session"] == s]
+        cell = _cell(sess_df)
+        # Mark the totals row with a darker top border.
+        cell = cell.replace("<td style='",
+                            "<td style='border-top:2px solid #34495e;")
+        totals_row += cell
+    grand = _cell(df).replace("<td style='",
+                              "<td style='border-top:2px solid #34495e;"
+                              "border-left:2px solid #34495e;")
+    totals_row += grand + "</tr>"
+
+    return (f"<table><thead>{header}</thead>"
+            f"<tbody>{rows_html}{totals_row}</tbody></table>"
+            f"<p style='font-size:11px;color:#888;margin-top:6px;'>"
+            f"Each cell: trade count, win rate, average R. "
+            f"Faded cells have fewer than 3 trades -- read with caution. "
+            f"Right column and bottom row are roll-ups.</p>")
+
+
+def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
+                       meta: Dict[str, Any]) -> str:
+    """Audit section for alerts filtered by the IST trading-window gate.
+
+    Shows: count of dropped alerts, distribution by pair and UTC hour, and
+    the R outcomes those alerts *would* have produced if traded. This is
+    the data the user needs to decide whether to shift sleep hours.
+    """
+    # Filter to one row per alert (proximal trade is canonical -- it always
+    # gets a row, 50pct sometimes does not). Avoids double-counting alerts.
+    rows = [t for t in ist_blocked_trades
+            if t.get("entry_zone") == "proximal"]
+    n = len(rows)
+
+    forex_window = meta.get("ist_window_forex", "UTC 03:30-18:30")
+    index_window = meta.get("ist_window_index", "UTC 13:00-20:00")
+
+    header = (
+        f"<p style='font-size:12px;color:#666;margin-bottom:8px;'>"
+        f"Alerts whose timestamp fell outside the user's IST trading window. "
+        f"Live system suppresses these -- backtest mirrors that. These rows "
+        f"are <b>excluded from every aggregate metric above</b>. They are "
+        f"shown here so you can decide whether shifting your sleep schedule "
+        f"would unlock real edge.</p>"
+        f"<p style='font-size:11px;color:#888;margin-bottom:10px;'>"
+        f"Window: forex/commodity {forex_window} &middot; index {index_window}."
+        f"</p>"
+    )
+
+    if n == 0:
+        return header + (
+            "<p style='color:#27ae60;'>"
+            "No alerts fell outside the IST window this run."
+            "</p>"
+        )
+
+    df = pd.DataFrame(rows)
+
+    # 1. By UTC hour: count of alerts + would-have R sum.
+    by_hour_rows = ""
+    if "alert_utc_hour" in df.columns and "r_realised" in df.columns:
+        grouped = df.groupby("alert_utc_hour")
+        hour_data = []
+        for hour, sub in grouped:
+            n_alerts = len(sub)
+            filled_sub = sub[sub["exit_reason"] != "never_filled"]
+            n_filled = len(filled_sub)
+            total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
+            wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
+            wr = (wins / n_filled * 100) if n_filled else None
+            hour_data.append((int(hour), n_alerts, n_filled, wins, wr, total_r))
+        hour_data.sort()
+        for hour, n_alerts, n_filled, wins, wr, total_r in hour_data:
+            sign = "+" if total_r >= 0 else ""
+            wr_str = f"{wr:.0f}%" if wr is not None else "&mdash;"
+            ist_hour = (hour + 5) % 24  # rough IST (+5:30 truncated to +5)
+            ist_minute = 30
+            r_color = "#27ae60" if total_r > 0 else ("#e74c3c" if total_r < 0 else "#888")
+            by_hour_rows += (
+                f"<tr><td>{hour:02d}:00 UTC</td>"
+                f"<td style='color:#888;'>~{ist_hour:02d}:{ist_minute:02d} IST</td>"
+                f"<td>{n_alerts}</td>"
+                f"<td>{n_filled}</td>"
+                f"<td>{wr_str}</td>"
+                f"<td style='color:{r_color};'>{sign}{total_r:.2f}R</td></tr>"
+            )
+
+    by_hour_table = ""
+    if by_hour_rows:
+        by_hour_table = (
+            f"<h4>Alerts by UTC hour (with hypothetical outcome)</h4>"
+            f"<table><thead>"
+            f"<tr><th>UTC hour</th><th>IST (approx)</th>"
+            f"<th>Alerts</th><th>Filled</th><th>WR</th>"
+            f"<th>Would-have R</th></tr>"
+            f"</thead><tbody>{by_hour_rows}</tbody></table>"
+            f"<p style='font-size:11px;color:#888;margin-top:6px;'>"
+            f"Would-have R = sum of r_realised across these dropped alerts "
+            f"if you had been awake to take them. "
+            f"Positive = sleeping cost you R; negative = blackout saved you R.</p>"
+        )
+
+    # 2. By pair: same view, sliced differently.
+    by_pair_rows = ""
+    if "pair" in df.columns and "r_realised" in df.columns:
+        for pair, sub in df.groupby("pair"):
+            n_alerts = len(sub)
+            filled_sub = sub[sub["exit_reason"] != "never_filled"]
+            n_filled = len(filled_sub)
+            total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
+            wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
+            wr = (wins / n_filled * 100) if n_filled else None
+            sign = "+" if total_r >= 0 else ""
+            wr_str = f"{wr:.0f}%" if wr is not None else "&mdash;"
+            r_color = "#27ae60" if total_r > 0 else ("#e74c3c" if total_r < 0 else "#888")
+            by_pair_rows += (
+                f"<tr><td><b>{pair}</b></td>"
+                f"<td>{n_alerts}</td>"
+                f"<td>{n_filled}</td>"
+                f"<td>{wr_str}</td>"
+                f"<td style='color:{r_color};'>{sign}{total_r:.2f}R</td></tr>"
+            )
+
+    by_pair_table = ""
+    if by_pair_rows:
+        by_pair_table = (
+            f"<h4>Alerts by pair</h4>"
+            f"<table><thead>"
+            f"<tr><th>Pair</th><th>Alerts</th><th>Filled</th>"
+            f"<th>WR</th><th>Would-have R</th></tr>"
+            f"</thead><tbody>{by_pair_rows}</tbody></table>"
+        )
+
+    return (
+        header
+        + f"<p style='font-size:13px;margin-bottom:8px;'>"
+          f"<b>{n} alert(s)</b> dropped by IST gate "
+          f"(proximal rows; each alert may have a paired 50% row too).</p>"
+        + by_hour_table + by_pair_table
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -777,6 +986,10 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # was excluded from every aggregate metric in summary.json.
         "news_blocked", "news_event_title", "news_event_currency",
         "news_event_source", "news_event_ts",
+        # IST blackout audit columns. ist_blocked=True means this alert
+        # fell outside the user's IST trading window and was excluded
+        # from aggregates (live system would have suppressed it).
+        "ist_blocked", "alert_utc_hour",
     ]
     df = pd.DataFrame(trades)
     cols_present = [c for c in front_cols if c in df.columns]
@@ -821,6 +1034,8 @@ _EXCEL_COL_NAMES = {
     "news_event_currency":  "News Currency",
     "news_event_source":    "News Source",
     "news_event_ts":        "News Event Time (UTC)",
+    "ist_blocked":          "IST Window Blocked",
+    "alert_utc_hour":       "Alert Hour (UTC)",
 }
 
 _EXIT_LABELS = {
@@ -1195,6 +1410,197 @@ def _vet_review_html(trades: List[Dict]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Per-entry-zone block: emits the full per-zone analysis stack.
+# ---------------------------------------------------------------------------
+
+def _zone_block_html(
+    zone_label: str,
+    zone_trades: List[Dict[str, Any]],
+    sb_realised: Dict[str, Any],
+    sb_tp1: Dict[str, Any],
+    sb_tp2: Dict[str, Any],
+    risk_usd: float,
+    band_color: str,
+) -> str:
+    """One self-contained section per entry zone: headline -> by-pair ->
+    by-session -> pair x session matrix -> killzone split -> score buckets
+    -> confluences -> structure events -> loss analysis -> TP1 vs TP2.
+
+    Every aggregate inside this block uses r_realised so the headline and
+    the breakdowns reconcile to the same total.
+    """
+    # Headline figures (mirror the top-of-email shape but scoped to this zone).
+    n         = sb_realised.get("trades", 0)
+    total_pnl = sb_realised.get("total_pnl_usd", 0)
+    exp_r     = sb_realised.get("expectancy_r", 0)
+    wr        = sb_realised.get("win_rate_pct", 0)
+    pnl_color = "#27ae60" if total_pnl >= 0 else "#e74c3c"
+    headline  = _week_headline(sb_realised)
+
+    # Exit-reason narrative scoped to this zone.
+    exit_counts = _exit_reason_counts(zone_trades)
+    exit_reason_plain = {
+        "sl": "Stop loss", "tp1": "TP1 hit", "tp2": "TP2 hit",
+        "timeout": "Time limit", "window_end": "End of window",
+        "sl_collision": "SL+TP same bar", "never_filled": "Never filled",
+    }
+    exit_breakdown = " &middot; ".join(
+        f"<b>{exit_reason_plain.get(k, k)}: {v}</b>"
+        for k, v in sorted(exit_counts.items())
+    )
+
+    # TP1-vs-TP2 hypothetical line.
+    _filled = [t for t in zone_trades if t.get("exit_reason") != "never_filled"]
+    if _filled:
+        sum_tp2 = sum((t.get("r_if_exit_tp2") or 0) for t in _filled)
+        sum_tp1 = sum((t.get("r_if_exit_tp1") or 0) for t in _filled)
+        def _f(v): return f"{'+' if v >= 0 else ''}{v:.1f}R"
+        tp1_vs_tp2_line = (
+            f"<p style='font-size:12px;color:#888;margin-top:2px;'>"
+            f"If we'd banked at TP1 instead of riding to TP2: "
+            f"total {_f(sum_tp1)} across {len(_filled)} trades "
+            f"(vs current TP2-ride policy: {_f(sum_tp2)}).</p>"
+        )
+    else:
+        tp1_vs_tp2_line = ""
+
+    # Score buckets and verdict (this zone's data only).
+    score_buckets = _score_buckets(zone_trades, "r_realised")
+    score_verdict = _score_verdict_text(score_buckets)
+
+    return f"""
+<!-- ZONE BAND -->
+<div style="background:{band_color};color:#fff;padding:14px 28px;
+            font-size:14px;font-weight:700;letter-spacing:0.04em;
+            text-transform:uppercase;">
+  {zone_label}
+</div>
+
+<!-- ZONE HEADLINE -->
+<div class="section">
+  <div style="font-size:26px;font-weight:700;color:{pnl_color};">
+    {_m(total_pnl)}
+  </div>
+  <div style="font-size:14px;color:#555;margin-top:4px;">
+    {n} filled trades &nbsp;&middot;&nbsp;
+    {wr:.0f}% won &nbsp;&middot;&nbsp;
+    avg {_r(exp_r)} per trade
+  </div>
+  <div style="font-size:13px;color:#444;margin-top:10px;
+              background:#f8f9fa;border-left:3px solid {pnl_color};
+              padding:8px 12px;border-radius:0 4px 4px 0;">
+    {headline}
+  </div>
+
+  <div class="stats-strip" style="margin-top:14px;">
+    <div class="stat">
+      <div class="val" style="color:#27ae60;">{sb_realised.get('wins', 0)}</div>
+      <div class="lbl">Wins</div>
+    </div>
+    <div class="stat">
+      <div class="val" style="color:#e74c3c;">{sb_realised.get('losses', 0)}</div>
+      <div class="lbl">Losses</div>
+    </div>
+    <div class="stat">
+      <div class="val" style="color:#888;">{sb_realised.get('breakevens', 0)}</div>
+      <div class="lbl">Break-evens</div>
+    </div>
+    <div class="stat">
+      <div class="val">{_r(sb_realised.get('avg_win_r', 0))}</div>
+      <div class="lbl">Avg win</div>
+    </div>
+    <div class="stat">
+      <div class="val">{_r(sb_realised.get('avg_loss_r', 0))}</div>
+      <div class="lbl">Avg loss</div>
+    </div>
+  </div>
+  {_exit_narrative(sb_realised, risk_usd)}
+  <p style="font-size:12px;color:#888;margin-top:4px;">
+    How trades closed: {exit_breakdown}
+  </p>
+  {tp1_vs_tp2_line}
+</div>
+
+<!-- BY PAIR -->
+<div class="section">
+  <h2>Where it worked &mdash; by pair</h2>
+  <p style="font-size:12px;color:#666;margin-bottom:10px;">
+    Win rate, average R and trade count per pair. Faded rows have fewer
+    than 3 trades &mdash; read with caution.
+  </p>
+  {_by_pair_html(zone_trades, "r_realised")}
+</div>
+
+<!-- BY SESSION -->
+<div class="section">
+  <h2>Where it worked &mdash; by session</h2>
+  <p style="font-size:12px;color:#666;margin-bottom:10px;">
+    Same view, sliced by trading session.
+  </p>
+  {_by_session_html(zone_trades, "r_realised")}
+</div>
+
+<!-- PAIR x SESSION MATRIX -->
+<div class="section">
+  <h2>Pair &times; session matrix</h2>
+  <p style="font-size:12px;color:#666;margin-bottom:10px;">
+    The view that actually tells you where edge lives: each (pair, session)
+    intersection in one table. Roll-ups on the right and bottom.
+  </p>
+  {_pair_session_matrix_html(zone_trades, "r_realised")}
+</div>
+
+<!-- KILLZONE -->
+<div class="section">
+  <h2>Killzone &mdash; wins vs losses</h2>
+  {_killzone_split_html(zone_trades)}
+</div>
+
+<!-- SCORE -->
+<div class="section">
+  <h2>Did the confidence score predict better trades?</h2>
+  <p><b>{score_verdict}</b></p>
+  {_score_table_html(score_buckets)}
+  <p style="font-size:12px;color:#888;margin-top:8px;">
+    Score rises with each confluence present: FVG, liquidity sweep, kill zone,
+    PD alignment, OB freshness, structure tier.
+  </p>
+</div>
+
+<!-- CONFLUENCES -->
+<div class="section">
+  <h2>Which confluences actually helped &mdash; by pair</h2>
+  <p style="font-size:12px;color:#666;margin-bottom:10px;">
+    Win rate when each confluence was present. &uarr; = improved results vs without it.
+    &darr; = hurt results. &mdash; = fewer than 3 trades with this confluence for this pair.
+  </p>
+  {_confluence_per_pair_html(zone_trades, "r_realised")}
+</div>
+
+<!-- STRUCTURE -->
+<div class="section">
+  <h2>Performance by structure event type</h2>
+  <p style="font-size:12px;color:#666;margin-bottom:10px;">
+    Verify that Major events outperform Minor &mdash; they should, if detection is working.
+  </p>
+  {_structure_event_breakdown_html(zone_trades, "r_realised")}
+</div>
+
+<!-- LOSS ANALYSIS -->
+<div class="section">
+  <h2>What was different about the losing trades</h2>
+  {_loss_analysis_html(zone_trades)}
+</div>
+
+<!-- VET REVIEW -->
+<div class="section">
+  <h2>Trades worth a second look</h2>
+  {_vet_review_html(zone_trades)}
+</div>
+"""
+
+
+# ---------------------------------------------------------------------------
 # Main report writer
 # ---------------------------------------------------------------------------
 
@@ -1208,30 +1614,47 @@ def write_h1_only_report(
     out_dir = Path(__file__).parent / "results" / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # News-blocked trades are kept in `trades_all` for Excel/CSV audit
-    # (so the user can see what was filtered and why) but are STRIPPED
-    # from `trades` -- the variable every metric path uses below. This is
-    # the single point of exclusion: no aggregate calculation should ever
-    # see a blocked row.
+    # News-blocked AND IST-blocked trades are kept in `trades_all` for
+    # Excel/CSV audit (so the user can see what was filtered and why) but
+    # are STRIPPED from `trades` -- the variable every metric path uses
+    # below. Single point of exclusion: no aggregate calculation should
+    # ever see a blocked row.
+    #
+    # News blackout = +/-30 min around high-impact economic event.
+    # IST blackout  = outside user's IST trading window (live mirror).
     trades_all = list(trades)
-    trades     = [t for t in trades_all if not t.get("news_blocked")]
+    trades         = [t for t in trades_all
+                      if not t.get("news_blocked")
+                      and not t.get("ist_blocked")]
     blocked_trades = [t for t in trades_all if t.get("news_blocked")]
+    ist_blocked_trades = [t for t in trades_all if t.get("ist_blocked")]
 
     prox_trades = [t for t in trades if t.get("entry_zone") == "proximal"]
     mid_trades  = [t for t in trades if t.get("entry_zone") == "50pct"]
 
-    # Primary view: proximal entry, TP2 default policy.
+    # Primary view: r_realised under the default policy (ride to TP2 with
+    # SL-to-BE after TP1 hit). Every per-pair / per-session / score / killzone
+    # / structure / loss table now uses r_realised, so the headline and the
+    # breakdowns reconcile. The TP1-only hypothetical column (r_if_exit_tp1)
+    # and pure TP2-ride column (r_if_exit_tp2) are only used in the explicit
+    # "Proximal vs 50%" comparison table where the exit policy is the variable
+    # under test.
+    sb_prox    = _aggregate_for_exit(prox_trades, "r_realised",     risk_usd)
+    sb_mid     = _aggregate_for_exit(mid_trades,  "r_realised",     risk_usd)
     sb_prox_tp2 = _aggregate_for_exit(prox_trades, "r_if_exit_tp2", risk_usd)
     sb_mid_tp2  = _aggregate_for_exit(mid_trades,  "r_if_exit_tp2", risk_usd)
     sb_prox_tp1 = _aggregate_for_exit(prox_trades, "r_if_exit_tp1", risk_usd)
     sb_mid_tp1  = _aggregate_for_exit(mid_trades,  "r_if_exit_tp1", risk_usd)
 
-    pp_prox   = _per_pair_breakdown(prox_trades,  "r_if_exit_tp2", risk_usd)
-    ss_prox   = _per_session_breakdown(prox_trades, "r_if_exit_tp2", risk_usd)
+    pp_prox   = _per_pair_breakdown(prox_trades,  "r_realised", risk_usd)
+    pp_mid    = _per_pair_breakdown(mid_trades,   "r_realised", risk_usd)
+    ss_prox   = _per_session_breakdown(prox_trades, "r_realised", risk_usd)
+    ss_mid    = _per_session_breakdown(mid_trades,  "r_realised", risk_usd)
     fill_prox = _fill_rate(trades, "proximal")
     fill_mid  = _fill_rate(trades, "50pct")
 
-    score_buckets = _score_buckets(prox_trades, "r_if_exit_tp2")
+    score_buckets      = _score_buckets(prox_trades, "r_realised")
+    score_buckets_mid  = _score_buckets(mid_trades,  "r_realised")
     # Exit counts must be scoped per entry-zone — the headline counts proximal
     # trades only, so mixing zones here makes the "How trades closed" line
     # contradict the headline (e.g. 21 filled but 29 SL hits across both zones).
@@ -1264,21 +1687,31 @@ def write_h1_only_report(
         "fill_rate_50pct":     fill_mid,
         "exit_reason_counts_proximal": exit_counts_prox,
         "exit_reason_counts_50pct":    exit_counts_mid,
+        # Scoreboards under three exit policies. r_realised is the default
+        # (TP2-ride with SL-to-BE after TP1); the tp1/tp2 columns are pure
+        # hypotheticals and named accordingly.
         "scoreboards": {
+            "proximal_realised":  sb_prox,
             "proximal_exit_tp1":  sb_prox_tp1,
             "proximal_exit_tp2":  sb_prox_tp2,
+            "fifty_pct_realised": sb_mid,
             "fifty_pct_exit_tp1": sb_mid_tp1,
             "fifty_pct_exit_tp2": sb_mid_tp2,
         },
-        "per_pair_proximal_tp2": pp_prox,
-        "per_pair_50pct_tp2":    _per_pair_breakdown(mid_trades, "r_if_exit_tp2", risk_usd),
-        "score_buckets_tp1":     _score_buckets(prox_trades, "r_if_exit_tp1"),
-        "score_buckets_tp2":     score_buckets,
-        # News-blackout exclusion. blocked_trade_rows is the count of
-        # trade rows (proximal + 50pct, so it can be up to 2x distinct alerts)
-        # that were dropped from all metric calculations.
+        # Per-pair / per-session breakdowns use r_realised so they reconcile
+        # to the headline total. Keys carry the column name explicitly.
+        "per_pair_proximal_realised": pp_prox,
+        "per_pair_50pct_realised":    pp_mid,
+        "per_session_proximal_realised": ss_prox,
+        "per_session_50pct_realised":    ss_mid,
+        "score_buckets_proximal_realised": score_buckets,
+        "score_buckets_50pct_realised":    score_buckets_mid,
+        # Blackout exclusion counters. Each is the count of trade rows
+        # (proximal + 50pct, up to 2x distinct alerts) dropped from every
+        # aggregate metric calculation above.
         "news_blocked_trade_rows": len(blocked_trades),
         "news_blocked_audit":      blocked_audit,
+        "ist_blocked_trade_rows":  len(ist_blocked_trades),
     }
 
     # Files. Use trades_all for CSV and Excel so blocked rows appear in
@@ -1294,48 +1727,17 @@ def write_h1_only_report(
         json.dump(summary, f, indent=2, default=str)
 
     # --- HTML ---
-    n          = sb_prox_tp2.get("trades", 0)
-    total_pnl  = sb_prox_tp2.get("total_pnl_usd", 0)
-    exp_r      = sb_prox_tp2.get("expectancy_r", 0)
-    wr         = sb_prox_tp2.get("win_rate_pct", 0)
-    headline   = _week_headline(sb_prox_tp2)
-    pnl_color  = "#27ae60" if total_pnl >= 0 else "#e74c3c"
-    pairs_str  = ", ".join(meta.get("pairs", []))
-    regime_str = meta.get("regime", "")
-
-    exit_reason_plain = {
-        "sl": "Stop loss", "tp1": "TP1 hit", "tp2": "TP2 hit",
-        "timeout": "Time limit", "window_end": "End of window",
-        "sl_collision": "SL+TP same bar", "never_filled": "Never filled",
-    }
-    # Email shows the proximal breakdown only — same population as the
-    # headline (n filled trades, wins, losses, narrative). The 50pct breakdown
-    # lives in summary.json under exit_reason_counts_50pct for offline review.
-    exit_breakdown = " &middot; ".join(
-        f"<b>{exit_reason_plain.get(k, k)}: {v}</b>"
-        for k, v in sorted(exit_counts_prox.items())
-    )
-
-    # Hypothetical TP1-only-exit comparison. Default policy rides to TP2
-    # after moving SL to BE on TP1 touch. The "if we'd banked at TP1" view
-    # answers: would a more conservative exit policy have given more total R?
-    _prox_filled = [t for t in prox_trades if t.get("exit_reason") != "never_filled"]
-    if _prox_filled:
-        sum_tp2 = sum((t.get("r_if_exit_tp2") or 0) for t in _prox_filled)
-        sum_tp1 = sum((t.get("r_if_exit_tp1") or 0) for t in _prox_filled)
-        n_prox = len(_prox_filled)
-        # Format as +X.XR with sign
-        def _f(v): return f"{'+' if v >= 0 else ''}{v:.1f}R"
-        tp1_vs_tp2_line = (
-            f"<p style='font-size:12px;color:#888;margin-top:2px;'>"
-            f"If we'd banked at TP1 instead of riding to TP2: "
-            f"total {_f(sum_tp1)} across {n_prox} trades "
-            f"(vs current TP2-ride policy: {_f(sum_tp2)}).</p>"
-        )
-    else:
-        tp1_vs_tp2_line = ""
-
-    score_verdict = _score_verdict_text(score_buckets)
+    # Top-of-email headline mirrors the Proximal zone's r_realised (the
+    # default-policy column). This is the same column the zone breakdowns
+    # use, so headline + breakdowns reconcile to the same total.
+    total_pnl_prox = sb_prox.get("total_pnl_usd", 0)
+    total_pnl_mid  = sb_mid.get("total_pnl_usd", 0)
+    n_prox_filled  = sb_prox.get("trades", 0)
+    n_mid_filled   = sb_mid.get("trades", 0)
+    pnl_color_prox = "#27ae60" if total_pnl_prox >= 0 else "#e74c3c"
+    pnl_color_mid  = "#27ae60" if total_pnl_mid  >= 0 else "#e74c3c"
+    pairs_str      = ", ".join(meta.get("pairs", []))
+    regime_str     = meta.get("regime", "")
 
     html = f"""<!DOCTYPE html>
 <html lang="en"><head>
@@ -1354,11 +1756,17 @@ def write_h1_only_report(
 
   /* Headline number */
   .headline {{ padding: 24px 28px; border-bottom: 1px solid #eee; }}
-  .headline .big {{ font-size: 32px; font-weight: 700; color: {pnl_color}; }}
+  .headline .big {{ font-size: 32px; font-weight: 700; }}
   .headline .sub {{ font-size: 14px; color: #555; margin-top: 4px; }}
   .headline .verdict {{ font-size: 13px; color: #444; margin-top: 10px;
-                        background: #f8f9fa; border-left: 3px solid {pnl_color};
+                        background: #f8f9fa;
                         padding: 8px 12px; border-radius: 0 4px 4px 0; }}
+  .summary-strip {{ display: flex; gap: 12px; margin-top: 16px; }}
+  .summary-card {{ flex: 1; padding: 14px; border-radius: 6px; border: 1px solid #eee; }}
+  .summary-card .label {{ font-size: 11px; color: #888;
+                          text-transform: uppercase; letter-spacing: 0.06em; }}
+  .summary-card .val {{ font-size: 22px; font-weight: 700; margin-top: 4px; }}
+  .summary-card .meta {{ font-size: 11px; color: #888; margin-top: 4px; }}
 
   /* Sections */
   .section {{ padding: 22px 28px; border-bottom: 1px solid #eee; }}
@@ -1402,131 +1810,73 @@ def write_h1_only_report(
   </div>
 </div>
 
-<!-- HEADLINE -->
+<!-- HEADLINE: side-by-side summary of both entry zones -->
 <div class="headline">
-  <div class="big">{_m(total_pnl)}</div>
-  <div class="sub">
-    {n} filled trades &nbsp;&middot;&nbsp;
-    {wr:.0f}% won &nbsp;&middot;&nbsp;
-    avg {_r(exp_r)} per trade
+  <div style="font-size:13px;color:#888;text-transform:uppercase;
+              letter-spacing:0.08em;margin-bottom:8px;">
+    Week summary &mdash; both entry zones
   </div>
-  <div class="verdict">{headline}</div>
-</div>
-
-<!-- SECTION 1: WHAT HAPPENED -->
-<div class="section">
-  <h2>What happened this week</h2>
-  <div class="stats-strip">
-    <div class="stat">
-      <div class="val" style="color:#27ae60;">{sb_prox_tp2.get('wins', 0)}</div>
-      <div class="lbl">Wins</div>
+  <div class="summary-strip">
+    <div class="summary-card" style="border-left:4px solid #2c3e50;">
+      <div class="label">Proximal entry</div>
+      <div class="val" style="color:{pnl_color_prox};">{_m(total_pnl_prox)}</div>
+      <div class="meta">{n_prox_filled} filled &middot;
+        {sb_prox.get('win_rate_pct', 0):.0f}% won &middot;
+        avg {_r(sb_prox.get('expectancy_r', 0))}</div>
     </div>
-    <div class="stat">
-      <div class="val" style="color:#e74c3c;">{sb_prox_tp2.get('losses', 0)}</div>
-      <div class="lbl">Losses</div>
-    </div>
-    <div class="stat">
-      <div class="val" style="color:#888;">{sb_prox_tp2.get('breakevens', 0)}</div>
-      <div class="lbl">Break-evens</div>
-    </div>
-    <div class="stat">
-      <div class="val">{_r(sb_prox_tp2.get('avg_win_r', 0))}</div>
-      <div class="lbl">Avg win</div>
-    </div>
-    <div class="stat">
-      <div class="val">{_r(sb_prox_tp2.get('avg_loss_r', 0))}</div>
-      <div class="lbl">Avg loss</div>
+    <div class="summary-card" style="border-left:4px solid #34495e;">
+      <div class="label">50% mean entry</div>
+      <div class="val" style="color:{pnl_color_mid};">{_m(total_pnl_mid)}</div>
+      <div class="meta">{n_mid_filled} filled &middot;
+        {sb_mid.get('win_rate_pct', 0):.0f}% won &middot;
+        avg {_r(sb_mid.get('expectancy_r', 0))}</div>
     </div>
   </div>
-  {_exit_narrative(sb_prox_tp2, risk_usd)}
-  <p style="font-size:12px;color:#888;margin-top:4px;">
-    How trades closed: {exit_breakdown}
-  </p>
-  {tp1_vs_tp2_line}
-</div>
-
-<!-- SECTION 2: WHERE IT WORKED — by pair and by session (flat) -->
-<div class="section">
-  <h2>Where it worked — by pair</h2>
-  <p style="font-size:12px;color:#666;margin-bottom:10px;">
-    Win rate, average R and trade count per pair (all sessions combined).
-    Rows with fewer than 3 trades show count only — not enough data to read.
-  </p>
-  {_by_pair_html(prox_trades, "r_if_exit_tp2")}
-</div>
-
-<div class="section">
-  <h2>Where it worked — by session</h2>
-  <p style="font-size:12px;color:#666;margin-bottom:10px;">
-    Same view, sliced by trading session (all pairs combined).
-    The pair × session cross-tab will return once we have enough trades
-    for each cell to be statistically meaningful.
-  </p>
-  {_by_session_html(prox_trades, "r_if_exit_tp2")}
-  <p style="font-size:11px;color:#aaa;margin-top:10px;">
-    Day of week is tracked in the Excel (Zone Register tab) and will be analysed
-    in the aggregate report after enough runs accumulate.
+  <p style="font-size:12px;color:#888;margin-top:14px;">
+    Each section below is a self-contained analysis of one entry zone.
+    Numbers within a section reconcile to that zone's headline.
   </p>
 </div>
 
-<!-- SECTION 2b: KILLZONE WIN/LOSS SPLIT -->
-<div class="section">
-  <h2>Killzone — wins vs losses</h2>
-  {_killzone_split_html(prox_trades)}
-</div>
+<!-- ============================================================ -->
+<!-- SECTION A: PROXIMAL ENTRY -->
+<!-- ============================================================ -->
+{_zone_block_html(
+    "Section A &mdash; Proximal entry",
+    prox_trades, sb_prox, sb_prox_tp1, sb_prox_tp2, risk_usd,
+    "#2c3e50",
+)}
 
-<!-- SECTION 3: SCORE -->
-<div class="section">
-  <h2>Did the confidence score predict better trades?</h2>
-  <p><b>{score_verdict}</b></p>
-  {_score_table_html(score_buckets)}
-  <p style="font-size:12px;color:#888;margin-top:8px;">
-    Score rises with each confluence present: FVG, liquidity sweep, kill zone,
-    PD alignment, OB freshness, structure tier.
-  </p>
-</div>
+<!-- ============================================================ -->
+<!-- SECTION B: 50% MEAN ENTRY -->
+<!-- ============================================================ -->
+{_zone_block_html(
+    "Section B &mdash; 50% mean entry",
+    mid_trades, sb_mid, sb_mid_tp1, sb_mid_tp2, risk_usd,
+    "#34495e",
+)}
 
-<!-- SECTION 4: CONFLUENCE PER PAIR -->
+<!-- ============================================================ -->
+<!-- SECTION C: ENTRY-MODE COMPARISON (single table, cross-zone) -->
+<!-- ============================================================ -->
 <div class="section">
-  <h2>Which confluences actually helped — by pair</h2>
-  <p style="font-size:12px;color:#666;margin-bottom:10px;">
-    Win rate when each confluence was present. ↑ = improved results vs without it.
-    ↓ = hurt results. — = fewer than 3 trades with this confluence for this pair.
-  </p>
-  {_confluence_per_pair_html(prox_trades, "r_if_exit_tp2")}
-</div>
-
-<!-- SECTION 5: STRUCTURE EVENT PERFORMANCE -->
-<div class="section">
-  <h2>Performance by structure event type</h2>
-  <p style="font-size:12px;color:#666;margin-bottom:10px;">
-    The system detects four kinds of structural events. Each carries different reliability.
-    Use this table to verify that Major events outperform Minor — they should, if detection is working.
-  </p>
-  {_structure_event_breakdown_html(prox_trades, "r_if_exit_tp2")}
-</div>
-
-<!-- SECTION 6: WHY WE LOST -->
-<div class="section">
-  <h2>What was different about the losing trades</h2>
-  {_loss_analysis_html(prox_trades)}
-</div>
-
-<!-- SECTION 6: PROXIMAL vs 50% -->
-<div class="section">
-  <h2>Proximal entry vs 50% midpoint entry</h2>
+  <h2>Proximal entry vs 50% midpoint entry &mdash; head-to-head</h2>
   {_entry_comparison_html(sb_prox_tp2, sb_mid_tp2, fill_prox, fill_mid)}
 </div>
 
-<!-- SECTION 7: VET REVIEW -->
+<!-- ============================================================ -->
+<!-- SECTION D: IST BLACKOUT AUDIT -->
+<!-- ============================================================ -->
 <div class="section">
-  <h2>Trades worth a second look</h2>
-  {_vet_review_html(prox_trades)}
+  <h2>IST trading-window gate &mdash; alerts dropped</h2>
+  {_ist_blackout_html(ist_blocked_trades, meta)}
 </div>
 
-<!-- SECTION 7b: NEWS BLACKOUT AUDIT -->
+<!-- ============================================================ -->
+<!-- SECTION E: NEWS BLACKOUT AUDIT -->
+<!-- ============================================================ -->
 <div class="section">
-  <h2>News blackout — trades filtered</h2>
+  <h2>News blackout &mdash; trades filtered</h2>
   {_news_blackout_html(blocked_trades, meta)}
 </div>
 

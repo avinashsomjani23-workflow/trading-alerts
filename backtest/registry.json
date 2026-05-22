@@ -1,0 +1,117 @@
+{
+  "updated_at": "2026-05-22T22:18:42.294298+00:00",
+  "runs": [
+    {
+      "run_id": "h1only_20241104_20241106",
+      "start": "2024-11-04",
+      "end": "2024-11-06",
+      "group": 0,
+      "regime": "war",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 6,
+        "filled_trades": 3,
+        "win_rate_pct": 0.0,
+        "expectancy_r": -0.667,
+        "max_dd_r": 7.0,
+        "longest_losing_streak": 7,
+        "fill_rate_proximal_pct": 100.0,
+        "fill_rate_50pct_pct": 100.0,
+        "per_pair": [],
+        "by_session": {
+          "Asia": {
+            "trades": 3,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
+          },
+          "London": {
+            "trades": 1,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
+          },
+          "NY": {
+            "trades": 3,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -0.667
+          },
+          "Other": {
+            "trades": 1,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
+          }
+        },
+        "score_buckets": [],
+        "score_verdict": "insufficient data"
+      },
+      "notes": "",
+      "recorded_at": "2026-05-22T22:18:42.292895+00:00"
+    },
+    {
+      "run_id": "h1only_20241106_20241106",
+      "start": "2024-11-06",
+      "end": "2024-11-06",
+      "group": 0,
+      "regime": "war",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 0,
+        "filled_trades": 0,
+        "win_rate_pct": 0,
+        "expectancy_r": 0,
+        "max_dd_r": 0.0,
+        "longest_losing_streak": 0,
+        "fill_rate_proximal_pct": 0.0,
+        "fill_rate_50pct_pct": 0.0,
+        "per_pair": [],
+        "by_session": {},
+        "score_buckets": [],
+        "score_verdict": "insufficient data"
+      },
+      "notes": "",
+      "recorded_at": "2026-05-22T22:16:02.397172+00:00"
+    },
+    {
+      "run_id": "h1only_20260401_20260408",
+      "start": "2026-04-01",
+      "end": "2026-04-08",
+      "group": 0,
+      "regime": "unspecified",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 12,
+        "filled_trades": 6,
+        "win_rate_pct": 16.7,
+        "expectancy_r": -0.395,
+        "max_dd_r": 4.0,
+        "longest_losing_streak": 3,
+        "fill_rate_proximal_pct": 100.0,
+        "fill_rate_50pct_pct": 100.0,
+        "per_pair": [],
+        "by_session": {
+          "Asia": {
+            "trades": 5,
+            "win_rate_pct": 40.0,
+            "expectancy_r": 0.146
+          },
+          "London": {
+            "trades": 4,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
+          },
+          "NY": {
+            "trades": 3,
+            "win_rate_pct": 33.3,
+            "expectancy_r": 0.317
+          }
+        },
+        "score_buckets": [],
+        "score_verdict": "insufficient data"
+      },
+      "notes": "",
+      "recorded_at": "2026-05-22T22:16:04.621618+00:00"
+    }
+  ]
+}

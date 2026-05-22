@@ -24,6 +24,7 @@ from backtest import data_loader, replay_engine, trade_simulator, reporting
 from backtest import reporting_email
 from backtest import h1_only_simulator
 from backtest import h1_only_reporting
+from backtest import ist_window
 from backtest.run_logger import RunLogger, log_event
 import news_filter
 
@@ -479,11 +480,13 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
 
         n_trades_for_pair = 0
         n_blocked_for_pair = 0
+        n_ist_blocked_for_pair = 0
+        pair_type = pair_conf.get("pair_type", "forex")
         for alert in alerts_for_pair:
             rows = h1_only_simulator.simulate_h1_only_dual(
                 alert, pair_conf, df_h1, risk_usd=risk_usd,
             )
-            # News blackout tagging. Option B: simulate every alert; tag
+            # Blackout tagging. Option B: simulate every alert; tag
             # blocked rows so they appear in Excel for audit but are
             # excluded from every aggregate metric (handled in reporting).
             #
@@ -499,16 +502,28 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                 alert_ts.to_pydatetime(), name, news_events,
                 window_minutes=30,
             )
+            # IST trading-window gate. Live system suppresses everything
+            # outside the user's IST window -- backtest must mirror this.
+            # Alerts outside the window are simulated for audit (so we can
+            # show "what you would have made if you'd traded these hours")
+            # but excluded from every aggregate metric.
+            ist_blocked = not ist_window.in_user_trading_window(
+                alert_ts, pair_type
+            )
             for row in rows:
                 row["news_blocked"]        = bool(blocked)
                 row["news_event_title"]    = src_event["title"]    if blocked else ""
                 row["news_event_currency"] = src_event["currency"] if blocked else ""
                 row["news_event_source"]   = src_event["source"]   if blocked else ""
                 row["news_event_ts"]       = src_event["ts_utc"].isoformat() if blocked else ""
+                row["ist_blocked"]         = bool(ist_blocked)
+                row["alert_utc_hour"]      = int(alert_ts.hour)
                 all_trades.append(row)
                 n_trades_for_pair += 1
                 if blocked:
                     n_blocked_for_pair += 1
+                if ist_blocked:
+                    n_ist_blocked_for_pair += 1
                 log_event("trade_simulated", pair=name,
                           alert_ts=str(alert["ts"]),
                           entry_zone=row.get("entry_zone"),
@@ -520,16 +535,21 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                           r_if_exit_tp2=row.get("r_if_exit_tp2"),
                           pnl_usd=row.get("pnl_usd"),
                           news_blocked=bool(blocked),
+                          ist_blocked=bool(ist_blocked),
                           news_event_title=row.get("news_event_title"),
                           news_event_source=row.get("news_event_source"))
 
         log_event("pair_trades_simulated", pair=name,
                   trades=n_trades_for_pair,
-                  news_blocked=n_blocked_for_pair)
+                  news_blocked=n_blocked_for_pair,
+                  ist_blocked=n_ist_blocked_for_pair)
         print(f"  {name}: {n_trades_for_pair} simulated trade rows "
-              f"(2 per qualified OB-touch; {n_blocked_for_pair} news-blocked)")
+              f"(2 per qualified OB-touch; "
+              f"{n_blocked_for_pair} news-blocked, "
+              f"{n_ist_blocked_for_pair} IST-blocked)")
 
     n_blocked_total = sum(1 for t in all_trades if t.get("news_blocked"))
+    n_ist_blocked_total = sum(1 for t in all_trades if t.get("ist_blocked"))
     meta = {
         "start": start.strftime("%Y-%m-%d"),
         "end": end.strftime("%Y-%m-%d"),
@@ -544,6 +564,12 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         "news_events_fetched":  len(news_events),
         "news_blocked_rows":    n_blocked_total,
         "news_window_minutes":  30,
+        # IST trading-window gate. Alerts outside the user's IST window
+        # are excluded from aggregates; rows kept in Excel for audit so
+        # the user can decide whether to shift their trading hours.
+        "ist_blocked_rows":     n_ist_blocked_total,
+        "ist_window_forex":     ist_window.window_label("forex"),
+        "ist_window_index":     ist_window.window_label("index"),
     }
     report_dir = h1_only_reporting.write_h1_only_report(
         run_id, all_trades, all_alerts, meta, risk_usd=risk_usd,
