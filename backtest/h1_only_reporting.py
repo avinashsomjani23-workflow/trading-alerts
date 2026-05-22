@@ -160,6 +160,325 @@ def _flag_vet_review(t: Dict[str, Any]) -> Tuple[bool, str]:
 
 
 # ---------------------------------------------------------------------------
+# Pair × Session 2D grid
+# ---------------------------------------------------------------------------
+
+_SESSION_ORDER = ["Asia", "London", "NY", "Other"]
+
+def _pair_session_grid_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    if not filled:
+        return "<p style='color:#888;'>No filled trades.</p>"
+    df = pd.DataFrame(filled)
+    if "pair" not in df.columns or "session" not in df.columns or r_col not in df.columns:
+        return "<p style='color:#888;'>Session or pair data missing.</p>"
+
+    pairs    = sorted(df["pair"].unique())
+    sessions = [s for s in _SESSION_ORDER if s in df["session"].unique()]
+
+    def _cell(sub: pd.DataFrame) -> str:
+        n = len(sub)
+        if n < 3:
+            return f"<td style='color:#bbb;text-align:center;'>—<br><small>{n}t</small></td>"
+        wr  = (sub[r_col] > 0).mean() * 100
+        exp = sub[r_col].mean()
+        if wr >= 50:
+            bg = "#eafaf1"
+        elif wr >= 40:
+            bg = "#fef9e7"
+        else:
+            bg = "#fdf2f2"
+        sign = "+" if exp >= 0 else ""
+        return (f"<td style='background:{bg};text-align:center;'>"
+                f"<b>{wr:.0f}%</b><br>"
+                f"<small>{sign}{exp:.2f}R &middot; {n}t</small></td>")
+
+    header = "<tr><th>Pair</th>" + "".join(f"<th>{s}</th>" for s in sessions) + "</tr>"
+    rows   = ""
+    for pair in pairs:
+        pair_df = df[df["pair"] == pair]
+        row = f"<tr><td><b>{pair}</b></td>"
+        for sess in sessions:
+            sub = pair_df[pair_df["session"] == sess]
+            row += _cell(sub)
+        row += "</tr>"
+        rows += row
+
+    legend = ("<p style='font-size:11px;color:#888;margin-top:6px;'>"
+              "🟢 ≥ 50% win rate &nbsp; 🟡 40–49% &nbsp; 🔴 &lt; 40% &nbsp;"
+              "— = fewer than 3 trades (not enough to conclude)</p>")
+    return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>{legend}"
+
+
+# ---------------------------------------------------------------------------
+# Confluence per pair
+# ---------------------------------------------------------------------------
+
+_CONFLUENCE_COLS = {
+    "FVG":          ("fvg_present",   lambda s: s == True),
+    "Sweep":        ("sweep_present", lambda s: s == True),
+    "Kill zone":    ("killzone_pts",  lambda s: s > 0),
+    "Freshness":    ("freshness_pts", lambda s: s > 0),
+    "Structure":    ("structure_pts", lambda s: s > 0),
+}
+
+def _confluence_per_pair_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    if not filled:
+        return "<p style='color:#888;'>No data.</p>"
+    df = pd.DataFrame(filled)
+    if "pair" not in df.columns or r_col not in df.columns:
+        return "<p style='color:#888;'>Data missing.</p>"
+
+    pairs  = sorted(df["pair"].unique())
+    confs  = list(_CONFLUENCE_COLS.keys())
+
+    def _mask(df: pd.DataFrame, name: str) -> pd.Series:
+        col, fn = _CONFLUENCE_COLS[name]
+        if col not in df.columns:
+            return pd.Series([False] * len(df), index=df.index)
+        try:
+            return fn(df[col])
+        except Exception:
+            return pd.Series([False] * len(df), index=df.index)
+
+    header = "<tr><th>Pair</th>" + "".join(f"<th>{c}</th>" for c in confs) + "</tr>"
+    rows   = ""
+    for pair in pairs:
+        sub = df[df["pair"] == pair]
+        row = f"<tr><td><b>{pair}</b></td>"
+        for c in confs:
+            mask    = _mask(sub, c)
+            with_c  = sub[mask]
+            wout_c  = sub[~mask]
+            if len(with_c) < 3:
+                row += "<td style='color:#bbb;text-align:center;'>—</td>"
+                continue
+            wr_with  = (with_c[r_col] > 0).mean() * 100
+            wr_wout  = (wout_c[r_col] > 0).mean() * 100 if len(wout_c) >= 3 else None
+            uplift   = (wr_with - wr_wout) if wr_wout is not None else None
+            bg = "#eafaf1" if (uplift is not None and uplift > 5) else \
+                 "#fdf2f2" if (uplift is not None and uplift < -5) else "#f9f9f9"
+            arrow = " ↑" if (uplift and uplift > 5) else " ↓" if (uplift and uplift < -5) else ""
+            row += (f"<td style='background:{bg};text-align:center;'>"
+                    f"{wr_with:.0f}%{arrow}<br>"
+                    f"<small>{len(with_c)}t</small></td>")
+        row += "</tr>"
+        rows += row
+
+    note = ("<p style='font-size:11px;color:#888;margin-top:6px;'>"
+            "Win rate when that confluence was present. ↑ = helped vs without it, "
+            "↓ = hurt. — = fewer than 3 trades with this confluence.</p>")
+    return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>{note}"
+
+
+# ---------------------------------------------------------------------------
+# Loss pattern analysis
+# ---------------------------------------------------------------------------
+
+# UTC hours that overlap with high-impact economic releases.
+_NEWS_HOURS = {7, 8, 9, 13, 14}  # EUR/UK data 07-09, US data 13-14 UTC
+
+def _loss_analysis_html(trades: List[Dict[str, Any]]) -> str:
+    losses = [t for t in trades
+              if t.get("exit_reason") not in ("never_filled",) and t.get("r_realised", 0) < 0]
+    if not losses:
+        return "<p style='color:#27ae60;'>No losing trades this week.</p>"
+
+    n = len(losses)
+    findings = []
+
+    # 1. News timing
+    news_hits = 0
+    for t in losses:
+        ts = t.get("fill_ts") or t.get("alert_ts", "")
+        try:
+            h = pd.Timestamp(ts).hour
+            if h in _NEWS_HOURS:
+                news_hits += 1
+        except Exception:
+            pass
+    if news_hits > 0:
+        findings.append(
+            f"<b>{news_hits} of {n}</b> losing trades were filled during high-impact news windows "
+            f"(07–09 UTC or 13–14 UTC). These hours have unpredictable price spikes that "
+            f"can invalidate OB setups. Consider filtering these hours out."
+        )
+
+    # 2. Tight TP (barely cleared the 1.5R minimum gate)
+    tight_tp = sum(1 for t in losses if 1.5 <= (t.get("tp1_rr") or 0) < 2.0)
+    if tight_tp > 0:
+        findings.append(
+            f"<b>{tight_tp} of {n}</b> losing trades had TP1 between 1.5R and 2.0R — "
+            f"barely cleared the minimum gate. The opposing swing used as TP1 may have been "
+            f"too close (lookback=3 finding nearby wicks rather than real liquidity). "
+            f"These trades needed a significant move but the target wasn't far enough."
+        )
+
+    # 3. Old OB
+    old_ob = sum(1 for t in losses if (t.get("ob_age_h1_bars") or 0) > 48)
+    if old_ob > 0:
+        findings.append(
+            f"<b>{old_ob} of {n}</b> losing trades used an OB older than 48 H1 bars (2 days). "
+            f"Old OBs are more likely to be mitigated or no longer holding institutional interest. "
+            f"Consider a freshness cutoff."
+        )
+
+    # 4. Outside kill zone
+    no_kz = sum(1 for t in losses if (t.get("killzone_pts") or 0) == 0)
+    if no_kz > 0:
+        findings.append(
+            f"<b>{no_kz} of {n}</b> losing trades were taken outside of kill zone hours. "
+            f"Entries during off-peak hours see lower institutional participation and "
+            f"weaker follow-through."
+        )
+
+    # 5. CHoCH (counter-trend risk)
+    choch = sum(1 for t in losses if t.get("bos_tag", "").upper() == "CHOCH")
+    if choch > 0:
+        findings.append(
+            f"<b>{choch} of {n}</b> losing trades were CHoCH setups. CHoCH means the system "
+            f"traded against the prior trend. These carry higher failure risk than BOS setups."
+        )
+
+    if not findings:
+        return (f"<p>{n} losing trades this week. No dominant loss pattern detected — "
+                f"losses appear to be distributed normally across conditions.</p>")
+
+    items = "".join(f"<li style='margin-bottom:8px;'>{f}</li>" for f in findings)
+    return f"<ul style='padding-left:18px;font-size:13px;line-height:1.6;'>{items}</ul>"
+
+
+# ---------------------------------------------------------------------------
+# Trade validation
+# ---------------------------------------------------------------------------
+
+def _validate_trades(trades: List[Dict[str, Any]]) -> List[str]:
+    """Check structural invariants. Returns a list of violation strings (empty = clean)."""
+    violations = []
+    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    for t in filled:
+        pair      = t.get("pair", "?")
+        ts        = t.get("alert_ts", "?")
+        direction = t.get("direction", "")
+        entry     = t.get("entry")
+        sl        = t.get("sl_initial")
+        tp1       = t.get("tp1")
+        tp2       = t.get("tp2")
+        r         = t.get("r_realised", 0)
+        reason    = t.get("exit_reason", "")
+
+        if entry is None or sl is None or tp1 is None:
+            violations.append(f"{pair} @ {ts}: missing entry/SL/TP1")
+            continue
+
+        if direction == "bullish":
+            if sl >= entry:
+                violations.append(f"{pair} @ {ts}: SL ({sl}) ≥ entry ({entry}) for LONG")
+            if tp1 <= entry:
+                violations.append(f"{pair} @ {ts}: TP1 ({tp1}) ≤ entry ({entry}) for LONG")
+            if tp2 is not None and tp2 <= tp1:
+                violations.append(f"{pair} @ {ts}: TP2 ({tp2}) ≤ TP1 ({tp1}) for LONG")
+        elif direction == "bearish":
+            if sl <= entry:
+                violations.append(f"{pair} @ {ts}: SL ({sl}) ≤ entry ({entry}) for SHORT")
+            if tp1 >= entry:
+                violations.append(f"{pair} @ {ts}: TP1 ({tp1}) ≥ entry ({entry}) for SHORT")
+            if tp2 is not None and tp2 >= tp1:
+                violations.append(f"{pair} @ {ts}: TP2 ({tp2}) ≥ TP1 ({tp1}) for SHORT")
+
+        # TP/SL exit should have correct sign
+        if reason == "sl" and r > 0:
+            violations.append(f"{pair} @ {ts}: exit=SL but r_realised={r:.2f} (positive — unexpected)")
+        if reason in ("tp1", "tp2") and r < 0:
+            violations.append(f"{pair} @ {ts}: exit={reason} but r_realised={r:.2f} (negative — unexpected)")
+
+    return violations
+
+
+def _validation_html(trades: List[Dict[str, Any]]) -> str:
+    violations = _validate_trades(trades)
+    if not violations:
+        n = len([t for t in trades if t.get("exit_reason") != "never_filled"])
+        return (f"<p style='color:#27ae60;'>✓ All {n} filled trades passed validation — "
+                f"entry/SL/TP levels are correctly ordered, and exit outcomes match exit reasons.</p>")
+    items = "".join(f"<li style='color:#e74c3c;font-family:monospace;font-size:12px;'>{v}</li>"
+                    for v in violations)
+    return (f"<p style='color:#e74c3c;'><b>⚠ {len(violations)} validation issue(s) found:</b></p>"
+            f"<ul>{items}</ul>"
+            f"<p style='font-size:12px;color:#888;'>These indicate calculation errors in the simulator. "
+            f"Do not draw trading conclusions until they are resolved.</p>")
+
+
+# ---------------------------------------------------------------------------
+# Zone register (for Excel tab)
+# ---------------------------------------------------------------------------
+
+def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
+    """One row per OB-touch event, showing both entry zone outcomes side by side."""
+    if not trades:
+        return pd.DataFrame()
+    df = pd.DataFrame(trades)
+    # Key = unique OB touch event: pair + alert_ts (each alert produces 2 rows)
+    if "alert_ts" not in df.columns or "pair" not in df.columns:
+        return pd.DataFrame()
+
+    _exit_labels = {
+        "sl": "Stop Loss Hit", "tp1": "TP1 Hit", "tp2": "TP2 Hit",
+        "timeout": "Time Limit (48h)", "window_end": "End of Window",
+        "sl_collision": "SL+TP Same Bar", "never_filled": "Never Filled",
+    }
+
+    rows = []
+    for (pair, alert_ts), grp in df.groupby(["pair", "alert_ts"]):
+        prox = grp[grp["entry_zone"] == "proximal"].iloc[0].to_dict() if not grp[grp["entry_zone"] == "proximal"].empty else {}
+        mid  = grp[grp["entry_zone"] == "50pct"].iloc[0].to_dict()   if not grp[grp["entry_zone"] == "50pct"].empty else {}
+
+        def _v(d, k, default=""):
+            return d.get(k, default)
+
+        rows.append({
+            "Pair":                    pair,
+            "OB Formed (UTC)":         _v(prox, "ob_timestamp"),
+            "Alert Time (UTC)":        alert_ts,
+            "Direction":               "Long" if _v(prox, "direction") == "bullish" else "Short",
+            "Structure Event":         _v(prox, "bos_tag"),
+            "Structure Tier":          _v(prox, "bos_tier"),
+            "OB Age (H1 bars)":        _v(prox, "ob_age_h1_bars"),
+            "Setup Score":             _v(prox, "score"),
+            "Trading Session":         _v(prox, "session"),
+            "Day of Week":             _day_of_week(alert_ts),
+            "Entry Price (Proximal)":  _v(prox, "entry"),
+            "Entry Price (50% Mid)":   _v(mid,  "entry"),
+            "Stop Loss":               _v(prox, "sl_initial"),
+            "Take Profit 1":           _v(prox, "tp1"),
+            "Take Profit 2":           _v(prox, "tp2"),
+            "TP1 Reward:Risk":         _v(prox, "tp1_rr"),
+            "TP2 Reward:Risk":         _v(prox, "tp2_rr"),
+            "Proximal Filled?":        "Yes" if _v(prox, "exit_reason") != "never_filled" and prox else "No",
+            "Proximal Outcome":        _exit_labels.get(_v(prox, "exit_reason"), _v(prox, "exit_reason")),
+            "Proximal R":              _v(prox, "r_realised"),
+            "Proximal Dollar P&L":     round(float(_v(prox, "r_realised", 0)) * float(_v(prox, "pnl_usd", 0) or 0 or 1), 0)
+                                       if prox else "",
+            "50% Filled?":             "Yes" if _v(mid, "exit_reason") != "never_filled" and mid else "No",
+            "50% Outcome":             _exit_labels.get(_v(mid, "exit_reason"), _v(mid, "exit_reason")),
+            "50% R":                   _v(mid, "r_realised"),
+            "FVG Present":             "Yes" if _v(prox, "fvg_present") else "No",
+            "Sweep Present":           "Yes" if _v(prox, "sweep_present") else "No",
+            "Confluences Active":      _v(prox, "confluences_present"),
+        })
+
+    return pd.DataFrame(rows)
+
+
+def _day_of_week(ts_str: str) -> str:
+    try:
+        return pd.Timestamp(ts_str).day_name()
+    except Exception:
+        return ""
+
+
+# ---------------------------------------------------------------------------
 # CSV (machine-readable, column names unchanged — used by aggregate_runs.py)
 # ---------------------------------------------------------------------------
 
@@ -251,6 +570,10 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
     try:
         df = pd.DataFrame(filled)
 
+        # Add day of week (tracked for cross-run aggregate analysis).
+        if "alert_ts" in df.columns:
+            df["day_of_week"] = df["alert_ts"].apply(_day_of_week)
+
         # Compute vet_review for each trade.
         reviews = [_flag_vet_review(t) for t in filled]
         df["vet_review"]        = ["Yes" if r[0] else "No" for r in reviews]
@@ -268,12 +591,22 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
         if "sweep_present" in df.columns:
             df["sweep_present"] = df["sweep_present"].map({True: "Yes", False: "No"}).fillna("")
 
-        # Select and rename columns.
-        desired = [c for c in _EXCEL_COL_NAMES if c in df.columns]
-        out_df = df[desired].rename(columns=_EXCEL_COL_NAMES)
+        # Select and rename columns — add day_of_week right after session.
+        _col_names_with_dow = dict(_EXCEL_COL_NAMES)
+        _col_names_with_dow["day_of_week"] = "Day of Week"
+        desired = [c for c in list(_EXCEL_COL_NAMES.keys())[:4]  # pair, direction, session
+                   + ["day_of_week"]
+                   + list(_EXCEL_COL_NAMES.keys())[4:]
+                   if c in df.columns]
+        out_df = df[desired].rename(columns=_col_names_with_dow)
+
+        # Zone register (one row per OB — both entry zones side by side).
+        zone_df = _build_zone_register_df(trades)
 
         with pd.ExcelWriter(path, engine="openpyxl") as xw:
             out_df.to_excel(xw, sheet_name="Trades", index=False)
+            if not zone_df.empty:
+                zone_df.to_excel(xw, sheet_name="Zone Register", index=False)
             ws = xw.sheets["Trades"]
 
             # Apply color to Dollar P&L column and R Achieved column.
@@ -340,6 +673,16 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
                     ws.column_dimensions[col[0].column_letter].width = col_widths.get(header, 14)
 
                 ws.freeze_panes = "A2"
+
+                # Style Zone Register tab if it exists.
+                if "Zone Register" in xw.sheets:
+                    zws = xw.sheets["Zone Register"]
+                    for cell in zws[1]:
+                        cell.font = Font(bold=True, color="FFFFFF")
+                        cell.fill = PatternFill("solid", fgColor="1A5490")
+                    for col in zws.columns:
+                        zws.column_dimensions[col[0].column_letter].width = 18
+                    zws.freeze_panes = "A2"
 
             except ImportError:
                 pass  # openpyxl styles not available — plain Excel still written
@@ -744,10 +1087,18 @@ def write_h1_only_report(
   </p>
 </div>
 
-<!-- SECTION 2: WHERE IT WORKED -->
+<!-- SECTION 2: WHERE IT WORKED — pair × session grid -->
 <div class="section">
-  <h2>Where it worked &mdash; proximal entry</h2>
-  {_pair_section_html(pp_prox, ss_prox, "r_if_exit_tp2")}
+  <h2>Where it worked — pair × session (proximal entry)</h2>
+  <p style="font-size:12px;color:#666;margin-bottom:10px;">
+    Each cell shows win rate / avg R / trade count for that pair + session combination.
+    Cells with fewer than 3 trades are shown as — (not enough data).
+  </p>
+  {_pair_session_grid_html(prox_trades, "r_if_exit_tp2")}
+  <p style="font-size:11px;color:#aaa;margin-top:10px;">
+    Day of week is tracked in the Excel (Zone Register tab) and will be analysed
+    in the aggregate report after enough runs accumulate.
+  </p>
 </div>
 
 <!-- SECTION 3: SCORE -->
@@ -757,38 +1108,65 @@ def write_h1_only_report(
   {_score_table_html(score_buckets)}
   <p style="font-size:12px;color:#888;margin-top:8px;">
     Score rises with each confluence present: FVG, liquidity sweep, kill zone,
-    PD alignment, OB freshness, structure tier. Higher score = more reasons to take the trade.
+    PD alignment, OB freshness, structure tier.
   </p>
 </div>
 
-<!-- SECTION 4: PROXIMAL vs 50% -->
+<!-- SECTION 4: CONFLUENCE PER PAIR -->
+<div class="section">
+  <h2>Which confluences actually helped — by pair</h2>
+  <p style="font-size:12px;color:#666;margin-bottom:10px;">
+    Win rate when each confluence was present. ↑ = improved results vs without it.
+    ↓ = hurt results. — = fewer than 3 trades with this confluence for this pair.
+  </p>
+  {_confluence_per_pair_html(prox_trades, "r_if_exit_tp2")}
+</div>
+
+<!-- SECTION 5: WHY WE LOST -->
+<div class="section">
+  <h2>What was different about the losing trades</h2>
+  {_loss_analysis_html(prox_trades)}
+</div>
+
+<!-- SECTION 6: PROXIMAL vs 50% -->
 <div class="section">
   <h2>Proximal entry vs 50% midpoint entry</h2>
   {_entry_comparison_html(sb_prox_tp2, sb_mid_tp2, fill_prox, fill_mid)}
 </div>
 
-<!-- SECTION 5: VET REVIEW -->
+<!-- SECTION 7: VET REVIEW -->
 <div class="section">
   <h2>Trades worth a second look</h2>
   {_vet_review_html(prox_trades)}
 </div>
 
-<!-- SECTION 6: FILES -->
+<!-- SECTION 8: FILES -->
 <div class="section">
   <h2>What's attached</h2>
   <ul style="padding-left:18px;font-size:13px;">
-    <li><b>trades.xlsx</b> &mdash; {"every filled trade, plain-English column names, color-coded P&L" if excel_ok else "<span style='color:#e74c3c;'>FAILED — openpyxl not installed. Use trades.csv instead.</span>"}</li>
-    <li><b>trades.csv</b> &mdash; same data, machine-readable column names (used by aggregate_runs.py)</li>
-    <li><b>summary.json</b> &mdash; all the numbers above in structured format</li>
-    <li><b>run_log.jsonl + console.log</b> &mdash; full diagnostic log if something went wrong</li>
+    <li><b>trades.xlsx — Trades tab:</b> {"every filled trade, plain-English headers, day of week, color-coded P&L, amber highlights on flagged trades" if excel_ok else "<span style='color:#e74c3c;'>FAILED — openpyxl not installed. Use trades.csv instead.</span>"}</li>
+    <li><b>trades.xlsx — Zone Register tab:</b> one row per OB, both entry zones side by side — use this to verify entry/SL/TP levels and fill logic</li>
+    <li><b>trades.csv</b> — machine-readable column names, used by aggregate_runs.py</li>
+    <li><b>summary.json</b> — all metrics in structured format</li>
+    <li><b>run_log.jsonl + console.log</b> — full diagnostic log</li>
   </ul>
+</div>
+
+<!-- SECTION 9: VALIDATION -->
+<div class="section">
+  <h2>System validation check</h2>
+  <p style="font-size:12px;color:#666;margin-bottom:8px;">
+    Verifies that entry prices are correctly positioned relative to SL and TP,
+    and that exit outcomes match exit types (e.g. SL exit has negative R).
+  </p>
+  {_validation_html(prox_trades + mid_trades)}
 </div>
 
 <!-- FOOTER -->
 <div class="footer">
-  <b>Limitations to keep in mind:</b>
-  No spread, slippage, or swap costs are modelled. Real P&amp;L will be approximately 5–10% lower.
-  Entries and exits are simulated at H1 bar boundaries. Same-bar SL+TP collision resolves as SL hit first (pessimistic).
+  <b>Limitations:</b>
+  No spread, slippage, or swap costs modelled — real P&amp;L ~5–10% lower.
+  Exits simulated at H1 bar boundaries. Same-bar SL+TP collision resolves SL-first (pessimistic).
   yfinance bars may differ slightly from broker bars.
 </div>
 
