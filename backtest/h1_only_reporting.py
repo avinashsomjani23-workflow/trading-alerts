@@ -341,12 +341,87 @@ def _loss_analysis_html(trades: List[Dict[str, Any]]) -> str:
             f"traded against the prior trend. These carry higher failure risk than BOS setups."
         )
 
+    # 6. Minor structure (smaller swing — less institutional weight)
+    minor = sum(1 for t in losses if str(t.get("bos_tier", "")).lower() == "minor")
+    if minor > 0 and minor / n >= 0.4:
+        findings.append(
+            f"<b>{minor} of {n}</b> losing trades were on Minor structure events. "
+            f"Minor events are smaller swings detected at a lower lookback and carry "
+            f"less institutional commitment than Major events. If this pattern repeats "
+            f"across runs, consider restricting entries to Major events only."
+        )
+
     if not findings:
         return (f"<p>{n} losing trades this week. No dominant loss pattern detected — "
                 f"losses appear to be distributed normally across conditions.</p>")
 
     items = "".join(f"<li style='margin-bottom:8px;'>{f}</li>" for f in findings)
     return f"<ul style='padding-left:18px;font-size:13px;line-height:1.6;'>{items}</ul>"
+
+
+# ---------------------------------------------------------------------------
+# Structure event performance breakdown (Major vs Minor, BOS vs CHoCH)
+# ---------------------------------------------------------------------------
+
+def _structure_event_breakdown_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    """Show trades grouped by structure event type. Helps verify Major vs Minor
+    detection reliability before live trading."""
+    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    if not filled:
+        return "<p style='color:#888;'>No filled trades.</p>"
+    df = pd.DataFrame(filled)
+    if "bos_tier" not in df.columns or "bos_tag" not in df.columns or r_col not in df.columns:
+        return "<p style='color:#888;'>Structure event data missing.</p>"
+
+    rows = "<tr><th>Event Type</th><th>Trades</th><th>Win rate</th><th>Avg R</th><th>Total P&L</th></tr>"
+    seen = []
+    for (tier, tag), sub in df.groupby(["bos_tier", "bos_tag"]):
+        n = len(sub)
+        wins = (sub[r_col] > 0).sum()
+        wr = wins / n * 100 if n else 0
+        exp = float(sub[r_col].mean()) if n else 0
+        total = float(sub[r_col].sum()) * 250  # default 1R = $250 for display
+        bg = "#eafaf1" if exp >= 0 else "#fdf2f2"
+        seen.append((tier, tag, n, wr, exp))
+        rows += (f"<tr style='background:{bg};'>"
+                 f"<td><b>{tier} {tag}</b></td>"
+                 f"<td>{n}</td>"
+                 f"<td>{wr:.0f}%</td>"
+                 f"<td>{_r(exp)}</td>"
+                 f"<td>{_m(total)}</td></tr>")
+
+    # Headline verdict comparing Major vs Minor.
+    major_n = sum(n for tier, _, n, _, _ in seen if tier == "Major")
+    minor_n = sum(n for tier, _, n, _, _ in seen if tier == "Minor")
+    major_exp = (sum(n * e for tier, _, n, _, e in seen if tier == "Major") / major_n) if major_n else None
+    minor_exp = (sum(n * e for tier, _, n, _, e in seen if tier == "Minor") / minor_n) if minor_n else None
+
+    note = ""
+    if major_exp is not None and minor_exp is not None and major_n >= 3 and minor_n >= 3:
+        diff = major_exp - minor_exp
+        if diff > 0.15:
+            note = (f"<p style='font-size:13px;color:#27ae60;margin-top:8px;'>"
+                    f"✓ Major events outperformed Minor by {diff:.2f}R per trade. "
+                    f"This is the expected behaviour — Major detection is working as designed.</p>")
+        elif diff < -0.15:
+            note = (f"<p style='font-size:13px;color:#e74c3c;margin-top:8px;'>"
+                    f"⚠ Minor events outperformed Major by {abs(diff):.2f}R — unexpected. "
+                    f"Major event detection may be misclassifying setups. Verify before trading live.</p>")
+        else:
+            note = (f"<p style='font-size:13px;color:#888;margin-top:8px;'>"
+                    f"Major and Minor performance is similar this week (difference: {diff:+.2f}R). "
+                    f"Need more data to draw conclusions.</p>")
+    elif major_n < 3 or minor_n < 3:
+        note = (f"<p style='font-size:12px;color:#888;margin-top:8px;'>"
+                f"Major: {major_n} trades · Minor: {minor_n} trades. "
+                f"Need at least 3 of each before comparing.</p>")
+
+    legend = ("<p style='font-size:11px;color:#aaa;margin-top:4px;'>"
+              "<b>BOS</b> = Break of Structure (trend continuation). "
+              "<b>CHoCH</b> = Change of Character (trend reversal). "
+              "<b>Major</b> = larger swing, more institutional weight. "
+              "<b>Minor</b> = smaller internal swing, less weight.</p>")
+    return f"<table>{rows}</table>{note}{legend}"
 
 
 # ---------------------------------------------------------------------------
@@ -1122,7 +1197,17 @@ def write_h1_only_report(
   {_confluence_per_pair_html(prox_trades, "r_if_exit_tp2")}
 </div>
 
-<!-- SECTION 5: WHY WE LOST -->
+<!-- SECTION 5: STRUCTURE EVENT PERFORMANCE -->
+<div class="section">
+  <h2>Performance by structure event type</h2>
+  <p style="font-size:12px;color:#666;margin-bottom:10px;">
+    The system detects four kinds of structural events. Each carries different reliability.
+    Use this table to verify that Major events outperform Minor — they should, if detection is working.
+  </p>
+  {_structure_event_breakdown_html(prox_trades, "r_if_exit_tp2")}
+</div>
+
+<!-- SECTION 6: WHY WE LOST -->
 <div class="section">
   <h2>What was different about the losing trades</h2>
   {_loss_analysis_html(prox_trades)}
