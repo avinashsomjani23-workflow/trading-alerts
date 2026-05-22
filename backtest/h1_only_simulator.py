@@ -165,6 +165,8 @@ def _simulate_single_entry(
     score: float,
     breakdown: Dict[str, float],
     risk_usd: float,
+    forced_tp1: Optional[float] = None,
+    forced_tp2: Optional[float] = None,
 ) -> Optional[Dict[str, Any]]:
     """Simulate one trade for one entry zone ('proximal' or '50pct').
 
@@ -193,19 +195,35 @@ def _simulate_single_entry(
                   error=f"{type(e).__name__}: {e}")
         return None
 
-    if not levels or not levels.get("valid", False):
-        log_event("h1only_sim_skip", level="info", pair=pair,
-                  entry_zone=entry_zone, alert_ts=str(alert_ts),
-                  reason=levels.get("reason", "levels_invalid")
-                         if isinstance(levels, dict) else "levels_none")
-        return None
-
-    entry = float(levels["entry"])
-    sl    = float(levels["sl"])
-    tp1   = float(levels["tp1"])
-    tp2   = float(levels["tp2"]) if levels.get("tp2") is not None else None
-    tp1_rr = float(levels.get("rr", 0.0))
-    tp2_rr = float(levels.get("tp2_rr", 0.0)) if tp2 is not None else 0.0
+    if forced_tp1 is not None:
+        # Shared-TP mode: only need entry and sl from levels (may be "invalid"
+        # because the TP gate failed from the 50pct entry, but entry/sl are
+        # still present in the dict after the smc_detector change).
+        if not isinstance(levels, dict) or "entry" not in levels:
+            log_event("h1only_sim_skip", level="info", pair=pair,
+                      entry_zone=entry_zone, alert_ts=str(alert_ts),
+                      reason="entry_not_computable_for_forced_tp_mode")
+            return None
+        entry  = float(levels["entry"])
+        sl     = float(levels["sl"])
+        tp1    = float(forced_tp1)
+        tp2    = float(forced_tp2) if forced_tp2 is not None else None
+        r_dist = abs(entry - sl)
+        tp1_rr = abs(tp1 - entry) / r_dist if r_dist > 0 else 0.0
+        tp2_rr = abs(tp2 - entry) / r_dist if (r_dist > 0 and tp2 is not None) else 0.0
+    else:
+        if not levels or not levels.get("valid", False):
+            log_event("h1only_sim_skip", level="info", pair=pair,
+                      entry_zone=entry_zone, alert_ts=str(alert_ts),
+                      reason=levels.get("reason", "levels_invalid")
+                             if isinstance(levels, dict) else "levels_none")
+            return None
+        entry  = float(levels["entry"])
+        sl     = float(levels["sl"])
+        tp1    = float(levels["tp1"])
+        tp2    = float(levels["tp2"]) if levels.get("tp2") is not None else None
+        tp1_rr = float(levels.get("rr", 0.0))
+        tp2_rr = float(levels.get("tp2_rr", 0.0)) if tp2 is not None else 0.0
 
     r_distance = abs(entry - sl)
     if r_distance <= 0:
@@ -466,11 +484,23 @@ def simulate_h1_only_dual(
 
     score, breakdown = _score_h1_only(alert, pair_conf, df_h1, alert_ts)
 
-    rows: List[Dict[str, Any]] = []
-    for zone in ("proximal", "50pct"):
-        row = _simulate_single_entry(
-            alert, pair_conf, df_h1, zone, score, breakdown, risk_usd,
-        )
-        if row is not None:
-            rows.append(row)
+    # Proximal entry defines the trade structure — simulate it first.
+    # If proximal levels are invalid (no TP1 clears 1.5R), skip both entries.
+    prox_row = _simulate_single_entry(
+        alert, pair_conf, df_h1, "proximal", score, breakdown, risk_usd,
+    )
+    if prox_row is None:
+        return []
+
+    # 50pct entry reuses proximal TP prices — same opposing liquidity target,
+    # only the entry zone differs. This makes the A/B comparison clean.
+    mid_row = _simulate_single_entry(
+        alert, pair_conf, df_h1, "50pct", score, breakdown, risk_usd,
+        forced_tp1=prox_row["tp1"],
+        forced_tp2=prox_row.get("tp2"),
+    )
+
+    rows: List[Dict[str, Any]] = [prox_row]
+    if mid_row is not None:
+        rows.append(mid_row)
     return rows

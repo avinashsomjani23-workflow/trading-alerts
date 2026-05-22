@@ -287,7 +287,7 @@ def write_h1_only_report(
 
     # CSV + Excel mirror + raw alerts.
     _trades_csv(trades, out_dir / "trades.csv")
-    _try_excel(trades, out_dir / "trades.xlsx", summary)
+    excel_ok = _try_excel(trades, out_dir / "trades.xlsx", summary) is not None
     with open(out_dir / "raw_alerts.jsonl", "w") as f:
         for a in raw_alerts:
             f.write(json.dumps(a, default=str) + "\n")
@@ -395,7 +395,7 @@ def write_h1_only_report(
     <h2>Files</h2>
     <ul>
       <li><b>trades.csv</b> &mdash; every trade row, full column set.</li>
-      <li><b>trades.xlsx</b> &mdash; same as CSV but Excel-formatted (if available).</li>
+      <li><b>trades.xlsx</b> &mdash; {"same as CSV, Excel-formatted." if excel_ok else "<b style='color:#e74c3c;'>FAILED TO WRITE &mdash; openpyxl may not be installed. Use trades.csv instead.</b>"}</li>
       <li><b>summary.json</b> &mdash; all the numbers above, machine-readable.</li>
       <li><b>raw_alerts.jsonl</b> &mdash; OB-touch alerts before simulation.</li>
       <li><b>run_log.jsonl</b> + <b>console.log</b> &mdash; full run diagnostics.</li>

@@ -1456,7 +1456,9 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15,
             "valid": False,
             "reason": ("No opposing H1 swing >= 1.5R past entry -- no trade."
                        if not opposing else
-                       "All opposing H1 swings past entry yield R:R < 1.5.")
+                       "All opposing H1 swings past entry yield R:R < 1.5."),
+            "entry": round(entry, dp),
+            "sl": round(sl, dp),
         }
 
     # TP2: next opposing swing past TP1. No RR gate.
