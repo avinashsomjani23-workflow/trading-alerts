@@ -113,10 +113,18 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
         log_event("h1_only_mode_forced", level="warn",
                   reason="window_start_beyond_yfinance_intraday_limit",
                   days_back=days_back_to_start,
-                  limit_days=YF_INTRADAY_LIMIT_DAYS)
+                  limit_days=YF_INTRADAY_LIMIT_DAYS,
+                  routed_to="_run_h1_only")
         print(f"\n[H1-ONLY MODE for ENTIRE RUN] start is {days_back_to_start}d ago "
               f"(yfinance intraday limit is {YF_INTRADAY_LIMIT_DAYS}d). "
-              f"Skipping M15/M5 fetches; trading H1 bars only.")
+              f"Routing to dual-entry H1-only simulator "
+              f"(proximal + 50pct rows, entry_zone column).")
+        # Whole window is beyond yfinance's M15 horizon. Delegate to the
+        # dual-entry H1-only path so the report carries both entry zones and
+        # the entry_zone column — instead of silently using the legacy
+        # single-entry h1-only fallback further down.
+        return _run_h1_only(cfg, start, end, pair_names, regime, risk_usd,
+                            send_email, out_dir, run_id)
 
     for pair_conf in pairs_to_run:
         name = pair_conf["name"]
