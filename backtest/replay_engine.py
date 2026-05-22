@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import sys
 import os
+import io
+import contextlib
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Iterator, Tuple
@@ -178,14 +180,20 @@ def replay_pair(
             diag["bars_with_events"] += 1
 
         # --- Step 2: detect OBs ----------------------------------------------
+        # Suppress detect_smc_radar's per-event [OB-DROP] stdout chatter during
+        # backtest replay. Live keeps these prints; backtest gets the same diag
+        # info in the returned `ob_build_diagnostics` dict (currently unused
+        # downstream — no consumer reads them today). Pure I/O reduction, no
+        # logic change to the live function.
         try:
-            obs_result = smc_radar.detect_smc_radar(
-                h1_slice,
-                pair_type=pair_type,
-                events=events,
-                walls=walls,
-                pair_name=pair_name,
-            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                obs_result = smc_radar.detect_smc_radar(
+                    h1_slice,
+                    pair_type=pair_type,
+                    events=events,
+                    walls=walls,
+                    pair_name=pair_name,
+                )
         except Exception as e:
             diag["radar_errors"] += 1
             log_event("radar_error", level="error", echo=(diag["radar_errors"] <= 3),
