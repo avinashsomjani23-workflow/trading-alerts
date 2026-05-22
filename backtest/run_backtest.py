@@ -25,6 +25,7 @@ from backtest import reporting_email
 from backtest import h1_only_simulator
 from backtest import h1_only_reporting
 from backtest import ist_window
+from backtest import killzone as killzone_filter
 from backtest.run_logger import RunLogger, log_event
 import news_filter
 
@@ -412,6 +413,10 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
     state = replay_engine.ReplayState()
     all_alerts: list = []
     all_trades: list = []
+    # Per-pair tally of alerts dropped by the killzone hard filter. Reported
+    # in summary.json and the email so the user can see how many setups the
+    # filter rejected and why (config_windows in the audit block).
+    killzone_drops_by_pair: dict = {}
     walk_start_ts = pd.Timestamp(start)
     walk_end_ts = pd.Timestamp(end)
 
@@ -481,8 +486,28 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         n_trades_for_pair = 0
         n_blocked_for_pair = 0
         n_ist_blocked_for_pair = 0
+        n_killzone_dropped_for_pair = 0
         pair_type = pair_conf.get("pair_type", "forex")
         for alert in alerts_for_pair:
+            # Killzone hard filter -- runs BEFORE simulation. An alert outside
+            # the pair's configured killzone is dropped entirely: no row is
+            # created, nothing appears in Excel, nothing appears in
+            # aggregates. This is the veteran SMC view -- outside the killzone
+            # there are no institutional desks, structure tests are noise.
+            alert_ts_raw = alert["ts"]
+            if not isinstance(alert_ts_raw, pd.Timestamp):
+                alert_ts_raw = pd.Timestamp(alert_ts_raw)
+            if alert_ts_raw.tzinfo is None:
+                alert_ts_raw = alert_ts_raw.tz_localize("UTC")
+            if not killzone_filter.in_pair_killzone(alert_ts_raw, pair_conf):
+                n_killzone_dropped_for_pair += 1
+                log_event("killzone_drop", pair=name,
+                          alert_ts=str(alert["ts"]),
+                          utc_hour=int(alert_ts_raw.hour),
+                          utc_minute=int(alert_ts_raw.minute),
+                          windows=killzone_filter.windows_label(pair_conf))
+                continue
+
             rows = h1_only_simulator.simulate_h1_only_dual(
                 alert, pair_conf, df_h1, risk_usd=risk_usd,
             )
@@ -493,11 +518,7 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
             # The blackout check uses the alert timestamp, not the fill
             # timestamp, because that is the moment we would (live) decide
             # whether to place the limit order.
-            alert_ts = alert["ts"]
-            if not isinstance(alert_ts, pd.Timestamp):
-                alert_ts = pd.Timestamp(alert_ts)
-            if alert_ts.tzinfo is None:
-                alert_ts = alert_ts.tz_localize("UTC")
+            alert_ts = alert_ts_raw
             blocked, src_event = news_filter.is_news_blackout(
                 alert_ts.to_pydatetime(), name, news_events,
                 window_minutes=30,
@@ -506,7 +527,9 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
             # outside the user's IST window -- backtest must mirror this.
             # Alerts outside the window are simulated for audit (so we can
             # show "what you would have made if you'd traded these hours")
-            # but excluded from every aggregate metric.
+            # but excluded from every aggregate metric. Killzone-dropped
+            # alerts have already short-circuited above, so this gate only
+            # ever sees in-killzone alerts.
             ist_blocked = not ist_window.in_user_trading_window(
                 alert_ts, pair_type
             )
@@ -542,14 +565,25 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         log_event("pair_trades_simulated", pair=name,
                   trades=n_trades_for_pair,
                   news_blocked=n_blocked_for_pair,
-                  ist_blocked=n_ist_blocked_for_pair)
+                  ist_blocked=n_ist_blocked_for_pair,
+                  killzone_dropped_alerts=n_killzone_dropped_for_pair)
         print(f"  {name}: {n_trades_for_pair} simulated trade rows "
               f"(2 per qualified OB-touch; "
               f"{n_blocked_for_pair} news-blocked, "
-              f"{n_ist_blocked_for_pair} IST-blocked)")
+              f"{n_ist_blocked_for_pair} IST-blocked, "
+              f"{n_killzone_dropped_for_pair} killzone-dropped alerts)")
+        # Aggregate killzone drops onto a run-level dict for the meta block.
+        killzone_drops_by_pair[name] = n_killzone_dropped_for_pair
 
     n_blocked_total = sum(1 for t in all_trades if t.get("news_blocked"))
     n_ist_blocked_total = sum(1 for t in all_trades if t.get("ist_blocked"))
+    n_killzone_dropped_total = sum(killzone_drops_by_pair.values())
+    # Per-pair killzone windows for the audit section. Keyed by pair name so
+    # the report can show "EURUSD: 07:00-16:30 UTC" alongside the drop count.
+    killzone_windows_by_pair = {
+        p["name"]: killzone_filter.windows_label(p)
+        for p in pairs_to_run
+    }
     meta = {
         "start": start.strftime("%Y-%m-%d"),
         "end": end.strftime("%Y-%m-%d"),
@@ -570,6 +604,13 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         "ist_blocked_rows":     n_ist_blocked_total,
         "ist_window_forex":     ist_window.window_label("forex"),
         "ist_window_index":     ist_window.window_label("index"),
+        # Killzone hard filter. Alerts outside the pair's configured
+        # killzone never enter the simulator -- they are not in `all_trades`,
+        # not in trades.xlsx, not in any aggregate. These two fields are
+        # the only place the count is preserved.
+        "killzone_dropped_alerts":   n_killzone_dropped_total,
+        "killzone_drops_by_pair":    killzone_drops_by_pair,
+        "killzone_windows_by_pair":  killzone_windows_by_pair,
     }
     report_dir = h1_only_reporting.write_h1_only_report(
         run_id, all_trades, all_alerts, meta, risk_usd=risk_usd,

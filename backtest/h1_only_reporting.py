@@ -167,8 +167,9 @@ _SESSION_ORDER = ["Asia", "London", "NY", "Other"]
 
 
 def _flat_breakdown_row(label: str, sub: pd.DataFrame, r_col: str) -> str:
-    """One row in a flat breakdown table. Low-n cells are faded so the eye
-    sees the number is thin without losing the data point."""
+    """One row in a flat breakdown table. Empty groups still appear (they
+    happened in the data) but with neutral styling. Sample size is shown as
+    a trade count -- the reader judges weight, no automatic fading."""
     n = len(sub)
     if n == 0:
         return (f"<tr style='color:#bbb;'>"
@@ -183,9 +184,7 @@ def _flat_breakdown_row(label: str, sub: pd.DataFrame, r_col: str) -> str:
     else:
         bg = "#fdf2f2"
     sign = "+" if exp >= 0 else ""
-    # Low-n rows render faded -- number is shown but de-emphasised.
-    opacity = "opacity:0.55;" if n < 3 else ""
-    return (f"<tr style='background:{bg};{opacity}'>"
+    return (f"<tr style='background:{bg};'>"
             f"<td><b>{label}</b></td>"
             f"<td>{n}</td>"
             f"<td>{wr:.0f}%</td>"
@@ -260,9 +259,8 @@ def _pair_session_matrix_html(trades: List[Dict[str, Any]], r_col: str) -> str:
             bg = "#fef9e7"
         else:
             bg = "#fdf2f2"
-        opacity = "opacity:0.55;" if n < 3 else ""
         sign = "+" if exp >= 0 else ""
-        return (f"<td style='background:{bg};{opacity}text-align:center;'>"
+        return (f"<td style='background:{bg};text-align:center;'>"
                 f"<div style='font-size:11px;color:#888;'>{n}t</div>"
                 f"<div style='font-weight:600;'>{wr:.0f}%</div>"
                 f"<div style='font-size:11px;'>{sign}{exp:.2f}R</div>"
@@ -307,8 +305,61 @@ def _pair_session_matrix_html(trades: List[Dict[str, Any]], r_col: str) -> str:
             f"<tbody>{rows_html}{totals_row}</tbody></table>"
             f"<p style='font-size:11px;color:#888;margin-top:6px;'>"
             f"Each cell: trade count, win rate, average R. "
-            f"Faded cells have fewer than 3 trades -- read with caution. "
             f"Right column and bottom row are roll-ups.</p>")
+
+
+def _killzone_audit_html(meta: Dict[str, Any]) -> str:
+    """Audit section for the per-pair killzone hard filter.
+
+    Killzone-dropped alerts never enter the simulator -- they have no row in
+    `all_trades`, so there is no per-alert detail to render here. This block
+    shows:
+      - per-pair drop counts (from meta['killzone_drops_by_pair'])
+      - the configured killzone windows per pair (from meta['killzone_windows_by_pair'])
+
+    Empty drop count is fine and rendered explicitly so the reader sees the
+    filter was active. Missing counters render a single neutral line."""
+    drops = meta.get("killzone_drops_by_pair") or {}
+    windows = meta.get("killzone_windows_by_pair") or {}
+    total = int(meta.get("killzone_dropped_alerts") or 0)
+
+    header = (
+        "<p style='font-size:12px;color:#666;margin-bottom:8px;'>"
+        "Alerts whose timestamp fell outside the pair's killzone window. "
+        "These are <b>dropped before simulation</b> -- they do not appear in "
+        "trades.xlsx and are excluded from every aggregate above."
+        "</p>"
+    )
+
+    if not drops and not windows:
+        return header + ("<p style='color:#888;'>"
+                         "No killzone filter active for this run.</p>")
+
+    pair_names_sorted = sorted(set(list(drops.keys()) + list(windows.keys())))
+    rows_html = ""
+    for pair in pair_names_sorted:
+        n = int(drops.get(pair, 0))
+        w = windows.get(pair, "no killzone configured")
+        rows_html += (
+            f"<tr>"
+            f"<td><b>{pair}</b></td>"
+            f"<td style='font-family:monospace;font-size:12px;'>{w}</td>"
+            f"<td style='text-align:right;'>{n}</td>"
+            f"</tr>"
+        )
+
+    return header + (
+        f"<p style='font-size:13px;margin-bottom:8px;'>"
+        f"<b>{total} alert(s)</b> dropped by killzone filter across "
+        f"{len(pair_names_sorted)} pair(s).</p>"
+        f"<table><thead>"
+        f"<tr><th>Pair</th><th>Killzone window(s) UTC</th><th>Dropped</th></tr>"
+        f"</thead><tbody>{rows_html}</tbody></table>"
+        f"<p style='font-size:11px;color:#888;margin-top:6px;'>"
+        f"30-min buffer is already included in the configured windows. "
+        f"Out-of-window alerts produce no trade row, no Excel entry, "
+        f"and contribute to no metric.</p>"
+    )
 
 
 def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
@@ -474,11 +525,13 @@ def _confluence_per_pair_html(trades: List[Dict[str, Any]], r_col: str) -> str:
             mask    = _mask(sub, c)
             with_c  = sub[mask]
             wout_c  = sub[~mask]
-            if len(with_c) < 3:
+            if len(with_c) == 0:
+                # No trades had this confluence -- there's nothing to display.
+                # This is different from "few trades": no data at all.
                 row += "<td style='color:#bbb;text-align:center;'>—</td>"
                 continue
             wr_with  = (with_c[r_col] > 0).mean() * 100
-            wr_wout  = (wout_c[r_col] > 0).mean() * 100 if len(wout_c) >= 3 else None
+            wr_wout  = (wout_c[r_col] > 0).mean() * 100 if len(wout_c) > 0 else None
             uplift   = (wr_with - wr_wout) if wr_wout is not None else None
             bg = "#eafaf1" if (uplift is not None and uplift > 5) else \
                  "#fdf2f2" if (uplift is not None and uplift < -5) else "#f9f9f9"
@@ -491,7 +544,7 @@ def _confluence_per_pair_html(trades: List[Dict[str, Any]], r_col: str) -> str:
 
     note = ("<p style='font-size:11px;color:#888;margin-top:6px;'>"
             "Win rate when that confluence was present. ↑ = helped vs without it, "
-            "↓ = hurt. — = fewer than 3 trades with this confluence.</p>")
+            "↓ = hurt. — = the confluence was never present for this pair.</p>")
     return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>{note}"
 
 
@@ -578,12 +631,14 @@ def _news_blackout_html(blocked_trades: List[Dict[str, Any]],
 # ---------------------------------------------------------------------------
 
 def _killzone_split_html(trades: List[Dict[str, Any]]) -> str:
-    """Two-line diagnostic: % of wins in killzone vs % of losses in killzone.
+    """In-killzone vs out-of-killzone diagnostic.
 
-    Killzone label comes from killzone_pts in the score breakdown (>0 = in).
-    A useful killzone should show wins clustering in-killzone and losses
-    clustering outside. If wins% and losses% are both ~50/50, the killzone
-    isn't separating signal from noise.
+    With the per-pair killzone hard filter in place, every trade reaching
+    this point is already in-killzone. The "outside killzone" bucket is
+    structurally empty, so a wins-vs-losses split would always say 100/0
+    and add no information. We render a short note instead. The audit
+    block "Killzone filter -- alerts dropped" carries the out-of-window
+    count for users who want to see what the filter rejected.
     """
     filled = [t for t in trades
               if t.get("exit_reason") not in ("never_filled",)
@@ -591,68 +646,13 @@ def _killzone_split_html(trades: List[Dict[str, Any]]) -> str:
     if not filled:
         return "<p style='color:#888;'>No filled trades.</p>"
 
-    wins  = [t for t in filled if (t.get("r_realised") or 0) > 0]
-    losses = [t for t in filled if (t.get("r_realised") or 0) <= 0]
-
-    def _in_kz(t):
-        return (t.get("killzone_pts") or 0) > 0
-
-    n_w, n_l = len(wins), len(losses)
-    w_in = sum(1 for t in wins   if _in_kz(t))
-    l_in = sum(1 for t in losses if _in_kz(t))
-
-    def _pct(num, denom):
-        return f"{num / denom * 100:.0f}%" if denom else "—"
-
-    # Expectancy split (uses r_realised under default policy)
-    in_kz  = [t for t in filled if _in_kz(t)]
-    out_kz = [t for t in filled if not _in_kz(t)]
-    def _exp(rows):
-        return sum((t.get("r_realised") or 0) for t in rows) / len(rows) if rows else None
-    def _wr(rows):
-        return sum(1 for t in rows if (t.get("r_realised") or 0) > 0) / len(rows) * 100 if rows else None
-
-    e_in, e_out = _exp(in_kz), _exp(out_kz)
-    wr_in, wr_out = _wr(in_kz), _wr(out_kz)
-
-    rows = (
-        f"<tr><td><b>Wins</b></td><td>{n_w}</td>"
-        f"<td>{w_in} ({_pct(w_in, n_w)})</td>"
-        f"<td>{n_w - w_in} ({_pct(n_w - w_in, n_w)})</td></tr>"
-        f"<tr><td><b>Losses</b></td><td>{n_l}</td>"
-        f"<td>{l_in} ({_pct(l_in, n_l)})</td>"
-        f"<td>{n_l - l_in} ({_pct(n_l - l_in, n_l)})</td></tr>"
-    )
-
-    def _fmt_r(v):
-        if v is None: return "—"
-        sign = "+" if v >= 0 else ""
-        return f"{sign}{v:.2f}R"
-
-    expectancy_line = (
-        f"<p style='font-size:13px;color:#555;margin-top:8px;'>"
-        f"<b>In-killzone</b>: n={len(in_kz)}, "
-        f"win rate {wr_in:.0f}%, expectancy {_fmt_r(e_in)} &nbsp;|&nbsp; "
-        f"<b>Outside killzone</b>: n={len(out_kz)}, "
-        f"win rate {wr_out:.0f}%, expectancy {_fmt_r(e_out)}"
-        f"</p>" if (in_kz and out_kz)
-        else f"<p style='font-size:13px;color:#888;margin-top:8px;'>"
-        f"Single-bucket dataset — need trades in both buckets for split.</p>"
-    )
-
+    n = len(filled)
     return (
-        f"<p style='font-size:12px;color:#666;margin-bottom:10px;'>"
-        f"Where are the wins coming from — inside or outside killzone hours? "
-        f"If wins cluster in-killzone and losses cluster outside, the killzone "
-        f"is doing real work. If both split ~50/50, killzone isn't separating signal."
-        f"</p>"
-        f"<table><thead>"
-        f"<tr><th>Outcome</th><th>Total</th><th>In killzone</th><th>Outside killzone</th></tr>"
-        f"</thead><tbody>{rows}</tbody></table>"
-        f"{expectancy_line}"
-        f"<p style='font-size:11px;color:#aaa;margin-top:4px;'>"
-        f"Killzone = UTC 06:00–18:00 (forex/commodity) or 13:00–20:00 (NAS100)."
-        f"</p>"
+        f"<p style='font-size:13px;color:#444;'>"
+        f"All <b>{n}</b> filled trades are inside the per-pair killzone "
+        f"(out-of-window alerts are dropped before simulation). "
+        f"See <i>Killzone filter -- alerts dropped</i> below for the rejected "
+        f"alert count and per-pair windows.</p>"
     )
 
 
@@ -660,10 +660,12 @@ def _killzone_split_html(trades: List[Dict[str, Any]]) -> str:
 # Loss pattern analysis
 # ---------------------------------------------------------------------------
 
-# UTC hours that overlap with high-impact economic releases.
-_NEWS_HOURS = {7, 8, 9, 13, 14}  # EUR/UK data 07-09, US data 13-14 UTC
-
 def _loss_analysis_html(trades: List[Dict[str, Any]]) -> str:
+    # By the time this function runs, news-blocked and IST-blocked rows have
+    # already been stripped upstream in write_h1_only_report. So every trade
+    # we see here is one we actually counted. The bullets below describe
+    # conditions of the *counted* losses; they must not re-introduce a "news
+    # window" bullet, because no row that reaches this function is news-flagged.
     losses = [t for t in trades
               if t.get("exit_reason") not in ("never_filled",) and t.get("r_realised", 0) < 0]
     if not losses:
@@ -671,23 +673,6 @@ def _loss_analysis_html(trades: List[Dict[str, Any]]) -> str:
 
     n = len(losses)
     findings = []
-
-    # 1. News timing
-    news_hits = 0
-    for t in losses:
-        ts = t.get("fill_ts") or t.get("alert_ts", "")
-        try:
-            h = pd.Timestamp(ts).hour
-            if h in _NEWS_HOURS:
-                news_hits += 1
-        except Exception:
-            pass
-    if news_hits > 0:
-        findings.append(
-            f"<b>{news_hits} of {n}</b> losing trades were filled during high-impact news windows "
-            f"(07–09 UTC or 13–14 UTC). These hours have unpredictable price spikes that "
-            f"can invalidate OB setups. Consider filtering these hours out."
-        )
 
     # 2. Tight TP (barely cleared the 1.5R minimum gate)
     tight_tp = sum(1 for t in losses if 1.5 <= (t.get("tp1_rr") or 0) < 2.0)
@@ -708,14 +693,10 @@ def _loss_analysis_html(trades: List[Dict[str, Any]]) -> str:
             f"Consider a freshness cutoff."
         )
 
-    # 4. Outside kill zone
-    no_kz = sum(1 for t in losses if (t.get("killzone_pts") or 0) == 0)
-    if no_kz > 0:
-        findings.append(
-            f"<b>{no_kz} of {n}</b> losing trades were taken outside of kill zone hours. "
-            f"Entries during off-peak hours see lower institutional participation and "
-            f"weaker follow-through."
-        )
+    # 4. (Removed) Outside-killzone bullet. With the per-pair killzone hard
+    # filter in place, every counted loss is already in-killzone -- this
+    # bullet would either always read "0 of N" or contradict the audit
+    # block by mixing the old pair_type window with the new per-pair gate.
 
     # 5. CHoCH (counter-trend risk)
     choch = sum(1 for t in losses if t.get("bos_tag", "").upper() == "CHOCH")
@@ -1525,8 +1506,7 @@ def _zone_block_html(
 <div class="section">
   <h2>Where it worked &mdash; by pair</h2>
   <p style="font-size:12px;color:#666;margin-bottom:10px;">
-    Win rate, average R and trade count per pair. Faded rows have fewer
-    than 3 trades &mdash; read with caution.
+    Win rate, average R and trade count per pair.
   </p>
   {_by_pair_html(zone_trades, "r_realised")}
 </div>
@@ -1712,6 +1692,13 @@ def write_h1_only_report(
         "news_blocked_trade_rows": len(blocked_trades),
         "news_blocked_audit":      blocked_audit,
         "ist_blocked_trade_rows":  len(ist_blocked_trades),
+        # Killzone hard filter: alerts dropped before simulation. Counts
+        # come from run_backtest meta -- the dropped alerts never produced
+        # trade rows, so we have to pass the totals through, not derive
+        # them from `trades`.
+        "killzone_dropped_alerts":  int(meta.get("killzone_dropped_alerts") or 0),
+        "killzone_drops_by_pair":   dict(meta.get("killzone_drops_by_pair") or {}),
+        "killzone_windows_by_pair": dict(meta.get("killzone_windows_by_pair") or {}),
     }
 
     # Files. Use trades_all for CSV and Excel so blocked rows appear in
@@ -1862,6 +1849,14 @@ def write_h1_only_report(
 <div class="section">
   <h2>Proximal entry vs 50% midpoint entry &mdash; head-to-head</h2>
   {_entry_comparison_html(sb_prox_tp2, sb_mid_tp2, fill_prox, fill_mid)}
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION D0: KILLZONE FILTER AUDIT -->
+<!-- ============================================================ -->
+<div class="section">
+  <h2>Killzone filter &mdash; alerts dropped</h2>
+  {_killzone_audit_html(meta)}
 </div>
 
 <!-- ============================================================ -->
