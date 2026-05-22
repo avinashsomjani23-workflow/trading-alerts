@@ -510,9 +510,9 @@ def main():
     ap.add_argument("--pairs", default="EURUSD,NZDUSD,USDJPY,USDCHF,NAS100,GOLD",
                     help="Comma-separated pair names")
     ap.add_argument("--regime", default="unspecified", choices=["war", "bau", "unspecified"])
-    ap.add_argument("--mode", default="auto", choices=list(VALID_MODES),
-                    help="auto = Phase 2/3 if M15/M5 available; "
-                         "h1_only = H1-only dual-entry, no scoring gate")
+    ap.add_argument("--mode", default="h1_only", choices=list(VALID_MODES),
+                    help="h1_only = H1-only dual-entry, no scoring gate (default); "
+                         "auto = Phase 2/3 if M15/M5 available (legacy)")
     ap.add_argument("--risk-usd", type=float, default=250.0)
     ap.add_argument("--email", action="store_true", help="Send report email")
     args = ap.parse_args()
@@ -520,8 +520,16 @@ def main():
     start = _parse_date(args.start)
     end = _parse_date(args.end)
     pairs = [p.strip() for p in args.pairs.split(",") if p.strip()]
-    run(start, end, pairs, regime=args.regime, risk_usd=args.risk_usd,
-        send_email=args.email, mode=args.mode)
+    out_dir = run(start, end, pairs, regime=args.regime, risk_usd=args.risk_usd,
+                  send_email=args.email, mode=args.mode)
+
+    # Auto-update cross-run registry after every run.
+    try:
+        from backtest.update_registry import build_registry
+        if out_dir is not None:
+            build_registry(target_run_id=out_dir.name)
+    except Exception as e:
+        print(f"  [registry update skipped: {e}]")
 
 
 if __name__ == "__main__":
