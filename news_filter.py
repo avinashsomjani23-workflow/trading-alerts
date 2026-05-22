@@ -1,11 +1,11 @@
 """News blackout filter.
 
 Single source of truth for "is this timestamp inside a high-impact news
-window for this pair." Used by backtest (FF + GDELT) and reserved for live
+window for this pair." Used by backtest (FF only) and reserved for live
 (FF + Reuters; not wired here since Phase 2/3 are paused).
 
 Public surface:
-    fetch_events(start_utc, end_utc, sources=("ff", "gdelt"))
+    fetch_events(start_utc, end_utc, sources=("ff",))
         -> list of NewsEvent records
     is_news_blackout(ts_utc, pair, events, window_minutes=30)
         -> (blocked: bool, source_event: dict | None)
@@ -23,9 +23,8 @@ Design guarantees:
 
 Coverage caveats (documented in KNOWN_LIMITATIONS.md):
     - FF: >99% of scheduled releases (NFP, CPI, FOMC, ECB, BoE, etc.).
-    - GDELT: ~70% of geopolitical shocks with 15-min lag.
-    - Combined: ~80% of price-moving events. Misses: surprise central
-      bank actions, tweet-driven moves, commodity-specific shocks.
+    - Unscheduled geopolitical shocks are NOT covered. We accept this gap
+      rather than inject noise from low-signal article feeds.
 """
 
 from __future__ import annotations
@@ -193,90 +192,6 @@ def fetch_ff_events(start_utc: datetime, end_utc: datetime) -> Tuple[List[Dict[s
 
 
 # ---------------------------------------------------------------------------
-# GDELT geopolitical-events fetcher (backtest)
-# ---------------------------------------------------------------------------
-
-# GDELT 2.0 Events API. Returns CSV records. We use the doc search API
-# because the Events table requires BigQuery for filtered access.
-# We query the article search and filter to high-severity geopolitical
-# headlines that mention the currencies/regions we trade.
-_GDELT_DOC_URL = (
-    "https://api.gdeltproject.org/api/v2/doc/doc"
-    "?query={query}&mode=ArtList&format=json&maxrecords=250"
-    "&startdatetime={start}&enddatetime={end}"
-)
-
-# Currencies we care about and the country/region terms that signal them.
-_GDELT_QUERY = (
-    '(war OR strike OR missile OR sanctions OR ceasefire OR invasion '
-    'OR "emergency rate" OR "rate cut")'
-)
-
-
-def fetch_gdelt_events(start_utc: datetime, end_utc: datetime) -> Tuple[List[Dict[str, Any]], bool]:
-    """Fetch GDELT geopolitical articles for the date range.
-
-    Returns (events, coverage_complete). Each event has:
-        ts_utc, currency (USD default if unmappable), impact ('High'),
-        title, source ('gdelt').
-    """
-    start = start_utc.strftime("%Y%m%d%H%M%S")
-    end   = end_utc.strftime("%Y%m%d%H%M%S")
-    url = _GDELT_DOC_URL.format(
-        query=urllib.parse.quote(_GDELT_QUERY),
-        start=start, end=end,
-    )
-    body = _http_get(url, timeout=30.0)
-    if body is None:
-        logger.warning("gdelt_fetch_failed range=%s..%s", start, end)
-        return [], False
-
-    try:
-        data = json.loads(body.decode("utf-8", errors="ignore"))
-    except json.JSONDecodeError as e:
-        logger.error("gdelt_json_parse_error: %s", e)
-        return [], False
-
-    out: List[Dict[str, Any]] = []
-    for art in data.get("articles", []):
-        ts_str = art.get("seendate")  # "20260415T130000Z"
-        if not ts_str:
-            continue
-        try:
-            ts_utc = datetime.strptime(ts_str, "%Y%m%dT%H%M%SZ").replace(
-                tzinfo=timezone.utc)
-        except ValueError:
-            continue
-        title = (art.get("title") or "").strip()
-        # Tag affected currencies by mention in the title. Fall back to USD
-        # (most geopolitical shocks affect USD via safe-haven flows).
-        title_upper = title.upper()
-        currencies = set()
-        for ccy, terms in [
-            ("USD", ["US ", "U.S.", "AMERICA", "FED", "WASHINGTON"]),
-            ("EUR", ["EU ", "EUROPE", "EURO ", "ECB", "GERMANY", "FRANCE"]),
-            ("GBP", ["UK ", "BRITAIN", "BOE", "LONDON"]),
-            ("JPY", ["JAPAN", "TOKYO", "BOJ"]),
-            ("CHF", ["SWISS", "SWITZERLAND", "SNB"]),
-            ("NZD", ["NEW ZEALAND", "RBNZ"]),
-        ]:
-            if any(t in title_upper for t in terms):
-                currencies.add(ccy)
-        if not currencies:
-            currencies.add("USD")  # default for geopolitical headlines
-        for ccy in currencies:
-            out.append({
-                "ts_utc":   ts_utc,
-                "currency": ccy,
-                "impact":   "High",
-                "title":    title,
-                "source":   "gdelt",
-            })
-    logger.info("gdelt_fetch range=%s..%s events=%d", start, end, len(out))
-    return out, True
-
-
-# ---------------------------------------------------------------------------
 # Reuters RSS scaffold (live; not wired since Phase 2/3 are paused)
 # ---------------------------------------------------------------------------
 
@@ -300,7 +215,7 @@ def fetch_reuters_events(start_utc: datetime, end_utc: datetime) -> Tuple[List[D
 def fetch_events(
     start_utc: datetime,
     end_utc: datetime,
-    sources: Iterable[str] = ("ff", "gdelt"),
+    sources: Iterable[str] = ("ff",),
 ) -> Dict[str, Any]:
     """Fetch all news events for [start_utc, end_utc] from the requested
     sources. Returns a dict with:
@@ -312,8 +227,6 @@ def fetch_events(
     for src in sources:
         if src == "ff":
             ev, ok = fetch_ff_events(start_utc, end_utc)
-        elif src == "gdelt":
-            ev, ok = fetch_gdelt_events(start_utc, end_utc)
         elif src == "reuters":
             ev, ok = fetch_reuters_events(start_utc, end_utc)
         else:

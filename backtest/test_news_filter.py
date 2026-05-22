@@ -213,7 +213,7 @@ def _build_summary(trades):
             "regime": "test", "mode": "h1_only",
             "pairs": ["EURUSD", "USDCHF", "NZDUSD"],
             "generated_utc": "2026-05-08T00:00:00+00:00",
-            "news_coverage": {"ff": True, "gdelt": True},
+            "news_coverage": {"ff": True},
             "news_events_fetched": 0,
             "news_blocked_rows": sum(1 for t in trades if t.get("news_blocked")),
             "news_window_minutes": 30,

@@ -418,8 +418,8 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
           f"pairs={pair_names} risk_per_trade=${risk_usd:.0f}")
     print(f"  No M15/M5 fetches. No scoring gate. Dual entry per OB.")
 
-    # News blackout filter. Fetch FF (scheduled) + GDELT (geopolitical) for
-    # the full backtest range plus a 1-day pad on each side (events at the
+    # News blackout filter. Fetch FF (scheduled high-impact events) for the
+    # full backtest range plus a 1-day pad on each side (events at the
     # range edges still need their ±30min window evaluated).
     # `start`/`end` from argparse via _parse_date are already tz-aware UTC,
     # so localize only when naive (defensive — never double-localize).
@@ -430,7 +430,7 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
     news_end   = _to_utc(end)   + timedelta(days=1)
     news_data = news_filter.fetch_events(
         news_start.to_pydatetime(), news_end.to_pydatetime(),
-        sources=("ff", "gdelt"),
+        sources=("ff",),
     )
     news_events = news_data["events"]
     news_coverage = news_data["coverage"]

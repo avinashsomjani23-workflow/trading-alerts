@@ -29,26 +29,26 @@ trusting any number it produces.
   `phase2_scan_log.jsonl` for the same week.
 - **News blackout filter is active in backtest.**
   The harness calls `news_filter.fetch_events()` at run start for the
-  date range, pulling from two sources:
+  date range, pulling from one source:
     - **ForexFactory (FairEconomy XML)** — High-impact scheduled releases
       (NFP, CPI, FOMC, ECB, BoE). Coverage on scheduled events is >99%.
-    - **GDELT 2.0** — geopolitical articles matching `war/strike/sanctions/
-      ceasefire/invasion/emergency rate`. Coverage ~70%, 15-min lag.
   Each simulated trade is checked against the event list via
   `is_news_blackout(alert_ts, pair, events, window=30min)`. Blocked rows
   are tagged `news_blocked=True` in trades.csv and trades.xlsx but are
   EXCLUDED from every aggregate metric (P&L, win rate, expectancy, RR,
   per-pair, per-session, killzone split, structure, score, confluence).
-  Combined coverage: ~80% of price-moving events. Misses surprise central
-  bank actions, tweet-driven moves, commodity-specific shocks.
+  Coverage: scheduled high-impact events only. Unscheduled geopolitical
+  shocks, surprise central bank actions, tweet-driven moves, and
+  commodity-specific shocks are NOT covered — we accept this gap rather
+  than inject noise from low-signal article feeds.
   Zero-hallucination guarantee: a trade is only flagged when an actual
-  event record from FF or GDELT matched the ±30min window. The matched
-  event title and source appear in summary.json `news_blocked_audit`.
+  event record from FF matched the ±30min window. The matched event
+  title and source appear in summary.json `news_blocked_audit`.
 - **Live system news flow.** Live (Phase 2 / Phase 3) still calls Gemini
   for display-only macro summary; news blackout filter is NOT wired into
   the live alert path because Phase 2/3 are paused. When live trading
-  resumes, the same `news_filter` module will be reused with FF + Reuters
-  RSS (lower latency than GDELT for breaking events).
+  resumes, the same `news_filter` module will be reused with FF +
+  Reuters RSS for breaking events.
 - **No Gemini summary.** Reports do not include AI commentary.
 
 ## Phase 3 substitution
