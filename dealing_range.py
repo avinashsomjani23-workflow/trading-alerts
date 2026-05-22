@@ -151,6 +151,24 @@ EVENT_RING_MAX = 20
 # (0.40) keeps the "meaningful displacement" bar consistent.
 STALE_WALL_ATR_MULT = 0.4
 
+# Janitor rule (LOCKED): re-anchor an abandoned opposite-side wall when the
+# market has clearly trended away from it. Complements STALE_WALL_ATR_MULT,
+# which only fires when price closes PAST a wall — that never triggers for a
+# wall the trend has run AWAY from. Fires when:
+#   1. opposite-side wall predates trend_start_idx (set before current trend),
+#   2. current trend has produced >= N confirmed lb-3 swings of the relevant
+#      type strictly inside (trend_start_idx, current_i],
+#   3. no BOS/CHoCH fired this candle AND the stale-wall rule did not relabel.
+# Wall is re-anchored to the MOST EXTREME of those in-trend swings (deepest
+# pullback low in a bullish trend; highest pullback high in a bearish trend).
+# Old wall is discarded — OB store preserves zone memory independently.
+# Pair-aware threshold: Forex pairs trend slower per H1 candle than indices
+# / commodities, so Forex uses a tighter swing count; NAS100/Gold need one
+# more swing to avoid firing on a single impulsive session.
+JANITOR_SWING_MIN_FOREX        = 3
+JANITOR_SWING_MIN_INDEX_COMMOD = 4
+JANITOR_INDEX_COMMOD_PAIRS = frozenset({"NAS100", "GOLD", "XAUUSD"})
+
 # Minor CHoCH wall-touch precondition. A Minor CHoCH (internal lb-3 break
 # inside the current trend) is only valid if price tested the trend-direction
 # wall within MINOR_CHOCH_WALL_TOUCH_ATR * ATR somewhere in the current leg
@@ -910,6 +928,74 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             'threshold_atr':   float(STALE_WALL_ATR_MULT),
         })
 
+    def _janitor_wall_check(current_i: int):
+        if trend not in ('bullish', 'bearish'):
+            return
+        if trend_start_idx <= 0 or trend_start_idx >= current_i:
+            return
+
+        swing_min = (JANITOR_SWING_MIN_INDEX_COMMOD
+                     if pair_name in JANITOR_INDEX_COMMOD_PAIRS
+                     else JANITOR_SWING_MIN_FOREX)
+
+        if trend == 'bullish':
+            wall = floor
+            opposite_type = 'low'
+        else:
+            wall = ceiling
+            opposite_type = 'high'
+
+        if wall["price"] is None or wall["is_placeholder"]:
+            return
+        # Predates current trend? Compare against trend_start_idx, not ts —
+        # idx may be None on resumed state, so resolve from wall ts when needed.
+        wall_idx = wall.get("idx")
+        if wall_idx is None:
+            wall_ts = wall.get("ts")
+            if wall_ts is None:
+                return
+            resolved = _idx_from_ts(wall_ts)
+            if resolved is None:
+                return
+            wall_idx = resolved
+        if wall_idx >= trend_start_idx:
+            return
+
+        in_trend_swings = [
+            s for s in swings_lb3
+            if s['type'] == opposite_type
+            and trend_start_idx < s['idx'] <= current_i
+        ]
+        if len(in_trend_swings) < swing_min:
+            return
+
+        if trend == 'bullish':
+            best = min(in_trend_swings, key=lambda s: s['price'])
+        else:
+            best = max(in_trend_swings, key=lambda s: s['price'])
+
+        old_price = float(wall["price"])
+        old_ts    = wall["ts"]
+        wall["price"] = float(best['price'])
+        wall["ts"]    = best['ts']
+        wall["idx"]   = best['idx']
+        wall["is_placeholder"] = False
+
+        _log_safe({
+            'candle_ts':       _ts_iso(df, current_i),
+            'pair':            pair_name,
+            'timeframe':       'H1',
+            'event_kind':      'WALL_JANITOR',
+            'wall_side':       'floor' if trend == 'bullish' else 'ceiling',
+            'trend':           trend,
+            'old_wall_price':  old_price,
+            'old_wall_ts':     old_ts,
+            'new_wall_price':  float(wall["price"]),
+            'new_wall_ts':     wall["ts"],
+            'swing_count':     int(len(in_trend_swings)),
+            'swing_min':       int(swing_min),
+        })
+
     def _log_safe(payload: Dict[str, Any]):
         if _event_logger is None or not pair_name:
             return
@@ -1119,6 +1205,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             # wall is no longer respected and is relabelled. Geometry-only;
             # no event, no trend flip.
             _stale_wall_check(i, close_i)
+            _janitor_wall_check(i)
             continue
 
         # 4. Chop flag — CHoCH only, gap from prior event in candles.
