@@ -247,6 +247,9 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
         print(f"  {name}: {len(alerts_for_pair)} would-be alerts")
 
         min_conf = pair_conf.get("min_confidence", 6.0)
+        # Backtest calibration: gate disabled so every scored alert is simulated.
+        # `passed` is still recorded per-zone so reports can bucket by would-have-passed.
+        gate_enabled = False
         for alert in alerts_for_pair:
             # Use live smc_detector.run_scorecard (same path Phase2 uses) so
             # backtest scoring stays in lockstep with live as scoring evolves.
@@ -254,6 +257,7 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
                 alert, pair_conf, df_h1, df_m15
             )
             passed = score >= min_conf
+            alert_proceeds = passed if gate_enabled else True
             log_event("alert_scored", pair=name,
                       ts=str(alert["ts"]),
                       ob_ts=alert["ob"].get("ob_timestamp"),
@@ -263,6 +267,8 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
                       score=round(score, 2),
                       min_conf=min_conf,
                       passed=passed,
+                      gate_enabled=gate_enabled,
+                      proceeds=alert_proceeds,
                       breakdown={k: round(float(v), 2) for k, v in breakdown.items()})
 
             zone_id = (alert["pair"], alert["ob"].get("ob_timestamp"))
@@ -271,14 +277,12 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
                 zr["score"] = round(score, 2)
                 zr["score_passed"] = passed
                 zr["min_conf"] = min_conf
+                zr["gate_enabled"] = gate_enabled
                 zr["breakdown"] = {k: round(float(v), 2) for k, v in breakdown.items()}
-                zr["alerted"] = passed
-                zr["alert_ts"] = str(alert["ts"]) if passed else None
-                if not passed:
-                    zr["outcome"] = "approached_score_failed"
-                    zr["outcome_reason"] = f"score_{score:.2f}_below_{min_conf}"
+                zr["alerted"] = alert_proceeds
+                zr["alert_ts"] = str(alert["ts"]) if alert_proceeds else None
 
-            if not passed:
+            if not alert_proceeds:
                 continue
 
             if h1_only_mode:
