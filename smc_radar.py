@@ -3255,6 +3255,111 @@ def fresh_to_slate_zone(fresh_zone, zone_id, ist_now, current_price, dp):
     }
 
 
+def _df_ts_iso(df, idx):
+    """Return the ISO timestamp at row idx in df, or None if out of range."""
+    try:
+        idx = int(idx)
+        if idx < 0 or idx >= len(df):
+            return None
+        if 'Datetime' in df.columns:
+            raw = df['Datetime'].iloc[idx]
+        elif 'Date' in df.columns:
+            raw = df['Date'].iloc[idx]
+        else:
+            raw = df.index[idx]
+        return raw.isoformat() if hasattr(raw, 'isoformat') else str(raw)
+    except Exception:
+        return None
+
+
+def _df_idx_from_iso(df, ts_iso):
+    """Return the row idx in df whose timestamp matches ts_iso, or None."""
+    if not ts_iso:
+        return None
+    for k in range(len(df)):
+        if _df_ts_iso(df, k) == ts_iso:
+            return k
+    return None
+
+
+def resync_slate_zone_indices(slate_zone, df, pair_name=""):
+    """
+    Re-anchor a slate zone's index fields to the current df frame using stored
+    timestamps. Each scan adds new candles and the frame shifts left; without
+    this, ob_idx / bos_idx / fvg.c1_idx / impulse_start_idx drift and point
+    to wrong candles. Charts then draw boxes on unrelated candles and Phase 2/3
+    walk the wrong slices for break-candle / sweep / FVG mitigation logic.
+
+    Source of truth: ob_timestamp + bos_timestamp (stored as ISO strings at
+    build time). impulse_start_idx and fvg.c1_idx/c3_idx are derived by
+    preserving their original offset from ob_idx (the leg's relative spacing
+    is invariant across scans).
+
+    Returns True on success, False if timestamps could not be located in df
+    (e.g., yfinance dropped the candle). Caller decides what to do on False —
+    typically log and skip rendering rather than draw with stale indices.
+    """
+    ob_ts  = slate_zone.get("ob_timestamp")
+    bos_ts = slate_zone.get("bos_timestamp")
+    new_ob_idx  = _df_idx_from_iso(df, ob_ts)
+    new_bos_idx = _df_idx_from_iso(df, bos_ts)
+    if new_ob_idx is None or new_bos_idx is None:
+        logging.warning(
+            f"[resync] {pair_name} zone {slate_zone.get('zone_id')} — "
+            f"could not locate ob_ts={ob_ts} or bos_ts={bos_ts} in current df. "
+            f"Leaving indices stale."
+        )
+        return False
+
+    old_ob_idx = slate_zone.get("ob_idx")
+    if old_ob_idx is None:
+        # Nothing to derive offset from for impulse_start; set defensively.
+        slate_zone["ob_idx"]  = new_ob_idx
+        slate_zone["bos_idx"] = new_bos_idx
+        return True
+
+    delta = new_ob_idx - int(old_ob_idx)
+    if delta == 0:
+        return True  # already aligned
+
+    # Apply the shift uniformly. Relative spacing is preserved.
+    slate_zone["ob_idx"]  = new_ob_idx
+    slate_zone["bos_idx"] = new_bos_idx
+    old_impulse = slate_zone.get("impulse_start_idx")
+    if old_impulse is not None:
+        shifted = int(old_impulse) + delta
+        slate_zone["impulse_start_idx"] = shifted if 0 <= shifted < len(df) else None
+    # FVG indices live under slate_zone["fvg"].
+    fvg = slate_zone.get("fvg") or {}
+    for key in ("c1_idx", "c3_idx", "ghost_c1_idx", "ghost_c3_idx", "mitigated_at_idx"):
+        v = fvg.get(key)
+        if v is None:
+            continue
+        try:
+            shifted = int(v) + delta
+        except (TypeError, ValueError):
+            continue
+        fvg[key] = shifted if 0 <= shifted < len(df) else None
+    slate_zone["fvg"] = fvg
+    # Sweep observation idx fields — these are absolute df indices too.
+    sw = slate_zone.get("sweep_observed") or {}
+    for key in ("sweep_idx", "swept_swing_idx"):
+        v = sw.get(key)
+        if v is None:
+            continue
+        try:
+            shifted = int(v) + delta
+        except (TypeError, ValueError):
+            continue
+        sw[key] = shifted if 0 <= shifted < len(df) else None
+    slate_zone["sweep_observed"] = sw
+    logging.info(
+        f"[resync] {pair_name} zone {slate_zone.get('zone_id')} — "
+        f"shifted indices by {delta} (ob_idx {old_ob_idx} -> {new_ob_idx})."
+    )
+    return True
+
+
 def refresh_slate_zone(slate_zone, fresh_zone, ist_now, current_price, dp):
     """
     Update an existing slate zone with fresh-scan data. Identity (zone_id,
@@ -3677,6 +3782,14 @@ def run_radar():
                 # Refresh last_seen so it doesn't accumulate as ghost.
                 sz["last_seen_iso"] = ist_now.isoformat()
                 sz["last_seen_label"] = ist_now.strftime('%H:%M IST')
+                # Re-anchor indices to the current df frame so chart rendering
+                # and Phase 2/3 consumers don't walk stale positions. Without
+                # this, every new H1 candle silently shifts ob_idx away from
+                # the real OB candle while the zone sits unrefreshed in slate.
+                try:
+                    resync_slate_zone_indices(sz, df, pair_name=name)
+                except Exception as _resync_err:
+                    logging.warning(f"[resync] {name} {sz.get('zone_id')} failed: {_resync_err}")
                 print(f"  [HOLD] {name} {sz['zone_id']} missing from scan but no concrete drop reason — kept in slate, logged.")
                 continue
             sz["status"] = "dropped"
