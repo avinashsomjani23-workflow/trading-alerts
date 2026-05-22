@@ -1322,18 +1322,27 @@ def find_m15_ob_inside_h1(df_m15, bias, h1_ob_high, h1_ob_low):
 #   Phase 2 (level computation at scan time), Phase 3 (fresh recomputation at
 #   trigger time). Phase 1 does NOT call this. Name is historical — despite
 #   "phase2" in the name, Phase 3 also depends on it for trigger-time levels.
-def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15):
+def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15,
+                          h1_only=False, entry_zone="proximal"):
     """
     Phase 2 entry / SL / TP computation.
 
-    Entry policy:
+    Entry policy (h1_only=False, default — live Phase 2 behaviour):
       1. Find an M15 OB nested fully inside the H1 OB (strict containment,
          opposite-color rule). If found, entry = M15 OB proximal.
       2. Else fallback: entry = H1 OB proximal.
 
-    SL: entry-OB distal +/- 1x spread (M15 distal if M15 entry, H1 distal if H1 entry).
+    Entry policy (h1_only=True — H1-only backtest mode):
+      M15 OB nest lookup is skipped entirely. Entry is taken from the H1 OB
+      geometry alone. `entry_zone` controls which line of the H1 OB:
+        - "proximal" -> entry at OB proximal edge (standard SMC vet entry).
+        - "50pct"    -> entry at OB midpoint (50% mean). Tighter R, fewer fills.
+      Both entries share the same SL (H1 OB distal +/- spread), so R-distance
+      differs by entry zone and RR on the same TP price differs accordingly.
 
-    TP swings: H1 swings at lookback=3.
+    SL: entry-OB distal +/- 1x spread.
+
+    TP swings: H1 swings at lookback=3 (unchanged across modes).
       TP1 = nearest opposing H1 swing past entry that clears 1.5R. No swing
             clearing 1.5R -> no trade.
       TP2 = next H1 swing past TP1 (no RR gate). If no further swing,
@@ -1342,6 +1351,10 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15):
     Limit-order chase guard: if the computed entry sits on the wrong side of
     current price (LONG entry above current, SHORT entry below), the alert is
     invalid -- price has moved through the zone.
+    For h1_only mode: the chase guard checks against the H1 OB-touch bar's
+    close, which is what `current_price` represents in that context. A 50pct
+    entry sitting deeper inside the OB than current price is NOT a chase --
+    it is a normal pending limit waiting for further penetration.
     """
     dp = _dp(pair_conf)
     # Spread unit per decimal_places. dp=5 forex (0.0001/pip), dp=3 JPY (0.01/pip),
@@ -1358,37 +1371,58 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15):
         return {"valid": False,
                 "reason": "H1 OB geometry missing -- zone schema drift."}
 
-    # Try M15 OB nested inside H1 OB.
-    m15_ob = find_m15_ob_inside_h1(df_m15, bias, h1_top, h1_bot)
+    # Try M15 OB nested inside H1 OB (skipped in h1_only mode).
+    m15_ob = None
+    if not h1_only:
+        m15_ob = find_m15_ob_inside_h1(df_m15, bias, h1_top, h1_bot)
     if m15_ob is not None:
         ob_top, ob_bot = m15_ob['high'], m15_ob['low']
         entry_source = "M15 OB Proximal (nested)"
     else:
         ob_top, ob_bot = h1_top, h1_bot
-        entry_source = "H1 OB Proximal (no M15 nest)"
+        entry_source = (
+            "H1 OB " + ("50% Mean" if entry_zone == "50pct" else "Proximal")
+            + (" (h1_only)" if h1_only else " (no M15 nest)")
+        )
 
-    # Entry = proximal of the chosen OB. SL = distal +/- 1x spread.
+    # Entry. Proximal = OB edge nearest to price; 50pct = OB midpoint.
+    # SL = OB distal +/- 1x spread (same for both entry zones; R-distance
+    # naturally differs because entry differs).
+    ob_mid = (ob_top + ob_bot) / 2.0
     if bias == "LONG":
-        entry = ob_top
+        entry = ob_mid if entry_zone == "50pct" else ob_top
         sl = ob_bot - spread_val
     else:
-        entry = ob_bot
+        entry = ob_mid if entry_zone == "50pct" else ob_bot
         sl = ob_top + spread_val
 
     # Limit-order chase guard. Tolerance = 0.5x spread for rounding/tick noise.
+    #
+    # Live behaviour (h1_only=False): the chase guard is correct -- in live
+    # trading the user places the limit AFTER seeing the alert, so if price
+    # has already moved past the OB the limit would be a chase (selling
+    # below current price for a SHORT, buying above for a LONG).
+    #
+    # H1-only backtest behaviour (h1_only=True): skip the chase guard for
+    # BOTH entry zones. The backtest models pre-placed pending limits sitting
+    # at proximal and 50% throughout the OB's lifetime -- not market-time
+    # decisions. Applying the chase guard only to proximal (the original code
+    # path) would bias the proximal vs 50% A/B comparison. Apply or skip
+    # symmetrically.
     tolerance = 0.5 * spread_val
-    if bias == "LONG" and entry > current_price + tolerance:
-        return {
-            "valid": False,
-            "reason": (f"Entry {round(entry, dp)} is above current price "
-                       f"{round(current_price, dp)} -- LONG limit would chase price.")
-        }
-    if bias == "SHORT" and entry < current_price - tolerance:
-        return {
-            "valid": False,
-            "reason": (f"Entry {round(entry, dp)} is below current price "
-                       f"{round(current_price, dp)} -- SHORT limit would chase price.")
-        }
+    if not h1_only:
+        if bias == "LONG" and entry > current_price + tolerance:
+            return {
+                "valid": False,
+                "reason": (f"Entry {round(entry, dp)} is above current price "
+                           f"{round(current_price, dp)} -- LONG limit would chase price.")
+            }
+        if bias == "SHORT" and entry < current_price - tolerance:
+            return {
+                "valid": False,
+                "reason": (f"Entry {round(entry, dp)} is below current price "
+                           f"{round(current_price, dp)} -- SHORT limit would chase price.")
+            }
 
     risk = abs(entry - sl)
     if risk == 0:

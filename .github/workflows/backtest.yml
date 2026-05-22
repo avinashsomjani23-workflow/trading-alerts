@@ -15,6 +15,12 @@ on:
         default: "war"
         type: choice
         options: [war, bau, unspecified]
+      mode:
+        description: "Backtest mode"
+        required: true
+        default: "auto"
+        type: choice
+        options: [auto, h1_only]
       pairs:
         description: "Comma-separated pairs"
         required: false
@@ -48,6 +54,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install yfinance pandas numpy openpyxl pyarrow requests matplotlib google-generativeai
 
+      - name: Run H1-only sanity test (synthetic OB)
+        # Fast guardrail: catches regressions in compute_phase2_levels h1_only
+        # path or the dual-entry simulator before we spend cycles on a full run.
+        run: python -m backtest.test_h1_only
+
       - name: Run backtest
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
@@ -55,7 +66,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BACKTEST_EMAIL: ${{ secrets.BACKTEST_EMAIL }}
         run: |
-          ARGS="--start ${{ inputs.start_date }} --end ${{ inputs.end_date }} --regime ${{ inputs.regime }} --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_gbp }}"
+          ARGS="--start ${{ inputs.start_date }} --end ${{ inputs.end_date }} --regime ${{ inputs.regime }} --mode ${{ inputs.mode }} --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_gbp }}"
           if [ "${{ inputs.send_email }}" = "true" ]; then
             ARGS="$ARGS --email"
           fi
@@ -65,7 +76,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: backtest-${{ inputs.regime }}-${{ inputs.start_date }}-${{ inputs.end_date }}
+          name: backtest-${{ inputs.mode }}-${{ inputs.regime }}-${{ inputs.start_date }}-${{ inputs.end_date }}
           path: backtest/results/
           retention-days: 30
 
@@ -73,7 +84,13 @@ jobs:
         if: always()
         run: |
           set -e
-          RUN_ID="${{ inputs.regime }}_$(echo ${{ inputs.start_date }} | tr -d -)_$(echo ${{ inputs.end_date }} | tr -d -)"
+          # Run-id prefix matches run_backtest._run_inner / _run_h1_only.
+          if [ "${{ inputs.mode }}" = "h1_only" ]; then
+            PREFIX="h1only"
+          else
+            PREFIX="${{ inputs.regime }}"
+          fi
+          RUN_ID="${PREFIX}_$(echo ${{ inputs.start_date }} | tr -d -)_$(echo ${{ inputs.end_date }} | tr -d -)"
           LOG_DIR="backtest/results/$RUN_ID"
           if [ ! -f "$LOG_DIR/run_log.jsonl" ] && [ ! -f "$LOG_DIR/console.log" ]; then
             echo "No logs to commit for $RUN_ID"
@@ -90,6 +107,8 @@ jobs:
           cp -f "$LOG_DIR/console.log"        /tmp/bt_logs/ 2>/dev/null || true
           cp -f "$LOG_DIR/summary.json"       /tmp/bt_logs/ 2>/dev/null || true
           cp -f "$LOG_DIR/zone_register.json" /tmp/bt_logs/ 2>/dev/null || true
+          # H1-only artifacts (only present for --mode h1_only runs)
+          cp -f "$LOG_DIR/trades.csv"         /tmp/bt_logs/ 2>/dev/null || true
 
           # Reset workspace to clean HEAD so unrelated dirty files don't block
           # the rebase. Logs are safe in /tmp.
@@ -106,7 +125,8 @@ jobs:
             cp -f /tmp/bt_logs/console.log        "$LOG_DIR/" 2>/dev/null || true
             cp -f /tmp/bt_logs/summary.json       "$LOG_DIR/" 2>/dev/null || true
             cp -f /tmp/bt_logs/zone_register.json "$LOG_DIR/" 2>/dev/null || true
-            git add -f "$LOG_DIR/run_log.jsonl" "$LOG_DIR/console.log" "$LOG_DIR/summary.json" "$LOG_DIR/zone_register.json" 2>/dev/null || true
+            cp -f /tmp/bt_logs/trades.csv         "$LOG_DIR/" 2>/dev/null || true
+            git add -f "$LOG_DIR/run_log.jsonl" "$LOG_DIR/console.log" "$LOG_DIR/summary.json" "$LOG_DIR/zone_register.json" "$LOG_DIR/trades.csv" 2>/dev/null || true
             if git diff --cached --quiet; then
               echo "Nothing to commit"
               exit 0

@@ -22,10 +22,20 @@ import pandas as pd
 
 from backtest import data_loader, replay_engine, trade_simulator, reporting
 from backtest import reporting_email
+from backtest import h1_only_simulator
+from backtest import h1_only_reporting
 from backtest.run_logger import RunLogger, log_event
 
 PHASE3_PAIRS = {"NAS100", "GOLD"}
 RESULTS_ROOT = _REPO_ROOT / "backtest" / "results"
+
+# Modes:
+#   auto      -- existing behaviour: Phase 2 / Phase 3 if M15/M5 available,
+#                else falls back to the legacy h1_only single-entry simulator.
+#   h1_only   -- new H1-only mode: NO scoring gate, fires dual entries
+#                (proximal + 50% mean) per OB, reuses live OB detection and
+#                liquidity-based TP logic, skips M15/M5 fetches entirely.
+VALID_MODES = ("auto", "h1_only")
 
 
 def _load_config() -> dict:
@@ -39,19 +49,27 @@ def _parse_date(s: str) -> datetime:
 
 def run(start: datetime, end: datetime, pair_names: list,
         regime: str = "unspecified", risk_usd: float = 250.0,
-        send_email: bool = False) -> Path:
+        send_email: bool = False, mode: str = "auto") -> Path:
     cfg = _load_config()
+
+    if mode not in VALID_MODES:
+        raise ValueError(f"mode must be one of {VALID_MODES}, got {mode!r}")
 
     # Initialise per-run logger as the first action. console.log + run_log.jsonl
     # land in the results folder so they ride along with the artifact upload.
-    run_id = f"{regime}_{start.strftime('%Y%m%d')}_{end.strftime('%Y%m%d')}"
+    prefix = "h1only" if mode == "h1_only" else regime
+    run_id = f"{prefix}_{start.strftime('%Y%m%d')}_{end.strftime('%Y%m%d')}"
     out_dir = RESULTS_ROOT / run_id
     logger = RunLogger.init(out_dir)
-    logger.event("run_start", regime=regime, start=start.strftime("%Y-%m-%d"),
+    logger.event("run_start", regime=regime, mode=mode,
+                 start=start.strftime("%Y-%m-%d"),
                  end=end.strftime("%Y-%m-%d"), pairs=pair_names,
                  risk_usd=risk_usd, send_email=send_email)
 
     try:
+        if mode == "h1_only":
+            return _run_h1_only(cfg, start, end, pair_names, regime,
+                                risk_usd, send_email, out_dir, run_id)
         return _run_inner(cfg, start, end, pair_names, regime, risk_usd,
                           send_email, out_dir, run_id)
     except Exception as e:
@@ -360,6 +378,119 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
     return report_dir
 
 
+def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
+                 out_dir, run_id):
+    """H1-only backtest run.
+
+    Differences from _run_inner:
+      - Skips M15 + M5 data fetches entirely (faster, no yfinance 60d issue).
+      - No scoring gate (every OB-touch fires).
+      - Fires TWO trade rows per OB-touch (proximal + 50% mean) via
+        h1_only_simulator.simulate_h1_only_dual.
+      - Uses h1_only_reporting for the side-by-side TP1/TP2 scoreboard.
+    """
+    fetch_start = start - timedelta(days=35)
+    pairs_to_run = [p for p in cfg["pairs"] if p["name"] in pair_names]
+    if not pairs_to_run:
+        log_event("abort_no_pairs", level="error", requested=pair_names)
+        return None
+
+    state = replay_engine.ReplayState()
+    all_alerts: list = []
+    all_trades: list = []
+    walk_start_ts = pd.Timestamp(start)
+    walk_end_ts = pd.Timestamp(end)
+
+    print(f"\n[H1-ONLY MODE] start={start.date()} end={end.date()} "
+          f"pairs={pair_names} risk_per_trade=${risk_usd:.0f}")
+    print(f"  No M15/M5 fetches. No scoring gate. Dual entry per OB.")
+
+    for pair_conf in pairs_to_run:
+        name = pair_conf["name"]
+        symbol = pair_conf["symbol"]
+        print(f"\n=== {name} ({symbol}) ===")
+
+        df_h1 = data_loader.load_bars(symbol, "1h", fetch_start, end)
+        if df_h1 is None or df_h1.empty:
+            log_event("pair_skip", level="warn", pair=name,
+                      reason="h1_unavailable")
+            print(f"  [SKIP] H1 unavailable for {name}")
+            continue
+        log_event("pair_data_loaded", pair=name, h1_rows=len(df_h1),
+                  m15_rows=0, m5_rows=0,
+                  h1_first=str(df_h1.index.min()),
+                  h1_last=str(df_h1.index.max()))
+
+        # Walk H1 bars and collect OB-touch alerts.
+        alerts_for_pair = []
+        for event in replay_engine.replay_pair(
+            pair_conf, df_h1, df_m15=None, df_m5=None,
+            state=state, walk_start_ts=walk_start_ts, walk_end_ts=walk_end_ts,
+        ):
+            if event["kind"] == "alert":
+                alerts_for_pair.append(event)
+                all_alerts.append({
+                    "pair": event["pair"],
+                    "ts": str(event["ts"]),
+                    "ob_timestamp": (event.get("ob") or {}).get("ob_timestamp"),
+                    "direction": (event.get("ob") or {}).get("direction"),
+                    "bos_tag": (event.get("ob") or {}).get("bos_tag"),
+                    "bos_tier": (event.get("ob") or {}).get("bos_tier"),
+                })
+
+        log_event("pair_alerts_collected", pair=name,
+                  alerts=len(alerts_for_pair), mode="h1_only")
+        print(f"  {name}: {len(alerts_for_pair)} OB-touch alerts")
+
+        n_trades_for_pair = 0
+        for alert in alerts_for_pair:
+            rows = h1_only_simulator.simulate_h1_only_dual(
+                alert, pair_conf, df_h1, risk_usd=risk_usd,
+            )
+            for row in rows:
+                all_trades.append(row)
+                n_trades_for_pair += 1
+                log_event("trade_simulated", pair=name,
+                          alert_ts=str(alert["ts"]),
+                          entry_zone=row.get("entry_zone"),
+                          score=row.get("score"),
+                          model="h1_only",
+                          exit_reason=row.get("exit_reason"),
+                          r_realised=row.get("r_realised"),
+                          r_if_exit_tp1=row.get("r_if_exit_tp1"),
+                          r_if_exit_tp2=row.get("r_if_exit_tp2"),
+                          pnl_usd=row.get("pnl_usd"))
+
+        log_event("pair_trades_simulated", pair=name, trades=n_trades_for_pair)
+        print(f"  {name}: {n_trades_for_pair} simulated trade rows "
+              f"(2 per qualified OB-touch)")
+
+    meta = {
+        "start": start.strftime("%Y-%m-%d"),
+        "end": end.strftime("%Y-%m-%d"),
+        "regime": regime,
+        "mode": "h1_only",
+        "pairs": pair_names,
+        "generated_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    report_dir = h1_only_reporting.write_h1_only_report(
+        run_id, all_trades, all_alerts, meta, risk_usd=risk_usd,
+    )
+    log_event("report_written", path=str(report_dir),
+              total_alerts=len(all_alerts), total_trades=len(all_trades))
+    print(f"\nH1-only report written to {report_dir}")
+
+    if send_email:
+        try:
+            reporting_email.send_report(report_dir, subject_suffix="(h1_only)")
+            log_event("email_sent", path=str(report_dir))
+        except Exception as e:
+            log_event("email_failed", level="error",
+                      error=f"{type(e).__name__}: {e}")
+
+    return report_dir
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", required=True, help="YYYY-MM-DD")
@@ -367,6 +498,9 @@ def main():
     ap.add_argument("--pairs", default="EURUSD,NZDUSD,USDJPY,USDCHF,NAS100,GOLD",
                     help="Comma-separated pair names")
     ap.add_argument("--regime", default="unspecified", choices=["war", "bau", "unspecified"])
+    ap.add_argument("--mode", default="auto", choices=list(VALID_MODES),
+                    help="auto = Phase 2/3 if M15/M5 available; "
+                         "h1_only = H1-only dual-entry, no scoring gate")
     ap.add_argument("--risk-usd", type=float, default=250.0)
     ap.add_argument("--email", action="store_true", help="Send report email")
     args = ap.parse_args()
@@ -375,7 +509,7 @@ def main():
     end = _parse_date(args.end)
     pairs = [p.strip() for p in args.pairs.split(",") if p.strip()]
     run(start, end, pairs, regime=args.regime, risk_usd=args.risk_usd,
-        send_email=args.email)
+        send_email=args.email, mode=args.mode)
 
 
 if __name__ == "__main__":

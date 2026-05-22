@@ -40,33 +40,83 @@ patched data sources — is fragile and slow. Mirroring the scoring is the
 honest middle path. The harness logs every confluence input so divergence
 from live is auditable.
 
+## Modes
+
+The harness runs in one of two modes:
+
+- **`auto`** (default) — full system. Uses M15 / M5 data where available
+  (Phase 2 limit orders for Forex, Phase 3 M5 CHoCH confirmation for Gold/NAS).
+  Falls back to legacy single-entry H1 simulation when M15 isn't available
+  (>~58 days ago).
+- **`h1_only`** — H1-only experiment. Tests whether the SMC system is viable
+  using H1 data alone. Key differences vs `auto`:
+  - Skips M15 / M5 fetches entirely (much faster).
+  - **No scoring gate** — every H1 OB-touch fires a trade regardless of
+    confluence score. Score is still computed and logged so the user can
+    discover the optimal threshold empirically from the trade outcomes.
+  - **Dual entry** — every OB-touch produces TWO trade rows: one with entry
+    at the OB proximal edge, one at the OB 50% mean. Same SL (OB distal),
+    same TP price levels (opposing H1 swing liquidity, reused from live
+    `compute_phase2_levels` with `h1_only=True`). R-distance halves on the
+    50% entry, so RR doubles for the same TP.
+  - Logs `r_if_exit_tp1` AND `r_if_exit_tp2` for every trade so the user can
+    see TP1-only behaviour vs default TP2 side by side.
+
 ## Running
 
 ### Via GitHub Actions (recommended)
-- Actions tab → "Backtest" workflow → "Run workflow" → fill start date + end date.
-- Output: Excel + HTML attached as run artifact; emailed if email is configured.
+- Actions tab → "Backtest" workflow → "Run workflow" → fill date range,
+  pick **mode** (`auto` or `h1_only`).
+- Output: artifacts attached, run log committed back to repo.
 
 ### Locally
 ```
-python backtest/run_backtest.py --start 2025-09-15 --end 2025-09-19 --regime war
+# Full system
+python backtest/run_backtest.py --start 2026-05-12 --end 2026-05-16 --regime war
+
+# H1-only experiment
+python backtest/run_backtest.py --mode h1_only --start 2026-05-12 --end 2026-05-16
 ```
+
+### H1-only sanity test
+```
+python -m backtest.test_h1_only
+```
+Asserts the level computation produces the expected proximal vs 50% entries
+on a synthetic OB. Runs in <2s. Same script runs on CI before every backtest.
 
 ## Files
 
 - `data_loader.py` — yfinance fetch + parquet cache.
 - `replay_engine.py` — bar-by-bar walk with lookahead guard.
-- `trade_simulator.py` — entry fill + SL/TP walk + MFE/MAE tracking.
-- `reporting.py` — Excel + HTML report assembly.
+- `trade_simulator.py` — entry fill + SL/TP walk + MFE/MAE tracking (auto mode).
+- `h1_only_simulator.py` — H1-only dual-entry simulator (h1_only mode).
+- `h1_only_reporting.py` — H1-only report writer with TP1/TP2 side-by-side
+  scoreboard and score-vs-winrate diagnostic table.
+- `reporting.py` — auto-mode Excel + HTML report assembly.
 - `reporting_email.py` — own SMTP, no live email reuse.
 - `run_backtest.py` — CLI entry.
+- `test_h1_only.py` — synthetic-OB sanity tests for H1-only path.
 
 ## Output structure
 
+### auto mode
 ```
-backtest/results/<run_id>/
+backtest/results/<regime>_<start>_<end>/
   forex_trades.xlsx
   nas_xau_trades.xlsx
+  zone_register.xlsx       # every OB ever active + disposition
   report.html
-  raw_alerts.jsonl    # every OB the system saw, scored or not
-  summary.json        # headline metrics for the run
+  raw_alerts.jsonl
+  summary.json
+```
+
+### h1_only mode
+```
+backtest/results/h1only_<start>_<end>/
+  trades.csv               # full column set, one row per (OB, entry zone)
+  trades.xlsx              # same data, Excel-formatted
+  report.html              # 4 scoreboards + score-vs-winrate buckets
+  raw_alerts.jsonl
+  summary.json
 ```
