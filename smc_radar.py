@@ -1156,6 +1156,14 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
         # If OB sits earlier than that, extend window back to include it.
         if has_ob and ob_abs < window_start:
             window_start = max(0, ob_abs - 3)
+        # Same extension for Alt OB (OB2) — otherwise the alt zone band shows
+        # without its candle outline when the alt OB is older than 130 bars.
+        # Capped at the data limit (n_full=150); we never fetch more than that,
+        # so we can't show what doesn't exist.
+        if alt_ob is not None:
+            alt_ob_abs_for_window = alt_ob.get('ob_idx')
+            if alt_ob_abs_for_window is not None and alt_ob_abs_for_window < window_start:
+                window_start = max(0, alt_ob_abs_for_window - 3)
 
         df_plot = full_df.iloc[window_start:].copy().reset_index(drop=True)
         n_plot  = len(df_plot)
@@ -1652,19 +1660,127 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
 
         mid_x = n_plot / 2.0
 
-        # --- Left-edge tags: proximal, distal, BOS/CHoCH ---
-        left_labels = []
+        # --- Edge tags: proximal, distal, BOS/CHoCH ---
+        # Default to left edge. If a label would visually collide with
+        # an FVG box / ghost FVG / sweep marker / break-candle outline /
+        # swing marker that also sits near the left edge, flip THAT label
+        # to the right edge. OB zone band and OB candle outline are NOT
+        # counted as obstacles (the band by design covers the left labels,
+        # and the OB candle is structurally tied to the labels).
+        edge_labels = []  # (price, text, color)
         if has_ob:
             zone_label_color = '#888888' if is_invalidated else '#bb8fce'
-            left_labels.append((proximal, f"{proximal:.{dp}f}", zone_label_color))
-            left_labels.append((distal,   f"{distal:.{dp}f}",   zone_label_color))
+            edge_labels.append((proximal, f"{proximal:.{dp}f}", zone_label_color))
+            edge_labels.append((distal,   f"{distal:.{dp}f}",   zone_label_color))
             if bos_price is not None:
                 bos_label_color = '#888888' if is_invalidated else bos_color
-                left_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_label_color))
+                edge_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_label_color))
+
+        # Build obstacle rectangles in DATA coords. Each entry: (x_lo, x_hi, y_lo, y_hi).
+        # We check overlap against a label's bbox at the left edge: x in [-1, LEFT_BAND_W].
+        # Approx label width in data x-units. Labels are ~7 chars at fontsize=10;
+        # 6 x-units is a conservative band covering the rendered text width.
+        LEFT_BAND_W = 6.0
+        RIGHT_BAND_LO = (n_plot + RIGHT_MARGIN) - LEFT_BAND_W - 1
+        RIGHT_BAND_HI = (n_plot + RIGHT_MARGIN)
+        # Label vertical half-height in price units — approximate using 1.2%
+        # of the y-axis span. Same value used for all labels (uniform font).
+        label_half_h = max((y_max - y_min) * 0.012, 1e-9)
+
+        obstacles = []
+        # FVG (active) — drawn at (mid_local - 0.6, fb) width 3.0, height ft-fb.
+        if has_ob and not is_invalidated and ob['fvg']['exists'] and ob['fvg']['c1_idx'] is not None:
+            _ft = float(ob['fvg']['fvg_top'])
+            _fb = float(ob['fvg']['fvg_bottom'])
+            _mid = ob['fvg']['c1_idx'] + 1 - window_start
+            if 0 <= _mid < n_plot:
+                obstacles.append((_mid - 0.6, _mid - 0.6 + 3.0, _fb, _ft))
+        # FVG (ghost) — same geometry as active.
+        if has_ob and not is_invalidated and (not ob['fvg']['exists']) \
+                and ob['fvg'].get('was_detected') and ob['fvg'].get('ghost_c1_idx') is not None:
+            _ft = float(ob['fvg']['ghost_top'])
+            _fb = float(ob['fvg']['ghost_bottom'])
+            _mid = ob['fvg']['ghost_c1_idx'] + 1 - window_start
+            if 0 <= _mid < n_plot:
+                obstacles.append((_mid - 0.6, _mid - 0.6 + 3.0, _fb, _ft))
+        # Sweep — dotted level line from swept_swing back to sweep_idx, plus
+        # star + label at the wick tip. Treat the level line span as obstacle.
+        _sw = (ob.get('sweep_observed') or {}) if (has_ob and not is_invalidated) else {}
+        if _sw.get('exists') and _sw.get('sweep_idx') is not None and _sw.get('price') is not None:
+            _sw_local = _sw['sweep_idx'] - window_start
+            if 0 <= _sw_local < n_plot:
+                _swept = _sw.get('swept_swing_idx')
+                _x_lo = max(0, _swept - window_start) if _swept is not None else max(0, _sw_local - 6)
+                _x_hi = _sw_local
+                if _x_lo > _x_hi:
+                    _x_lo, _x_hi = _x_hi, _x_lo
+                _sw_p = float(_sw['price'])
+                obstacles.append((_x_lo, _x_hi + 0.5, _sw_p - label_half_h, _sw_p + label_half_h))
+        # Break candle outline — spans br_start..br_end at ±0.5 around column.
+        if has_ob:
+            try:
+                _br_start, _br_end = smc_detector.compute_h1_break_candle_span(full_df, ob, None)
+            except Exception:
+                _br_start = _br_end = None
+            if _br_start is not None and _br_end is not None:
+                for _abs_i in range(_br_start, _br_end + 1):
+                    if _abs_i < window_start:
+                        continue
+                    _li = _abs_i - window_start
+                    if 0 <= _li < n_plot:
+                        _ch = float(H[_li]); _cl = float(L[_li])
+                        obstacles.append((_li - 0.5, _li + 0.5, _cl, _ch))
+        # Alt OB candle outline — only when alt has its own candle drawn in window.
+        if (alt_ob is not None) and has_ob:
+            _alt_idx = alt_ob.get('ob_idx')
+            if _alt_idx is not None:
+                _ali = _alt_idx - window_start
+                if 0 <= _ali < n_plot:
+                    _ah = float(H[_ali]); _al = float(L[_ali])
+                    obstacles.append((_ali - 0.5, _ali + 0.5, _al, _ah))
+        # Alt OB right-edge tag — sits at right edge, alt_zone midline.
+        if (alt_ob is not None) and has_ob:
+            _ap = float(alt_ob['proximal_line']); _ad = float(alt_ob['distal_line'])
+            _amid = (_ap + _ad) / 2.0
+            obstacles.append((RIGHT_BAND_LO, RIGHT_BAND_HI,
+                              _amid - label_half_h * 2, _amid + label_half_h * 2))
+
+        def _band_overlap(price, x_lo, x_hi):
+            """True if a label centered at price within [x_lo, x_hi] overlaps any obstacle."""
+            y_lo = price - label_half_h
+            y_hi = price + label_half_h
+            for (ox_lo, ox_hi, oy_lo, oy_hi) in obstacles:
+                if x_hi < ox_lo or x_lo > ox_hi:
+                    continue
+                if y_hi < oy_lo or y_lo > oy_hi:
+                    continue
+                return True
+            return False
+
+        # Decide per-label side. Default left; if left collides AND right is clear, flip.
+        # If both collide, keep left (least-bad fallback, never worse than today).
+        left_labels = []
+        right_labels = []
+        for (price, text, color) in edge_labels:
+            left_blocked = _band_overlap(price, -1, -1 + LEFT_BAND_W)
+            if left_blocked:
+                right_blocked = _band_overlap(price, RIGHT_BAND_LO, RIGHT_BAND_HI)
+                if not right_blocked:
+                    right_labels.append((price, text, color))
+                    continue
+            left_labels.append((price, text, color))
+
+        # Render left group.
         left_stacked = smc_detector.stack_labels(left_labels, pair_conf_shim)
         for adj_price, text, color in left_stacked:
             ax.text(-1, adj_price, text, color=color, fontsize=10, va='center',
                     ha='left', fontweight='bold', zorder=7,
+                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.78))
+        # Render right group.
+        right_stacked = smc_detector.stack_labels(right_labels, pair_conf_shim)
+        for adj_price, text, color in right_stacked:
+            ax.text(n_plot + RIGHT_MARGIN - 1, adj_price, text, color=color,
+                    fontsize=10, va='center', ha='right', fontweight='bold', zorder=7,
                     bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.78))
 
         # --- Mid-chart tags: current price, DR walls, EQ ---
