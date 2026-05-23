@@ -160,6 +160,362 @@ def _flag_vet_review(t: Dict[str, Any]) -> Tuple[bool, str]:
 
 
 # ---------------------------------------------------------------------------
+# Sample-size discipline + exit-policy math
+# ---------------------------------------------------------------------------
+
+# Below this trade count, comparative verdicts are demoted to
+# "insufficient sample" rather than asserted. Reader still sees the numbers.
+MIN_N_FOR_VERDICT = 5
+
+
+def _runner_r(t: Dict[str, Any]) -> float:
+    """R under TP1+runner policy: 50% of position closes at TP1 when TP1 hit,
+    50% rides to whatever r_realised did (SL is moved to entry after TP1,
+    so the runner can BE-stop, win to TP2, or end at window close).
+
+    When TP1 never hits, the full position is treated under default policy
+    (so the runner branch == r_realised).
+    """
+    if t.get("exit_reason") == "never_filled":
+        return 0.0
+    r_realised = float(t.get("r_realised") or 0.0)
+    bars_to_tp1 = t.get("bars_to_tp1")
+    tp1_rr = float(t.get("tp1_rr") or 0.0)
+    if bars_to_tp1 is not None and bars_to_tp1 >= 0:
+        return 0.5 * tp1_rr + 0.5 * r_realised
+    return r_realised
+
+
+def _attach_runner_r(trades: List[Dict[str, Any]]) -> None:
+    """Mutate trades in place to add `r_if_runner` (TP1+runner policy)."""
+    for t in trades:
+        if "r_if_runner" not in t:
+            t["r_if_runner"] = round(_runner_r(t), 3)
+
+
+def _exit_policy_table(trades: List[Dict[str, Any]],
+                       risk_usd: float) -> List[Dict[str, Any]]:
+    """Aggregate the three exit policies side by side: TP1-only, TP1+runner,
+    TP2-ride (current). Aggregates use `_aggregate_for_exit` for consistency
+    with the per-zone scoreboards.
+    """
+    _attach_runner_r(trades)
+    out = []
+    for label, col in [
+        ("TP1-only",     "r_if_exit_tp1"),
+        ("TP1 + runner", "r_if_runner"),
+        ("TP2-ride (current)", "r_realised"),
+    ]:
+        sb = _aggregate_for_exit(trades, col, risk_usd)
+        out.append({"policy": label, "col": col, **sb})
+    return out
+
+
+def _best_policy_by_dim(trades: List[Dict[str, Any]],
+                        dim: str,
+                        risk_usd: float) -> List[Dict[str, Any]]:
+    """For each value of `dim` (pair or session), find which exit policy
+    produced the highest total R. Returns rows sorted by trade count desc.
+    """
+    _attach_runner_r(trades)
+    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    if not filled:
+        return []
+    df = pd.DataFrame(filled)
+    if dim not in df.columns:
+        return []
+    out = []
+    for val, sub in df.groupby(dim):
+        n = int(len(sub))
+        totals = {
+            "TP1-only":            float(sub["r_if_exit_tp1"].sum()),
+            "TP1 + runner":        float(sub["r_if_runner"].sum()),
+            "TP2-ride (current)":  float(sub["r_realised"].sum()),
+        }
+        best_label = max(totals, key=totals.get)
+        out.append({
+            dim:        val,
+            "trades":   n,
+            "tp1_r":    round(totals["TP1-only"], 2),
+            "runner_r": round(totals["TP1 + runner"], 2),
+            "tp2_r":    round(totals["TP2-ride (current)"], 2),
+            "best":     best_label,
+            "edge_r":   round(totals[best_label] - totals["TP2-ride (current)"], 2),
+        })
+    out.sort(key=lambda r: r["trades"], reverse=True)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Findings panel — auto-derived one-liners that lead each zone block.
+# Output is a list of (severity, text) pairs. Severity drives the bullet color.
+# Severities: "good" (green), "warn" (amber), "bad" (red), "info" (grey).
+# ---------------------------------------------------------------------------
+
+def _findings_panel(trades: List[Dict[str, Any]],
+                    sb: Dict[str, Any],
+                    risk_usd: float) -> List[Tuple[str, str]]:
+    findings: List[Tuple[str, str]] = []
+    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    n = len(filled)
+    if n == 0:
+        return [("info", "No filled trades this period.")]
+    df = pd.DataFrame(filled)
+
+    # 1. Headline result.
+    pnl = sb.get("total_pnl_usd", 0)
+    exp = sb.get("expectancy_r", 0)
+    wr  = sb.get("win_rate_pct", 0)
+    if pnl >= 0 and exp >= 0.3:
+        findings.append(("good", f"Net <b>{_m(pnl)}</b> across {n} trades "
+                                 f"(avg {_r(exp)}, {wr:.0f}% WR). Edge present."))
+    elif pnl >= 0:
+        findings.append(("info", f"Net <b>{_m(pnl)}</b> across {n} trades "
+                                 f"(avg {_r(exp)}, {wr:.0f}% WR). Marginal — verify before sizing up."))
+    else:
+        findings.append(("bad", f"Net <b>{_m(pnl)}</b> across {n} trades "
+                                f"(avg {_r(exp)}, {wr:.0f}% WR). Edge missing this period."))
+
+    # 2. Best exit policy.
+    _attach_runner_r(trades)
+    pol = {
+        "TP1-only":           float(df["r_if_exit_tp1"].sum()),
+        "TP1 + runner":       float(df["r_if_runner"].sum()),
+        "TP2-ride (current)": float(df["r_realised"].sum()),
+    }
+    best_pol = max(pol, key=pol.get)
+    delta = pol[best_pol] - pol["TP2-ride (current)"]
+    if best_pol != "TP2-ride (current)" and delta >= 1.0:
+        findings.append(("warn",
+            f"Best exit policy was <b>{best_pol}</b> "
+            f"({pol[best_pol]:+.1f}R vs current TP2-ride {pol['TP2-ride (current)']:+.1f}R, "
+            f"delta {delta:+.1f}R). Worth simulating live."))
+    else:
+        findings.append(("info",
+            f"Current TP2-ride policy is best of the three "
+            f"(TP1-only {pol['TP1-only']:+.1f}R · runner {pol['TP1 + runner']:+.1f}R · "
+            f"TP2 {pol['TP2-ride (current)']:+.1f}R)."))
+
+    # 3. Best and worst (pair, session) — only show with n >= 3 in the cell.
+    if "pair" in df.columns and "session" in df.columns:
+        cells = []
+        for (p, s), sub in df.groupby(["pair", "session"]):
+            if len(sub) >= 3:
+                cells.append((p, s, len(sub), float(sub["r_realised"].mean()),
+                              (sub["r_realised"] > 0).sum() / len(sub) * 100))
+        if cells:
+            cells.sort(key=lambda x: x[3], reverse=True)
+            p, s, nn, e, w = cells[0]
+            if e > 0.3:
+                findings.append(("good",
+                    f"Best edge: <b>{p} / {s}</b> ({nn} trades, "
+                    f"{w:.0f}% WR, avg {_r(e)})."))
+            p, s, nn, e, w = cells[-1]
+            if e < -0.3 and len(cells) > 1:
+                findings.append(("bad",
+                    f"Weakest cell: <b>{p} / {s}</b> ({nn} trades, "
+                    f"{w:.0f}% WR, avg {_r(e)}). Consider gating off."))
+
+    # 4. MFE leak: losers that ran significantly in your favour first.
+    losers = df[df["r_realised"] < 0]
+    if len(losers) >= 3:
+        leakers = losers[losers["mfe_r"] >= 1.0]
+        if len(leakers) >= max(2, int(0.3 * len(losers))):
+            findings.append(("warn",
+                f"<b>{len(leakers)} of {len(losers)}</b> losers ran ≥+1.0R before reversing "
+                f"(avg peak {leakers['mfe_r'].mean():.1f}R). Trailing stop study warranted."))
+
+    # 5. Win capture — too tight vs too loose.
+    cap = sb.get("win_capture_pct", 0)
+    avg_mfe = sb.get("avg_mfe_r", 0)
+    if sb.get("wins", 0) >= MIN_N_FOR_VERDICT and avg_mfe > 0:
+        if cap < 60:
+            findings.append(("warn",
+                f"Winners captured only {cap:.0f}% of peak (avg peak {_r(avg_mfe)}) — "
+                f"TP placement is leaving runner R on the table."))
+        elif cap >= 85:
+            findings.append(("info",
+                f"Winners captured {cap:.0f}% of peak — TP placement is tight to peak; "
+                f"little headroom left."))
+
+    return findings
+
+
+def _findings_panel_html(findings: List[Tuple[str, str]]) -> str:
+    color_map = {
+        "good": ("#27ae60", "✓"),
+        "warn": ("#f39c12", "!"),
+        "bad":  ("#e74c3c", "✗"),
+        "info": ("#6c757d", "•"),
+    }
+    items = []
+    for sev, text in findings:
+        col, sym = color_map.get(sev, color_map["info"])
+        items.append(
+            f"<li style='list-style:none;padding:6px 0 6px 18px;"
+            f"border-left:3px solid {col};margin-bottom:4px;'>"
+            f"<span style='color:{col};font-weight:700;margin-right:6px;'>{sym}</span>"
+            f"{text}</li>"
+        )
+    return ("<ul style='padding-left:0;margin:0;font-size:13px;line-height:1.5;'>"
+            + "".join(items) + "</ul>")
+
+
+# ---------------------------------------------------------------------------
+# Exit-policy comparison: three policies + per-pair + per-session.
+# ---------------------------------------------------------------------------
+
+def _exit_policy_html(trades: List[Dict[str, Any]], risk_usd: float) -> str:
+    rows_data = _exit_policy_table(trades, risk_usd)
+    if not rows_data or rows_data[0].get("trades", 0) == 0:
+        return "<p style='color:#888;'>No filled trades to compare policies on.</p>"
+
+    n = rows_data[0]["trades"]
+    header = _table_row(
+        ["Exit policy", "Win rate", "Avg R", "Total R", "Total P&L"],
+        header=True,
+    )
+    body = ""
+    for r in rows_data:
+        is_current = r["policy"].startswith("TP2-ride")
+        pnl = r.get("total_pnl_usd", 0)
+        color = "#eafaf1" if pnl >= 0 else "#fdf2f2"
+        label = (f"<b>{r['policy']}</b>" if not is_current
+                 else f"<b>{r['policy']}</b>")
+        body += _table_row([
+            label,
+            f"{r.get('win_rate_pct', 0):.0f}%",
+            _r(r.get("expectancy_r", 0)),
+            f"{r.get('total_r', 0):+.1f}R",
+            f"<b style='color:{'#27ae60' if pnl >= 0 else '#e74c3c'};'>{_m(pnl)}</b>",
+        ], color=color)
+
+    note = (f"<p style='font-size:12px;color:#666;margin-top:6px;'>"
+            f"All three policies use the same fills ({n} trades). "
+            f"TP1-only: close full position at TP1. "
+            f"TP1+runner: half off at TP1, rest rides with SL-to-BE. "
+            f"TP2-ride: full position rides to TP2 (current policy).</p>")
+    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>{note}"
+
+
+def _exit_policy_by_dim_html(trades: List[Dict[str, Any]],
+                             risk_usd: float, dim: str, dim_label: str) -> str:
+    rows_data = _best_policy_by_dim(trades, dim, risk_usd)
+    if not rows_data:
+        return ""
+    header = _table_row(
+        [dim_label, "Trades", "TP1-only", "TP1+runner", "TP2-ride", "Best", "Edge vs TP2"],
+        header=True,
+    )
+    body = ""
+    for r in rows_data:
+        edge_color = "#27ae60" if r["edge_r"] > 0 else "#888"
+        body += _table_row([
+            f"<b>{r[dim]}</b>",
+            str(r["trades"]),
+            f"{r['tp1_r']:+.1f}R",
+            f"{r['runner_r']:+.1f}R",
+            f"{r['tp2_r']:+.1f}R",
+            f"<b>{r['best']}</b>",
+            f"<span style='color:{edge_color};'>{r['edge_r']:+.1f}R</span>",
+        ])
+    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
+
+
+# ---------------------------------------------------------------------------
+# Where the edge leaked — replaces the old "losing trades" bullet block.
+# Same data as before plus MFE-leak, OB-age distribution, time-in-trade.
+# ---------------------------------------------------------------------------
+
+def _edge_leak_html(trades: List[Dict[str, Any]]) -> str:
+    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    losers = [t for t in filled if (t.get("r_realised") or 0) < 0]
+    winners = [t for t in filled if (t.get("r_realised") or 0) > 0]
+    n_loss = len(losers)
+    if n_loss == 0:
+        return "<p style='color:#27ae60;'>No losing trades this period.</p>"
+
+    findings: List[str] = []
+
+    # 1. MFE-leak among losers.
+    leak_1r = sum(1 for t in losers if (t.get("mfe_r") or 0) >= 1.0)
+    leak_2r = sum(1 for t in losers if (t.get("mfe_r") or 0) >= 2.0)
+    if leak_1r >= 2:
+        avg_peak = sum((t.get("mfe_r") or 0) for t in losers
+                       if (t.get("mfe_r") or 0) >= 1.0) / leak_1r
+        findings.append(
+            f"<b>{leak_1r} of {n_loss}</b> losers ran ≥+1.0R before reversing "
+            f"(avg peak {avg_peak:.1f}R; {leak_2r} reached ≥+2.0R). "
+            f"Trailing stop or partial-at-1R study warranted."
+        )
+
+    # 2. Tight TP1 — already-shipped finding, keep.
+    tight_tp = sum(1 for t in losers if 1.5 <= (t.get("tp1_rr") or 0) < 2.0)
+    if tight_tp >= 2:
+        findings.append(
+            f"<b>{tight_tp} of {n_loss}</b> losers had TP1 between 1.5R and 2.0R "
+            f"(barely cleared the minimum gate). Opposing-swing lookback may be "
+            f"finding nearby wicks instead of real liquidity."
+        )
+
+    # 3. OB age distribution.
+    ages = [(t.get("ob_age_h1_bars") or 0) for t in losers]
+    if ages:
+        old = sum(1 for a in ages if a > 48)
+        fresh = sum(1 for a in ages if a <= 12)
+        if old >= max(2, int(0.3 * n_loss)):
+            findings.append(
+                f"<b>{old} of {n_loss}</b> losers used an OB older than 48 H1 bars (2 days). "
+                f"Old OBs are more likely to be mitigated. Consider a freshness cutoff."
+            )
+        elif fresh >= max(2, int(0.5 * n_loss)) and fresh > old:
+            findings.append(
+                f"<b>{fresh} of {n_loss}</b> losers used a fresh OB (≤12 bars old). "
+                f"Freshness alone isn't a guarantee — other confluences should carry the setup."
+            )
+
+    # 4. Time-in-trade for winners vs losers.
+    win_hrs = [(t.get("bars_to_exit") or 0) for t in winners if (t.get("bars_to_exit") or 0) > 0]
+    loss_hrs = [(t.get("bars_to_exit") or 0) for t in losers if (t.get("bars_to_exit") or 0) > 0]
+    if len(win_hrs) >= MIN_N_FOR_VERDICT and len(loss_hrs) >= MIN_N_FOR_VERDICT:
+        avg_w = sum(win_hrs) / len(win_hrs)
+        avg_l = sum(loss_hrs) / len(loss_hrs)
+        if avg_l < avg_w * 0.6:
+            findings.append(
+                f"Losers stopped out fast (avg {avg_l:.0f}h held vs {avg_w:.0f}h for winners). "
+                f"Fast losses suggest the bias was wrong from entry — not late management failures."
+            )
+        elif avg_l > avg_w * 1.5:
+            findings.append(
+                f"Losers held long (avg {avg_l:.0f}h vs {avg_w:.0f}h for winners). "
+                f"Slow losses suggest TP1 is too far — trade idea was right but target was unreachable."
+            )
+
+    # 5. CHoCH — kept, but only flagged when meaningful share.
+    choch = sum(1 for t in losers if str(t.get("bos_tag") or "").upper() == "CHOCH")
+    if choch >= 2 and choch / n_loss >= 0.25:
+        findings.append(
+            f"<b>{choch} of {n_loss}</b> losers were CHoCH setups (counter-trend). "
+            f"CHoCH carries higher failure risk than BOS."
+        )
+
+    # 6. Minor structure — kept, threshold tightened.
+    minor = sum(1 for t in losers if str(t.get("bos_tier") or "").lower() == "minor")
+    if minor >= 2 and minor / n_loss >= 0.5:
+        findings.append(
+            f"<b>{minor} of {n_loss}</b> losers were on Minor structure events. "
+            f"If this repeats across runs, consider restricting entries to Major events only."
+        )
+
+    if not findings:
+        return (f"<p>{n_loss} losing trades this period. No dominant loss pattern detected — "
+                f"losses appear distributed normally across conditions.</p>")
+
+    items = "".join(f"<li style='margin-bottom:8px;'>{f}</li>" for f in findings)
+    return f"<ul style='padding-left:18px;font-size:13px;line-height:1.6;'>{items}</ul>"
+
+
+# ---------------------------------------------------------------------------
 # By-pair and by-session flat tables (replaces the sparse 2D grid)
 # ---------------------------------------------------------------------------
 
@@ -815,25 +1171,29 @@ def _structure_event_breakdown_html(trades: List[Dict[str, Any]], r_col: str) ->
     major_exp = (sum(n * e for tier, _, n, _, e in seen if tier == "Major") / major_n) if major_n else None
     minor_exp = (sum(n * e for tier, _, n, _, e in seen if tier == "Minor") / minor_n) if minor_n else None
 
-    # No n-threshold suppression -- the diff is shown whenever both tiers
-    # have at least one trade. Reader sees the sample size in the table
-    # above and weighs the comparison themselves.
+    # Sample-size discipline: a verdict is only meaningful when BOTH tiers
+    # have a non-trivial sample. Below the threshold, the diff can flip
+    # period to period (and was flipping between proximal/50% in the same
+    # email). Suppress the verdict in that case rather than asserting it.
     note = ""
     if major_exp is not None and minor_exp is not None:
         diff = major_exp - minor_exp
-        sample = (f" (Major: {major_n} trades, Minor: {minor_n} trades)"
-                  if (major_n < 3 or minor_n < 3) else "")
-        if diff > 0.15:
+        if major_n < MIN_N_FOR_VERDICT or minor_n < MIN_N_FOR_VERDICT:
+            note = (f"<p style='font-size:12px;color:#888;margin-top:8px;'>"
+                    f"Sample too small for a Major-vs-Minor verdict "
+                    f"(Major: {major_n}t, Minor: {minor_n}t; need ≥{MIN_N_FOR_VERDICT} each). "
+                    f"Diff this period: {diff:+.2f}R — re-check across runs.</p>")
+        elif diff > 0.15:
             note = (f"<p style='font-size:13px;color:#27ae60;margin-top:8px;'>"
-                    f"✓ Major events outperformed Minor by {diff:.2f}R per trade{sample}. "
+                    f"✓ Major events outperformed Minor by {diff:.2f}R per trade. "
                     f"This is the expected behaviour — Major detection is working as designed.</p>")
         elif diff < -0.15:
             note = (f"<p style='font-size:13px;color:#e74c3c;margin-top:8px;'>"
-                    f"⚠ Minor events outperformed Major by {abs(diff):.2f}R{sample} — unexpected. "
+                    f"⚠ Minor events outperformed Major by {abs(diff):.2f}R — unexpected. "
                     f"Major event detection may be misclassifying setups. Verify before trading live.</p>")
         else:
             note = (f"<p style='font-size:13px;color:#888;margin-top:8px;'>"
-                    f"Major and Minor performance is similar (difference: {diff:+.2f}R){sample}.</p>")
+                    f"Major and Minor performance is similar (difference: {diff:+.2f}R).</p>")
     elif major_n == 0 and minor_n == 0:
         note = ("<p style='font-size:12px;color:#888;margin-top:8px;'>"
                 "No structure-event data this period.</p>")
@@ -1056,11 +1416,14 @@ _EXCEL_COL_NAMES = {
     "tp2_rr":            "TP2 Reward:Risk",
     "exit_reason":       "How Trade Closed",
     "exit_price":        "Exit Price",
-    "r_realised":        "R Achieved",
-    "pnl_usd":           "Dollar P&L",
+    "r_realised":        "R Achieved (TP2-ride)",
+    "pnl_usd":           "Dollar P&L (TP2-ride)",
+    "r_if_exit_tp1":     "R if Closed at TP1",
+    "r_if_runner":       "R if TP1 + Runner",
     "mfe_r":             "Best Price Reached (R)",
     "mae_r":             "Worst Price Reached (R)",
     "bars_to_exit":      "Hours Held",
+    "bars_to_tp1":       "Hours to TP1 (-1 if never)",
     "score":             "Setup Score (0–8)",
     "confluences_present": "Confluences Active",
     "fvg_present":       "FVG Present",
@@ -1071,6 +1434,10 @@ _EXCEL_COL_NAMES = {
     "vet_review_reason": "Why Worth Reviewing",
     "alert_ts":          "Alert Time (UTC)",
     "exit_ts":           "Trade Closed (UTC)",
+    "ob_time_ist":       "OB Formed (IST)",
+    "fill_time_ist":     "Entry Fill (IST)",
+    "sl_hit_time_ist":   "SL Hit (IST)",
+    "tp_fill_time_ist":  "TP Fill (IST)",
     "news_blocked":         "News Blocked",
     "news_event_title":     "News Event",
     "news_event_currency":  "News Currency",
@@ -1101,6 +1468,25 @@ _DIR_LABELS = {
 }
 
 
+def _to_ist_str(ts_val: Any) -> str:
+    """Convert a UTC ISO timestamp string (or pd.Timestamp) to IST 'YYYY-MM-DD HH:MM'.
+
+    All stored timestamps in the backtest pipeline are UTC (data_loader pins
+    every H1 frame to UTC and the simulator localises naïve timestamps to UTC
+    before emitting). So a bare conversion to Asia/Kolkata is correct — no
+    silent assumption about the source zone.
+    """
+    if ts_val is None or ts_val == "" or (isinstance(ts_val, float) and pd.isna(ts_val)):
+        return ""
+    try:
+        ts = pd.Timestamp(ts_val)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize("UTC")
+        return ts.tz_convert("Asia/Kolkata").strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return ""
+
+
 def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
     """Write human-readable Excel. Returns path or None on failure."""
     # Only filled trades in the Excel — never_filled are counted in fill rate
@@ -1109,11 +1495,30 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
     if not filled:
         return None
     try:
+        # Make sure r_if_runner is populated for every row so the new Excel
+        # column has data. _attach_runner_r is idempotent.
+        _attach_runner_r(filled)
         df = pd.DataFrame(filled)
 
         # Add day of week (tracked for cross-run aggregate analysis).
         if "alert_ts" in df.columns:
             df["day_of_week"] = df["alert_ts"].apply(_day_of_week)
+
+        # IST timestamp columns (for TradingView verification). Source columns
+        # are UTC ISO strings. SL/TP IST cells split exit_ts by exit_reason so
+        # a row only carries the IST timestamp for the outcome that actually
+        # happened — empty otherwise.
+        df["ob_time_ist"]    = df["ob_timestamp"].apply(_to_ist_str) if "ob_timestamp" in df.columns else ""
+        df["fill_time_ist"]  = df["fill_ts"].apply(_to_ist_str)      if "fill_ts"      in df.columns else ""
+
+        def _sl_ist(row):
+            return _to_ist_str(row.get("exit_ts")) if row.get("exit_reason") in ("sl", "sl_collision") else ""
+
+        def _tp_ist(row):
+            return _to_ist_str(row.get("exit_ts")) if row.get("exit_reason") in ("tp1", "tp2") else ""
+
+        df["sl_hit_time_ist"] = df.apply(_sl_ist, axis=1) if "exit_ts" in df.columns else ""
+        df["tp_fill_time_ist"] = df.apply(_tp_ist, axis=1) if "exit_ts" in df.columns else ""
 
         # Compute vet_review for each trade.
         reviews = [_flag_vet_review(t) for t in filled]
@@ -1154,17 +1559,21 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
             "Take Profit 1": 13, "Take Profit 2": 13,
             "TP1 Reward:Risk": 14, "TP2 Reward:Risk": 14,
             "How Trade Closed": 24, "Exit Price": 12,
-            "R Achieved": 12, "Dollar P&L": 12,
+            "R Achieved (TP2-ride)": 18, "Dollar P&L (TP2-ride)": 20,
+            "R if Closed at TP1": 18, "R if TP1 + Runner": 18,
             "Proximal R": 12, "Proximal Dollar P&L": 18,
             "50% R": 12, "50% Dollar P&L": 18,
             "Best Price Reached (R)": 20, "Worst Price Reached (R)": 20,
-            "Hours Held": 10, "Setup Score (0–8)": 14,
+            "Hours Held": 10, "Hours to TP1 (-1 if never)": 22,
+            "Setup Score (0–8)": 14,
             "Confluences Active": 22,
             "FVG Present": 12, "Liquidity Sweep Present": 22,
             "Structure Event (BOS / CHoCH)": 24,
             "Structure Tier (Major / Minor)": 24,
             "Worth Reviewing": 15, "Why Worth Reviewing": 40,
             "Alert Time (UTC)": 20, "Trade Closed (UTC)": 20,
+            "OB Formed (IST)": 18, "Entry Fill (IST)": 18,
+            "SL Hit (IST)": 18, "TP Fill (IST)": 18,
         }
 
         def _style_trades_sheet(ws, from_openpyxl):
@@ -1184,7 +1593,8 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
 
             headers = [cell.value for cell in ws[1]]
             pnl_cols = [headers.index(h) + 1 for h in
-                        ("Dollar P&L", "Proximal Dollar P&L", "50% Dollar P&L")
+                        ("Dollar P&L (TP2-ride)", "Dollar P&L",
+                         "Proximal Dollar P&L", "50% Dollar P&L")
                         if h in headers]
             rev_col = headers.index("Worth Reviewing") + 1 if "Worth Reviewing" in headers else None
             nb_col  = headers.index("News Blocked") + 1   if "News Blocked" in headers else None
@@ -1392,12 +1802,15 @@ def _pair_section_html(pp: List[Dict], ss: List[Dict], r_col_label: str) -> str:
 def _score_verdict_text(buckets: List[Dict]) -> str:
     if not buckets:
         return "No score data this period."
-    if len(buckets) < 2:
-        b = buckets[0]
-        return (f"Only one score bucket present ({b['score_bucket']}, "
-                f"{b['trades']} trades, avg {_r(b['expectancy_r'])}). "
-                f"No score-vs-outcome trend can be drawn from a single bucket.")
-    exp_vals = [b["expectancy_r"] for b in buckets]
+    # Sample-size discipline: buckets with very small n distort the trend check.
+    # Use only buckets with n >= 3 for the verdict, but keep all in the table.
+    robust = [b for b in buckets if b["trades"] >= 3]
+    if len(robust) < 2:
+        total_n = sum(b["trades"] for b in buckets)
+        return (f"Insufficient sample to call score-vs-outcome trend "
+                f"({total_n} trades across {len(buckets)} buckets; "
+                f"need ≥2 buckets with ≥3 trades each).")
+    exp_vals = [b["expectancy_r"] for b in robust]
     rises = sum(1 for a, b in zip(exp_vals, exp_vals[1:]) if b > a)
     total = len(exp_vals) - 1
     ratio = rises / total if total > 0 else 0
@@ -1421,9 +1834,24 @@ def _score_table_html(buckets: List[Dict]) -> str:
     return f"<table><thead>{rows}</thead></table>"  # already has header in rows
 
 
-def _entry_comparison_html(sb_prox: Dict, sb_mid: Dict, fill_prox: Dict, fill_mid: Dict) -> str:
+def _entry_comparison_html(sb_prox: Dict, sb_mid: Dict,
+                           fill_prox: Dict, fill_mid: Dict,
+                           prox_trades: List[Dict[str, Any]],
+                           mid_trades: List[Dict[str, Any]],
+                           risk_usd: float) -> str:
+    """Head-to-head of proximal vs 50% entry, broken out for each exit policy
+    (TP1-only, TP1+runner, TP2-ride). Lets the reader see whether one entry
+    zone dominates universally or only under a specific exit policy."""
     def _row(label: str, prox_val: str, mid_val: str) -> str:
         return f"<tr><td><b>{label}</b></td><td>{prox_val}</td><td>{mid_val}</td></tr>"
+
+    # Per-policy aggregates.
+    _attach_runner_r(prox_trades)
+    _attach_runner_r(mid_trades)
+    sb_prox_tp1 = _aggregate_for_exit(prox_trades, "r_if_exit_tp1", risk_usd)
+    sb_prox_run = _aggregate_for_exit(prox_trades, "r_if_runner",   risk_usd)
+    sb_mid_tp1  = _aggregate_for_exit(mid_trades,  "r_if_exit_tp1", risk_usd)
+    sb_mid_run  = _aggregate_for_exit(mid_trades,  "r_if_runner",   risk_usd)
 
     rows = "".join([
         _table_row(["", "Proximal entry", "50% midpoint entry"], header=True),
@@ -1432,20 +1860,51 @@ def _entry_comparison_html(sb_prox: Dict, sb_mid: Dict, fill_prox: Dict, fill_mi
         _row("Orders filled",
              f"{fill_prox['filled']} ({fill_prox['fill_rate_pct']:.0f}%)",
              f"{fill_mid['filled']} ({fill_mid['fill_rate_pct']:.0f}%)"),
-        _row("Win rate",
+        _row("Win rate (TP2-ride)",
              f"{sb_prox.get('win_rate_pct', 0):.0f}%",
              f"{sb_mid.get('win_rate_pct', 0):.0f}%"),
-        _row("Avg R per trade",
+        _row("Avg R (TP2-ride, current)",
              _r(sb_prox.get("expectancy_r", 0)),
              _r(sb_mid.get("expectancy_r", 0))),
-        _row("Total P&L",
+        _row("Total P&L &mdash; TP1-only",
+             _m(sb_prox_tp1.get("total_pnl_usd", 0)),
+             _m(sb_mid_tp1.get("total_pnl_usd", 0))),
+        _row("Total P&L &mdash; TP1 + runner",
+             _m(sb_prox_run.get("total_pnl_usd", 0)),
+             _m(sb_mid_run.get("total_pnl_usd", 0))),
+        _row("Total P&L &mdash; TP2-ride (current)",
              f"<b>{_m(sb_prox.get('total_pnl_usd', 0))}</b>",
              f"<b>{_m(sb_mid.get('total_pnl_usd', 0))}</b>"),
     ])
-    note = ("<p style='font-size:12px;color:#666;margin-top:8px;'>"
-            "Both entries target the same take profit levels. The 50% entry fills less often "
-            "but has a tighter stop-to-target ratio when it does fill.</p>")
-    return f"<table>{rows}</table>{note}"
+
+    # Best (entry, policy) call-out.
+    grid = {
+        ("Proximal", "TP1-only"):           sb_prox_tp1.get("total_pnl_usd", 0),
+        ("Proximal", "TP1+runner"):         sb_prox_run.get("total_pnl_usd", 0),
+        ("Proximal", "TP2-ride (current)"): sb_prox.get("total_pnl_usd", 0),
+        ("50% entry", "TP1-only"):           sb_mid_tp1.get("total_pnl_usd", 0),
+        ("50% entry", "TP1+runner"):         sb_mid_run.get("total_pnl_usd", 0),
+        ("50% entry", "TP2-ride (current)"): sb_mid.get("total_pnl_usd", 0),
+    }
+    best_combo = max(grid, key=grid.get)
+    current = grid[("Proximal", "TP2-ride (current)")] + grid[("50% entry", "TP2-ride (current)")]
+    best_pnl = grid[best_combo]
+
+    if best_combo == ("Proximal", "TP2-ride (current)") or best_combo == ("50% entry", "TP2-ride (current)"):
+        verdict = ("<p style='font-size:13px;color:#27ae60;margin-top:10px;'>"
+                   f"<b>Current policy is best on the single dominant entry/exit pair.</b> "
+                   f"Best single combo: {best_combo[0]} + {best_combo[1]} ({_m(best_pnl)}).</p>")
+    else:
+        verdict = ("<p style='font-size:13px;color:#f39c12;margin-top:10px;'>"
+                   f"<b>Best single combo this period: {best_combo[0]} + {best_combo[1]} "
+                   f"({_m(best_pnl)})</b> &mdash; "
+                   f"vs current TP2-ride total {_m(current)}. Worth simulating live.</p>")
+
+    note = ("<p style='font-size:12px;color:#666;margin-top:4px;'>"
+            "All policies target the same TP1/TP2 levels. TP1-only closes at TP1; "
+            "TP1+runner takes half at TP1 and rides the rest under a BE stop; "
+            "TP2-ride is the current default (full position rides to TP2).</p>")
+    return f"<table>{rows}</table>{verdict}{note}"
 
 
 def _vet_review_html(trades: List[Dict]) -> str:
@@ -1479,47 +1938,29 @@ def _zone_block_html(
     risk_usd: float,
     band_color: str,
 ) -> str:
-    """One self-contained section per entry zone: headline -> by-pair ->
-    by-session -> pair x session matrix -> killzone split -> score buckets
-    -> confluences -> structure events -> loss analysis -> TP1 vs TP2.
+    """One self-contained section per entry zone. New layout:
+      findings panel -> compact header -> by-pair -> by-session ->
+      pair x session matrix -> pair x DOW matrix -> exit-policy comparison ->
+      score buckets -> confluences -> structure events ->
+      where the edge leaked -> trades worth a second look.
 
     Every aggregate inside this block uses r_realised so the headline and
-    the breakdowns reconcile to the same total.
+    the breakdowns reconcile to the same total. Exit-policy section uses
+    r_if_exit_tp1, r_if_runner and r_realised side by side.
     """
-    # Headline figures (mirror the top-of-email shape but scoped to this zone).
+    # Headline figures.
     n         = sb_realised.get("trades", 0)
     total_pnl = sb_realised.get("total_pnl_usd", 0)
     exp_r     = sb_realised.get("expectancy_r", 0)
     wr        = sb_realised.get("win_rate_pct", 0)
+    wins      = sb_realised.get("wins", 0)
+    losses    = sb_realised.get("losses", 0)
+    bes       = sb_realised.get("breakevens", 0)
     pnl_color = "#27ae60" if total_pnl >= 0 else "#e74c3c"
-    headline  = _week_headline(sb_realised)
 
-    # Exit-reason narrative scoped to this zone.
-    exit_counts = _exit_reason_counts(zone_trades)
-    exit_reason_plain = {
-        "sl": "Stop loss", "tp1": "TP1 hit", "tp2": "TP2 hit",
-        "timeout": "Time limit", "window_end": "End of window",
-        "sl_collision": "SL+TP same bar", "never_filled": "Never filled",
-    }
-    exit_breakdown = " &middot; ".join(
-        f"<b>{exit_reason_plain.get(k, k)}: {v}</b>"
-        for k, v in sorted(exit_counts.items())
-    )
-
-    # TP1-vs-TP2 hypothetical line.
-    _filled = [t for t in zone_trades if t.get("exit_reason") != "never_filled"]
-    if _filled:
-        sum_tp2 = sum((t.get("r_if_exit_tp2") or 0) for t in _filled)
-        sum_tp1 = sum((t.get("r_if_exit_tp1") or 0) for t in _filled)
-        def _f(v): return f"{'+' if v >= 0 else ''}{v:.1f}R"
-        tp1_vs_tp2_line = (
-            f"<p style='font-size:12px;color:#888;margin-top:2px;'>"
-            f"If we'd banked at TP1 instead of riding to TP2: "
-            f"total {_f(sum_tp1)} across {len(_filled)} trades "
-            f"(vs current TP2-ride policy: {_f(sum_tp2)}).</p>"
-        )
-    else:
-        tp1_vs_tp2_line = ""
+    # Auto-derived findings — the lead.
+    findings = _findings_panel(zone_trades, sb_realised, risk_usd)
+    findings_block = _findings_panel_html(findings)
 
     # Score buckets and verdict (this zone's data only).
     score_buckets = _score_buckets(zone_trades, "r_realised")
@@ -1533,126 +1974,78 @@ def _zone_block_html(
   {zone_label}
 </div>
 
-<!-- ZONE HEADLINE -->
+<!-- COMPACT HEADER + FINDINGS PANEL -->
 <div class="section">
-  <div style="font-size:26px;font-weight:700;color:{pnl_color};">
-    {_m(total_pnl)}
-  </div>
-  <div style="font-size:14px;color:#555;margin-top:4px;">
-    {n} filled trades &nbsp;&middot;&nbsp;
-    {wr:.0f}% won &nbsp;&middot;&nbsp;
-    avg {_r(exp_r)} per trade
-  </div>
-  <div style="font-size:13px;color:#444;margin-top:10px;
-              background:#f8f9fa;border-left:3px solid {pnl_color};
-              padding:8px 12px;border-radius:0 4px 4px 0;">
-    {headline}
-  </div>
-
-  <div class="stats-strip" style="margin-top:14px;">
-    <div class="stat">
-      <div class="val" style="color:#27ae60;">{sb_realised.get('wins', 0)}</div>
-      <div class="lbl">Wins</div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;
+              flex-wrap:wrap;gap:14px;margin-bottom:14px;">
+    <div style="font-size:24px;font-weight:700;color:{pnl_color};">
+      {_m(total_pnl)}
     </div>
-    <div class="stat">
-      <div class="val" style="color:#e74c3c;">{sb_realised.get('losses', 0)}</div>
-      <div class="lbl">Losses</div>
-    </div>
-    <div class="stat">
-      <div class="val" style="color:#888;">{sb_realised.get('breakevens', 0)}</div>
-      <div class="lbl">Break-evens</div>
-    </div>
-    <div class="stat">
-      <div class="val">{_r(sb_realised.get('avg_win_r', 0))}</div>
-      <div class="lbl">Avg win</div>
-    </div>
-    <div class="stat">
-      <div class="val">{_r(sb_realised.get('avg_loss_r', 0))}</div>
-      <div class="lbl">Avg loss</div>
+    <div style="font-size:13px;color:#666;">
+      <b>{n}</b> filled &middot; <b>{wr:.0f}%</b> WR &middot; <b>{_r(exp_r)}</b> avg &middot;
+      {wins}W / {losses}L / {bes}BE
     </div>
   </div>
-  {_exit_narrative(sb_realised, risk_usd)}
-  <p style="font-size:12px;color:#888;margin-top:4px;">
-    How trades closed: {exit_breakdown}
-  </p>
-  {tp1_vs_tp2_line}
+  {findings_block}
 </div>
 
 <!-- BY PAIR -->
 <div class="section">
-  <h2>Where it worked &mdash; by pair</h2>
-  <p style="font-size:12px;color:#666;margin-bottom:10px;">
-    Win rate, average R and trade count per pair.
-  </p>
+  <h2>By pair</h2>
   {_by_pair_html(zone_trades, "r_realised")}
 </div>
 
 <!-- BY SESSION -->
 <div class="section">
-  <h2>Where it worked &mdash; by session</h2>
-  <p style="font-size:12px;color:#666;margin-bottom:10px;">
-    Same view, sliced by trading session.
-  </p>
+  <h2>By session</h2>
   {_by_session_html(zone_trades, "r_realised")}
 </div>
 
 <!-- PAIR x SESSION MATRIX -->
 <div class="section">
-  <h2>Pair &times; session matrix</h2>
-  <p style="font-size:12px;color:#666;margin-bottom:10px;">
-    The view that actually tells you where edge lives: each (pair, session)
-    intersection in one table. Roll-ups on the right and bottom.
-  </p>
+  <h2>Pair &times; session</h2>
   {_pair_session_matrix_html(zone_trades, "r_realised")}
 </div>
 
 <!-- PAIR x DAY-OF-WEEK MATRIX -->
 <div class="section">
-  <h2>Pair &times; day-of-week matrix</h2>
-  <p style="font-size:12px;color:#666;margin-bottom:10px;">
-    Same shape as the session matrix, sliced by day of week. Useful for
-    spotting per-pair day effects (a pair that consistently fails on Fridays,
-    or wakes up Mondays). All non-empty cells shown; read the sample size
-    from each cell's trade count.
-  </p>
+  <h2>Pair &times; day of week</h2>
   {_pair_dow_matrix_html(zone_trades, "r_realised")}
+</div>
+
+<!-- EXIT POLICY COMPARISON -->
+<div class="section">
+  <h2>Exit policy comparison</h2>
+  {_exit_policy_html(zone_trades, risk_usd)}
+  <h4 style="margin-top:16px;">Best policy by pair</h4>
+  {_exit_policy_by_dim_html(zone_trades, risk_usd, "pair", "Pair")}
+  <h4 style="margin-top:16px;">Best policy by session</h4>
+  {_exit_policy_by_dim_html(zone_trades, risk_usd, "session", "Session")}
 </div>
 
 <!-- SCORE -->
 <div class="section">
-  <h2>Did the confidence score predict better trades?</h2>
+  <h2>Confidence score &mdash; did it predict outcomes?</h2>
   <p><b>{score_verdict}</b></p>
   {_score_table_html(score_buckets)}
-  <p style="font-size:12px;color:#888;margin-top:8px;">
-    Score rises with each confluence present: FVG, liquidity sweep, kill zone,
-    PD alignment, OB freshness, structure tier.
-  </p>
 </div>
 
 <!-- CONFLUENCES -->
 <div class="section">
-  <h2>Which confluences actually helped &mdash; by pair</h2>
-  <p style="font-size:12px;color:#666;margin-bottom:10px;">
-    Win rate when each confluence was present. &uarr; = improved results vs without it.
-    &darr; = hurt results. &mdash; = that confluence was never present for this pair.
-    All non-empty cells shown; sample size is the small number on each cell.
-  </p>
+  <h2>Confluences by pair</h2>
   {_confluence_per_pair_html(zone_trades, "r_realised")}
 </div>
 
 <!-- STRUCTURE -->
 <div class="section">
-  <h2>Performance by structure event type</h2>
-  <p style="font-size:12px;color:#666;margin-bottom:10px;">
-    Verify that Major events outperform Minor &mdash; they should, if detection is working.
-  </p>
+  <h2>Structure event performance</h2>
   {_structure_event_breakdown_html(zone_trades, "r_realised")}
 </div>
 
-<!-- LOSS ANALYSIS -->
+<!-- EDGE LEAK -->
 <div class="section">
-  <h2>What was different about the losing trades</h2>
-  {_loss_analysis_html(zone_trades)}
+  <h2>Where the edge leaked</h2>
+  {_edge_leak_html(zone_trades)}
 </div>
 
 <!-- VET REVIEW -->
@@ -1839,7 +2232,8 @@ def _build_group_html(
 
 <div class="section">
   <h2>Proximal entry vs 50% midpoint entry &mdash; head-to-head</h2>
-  {_entry_comparison_html(sb_prox, sb_mid, fill_prox, fill_mid)}
+  {_entry_comparison_html(sb_prox, sb_mid, fill_prox, fill_mid,
+                          prox_trades, mid_trades, risk_usd)}
 </div>
 
 <div class="section">
@@ -2193,7 +2587,8 @@ def write_h1_only_report(
 <!-- ============================================================ -->
 <div class="section">
   <h2>Proximal entry vs 50% midpoint entry &mdash; head-to-head</h2>
-  {_entry_comparison_html(sb_prox, sb_mid, fill_prox, fill_mid)}
+  {_entry_comparison_html(sb_prox, sb_mid, fill_prox, fill_mid,
+                          prox_trades, mid_trades, risk_usd)}
 </div>
 
 <!-- ============================================================ -->

@@ -1,7 +1,7 @@
-"""Bar-by-bar replay through live SMC detection modules.
+"""Bar-by-bar H1 replay through live SMC detection modules.
 
-Walks H1 candles one at a time. At each H1 close, slices H1+M15(+M5) data up to
-that bar and calls the live `dealing_range.update_pair` and
+Walks H1 candles one at a time. At each H1 close, slices H1 data up to that
+bar and calls the live `dealing_range.update_pair` and
 `smc_radar.detect_smc_radar` functions to get OBs that would have existed at
 that moment.
 
@@ -92,8 +92,6 @@ def _is_ob_mitigated_replay(direction: str, distal: float, proximal: float,
 def replay_pair(
     pair_conf: Dict[str, Any],
     df_h1: pd.DataFrame,
-    df_m15: pd.DataFrame,
-    df_m5: Optional[pd.DataFrame],
     state: ReplayState,
     walk_start_ts: pd.Timestamp,
     walk_end_ts: pd.Timestamp,
@@ -146,14 +144,6 @@ def replay_pair(
         if len(h1_slice) < MIN_WARMUP:
             diag["warmup_skipped"] += 1
             continue
-
-        m15_slice = _slice_up_to(df_m15, h1_ts) if df_m15 is not None else None
-        if m15_slice is not None:
-            _assert_no_lookahead(m15_slice, h1_ts, "M15")
-
-        m5_slice = _slice_up_to(df_m5, h1_ts) if df_m5 is not None else None
-        if m5_slice is not None:
-            _assert_no_lookahead(m5_slice, h1_ts, "M5")
 
         # --- Step 1: update dealing_range walls + event ring -----------------
         try:
@@ -276,7 +266,6 @@ def replay_pair(
                 "h1_atr": h1_atr,
                 "ob": ob,
                 "walls": walls,
-                "m15_slice_end": m15_slice.index[-1] if m15_slice is not None and not m15_slice.empty else None,
             }
             state.alerted_zones[pair_name].add(zone_id)
 
@@ -309,106 +298,6 @@ def replay_pair(
         f"closest={closest_str} (cap={atr_mult}×ATR) "
         f"alerts={diag['alerts_emitted']}"
     )
-
-
-def replay_phase3_watch(
-    alert: Dict[str, Any],
-    pair_conf: Dict[str, Any],
-    df_m5: pd.DataFrame,
-    walk_end_ts: pd.Timestamp,
-    m5_tap_window: int = 30,
-) -> Optional[Dict[str, Any]]:
-    """Given a Phase 2 alert that qualified for Phase 3, walk M5 bars forward
-    and return a Phase 3 trigger event when tap + M5 CHoCH fires, or None
-    if the watch expires or OB is invalidated first.
-
-    Mirrors live run_phase3() logic: tap check → CHoCH via detect_ltf_choch
-    → RR gate → yield trigger.
-
-    Returns a trigger dict or None.
-    """
-    ob = alert["ob"]
-    bias = "LONG" if ob.get("direction") == "bullish" else "SHORT"
-    proximal = float(ob["proximal_line"])
-    distal = float(ob["distal_line"])
-    alert_ts = pd.Timestamp(alert["ts"])
-    if alert_ts.tzinfo is None:
-        alert_ts = alert_ts.tz_localize("UTC")
-
-    bounds = {"max": max(proximal, distal), "min": min(proximal, distal)}
-
-    # Walk M5 bars from alert_ts onward.
-    if df_m5 is None or df_m5.empty:
-        return None
-    future_m5 = df_m5.loc[alert_ts:walk_end_ts]
-    if future_m5.empty:
-        return None
-
-    tapped = False
-    for i, (m5_ts, bar) in enumerate(future_m5.iterrows()):
-        m5_slice = _slice_up_to(df_m5, m5_ts)
-        _assert_no_lookahead(m5_slice, m5_ts, "M5-P3")
-
-        current_close = float(bar["Close"])
-
-        # Invalidation: M5 close beyond H1 OB distal.
-        if bias == "LONG" and current_close < distal:
-            return None
-        if bias == "SHORT" and current_close > distal:
-            return None
-
-        # Tap: proximal touched.
-        if not tapped:
-            recent = m5_slice.tail(m5_tap_window)
-            if (bias == "LONG" and recent["Low"].min() <= proximal) or \
-               (bias == "SHORT" and recent["High"].max() >= proximal):
-                tapped = True
-
-        if not tapped:
-            continue
-
-        # OB liveness: re-check mitigation on H1 at this M5 timestamp.
-        # Mirrors live Fix 1+12: confirms P1 hasn't 3-touch mitigated the OB
-        # between the H1 alert and now. Use the full H1 up to this moment.
-        h1_at_trigger = _slice_up_to(
-            # df_h1 not passed into this function — resolve from alert context.
-            # We store it on the alert dict in run_backtest.py via extra key.
-            alert.get("_df_h1"),
-            m5_ts,
-        ) if alert.get("_df_h1") is not None else None
-        if h1_at_trigger is not None and not h1_at_trigger.empty:
-            mit, _ = _is_ob_mitigated_replay(
-                ob.get("direction"), float(ob["distal_line"]),
-                float(ob["proximal_line"]), h1_at_trigger, ob.get("ob_timestamp")
-            )
-            if mit:
-                return None  # OB mitigated on H1 before M5 CHoCH could fire
-
-        # M5 CHoCH via live function (already uses single most-recent swing per Fix 5).
-        try:
-            choch_res = smc_detector.detect_ltf_choch(m5_slice, bias, bounds)
-        except Exception as e:
-            print(f"  [P3 CHoCH ERR] {alert['pair']} @ {m5_ts}: {e}")
-            continue
-
-        if not choch_res.get("fired"):
-            continue
-
-        choch_level = float(choch_res["level"])
-        return {
-            "kind": "phase3_trigger",
-            "pair": alert["pair"],
-            "ts": m5_ts,
-            "alert_ts": alert["ts"],
-            "ob": ob,
-            "bias": bias,
-            "choch_level": choch_level,
-            "current_price": current_close,
-            "h1_atr": alert.get("h1_atr"),
-            "walls": alert.get("walls"),
-        }
-
-    return None
 
 
 def _normalize_obs_result(result: Any) -> List[Dict[str, Any]]:

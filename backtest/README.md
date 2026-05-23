@@ -26,56 +26,31 @@ the trading system *would have done* on a given week.
    - Conservative rule: same-bar SL + TP collision → SL hits first.
 4. Generate Excel + HTML report with two regimes (per-pair view + Forex vs NAS/XAU split).
 
-## Compromise: Phase 2 scoring
+## Mode
 
-Phase 2's confluence scoring lives inline in the live `Phase2_Alert_Engine.py`
-main block — not in a callable function. This harness mirrors that scoring
-logic in `trade_simulator.py::score_ob_confluences()`. **If the live scoring
-changes, this mirror must be updated.** See `KNOWN_LIMITATIONS.md`.
-
-Why this compromise: refactoring the live scoring into a callable function
-would mean editing the live codebase — explicit hard rule violation. The
-alternative — running the live `Phase2_Alert_Engine.py` as a subprocess with
-patched data sources — is fragile and slow. Mirroring the scoring is the
-honest middle path. The harness logs every confluence input so divergence
-from live is auditable.
-
-## Modes
-
-The harness runs in one of two modes:
-
-- **`auto`** (default) — full system. Uses M15 / M5 data where available
-  (Phase 2 limit orders for Forex, Phase 3 M5 CHoCH confirmation for Gold/NAS).
-  Falls back to legacy single-entry H1 simulation when M15 isn't available
-  (>~58 days ago).
-- **`h1_only`** — H1-only experiment. Tests whether the SMC system is viable
-  using H1 data alone. Key differences vs `auto`:
-  - Skips M15 / M5 fetches entirely (much faster).
-  - **No scoring gate** — every H1 OB-touch fires a trade regardless of
-    confluence score. Score is still computed and logged so the user can
-    discover the optimal threshold empirically from the trade outcomes.
-  - **Dual entry** — every OB-touch produces TWO trade rows: one with entry
-    at the OB proximal edge, one at the OB 50% mean. Same SL (OB distal),
-    same TP price levels (opposing H1 swing liquidity, reused from live
-    `compute_phase2_levels` with `h1_only=True`). R-distance halves on the
-    50% entry, so RR doubles for the same TP.
-  - Logs `r_if_exit_tp1` AND `r_if_exit_tp2` for every trade so the user can
-    see TP1-only behaviour vs default TP2 side by side.
+H1-only is the only mode. Tests the SMC system on H1 data alone:
+- Skips M15 / M5 fetches entirely.
+- **No scoring gate** — every H1 OB-touch fires a trade regardless of
+  confluence score. Score is still computed (via live
+  `smc_detector.run_scorecard` with `df_m15=None`) and logged so the user
+  can discover the optimal threshold empirically from the trade outcomes.
+- **Dual entry** — every OB-touch produces TWO trade rows: one with entry
+  at the OB proximal edge, one at the OB 50% mean. Same SL (OB distal),
+  same TP price levels (opposing H1 swing liquidity, reused from live
+  `compute_phase2_levels` with `h1_only=True`). R-distance halves on the
+  50% entry, so RR doubles for the same TP.
+- Logs `r_if_exit_tp1` AND `r_if_exit_tp2` for every trade so the user can
+  see TP1-only behaviour vs default TP2 side by side.
 
 ## Running
 
 ### Via GitHub Actions (recommended)
-- Actions tab → "Backtest" workflow → "Run workflow" → fill date range,
-  pick **mode** (`auto` or `h1_only`).
+- Actions tab → "Backtest" workflow → "Run workflow" → fill date range.
 - Output: artifacts attached, run log committed back to repo.
 
 ### Locally
 ```
-# Full system
 python backtest/run_backtest.py --start 2026-05-12 --end 2026-05-16 --regime war
-
-# H1-only experiment
-python backtest/run_backtest.py --mode h1_only --start 2026-05-12 --end 2026-05-16
 ```
 
 ### H1-only sanity test
@@ -88,12 +63,10 @@ on a synthetic OB. Runs in <2s. Same script runs on CI before every backtest.
 ## Files
 
 - `data_loader.py` — yfinance fetch + parquet cache.
-- `replay_engine.py` — bar-by-bar walk with lookahead guard.
-- `trade_simulator.py` — entry fill + SL/TP walk + MFE/MAE tracking (auto mode).
-- `h1_only_simulator.py` — H1-only dual-entry simulator (h1_only mode).
-- `h1_only_reporting.py` — H1-only report writer with TP1/TP2 side-by-side
+- `replay_engine.py` — bar-by-bar H1 walk with lookahead guard.
+- `h1_only_simulator.py` — H1-only dual-entry simulator.
+- `h1_only_reporting.py` — report writer with TP1/TP2 side-by-side
   scoreboard and score-vs-winrate diagnostic table.
-- `reporting.py` — auto-mode Excel + HTML report assembly.
 - `reporting_email.py` — own SMTP, no live email reuse.
 - `run_backtest.py` — CLI entry.
 - `test_h1_only.py` — synthetic-OB sanity tests for H1-only path.

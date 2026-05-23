@@ -148,7 +148,7 @@ def _score_h1_only(alert: Dict[str, Any], pair_conf: Dict[str, Any],
         return 0.0, {}
     breakdown = dict(score_res.get("breakdown", {}))
     # Override killzone using the alert bar's hour (live wallclock would be
-    # wrong in a backtest). Mirrors trade_simulator.score_alert_via_live.
+    # wrong in a backtest).
     pair_type = pair_conf.get("pair_type", "forex")
     breakdown["killzone"] = (
         0.5 if smc_detector._killzone_hit(alert_ts.hour, pair_type) else 0.0

@@ -75,7 +75,7 @@ jobs:
           # Regime auto-detected from backtest/WAR_REGIME_WEEKS.json -- no
           # workflow input. The detector reads the date range and tags the
           # run war/bau before any logging or reporting fires.
-          ARGS="--start ${{ inputs.start_date }} --end ${{ inputs.end_date }} --mode h1_only --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_gbp }}"
+          ARGS="--start ${{ inputs.start_date }} --end ${{ inputs.end_date }} --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_gbp }}"
           if [ "${{ inputs.send_email }}" = "true" ]; then
             ARGS="$ARGS --email"
           fi

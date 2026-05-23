@@ -21,12 +21,11 @@ trusting any number it produces.
 
 ## Scoring model
 
-- **Phase 2 scoring is mirrored, not called.** The live scoring logic lives
-  inline in `Phase2_Alert_Engine.py` main block. The harness reimplements
-  it in `trade_simulator.py::score_ob_confluences()`. Any change to the
-  live scoring rules will silently drift this harness until the mirror is
-  updated. Cross-check by comparing harness scores against
-  `phase2_scan_log.jsonl` for the same week.
+- **Scoring calls live `smc_detector.run_scorecard` directly** (with
+  `df_m15=None` for H1-only), so it stays in lockstep with live scoring.
+  Killzone is overridden with the alert bar's hour (live wallclock would
+  be wrong for replayed history). M15 FVG component is always 0 by
+  construction in H1-only mode.
 - **News blackout filter is active in backtest.**
   The harness calls `news_filter.fetch_events()` at run start for the
   date range, pulling from one source:
@@ -51,24 +50,15 @@ trusting any number it produces.
   Reuters RSS for breaking events.
 - **No Gemini summary.** Reports do not include AI commentary.
 
-## Phase 3 substitution
-
-- NAS100 and Gold normally use Phase 3 (M5 CHoCH trigger).
-- For weeks older than ~60 days, M5 data isn't reliable.
-- Backtest falls back to Phase 2 limit-order model for older NAS/Gold weeks.
-- **Report banners this clearly per pair per week.** A Phase 2-substitute
-  result for NAS/Gold pre-2026-03 tells you about a hypothetical M15 system,
-  NOT the live Phase 3 system. Do not tune Phase 3 based on this.
-
 ## Trade simulation
 
 - **Same-bar SL + TP collision:** SL hits first (pessimistic). Count of
   collisions is reported so the drag is visible.
-- **Limit order fill:** Assumed instant fill when M15 low/high touches
+- **Limit order fill:** Assumed instant fill when H1 low/high touches
   the limit price (no requote, no partial fill).
 - **No re-entry logic.** One trade per OB per direction per zone-life.
-- **Time stop:** Trades not closed within `MAX_HOLD_HOURS` (default 72)
-  are time-stopped at the last bar's close. Configurable.
+- **Time stop:** trades not closed within `MAX_HOLD_H1_BARS` (default 48
+  H1 bars = 2 trading days) are time-stopped at the last bar's close.
 
 ## What this CAN'T tell you
 
