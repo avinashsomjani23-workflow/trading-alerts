@@ -64,6 +64,12 @@ jobs:
         # Adding extreme-outcome blocked rows must not move P&L, WR, RR, etc.
         run: python -m backtest.test_news_filter
 
+      - name: Run P&L reconciliation tests
+        # Pins the contract that headline P&L, head-to-head P&L, Excel
+        # Dollar P&L and registry headline all derive from the same column
+        # (r_realised). Catches regressions of the May-2026 divergence bug.
+        run: python -m backtest.test_pnl_reconciliation
+
       - name: Run backtest
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}

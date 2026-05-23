@@ -156,11 +156,17 @@ def _extract_metrics(run_dir: Path, summary: Dict[str, Any]) -> Dict[str, Any]:
     """Pull all cross-run-relevant metrics from one run folder."""
     trades_df = _load_trades(run_dir)
 
-    # Prefer the proximal TP2 scoreboard as the primary view (default policy).
+    # Headline view: proximal r_realised (default policy = TP2-ride with
+    # SL-to-BE after TP1). Same column the email headline uses, so the
+    # registry's numbers reconcile with what the user saw in their inbox.
+    # The exit_tp1 / exit_tp2 hypotheticals are kept in summary.json for
+    # the head-to-head policy comparison only -- never as the headline.
     boards = summary.get("scoreboards", {})
-    primary = boards.get("proximal_exit_tp2", {})
+    primary = boards.get("proximal_realised", {})
     if not primary or primary.get("trades", 0) == 0:
-        primary = boards.get("proximal_exit_tp1", {})
+        # Legacy summaries (pre-2026-05) only had the tp1/tp2 hypotheticals;
+        # fall back so old runs still register.
+        primary = boards.get("proximal_exit_tp2", {}) or boards.get("proximal_exit_tp1", {})
 
     total_trade_rows = summary.get("total_trade_rows", 0)
     filled_trades = primary.get("trades", 0)
@@ -169,8 +175,14 @@ def _extract_metrics(run_dir: Path, summary: Dict[str, Any]) -> Dict[str, Any]:
     fill_prox = summary.get("fill_rate_proximal", {})
     fill_50pct = summary.get("fill_rate_50pct", {})
 
-    per_pair = summary.get("per_pair_proximal_tp2", [])
-    score_buckets = summary.get("score_buckets_tp2", [])
+    # Breakdown keys match the writer in h1_only_reporting.write_h1_only_report
+    # (per_pair_proximal_realised, score_buckets_proximal_realised).
+    per_pair = (summary.get("per_pair_proximal_realised")
+                or summary.get("per_pair_proximal_tp2")  # legacy fallback
+                or [])
+    score_buckets = (summary.get("score_buckets_proximal_realised")
+                     or summary.get("score_buckets_tp2")  # legacy fallback
+                     or [])
 
     # Registry headline metrics (filled_trades, win_rate, expectancy) all come
     # from the proximal scoreboard. Drawdown, streak, and session breakdown must

@@ -658,6 +658,17 @@ def main():
     except Exception as e:
         print(f"  [registry update skipped: {e}]")
 
+    # Persist run logs to the repo so every backtest -- local or GHA --
+    # leaves a permanent, readable trail at backtest/results/<run_id>/.
+    # Previously this only happened in the GHA workflow; local runs were
+    # silently dropped. The Python-side commit makes it source-agnostic.
+    try:
+        from backtest.commit_logs import commit_run_logs
+        if out_dir is not None:
+            commit_run_logs(out_dir, _REPO_ROOT, push=True)
+    except Exception as e:
+        print(f"  [log commit skipped: {e}]")
+
 
 if __name__ == "__main__":
     main()

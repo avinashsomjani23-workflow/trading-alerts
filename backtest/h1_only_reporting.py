@@ -916,11 +916,11 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
             "Proximal Filled?":        "Yes" if _v(prox, "exit_reason") != "never_filled" and prox else "No",
             "Proximal Outcome":        _exit_labels.get(_v(prox, "exit_reason"), _v(prox, "exit_reason")),
             "Proximal R":              _v(prox, "r_realised"),
-            "Proximal Dollar P&L":     round(float(_v(prox, "r_realised", 0)) * float(_v(prox, "pnl_usd", 0) or 0 or 1), 0)
-                                       if prox else "",
+            "Proximal Dollar P&L":     round(float(_v(prox, "pnl_usd", 0) or 0), 0) if prox else "",
             "50% Filled?":             "Yes" if _v(mid, "exit_reason") != "never_filled" and mid else "No",
             "50% Outcome":             _exit_labels.get(_v(mid, "exit_reason"), _v(mid, "exit_reason")),
             "50% R":                   _v(mid, "r_realised"),
+            "50% Dollar P&L":          round(float(_v(mid, "pnl_usd", 0) or 0), 0) if mid else "",
             "FVG Present":             "Yes" if _v(prox, "fvg_present") else "No",
             "Sweep Present":           "Yes" if _v(prox, "sweep_present") else "No",
             "Confluences Active":      _v(prox, "confluences_present"),
@@ -1102,9 +1102,13 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
                     cell.fill      = PatternFill("solid", fgColor="2C3E50")
                     cell.alignment = Alignment(wrap_text=True)
 
-                # Find P&L and R columns.
+                # Find P&L and R columns. Pivoted layout has per-zone P&L
+                # columns; legacy (one-row-per-trade) layout has a single
+                # "Dollar P&L". Color whichever exists.
                 headers = [cell.value for cell in ws[1]]
-                pnl_col = headers.index("Dollar P&L") + 1 if "Dollar P&L" in headers else None
+                pnl_cols = [headers.index(h) + 1 for h in
+                            ("Dollar P&L", "Proximal Dollar P&L", "50% Dollar P&L")
+                            if h in headers]
                 r_col   = headers.index("R Achieved") + 1 if "R Achieved" in headers else None
                 rev_col = headers.index("Worth Reviewing") + 1 if "Worth Reviewing" in headers else None
 
@@ -1115,14 +1119,18 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
                         if base_fill:
                             cell.fill = base_fill
 
-                    # P&L color.
-                    if pnl_col:
-                        val = ws.cell(row=row_idx, column=pnl_col).value
-                        if val is not None:
-                            fill = green_fill if val > 0 else (red_fill if val < 0 else None)
-                            if fill:
-                                for cell in row:
-                                    cell.fill = fill
+                    # P&L color -- row tinted by net P&L across both zones so
+                    # the eye reads winning alerts (either zone) as green.
+                    if pnl_cols:
+                        net = 0
+                        for c in pnl_cols:
+                            v = ws.cell(row=row_idx, column=c).value
+                            if isinstance(v, (int, float)):
+                                net += v
+                        fill = green_fill if net > 0 else (red_fill if net < 0 else None)
+                        if fill:
+                            for cell in row:
+                                cell.fill = fill
 
                     # Highlight "Worth Reviewing = Yes" in amber.
                     if rev_col:
@@ -1151,6 +1159,8 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
                     "TP1 Reward:Risk": 14, "TP2 Reward:Risk": 14,
                     "How Trade Closed": 24, "Exit Price": 12,
                     "R Achieved": 12, "Dollar P&L": 12,
+                    "Proximal R": 12, "Proximal Dollar P&L": 18,
+                    "50% R": 12, "50% Dollar P&L": 18,
                     "Best Price Reached (R)": 20, "Worst Price Reached (R)": 20,
                     "Hours Held": 10, "Setup Score (0–8)": 14,
                     "Confluences Active": 22,
@@ -1590,8 +1600,10 @@ def write_h1_only_report(
     raw_alerts: List[Dict[str, Any]],
     meta: Dict[str, Any],
     risk_usd: float = 250.0,
+    out_root: Path = None,
 ) -> Path:
-    out_dir = Path(__file__).parent / "results" / run_id
+    base = out_root if out_root is not None else (Path(__file__).parent / "results")
+    out_dir = Path(base) / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # News-blocked AND IST-blocked trades are kept in `trades_all` for
@@ -1700,6 +1712,24 @@ def write_h1_only_report(
         "killzone_drops_by_pair":   dict(meta.get("killzone_drops_by_pair") or {}),
         "killzone_windows_by_pair": dict(meta.get("killzone_windows_by_pair") or {}),
     }
+
+    # Reconciliation invariant. The headline P&L (sb_prox / sb_mid) MUST
+    # equal the sum of per-trade pnl_usd for the same population. If this
+    # fails, the email is publishing inconsistent numbers across sections
+    # -- the kind of bug that wastes hours to debug downstream. Fail loud.
+    def _reconcile(zone_label, scoreboard, zone_trades):
+        from_scoreboard = round(float(scoreboard.get("total_pnl_usd", 0)), 2)
+        filled = [t for t in zone_trades if t.get("exit_reason") != "never_filled"]
+        from_trades = round(sum(float(t.get("pnl_usd") or 0) for t in filled), 2)
+        if abs(from_scoreboard - from_trades) > 0.01:
+            raise AssertionError(
+                f"P&L reconciliation failed for {zone_label}: "
+                f"scoreboard={from_scoreboard} vs per-trade-sum={from_trades}. "
+                f"This means the email headline contradicts the trade rows. "
+                f"Fix the aggregator before shipping the report."
+            )
+    _reconcile("proximal", sb_prox, prox_trades)
+    _reconcile("50pct",    sb_mid,  mid_trades)
 
     # Files. Use trades_all for CSV and Excel so blocked rows appear in
     # the audit outputs (column news_blocked + event metadata). Metrics
@@ -1848,7 +1878,7 @@ def write_h1_only_report(
 <!-- ============================================================ -->
 <div class="section">
   <h2>Proximal entry vs 50% midpoint entry &mdash; head-to-head</h2>
-  {_entry_comparison_html(sb_prox_tp2, sb_mid_tp2, fill_prox, fill_mid)}
+  {_entry_comparison_html(sb_prox, sb_mid, fill_prox, fill_mid)}
 </div>
 
 <!-- ============================================================ -->
