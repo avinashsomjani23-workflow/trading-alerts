@@ -15,12 +15,6 @@ on:
         default: "war"
         type: choice
         options: [war, bau, unspecified]
-      mode:
-        description: "Backtest mode"
-        required: true
-        default: "auto"
-        type: choice
-        options: [auto, h1_only]
       pairs:
         description: "Comma-separated pairs"
         required: false
@@ -77,7 +71,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BACKTEST_EMAIL: ${{ secrets.BACKTEST_EMAIL }}
         run: |
-          ARGS="--start ${{ inputs.start_date }} --end ${{ inputs.end_date }} --regime ${{ inputs.regime }} --mode ${{ inputs.mode }} --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_gbp }}"
+          ARGS="--start ${{ inputs.start_date }} --end ${{ inputs.end_date }} --regime ${{ inputs.regime }} --mode h1_only --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_gbp }}"
           if [ "${{ inputs.send_email }}" = "true" ]; then
             ARGS="$ARGS --email"
           fi
@@ -87,7 +81,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: backtest-${{ inputs.mode }}-${{ inputs.regime }}-${{ inputs.start_date }}-${{ inputs.end_date }}
+          name: backtest-h1_only-${{ inputs.regime }}-${{ inputs.start_date }}-${{ inputs.end_date }}
           path: backtest/results/
           retention-days: 30
 
@@ -95,13 +89,8 @@ jobs:
         if: always()
         run: |
           set -e
-          # Run-id prefix matches run_backtest._run_inner / _run_h1_only.
-          if [ "${{ inputs.mode }}" = "h1_only" ]; then
-            PREFIX="h1only"
-          else
-            PREFIX="${{ inputs.regime }}"
-          fi
-          RUN_ID="${PREFIX}_$(echo ${{ inputs.start_date }} | tr -d -)_$(echo ${{ inputs.end_date }} | tr -d -)"
+          # Run-id prefix matches run_backtest._run_h1_only (h1_only mode is forced above).
+          RUN_ID="h1only_$(echo ${{ inputs.start_date }} | tr -d -)_$(echo ${{ inputs.end_date }} | tr -d -)"
           LOG_DIR="backtest/results/$RUN_ID"
           if [ ! -f "$LOG_DIR/run_log.jsonl" ] && [ ! -f "$LOG_DIR/console.log" ]; then
             echo "No logs to commit for $RUN_ID"
