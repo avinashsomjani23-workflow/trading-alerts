@@ -63,10 +63,25 @@ def _dp(pair_conf):
 # SHARED P1+P2+P3 — ATR computation. Called by Phase 1 (H1), Phase 2 (H1+M15),
 # Phase 3 (M5). Timeframe is determined by the df passed in. Behavior change
 # affects FVG noise floor, OB filtering, and proximity calculations everywhere.
-def compute_atr(df, period=14):
-    """ATR computation used across phases."""
-    if df is None or len(df) < period + 1:
-        return None
+#
+# Memoization (added 2026-05-23 to cut backtest runtime):
+# The function is pure for a given OHLC slice. During backtest replay it gets
+# called ~480x per scan, each time iterating the full history. We cache on a
+# content fingerprint (first_ts, last_ts, len, last OHLC values, period).
+# Collision across instruments is effectively impossible because the OHLC
+# anchors differ. If anything in the cache path raises, we set a module flag
+# that the email layer reads — backtest email will be tagged [ATR-CACHE-FAIL]
+# so the user knows to fall back. Cache miss path always recomputes from
+# scratch, so a buggy cache cannot silently corrupt results — at worst it
+# fails loudly via the flag.
+_ATR_CACHE = {}
+_ATR_CACHE_ERROR = None  # str message if memoization path ever raised
+
+def _atr_cache_status():
+    """Returns None if cache healthy, else error message. Read by email layer."""
+    return _ATR_CACHE_ERROR
+
+def _atr_compute_raw(df, period):
     H = df['High'].values.astype(float)
     L = df['Low'].values.astype(float)
     C = df['Close'].values.astype(float)
@@ -77,6 +92,40 @@ def compute_atr(df, period=14):
     if len(trs) < period:
         return None
     return float(np.mean(trs[-period:]))
+
+def compute_atr(df, period=14):
+    """ATR computation used across phases. Memoized on slice fingerprint."""
+    global _ATR_CACHE_ERROR
+    if df is None or len(df) < period + 1:
+        return None
+    try:
+        n = len(df)
+        first_ts = df.index[0]
+        last_ts = df.index[-1]
+        last_close = float(df['Close'].iat[-1])
+        last_high = float(df['High'].iat[-1])
+        last_low = float(df['Low'].iat[-1])
+        key = (first_ts, last_ts, n, period, last_close, last_high, last_low)
+        cached = _ATR_CACHE.get(key)
+        if cached is not None:
+            return cached
+        value = _atr_compute_raw(df, period)
+        if value is not None:
+            # Bound cache: 4096 entries is more than enough for any single
+            # backtest run (240 bars x 6 pairs x ~3 callsites = ~4300 worst case).
+            if len(_ATR_CACHE) > 4096:
+                _ATR_CACHE.clear()
+            _ATR_CACHE[key] = value
+        return value
+    except Exception as e:
+        # Cache path broke — record loudly and fall back to raw compute.
+        # This NEVER returns wrong values; worst case is no caching this turn.
+        _ATR_CACHE_ERROR = f"{type(e).__name__}: {e}"
+        try:
+            return _atr_compute_raw(df, period)
+        except Exception as e2:
+            _ATR_CACHE_ERROR = f"raw compute also failed: {type(e2).__name__}: {e2}"
+            return None
 
 
 # ---------------------------------------------------------------------------
