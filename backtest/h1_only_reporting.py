@@ -711,36 +711,6 @@ def _news_blackout_html(blocked_trades: List[Dict[str, Any]],
 
 
 # ---------------------------------------------------------------------------
-# Killzone diagnostic: are wins concentrated inside the killzone vs losses?
-# ---------------------------------------------------------------------------
-
-def _killzone_split_html(trades: List[Dict[str, Any]]) -> str:
-    """In-killzone vs out-of-killzone diagnostic.
-
-    With the per-pair killzone hard filter in place, every trade reaching
-    this point is already in-killzone. The "outside killzone" bucket is
-    structurally empty, so a wins-vs-losses split would always say 100/0
-    and add no information. We render a short note instead. The audit
-    block "Killzone filter -- alerts dropped" carries the out-of-window
-    count for users who want to see what the filter rejected.
-    """
-    filled = [t for t in trades
-              if t.get("exit_reason") not in ("never_filled",)
-              and t.get("entry_zone") == "proximal"]
-    if not filled:
-        return "<p style='color:#888;'>No filled trades.</p>"
-
-    n = len(filled)
-    return (
-        f"<p style='font-size:13px;color:#444;'>"
-        f"All <b>{n}</b> filled trades are inside the per-pair killzone "
-        f"(out-of-window alerts are dropped before simulation). "
-        f"See <i>Killzone filter -- alerts dropped</i> below for the rejected "
-        f"alert count and per-pair windows.</p>"
-    )
-
-
-# ---------------------------------------------------------------------------
 # Loss pattern analysis
 # ---------------------------------------------------------------------------
 
@@ -1029,7 +999,7 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
 
 def _day_of_week(ts_str: str) -> str:
     try:
-        return pd.Timestamp(ts_str).day_name()
+        return pd.Timestamp(ts_str).day_name()[:3]
     except Exception:
         return ""
 
@@ -1174,100 +1144,97 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
         # Zone register (one row per OB — both entry zones side by side).
         zone_df = _build_zone_register_df(trades)
 
+        # Split trades into proximal and 50% tabs.
+        prox_df = out_df[out_df["Entry Type"] == _ENTRY_LABELS["proximal"]] if "Entry Type" in out_df.columns else out_df
+        mid_df  = out_df[out_df["Entry Type"] == _ENTRY_LABELS["50pct"]]   if "Entry Type" in out_df.columns else pd.DataFrame()
+
+        col_widths = {
+            "Currency Pair": 14, "Direction": 10, "Trading Session": 12,
+            "Entry Type": 18, "Entry Price": 12, "Stop Loss": 12,
+            "Take Profit 1": 13, "Take Profit 2": 13,
+            "TP1 Reward:Risk": 14, "TP2 Reward:Risk": 14,
+            "How Trade Closed": 24, "Exit Price": 12,
+            "R Achieved": 12, "Dollar P&L": 12,
+            "Proximal R": 12, "Proximal Dollar P&L": 18,
+            "50% R": 12, "50% Dollar P&L": 18,
+            "Best Price Reached (R)": 20, "Worst Price Reached (R)": 20,
+            "Hours Held": 10, "Setup Score (0–8)": 14,
+            "Confluences Active": 22,
+            "FVG Present": 12, "Liquidity Sweep Present": 22,
+            "Structure Event (BOS / CHoCH)": 24,
+            "Structure Tier (Major / Minor)": 24,
+            "Worth Reviewing": 15, "Why Worth Reviewing": 40,
+            "Alert Time (UTC)": 20, "Trade Closed (UTC)": 20,
+        }
+
+        def _style_trades_sheet(ws, from_openpyxl):
+            PatternFill, Font, Alignment = (
+                from_openpyxl["PatternFill"],
+                from_openpyxl["Font"],
+                from_openpyxl["Alignment"],
+            )
+            green_fill = PatternFill("solid", fgColor="C6EFCE")
+            red_fill   = PatternFill("solid", fgColor="FFC7CE")
+            grey_fill  = PatternFill("solid", fgColor="F2F2F2")
+
+            for cell in ws[1]:
+                cell.font      = Font(bold=True, color="FFFFFF")
+                cell.fill      = PatternFill("solid", fgColor="2C3E50")
+                cell.alignment = Alignment(wrap_text=True)
+
+            headers = [cell.value for cell in ws[1]]
+            pnl_cols = [headers.index(h) + 1 for h in
+                        ("Dollar P&L", "Proximal Dollar P&L", "50% Dollar P&L")
+                        if h in headers]
+            rev_col = headers.index("Worth Reviewing") + 1 if "Worth Reviewing" in headers else None
+            nb_col  = headers.index("News Blocked") + 1   if "News Blocked" in headers else None
+
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row), start=2):
+                base_fill = grey_fill if row_idx % 2 == 0 else None
+                for cell in row:
+                    if base_fill:
+                        cell.fill = base_fill
+                if pnl_cols:
+                    net = sum(
+                        ws.cell(row=row_idx, column=c).value or 0
+                        for c in pnl_cols
+                        if isinstance(ws.cell(row=row_idx, column=c).value, (int, float))
+                    )
+                    fill = green_fill if net > 0 else (red_fill if net < 0 else None)
+                    if fill:
+                        for cell in row:
+                            cell.fill = fill
+                if rev_col and ws.cell(row=row_idx, column=rev_col).value == "Yes":
+                    for cell in row:
+                        cell.fill = PatternFill("solid", fgColor="FFEB9C")
+
+            if nb_col:
+                news_fill = PatternFill("solid", fgColor="E8DAEF")
+                for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row), start=2):
+                    if ws.cell(row=row_idx, column=nb_col).value in (True, "True", "Yes", 1, "1"):
+                        for cell in row:
+                            cell.fill = news_fill
+
+            for i, col in enumerate(ws.columns, start=1):
+                header = ws.cell(row=1, column=i).value
+                ws.column_dimensions[col[0].column_letter].width = col_widths.get(header, 14)
+            ws.freeze_panes = "A2"
+
         with pd.ExcelWriter(path, engine="openpyxl") as xw:
-            out_df.to_excel(xw, sheet_name="Trades", index=False)
+            prox_df.to_excel(xw, sheet_name="Proximal", index=False)
+            if not mid_df.empty:
+                mid_df.to_excel(xw, sheet_name="50% Entry", index=False)
             if not zone_df.empty:
                 zone_df.to_excel(xw, sheet_name="Zone Register", index=False)
-            ws = xw.sheets["Trades"]
 
-            # Apply color to Dollar P&L column and R Achieved column.
             try:
                 from openpyxl.styles import PatternFill, Font, Alignment
-                green_fill = PatternFill("solid", fgColor="C6EFCE")
-                red_fill   = PatternFill("solid", fgColor="FFC7CE")
-                grey_fill  = PatternFill("solid", fgColor="F2F2F2")
+                _opx = {"PatternFill": PatternFill, "Font": Font, "Alignment": Alignment}
 
-                # Header row styling.
-                for cell in ws[1]:
-                    cell.font      = Font(bold=True, color="FFFFFF")
-                    cell.fill      = PatternFill("solid", fgColor="2C3E50")
-                    cell.alignment = Alignment(wrap_text=True)
+                _style_trades_sheet(xw.sheets["Proximal"], _opx)
+                if "50% Entry" in xw.sheets:
+                    _style_trades_sheet(xw.sheets["50% Entry"], _opx)
 
-                # Find P&L and R columns. Pivoted layout has per-zone P&L
-                # columns; legacy (one-row-per-trade) layout has a single
-                # "Dollar P&L". Color whichever exists.
-                headers = [cell.value for cell in ws[1]]
-                pnl_cols = [headers.index(h) + 1 for h in
-                            ("Dollar P&L", "Proximal Dollar P&L", "50% Dollar P&L")
-                            if h in headers]
-                r_col   = headers.index("R Achieved") + 1 if "R Achieved" in headers else None
-                rev_col = headers.index("Worth Reviewing") + 1 if "Worth Reviewing" in headers else None
-
-                for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row), start=2):
-                    # Alternate row background.
-                    base_fill = grey_fill if row_idx % 2 == 0 else None
-                    for cell in row:
-                        if base_fill:
-                            cell.fill = base_fill
-
-                    # P&L color -- row tinted by net P&L across both zones so
-                    # the eye reads winning alerts (either zone) as green.
-                    if pnl_cols:
-                        net = 0
-                        for c in pnl_cols:
-                            v = ws.cell(row=row_idx, column=c).value
-                            if isinstance(v, (int, float)):
-                                net += v
-                        fill = green_fill if net > 0 else (red_fill if net < 0 else None)
-                        if fill:
-                            for cell in row:
-                                cell.fill = fill
-
-                    # Highlight "Worth Reviewing = Yes" in amber.
-                    if rev_col:
-                        rev_val = ws.cell(row=row_idx, column=rev_col).value
-                        if rev_val == "Yes":
-                            for cell in row:
-                                cell.fill = PatternFill("solid", fgColor="FFEB9C")
-
-                # News-blocked rows: lavender highlight applied AFTER P&L /
-                # reviewing colors, so the eye sees "this row was excluded"
-                # regardless of its hypothetical outcome. Search by header.
-                nb_col = headers.index("News Blocked") + 1 if "News Blocked" in headers else None
-                if nb_col:
-                    news_fill = PatternFill("solid", fgColor="E8DAEF")  # light purple
-                    for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row), start=2):
-                        val = ws.cell(row=row_idx, column=nb_col).value
-                        if val in (True, "True", "Yes", 1, "1"):
-                            for cell in row:
-                                cell.fill = news_fill
-
-                # Column widths.
-                col_widths = {
-                    "Currency Pair": 14, "Direction": 10, "Trading Session": 12,
-                    "Entry Type": 18, "Entry Price": 12, "Stop Loss": 12,
-                    "Take Profit 1": 13, "Take Profit 2": 13,
-                    "TP1 Reward:Risk": 14, "TP2 Reward:Risk": 14,
-                    "How Trade Closed": 24, "Exit Price": 12,
-                    "R Achieved": 12, "Dollar P&L": 12,
-                    "Proximal R": 12, "Proximal Dollar P&L": 18,
-                    "50% R": 12, "50% Dollar P&L": 18,
-                    "Best Price Reached (R)": 20, "Worst Price Reached (R)": 20,
-                    "Hours Held": 10, "Setup Score (0–8)": 14,
-                    "Confluences Active": 22,
-                    "FVG Present": 12, "Liquidity Sweep Present": 22,
-                    "Structure Event (BOS / CHoCH)": 24,
-                    "Structure Tier (Major / Minor)": 24,
-                    "Worth Reviewing": 15, "Why Worth Reviewing": 40,
-                    "Alert Time (UTC)": 20, "Trade Closed (UTC)": 20,
-                }
-                for i, col in enumerate(ws.columns, start=1):
-                    header = ws.cell(row=1, column=i).value
-                    ws.column_dimensions[col[0].column_letter].width = col_widths.get(header, 14)
-
-                ws.freeze_panes = "A2"
-
-                # Style Zone Register tab if it exists.
                 if "Zone Register" in xw.sheets:
                     zws = xw.sheets["Zone Register"]
                     for cell in zws[1]:
@@ -1649,12 +1616,6 @@ def _zone_block_html(
     from each cell's trade count.
   </p>
   {_pair_dow_matrix_html(zone_trades, "r_realised")}
-</div>
-
-<!-- KILLZONE -->
-<div class="section">
-  <h2>Killzone &mdash; wins vs losses</h2>
-  {_killzone_split_html(zone_trades)}
 </div>
 
 <!-- SCORE -->
