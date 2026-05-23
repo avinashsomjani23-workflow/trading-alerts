@@ -1,0 +1,30 @@
+C:\Users\aviso\OneDrive\Desktop\trading-alerts\smc_radar.py:9: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+
+=== EURUSD ===
+  loaded H1 rows=666 range=[2026-03-02 00:00:00+00:00 .. 2026-04-09 00:00:00+00:00]
+  walk bars in window: 144
+  ... bar 20/144 t=60.3s
+  ... bar 40/144 t=77.3s
+  ... bar 60/144 t=91.5s
+  ... bar 80/144 t=113.7s
+  ... bar 100/144 t=134.6s
+  ... bar 120/144 t=152.4s
+  ... bar 140/144 t=171.8s
+  done in 175.7s
+  NEW dealing_range events (type, tier): {('BOS', 'Minor'): 21}
+  smc_radar OBs by (bos_tag, bos_tier):  {('BOS', 'Minor'): 117}
+  OB drops by (ev_type, ev_tier, gate):  {('BOS', 'Major', 'event_outside_window'): 3, ('CHoCH', 'Major', 'event_outside_window'): 2, ('BOS', 'Minor', 'post_build_mitigation'): 1988, ('BOS', 'Minor', 'no_qualifying_ob_candle'): 512}
+  last 15 events in ring: [('BOS', 'Minor', 'bearish', '2026-04-02T07:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-02T08:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-03T14:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-03T15:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-03T16:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-03T17:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-03T18:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-03T19:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-03T20:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-05T23:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-06T01:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-07T01:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-07T02:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-08T18:00:00+00:00'), ('BOS', 'Minor', 'bearish', '2026-04-08T20:00:00+00:00')]
+
+=== NZDUSD ===
+  loaded H1 rows=670 range=[2026-03-02 00:00:00+00:00 .. 2026-04-09 00:00:00+00:00]
+  walk bars in window: 144
+  ... bar 20/144 t=71.2s
