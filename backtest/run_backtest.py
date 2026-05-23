@@ -185,24 +185,28 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         n_killzone_dropped_for_pair = 0
         pair_type = pair_conf.get("pair_type", "forex")
         for alert in alerts_for_pair:
-            # Killzone hard filter -- runs BEFORE simulation. An alert outside
-            # the pair's configured killzone is dropped entirely: no row is
-            # created, nothing appears in Excel, nothing appears in
-            # aggregates. This is the veteran SMC view -- outside the killzone
-            # there are no institutional desks, structure tests are noise.
+            # Killzone gate -- alerts outside the pair's configured killzone
+            # are SIMULATED for audit (so we can show "what you would have
+            # made if you had traded outside the killzone") but tagged
+            # `killzone_blocked=True` and EXCLUDED from every aggregate
+            # metric in the report. This mirrors the IST/news gates so the
+            # user can verify per-pair killzone filtering is actually saving
+            # R, not just dropping winners.
             alert_ts_raw = alert["ts"]
             if not isinstance(alert_ts_raw, pd.Timestamp):
                 alert_ts_raw = pd.Timestamp(alert_ts_raw)
             if alert_ts_raw.tzinfo is None:
                 alert_ts_raw = alert_ts_raw.tz_localize("UTC")
-            if not killzone_filter.in_pair_killzone(alert_ts_raw, pair_conf):
+            killzone_blocked = not killzone_filter.in_pair_killzone(
+                alert_ts_raw, pair_conf
+            )
+            if killzone_blocked:
                 n_killzone_dropped_for_pair += 1
                 log_event("killzone_drop", pair=name,
                           alert_ts=str(alert["ts"]),
                           utc_hour=int(alert_ts_raw.hour),
                           utc_minute=int(alert_ts_raw.minute),
                           windows=killzone_filter.windows_label(pair_conf))
-                continue
 
             rows = h1_only_simulator.simulate_h1_only_dual(
                 alert, pair_conf, df_h1, risk_usd=risk_usd,
@@ -221,11 +225,9 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
             )
             # IST trading-window gate. Live system suppresses everything
             # outside the user's IST window -- backtest must mirror this.
-            # Alerts outside the window are simulated for audit (so we can
-            # show "what you would have made if you'd traded these hours")
-            # but excluded from every aggregate metric. Killzone-dropped
-            # alerts have already short-circuited above, so this gate only
-            # ever sees in-killzone alerts.
+            # Alerts outside the window are simulated for audit but excluded
+            # from every aggregate metric. Killzone-blocked rows are also
+            # excluded by the same mechanism (handled in reporting).
             ist_blocked = not ist_window.in_user_trading_window(
                 alert_ts, pair_type
             )
@@ -236,6 +238,8 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                 row["news_event_source"]   = src_event["source"]   if blocked else ""
                 row["news_event_ts"]       = src_event["ts_utc"].isoformat() if blocked else ""
                 row["ist_blocked"]         = bool(ist_blocked)
+                row["killzone_blocked"]    = bool(killzone_blocked)
+                row["killzone_windows"]    = killzone_filter.windows_label(pair_conf)
                 row["alert_utc_hour"]      = int(alert_ts.hour)
                 all_trades.append(row)
                 n_trades_for_pair += 1

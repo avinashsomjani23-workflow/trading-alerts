@@ -746,57 +746,155 @@ def _pair_dow_matrix_html(trades: List[Dict[str, Any]], r_col: str) -> str:
             f"Use this to spot per-pair day-of-week effects.</p>")
 
 
-def _killzone_audit_html(meta: Dict[str, Any]) -> str:
-    """Audit section for the per-pair killzone hard filter.
+def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
+                         meta: Dict[str, Any]) -> str:
+    """Audit section for the per-pair killzone gate.
 
-    Killzone-dropped alerts never enter the simulator -- they have no row in
-    `all_trades`, so there is no per-alert detail to render here. This block
-    shows:
-      - per-pair drop counts (from meta['killzone_drops_by_pair'])
-      - the configured killzone windows per pair (from meta['killzone_windows_by_pair'])
+    Killzone-blocked alerts are now SIMULATED for audit (same pattern as IST
+    and news) but excluded from every aggregate metric above. This lets the
+    user see the per-pair would-have R: positive = killzone filter is costing
+    you trades; negative = killzone filter is saving you R.
 
-    Empty drop count is fine and rendered explicitly so the reader sees the
-    filter was active. Missing counters render a single neutral line."""
-    drops = meta.get("killzone_drops_by_pair") or {}
+    Block shows:
+      - per-pair count + would-have R + WR
+      - the configured killzone windows per pair (from meta)
+      - a per-UTC-hour distribution so the user can see if the misses cluster
+        in a particular hour (and consider extending the window)
+    """
     windows = meta.get("killzone_windows_by_pair") or {}
-    total = int(meta.get("killzone_dropped_alerts") or 0)
+    drops_meta = meta.get("killzone_drops_by_pair") or {}
+    total_drops = int(meta.get("killzone_dropped_alerts") or 0)
+
+    # Filter to one row per alert (proximal) to avoid double-counting.
+    rows = [t for t in kz_blocked_trades
+            if t.get("entry_zone") == "proximal"]
+    n = len(rows)
 
     header = (
         "<p style='font-size:12px;color:#666;margin-bottom:8px;'>"
         "Alerts whose timestamp fell outside the pair's killzone window. "
-        "These are <b>dropped before simulation</b> -- they do not appear in "
-        "trades.xlsx and are excluded from every aggregate above."
+        "These rows are <b>excluded from every aggregate metric above</b>; "
+        "they are simulated only so we can show what would have happened "
+        "if the filter were off. Positive would-have R = filter is costing "
+        "you trades; negative = filter is saving you R."
         "</p>"
     )
 
-    if not drops and not windows:
+    if n == 0 and not windows:
         return header + ("<p style='color:#888;'>"
                          "No killzone filter active for this run.</p>")
-
-    pair_names_sorted = sorted(set(list(drops.keys()) + list(windows.keys())))
-    rows_html = ""
-    for pair in pair_names_sorted:
-        n = int(drops.get(pair, 0))
-        w = windows.get(pair, "no killzone configured")
-        rows_html += (
-            f"<tr>"
-            f"<td><b>{pair}</b></td>"
-            f"<td style='font-family:monospace;font-size:12px;'>{w}</td>"
-            f"<td style='text-align:right;'>{n}</td>"
-            f"</tr>"
+    if n == 0:
+        # Filter was configured but produced no out-of-window alerts.
+        pair_names_sorted = sorted(windows.keys())
+        win_rows = ""
+        for pair in pair_names_sorted:
+            w = windows.get(pair, "no killzone configured")
+            d = int(drops_meta.get(pair, 0))
+            win_rows += (
+                f"<tr><td><b>{pair}</b></td>"
+                f"<td style='font-family:monospace;font-size:12px;'>{w}</td>"
+                f"<td style='text-align:right;'>{d}</td></tr>"
+            )
+        return header + (
+            f"<p style='color:#27ae60;'>No alerts fell outside the killzone "
+            f"this run across {len(pair_names_sorted)} configured pair(s).</p>"
+            f"<table><thead>"
+            f"<tr><th>Pair</th><th>Killzone window(s) UTC</th><th>Dropped</th></tr>"
+            f"</thead><tbody>{win_rows}</tbody></table>"
         )
 
-    return header + (
-        f"<p style='font-size:13px;margin-bottom:8px;'>"
-        f"<b>{total} alert(s)</b> dropped by killzone filter across "
-        f"{len(pair_names_sorted)} pair(s).</p>"
-        f"<table><thead>"
-        f"<tr><th>Pair</th><th>Killzone window(s) UTC</th><th>Dropped</th></tr>"
-        f"</thead><tbody>{rows_html}</tbody></table>"
-        f"<p style='font-size:11px;color:#888;margin-top:6px;'>"
-        f"30-min buffer is already included in the configured windows. "
-        f"Out-of-window alerts produce no trade row, no Excel entry, "
-        f"and contribute to no metric.</p>"
+    df = pd.DataFrame(rows)
+
+    # 1. By pair: alerts + filled + WR + would-have R + the configured window.
+    by_pair_rows = ""
+    if "pair" in df.columns and "r_realised" in df.columns:
+        for pair, sub in df.groupby("pair"):
+            n_alerts = len(sub)
+            filled_sub = sub[sub["exit_reason"] != "never_filled"]
+            n_filled = len(filled_sub)
+            total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
+            wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
+            wr = (wins / n_filled * 100) if n_filled else None
+            sign = "+" if total_r >= 0 else ""
+            wr_str = f"{wr:.0f}%" if wr is not None else "&mdash;"
+            r_color = "#27ae60" if total_r > 0 else ("#e74c3c" if total_r < 0 else "#888")
+            w = windows.get(pair, "&mdash;")
+            verdict = ("filter cost R" if total_r > 0.5
+                       else "filter saved R" if total_r < -0.5
+                       else "neutral")
+            verdict_color = ("#e74c3c" if total_r > 0.5
+                             else "#27ae60" if total_r < -0.5
+                             else "#888")
+            by_pair_rows += (
+                f"<tr><td><b>{pair}</b></td>"
+                f"<td style='font-family:monospace;font-size:11px;'>{w}</td>"
+                f"<td>{n_alerts}</td>"
+                f"<td>{n_filled}</td>"
+                f"<td>{wr_str}</td>"
+                f"<td style='color:{r_color};'>{sign}{total_r:.2f}R</td>"
+                f"<td style='color:{verdict_color};font-size:12px;'>{verdict}</td>"
+                f"</tr>"
+            )
+
+    by_pair_table = ""
+    if by_pair_rows:
+        by_pair_table = (
+            f"<h4>Per-pair would-have R</h4>"
+            f"<table><thead>"
+            f"<tr><th>Pair</th><th>Killzone window(s) UTC</th>"
+            f"<th>Alerts</th><th>Filled</th><th>WR</th>"
+            f"<th>Would-have R</th><th>Verdict</th></tr>"
+            f"</thead><tbody>{by_pair_rows}</tbody></table>"
+            f"<p style='font-size:11px;color:#888;margin-top:6px;'>"
+            f"Verdict thresholds: |R| ≥ 0.5R = filter has effect; otherwise "
+            f"neutral. Repeat across multiple runs before drawing conclusions.</p>"
+        )
+
+    # 2. By UTC hour: helps spot whether the misses cluster in one hour
+    # (e.g. London-open extension might recover edge), the same way the
+    # IST gate's hour table does.
+    by_hour_rows = ""
+    if "alert_utc_hour" in df.columns and "r_realised" in df.columns:
+        grouped = df.groupby("alert_utc_hour")
+        hour_data = []
+        for hour, sub in grouped:
+            n_alerts = len(sub)
+            filled_sub = sub[sub["exit_reason"] != "never_filled"]
+            n_filled = len(filled_sub)
+            total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
+            wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
+            wr = (wins / n_filled * 100) if n_filled else None
+            hour_data.append((int(hour), n_alerts, n_filled, wins, wr, total_r))
+        hour_data.sort()
+        for hour, n_alerts, n_filled, wins, wr, total_r in hour_data:
+            sign = "+" if total_r >= 0 else ""
+            wr_str = f"{wr:.0f}%" if wr is not None else "&mdash;"
+            r_color = "#27ae60" if total_r > 0 else ("#e74c3c" if total_r < 0 else "#888")
+            by_hour_rows += (
+                f"<tr><td>{hour:02d}:00 UTC</td>"
+                f"<td>{n_alerts}</td>"
+                f"<td>{n_filled}</td>"
+                f"<td>{wr_str}</td>"
+                f"<td style='color:{r_color};'>{sign}{total_r:.2f}R</td></tr>"
+            )
+
+    by_hour_table = ""
+    if by_hour_rows:
+        by_hour_table = (
+            f"<h4>Out-of-window alerts by UTC hour</h4>"
+            f"<table><thead>"
+            f"<tr><th>UTC hour</th><th>Alerts</th><th>Filled</th>"
+            f"<th>WR</th><th>Would-have R</th></tr>"
+            f"</thead><tbody>{by_hour_rows}</tbody></table>"
+        )
+
+    return (
+        header
+        + f"<p style='font-size:13px;margin-bottom:8px;'>"
+          f"<b>{n} alert(s)</b> outside the configured killzone "
+          f"(proximal rows; each alert may have a paired 50% row too). "
+          f"meta-counter records {total_drops} dropped.</p>"
+        + by_pair_table + by_hour_table
     )
 
 
@@ -1315,6 +1413,9 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
         news_event_currency = _v(prox, "news_event_currency") or _v(mid, "news_event_currency")
         news_event_source   = _v(prox, "news_event_source")   or _v(mid, "news_event_source")
         news_event_ts       = _v(prox, "news_event_ts")       or _v(mid, "news_event_ts")
+        # Killzone flag is alert-level; prox and 50pct share the same value.
+        kz_blocked = bool(_v(prox, "killzone_blocked") or _v(mid, "killzone_blocked"))
+        ist_blocked_zr = bool(_v(prox, "ist_blocked") or _v(mid, "ist_blocked"))
 
         rows.append({
             "Pair":                    pair,
@@ -1352,6 +1453,8 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
             "News Currency":           news_event_currency,
             "News Source":             news_event_source,
             "News Event Time (UTC)":   news_event_ts,
+            "Killzone Blocked":        "Yes" if kz_blocked else "No",
+            "IST Blocked":             "Yes" if ist_blocked_zr else "No",
         })
 
     return pd.DataFrame(rows)
@@ -1444,6 +1547,8 @@ _EXCEL_COL_NAMES = {
     "news_event_source":    "News Source",
     "news_event_ts":        "News Event Time (UTC)",
     "ist_blocked":          "IST Window Blocked",
+    "killzone_blocked":     "Killzone Blocked",
+    "killzone_windows":     "Killzone Window(s)",
     "alert_utc_hour":       "Alert Hour (UTC)",
 }
 
@@ -2099,9 +2204,12 @@ def _build_group_html(
     combined summary.json under `by_group`.
     """
     trades = [t for t in group_trades_all
-              if not t.get("news_blocked") and not t.get("ist_blocked")]
+              if not t.get("news_blocked")
+              and not t.get("ist_blocked")
+              and not t.get("killzone_blocked")]
     blocked_trades = [t for t in group_trades_all if t.get("news_blocked")]
     ist_blocked_trades = [t for t in group_trades_all if t.get("ist_blocked")]
+    kz_blocked_trades = [t for t in group_trades_all if t.get("killzone_blocked")]
 
     prox_trades = [t for t in trades if t.get("entry_zone") == "proximal"]
     mid_trades  = [t for t in trades if t.get("entry_zone") == "50pct"]
@@ -2238,7 +2346,7 @@ def _build_group_html(
 
 <div class="section">
   <h2>Killzone filter &mdash; alerts dropped</h2>
-  {_killzone_audit_html(group_meta)}
+  {_killzone_audit_html(kz_blocked_trades, group_meta)}
 </div>
 
 <div class="section">
@@ -2326,9 +2434,11 @@ def write_h1_only_report(
     trades_all = list(trades)
     trades         = [t for t in trades_all
                       if not t.get("news_blocked")
-                      and not t.get("ist_blocked")]
+                      and not t.get("ist_blocked")
+                      and not t.get("killzone_blocked")]
     blocked_trades = [t for t in trades_all if t.get("news_blocked")]
     ist_blocked_trades = [t for t in trades_all if t.get("ist_blocked")]
+    kz_blocked_trades = [t for t in trades_all if t.get("killzone_blocked")]
 
     prox_trades = [t for t in trades if t.get("entry_zone") == "proximal"]
     mid_trades  = [t for t in trades if t.get("entry_zone") == "50pct"]
@@ -2596,7 +2706,7 @@ def write_h1_only_report(
 <!-- ============================================================ -->
 <div class="section">
   <h2>Killzone filter &mdash; alerts dropped</h2>
-  {_killzone_audit_html(meta)}
+  {_killzone_audit_html(kz_blocked_trades, meta)}
 </div>
 
 <!-- ============================================================ -->
