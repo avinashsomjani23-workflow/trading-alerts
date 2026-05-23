@@ -42,6 +42,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install yfinance pandas numpy openpyxl pyarrow requests matplotlib google-generativeai
 
+      - name: Configure git identity
+        # Required for backtest/commit_logs.py (called by run_backtest.main)
+        # to create the "Backtest logs: <run_id>" commit.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Run H1-only sanity test (synthetic OB)
         # Fast guardrail: catches regressions in compute_phase2_levels h1_only
         # path or the dual-entry simulator before we spend cycles on a full run.
@@ -82,59 +89,12 @@ jobs:
           path: backtest/results/
           retention-days: 30
 
-      - name: Commit run log back to repo
-        if: always()
-        run: |
-          set -e
-          # Run-id prefix matches run_backtest._run_h1_only (h1_only mode is forced above).
-          RUN_ID="h1only_$(echo ${{ inputs.start_date }} | tr -d -)_$(echo ${{ inputs.end_date }} | tr -d -)"
-          LOG_DIR="backtest/results/$RUN_ID"
-          if [ ! -f "$LOG_DIR/run_log.jsonl" ] && [ ! -f "$LOG_DIR/console.log" ]; then
-            echo "No logs to commit for $RUN_ID"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Isolate the log files from any other dirty workspace state (the
-          # backtest run may have touched live state JSONs as a side effect —
-          # we do NOT want those carried in this commit).
-          mkdir -p /tmp/bt_logs
-          cp -f "$LOG_DIR/run_log.jsonl"      /tmp/bt_logs/ 2>/dev/null || true
-          cp -f "$LOG_DIR/console.log"        /tmp/bt_logs/ 2>/dev/null || true
-          cp -f "$LOG_DIR/summary.json"       /tmp/bt_logs/ 2>/dev/null || true
-          cp -f "$LOG_DIR/zone_register.json" /tmp/bt_logs/ 2>/dev/null || true
-          # H1-only artifacts (only present for --mode h1_only runs)
-          cp -f "$LOG_DIR/trades.csv"         /tmp/bt_logs/ 2>/dev/null || true
-
-          # Reset workspace to clean HEAD so unrelated dirty files don't block
-          # the rebase. Logs are safe in /tmp.
-          git reset --hard HEAD
-          git clean -fd
-
-          # Retry push up to 5 times to handle races with live system commits
-          # (live phases 1/2/3 push state JSONs every few minutes).
-          for attempt in 1 2 3 4 5; do
-            git fetch origin main
-            git reset --hard origin/main
-            mkdir -p "$LOG_DIR"
-            cp -f /tmp/bt_logs/run_log.jsonl      "$LOG_DIR/" 2>/dev/null || true
-            cp -f /tmp/bt_logs/console.log        "$LOG_DIR/" 2>/dev/null || true
-            cp -f /tmp/bt_logs/summary.json       "$LOG_DIR/" 2>/dev/null || true
-            cp -f /tmp/bt_logs/zone_register.json "$LOG_DIR/" 2>/dev/null || true
-            cp -f /tmp/bt_logs/trades.csv         "$LOG_DIR/" 2>/dev/null || true
-            git add -f "$LOG_DIR/run_log.jsonl" "$LOG_DIR/console.log" "$LOG_DIR/summary.json" "$LOG_DIR/zone_register.json" "$LOG_DIR/trades.csv" 2>/dev/null || true
-            if git diff --cached --quiet; then
-              echo "Nothing to commit"
-              exit 0
-            fi
-            git commit -m "Backtest logs: $RUN_ID [skip ci]"
-            if git push origin HEAD:main; then
-              echo "Push succeeded on attempt $attempt"
-              exit 0
-            fi
-            echo "Push attempt $attempt rejected — refetching and retrying..."
-            sleep 3
-          done
-          echo "ERROR: push failed after 5 attempts"
-          exit 1
+      # NOTE: Log persistence is handled by backtest/commit_logs.py inside
+      # run_backtest.main(). That path raises and exits non-zero on any
+      # failure, so this workflow does NOT need its own commit step.
+      # A previous bash equivalent here did `git reset --hard` which
+      # destroyed Python's commit before pushing -- removed to end the race.
+      #
+      # If the run step above exits non-zero, the workflow fails and you
+      # see it immediately. If it succeeds, the commit is guaranteed
+      # pushed to origin/main (and verified via git log --grep).

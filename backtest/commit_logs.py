@@ -1,9 +1,10 @@
-"""Commit backtest log artifacts to the repo, regardless of trigger source.
+"""Commit backtest log artifacts to the repo.
 
 Every backtest run -- local or GitHub Actions -- must leave a permanent log
-in the repo at backtest/results/<run_id>/. Previously this lived only in
-.github/workflows/backtest.yml, so local runs (the more common case) never
-persisted. This module makes the commit happen at the end of every run.
+in the repo at backtest/results/<run_id>/. This module is the SINGLE source
+of truth for that persistence. The previous bash equivalent in
+.github/workflows/backtest.yml has been removed because it raced this code
+and discarded its commits via `git reset --hard`.
 
 Files committed (text, small):
   run_log.jsonl, console.log, summary.json, trades.csv, zone_register.json
@@ -11,11 +12,9 @@ Files committed (text, small):
 Files NOT committed (binary or large):
   trades.xlsx (binary), raw_alerts.jsonl (can be large)
 
-Idempotency: if there is nothing new to add (e.g. workflow already pushed
-the same files), the function exits cleanly.
-
-Safety: only stages the specific log files. Never `git add -A`. Live-system
-state JSONs in the workspace are not touched.
+Failure policy: this module RAISES on every failure path. A backtest that
+cannot persist its log is a failed backtest -- silent skip is forbidden.
+The caller (run_backtest.main) must propagate the failure to the user.
 """
 
 from __future__ import annotations
@@ -23,9 +22,8 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
-# Artifacts safe to keep in git: text, small, useful for cross-run debugging.
 _LOG_FILES = [
     "run_log.jsonl",
     "console.log",
@@ -33,6 +31,12 @@ _LOG_FILES = [
     "trades.csv",
     "zone_register.json",
 ]
+
+
+class LogCommitError(RuntimeError):
+    """Raised when backtest logs cannot be committed/pushed. The backtest
+    run is considered failed -- the user sees this immediately, not weeks
+    later when they try to fetch a run that was never persisted."""
 
 
 def _run(cmd: List[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -49,103 +53,104 @@ def _has_remote(repo_root: Path) -> bool:
     return r.returncode == 0 and bool(r.stdout.strip())
 
 
+def _verify_committed(repo_root: Path, run_id: str) -> str:
+    """After commit+push, prove the commit exists by grepping the log.
+    Returns the SHA. Raises if no commit with this run_id is found."""
+    r = _run(["git", "log", "-1", "--format=%H",
+              f"--grep=Backtest logs: {run_id}"], repo_root)
+    if r.returncode != 0 or not r.stdout.strip():
+        raise LogCommitError(
+            f"Verification failed: no commit matching "
+            f"'Backtest logs: {run_id}' found in git log. "
+            f"git log stderr: {r.stderr.strip()[:300]}"
+        )
+    return r.stdout.strip()[:8]
+
+
 def commit_run_logs(
     run_dir: Path,
     repo_root: Path,
     push: bool = True,
     max_push_attempts: int = 5,
-) -> Optional[str]:
-    """Stage and commit the run's log files to the current branch.
+) -> str:
+    """Stage, commit, push, and VERIFY the run's log files.
 
-    Returns the commit SHA on success, None if nothing was committed.
-    Never raises on git failure -- prints the error and returns None.
-    The backtest run itself is already complete; failing to commit logs
-    must not poison the calling process.
+    Returns the commit SHA on success.
+    Raises LogCommitError on any failure (run_dir missing, no log files
+    written, git add/commit/push fails, or post-push verification fails).
     """
     if not run_dir.exists():
-        print(f"[commit_logs] run_dir does not exist: {run_dir}")
-        return None
+        raise LogCommitError(f"run_dir does not exist: {run_dir}")
 
     if not _git_available(repo_root):
-        print(f"[commit_logs] not a git repo at {repo_root} -- skipping")
-        return None
+        raise LogCommitError(f"not a git repo at {repo_root}")
 
-    # Files that actually exist in this run.
     present = [f for f in _LOG_FILES if (run_dir / f).exists()]
     if not present:
-        print(f"[commit_logs] no log files present in {run_dir} -- skipping")
-        return None
+        raise LogCommitError(
+            f"no log files present in {run_dir} -- the run wrote nothing "
+            f"to persist. Check that RunLogger.init() and the reporting "
+            f"step ran successfully."
+        )
 
-    # Stash the log files in a temp location so we can reset/clean the
-    # workspace without losing them. The live system (phases 1/2/3) may have
-    # touched state JSONs in the workspace; those must NOT be carried.
-    import tempfile
-    tmp = Path(tempfile.mkdtemp(prefix="bt_logs_"))
-    try:
-        for fname in present:
-            shutil.copy2(run_dir / fname, tmp / fname)
+    rel_dir = run_dir.relative_to(repo_root)
+    targets = [str(rel_dir / f) for f in present]
 
-        # Force-stage only the specific log files (results/ is gitignored,
-        # so -f is required).
-        rel_dir = run_dir.relative_to(repo_root)
-        targets = [str(rel_dir / f) for f in present]
+    add = _run(["git", "add", "-f", *targets], repo_root)
+    if add.returncode != 0:
+        raise LogCommitError(f"git add failed: {add.stderr.strip()}")
 
-        # Make sure the files are physically in the working tree at the
-        # expected path (they should be -- this is defensive).
-        for fname in present:
-            dst = run_dir / fname
-            if not dst.exists():
-                shutil.copy2(tmp / fname, dst)
+    # Anything actually staged? If the files are byte-identical to a prior
+    # commit (same run_id, same content), there's nothing to commit -- but
+    # in that case the commit ALREADY EXISTS, so verification will still
+    # succeed. We treat "nothing to stage" as success only if verification
+    # then finds the prior commit.
+    diff = _run(["git", "diff", "--cached", "--quiet", "--", *targets],
+                repo_root)
+    nothing_staged = (diff.returncode == 0)
 
-        add = _run(["git", "add", "-f", *targets], repo_root)
-        if add.returncode != 0:
-            print(f"[commit_logs] git add failed: {add.stderr.strip()}")
-            return None
-
-        # Anything actually staged?
-        diff = _run(["git", "diff", "--cached", "--quiet", "--", *targets],
-                    repo_root)
-        if diff.returncode == 0:
-            # No staged changes (already committed in a previous run, e.g.
-            # by the GHA workflow). That's fine -- exit clean.
-            print(f"[commit_logs] no changes to commit for {run_dir.name}")
-            return None
-
+    if not nothing_staged:
         msg = f"Backtest logs: {run_dir.name} [skip ci]"
         commit = _run(["git", "commit", "-m", msg], repo_root)
         if commit.returncode != 0:
-            print(f"[commit_logs] git commit failed: {commit.stderr.strip()}")
-            return None
+            raise LogCommitError(f"git commit failed: {commit.stderr.strip()}")
 
         sha_proc = _run(["git", "rev-parse", "HEAD"], repo_root)
         sha = sha_proc.stdout.strip()[:8] if sha_proc.returncode == 0 else "?"
-        print(f"[commit_logs] committed {sha} -- {len(present)} files")
+        print(f"[commit_logs] committed {sha} -- {len(present)} files for {run_dir.name}")
+    else:
+        print(f"[commit_logs] no new content for {run_dir.name} -- "
+              f"verifying prior commit exists")
 
-        if not push:
-            return sha
-        if not _has_remote(repo_root):
-            print(f"[commit_logs] no remote configured -- commit only, no push")
-            return sha
+    if not push or not _has_remote(repo_root):
+        # Local-only: verify and return.
+        return _verify_committed(repo_root, run_dir.name)
 
-        # Push with retry: live phases push state JSONs constantly, so a
-        # non-fast-forward is expected and harmless. Rebase + retry.
-        for attempt in range(1, max_push_attempts + 1):
-            push_proc = _run(["git", "push", "origin", "HEAD:main"], repo_root)
-            if push_proc.returncode == 0:
-                print(f"[commit_logs] push succeeded on attempt {attempt}")
-                return sha
-            print(f"[commit_logs] push attempt {attempt} failed -- "
-                  f"{push_proc.stderr.strip()[:200]}")
-            # Rebase onto remote and retry.
-            _run(["git", "fetch", "origin", "main"], repo_root)
-            rebase = _run(["git", "rebase", "origin/main"], repo_root)
-            if rebase.returncode != 0:
-                _run(["git", "rebase", "--abort"], repo_root)
-                print(f"[commit_logs] rebase failed -- giving up")
-                return sha  # commit is local; user can push manually
-        print(f"[commit_logs] push failed after {max_push_attempts} attempts "
-              f"-- commit is local at {sha}")
-        return sha
+    # Push with rebase-retry. Live phases push state JSONs constantly, so
+    # non-fast-forward is expected. After max attempts, RAISE.
+    last_err = ""
+    for attempt in range(1, max_push_attempts + 1):
+        push_proc = _run(["git", "push", "origin", "HEAD:main"], repo_root)
+        if push_proc.returncode == 0:
+            print(f"[commit_logs] push succeeded on attempt {attempt}")
+            return _verify_committed(repo_root, run_dir.name)
 
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        last_err = push_proc.stderr.strip()[:300]
+        print(f"[commit_logs] push attempt {attempt} failed -- {last_err}")
+        _run(["git", "fetch", "origin", "main"], repo_root)
+        rebase = _run(["git", "rebase", "origin/main"], repo_root)
+        if rebase.returncode != 0:
+            rebase_err = rebase.stderr.strip()[:300]
+            _run(["git", "rebase", "--abort"], repo_root)
+            raise LogCommitError(
+                f"rebase onto origin/main failed during push retry: "
+                f"{rebase_err}. Commit IS local but is not on GitHub. "
+                f"Resolve manually with: git fetch origin && "
+                f"git rebase origin/main && git push origin main"
+            )
+
+    raise LogCommitError(
+        f"push failed after {max_push_attempts} attempts. Last error: "
+        f"{last_err}. Commit IS local (run: {run_dir.name}) but is not on "
+        f"GitHub. Push manually with: git push origin main"
+    )

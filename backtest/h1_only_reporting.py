@@ -1875,6 +1875,9 @@ def _build_group_html(
   <b>Limitations:</b>
   No spread, slippage, or swap costs modelled. Exits simulated at H1 bar boundaries.
   Same-bar SL+TP collision resolves SL-first (pessimistic).
+  <br><br>
+  <b>Run log:</b> <code>backtest/results/{out_dir.name}/</code> &middot;
+  verify with <code>git log --grep="Backtest logs: {out_dir.name}"</code>
 </div>
 
 </div></body></html>"""
@@ -2245,6 +2248,9 @@ def write_h1_only_report(
   No spread, slippage, or swap costs modelled — real P&amp;L ~5–10% lower.
   Exits simulated at H1 bar boundaries. Same-bar SL+TP collision resolves SL-first (pessimistic).
   yfinance bars may differ slightly from broker bars.
+  <br><br>
+  <b>Run log:</b> <code>backtest/results/{run_id}/</code> &middot;
+  verify with <code>git log --grep="Backtest logs: {run_id}"</code>
 </div>
 
 </div><!-- /wrap -->

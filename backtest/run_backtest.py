@@ -686,14 +686,27 @@ def main():
 
     # Persist run logs to the repo so every backtest -- local or GHA --
     # leaves a permanent, readable trail at backtest/results/<run_id>/.
-    # Previously this only happened in the GHA workflow; local runs were
-    # silently dropped. The Python-side commit makes it source-agnostic.
+    # Failures here are FATAL: a backtest that did not persist is a failed
+    # backtest. Silent skip is forbidden -- it has hidden three prior
+    # regressions of this same bug. The caller (user / GHA) must see the
+    # failure immediately, not weeks later when they try to fetch a run
+    # that was never persisted.
+    if out_dir is None:
+        raise RuntimeError(
+            "Backtest produced no output directory -- nothing to persist. "
+            "This is a bug in the run() path; investigate before re-running."
+        )
+
+    from backtest.commit_logs import commit_run_logs, LogCommitError
     try:
-        from backtest.commit_logs import commit_run_logs
-        if out_dir is not None:
-            commit_run_logs(out_dir, _REPO_ROOT, push=True)
-    except Exception as e:
-        print(f"  [log commit skipped: {e}]")
+        sha = commit_run_logs(out_dir, _REPO_ROOT, push=True)
+        print(f"  [log commit OK] {out_dir.name} -> {sha}")
+    except LogCommitError as e:
+        print(f"\n!!! LOG COMMIT FAILED for {out_dir.name} !!!")
+        print(f"    Reason: {e}")
+        print(f"    The backtest report MAY have been emailed, but the run "
+              f"log is NOT persisted. Fix this before re-running.")
+        sys.exit(2)
 
 
 if __name__ == "__main__":
