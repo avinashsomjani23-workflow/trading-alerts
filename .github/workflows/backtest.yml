@@ -9,12 +9,6 @@ on:
       end_date:
         description: "End date (YYYY-MM-DD)"
         required: true
-      regime:
-        description: "Regime tag"
-        required: true
-        default: "war"
-        type: choice
-        options: [war, bau, unspecified]
       pairs:
         description: "Comma-separated pairs"
         required: false
@@ -71,7 +65,10 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BACKTEST_EMAIL: ${{ secrets.BACKTEST_EMAIL }}
         run: |
-          ARGS="--start ${{ inputs.start_date }} --end ${{ inputs.end_date }} --regime ${{ inputs.regime }} --mode h1_only --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_gbp }}"
+          # Regime auto-detected from backtest/WAR_REGIME_WEEKS.json -- no
+          # workflow input. The detector reads the date range and tags the
+          # run war/bau before any logging or reporting fires.
+          ARGS="--start ${{ inputs.start_date }} --end ${{ inputs.end_date }} --mode h1_only --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_gbp }}"
           if [ "${{ inputs.send_email }}" = "true" ]; then
             ARGS="$ARGS --email"
           fi
@@ -81,7 +78,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: backtest-h1_only-${{ inputs.regime }}-${{ inputs.start_date }}-${{ inputs.end_date }}
+          name: backtest-h1_only-${{ inputs.start_date }}-${{ inputs.end_date }}
           path: backtest/results/
           retention-days: 30
 

@@ -226,11 +226,10 @@ def _pair_session_matrix_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     """Pair x Session cross-tab. Pairs are rows, sessions are columns.
     Each cell shows trade count on top, WR and avg R below.
 
-    Color encodes WR (green >=50, amber 40-50, red <40). Low-n cells (n<3)
-    are faded so the eye sees the thin sample without losing the data point.
-    Right-most column and bottom row show pair-totals and session-totals so
-    weeks with only one trade per (pair, session) still produce a readable
-    pair-level row.
+    Color encodes WR (green >=50, amber 40-50, red <40). Every non-empty cell
+    is shown -- no n-threshold suppression. The user reads the sample size
+    from the cell's trade count and makes the call themselves.
+    Right-most column and bottom row show pair-totals and session-totals.
     """
     filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
     if not filled:
@@ -306,6 +305,89 @@ def _pair_session_matrix_html(trades: List[Dict[str, Any]], r_col: str) -> str:
             f"<p style='font-size:11px;color:#888;margin-top:6px;'>"
             f"Each cell: trade count, win rate, average R. "
             f"Right column and bottom row are roll-ups.</p>")
+
+
+_DOW_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def _pair_dow_matrix_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    """Pair x Day-of-Week cross-tab. Same format as the session matrix.
+
+    Lets the user spot per-pair day effects (e.g. EURUSD weak on Friday,
+    GOLD strong Monday). Every non-empty cell is shown -- no n suppression.
+    """
+    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    if not filled:
+        return "<p style='color:#888;'>No filled trades.</p>"
+    df = pd.DataFrame(filled)
+    if "pair" not in df.columns or "alert_ts" not in df.columns \
+            or r_col not in df.columns:
+        return "<p style='color:#888;'>Pair/alert_ts data missing.</p>"
+
+    df["_dow"] = df["alert_ts"].apply(_day_of_week)
+    pairs = sorted(df["pair"].unique())
+    days_present = [d for d in _DOW_ORDER if d in df["_dow"].unique()]
+    if not days_present:
+        return "<p style='color:#888;'>No day-of-week data.</p>"
+
+    def _cell(sub: pd.DataFrame) -> str:
+        n = len(sub)
+        if n == 0:
+            return ("<td style='text-align:center;color:#ccc;font-size:11px;'>"
+                    "&mdash;</td>")
+        wins = (sub[r_col] > 0).sum()
+        wr = wins / n * 100
+        exp = sub[r_col].mean()
+        if wr >= 50:
+            bg = "#eafaf1"
+        elif wr >= 40:
+            bg = "#fef9e7"
+        else:
+            bg = "#fdf2f2"
+        sign = "+" if exp >= 0 else ""
+        return (f"<td style='background:{bg};text-align:center;'>"
+                f"<div style='font-size:11px;color:#888;'>{n}t</div>"
+                f"<div style='font-weight:600;'>{wr:.0f}%</div>"
+                f"<div style='font-size:11px;'>{sign}{exp:.2f}R</div>"
+                f"</td>")
+
+    header = "<tr><th>Pair</th>"
+    for d in days_present:
+        header += f"<th style='text-align:center;'>{d}</th>"
+    header += "<th style='text-align:center;background:#34495e;'>All</th></tr>"
+
+    rows_html = ""
+    for pair in pairs:
+        pair_df = df[df["pair"] == pair]
+        row = f"<tr><td><b>{pair}</b></td>"
+        for d in days_present:
+            row += _cell(pair_df[pair_df["_dow"] == d])
+        row += _cell(pair_df).replace("background:#eafaf1",
+                                       "background:#eafaf1;border-left:2px solid #34495e") \
+                              .replace("background:#fef9e7",
+                                       "background:#fef9e7;border-left:2px solid #34495e") \
+                              .replace("background:#fdf2f2",
+                                       "background:#fdf2f2;border-left:2px solid #34495e")
+        row += "</tr>"
+        rows_html += row
+
+    totals_row = "<tr><td style='background:#34495e;color:#fff;'><b>All</b></td>"
+    for d in days_present:
+        day_df = df[df["_dow"] == d]
+        cell = _cell(day_df)
+        cell = cell.replace("<td style='",
+                            "<td style='border-top:2px solid #34495e;")
+        totals_row += cell
+    grand = _cell(df).replace("<td style='",
+                              "<td style='border-top:2px solid #34495e;"
+                              "border-left:2px solid #34495e;")
+    totals_row += grand + "</tr>"
+
+    return (f"<table><thead>{header}</thead>"
+            f"<tbody>{rows_html}{totals_row}</tbody></table>"
+            f"<p style='font-size:11px;color:#888;margin-top:6px;'>"
+            f"Each cell: trade count, win rate, average R. "
+            f"Use this to spot per-pair day-of-week effects.</p>")
 
 
 def _killzone_audit_html(meta: Dict[str, Any]) -> str:
@@ -544,7 +626,9 @@ def _confluence_per_pair_html(trades: List[Dict[str, Any]], r_col: str) -> str:
 
     note = ("<p style='font-size:11px;color:#888;margin-top:6px;'>"
             "Win rate when that confluence was present. ↑ = helped vs without it, "
-            "↓ = hurt. — = the confluence was never present for this pair.</p>")
+            "↓ = hurt. — = the confluence was never present for this pair. "
+            "Small number under each cell is the trade count — read sample "
+            "size from there, no minimum threshold applied.</p>")
     return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>{note}"
 
 
@@ -761,25 +845,32 @@ def _structure_event_breakdown_html(trades: List[Dict[str, Any]], r_col: str) ->
     major_exp = (sum(n * e for tier, _, n, _, e in seen if tier == "Major") / major_n) if major_n else None
     minor_exp = (sum(n * e for tier, _, n, _, e in seen if tier == "Minor") / minor_n) if minor_n else None
 
+    # No n-threshold suppression -- the diff is shown whenever both tiers
+    # have at least one trade. Reader sees the sample size in the table
+    # above and weighs the comparison themselves.
     note = ""
-    if major_exp is not None and minor_exp is not None and major_n >= 3 and minor_n >= 3:
+    if major_exp is not None and minor_exp is not None:
         diff = major_exp - minor_exp
+        sample = (f" (Major: {major_n} trades, Minor: {minor_n} trades)"
+                  if (major_n < 3 or minor_n < 3) else "")
         if diff > 0.15:
             note = (f"<p style='font-size:13px;color:#27ae60;margin-top:8px;'>"
-                    f"✓ Major events outperformed Minor by {diff:.2f}R per trade. "
+                    f"✓ Major events outperformed Minor by {diff:.2f}R per trade{sample}. "
                     f"This is the expected behaviour — Major detection is working as designed.</p>")
         elif diff < -0.15:
             note = (f"<p style='font-size:13px;color:#e74c3c;margin-top:8px;'>"
-                    f"⚠ Minor events outperformed Major by {abs(diff):.2f}R — unexpected. "
+                    f"⚠ Minor events outperformed Major by {abs(diff):.2f}R{sample} — unexpected. "
                     f"Major event detection may be misclassifying setups. Verify before trading live.</p>")
         else:
             note = (f"<p style='font-size:13px;color:#888;margin-top:8px;'>"
-                    f"Major and Minor performance is similar this week (difference: {diff:+.2f}R). "
-                    f"Need more data to draw conclusions.</p>")
-    elif major_n < 3 or minor_n < 3:
+                    f"Major and Minor performance is similar (difference: {diff:+.2f}R){sample}.</p>")
+    elif major_n == 0 and minor_n == 0:
+        note = ("<p style='font-size:12px;color:#888;margin-top:8px;'>"
+                "No structure-event data this period.</p>")
+    else:
         note = (f"<p style='font-size:12px;color:#888;margin-top:8px;'>"
-                f"Major: {major_n} trades · Minor: {minor_n} trades. "
-                f"Need at least 3 of each before comparing.</p>")
+                f"Only one tier present this period "
+                f"(Major: {major_n}, Minor: {minor_n}). No comparison possible.</p>")
 
     legend = ("<p style='font-size:11px;color:#aaa;margin-top:4px;'>"
               "<b>BOS</b> = Break of Structure (trend continuation). "
@@ -1213,17 +1304,20 @@ def _week_headline(sb: Dict[str, Any]) -> str:
     n   = sb.get("trades", 0)
     exp = sb.get("expectancy_r", 0)
     wr  = sb.get("win_rate_pct", 0)
-    if n < 5:
-        return "Not enough trades this week to draw a conclusion (fewer than 5 filled)."
+    if n == 0:
+        return "No filled trades this period."
+    # No n-threshold suppression. The headline is shown for any non-zero
+    # sample size; the user reads the trade count from the strip below
+    # and decides whether to trust the verdict.
     if exp >= 0.3 and wr >= 50:
-        return "System performed well this week."
+        return "System performed well this period."
     if exp >= 0 and wr >= 45:
-        return "Modest positive week — edge is there but modest."
+        return "Modest positive period — edge is there but modest."
     if exp >= 0 and wr < 45:
         return "Profitable but fewer wins than expected — check if losses are stopping cleanly."
     if exp < 0 and wr >= 50:
         return "Many wins but losses were too large — take profit levels may be too tight."
-    return "Difficult week — below threshold on both win rate and expectancy."
+    return "Difficult period — below threshold on both win rate and expectancy."
 
 
 def _exit_narrative(sb: Dict[str, Any], risk_usd: float) -> str:
@@ -1329,17 +1423,22 @@ def _pair_section_html(pp: List[Dict], ss: List[Dict], r_col_label: str) -> str:
 
 
 def _score_verdict_text(buckets: List[Dict]) -> str:
+    if not buckets:
+        return "No score data this period."
     if len(buckets) < 2:
-        return "Not enough score diversity to draw a conclusion."
+        b = buckets[0]
+        return (f"Only one score bucket present ({b['score_bucket']}, "
+                f"{b['trades']} trades, avg {_r(b['expectancy_r'])}). "
+                f"No score-vs-outcome trend can be drawn from a single bucket.")
     exp_vals = [b["expectancy_r"] for b in buckets]
     rises = sum(1 for a, b in zip(exp_vals, exp_vals[1:]) if b > a)
     total = len(exp_vals) - 1
     ratio = rises / total if total > 0 else 0
     if ratio >= 0.7:
-        return "✓ Yes — higher score setups consistently produced better outcomes this week."
+        return "✓ Yes — higher score setups consistently produced better outcomes this period."
     if ratio >= 0.4:
         return "~ Partial — some relationship, not consistent across all score levels."
-    return "✗ No — score did not predict outcomes this week. One week is not enough to conclude — check across all runs."
+    return "✗ No — score did not predict outcomes this period."
 
 
 def _score_table_html(buckets: List[Dict]) -> str:
@@ -1540,6 +1639,18 @@ def _zone_block_html(
   {_pair_session_matrix_html(zone_trades, "r_realised")}
 </div>
 
+<!-- PAIR x DAY-OF-WEEK MATRIX -->
+<div class="section">
+  <h2>Pair &times; day-of-week matrix</h2>
+  <p style="font-size:12px;color:#666;margin-bottom:10px;">
+    Same shape as the session matrix, sliced by day of week. Useful for
+    spotting per-pair day effects (a pair that consistently fails on Fridays,
+    or wakes up Mondays). All non-empty cells shown; read the sample size
+    from each cell's trade count.
+  </p>
+  {_pair_dow_matrix_html(zone_trades, "r_realised")}
+</div>
+
 <!-- KILLZONE -->
 <div class="section">
   <h2>Killzone &mdash; wins vs losses</h2>
@@ -1562,7 +1673,8 @@ def _zone_block_html(
   <h2>Which confluences actually helped &mdash; by pair</h2>
   <p style="font-size:12px;color:#666;margin-bottom:10px;">
     Win rate when each confluence was present. &uarr; = improved results vs without it.
-    &darr; = hurt results. &mdash; = fewer than 3 trades with this confluence for this pair.
+    &darr; = hurt results. &mdash; = that confluence was never present for this pair.
+    All non-empty cells shown; sample size is the small number on each cell.
   </p>
   {_confluence_per_pair_html(zone_trades, "r_realised")}
 </div>
@@ -1588,6 +1700,245 @@ def _zone_block_html(
   {_vet_review_html(zone_trades)}
 </div>
 """
+
+
+# ---------------------------------------------------------------------------
+# Pair groups for split per-email reports
+# ---------------------------------------------------------------------------
+
+FOREX_PAIRS = {"EURUSD", "NZDUSD", "USDJPY", "USDCHF"}
+INDEX_COMMODITY_PAIRS = {"NAS100", "GOLD", "XAUUSD"}
+
+
+def _filter_meta_by_pairs(meta: Dict[str, Any], allowed: set) -> Dict[str, Any]:
+    """Return a copy of meta with per-pair fields scoped to `allowed`.
+
+    The audit sections in the per-group emails should only show counters
+    for pairs in that group. We touch the per-pair dicts (killzone drops,
+    killzone windows) and the pair list; other meta fields are unchanged.
+    """
+    out = dict(meta)
+    out["pairs"] = [p for p in meta.get("pairs", []) if p in allowed]
+    drops = meta.get("killzone_drops_by_pair") or {}
+    out["killzone_drops_by_pair"] = {k: v for k, v in drops.items() if k in allowed}
+    windows = meta.get("killzone_windows_by_pair") or {}
+    out["killzone_windows_by_pair"] = {k: v for k, v in windows.items() if k in allowed}
+    out["killzone_dropped_alerts"] = int(sum(out["killzone_drops_by_pair"].values()))
+    return out
+
+
+def _build_group_html(
+    group_label: str,
+    group_trades_all: List[Dict[str, Any]],
+    group_meta: Dict[str, Any],
+    risk_usd: float,
+    out_dir: Path,
+    html_filename: str,
+    excel_filename: str,
+) -> Dict[str, Any]:
+    """Build one HTML report + one Excel for a single pair group.
+
+    Mirrors the section layout of the combined report, but every aggregate
+    is recomputed against `group_trades_all` so the headline, Sections A/B,
+    head-to-head, and every audit section are internally consistent.
+    Returns the group's summary dict so the caller can fold it into the
+    combined summary.json under `by_group`.
+    """
+    trades = [t for t in group_trades_all
+              if not t.get("news_blocked") and not t.get("ist_blocked")]
+    blocked_trades = [t for t in group_trades_all if t.get("news_blocked")]
+    ist_blocked_trades = [t for t in group_trades_all if t.get("ist_blocked")]
+
+    prox_trades = [t for t in trades if t.get("entry_zone") == "proximal"]
+    mid_trades  = [t for t in trades if t.get("entry_zone") == "50pct"]
+
+    sb_prox     = _aggregate_for_exit(prox_trades, "r_realised",     risk_usd)
+    sb_mid      = _aggregate_for_exit(mid_trades,  "r_realised",     risk_usd)
+    sb_prox_tp1 = _aggregate_for_exit(prox_trades, "r_if_exit_tp1",  risk_usd)
+    sb_prox_tp2 = _aggregate_for_exit(prox_trades, "r_if_exit_tp2",  risk_usd)
+    sb_mid_tp1  = _aggregate_for_exit(mid_trades,  "r_if_exit_tp1",  risk_usd)
+    sb_mid_tp2  = _aggregate_for_exit(mid_trades,  "r_if_exit_tp2",  risk_usd)
+    fill_prox   = _fill_rate(trades, "proximal")
+    fill_mid    = _fill_rate(trades, "50pct")
+
+    # Reconciliation invariant within this group, same as the combined path.
+    def _reconcile(zone_label, scoreboard, zone_trades):
+        from_scoreboard = round(float(scoreboard.get("total_pnl_usd", 0)), 2)
+        filled = [t for t in zone_trades if t.get("exit_reason") != "never_filled"]
+        from_trades = round(sum(float(t.get("pnl_usd") or 0) for t in filled), 2)
+        if abs(from_scoreboard - from_trades) > 0.01:
+            raise AssertionError(
+                f"P&L reconciliation failed for {group_label}/{zone_label}: "
+                f"scoreboard={from_scoreboard} vs per-trade-sum={from_trades}.")
+    _reconcile("proximal", sb_prox, prox_trades)
+    _reconcile("50pct",    sb_mid,  mid_trades)
+
+    # Excel: this group's filled+blocked rows only (matches what trades.xlsx
+    # does for the combined report -- audit rows preserved).
+    excel_ok = _try_excel(group_trades_all, out_dir / excel_filename) is not None
+
+    total_pnl_prox = sb_prox.get("total_pnl_usd", 0)
+    total_pnl_mid  = sb_mid.get("total_pnl_usd", 0)
+    n_prox_filled  = sb_prox.get("trades", 0)
+    n_mid_filled   = sb_mid.get("trades", 0)
+    pnl_color_prox = "#27ae60" if total_pnl_prox >= 0 else "#e74c3c"
+    pnl_color_mid  = "#27ae60" if total_pnl_mid  >= 0 else "#e74c3c"
+    pairs_str  = ", ".join(group_meta.get("pairs", []))
+    regime_str = group_meta.get("regime", "")
+
+    html = f"""<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          background: #f8f9fa; color: #212529; font-size: 14px; line-height: 1.6; }}
+  .wrap {{ max-width: 680px; margin: 0 auto; background: #fff; }}
+  .top-band {{ background: #2c3e50; color: #fff; padding: 20px 28px; }}
+  .top-band h1 {{ font-size: 18px; font-weight: 700; margin-bottom: 4px; }}
+  .top-band .meta {{ font-size: 12px; color: #bdc3c7; }}
+  .headline {{ padding: 24px 28px; border-bottom: 1px solid #eee; }}
+  .summary-strip {{ display: flex; gap: 12px; margin-top: 16px; }}
+  .summary-card {{ flex: 1; padding: 14px; border-radius: 6px; border: 1px solid #eee; }}
+  .summary-card .label {{ font-size: 11px; color: #888;
+                          text-transform: uppercase; letter-spacing: 0.06em; }}
+  .summary-card .val {{ font-size: 22px; font-weight: 700; margin-top: 4px; }}
+  .summary-card .meta {{ font-size: 11px; color: #888; margin-top: 4px; }}
+  .section {{ padding: 22px 28px; border-bottom: 1px solid #eee; }}
+  .section h2 {{ font-size: 13px; font-weight: 700; text-transform: uppercase;
+                 letter-spacing: 0.06em; color: #888; margin-bottom: 14px; }}
+  .section p {{ margin-bottom: 10px; font-size: 14px; }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }}
+  th {{ background: #2c3e50; color: #fff; padding: 8px 10px; text-align: left;
+        font-weight: 600; font-size: 12px; }}
+  td {{ padding: 7px 10px; border-bottom: 1px solid #eee; }}
+  tr:last-child td {{ border-bottom: none; }}
+  h4 {{ font-size: 12px; font-weight: 700; color: #666; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }}
+  .stats-strip {{ display: flex; gap: 0; border: 1px solid #eee; border-radius: 6px;
+                  overflow: hidden; margin-bottom: 16px; }}
+  .stat {{ flex: 1; padding: 14px 12px; text-align: center; border-right: 1px solid #eee; }}
+  .stat:last-child {{ border-right: none; }}
+  .stat .val {{ font-size: 20px; font-weight: 700; }}
+  .stat .lbl {{ font-size: 11px; color: #888; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }}
+  .caveat {{ background: #fffbea; border-left: 3px solid #f59e0b; padding: 10px 14px;
+             border-radius: 0 4px 4px 0; font-size: 12px; color: #555; margin-top: 8px; }}
+  .footer {{ padding: 16px 28px; background: #f8f9fa; font-size: 11px; color: #999; }}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="top-band">
+  <h1>{group_label} &mdash; {group_meta.get('start')} to {group_meta.get('end')}</h1>
+  <div class="meta">
+    {pairs_str} &nbsp;&middot;&nbsp; 1R = ${risk_usd:.0f} &nbsp;&middot;&nbsp;
+    Regime: {regime_str} &nbsp;&middot;&nbsp; H1 bars only, no spread or slippage modelled
+  </div>
+</div>
+
+<div class="headline">
+  <div style="font-size:13px;color:#888;text-transform:uppercase;
+              letter-spacing:0.08em;margin-bottom:8px;">
+    Period summary &mdash; both entry zones ({group_label})
+  </div>
+  <div class="summary-strip">
+    <div class="summary-card" style="border-left:4px solid #2c3e50;">
+      <div class="label">Proximal entry</div>
+      <div class="val" style="color:{pnl_color_prox};">{_m(total_pnl_prox)}</div>
+      <div class="meta">{n_prox_filled} filled &middot;
+        {sb_prox.get('win_rate_pct', 0):.0f}% won &middot;
+        avg {_r(sb_prox.get('expectancy_r', 0))}</div>
+    </div>
+    <div class="summary-card" style="border-left:4px solid #34495e;">
+      <div class="label">50% mean entry</div>
+      <div class="val" style="color:{pnl_color_mid};">{_m(total_pnl_mid)}</div>
+      <div class="meta">{n_mid_filled} filled &middot;
+        {sb_mid.get('win_rate_pct', 0):.0f}% won &middot;
+        avg {_r(sb_mid.get('expectancy_r', 0))}</div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:#888;margin-top:14px;">
+    Aggregates above and in every section below are scoped to
+    {group_label.lower()} pairs only. Numbers reconcile within this email.
+  </p>
+</div>
+
+{_zone_block_html(
+    "Section A &mdash; Proximal entry",
+    prox_trades, sb_prox, sb_prox_tp1, sb_prox_tp2, risk_usd,
+    "#2c3e50",
+)}
+
+{_zone_block_html(
+    "Section B &mdash; 50% mean entry",
+    mid_trades, sb_mid, sb_mid_tp1, sb_mid_tp2, risk_usd,
+    "#34495e",
+)}
+
+<div class="section">
+  <h2>Proximal entry vs 50% midpoint entry &mdash; head-to-head</h2>
+  {_entry_comparison_html(sb_prox, sb_mid, fill_prox, fill_mid)}
+</div>
+
+<div class="section">
+  <h2>Killzone filter &mdash; alerts dropped</h2>
+  {_killzone_audit_html(group_meta)}
+</div>
+
+<div class="section">
+  <h2>IST trading-window gate &mdash; alerts dropped</h2>
+  {_ist_blackout_html(ist_blocked_trades, group_meta)}
+</div>
+
+<div class="section">
+  <h2>News blackout &mdash; trades filtered</h2>
+  {_news_blackout_html(blocked_trades, group_meta)}
+</div>
+
+<div class="section">
+  <h2>What's attached</h2>
+  <ul style="padding-left:18px;font-size:13px;">
+    <li><b>{excel_filename} — Trades tab:</b>
+      {"every filled trade for this group, plain-English headers." if excel_ok else "<span style='color:#e74c3c;'>FAILED — openpyxl not installed.</span>"}</li>
+    <li><b>{excel_filename} — Zone Register tab:</b> one row per OB, both entry zones side by side.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>System validation check</h2>
+  {_validation_html(prox_trades + mid_trades)}
+</div>
+
+<div class="footer">
+  <b>Limitations:</b>
+  No spread, slippage, or swap costs modelled. Exits simulated at H1 bar boundaries.
+  Same-bar SL+TP collision resolves SL-first (pessimistic).
+</div>
+
+</div></body></html>"""
+
+    (out_dir / html_filename).write_text(html, encoding="utf-8")
+
+    return {
+        "label": group_label,
+        "pairs": group_meta.get("pairs", []),
+        "scoreboards": {
+            "proximal_realised":  sb_prox,
+            "proximal_exit_tp1":  sb_prox_tp1,
+            "proximal_exit_tp2":  sb_prox_tp2,
+            "fifty_pct_realised": sb_mid,
+            "fifty_pct_exit_tp1": sb_mid_tp1,
+            "fifty_pct_exit_tp2": sb_mid_tp2,
+        },
+        "fill_rate_proximal": fill_prox,
+        "fill_rate_50pct":    fill_mid,
+        "news_blocked_trade_rows": len(blocked_trades),
+        "ist_blocked_trade_rows":  len(ist_blocked_trades),
+        "killzone_dropped_alerts": int(group_meta.get("killzone_dropped_alerts") or 0),
+        "html_file":  html_filename,
+        "excel_file": excel_filename,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1939,4 +2290,35 @@ def write_h1_only_report(
 </body></html>"""
 
     (out_dir / "report.html").write_text(html, encoding="utf-8")
+
+    # ---- Per-group split reports (Forex vs Gold/NAS) ----
+    # Same Section A/B layout, same thresholds, but every aggregate and audit
+    # section is recomputed against the group's pair subset. The combined
+    # report above is unchanged so update_registry.py / aggregate_runs.py keep
+    # reading trades.xlsx + summary.json as today.
+    forex_trades_all = [t for t in trades_all if t.get("pair") in FOREX_PAIRS]
+    indcom_trades_all = [t for t in trades_all if t.get("pair") in INDEX_COMMODITY_PAIRS]
+
+    forex_meta  = _filter_meta_by_pairs(meta, FOREX_PAIRS)
+    indcom_meta = _filter_meta_by_pairs(meta, INDEX_COMMODITY_PAIRS)
+
+    by_group = {}
+    if forex_trades_all:
+        by_group["forex"] = _build_group_html(
+            "Forex", forex_trades_all, forex_meta, risk_usd,
+            out_dir, "report_forex.html", "forex_trades.xlsx",
+        )
+    if indcom_trades_all:
+        by_group["gold_nas"] = _build_group_html(
+            "Gold + NAS100", indcom_trades_all, indcom_meta, risk_usd,
+            out_dir, "report_gold_nas.html", "nas_xau_trades.xlsx",
+        )
+
+    if by_group:
+        # Fold per-group summaries into the combined summary.json so future
+        # tooling can read the partitioned numbers without re-running anything.
+        summary["by_group"] = by_group
+        with open(out_dir / "summary.json", "w") as f:
+            json.dump(summary, f, indent=2, default=str)
+
     return out_dir

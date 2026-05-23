@@ -50,13 +50,36 @@ def _parse_date(s: str) -> datetime:
     return datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
 
+def _regime_label_for(regime: str, start: datetime, end: datetime):
+    """Look up the curated WAR-range label so the email subject can name the
+    specific event. Returns None if regime is not 'war' or no range matched."""
+    if regime != "war":
+        return None
+    try:
+        from backtest import regime_detector
+        _r, label = regime_detector.detect_regime(
+            start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+        return label
+    except Exception:
+        return None
+
+
 def run(start: datetime, end: datetime, pair_names: list,
-        regime: str = "unspecified", risk_usd: float = 250.0,
+        regime: str = "auto", risk_usd: float = 250.0,
         send_email: bool = False, mode: str = "auto") -> Path:
     cfg = _load_config()
 
     if mode not in VALID_MODES:
         raise ValueError(f"mode must be one of {VALID_MODES}, got {mode!r}")
+
+    # Regime: 'auto' (default) consults WAR_REGIME_WEEKS.json. Explicit
+    # 'war'/'bau' overrides the file. We resolve once here so every downstream
+    # tag (run_id prefix, log fields, meta, email subject) sees the same value.
+    regime_label = None
+    if regime == "auto":
+        from backtest import regime_detector
+        regime, regime_label = regime_detector.detect_regime(
+            start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
 
     # Initialise per-run logger as the first action. console.log + run_log.jsonl
     # land in the results folder so they ride along with the artifact upload.
@@ -64,7 +87,7 @@ def run(start: datetime, end: datetime, pair_names: list,
     run_id = f"{prefix}_{start.strftime('%Y%m%d')}_{end.strftime('%Y%m%d')}"
     out_dir = RESULTS_ROOT / run_id
     logger = RunLogger.init(out_dir)
-    logger.event("run_start", regime=regime, mode=mode,
+    logger.event("run_start", regime=regime, regime_label=regime_label, mode=mode,
                  start=start.strftime("%Y-%m-%d"),
                  end=end.strftime("%Y-%m-%d"), pairs=pair_names,
                  risk_usd=risk_usd, send_email=send_email)
@@ -369,6 +392,7 @@ def _run_inner(cfg, start, end, pair_names, regime, risk_usd, send_email,
         "start": start.strftime("%Y-%m-%d"),
         "end": end.strftime("%Y-%m-%d"),
         "regime": regime,
+        "regime_label": _regime_label_for(regime, start, end),
         "pairs": pair_names,
         "generated_utc": datetime.now(timezone.utc).isoformat(),
     }
@@ -588,6 +612,7 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         "start": start.strftime("%Y-%m-%d"),
         "end": end.strftime("%Y-%m-%d"),
         "regime": regime,
+        "regime_label": _regime_label_for(regime, start, end),
         "mode": "h1_only",
         "pairs": pair_names,
         "generated_utc": datetime.now(timezone.utc).isoformat(),
@@ -636,7 +661,8 @@ def main():
     ap.add_argument("--end", required=True, help="YYYY-MM-DD")
     ap.add_argument("--pairs", default="EURUSD,NZDUSD,USDJPY,USDCHF,NAS100,GOLD",
                     help="Comma-separated pair names")
-    ap.add_argument("--regime", default="unspecified", choices=["war", "bau", "unspecified"])
+    ap.add_argument("--regime", default="auto", choices=["auto", "war", "bau"],
+                    help="auto reads backtest/WAR_REGIME_WEEKS.json; explicit war/bau overrides")
     ap.add_argument("--mode", default="h1_only", choices=list(VALID_MODES),
                     help="h1_only = H1-only dual-entry, no scoring gate (default); "
                          "auto = Phase 2/3 if M15/M5 available (legacy)")

@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "purpose": "Date ranges classified as WAR regime (USD-affecting geopolitical conflict). Outside any range = BAU.",
+    "classification_rule": "Only conflicts that materially move USD via safe-haven flows, sanctions, oil shock, or central bank reaction. Regional flare-ups without USD impact stay BAU.",
+    "format": "Each range has 'start' and 'end' in YYYY-MM-DD (inclusive). 'open_ended' = true means the end date is provisional and the conflict is still ongoing; treat as WAR up to today.",
+    "source": "Curated by hand from widely-reported events. NOT auto-generated. Review and edit before each new backtest period if your run window touches a range boundary.",
+    "last_reviewed": "2026-05-23"
+  },
+  "war_ranges": [
+    {
+      "label": "Russia-Ukraine full-scale invasion",
+      "start": "2022-02-21",
+      "end":   "2099-12-31",
+      "open_ended": true,
+      "usd_impact": "Safe-haven USD bid; energy shock via EUR; sustained sanctions cycle.",
+      "notes": "Invasion confirmed 2022-02-24. Pre-invasion troop massing and recognition of Donetsk/Luhansk on 2022-02-21 already moved DXY; start one week early."
+    },
+    {
+      "label": "Israel-Hamas war (post Oct 7)",
+      "start": "2023-10-07",
+      "end":   "2099-12-31",
+      "open_ended": true,
+      "usd_impact": "Initial safe-haven USD bid; oil risk premium; spillover into JPY and CHF.",
+      "notes": "Begins on Oct 7 2023 attack. Includes the spillovers below as embedded sub-events but the regime tag does not lift."
+    },
+    {
+      "label": "Iran-Israel direct strikes (Apr 2024)",
+      "start": "2024-04-13",
+      "end":   "2024-04-26",
+      "open_ended": false,
+      "usd_impact": "Sharp safe-haven USD spike; oil futures; intraday FX vol on USDCHF and USDJPY.",
+      "notes": "Iran direct missile/drone strike on Israel 2024-04-13; Israeli response 2024-04-19. Tail of two weeks captures DXY mean-reversion. Embedded inside the Israel-Hamas range above so this entry is redundant in classification but kept for audit."
+    },
+    {
+      "label": "Iran-Israel direct strikes (Oct 2024)",
+      "start": "2024-10-01",
+      "end":   "2024-10-14",
+      "open_ended": false,
+      "usd_impact": "Safe-haven USD bid; oil; risk-off in equities / NAS100.",
+      "notes": "Iran ballistic-missile attack on Israel 2024-10-01. Two-week tail captures volatility decay. Embedded inside Israel-Hamas range above."
+    }
+  ]
+}
