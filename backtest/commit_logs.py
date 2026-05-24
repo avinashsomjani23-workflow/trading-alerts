@@ -96,6 +96,15 @@ def commit_run_logs(
     rel_dir = run_dir.relative_to(repo_root)
     targets = [str(rel_dir / f) for f in present]
 
+    # Cross-run rollup files written by update_registry. Staging them in the
+    # same commit is mandatory: if they sit unstaged, `git rebase` during the
+    # push-retry loop fails with "cannot rebase: You have unstaged changes"
+    # and the run logs never reach GitHub (see May 2026 incident). Add only
+    # if present -- update_registry may have been skipped (caller logs that).
+    for extra in ("backtest/registry.json", "BACKTEST_LOG.md"):
+        if (repo_root / extra).exists():
+            targets.append(extra)
+
     add = _run(["git", "add", "-f", *targets], repo_root)
     if add.returncode != 0:
         raise LogCommitError(f"git add failed: {add.stderr.strip()}")

@@ -338,6 +338,36 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
               total_alerts=len(all_alerts), total_trades=len(all_trades))
     print(f"\nH1-only report written to {report_dir}")
 
+    # Update cross-run registry BEFORE commit so registry.json + BACKTEST_LOG.md
+    # land in the same commit as the run's log files. If registry update runs
+    # AFTER commit, its output files are unstaged when the push retries, which
+    # causes `git rebase` to fail with "cannot rebase: You have unstaged
+    # changes" and the run logs never reach GitHub (see May 2026 incident).
+    try:
+        from backtest.update_registry import build_registry
+        build_registry(target_run_id=report_dir.name)
+    except Exception as e:
+        print(f"  [registry update skipped: {e}]")
+        log_event("registry_update_failed", level="warn", error=str(e))
+
+    # Push logs to GitHub BEFORE the email goes out. The email is the user's
+    # signal that a run completed; if they get the email but the logs aren't
+    # on GitHub, the run is unrecoverable (see March 2026 incident). Order
+    # matters: persistence first, notification second. If push fails the
+    # backtest exits non-zero and no email is sent -- user re-runs.
+    from backtest.commit_logs import commit_run_logs, LogCommitError
+    try:
+        sha = commit_run_logs(report_dir, _REPO_ROOT, push=True)
+        print(f"  [log commit OK] {report_dir.name} -> {sha}")
+        log_event("logs_pushed_to_github", run_id=report_dir.name, sha=sha)
+    except LogCommitError as e:
+        log_event("logs_push_failed", level="error",
+                  run_id=report_dir.name, error=str(e))
+        print(f"\n!!! LOG COMMIT FAILED for {report_dir.name} !!!")
+        print(f"    Reason: {e}")
+        print(f"    Email NOT sent. Fix the push problem and re-run.")
+        raise
+
     if send_email:
         try:
             reporting_email.send_report(report_dir, subject_suffix="(h1_only)")
@@ -367,37 +397,15 @@ def main():
     out_dir = run(start, end, pairs, regime=args.regime, risk_usd=args.risk_usd,
                   send_email=args.email)
 
-    # Auto-update cross-run registry after every run.
-    try:
-        from backtest.update_registry import build_registry
-        if out_dir is not None:
-            build_registry(target_run_id=out_dir.name)
-    except Exception as e:
-        print(f"  [registry update skipped: {e}]")
-
-    # Persist run logs to the repo so every backtest -- local or GHA --
-    # leaves a permanent, readable trail at backtest/results/<run_id>/.
-    # Failures here are FATAL: a backtest that did not persist is a failed
-    # backtest. Silent skip is forbidden -- it has hidden three prior
-    # regressions of this same bug. The caller (user / GHA) must see the
-    # failure immediately, not weeks later when they try to fetch a run
-    # that was never persisted.
+    # Registry update + log persistence to GitHub happen INSIDE _run_h1_only,
+    # before the email is sent. If we reached this point, both succeeded
+    # (otherwise _run_h1_only would have raised and main() would have exited
+    # non-zero). Order: registry, persist, email. See March/May 2026 incidents.
     if out_dir is None:
         raise RuntimeError(
             "Backtest produced no output directory -- nothing to persist. "
             "This is a bug in the run() path; investigate before re-running."
         )
-
-    from backtest.commit_logs import commit_run_logs, LogCommitError
-    try:
-        sha = commit_run_logs(out_dir, _REPO_ROOT, push=True)
-        print(f"  [log commit OK] {out_dir.name} -> {sha}")
-    except LogCommitError as e:
-        print(f"\n!!! LOG COMMIT FAILED for {out_dir.name} !!!")
-        print(f"    Reason: {e}")
-        print(f"    The backtest report MAY have been emailed, but the run "
-              f"log is NOT persisted. Fix this before re-running.")
-        sys.exit(2)
 
 
 if __name__ == "__main__":
