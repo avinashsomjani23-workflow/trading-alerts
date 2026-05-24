@@ -21,10 +21,21 @@ import pandas as pd
 # Aggregation helpers (used by summary.json + HTML)
 # ---------------------------------------------------------------------------
 
+# Trades to exclude from every aggregate. never_filled = limit never hit.
+# window_end / timeout = walk ran out of bars; trade unresolved, treat as
+# audit-only (RCA #5). These rows remain in CSV/Excel but never feed P&L,
+# win rate, expectancy, or any reported metric.
+_EXCLUDE_REASONS = {"never_filled", "window_end", "timeout"}
+
+
+def _is_real_filled(t: Dict[str, Any]) -> bool:
+    return t.get("exit_reason") not in _EXCLUDE_REASONS
+
+
 def _aggregate_for_exit(trades: List[Dict[str, Any]], r_col: str,
                         risk_usd: float) -> Dict[str, Any]:
     """Aggregate filled trades under a hypothetical exit policy."""
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return {"trades": 0, "filled": 0}
     df = pd.DataFrame(filled)
@@ -59,7 +70,7 @@ def _aggregate_for_exit(trades: List[Dict[str, Any]], r_col: str,
 
 def _per_pair_breakdown(trades: List[Dict[str, Any]], r_col: str,
                         risk_usd: float) -> List[Dict[str, Any]]:
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return []
     df = pd.DataFrame(filled)
@@ -79,7 +90,7 @@ def _per_pair_breakdown(trades: List[Dict[str, Any]], r_col: str,
 
 def _per_session_breakdown(trades: List[Dict[str, Any]], r_col: str,
                            risk_usd: float) -> List[Dict[str, Any]]:
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return []
     df = pd.DataFrame(filled)
@@ -104,7 +115,7 @@ def _fill_rate(trades: List[Dict[str, Any]], entry_zone: str) -> Dict[str, Any]:
     zone_rows = [t for t in trades if t.get("entry_zone") == entry_zone]
     if not zone_rows:
         return {"alerts": 0, "filled": 0, "fill_rate_pct": 0.0}
-    filled = [t for t in zone_rows if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in zone_rows if _is_real_filled(t)]
     return {
         "alerts":        len(zone_rows),
         "filled":        len(filled),
@@ -113,7 +124,7 @@ def _fill_rate(trades: List[Dict[str, Any]], entry_zone: str) -> Dict[str, Any]:
 
 
 def _score_buckets(trades: List[Dict[str, Any]], r_col: str) -> List[Dict[str, Any]]:
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return []
     df = pd.DataFrame(filled)
@@ -218,7 +229,7 @@ def _best_policy_by_dim(trades: List[Dict[str, Any]],
     produced the highest total R. Returns rows sorted by trade count desc.
     """
     _attach_runner_r(trades)
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return []
     df = pd.DataFrame(filled)
@@ -256,7 +267,7 @@ def _findings_panel(trades: List[Dict[str, Any]],
                     sb: Dict[str, Any],
                     risk_usd: float) -> List[Tuple[str, str]]:
     findings: List[Tuple[str, str]] = []
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     n = len(filled)
     if n == 0:
         return [("info", "No filled trades this period.")]
@@ -428,7 +439,7 @@ def _exit_policy_by_dim_html(trades: List[Dict[str, Any]],
 # ---------------------------------------------------------------------------
 
 def _edge_leak_html(trades: List[Dict[str, Any]]) -> str:
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     losers = [t for t in filled if (t.get("r_realised") or 0) < 0]
     winners = [t for t in filled if (t.get("r_realised") or 0) > 0]
     n_loss = len(losers)
@@ -549,7 +560,7 @@ def _flat_breakdown_row(label: str, sub: pd.DataFrame, r_col: str) -> str:
 
 def _by_pair_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     """Win rate / avg R / trade count, by pair (all sessions combined)."""
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return "<p style='color:#888;'>No filled trades.</p>"
     df = pd.DataFrame(filled)
@@ -565,7 +576,7 @@ def _by_pair_html(trades: List[Dict[str, Any]], r_col: str) -> str:
 
 def _by_session_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     """Win rate / avg R / trade count, by trading session (all pairs combined)."""
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return "<p style='color:#888;'>No filled trades.</p>"
     df = pd.DataFrame(filled)
@@ -587,7 +598,7 @@ def _pair_session_matrix_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     from the cell's trade count and makes the call themselves.
     Right-most column and bottom row show pair-totals and session-totals.
     """
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return "<p style='color:#888;'>No filled trades.</p>"
     df = pd.DataFrame(filled)
@@ -672,7 +683,7 @@ def _pair_dow_matrix_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     Lets the user spot per-pair day effects (e.g. EURUSD weak on Friday,
     GOLD strong Monday). Every non-empty cell is shown -- no n suppression.
     """
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return "<p style='color:#888;'>No filled trades.</p>"
     df = pd.DataFrame(filled)
@@ -810,7 +821,7 @@ def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
     if "pair" in df.columns and "r_realised" in df.columns:
         for pair, sub in df.groupby("pair"):
             n_alerts = len(sub)
-            filled_sub = sub[sub["exit_reason"] != "never_filled"]
+            filled_sub = sub[~sub["exit_reason"].isin(["never_filled","window_end","timeout"])]
             n_filled = len(filled_sub)
             total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
             wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
@@ -859,7 +870,7 @@ def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
         hour_data = []
         for hour, sub in grouped:
             n_alerts = len(sub)
-            filled_sub = sub[sub["exit_reason"] != "never_filled"]
+            filled_sub = sub[~sub["exit_reason"].isin(["never_filled","window_end","timeout"])]
             n_filled = len(filled_sub)
             total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
             wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
@@ -943,7 +954,7 @@ def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
         hour_data = []
         for hour, sub in grouped:
             n_alerts = len(sub)
-            filled_sub = sub[sub["exit_reason"] != "never_filled"]
+            filled_sub = sub[~sub["exit_reason"].isin(["never_filled","window_end","timeout"])]
             n_filled = len(filled_sub)
             total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
             wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
@@ -985,7 +996,7 @@ def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
     if "pair" in df.columns and "r_realised" in df.columns:
         for pair, sub in df.groupby("pair"):
             n_alerts = len(sub)
-            filled_sub = sub[sub["exit_reason"] != "never_filled"]
+            filled_sub = sub[~sub["exit_reason"].isin(["never_filled","window_end","timeout"])]
             n_filled = len(filled_sub)
             total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
             wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
@@ -1033,7 +1044,7 @@ _CONFLUENCE_COLS = {
 }
 
 def _confluence_per_pair_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return "<p style='color:#888;'>No data.</p>"
     df = pd.DataFrame(filled)
@@ -1175,7 +1186,7 @@ def _loss_analysis_html(trades: List[Dict[str, Any]]) -> str:
     # conditions of the *counted* losses; they must not re-introduce a "news
     # window" bullet, because no row that reaches this function is news-flagged.
     losses = [t for t in trades
-              if t.get("exit_reason") not in ("never_filled",) and t.get("r_realised", 0) < 0]
+              if _is_real_filled(t) and t.get("r_realised", 0) < 0]
     if not losses:
         return "<p style='color:#27ae60;'>No losing trades this week.</p>"
 
@@ -1239,7 +1250,7 @@ def _loss_analysis_html(trades: List[Dict[str, Any]]) -> str:
 def _structure_event_breakdown_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     """Show trades grouped by structure event type. Helps verify Major vs Minor
     detection reliability before live trading."""
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return "<p style='color:#888;'>No filled trades.</p>"
     df = pd.DataFrame(filled)
@@ -1315,7 +1326,7 @@ def _structure_event_breakdown_html(trades: List[Dict[str, Any]], r_col: str) ->
 def _validate_trades(trades: List[Dict[str, Any]]) -> List[str]:
     """Check structural invariants. Returns a list of violation strings (empty = clean)."""
     violations = []
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     for t in filled:
         pair      = t.get("pair", "?")
         ts        = t.get("alert_ts", "?")
@@ -1363,10 +1374,10 @@ def _validation_html(trades: List[Dict[str, Any]]) -> str:
         # filled-trade count (proximal only). Make that explicit so the number
         # doesn't appear to contradict the headline.
         n_prox = len([t for t in trades
-                      if t.get("exit_reason") != "never_filled"
+                      if _is_real_filled(t)
                       and t.get("entry_zone") == "proximal"])
         n_mid  = len([t for t in trades
-                      if t.get("exit_reason") != "never_filled"
+                      if _is_real_filled(t)
                       and t.get("entry_zone") == "50pct"])
         return (f"<p style='color:#27ae60;'>✓ All filled trade rows passed validation "
                 f"({n_prox} proximal + {n_mid} 50pct) — "
@@ -1596,7 +1607,7 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
     """Write human-readable Excel. Returns path or None on failure."""
     # Only filled trades in the Excel — never_filled are counted in fill rate
     # but are not trade outcomes and would confuse the spreadsheet.
-    filled = [t for t in trades if t.get("exit_reason") != "never_filled"]
+    filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return None
     try:
@@ -2014,7 +2025,7 @@ def _entry_comparison_html(sb_prox: Dict, sb_mid: Dict,
 
 def _vet_review_html(trades: List[Dict]) -> str:
     flagged = [(t, *_flag_vet_review(t)) for t in trades
-               if t.get("exit_reason") != "never_filled"]
+               if _is_real_filled(t)]
     flagged = [(t, flag, reason) for t, flag, reason in flagged if flag]
     if not flagged:
         return "<p>Nothing flagged this week. All wins and losses behaved as expected.</p>"
@@ -2226,7 +2237,7 @@ def _build_group_html(
     # Reconciliation invariant within this group, same as the combined path.
     def _reconcile(zone_label, scoreboard, zone_trades):
         from_scoreboard = round(float(scoreboard.get("total_pnl_usd", 0)), 2)
-        filled = [t for t in zone_trades if t.get("exit_reason") != "never_filled"]
+        filled = [t for t in zone_trades if _is_real_filled(t)]
         from_trades = round(sum(float(t.get("pnl_usd") or 0) for t in filled), 2)
         if abs(from_scoreboard - from_trades) > 0.01:
             raise AssertionError(
@@ -2538,7 +2549,7 @@ def write_h1_only_report(
     # -- the kind of bug that wastes hours to debug downstream. Fail loud.
     def _reconcile(zone_label, scoreboard, zone_trades):
         from_scoreboard = round(float(scoreboard.get("total_pnl_usd", 0)), 2)
-        filled = [t for t in zone_trades if t.get("exit_reason") != "never_filled"]
+        filled = [t for t in zone_trades if _is_real_filled(t)]
         from_trades = round(sum(float(t.get("pnl_usd") or 0) for t in filled), 2)
         if abs(from_scoreboard - from_trades) > 0.01:
             raise AssertionError(

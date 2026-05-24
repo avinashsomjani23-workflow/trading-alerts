@@ -233,6 +233,25 @@ def _simulate_single_entry(
         tp1_rr = float(levels.get("rr", 0.0))
         tp2_rr = float(levels.get("tp2_rr", 0.0)) if tp2 is not None else 0.0
 
+    # Apply pair spread to widen SL (worst-case execution). spread_pips is
+    # the pair's typical broker spread. pip_size derived from decimal_places:
+    # 4-5dp instruments (EURUSD, NZDUSD, USDCHF) -> pip = 0.0001
+    # 2-3dp instruments (USDJPY, GOLD, NAS100)   -> pip = 0.01
+    # For a LONG, SL sits below entry; spread pushes SL further down (worse).
+    # For a SHORT, SL sits above entry; spread pushes SL further up (worse).
+    # TP levels are NOT widened -- pessimistic, matches what the user gets
+    # at the bid/ask after entering. Slippage and swap are NOT modelled
+    # (user decision; revisit when needed). RCA #9.
+    spread_pips = float(pair_conf.get("spread_pips", 0.0))
+    decimal_places = int(pair_conf.get("decimal_places", 5))
+    pip_size = 0.01 if decimal_places <= 3 else 0.0001
+    spread_price = spread_pips * pip_size
+    if spread_price > 0:
+        if bias == "LONG":
+            sl = sl - spread_price
+        else:
+            sl = sl + spread_price
+
     r_distance = abs(entry - sl)
     if r_distance <= 0:
         log_event("h1only_sim_skip", level="warn", pair=pair,
@@ -252,15 +271,17 @@ def _simulate_single_entry(
                       tp1=tp1, tp2=tp2, bias=bias)
             return None
 
-    # Walk H1 bars from alert_ts forward up to MAX_HOLD_H1_BARS bars.
-    # alert_ts is the bar OPENING at P2 fire moment — the first bar on which
-    # a live broker could fill the limit order. The just-closed bar that
-    # triggered the proximity check is NOT included: at the moment its wick
-    # was creating the move, the limit order didn't exist yet.
-    future = df_h1.loc[alert_ts:]
+    # Walk H1 bars from (alert_ts + 1H) forward up to MAX_HOLD_H1_BARS bars.
+    # The alert fires when its bar CLOSES; a live broker can only place the
+    # limit AFTER close, so the earliest legal fill is the NEXT bar's open.
+    # Including the alert bar caused 283/1792 cloned-fill rows in the
+    # 2026-03 backtest -- physically impossible "fills" on the bar that
+    # only just published the alert (see RCA #2, #4).
+    fill_walk_start = alert_ts + pd.Timedelta(hours=1)
+    future = df_h1.loc[fill_walk_start:]
     if future.empty:
         return None
-    future = future.iloc[: MAX_HOLD_H1_BARS + 1]  # +1 to include alert bar
+    future = future.iloc[: MAX_HOLD_H1_BARS]
 
     filled = False
     fill_ts: Optional[pd.Timestamp] = None
@@ -331,11 +352,13 @@ def _simulate_single_entry(
         if tp2_hit_in_bar and tp2_hit_bar_idx == -1:
             tp2_hit_bar_idx = bars_walked_post_fill
 
-        # Pessimistic same-bar resolution: SL first.
+        # Worst-case same-bar resolution: SL wins. Small OBs may trigger this;
+        # user decision is to take the loss rather than tag inconclusive, so
+        # there's no special exit_reason -- it's a plain SL.
         if sl_hit_in_bar and (tp1_hit_in_bar or tp2_hit_in_bar):
             sl_collision = True
             exit_ts = ts
-            exit_reason = "sl_collision"
+            exit_reason = "sl"
             exit_price = sl_after_tp1
             break
         if sl_hit_in_bar:

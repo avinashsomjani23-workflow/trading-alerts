@@ -202,7 +202,25 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         n_ist_blocked_for_pair = 0
         n_killzone_dropped_for_pair = 0
         pair_type = pair_conf.get("pair_type", "forex")
+        # Dedup: only the FIRST alert per (OB, entry_zone) is simulated.
+        # The replay engine emits one alert per re-armed approach (state
+        # machine), but the 2026-03 run showed the same OB firing 5-60
+        # times and producing identical loser clones. Treat each OB as
+        # one trade attempt per backtest -- once it fires, it's done.
+        # See RCA #1, #7, #8.
+        seen_obs: set = set()
         for alert in alerts_for_pair:
+            ob_key = (
+                (alert.get("ob") or {}).get("ob_timestamp"),
+                (alert.get("ob") or {}).get("direction"),
+            )
+            if ob_key in seen_obs:
+                log_event("ob_dedup_skip", pair=name,
+                          alert_ts=str(alert["ts"]),
+                          ob_ts=ob_key[0], direction=ob_key[1],
+                          alert_seq=int(alert.get("alert_seq", 1)))
+                continue
+            seen_obs.add(ob_key)
             # Killzone gate -- alerts outside the pair's configured killzone
             # are SIMULATED for audit (so we can show "what you would have
             # made if you had traded outside the killzone") but tagged
