@@ -47,9 +47,21 @@ class ReplayState:
         self.dr_state: Dict[str, Dict[str, Any]] = {}
         # pair_name -> list of currently-active OBs (matches live active_obs)
         self.active_obs: Dict[str, List[Dict[str, Any]]] = {}
-        # pair_name -> set of zone IDs we've already emitted an alert for
-        # (prevents the same OB triggering an alert on every H1 close)
-        self.alerted_zones: Dict[str, set] = {}
+        # pair_name -> {zone_id -> per-OB state dict}
+        # Per-OB state shape:
+        #   {"state": "armed" | "cooling",
+        #    "fire_count": int,             # how many times this OB has fired
+        #    "last_fire_ts": pd.Timestamp}  # timestamp of most recent fire
+        # State machine:
+        #   armed   -> fires when wick within prox_cap × ATR of proximal
+        #              -> moves to cooling, emits ONE alert (= one limit
+        #              order with proximal + 50% scenarios)
+        #   cooling -> re-arms when wick clears (prox_cap + 1) × ATR from
+        #              proximal (price has meaningfully moved away)
+        # Mitigation (handled separately): distal wick-touch OR 3rd proximal
+        # touch kills the OB permanently. No "exhausted after fill" flag —
+        # a vet re-trades clean un-mitigated zones on legitimate re-approach.
+        self.ob_alert_state: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
 
 def _assert_no_lookahead(slice_df: pd.DataFrame, replay_ts: pd.Timestamp,
@@ -64,8 +76,27 @@ def _assert_no_lookahead(slice_df: pd.DataFrame, replay_ts: pd.Timestamp,
         )
 
 
+def _slice_closed_before(df: pd.DataFrame, wall_clock_ts: pd.Timestamp
+                         ) -> pd.DataFrame:
+    """Return df rows whose bar OPENED strictly before wall_clock_ts.
+
+    yfinance H1 bars are open-timestamped: a bar indexed `12:00` covers
+    12:00→13:00 and is only KNOWN at 13:00 when it closes. So at wall-clock
+    moment T, the bars that have actually closed are those with index < T.
+
+    Example: wall_clock_ts=13:00 -> includes 12:00 bar (closed at 13:00),
+    excludes 13:00 bar (still forming, won't close until 14:00).
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+    return df[df.index < wall_clock_ts]
+
+
 def _slice_up_to(df: pd.DataFrame, ts: pd.Timestamp) -> pd.DataFrame:
-    """Return df rows with index <= ts. Empty df if none."""
+    """Legacy inclusive slice. Retained for back-compat in helpers that
+    operate on already-closed history (e.g. mitigation replay where the
+    caller has already excluded the in-progress bar). Do NOT use for the
+    live P1 simulation slice — that must use _slice_closed_before."""
     if df is None or df.empty:
         return pd.DataFrame()
     return df.loc[:ts]
@@ -111,17 +142,30 @@ def replay_pair(
     if df_h1 is None or df_h1.empty:
         return
 
-    # Walk only H1 bars in the requested window.
+    # Walk only H1 bars in the requested window. Each h1_ts in this index is
+    # the OPEN time of a bar; we treat it as the wall-clock moment when the
+    # hourly P1+P2 cron would fire. At that moment, the most recently CLOSED
+    # bar is the one indexed (h1_ts - 1h), because the bar indexed h1_ts has
+    # only just begun.
     h1_in_window = df_h1.loc[walk_start_ts:walk_end_ts]
     if h1_in_window.empty:
         return
 
     state.dr_state.setdefault(pair_name, None)
     state.active_obs.setdefault(pair_name, [])
-    state.alerted_zones.setdefault(pair_name, set())
+    state.ob_alert_state.setdefault(pair_name, {})
 
     # Need >= 50 H1 bars of history before the walk start for reliable structure.
     MIN_WARMUP = 50
+
+    # Re-arm threshold: price wick/close must clear (prox_cap + REARM_EXTRA_ATR)
+    # × ATR from proximal before a fired OB can fire again. Stops one OB from
+    # spamming alerts every hour while price wiggles inside the proximity band.
+    REARM_EXTRA_ATR = 1.0
+
+    # Hard age cap mirrors live OB_MAX_AGE_DAYS (smc_radar.py:100). Drop
+    # stale OBs from the slate even if not formally mitigated.
+    OB_MAX_AGE_DAYS = 15
 
     # Diagnostic counters — printed at end of walk to show where the funnel collapses.
     diag = {
@@ -133,17 +177,26 @@ def replay_pair(
         "bars_with_obs_returned": 0,
         "new_obs_added": 0,
         "alerts_emitted": 0,
+        "alerts_resuppressed": 0,   # blocked because BOS was on just-closed bar
+        "alerts_rearmed": 0,
         "prox_checks": 0,
+        "obs_aged_out": 0,
         "closest_dist_atr_seen": None,  # min (distance / h1_atr) ever observed
     }
 
     for h1_ts in h1_in_window.index:
         diag["bars_walked"] += 1
-        h1_slice = _slice_up_to(df_h1, h1_ts)
+        # P1 sees only CLOSED bars. The bar opened at h1_ts is in progress.
+        h1_slice = _slice_closed_before(df_h1, h1_ts)
         _assert_no_lookahead(h1_slice, h1_ts, "H1")
         if len(h1_slice) < MIN_WARMUP:
             diag["warmup_skipped"] += 1
             continue
+
+        # The "just-closed" bar: the most recent bar whose open is < h1_ts.
+        # All P2 proximity decisions read this bar's high/low/close.
+        just_closed = h1_slice.iloc[-1]
+        just_closed_ts = h1_slice.index[-1]
 
         # --- Step 1: update dealing_range walls + event ring -----------------
         try:
@@ -200,10 +253,14 @@ def replay_pair(
             continue
         diag["bars_with_obs_returned"] += 1
 
-        current_price = float(h1_slice["Close"].iloc[-1])
+        current_price = float(just_closed["Close"])
+        just_closed_high = float(just_closed["High"])
+        just_closed_low = float(just_closed["Low"])
 
-        # Drop mitigated OBs from active list. Yield a diagnostic event so the
-        # zone register knows which OBs died and why (vs being alerted/traded).
+        # Drop mitigated OBs from active list. Mitigation now uses the
+        # wick-touch-distal rule (smc_detector.is_ob_mitigated_phase1 was
+        # updated to match SMC textbook). Yield a diagnostic event so the
+        # zone register knows which OBs died and why.
         kept = []
         for ob in state.active_obs[pair_name]:
             mitigated, mit_reason = _is_ob_mitigated_replay(
@@ -211,6 +268,8 @@ def replay_pair(
                 float(ob["proximal_line"]), h1_slice, ob.get("ob_timestamp")
             )
             if mitigated:
+                zone_id = ob.get("ob_timestamp") or f"{ob.get('direction')}_{ob.get('proximal_line')}"
+                state.ob_alert_state[pair_name].pop(zone_id, None)
                 yield {
                     "kind": "ob_mitigated",
                     "pair": pair_name,
@@ -222,12 +281,46 @@ def replay_pair(
             kept.append(ob)
         state.active_obs[pair_name] = kept
 
+        # Age cap — drop OBs older than OB_MAX_AGE_DAYS (mirrors live slate).
+        kept_after_age = []
+        for ob in state.active_obs[pair_name]:
+            ob_ts_iso = ob.get("ob_timestamp")
+            if ob_ts_iso:
+                try:
+                    ob_ts = pd.Timestamp(ob_ts_iso)
+                    if ob_ts.tzinfo is None:
+                        ob_ts = ob_ts.tz_localize("UTC")
+                    age_days = (h1_ts - ob_ts).total_seconds() / 86400.0
+                    if age_days > OB_MAX_AGE_DAYS:
+                        diag["obs_aged_out"] += 1
+                        zone_id = ob_ts_iso
+                        state.ob_alert_state[pair_name].pop(zone_id, None)
+                        yield {
+                            "kind": "ob_mitigated",
+                            "pair": pair_name,
+                            "ts": h1_ts,
+                            "ob": ob,
+                            "reason": f"aged_out_{age_days:.1f}d",
+                        }
+                        continue
+                except Exception:
+                    pass
+            kept_after_age.append(ob)
+        state.active_obs[pair_name] = kept_after_age
+
         # Merge newly-detected OBs (by ob_timestamp identity).
         existing_ts = {o.get("ob_timestamp") for o in state.active_obs[pair_name]}
         for ob in obs:
             if ob.get("ob_timestamp") in existing_ts:
                 continue
             state.active_obs[pair_name].append(ob)
+            zone_id = ob.get("ob_timestamp") or f"{ob.get('direction')}_{ob.get('proximal_line')}"
+            # New OB starts armed, ready to fire on a future approach.
+            state.ob_alert_state[pair_name][zone_id] = {
+                "state": "armed",
+                "fire_count": 0,
+                "last_fire_ts": None,
+            }
             diag["new_obs_added"] += 1
             yield {
                 "kind": "ob_seen",
@@ -237,27 +330,90 @@ def replay_pair(
                 "ob": ob,
             }
 
-        # --- Step 3: emit alerts for any active OB within proximity ----------
+        # --- Step 3: P2 alert step. Per OB, run state machine -------------
+        # Rules:
+        #   * Alert candle (h1_ts) MUST be strictly after the BOS event
+        #     candle. If BOS happened on the just-closed bar, no alert this
+        #     cycle (wait one more hour). This kills the "trade the BOS
+        #     candle" bug from the previous backtest engine.
+        #   * Proximity uses wick OR close: short OB checks just-closed bar
+        #     high vs proximal; long OB checks just-closed bar low vs
+        #     proximal. (For short, "wick reaching up toward proximal" =
+        #     high near proximal. For long, "wick reaching down toward
+        #     proximal" = low near proximal.)
+        #   * State machine: armed -> fires -> cooling; cools back to
+        #     armed only after price clears (cap + REARM_EXTRA_ATR) × ATR.
+        #     Each fire emits exactly one alert event => one limit-order
+        #     pair (proximal + 50% midpoint). No double-counting.
+        #   * exhausted=True: an alert that produced a fill exhausts the
+        #     OB permanently. Set by run_backtest after the simulator runs.
         h1_atr = smc_detector.compute_atr(h1_slice)
         if not h1_atr:
             continue
         prox_cap = pair_conf["atr_multiplier"] * h1_atr
+        rearm_cap = prox_cap + REARM_EXTRA_ATR * h1_atr
 
         for ob in state.active_obs[pair_name]:
             zone_id = ob.get("ob_timestamp") or f"{ob.get('direction')}_{ob.get('proximal_line')}"
-            if zone_id in state.alerted_zones[pair_name]:
-                continue
+            ob_state = state.ob_alert_state[pair_name].setdefault(zone_id, {
+                "state": "armed", "fire_count": 0, "last_fire_ts": None,
+            })
+
             proximal = float(ob["proximal_line"])
-            distance = abs(current_price - proximal)
+            direction = ob.get("direction")
+
+            # Wick-based distance: for SHORT OB the threat candle is one
+            # whose HIGH approaches proximal from BELOW; for LONG OB it's
+            # the candle whose LOW approaches proximal from ABOVE.
+            if direction == "bullish":  # LONG OB
+                wick_distance = max(0.0, just_closed_low - proximal)
+            else:                        # SHORT OB
+                wick_distance = max(0.0, proximal - just_closed_high)
+
             diag["prox_checks"] += 1
             if h1_atr > 0:
-                dist_in_atr = distance / h1_atr
+                dist_in_atr = wick_distance / h1_atr
                 if (diag["closest_dist_atr_seen"] is None
                         or dist_in_atr < diag["closest_dist_atr_seen"]):
                     diag["closest_dist_atr_seen"] = dist_in_atr
-            if distance > prox_cap:
+
+            # Cooling -> armed transition (price has cleared re-arm band)
+            if ob_state["state"] == "cooling" and wick_distance > rearm_cap:
+                ob_state["state"] = "armed"
+                diag["alerts_rearmed"] += 1
+
+            if ob_state["state"] != "armed":
                 continue
+            if wick_distance > prox_cap:
+                continue
+
+            # Safety assertion: under the new closed-bar-only detection,
+            # bos_ts is always <= just_closed_ts (BOS is in the history P1
+            # sees), and alert fires at h1_ts > just_closed_ts. So
+            # alert_ts > bos_ts is structurally guaranteed. If this ever
+            # fails, detection has leaked a future bar — abort loudly so we
+            # don't write wrong data.
+            bos_ts_iso = ob.get("bos_timestamp")
+            if bos_ts_iso:
+                try:
+                    bos_ts = pd.Timestamp(bos_ts_iso)
+                    if bos_ts.tzinfo is None:
+                        bos_ts = bos_ts.tz_localize("UTC")
+                    if h1_ts <= bos_ts:
+                        diag["alerts_resuppressed"] += 1
+                        log_event("alert_lookahead_blocked", level="error",
+                                  echo=True, pair=pair_name,
+                                  h1_ts=str(h1_ts), bos_ts=str(bos_ts),
+                                  ob_ts=ob.get("ob_timestamp"))
+                        continue
+                except Exception:
+                    pass
+
+            # Fire!
             diag["alerts_emitted"] += 1
+            ob_state["state"] = "cooling"
+            ob_state["fire_count"] += 1
+            ob_state["last_fire_ts"] = h1_ts
             yield {
                 "kind": "alert",
                 "pair": pair_name,
@@ -266,8 +422,16 @@ def replay_pair(
                 "h1_atr": h1_atr,
                 "ob": ob,
                 "walls": walls,
+                "alert_seq": ob_state["fire_count"],
+                "zone_id": zone_id,
+                # Just-closed bar's high/low — simulator uses these to do the
+                # SAME-BAR fill check (alert and limit order are
+                # instantaneous; if the bar that triggered the alert already
+                # tagged proximal/midpoint, the limit fills immediately).
+                "alert_bar_high": just_closed_high,
+                "alert_bar_low": just_closed_low,
+                "alert_bar_ts": just_closed_ts,
             }
-            state.alerted_zones[pair_name].add(zone_id)
 
     closest = diag["closest_dist_atr_seen"]
     closest_str = f"{closest:.2f}×ATR" if closest is not None else "n/a"
@@ -286,6 +450,9 @@ def replay_pair(
         closest_dist_atr=(round(closest, 3) if closest is not None else None),
         atr_multiplier_cap=atr_mult,
         alerts=diag["alerts_emitted"],
+        alerts_resuppressed=diag["alerts_resuppressed"],
+        alerts_rearmed=diag["alerts_rearmed"],
+        obs_aged_out=diag["obs_aged_out"],
     )
     print(
         f"  [DIAG {pair_name}] walked={diag['bars_walked']} "
@@ -296,7 +463,10 @@ def replay_pair(
         f"new_obs={diag['new_obs_added']} "
         f"prox_checks={diag['prox_checks']} "
         f"closest={closest_str} (cap={atr_mult}×ATR) "
-        f"alerts={diag['alerts_emitted']}"
+        f"alerts={diag['alerts_emitted']} "
+        f"resuppressed={diag['alerts_resuppressed']} "
+        f"rearmed={diag['alerts_rearmed']} "
+        f"aged_out={diag['obs_aged_out']}"
     )
 
 

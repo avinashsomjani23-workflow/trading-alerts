@@ -107,6 +107,19 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         log_event("abort_no_pairs", level="error", requested=pair_names)
         return None
 
+    # Backtest-only proximity caps. Live config.json stays at 4.0/4.5; the
+    # backtest uses tighter caps because Phase 2 in backtest fires hourly on
+    # closed-bar wicks (no microstructure noise), so the live padding isn't
+    # needed. Trader-set: 3.0 ATR for FX, 3.5 ATR for index/commodity.
+    BACKTEST_ATR_MULT = {"forex": 3.0, "index": 3.5, "commodity": 3.5}
+    for p in pairs_to_run:
+        live_mult = p.get("atr_multiplier")
+        bt_mult = BACKTEST_ATR_MULT.get(p.get("pair_type"), live_mult)
+        p["atr_multiplier"] = bt_mult
+        log_event("backtest_atr_override", pair=p["name"],
+                  pair_type=p.get("pair_type"),
+                  live=live_mult, backtest=bt_mult)
+
     state = replay_engine.ReplayState()
     all_alerts: list = []
     all_trades: list = []
@@ -169,7 +182,12 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                 all_alerts.append({
                     "pair": event["pair"],
                     "ts": str(event["ts"]),
+                    "alert_bar_ts": (str(event["alert_bar_ts"])
+                                     if event.get("alert_bar_ts") is not None
+                                     else None),
+                    "alert_seq": int(event.get("alert_seq", 1)),
                     "ob_timestamp": (event.get("ob") or {}).get("ob_timestamp"),
+                    "bos_timestamp": (event.get("ob") or {}).get("bos_timestamp"),
                     "direction": (event.get("ob") or {}).get("direction"),
                     "bos_tag": (event.get("ob") or {}).get("bos_tag"),
                     "bos_tier": (event.get("ob") or {}).get("bos_tier"),

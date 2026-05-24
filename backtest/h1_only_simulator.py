@@ -182,6 +182,14 @@ def _simulate_single_entry(
         alert_ts = pd.Timestamp(alert_ts)
     if alert_ts.tzinfo is None:
         alert_ts = alert_ts.tz_localize("UTC")
+    # Fill walk starts on the bar that OPENS at alert_ts (the bar still
+    # forming when the alert fires). The just-closed bar that triggered the
+    # alert is NOT a fill candidate — at the moment its wick was making the
+    # move that triggered proximity, the limit order didn't exist yet (the
+    # alert hadn't fired). The earliest a live broker could fill the limit
+    # is during the bar that starts at alert_ts. Same-bar fills (within
+    # this opening bar) ARE allowed and common — market momentum that
+    # carries straight into the zone.
     current_price = alert["current_price"]
 
     try:
@@ -245,6 +253,10 @@ def _simulate_single_entry(
             return None
 
     # Walk H1 bars from alert_ts forward up to MAX_HOLD_H1_BARS bars.
+    # alert_ts is the bar OPENING at P2 fire moment — the first bar on which
+    # a live broker could fill the limit order. The just-closed bar that
+    # triggered the proximity check is NOT included: at the moment its wick
+    # was creating the move, the limit order didn't exist yet.
     future = df_h1.loc[alert_ts:]
     if future.empty:
         return None
@@ -432,6 +444,12 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     return {
         "pair":          alert["pair"],
         "alert_ts":      alert_ts.isoformat() if hasattr(alert_ts, "isoformat") else str(alert_ts),
+        "alert_bar_ts":  (alert.get("alert_bar_ts").isoformat()
+                          if hasattr(alert.get("alert_bar_ts"), "isoformat")
+                          else str(alert.get("alert_bar_ts")) if alert.get("alert_bar_ts") is not None
+                          else None),
+        "alert_seq":     int(alert.get("alert_seq", 1)),
+        "bos_timestamp": ob.get("bos_timestamp"),
         "fill_ts":       fill_ts.isoformat() if (fill_ts is not None and hasattr(fill_ts, "isoformat")) else None,
         "exit_ts":       exit_ts.isoformat() if (exit_ts is not None and hasattr(exit_ts, "isoformat")) else None,
         "direction":     direction,

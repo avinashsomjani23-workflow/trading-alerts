@@ -2362,12 +2362,13 @@ def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx, end_idx=N
     touches = 0
     for m in range(start_idx, end_idx):
         if direction == 'bullish':
-            if C[m] < distal:
+            # Wick-touch on distal kills the zone (was: close beyond distal).
+            if L[m] <= distal:
                 return True, 'mitigated_distal_break', touches
             if L[m] <= proximal:
                 touches += 1
         else:
-            if C[m] > distal:
+            if H[m] >= distal:
                 return True, 'mitigated_distal_break', touches
             if H[m] >= proximal:
                 touches += 1
