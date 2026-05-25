@@ -1219,6 +1219,45 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
     # through levels on news without genuine fills. Forex keeps touch-based.
     close_based_full_mit = pair_type in ("index", "commodity")
 
+    # Session-gap guard. A textbook 3-candle FVG requires candle 2 to be a
+    # real traded candle whose body+wicks didn't fill the imbalance between
+    # candle 1 and candle 3. When candle 2's timestamp is more than one bar
+    # after candle 1 (weekend close, holiday, exchange halt), there IS no
+    # real candle 2 — the "gap" is just an unrelated price jump across a
+    # market-closed period. Veterans do not respect these as FVGs.
+    #
+    # Detection: infer the dominant timestamp delta from the median pairwise
+    # gap of the df index, then reject any 3-candle pattern where ts(k+1)-ts(k)
+    # exceeds 1.5x that delta. Applied to BOTH LONG and SHORT branches below.
+    def _session_gap_between(a: int, b: int) -> bool:
+        try:
+            ta = df.index[int(a)]
+            tb = df.index[int(b)]
+            if not (hasattr(ta, 'to_pydatetime') and hasattr(tb, 'to_pydatetime')):
+                return False
+            delta_seconds = (tb - ta).total_seconds()
+            return delta_seconds > _bar_seconds * 1.5
+        except Exception:
+            return False
+
+    _bar_seconds = None
+    try:
+        idx = df.index
+        if len(idx) >= 5 and hasattr(idx[0], 'to_pydatetime'):
+            diffs = []
+            for k in range(1, min(len(idx), 30)):
+                d = (idx[k] - idx[k - 1]).total_seconds()
+                if d > 0:
+                    diffs.append(d)
+            if diffs:
+                diffs.sort()
+                _bar_seconds = diffs[len(diffs) // 2]  # median
+    except Exception:
+        _bar_seconds = None
+    # If we can't infer the bar size, the gap guard is a no-op (return False).
+    if _bar_seconds is None or _bar_seconds <= 0:
+        _bar_seconds = float('inf')
+
     # Oldest-first scan: returns FVG closest to OB. When a live FVG exists,
     # it is preferred over later ghosts (price hits the deepest live FVG first
     # on retrace).
@@ -1241,6 +1280,11 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
         if bias == "LONG" and H[k] < L[k + 2]:
             ft, fb = float(L[k + 2]), float(H[k])
             if (ft - fb) < atr_floor:
+                continue
+            # Reject weekend/holiday gaps masquerading as FVGs (see comment
+            # near _session_gap_between definition above). Either edge with a
+            # session-close gap disqualifies the pattern.
+            if _session_gap_between(k, k + 1) or _session_gap_between(k + 1, k + 2):
                 continue
             # LONG: proximal = ft, distal = fb.
             full_fill_idx = None
@@ -1280,6 +1324,8 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
         elif bias == "SHORT" and L[k] > H[k + 2]:
             ft, fb = float(L[k]), float(H[k + 2])
             if (ft - fb) < atr_floor:
+                continue
+            if _session_gap_between(k, k + 1) or _session_gap_between(k + 1, k + 2):
                 continue
             # SHORT: proximal = fb, distal = ft.
             full_fill_idx = None

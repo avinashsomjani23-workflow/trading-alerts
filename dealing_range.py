@@ -165,6 +165,13 @@ STALE_WALL_ATR_MULT = 0.4
 # Pair-aware threshold: Forex pairs trend slower per H1 candle than indices
 # / commodities, so Forex uses a tighter swing count; NAS100/Gold need one
 # more swing to avoid firing on a single impulsive session.
+#
+# Long-trend handling: when the Major CHoCH that started the current trend
+# is older than the visible rolling H1 window, trend_start_idx falls back to
+# 0 (whole window belongs to this trend). The rule still fires in that case
+# — the "wall predates trend" gate is bypassed because every in-window wall
+# necessarily has idx >= 0. Without this, long-running trends could never
+# be cleaned up (which was the original observed bug).
 JANITOR_SWING_MIN_FOREX        = 3
 JANITOR_SWING_MIN_INDEX_COMMOD = 4
 JANITOR_INDEX_COMMOD_PAIRS = frozenset({"NAS100", "GOLD", "XAUUSD"})
@@ -929,10 +936,40 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         })
 
     def _janitor_wall_check(current_i: int):
+        # Diagnostic skip-reason logger. Fires once per candle when the janitor
+        # exits without re-anchoring. Lets us see which guard blocked the rule
+        # in production without re-running anything.
+        def _skip(reason: str, extra: Optional[Dict[str, Any]] = None):
+            payload = {
+                'candle_ts':  _ts_iso(df, current_i),
+                'pair':       pair_name,
+                'timeframe':  'H1',
+                'event_kind': 'WALL_JANITOR_SKIP',
+                'reason':     reason,
+                'trend':      trend,
+                'trend_start_idx': int(trend_start_idx),
+                'current_i':       int(current_i),
+            }
+            if extra:
+                payload.update(extra)
+            _log_safe(payload)
+
         if trend not in ('bullish', 'bearish'):
+            _skip('no_trend')
             return
-        if trend_start_idx <= 0 or trend_start_idx >= current_i:
+        # trend_start_idx == 0 is VALID — it means the trend origin (last Major
+        # CHoCH) is older than the visible rolling window, so the whole window
+        # belongs to this trend. Only exit if start has caught up with current.
+        if trend_start_idx >= current_i:
+            _skip('trend_start_at_or_after_current')
             return
+
+        # Flag set when trend_start_idx fell back to 0 because the persisted
+        # trend_start_ts couldn't be resolved inside the visible df window.
+        # Used purely for diagnostics — does not change behaviour.
+        trend_start_out_of_window = (
+            bool(state.get("trend_start_ts")) and trend_start_idx == 0
+        )
 
         swing_min = (JANITOR_SWING_MIN_INDEX_COMMOD
                      if pair_name in JANITOR_INDEX_COMMOD_PAIRS
@@ -945,7 +982,11 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             wall = ceiling
             opposite_type = 'high'
 
-        if wall["price"] is None or wall["is_placeholder"]:
+        if wall["price"] is None:
+            _skip('wall_price_none')
+            return
+        if wall["is_placeholder"]:
+            _skip('wall_is_placeholder')
             return
         # Predates current trend? Compare against trend_start_idx, not ts —
         # idx may be None on resumed state, so resolve from wall ts when needed.
@@ -953,12 +994,22 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         if wall_idx is None:
             wall_ts = wall.get("ts")
             if wall_ts is None:
+                _skip('wall_ts_missing')
                 return
             resolved = _idx_from_ts(wall_ts)
             if resolved is None:
-                return
-            wall_idx = resolved
-        if wall_idx >= trend_start_idx:
+                # Wall was set before the visible window — by construction it
+                # predates trend_start_idx. Treat it as eligible by setting
+                # wall_idx to -1 (older than any in-window candle).
+                wall_idx = -1
+            else:
+                wall_idx = resolved
+        if wall_idx >= trend_start_idx and not trend_start_out_of_window:
+            # When trend origin is out-of-window (trend_start_idx==0), the
+            # "wall predates trend" check is meaningless — every in-window
+            # wall has idx >= 0. Skip the gate so long trends remain eligible.
+            _skip('wall_inside_current_trend',
+                  {'wall_idx': int(wall_idx)})
             return
 
         in_trend_swings = [
@@ -967,6 +1018,10 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             and trend_start_idx < s['idx'] <= current_i
         ]
         if len(in_trend_swings) < swing_min:
+            _skip('not_enough_swings',
+                  {'swing_count': int(len(in_trend_swings)),
+                   'swing_min':   int(swing_min),
+                   'trend_start_out_of_window': bool(trend_start_out_of_window)})
             return
 
         if trend == 'bullish':
@@ -994,6 +1049,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             'new_wall_ts':     wall["ts"],
             'swing_count':     int(len(in_trend_swings)),
             'swing_min':       int(swing_min),
+            'trend_start_out_of_window': bool(trend_start_out_of_window),
         })
 
     def _log_safe(payload: Dict[str, Any]):
