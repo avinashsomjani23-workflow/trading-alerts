@@ -144,15 +144,16 @@ Calibration questions (test X vs Y on historical data) live in BACKLOG.md, not h
 Weekdays 09:00–24:00 IST = 03:30–18:30 UTC. Hours outside this window are blackout (no trades fire).
 
 ### Our hours (UTC, post-tightening 2026-05-25)
-| Pair type | Scoring windows (`_killzone_hit`) | Hard-filter windows (`killzones_utc`) | IST equivalent |
+| Pair | Scoring windows (`_killzone_hit`) | Hard-filter windows (`killzones_utc`) | IST equivalent |
 |---|---|---|---|
-| Forex (EUR/USDJPY/NZD/CHF) | 07–10, 12–17 | 07–10, 12–17 | 12:30–15:30, 17:30–22:30 IST |
+| EURUSD, USDCHF | 07–10, 12–17 | 07–10, 12–17 | 12:30–15:30, 17:30–22:30 IST |
+| USDJPY, NZDUSD | 07–10, 12–17 | **03:30–07:00**, 07–10, 12–17 | 09:00–12:30, 12:30–15:30, 17:30–22:30 IST |
 | Index (NAS100) | 13–21 | 13–21 | 18:30–02:30 IST |
 | Commodity (Gold) | 07–10, 12–21 | 07–10, 12–21 | 12:30–15:30, 17:30–02:30 IST |
 
-Dead-hour cuts: London lunch (10–12 UTC), forex post-NY drift (17–21 UTC), and Asian session (00–07 UTC) all excluded from forex. NAS/Gold retain NY through cash close because they are NY-driven products.
+Dead-hour cuts: London lunch (10–12 UTC) and forex post-NY drift (17–21 UTC) excluded from forex. NAS/Gold retain NY through cash close because they are NY-driven products.
 
-Scoring and hard filter are now aligned. No more "scored as killzone but not filtered" mismatch.
+JPY/NZD Asia-tail (03:30–07:00 UTC): kept as a hard-filter window only because Tokyo session drives JPY/NZD flow and overlaps the user's IST trading window (03:30 UTC = 09:00 IST). Scoring side is bucket-level and doesn't credit it — Asia-tail JPY/NZD alerts fire but lose the +0.5 killzone confluence point.
 
 ### Compared to standard SMC kill zones (UTC)
 - London open (07:00–10:00) — covered ✓

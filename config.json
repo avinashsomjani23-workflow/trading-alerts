@@ -32,7 +32,7 @@
       "min_confidence": 6.0,
       "decimal_places": 3,
       "spread_pips": 2.0,
-      "killzones_utc": [["07:00", "10:00"], ["12:00", "17:00"]]
+      "killzones_utc": [["03:30", "07:00"], ["07:00", "10:00"], ["12:00", "17:00"]]
     },
     {
       "symbol": "NZDUSD=X",
@@ -46,7 +46,7 @@
       "min_confidence": 4.0,
       "decimal_places": 5,
       "spread_pips": 4.0,
-      "killzones_utc": [["07:00", "10:00"], ["12:00", "17:00"]]
+      "killzones_utc": [["03:30", "07:00"], ["07:00", "10:00"], ["12:00", "17:00"]]
     },
     {
       "symbol": "CHF=X",

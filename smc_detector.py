@@ -1746,7 +1746,12 @@ def _killzone_hit(utc_hour, pair_type):
 
     NOTE: this function only controls the +0.5 score input. The hard
     alert-suppression filter is config-driven via killzones_utc and lives
-    in backtest/killzone.py (and Phase 2 equivalents).
+    in backtest/killzone.py (and Phase 2 equivalents). USDJPY and NZDUSD
+    additionally allow an Asia-tail (03:30-07:00 UTC) hard-filter window
+    that this scoring function does NOT credit -- pair-type granularity
+    is too coarse to distinguish JPY/NZD from EUR/CHF. Asia-tail JPY/NZD
+    trades will fire as alerts but lose the +0.5 killzone confluence.
+    Trade-off chosen for simplicity over special-casing.
     """
     if pair_type == "forex":
         return (7 <= utc_hour < 10) or (12 <= utc_hour < 17)
