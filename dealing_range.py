@@ -792,28 +792,65 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
 
     # Promote a placeholder wall if a confirmed swing now exists in
     # (leg_start_idx, current_i].
+    #
+    # Two distinct outcomes from _resolve_placeholder:
+    #   - Confirmed lb-3 swing found (is_ph=False) -> structural anchor,
+    #     wall becomes ANCHORED. Replaces unconditionally — an lb-3 pivot
+    #     inside the leg is the meaningful new structural reference for
+    #     this trend, even if it sits inward of the break-candle extreme.
+    #   - No lb-3 swing yet (is_ph=True) -> rolling extreme. Acts as the
+    #     same one-way ratchet as _refresh_tentative: only update if the
+    #     rolling extreme is FURTHER from mid-range than the current
+    #     placeholder. Otherwise we'd overwrite a meaningful anchor (BOS
+    #     break-candle extreme; surviving wall demoted across a Major
+    #     CHoCH) with a single-candle OHLC of the latest bar.
     def _try_promote_placeholder(side: str, current_i: int):
         if side == 'ceiling':
             if not ceiling["is_placeholder"]:
                 return
             promoted, is_ph = _resolve_placeholder('ceiling', df, leg_start_idx + 1, current_i)
-            if promoted is not None:
-                ceiling["price"] = promoted["price"]
-                ceiling["ts"]    = promoted["ts"]
-                ceiling["idx"]   = promoted["idx"]
-                ceiling["is_placeholder"] = is_ph
+            if promoted is None:
+                return
+            if is_ph:
+                # Rolling-extreme outcome — apply ratchet up only.
+                if ceiling["price"] is not None and promoted["price"] <= ceiling["price"]:
+                    return
+            ceiling["price"] = promoted["price"]
+            ceiling["ts"]    = promoted["ts"]
+            ceiling["idx"]   = promoted["idx"]
+            ceiling["is_placeholder"] = is_ph
         else:
             if not floor["is_placeholder"]:
                 return
             promoted, is_ph = _resolve_placeholder('floor', df, leg_start_idx + 1, current_i)
-            if promoted is not None:
-                floor["price"] = promoted["price"]
-                floor["ts"]    = promoted["ts"]
-                floor["idx"]   = promoted["idx"]
-                floor["is_placeholder"] = is_ph
+            if promoted is None:
+                return
+            if is_ph:
+                # Rolling-extreme outcome — apply ratchet down only.
+                if floor["price"] is not None and promoted["price"] >= floor["price"]:
+                    return
+            floor["price"] = promoted["price"]
+            floor["ts"]    = promoted["ts"]
+            floor["idx"]   = promoted["idx"]
+            floor["is_placeholder"] = is_ph
 
     # Refresh a still-tentative wall to the rolling extreme since leg_start.
     # Geometry only — events do NOT fire on placeholder-wall break.
+    #
+    # One-way ratchet (LOCKED): a placeholder wall represents the most extreme
+    # price reached since the wall was last set. Refresh may only EXTEND the
+    # placeholder further from mid-range (ceiling can only ratchet UP, floor
+    # can only ratchet DOWN). It must NEVER pull the wall back toward price.
+    #
+    # Why: the wall's current price is a real anchor — either the break-candle
+    # extreme set on BOS/Major CHoCH, or the surviving wall from the prior
+    # trend that was demoted to placeholder. Replacing it with a rolling
+    # extreme of a shorter slice (e.g. when leg_start advanced to the latest
+    # candle on a fresh event) collapses the dealing range to single-candle
+    # OHLC. Observed bug: post-Major-CHoCH at candle N, the trend-flipped
+    # floor (surviving from prior bearish trend, real anchor) was overwritten
+    # to Low(N+1) — a few pips below current price — destroying the dealing
+    # range geometry.
     def _refresh_tentative(side: str, current_i: int):
         if side == 'ceiling':
             if not ceiling["is_placeholder"]:
@@ -823,9 +860,12 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                 return
             H_arr = df['High'].values.astype(float)
             rng_idx = lo + int(H_arr[lo: hi + 1].argmax())
-            ceiling["price"] = float(H_arr[rng_idx])
-            ceiling["ts"]    = _ts_iso(df, rng_idx)
-            ceiling["idx"]   = rng_idx
+            rng_price = float(H_arr[rng_idx])
+            # Ratchet up only — never retreat.
+            if ceiling["price"] is None or rng_price > ceiling["price"]:
+                ceiling["price"] = rng_price
+                ceiling["ts"]    = _ts_iso(df, rng_idx)
+                ceiling["idx"]   = rng_idx
         else:
             if not floor["is_placeholder"]:
                 return
@@ -834,9 +874,12 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                 return
             L_arr = df['Low'].values.astype(float)
             rng_idx = lo + int(L_arr[lo: hi + 1].argmin())
-            floor["price"] = float(L_arr[rng_idx])
-            floor["ts"]    = _ts_iso(df, rng_idx)
-            floor["idx"]   = rng_idx
+            rng_price = float(L_arr[rng_idx])
+            # Ratchet down only — never retreat.
+            if floor["price"] is None or rng_price < floor["price"]:
+                floor["price"] = rng_price
+                floor["ts"]    = _ts_iso(df, rng_idx)
+                floor["idx"]   = rng_idx
 
     # Relabel a confirmed non-trend-side wall as stale when price has already
     # closed beyond it by >= STALE_WALL_ATR_MULT * ATR. No event fires; trend

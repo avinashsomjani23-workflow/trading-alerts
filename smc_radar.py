@@ -1315,7 +1315,15 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
 
         # --- Zone band ---
         # Greyed out when invalidated (dead zone — corpse only).
-        if has_ob:
+        # SAFETY: if the OB candle has rolled out of the visible window
+        # (ob_plot_idx < 0 — possible on stale invalidated zones where the
+        # df has shifted further than the OB age), DO NOT render the band.
+        # Drawing the band with zone_x_start clamped to 0 while the OB candle
+        # outline is suppressed produces an orphan box anchored to nothing.
+        # Caller (slate render path) should have skipped this chart entirely
+        # via resync; this guard is the second line of defence.
+        ob_in_window = has_ob and ob_plot_idx is not None and 0 <= ob_plot_idx < n_plot
+        if has_ob and ob_in_window:
             if is_invalidated:
                 band_face, band_edge, band_alpha = '#666666', '#888888', 0.10
             else:
@@ -4045,11 +4053,46 @@ def run_radar():
 
                 if df is not None and target.get("drop_reason") in INVALIDATION_REASONS:
                     cid = f"chart_{pair_name}_{chart_counter}"
+                    # Re-anchor the invalidated zone's df indices to the
+                    # current frame BEFORE rendering. Slate zones can sit
+                    # with stale ob_idx after enough scans (each new H1 candle
+                    # shifts the frame left; the drop path doesn't refresh
+                    # the indices the way the HOLD path does). Stale ob_idx
+                    # causes the chart to draw a grey box clamped to x=0 with
+                    # NO OB candle outline (the outline guard `0 <= ob_plot_idx
+                    # < n_plot` skips negative indices). Result: an orphan
+                    # box anchored to nothing — visually misleading.
+                    try:
+                        resync_slate_zone_indices(target, df, pair_name=pair_name)
+                    except Exception as _resync_err:
+                        logging.warning(
+                            f"[resync] {pair_name} invalidated zone "
+                            f"{target.get('zone_id')} failed: {_resync_err}"
+                        )
                     ob_for_chart = _slate_zone_to_ob_shape(target)
-                    chart_b64 = generate_h1_chart(
-                        df, ob_for_chart, dp, pair_name, ist_ts_full,
-                        walls=pair_walls, is_invalidated=True
+                    # If the OB candle is no longer locatable in the visible
+                    # df window (rolled out of yfinance's rolling fetch), do
+                    # NOT render a chart with phantom indices. Skip the chart
+                    # entirely; the invalidation card still publishes the
+                    # textual reason. Better to lose one chart than to print
+                    # an orphan box.
+                    ob_ts_check = target.get("ob_timestamp")
+                    ob_idx_resolved = (
+                        _df_idx_from_iso(df, ob_ts_check)
+                        if ob_ts_check else None
                     )
+                    if ob_idx_resolved is None:
+                        logging.warning(
+                            f"[invalidated-chart] {pair_name} "
+                            f"{target.get('zone_id')} skipped — OB candle "
+                            f"ts={ob_ts_check} no longer in df window."
+                        )
+                        chart_b64 = None
+                    else:
+                        chart_b64 = generate_h1_chart(
+                            df, ob_for_chart, dp, pair_name, ist_ts_full,
+                            walls=pair_walls, is_invalidated=True
+                        )
                     if chart_b64:
                         invalidation_cards.append(
                             build_invalidation_card_html(
