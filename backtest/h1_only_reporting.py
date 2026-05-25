@@ -1817,8 +1817,8 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
         zr_dow = _day_of_week(prox_fill_ts or alert_ts)
         rows.append({
             "Pair":                    pair,
-            "OB Candle (IST)":         _to_ist_hour_str(_v(prox, "ob_timestamp")),
-            "Scan / Alert Time (IST)": _to_ist_hour_str(alert_ts),
+            "OB Candle (IST)":         _to_ist_str(_v(prox, "ob_timestamp")),
+            "Scan / Alert Time (IST)": _to_ist_str(alert_ts),
             "Direction":               "Long" if _v(prox, "direction") == "bullish" else "Short",
             "Structure Event":         _v(prox, "bos_tag"),
             "Structure Tier":          _v(prox, "bos_tier"),
@@ -1994,20 +1994,6 @@ def _to_ist_str(ts_val: Any) -> str:
         return ""
 
 
-def _to_ist_hour_str(ts_val: Any) -> str:
-    """Same as _to_ist_str but hour-only granularity ('YYYY-MM-DD HH').
-    Used for OB candle / scan-alert columns where minute precision is noise."""
-    if ts_val is None or ts_val == "" or (isinstance(ts_val, float) and pd.isna(ts_val)):
-        return ""
-    try:
-        ts = pd.Timestamp(ts_val)
-        if ts.tzinfo is None:
-            ts = ts.tz_localize("UTC")
-        return ts.tz_convert("Asia/Kolkata").strftime("%Y-%m-%d %H:00")
-    except Exception:
-        return ""
-
-
 def _try_excel(trades: List[Dict[str, Any]], path: Path,
                risk_usd: float = 250.0) -> Optional[Path]:
     """Write human-readable Excel. Returns path or None on failure.
@@ -2041,10 +2027,8 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
         # are UTC ISO strings. SL/TP IST cells split exit_ts by exit_reason so
         # a row only carries the IST timestamp for the outcome that actually
         # happened — empty otherwise.
-        # OB candle and scan/alert times are hour-only (chart cross-ref
-        # granularity); fill/SL/TP keep minute precision (execution audit).
-        df["ob_time_ist"]    = df["ob_timestamp"].apply(_to_ist_hour_str) if "ob_timestamp" in df.columns else ""
-        df["alert_time_ist"] = df["alert_ts"].apply(_to_ist_hour_str)     if "alert_ts"     in df.columns else ""
+        df["ob_time_ist"]    = df["ob_timestamp"].apply(_to_ist_str) if "ob_timestamp" in df.columns else ""
+        df["alert_time_ist"] = df["alert_ts"].apply(_to_ist_str)     if "alert_ts"     in df.columns else ""
         df["fill_time_ist"]  = df["fill_ts"].apply(_to_ist_str)      if "fill_ts"      in df.columns else ""
 
         def _sl_ist(row):
