@@ -169,7 +169,8 @@ def _pd_zone_from_dr(price: float, dr: Optional[Dict[str, Any]]) -> str:
 
 
 def _confluences_present(breakdown: Dict[str, float]) -> str:
-    """Comma-separated list of confluences that scored > 0 on this OB."""
+    """Comma-separated list of confluences that scored > 0 on this OB.
+    Killzone removed 2026-05-25 (no longer a scoring input)."""
     names = []
     if breakdown.get("structure", 0) > 0:
         names.append("structure")
@@ -179,8 +180,6 @@ def _confluences_present(breakdown: Dict[str, float]) -> str:
         names.append("fvg")
     if breakdown.get("freshness", 0) > 0:
         names.append("freshness")
-    if breakdown.get("killzone", 0) > 0:
-        names.append("killzone")
     return ",".join(names) if names else "none"
 
 
@@ -234,12 +233,10 @@ def _score_h1_only(alert: Dict[str, Any], pair_conf: Dict[str, Any],
                   error=f"{type(e).__name__}: {e}")
         return 0.0, {}
     breakdown = dict(score_res.get("breakdown", {}))
-    # Override killzone using the alert bar's hour (live wallclock would be
-    # wrong in a backtest).
-    pair_type = pair_conf.get("pair_type", "forex")
-    breakdown["killzone"] = (
-        0.5 if smc_detector._killzone_hit(alert_ts.hour, pair_type) else 0.0
-    )
+    # Killzone removed from scoring 2026-05-25 -- hard filter already
+    # ensures every alert is in-killzone, so the bonus was redundant.
+    # Zero out defensively in case live scorer ever emits non-zero.
+    breakdown["killzone"] = 0.0
     total = round(sum(float(v) for v in breakdown.values()), 1)
     return total, breakdown
 

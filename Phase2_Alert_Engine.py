@@ -1144,11 +1144,12 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
                 </p>
             </div>"""
 
-    # Total max is 8.0 for non-JPY forex (sweep collapsed to presence-only 1.0),
-    # 10.0 elsewhere. Mirrors the scoring rule in smc_detector.run_scorecard.
+    # Total max is 7.5 for non-JPY forex (sweep collapsed to presence-only 1.0),
+    # 9.5 elsewhere. Mirrors smc_detector.run_scorecard. Killzone removed
+    # from scoring 2026-05-25 (was always-credited noise).
     _pname = pair_conf.get('name', '') if pair_conf else ''
     _ptype = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
-    total_max_for_card = 8.0 if (_ptype == 'forex' and 'JPY' not in _pname) else 10.0
+    total_max_for_card = 7.5 if (_ptype == 'forex' and 'JPY' not in _pname) else 9.5
     scorecard_html = build_scorecard_html(scorecard_rows, total_score, total_max_for_card)
 
     distance_html = f"""
@@ -2196,7 +2197,7 @@ if __name__ == "__main__":
                     atr_label, distance_str, dollar_risk_str, scan_start_ts,
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
-                _subj_max = 8.0 if (pair_conf.get('pair_type') == 'forex' and 'JPY' not in name) else 10.0
+                _subj_max = 7.5 if (pair_conf.get('pair_type') == 'forex' and 'JPY' not in name) else 9.5
                 send_email(
                     f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/{_subj_max} | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart
@@ -2327,7 +2328,7 @@ if __name__ == "__main__":
                     atr_label, distance_str, dollar_risk_str, scan_start_ts,
                     h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
                 )
-                _subj_max = 8.0 if (pair_conf.get('pair_type') == 'forex' and 'JPY' not in name) else 10.0
+                _subj_max = 7.5 if (pair_conf.get('pair_type') == 'forex' and 'JPY' not in name) else 9.5
                 send_email(
                     f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/{_subj_max} | {ist_now.strftime('%H:%M IST')}",
                     html, h1_chart, m15_chart

@@ -1982,11 +1982,13 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         if rng_width > 0:
             pd_position = (proximal - dr["range_low"]) / rng_width
     bd["pd"] = 0.0  # PD removed from scoring; display-only.
-    # Killzone — UTC-based. IST conversion is for display only.
-    # Not a hard gate: out-of-killzone trades can still alert if other
-    # confluences carry the score. In-killzone is a 0.5 bonus.
-    utc_hour = datetime.utcnow().hour
-    bd["killzone"] = 0.5 if _killzone_hit(utc_hour, pair_type) else 0.0
+    # Killzone — removed from scoring 2026-05-25. The hard filter
+    # (config.json killzones_utc) already drops every alert outside the
+    # killzone window, so 100% of alerts would have scored the +0.5 bonus.
+    # A confluence that fires for every alert is not a confluence -- it's
+    # noise in the total. Killzone presence is still surfaced via the
+    # ob_session / fill_session / killzone_alignment fields on each row.
+    bd["killzone"] = 0.0
 
     # Macro removed from scorecard. Still surfaced as email-only context.
 
@@ -2015,13 +2017,13 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     """
     Return list of (label, score, max_score, status, explanation) for email rendering.
 
-    Scorecard maxima:
+    Scorecard maxima (post-2026-05-25 killzone removal):
       Non-JPY forex (EURUSD, NZDUSD, USDCHF):
-        Structure 3.0 | Sweep 1.0 (presence-only) | FVG 2.0 | Freshness 1.5 | Killzone 0.5
-        Total = 8.0. Min confidence = 4.0.
+        Structure 3.0 | Sweep 1.0 (presence-only) | FVG 2.0 | Freshness 1.5
+        Total = 7.5. Min confidence = 3.5.
       JPY / Gold / NAS:
-        Structure 3.0 | Sweep 3.0 | FVG 2.0 | Freshness 1.5 | Killzone 0.5
-        Total = 10.0. Min confidence = 6.0.
+        Structure 3.0 | Sweep 3.0 | FVG 2.0 | Freshness 1.5
+        Total = 9.5. Min confidence = 5.5.
     PD is rendered as a display-only row (max_score = 0) showing range
     geometry and PD% so the trader can use it for judgement, but it
     contributes no points. Macro removed from scoring; still rendered
@@ -2178,14 +2180,10 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         rows.append(("Premium / Discount", 0.0, 0.0, "info",
                       f"H1 OB proximal at {pd_pct_str} of H1 dealing range ({zone_label}). {dr_src}{dr_tag}{chop_tag}"))
     
-    # 6. Killzone — 0.5 bonus when inside an active session for the pair.
-    # Not a hard gate: out-of-killzone trades still alert if score reaches min.
-    s = breakdown.get("killzone", 0)
-    if s >= 0.5:
-        rows.append(("Killzone", s, 0.5, "ok", "Inside active trading window."))
-    else:
-        rows.append(("Killzone", s, 0.5, "fail",
-                      "Outside main trading window — lower volume expected."))
+    # Killzone removed from scorecard 2026-05-25. The hard filter already
+    # ensures every alert is in-killzone, so the row was always green and
+    # added no information. Killzone context is now in the per-row
+    # alignment fields (ob_session, fill_session, killzone_alignment).
 
     return rows
 # PHASE 3 ONLY — detects M5 CHoCH inside H1 zone bounds (Phase 3 entry trigger).
