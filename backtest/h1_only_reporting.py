@@ -25,7 +25,7 @@ import pandas as pd
 # window_end / timeout = walk ran out of bars; trade unresolved, treat as
 # audit-only (RCA #5). These rows remain in CSV/Excel but never feed P&L,
 # win rate, expectancy, or any reported metric.
-_EXCLUDE_REASONS = {"never_filled", "window_end", "timeout"}
+_EXCLUDE_REASONS = {"never_filled", "timeout"}
 
 
 def _is_real_filled(t: Dict[str, Any]) -> bool:
