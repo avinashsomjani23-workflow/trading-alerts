@@ -1729,16 +1729,31 @@ def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
 
 def _killzone_hit(utc_hour, pair_type):
     """Kill zone windows in UTC. IST is for display only.
-    User trading window: weekdays 09:00-24:00 IST = 03:30-18:30 UTC.
-    Hours outside that window are blackout and excluded here.
-    Hour-level precision (no 30-min boundaries).
+
+    Tightened to discrete institutional windows. Dead hours (London lunch
+    10-12 UTC for Forex) excluded -- they used to inflate the confluence
+    score on low-quality setups.
+
+    Windows (UTC), aligned with config.json killzones_utc:
+      - Forex (EURUSD, USDCHF, USDJPY, NZDUSD): 07-10, 12-17
+      - Index (NAS100):                          13-21 (NY core, full session)
+      - Commodity (Gold):                        07-10, 12-21 (London + full NY)
+
+    Asymmetry rationale: Forex desks shut at London close (~17 UTC), so
+    the late-NY hours are dead for currency pairs. NAS and Gold are NY-
+    institutionally driven through cash close (~21 UTC), so we keep
+    scoring credit through that window.
+
+    NOTE: this function only controls the +0.5 score input. The hard
+    alert-suppression filter is config-driven via killzones_utc and lives
+    in backtest/killzone.py (and Phase 2 equivalents).
     """
-    if pair_type in ("forex", "commodity"):
-        # London open through NY session, capped at user trading-day end.
-        return 6 <= utc_hour <= 18
+    if pair_type == "forex":
+        return (7 <= utc_hour < 10) or (12 <= utc_hour < 17)
+    if pair_type == "commodity":
+        return (7 <= utc_hour < 10) or (12 <= utc_hour < 21)
     if pair_type == "index":
-        # NY core only.
-        return 13 <= utc_hour <= 18
+        return 13 <= utc_hour < 21
     return False
 
 

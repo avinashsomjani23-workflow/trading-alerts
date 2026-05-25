@@ -61,6 +61,50 @@ SCORE_REEMAIL_UP_THRESHOLD   = 0.7   # current >= prior + 0.7 -> re-email up
 SCORE_REEMAIL_DOWN_THRESHOLD = 0.5   # current <= prior - 0.5 -> re-email down
 
 
+def _ob_in_killzone_label(ob, pair_conf):
+    """Render a human-readable label for whether the OB candle landed in a
+    configured killzone window. Used in the live alert email so the trader
+    can eyeball the SMC alignment hypothesis as data accumulates.
+
+    Returns:
+      - "in killzone" (green) if ob_timestamp hour overlaps any killzones_utc window
+      - "outside killzone" (amber) if it doesn't
+      - "unknown" if either input is missing
+    """
+    try:
+        ob_ts_iso = (ob or {}).get("ob_timestamp")
+        if not ob_ts_iso:
+            return "<span style='color:#888;'>unknown</span>"
+        import pandas as pd
+        ts = pd.Timestamp(ob_ts_iso)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize("UTC")
+        else:
+            ts = ts.tz_convert("UTC")
+        hour_start = ts.hour * 60
+        hour_end   = hour_start + 60
+        windows = (pair_conf or {}).get("killzones_utc") or []
+        in_kz = False
+        for w in windows:
+            if not isinstance(w, (list, tuple)) or len(w) != 2:
+                continue
+            try:
+                sh, sm = (int(x) for x in str(w[0]).split(":"))
+                eh, em = (int(x) for x in str(w[1]).split(":"))
+            except (ValueError, AttributeError):
+                continue
+            start_min = sh * 60 + sm
+            end_min   = eh * 60 + em
+            if hour_start < end_min and hour_end > start_min:
+                in_kz = True
+                break
+        if in_kz:
+            return "<b style='color:#27ae60;'>in killzone</b>"
+        return "<b style='color:#e67e22;'>outside killzone</b>"
+    except Exception:
+        return "<span style='color:#888;'>unknown</span>"
+
+
 def hysteresis_should_reemail(current_score, prior_score):
     """
     Decide whether a same-zone re-sighting deserves an update email.
@@ -1112,11 +1156,17 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         <b style="color:#eee;">Distance:</b> {distance_str} &nbsp;&middot;&nbsp; {atr_label}
     </div>"""
 
+    # Killzone-alignment annotation: did the OB candle land in a killzone?
+    # Fill side is unknown until we actually fill, so we only show the OB
+    # side here. SMC hypothesis: OB-in-killzone setups outperform.
+    ob_in_kz_label = _ob_in_killzone_label(ob, pair_conf)
+
     context_html = f"""
     <div style="margin-bottom:12px;font-size:11px;color:#888;">
         <b style="color:#aaa;">Zone:</b> {bos_tag}
         &nbsp;&middot;&nbsp; Proximal {ob.get('proximal_line', 0):.{dp}f}
         / Distal {ob.get('distal_line', 0):.{dp}f}
+        &nbsp;&middot;&nbsp; <b style="color:#aaa;">OB candle:</b> {ob_in_kz_label}
     </div>"""
 
     # Trend banner (information only — trader decides whether to take counter-trend)

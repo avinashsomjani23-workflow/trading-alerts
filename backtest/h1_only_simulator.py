@@ -58,6 +58,93 @@ def _session_from_utc_hour(h: int) -> str:
     return "Other"
 
 
+def _ts_hour_utc(ts_val) -> Optional[int]:
+    """Coerce ts (str / pd.Timestamp / None) to UTC hour, or None if unparseable."""
+    if ts_val is None or ts_val == "":
+        return None
+    try:
+        ts = pd.Timestamp(ts_val)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize("UTC")
+        else:
+            ts = ts.tz_convert("UTC")
+        return int(ts.hour)
+    except Exception:
+        return None
+
+
+def _ob_session(ob: Dict[str, Any]) -> str:
+    """Session label for the OB candle itself (when the institutional move
+    that created the zone happened). 'unknown' if ob_timestamp missing."""
+    h = _ts_hour_utc(ob.get("ob_timestamp"))
+    return _session_from_utc_hour(h) if h is not None else "unknown"
+
+
+def _fill_session(fill_ts, alert_ts) -> str:
+    """Session at fill (when capital was at work). Falls back to alert hour
+    for never_filled rows so the column is never empty."""
+    h = _ts_hour_utc(fill_ts) if fill_ts is not None else None
+    if h is None:
+        h = _ts_hour_utc(alert_ts)
+    return _session_from_utc_hour(h) if h is not None else "unknown"
+
+
+def _hour_in_pair_killzone(utc_hour: Optional[int], pair_conf: Dict[str, Any]) -> bool:
+    """True if utc_hour falls inside any of this pair's configured killzone
+    windows. Uses minute-precision: hour H counts as 'in' if any minute of
+    H:00-H:59 sits inside a window."""
+    if utc_hour is None:
+        return False
+    windows = pair_conf.get("killzones_utc") or []
+    for w in windows:
+        if not isinstance(w, (list, tuple)) or len(w) != 2:
+            continue
+        try:
+            sh, sm = (int(x) for x in str(w[0]).split(":"))
+            eh, em = (int(x) for x in str(w[1]).split(":"))
+        except (ValueError, AttributeError):
+            continue
+        start_min = sh * 60 + sm
+        end_min   = eh * 60 + em
+        hour_start = utc_hour * 60
+        hour_end   = hour_start + 60
+        if hour_start < end_min and hour_end > start_min:
+            return True
+    return False
+
+
+def _ob_in_killzone(ob: Dict[str, Any], pair_conf: Dict[str, Any]) -> bool:
+    return _hour_in_pair_killzone(_ts_hour_utc(ob.get("ob_timestamp")), pair_conf)
+
+
+def _fill_in_killzone(fill_ts, pair_conf: Dict[str, Any]) -> bool:
+    if fill_ts is None:
+        return False
+    return _hour_in_pair_killzone(_ts_hour_utc(fill_ts), pair_conf)
+
+
+def _killzone_alignment(ob: Dict[str, Any], fill_ts, alert_ts,
+                        pair_conf: Dict[str, Any]) -> str:
+    """4-way bucket for the SMC veteran hypothesis test:
+       - 'Both'    : OB candle AND fill candle both fell in a killzone window
+       - 'OB only' : OB in killzone, fill outside
+       - 'Fill only': fill in killzone, OB outside
+       - 'Neither' : both outside
+       - 'never_filled': fill_ts is None (no fill happened)
+    """
+    if fill_ts is None:
+        return "never_filled"
+    ob_kz = _ob_in_killzone(ob, pair_conf)
+    fl_kz = _fill_in_killzone(fill_ts, pair_conf)
+    if ob_kz and fl_kz:
+        return "Both"
+    if ob_kz:
+        return "OB only"
+    if fl_kz:
+        return "Fill only"
+    return "Neither"
+
+
 def _pd_zone_from_dr(price: float, dr: Optional[Dict[str, Any]]) -> str:
     """Where in the dealing range is `price`?
        discount = lower 40%, premium = upper 40%, equilibrium = middle 20%.
@@ -312,6 +399,7 @@ def _simulate_single_entry(
         bar_hi = float(bar["High"])
         bar_lo = float(bar["Low"])
 
+        is_fill_bar_this_iter = False
         if not filled:
             # Pending limit fill: long fills when bar.low <= entry,
             # short fills when bar.high >= entry. Applies to both proximal
@@ -323,6 +411,7 @@ def _simulate_single_entry(
                 fill_bar_idx = i
                 mfe_price = entry
                 mae_price = entry
+                is_fill_bar_this_iter = True
             else:
                 continue
 
@@ -345,6 +434,18 @@ def _simulate_single_entry(
             sl_hit_in_bar = bar_hi >= sl_after_tp1
             tp1_hit_in_bar = bar_lo <= tp1
             tp2_hit_in_bar = (tp2 is not None) and (bar_lo <= tp2)
+
+        # Fill-bar rule (2026-05-25):
+        # On the bar where the limit just filled, we cannot infer intra-bar
+        # sequence of fill -> TP vs fill -> SL. SL-side: if the bar pierced
+        # SL, price had to travel through entry first (limit fills, then SL),
+        # so SL is the honest outcome. TP-side: bar high reaching TP could
+        # mean (a) price ticked up to TP before pulling down to fill, OR (b)
+        # filled then rallied to TP. Can't tell. Conservative call: do NOT
+        # credit TP on the fill bar. Walk forward.
+        if is_fill_bar_this_iter:
+            tp1_hit_in_bar = False
+            tp2_hit_in_bar = False
 
         # Record first-touch bar indices for diagnostic columns.
         if tp1_hit_in_bar and tp1_hit_bar_idx == -1:
@@ -513,6 +614,17 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "bos_tier":      bos_tier,
         "fvg_present":   bool((ob.get("fvg") or {}).get("exists")),
         "sweep_present": bool((ob.get("sweep_observed") or {}).get("exists")),
+        # Session breakdown — OB formation vs fill, plus killzone alignment.
+        # Fill session is the more honest label (when capital was actually
+        # at work). OB session captures setup quality (institutional vs not).
+        # Alignment buckets: Both / OB only / Fill only / Neither -- used by
+        # email and Excel reporting to test the SMC veteran hypothesis that
+        # both-in-killzone trades have a higher win rate.
+        "ob_session":          _ob_session(ob),
+        "fill_session":        _fill_session(fill_ts, alert_ts),
+        "ob_in_killzone":      _ob_in_killzone(ob, pair_conf),
+        "fill_in_killzone":    _fill_in_killzone(fill_ts, pair_conf),
+        "killzone_alignment":  _killzone_alignment(ob, fill_ts, alert_ts, pair_conf),
     }
 
 

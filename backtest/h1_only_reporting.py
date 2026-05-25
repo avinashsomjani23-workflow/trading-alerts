@@ -373,6 +373,389 @@ def _findings_panel_html(findings: List[Tuple[str, str]]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Killzone Alignment — OB session vs Fill session alignment buckets.
+# Tests the SMC hypothesis: both-in-killzone trades > one-side > neither.
+# ---------------------------------------------------------------------------
+
+_ALIGNMENT_ORDER = ["Both", "OB only", "Fill only", "Neither"]
+
+
+def _killzone_alignment_table(trades: List[Dict[str, Any]], r_col: str
+                              ) -> List[Dict[str, Any]]:
+    """One row per alignment bucket: trades, win rate, avg R, total R."""
+    filled = [t for t in trades if _is_real_filled(t)]
+    if not filled:
+        return []
+    df = pd.DataFrame(filled)
+    if "killzone_alignment" not in df.columns or r_col not in df.columns:
+        return []
+    out = []
+    for bucket in _ALIGNMENT_ORDER:
+        sub = df[df["killzone_alignment"] == bucket]
+        if sub.empty:
+            continue
+        wins = sub[sub[r_col] > 0]
+        out.append({
+            "bucket":       bucket,
+            "trades":       int(len(sub)),
+            "win_rate_pct": round(len(wins) / len(sub) * 100, 1) if len(sub) else 0,
+            "expectancy_r": round(float(sub[r_col].mean()), 3),
+            "total_r":      round(float(sub[r_col].sum()), 3),
+        })
+    return out
+
+
+def _killzone_alignment_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    rows = _killzone_alignment_table(trades, r_col)
+    if not rows:
+        return "<p style='color:#888;'>No filled trades to break down by alignment.</p>"
+    header = _table_row(
+        ["Bucket", "Trades", "Win rate", "Avg R", "Total R"], header=True,
+    )
+    body = ""
+    for r in rows:
+        color = "#eafaf1" if r["expectancy_r"] >= 0 else "#fdf2f2"
+        body += _table_row([
+            r["bucket"], str(r["trades"]),
+            f"{r['win_rate_pct']:.0f}%",
+            _r(r["expectancy_r"]),
+            f"{r['total_r']:+.1f}R",
+        ], color=color)
+    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
+
+
+def _killzone_alignment_losses_html(trades: List[Dict[str, Any]]) -> str:
+    """Losing-trades view: of all SL outcomes, how do they distribute across
+    alignment buckets? If 'Neither' over-indexes vs its trade share, that's
+    the actionable signal -- block that bucket."""
+    filled = [t for t in trades if _is_real_filled(t)]
+    if not filled:
+        return "<p style='color:#888;'>No filled trades.</p>"
+    df = pd.DataFrame(filled)
+    if "killzone_alignment" not in df.columns or "r_realised" not in df.columns:
+        return "<p style='color:#888;'>Alignment data unavailable.</p>"
+    losses = df[df["r_realised"] < 0]
+    total_losses = len(losses)
+    total_trades = len(df)
+    if total_losses == 0:
+        return "<p style='color:#888;'>No losing trades in this run.</p>"
+    header = _table_row(
+        ["Bucket", "Losses", "% of losses", "% of all trades", "Over/Under-index"],
+        header=True,
+    )
+    body = ""
+    for bucket in _ALIGNMENT_ORDER:
+        sub_losses = losses[losses["killzone_alignment"] == bucket]
+        sub_all    = df[df["killzone_alignment"] == bucket]
+        if sub_losses.empty and sub_all.empty:
+            continue
+        pct_losses = len(sub_losses) / total_losses * 100 if total_losses else 0
+        pct_all    = len(sub_all) / total_trades * 100 if total_trades else 0
+        delta      = pct_losses - pct_all
+        # Positive delta => bucket has MORE losses than its trade share would
+        # predict (a loser-skewed bucket).
+        if delta > 5:
+            indicator = f"<b style='color:#e74c3c;'>+{delta:.0f}pp (loser-skewed)</b>"
+            color = "#fdf2f2"
+        elif delta < -5:
+            indicator = f"<b style='color:#27ae60;'>{delta:.0f}pp (winner-skewed)</b>"
+            color = "#eafaf1"
+        else:
+            indicator = f"{delta:+.0f}pp (neutral)"
+            color = ""
+        body += _table_row([
+            bucket, str(len(sub_losses)),
+            f"{pct_losses:.0f}%", f"{pct_all:.0f}%", indicator,
+        ], color=color)
+    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
+
+
+# ---------------------------------------------------------------------------
+# Counterfactual "what if" filter analysis.
+# For each filter dimension, compute aggregates under the filter and report
+# delta vs baseline. Direct answer to: "if I had only taken trades that
+# matched X, would I have made more money?"
+# ---------------------------------------------------------------------------
+
+_LOW_N_THRESHOLD = 10
+
+
+def _cf_aggregate(sub: "pd.DataFrame", risk_usd: float) -> Dict[str, Any]:
+    if sub.empty:
+        return {"n": 0, "win_rate": 0.0, "avg_r": 0.0, "total_pnl": 0.0}
+    wins = sub[sub["r_realised"] > 0]
+    return {
+        "n":         int(len(sub)),
+        "win_rate":  len(wins) / len(sub) * 100,
+        "avg_r":     float(sub["r_realised"].mean()),
+        "total_pnl": float(sub["r_realised"].sum()) * risk_usd,
+    }
+
+
+def _cf_row(label: str, sub_agg: Dict[str, Any], baseline: Dict[str, Any]
+            ) -> str:
+    """One HTML row for a counterfactual filter."""
+    n = sub_agg["n"]
+    if n == 0:
+        return _table_row([label, "0", "—", "—", "—", "—"])
+    low_n = " <i>(low n)</i>" if n < _LOW_N_THRESHOLD else ""
+    wr_delta = sub_agg["win_rate"] - baseline["win_rate"]
+    pnl_delta = sub_agg["total_pnl"] - baseline["total_pnl"]
+    pnl_color = "#27ae60" if pnl_delta >= 0 else "#e74c3c"
+    row_color = "#eafaf1" if sub_agg["avg_r"] >= 0 else "#fdf2f2"
+    return _table_row([
+        label + low_n,
+        str(n),
+        f"{sub_agg['win_rate']:.0f}% ({wr_delta:+.0f}pp)",
+        _r(sub_agg["avg_r"]),
+        _m(sub_agg["total_pnl"]),
+        f"<span style='color:{pnl_color};'>{_m(pnl_delta)}</span>",
+    ], color=row_color)
+
+
+def _counterfactual_html(trades: List[Dict[str, Any]], risk_usd: float) -> str:
+    """Run a battery of counterfactual filters and show win-rate/P&L delta."""
+    filled = [t for t in trades if _is_real_filled(t)]
+    if not filled:
+        return "<p style='color:#888;'>No filled trades for counterfactual analysis.</p>"
+    df = pd.DataFrame(filled)
+    if "r_realised" not in df.columns:
+        return "<p style='color:#888;'>r_realised missing — cannot build counterfactuals.</p>"
+
+    baseline = _cf_aggregate(df, risk_usd)
+    if baseline["n"] == 0:
+        return "<p style='color:#888;'>Baseline empty.</p>"
+
+    # Build the filter battery. Each filter has a section label and a list
+    # of (description, predicate) pairs. Predicates take a row dict.
+    sections: List[Tuple[str, List[Tuple[str, "pd.Series"]]]] = []
+
+    # --- TP1 R bucket filters -------------------------------------------------
+    if "tp1_rr" in df.columns:
+        tp1 = df["tp1_rr"].astype(float)
+        sections.append(("TP1 R-multiple filters", [
+            ("Only TP1 R >= 1.5",               tp1 >= 1.5),
+            ("Only TP1 R >= 2.0",               tp1 >= 2.0),
+            ("Only TP1 R >= 2.5",               tp1 >= 2.5),
+            ("Skip TP1 R in [1.5, 2.0)",        ~tp1.between(1.5, 2.0, inclusive="left")),
+            ("Skip TP1 R in [2.0, 2.5)",        ~tp1.between(2.0, 2.5, inclusive="left")),
+        ]))
+
+    # --- TP2 R bucket filters -------------------------------------------------
+    if "tp2_rr" in df.columns:
+        tp2 = pd.to_numeric(df["tp2_rr"], errors="coerce")
+        sections.append(("TP2 R-multiple filters", [
+            ("Only TP2 R >= 2.0",               (tp2 >= 2.0) & tp2.notna()),
+            ("Only TP2 R >= 2.5",               (tp2 >= 2.5) & tp2.notna()),
+            ("Only TP2 R >= 3.0",               (tp2 >= 3.0) & tp2.notna()),
+            ("Skip TP2 R in [1.5, 2.0)",        ~tp2.between(1.5, 2.0, inclusive="left") | tp2.isna()),
+        ]))
+
+    # --- Score thresholds -----------------------------------------------------
+    if "score" in df.columns:
+        sc = pd.to_numeric(df["score"], errors="coerce")
+        sections.append(("Setup score thresholds", [
+            ("Only score >= 3", sc >= 3),
+            ("Only score >= 4", sc >= 4),
+            ("Only score >= 5", sc >= 5),
+        ]))
+
+    # --- Confluence count -----------------------------------------------------
+    if "confluences_present" in df.columns:
+        conf_count = df["confluences_present"].astype(str).apply(
+            lambda s: 0 if s in ("", "none", "nan") else len([c for c in s.split(",") if c])
+        )
+        sections.append(("Number of active confluences", [
+            ("Only >= 2 confluences", conf_count >= 2),
+            ("Only >= 3 confluences", conf_count >= 3),
+            ("Only >= 4 confluences", conf_count >= 4),
+        ]))
+
+    # --- Killzone alignment ---------------------------------------------------
+    if "killzone_alignment" in df.columns:
+        ka = df["killzone_alignment"]
+        sections.append(("Killzone alignment (OB + fill)", [
+            ("Only Both",     ka == "Both"),
+            ("Skip Neither",  ka != "Neither"),
+            ("Only Both or Fill only", ka.isin(["Both", "Fill only"])),
+        ]))
+
+    # --- Fill session ---------------------------------------------------------
+    if "fill_session" in df.columns:
+        fs = df["fill_session"]
+        sections.append(("Fill session filters", [
+            ("Only Fill in London", fs == "London"),
+            ("Only Fill in NY",     fs == "NY"),
+            ("Skip Fill in Asia",   fs != "Asia"),
+        ]))
+
+    # --- Day of week ----------------------------------------------------------
+    if "fill_ts" in df.columns:
+        dow = pd.to_datetime(df["fill_ts"], errors="coerce", utc=True).dt.day_name()
+        sections.append(("Day of week (fill day)", [
+            ("Skip Monday",    dow != "Monday"),
+            ("Skip Friday",    dow != "Friday"),
+            ("Only Tue-Thu",   dow.isin(["Tuesday", "Wednesday", "Thursday"])),
+        ]))
+
+    # --- PD zone --------------------------------------------------------------
+    if "pd_zone" in df.columns:
+        pdz = df["pd_zone"]
+        sections.append(("PD-array zone of entry", [
+            ("Only Discount", pdz == "discount"),
+            ("Only Premium",  pdz == "premium"),
+            ("Skip Equilibrium", pdz != "equilibrium"),
+        ]))
+
+    # Baseline row at top.
+    baseline_row = _table_row([
+        "<b>Baseline (no filter)</b>", str(baseline["n"]),
+        f"{baseline['win_rate']:.0f}%",
+        _r(baseline["avg_r"]),
+        _m(baseline["total_pnl"]),
+        "—",
+    ], color="#f4f4f4")
+
+    header = _table_row(
+        ["Filter", "Trades", "Win rate (vs baseline)", "Avg R", "Total P&amp;L", "P&amp;L delta"],
+        header=True,
+    )
+
+    body_parts: List[str] = [baseline_row]
+    for sect_label, filters in sections:
+        body_parts.append(_table_row([
+            f"<b style='background:#1A5490;color:white;padding:2px 6px;'>{sect_label}</b>",
+            "", "", "", "", "",
+        ]))
+        for label, mask in filters:
+            sub = df[mask.fillna(False)]
+            sub_agg = _cf_aggregate(sub, risk_usd)
+            body_parts.append(_cf_row(label, sub_agg, baseline))
+
+    note = (
+        "<p style='font-size:12px;color:#666;margin-top:6px;'>"
+        f"Baseline = all {baseline['n']} filled trades. Each filter row shows the subset that would have remained if we applied that filter. "
+        "<b>P&amp;L delta</b> = subset P&amp;L minus baseline P&amp;L &mdash; positive means the filter would have improved the run. "
+        f"Buckets with fewer than {_LOW_N_THRESHOLD} trades are marked <i>(low n)</i> and should be treated as directional only.</p>"
+    )
+    return (f"<table><thead>{header}</thead><tbody>{''.join(body_parts)}</tbody></table>{note}")
+
+
+def _counterfactual_dataframe(trades: List[Dict[str, Any]],
+                              risk_usd: float) -> "pd.DataFrame":
+    """Flat tabular form of the counterfactual analysis for Excel.
+
+    Mirrors the row set built in _counterfactual_html so the Excel tab
+    matches the email. Returns an empty frame if no filled trades or
+    r_realised missing -- caller treats empty as 'skip the tab'.
+    """
+    filled = [t for t in trades if _is_real_filled(t)]
+    if not filled:
+        return pd.DataFrame()
+    df = pd.DataFrame(filled)
+    if "r_realised" not in df.columns:
+        return pd.DataFrame()
+
+    baseline = _cf_aggregate(df, risk_usd)
+    if baseline["n"] == 0:
+        return pd.DataFrame()
+
+    rows: List[Dict[str, Any]] = [{
+        "Section":      "Baseline",
+        "Filter":       "All filled trades (no filter)",
+        "Trades":       baseline["n"],
+        "Win Rate %":   round(baseline["win_rate"], 1),
+        "Win Rate Delta (pp)": 0.0,
+        "Avg R":        round(baseline["avg_r"], 3),
+        "Total P&L":    round(baseline["total_pnl"], 2),
+        "P&L Delta":    0.0,
+        "Low N?":       "No",
+    }]
+
+    sections: List[Tuple[str, List[Tuple[str, "pd.Series"]]]] = []
+
+    if "tp1_rr" in df.columns:
+        tp1 = df["tp1_rr"].astype(float)
+        sections.append(("TP1 R-multiple", [
+            ("Only TP1 R >= 1.5",        tp1 >= 1.5),
+            ("Only TP1 R >= 2.0",        tp1 >= 2.0),
+            ("Only TP1 R >= 2.5",        tp1 >= 2.5),
+            ("Skip TP1 R in [1.5,2.0)",  ~tp1.between(1.5, 2.0, inclusive="left")),
+            ("Skip TP1 R in [2.0,2.5)",  ~tp1.between(2.0, 2.5, inclusive="left")),
+        ]))
+    if "tp2_rr" in df.columns:
+        tp2 = pd.to_numeric(df["tp2_rr"], errors="coerce")
+        sections.append(("TP2 R-multiple", [
+            ("Only TP2 R >= 2.0",        (tp2 >= 2.0) & tp2.notna()),
+            ("Only TP2 R >= 2.5",        (tp2 >= 2.5) & tp2.notna()),
+            ("Only TP2 R >= 3.0",        (tp2 >= 3.0) & tp2.notna()),
+            ("Skip TP2 R in [1.5,2.0)",  ~tp2.between(1.5, 2.0, inclusive="left") | tp2.isna()),
+        ]))
+    if "score" in df.columns:
+        sc = pd.to_numeric(df["score"], errors="coerce")
+        sections.append(("Score threshold", [
+            ("Only score >= 3", sc >= 3),
+            ("Only score >= 4", sc >= 4),
+            ("Only score >= 5", sc >= 5),
+        ]))
+    if "confluences_present" in df.columns:
+        conf_count = df["confluences_present"].astype(str).apply(
+            lambda s: 0 if s in ("", "none", "nan") else len([c for c in s.split(",") if c])
+        )
+        sections.append(("Confluences", [
+            ("Only >= 2 confluences", conf_count >= 2),
+            ("Only >= 3 confluences", conf_count >= 3),
+            ("Only >= 4 confluences", conf_count >= 4),
+        ]))
+    if "killzone_alignment" in df.columns:
+        ka = df["killzone_alignment"]
+        sections.append(("Killzone alignment", [
+            ("Only Both",     ka == "Both"),
+            ("Skip Neither",  ka != "Neither"),
+            ("Only Both or Fill only", ka.isin(["Both", "Fill only"])),
+        ]))
+    if "fill_session" in df.columns:
+        fs = df["fill_session"]
+        sections.append(("Fill session", [
+            ("Only Fill in London", fs == "London"),
+            ("Only Fill in NY",     fs == "NY"),
+            ("Skip Fill in Asia",   fs != "Asia"),
+        ]))
+    if "fill_ts" in df.columns:
+        dow = pd.to_datetime(df["fill_ts"], errors="coerce", utc=True).dt.day_name()
+        sections.append(("Day of week", [
+            ("Skip Monday",  dow != "Monday"),
+            ("Skip Friday",  dow != "Friday"),
+            ("Only Tue-Thu", dow.isin(["Tuesday", "Wednesday", "Thursday"])),
+        ]))
+    if "pd_zone" in df.columns:
+        pdz = df["pd_zone"]
+        sections.append(("PD zone", [
+            ("Only Discount",     pdz == "discount"),
+            ("Only Premium",      pdz == "premium"),
+            ("Skip Equilibrium",  pdz != "equilibrium"),
+        ]))
+
+    for sect_label, filters in sections:
+        for label, mask in filters:
+            sub = df[mask.fillna(False)]
+            agg = _cf_aggregate(sub, risk_usd)
+            rows.append({
+                "Section":      sect_label,
+                "Filter":       label,
+                "Trades":       agg["n"],
+                "Win Rate %":   round(agg["win_rate"], 1) if agg["n"] else None,
+                "Win Rate Delta (pp)": round(agg["win_rate"] - baseline["win_rate"], 1) if agg["n"] else None,
+                "Avg R":        round(agg["avg_r"], 3) if agg["n"] else None,
+                "Total P&L":    round(agg["total_pnl"], 2) if agg["n"] else None,
+                "P&L Delta":    round(agg["total_pnl"] - baseline["total_pnl"], 2) if agg["n"] else None,
+                "Low N?":       "Yes" if 0 < agg["n"] < _LOW_N_THRESHOLD else "No",
+            })
+
+    return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
 # Exit-policy comparison: three policies + per-pair + per-session.
 # ---------------------------------------------------------------------------
 
@@ -1428,17 +1811,23 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
         kz_blocked = bool(_v(prox, "killzone_blocked") or _v(mid, "killzone_blocked"))
         ist_blocked_zr = bool(_v(prox, "ist_blocked") or _v(mid, "ist_blocked"))
 
+        # Prefer fill_session (when the trade was actually live). Fall back
+        # to alert-hour session for never-filled OBs. Same logic for DOW.
+        prox_fill_ts = _v(prox, "fill_ts") or _v(mid, "fill_ts")
+        zr_dow = _day_of_week(prox_fill_ts or alert_ts)
         rows.append({
             "Pair":                    pair,
-            "OB Formed (UTC)":         _v(prox, "ob_timestamp"),
-            "Alert Time (UTC)":        alert_ts,
+            "OB Candle (IST)":         _to_ist_hour_str(_v(prox, "ob_timestamp")),
+            "Scan / Alert Time (IST)": _to_ist_hour_str(alert_ts),
             "Direction":               "Long" if _v(prox, "direction") == "bullish" else "Short",
             "Structure Event":         _v(prox, "bos_tag"),
             "Structure Tier":          _v(prox, "bos_tier"),
             "OB Age (H1 bars)":        _v(prox, "ob_age_h1_bars"),
             "Setup Score":             _v(prox, "score"),
-            "Trading Session":         _v(prox, "session"),
-            "Day of Week":             _day_of_week(alert_ts),
+            "Fill Session":            _v(prox, "fill_session") or _v(mid, "fill_session"),
+            "OB Session":              _v(prox, "ob_session"),
+            "Killzone Alignment":      _v(prox, "killzone_alignment") or _v(mid, "killzone_alignment"),
+            "Day of Week":             zr_dow,
             "Entry Price (Proximal)":  _v(prox, "entry"),
             "Entry Price (50% Mid)":   _v(mid,  "entry"),
             "Stop Loss":               _v(prox, "sl_initial"),
@@ -1520,7 +1909,9 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
 _EXCEL_COL_NAMES = {
     "pair":              "Currency Pair",
     "direction":         "Direction",
-    "session":           "Trading Session",
+    "fill_session":      "Fill Session",
+    "ob_session":        "OB Session",
+    "killzone_alignment": "Killzone Alignment",
     "entry_zone":        "Entry Type",
     "entry":             "Entry Price",
     "sl_initial":        "Stop Loss",
@@ -1546,9 +1937,9 @@ _EXCEL_COL_NAMES = {
     "bos_tier":          "Structure Tier (Major / Minor)",
     "vet_review":        "Worth Reviewing",
     "vet_review_reason": "Why Worth Reviewing",
-    "alert_ts":          "Alert Time (UTC)",
-    "exit_ts":           "Trade Closed (UTC)",
-    "ob_time_ist":       "OB Formed (IST)",
+    # Hour-only IST columns for chart cross-reference. UTC columns dropped.
+    "ob_time_ist":       "OB Candle (IST)",
+    "alert_time_ist":    "Scan / Alert Time (IST)",
     "fill_time_ist":     "Entry Fill (IST)",
     "sl_hit_time_ist":   "SL Hit (IST)",
     "tp_fill_time_ist":  "TP Fill (IST)",
@@ -1603,8 +1994,27 @@ def _to_ist_str(ts_val: Any) -> str:
         return ""
 
 
-def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
-    """Write human-readable Excel. Returns path or None on failure."""
+def _to_ist_hour_str(ts_val: Any) -> str:
+    """Same as _to_ist_str but hour-only granularity ('YYYY-MM-DD HH').
+    Used for OB candle / scan-alert columns where minute precision is noise."""
+    if ts_val is None or ts_val == "" or (isinstance(ts_val, float) and pd.isna(ts_val)):
+        return ""
+    try:
+        ts = pd.Timestamp(ts_val)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize("UTC")
+        return ts.tz_convert("Asia/Kolkata").strftime("%Y-%m-%d %H:00")
+    except Exception:
+        return ""
+
+
+def _try_excel(trades: List[Dict[str, Any]], path: Path,
+               risk_usd: float = 250.0) -> Optional[Path]:
+    """Write human-readable Excel. Returns path or None on failure.
+
+    `risk_usd` is used by the What If counterfactual tab to scale R-deltas
+    into $-deltas. Defaults to 250 if caller doesn't pass it.
+    """
     # Only filled trades in the Excel — never_filled are counted in fill rate
     # but are not trade outcomes and would confuse the spreadsheet.
     filled = [t for t in trades if _is_real_filled(t)]
@@ -1616,15 +2026,25 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
         _attach_runner_r(filled)
         df = pd.DataFrame(filled)
 
-        # Add day of week (tracked for cross-run aggregate analysis).
-        if "alert_ts" in df.columns:
+        # Day of week — sourced from fill_ts (when the trade was actually
+        # live). never_filled rows fall back to alert_ts. Previous code keyed
+        # off alert_ts which conflated setup-day with trading-day.
+        if "fill_ts" in df.columns:
+            df["day_of_week"] = df.apply(
+                lambda r: _day_of_week(r.get("fill_ts") or r.get("alert_ts")),
+                axis=1,
+            )
+        elif "alert_ts" in df.columns:
             df["day_of_week"] = df["alert_ts"].apply(_day_of_week)
 
         # IST timestamp columns (for TradingView verification). Source columns
         # are UTC ISO strings. SL/TP IST cells split exit_ts by exit_reason so
         # a row only carries the IST timestamp for the outcome that actually
         # happened — empty otherwise.
-        df["ob_time_ist"]    = df["ob_timestamp"].apply(_to_ist_str) if "ob_timestamp" in df.columns else ""
+        # OB candle and scan/alert times are hour-only (chart cross-ref
+        # granularity); fill/SL/TP keep minute precision (execution audit).
+        df["ob_time_ist"]    = df["ob_timestamp"].apply(_to_ist_hour_str) if "ob_timestamp" in df.columns else ""
+        df["alert_time_ist"] = df["alert_ts"].apply(_to_ist_hour_str)     if "alert_ts"     in df.columns else ""
         df["fill_time_ist"]  = df["fill_ts"].apply(_to_ist_str)      if "fill_ts"      in df.columns else ""
 
         def _sl_ist(row):
@@ -1653,12 +2073,15 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
         if "sweep_present" in df.columns:
             df["sweep_present"] = df["sweep_present"].map({True: "Yes", False: "No"}).fillna("")
 
-        # Select and rename columns — add day_of_week right after session.
+        # Select and rename columns — insert day_of_week right after the
+        # session/alignment block (pair, direction, fill_session, ob_session,
+        # killzone_alignment = first 5 keys in _EXCEL_COL_NAMES).
         _col_names_with_dow = dict(_EXCEL_COL_NAMES)
         _col_names_with_dow["day_of_week"] = "Day of Week"
-        desired = [c for c in list(_EXCEL_COL_NAMES.keys())[:4]  # pair, direction, session
+        _split_at = 5
+        desired = [c for c in list(_EXCEL_COL_NAMES.keys())[:_split_at]
                    + ["day_of_week"]
-                   + list(_EXCEL_COL_NAMES.keys())[4:]
+                   + list(_EXCEL_COL_NAMES.keys())[_split_at:]
                    if c in df.columns]
         out_df = df[desired].rename(columns=_col_names_with_dow)
 
@@ -1670,7 +2093,9 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
         mid_df  = out_df[out_df["Entry Type"] == _ENTRY_LABELS["50pct"]]   if "Entry Type" in out_df.columns else pd.DataFrame()
 
         col_widths = {
-            "Currency Pair": 14, "Direction": 10, "Trading Session": 12,
+            "Currency Pair": 14, "Direction": 10,
+            "Fill Session": 13, "OB Session": 13, "Killzone Alignment": 18,
+            "Day of Week": 11,
             "Entry Type": 18, "Entry Price": 12, "Stop Loss": 12,
             "Take Profit 1": 13, "Take Profit 2": 13,
             "TP1 Reward:Risk": 14, "TP2 Reward:Risk": 14,
@@ -1687,8 +2112,8 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
             "Structure Event (BOS / CHoCH)": 24,
             "Structure Tier (Major / Minor)": 24,
             "Worth Reviewing": 15, "Why Worth Reviewing": 40,
-            "Alert Time (UTC)": 20, "Trade Closed (UTC)": 20,
-            "OB Formed (IST)": 18, "Entry Fill (IST)": 18,
+            "OB Candle (IST)": 18, "Scan / Alert Time (IST)": 22,
+            "Entry Fill (IST)": 18,
             "SL Hit (IST)": 18, "TP Fill (IST)": 18,
         }
 
@@ -1753,6 +2178,23 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
             if not zone_df.empty:
                 zone_df.to_excel(xw, sheet_name="Zone Register", index=False)
 
+            # Killzone alignment tab — one row per bucket (Both / OB only / Fill only / Neither)
+            kz_align_rows = _killzone_alignment_table(filled, "r_realised")
+            if kz_align_rows:
+                kz_df = pd.DataFrame(kz_align_rows).rename(columns={
+                    "bucket":       "Killzone Alignment",
+                    "trades":       "Trades",
+                    "win_rate_pct": "Win Rate %",
+                    "expectancy_r": "Avg R per Trade",
+                    "total_r":      "Total R",
+                })
+                kz_df.to_excel(xw, sheet_name="Killzone Alignment", index=False)
+
+            # What-If counterfactual tab — flat rows matching the email table.
+            cf_df = _counterfactual_dataframe(filled, risk_usd)
+            if not cf_df.empty:
+                cf_df.to_excel(xw, sheet_name="What If", index=False)
+
             try:
                 from openpyxl.styles import PatternFill, Font, Alignment
                 _opx = {"PatternFill": PatternFill, "Font": Font, "Alignment": Alignment}
@@ -1769,6 +2211,17 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path) -> Optional[Path]:
                     for col in zws.columns:
                         zws.column_dimensions[col[0].column_letter].width = 18
                     zws.freeze_panes = "A2"
+
+                for extra_sheet in ("Killzone Alignment", "What If"):
+                    if extra_sheet in xw.sheets:
+                        ews = xw.sheets[extra_sheet]
+                        for cell in ews[1]:
+                            cell.font = Font(bold=True, color="FFFFFF")
+                            cell.fill = PatternFill("solid", fgColor="1A5490")
+                            cell.alignment = Alignment(wrap_text=True)
+                        for col in ews.columns:
+                            ews.column_dimensions[col[0].column_letter].width = 22
+                        ews.freeze_panes = "A2"
 
             except ImportError:
                 pass  # openpyxl styles not available — plain Excel still written
@@ -2129,14 +2582,35 @@ def _zone_block_html(
   {_pair_dow_matrix_html(zone_trades, "r_realised")}
 </div>
 
+<!-- KILLZONE ALIGNMENT (OB vs Fill in killzone) -->
+<div class="section">
+  <h2>Killzone alignment &mdash; OB candle vs fill candle</h2>
+  <p>SMC hypothesis: trades where both the OB candle and the fill candle land in a configured killzone window should outperform trades where one or both fall outside it. Buckets:</p>
+  <ul>
+    <li><b>Both</b>: OB formed AND filled in killzone &mdash; A-grade per SMC orthodoxy.</li>
+    <li><b>OB only</b> / <b>Fill only</b>: one side in killzone &mdash; B-grade.</li>
+    <li><b>Neither</b>: both off-hours &mdash; weakest setup.</li>
+  </ul>
+  {_killzone_alignment_html(zone_trades, "r_realised")}
+  <h4 style="margin-top:16px;">Losing trades by alignment bucket</h4>
+  {_killzone_alignment_losses_html(zone_trades)}
+</div>
+
+<!-- WHAT IF — counterfactual filter analysis -->
+<div class="section">
+  <h2>"What if" &mdash; counterfactual filter analysis</h2>
+  <p>For each filter dimension below, the table shows what would have happened if we had only taken trades meeting the filter. <b>vs baseline</b> compares each subset's R-per-trade and total P&amp;L to the unfiltered baseline. Buckets with fewer than 10 trades are marked <i>(low n)</i> &mdash; treat as directional, not significant.</p>
+  {_counterfactual_html(zone_trades, risk_usd)}
+</div>
+
 <!-- EXIT POLICY COMPARISON -->
 <div class="section">
   <h2>Exit policy comparison</h2>
   {_exit_policy_html(zone_trades, risk_usd)}
   <h4 style="margin-top:16px;">Best policy by pair</h4>
   {_exit_policy_by_dim_html(zone_trades, risk_usd, "pair", "Pair")}
-  <h4 style="margin-top:16px;">Best policy by session</h4>
-  {_exit_policy_by_dim_html(zone_trades, risk_usd, "session", "Session")}
+  <h4 style="margin-top:16px;">Best policy by fill session</h4>
+  {_exit_policy_by_dim_html(zone_trades, risk_usd, "fill_session", "Fill Session")}
 </div>
 
 <!-- SCORE -->
@@ -2248,7 +2722,8 @@ def _build_group_html(
 
     # Excel: this group's filled+blocked rows only (matches what trades.xlsx
     # does for the combined report -- audit rows preserved).
-    excel_ok = _try_excel(group_trades_all, out_dir / excel_filename) is not None
+    excel_ok = _try_excel(group_trades_all, out_dir / excel_filename,
+                          risk_usd=risk_usd) is not None
 
     total_pnl_prox = sb_prox.get("total_pnl_usd", 0)
     total_pnl_mid  = sb_mid.get("total_pnl_usd", 0)
@@ -2566,7 +3041,8 @@ def write_h1_only_report(
     # were computed above on the filtered `trades`, so summary stats are
     # unaffected by this.
     _trades_csv(trades_all, out_dir / "trades.csv")
-    excel_ok = _try_excel(trades_all, out_dir / "trades.xlsx") is not None
+    excel_ok = _try_excel(trades_all, out_dir / "trades.xlsx",
+                          risk_usd=risk_usd) is not None
     with open(out_dir / "raw_alerts.jsonl", "w") as f:
         for a in raw_alerts:
             f.write(json.dumps(a, default=str) + "\n")

@@ -18,7 +18,7 @@
       "min_confidence": 4.0,
       "decimal_places": 5,
       "spread_pips": 2.0,
-      "killzones_utc": [["07:00", "16:30"]]
+      "killzones_utc": [["07:00", "10:00"], ["12:00", "17:00"]]
     },
     {
       "symbol": "JPY=X",
@@ -32,7 +32,7 @@
       "min_confidence": 6.0,
       "decimal_places": 3,
       "spread_pips": 2.0,
-      "killzones_utc": [["00:00", "05:00"], ["12:30", "16:30"]]
+      "killzones_utc": [["07:00", "10:00"], ["12:00", "17:00"]]
     },
     {
       "symbol": "NZDUSD=X",
@@ -46,7 +46,7 @@
       "min_confidence": 4.0,
       "decimal_places": 5,
       "spread_pips": 4.0,
-      "killzones_utc": [["00:00", "05:00"], ["12:30", "16:30"]]
+      "killzones_utc": [["07:00", "10:00"], ["12:00", "17:00"]]
     },
     {
       "symbol": "CHF=X",
@@ -60,7 +60,7 @@
       "min_confidence": 4.0,
       "decimal_places": 5,
       "spread_pips": 2.0,
-      "killzones_utc": [["07:00", "16:30"]]
+      "killzones_utc": [["07:00", "10:00"], ["12:00", "17:00"]]
     },
     {
       "symbol": "NQ=F",
@@ -74,7 +74,7 @@
       "min_confidence": 6.0,
       "decimal_places": 2,
       "spread_pips": 2.0,
-      "killzones_utc": [["13:30", "20:30"]]
+      "killzones_utc": [["13:00", "21:00"]]
     },
     {
       "symbol": "GC=F",
@@ -88,7 +88,7 @@
       "min_confidence": 6.0,
       "decimal_places": 2,
       "spread_pips": 0.50,
-      "killzones_utc": [["12:30", "20:30"]]
+      "killzones_utc": [["07:00", "10:00"], ["12:00", "21:00"]]
     }
   ],
   "scoring": {
