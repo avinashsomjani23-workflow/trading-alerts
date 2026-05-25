@@ -247,7 +247,13 @@ def save_state(state: Dict[str, Any]) -> None:
 # --- Timestamp helper --------------------------------------------------------
 
 def _ts_iso(df, idx: int) -> Optional[str]:
-    """Return ISO timestamp string for df row at positional idx."""
+    """Return ISO timestamp string for df row at positional idx.
+
+    Refuses to fall back to str(idx) when no datetime source exists — returning
+    an integer-string ts (e.g. "146") silently corrupts persisted state with
+    positional indices that look like timestamps but compare wrong and never
+    resolve back via _idx_from_ts. Better to return None and let callers see
+    a missing ts than to write garbage."""
     if df is None or idx is None:
         return None
     try:
@@ -262,7 +268,8 @@ def _ts_iso(df, idx: int) -> Optional[str]:
             raw = df.index[idx]
         if hasattr(raw, 'isoformat'):
             return raw.isoformat()
-        return str(raw)
+        # No datetime source — refuse to return a positional-index string.
+        return None
     except Exception:
         return None
 

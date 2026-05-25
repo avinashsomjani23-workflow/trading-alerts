@@ -3720,6 +3720,14 @@ def run_radar():
         try:
             structure_state_all = dealing_range.load_state()
             prior_walls = structure_state_all.get(name)
+            # DIAG: log df shape going into update_pair so corruption source is identifiable from production logs.
+            try:
+                _df_cols = list(df.columns) if df is not None else None
+                _df_idx_type = type(df.index).__name__ if df is not None else None
+                _df_has_dt_col = ('Datetime' in (_df_cols or []))
+                logging.info(f"[ts-diag] {name} df cols={_df_cols} idx_type={_df_idx_type} has_Datetime_col={_df_has_dt_col} len={len(df) if df is not None else 0}")
+            except Exception as _diag_err:
+                logging.warning(f"[ts-diag] {name} log failed: {_diag_err}")
             new_walls = dealing_range.update_pair(df, prior_walls, pair) or {}
             # Strip non-persisted diagnostic before saving — it stays in
             # the in-memory copy for downstream scan logging only.
