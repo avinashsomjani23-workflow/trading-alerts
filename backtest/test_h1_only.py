@@ -1,8 +1,7 @@
 """Unit-style assertions for the H1-only mode.
 
 Validates:
-  1. compute_phase2_levels(h1_only=True) skips M15 nest with df_m15=None and
-     does not crash.
+  1. compute_phase2_levels returns H1 OB geometry (no M15 nest path).
   2. Proximal entry sits exactly at OB proximal (within tolerance).
   3. 50pct entry sits exactly at OB midpoint.
   4. SL is identical for both entry zones (only entry differs).
@@ -118,12 +117,12 @@ def test_levels_dual_entry():
     current_price = proximal_expected
 
     lv_prox = smc_detector.compute_phase2_levels(
-        pair_conf, "LONG", ob, current_price, df_h1, df_m15=None,
-        h1_only=True, entry_zone="proximal",
+        pair_conf, "LONG", ob, current_price, df_h1,
+        entry_zone="proximal",
     )
     lv_mid = smc_detector.compute_phase2_levels(
-        pair_conf, "LONG", ob, current_price, df_h1, df_m15=None,
-        h1_only=True, entry_zone="50pct",
+        pair_conf, "LONG", ob, current_price, df_h1,
+        entry_zone="50pct",
     )
 
     ok = True
@@ -183,21 +182,24 @@ def test_levels_dual_entry():
     return ok
 
 
-def test_no_m15_no_crash():
-    """h1_only=True with df_m15=None should never invoke find_m15_ob_inside_h1."""
-    print("\n== test_no_m15_no_crash ==")
+def test_signature_h1_only():
+    """compute_phase2_levels takes H1 data only -- no df_m15 / h1_only kwargs."""
+    print("\n== test_signature_h1_only ==")
     df_h1 = _synth_h1_df()
     pair_conf = _synth_pair_conf()
     ob = _synth_ob_bullish(df_h1)
     current_price = ob["proximal_line"]
     try:
         lv = smc_detector.compute_phase2_levels(
-            pair_conf, "LONG", ob, current_price, df_h1, df_m15=None,
-            h1_only=True, entry_zone="proximal",
+            pair_conf, "LONG", ob, current_price, df_h1,
+            entry_zone="proximal",
         )
-        return check(isinstance(lv, dict), "no crash with df_m15=None")
+        ok = check(isinstance(lv, dict), "compute_phase2_levels returns dict")
+        ok &= check("m15_ob" not in lv,
+                    "result no longer carries m15_ob payload")
+        return ok
     except Exception as e:
-        print(f"  FAIL: crashed with df_m15=None: {type(e).__name__}: {e}")
+        print(f"  FAIL: crashed: {type(e).__name__}: {e}")
         return False
 
 
@@ -272,8 +274,8 @@ def test_tp2_ordering_invariant():
 
         for zone in ("proximal", "50pct"):
             lv = smc_detector.compute_phase2_levels(
-                pair_conf, bias_label, ob, current_price, df_h1, df_m15=None,
-                h1_only=True, entry_zone=zone,
+                pair_conf, bias_label, ob, current_price, df_h1,
+                entry_zone=zone,
             )
             if not (isinstance(lv, dict) and lv.get("valid")):
                 continue
@@ -291,7 +293,7 @@ def test_tp2_ordering_invariant():
 
 def main():
     results = [
-        ("test_no_m15_no_crash",        test_no_m15_no_crash()),
+        ("test_signature_h1_only",      test_signature_h1_only()),
         ("test_levels_dual_entry",      test_levels_dual_entry()),
         ("test_dual_simulator_columns", test_dual_simulator_columns()),
         ("test_tp2_ordering_invariant", test_tp2_ordering_invariant()),

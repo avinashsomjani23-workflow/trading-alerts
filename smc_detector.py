@@ -1413,43 +1413,35 @@ def find_m15_ob_inside_h1(df_m15, bias, h1_ob_high, h1_ob_low):
     return None
 
 
-# SHARED P2+P3 — computes SL/TP1/TP2 from H1/M15 structure. Called by:
-#   Phase 2 (level computation at scan time), Phase 3 (fresh recomputation at
-#   trigger time). Phase 1 does NOT call this. Name is historical — despite
-#   "phase2" in the name, Phase 3 also depends on it for trigger-time levels.
-def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15,
-                          h1_only=False, entry_zone="proximal"):
+# PHASE 2 ONLY — computes SL/TP1/TP2 from H1 structure.
+# (Phase 3 historically called this too. Phase 3 is disabled in the H1-only
+# migration; if it is ever re-enabled, this function's H1-only behaviour is
+# what it will get.)
+def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
+                          entry_zone="proximal"):
     """
-    Phase 2 entry / SL / TP computation.
+    Phase 2 entry / SL / TP computation. H1-only since 2026-05-26 migration.
 
-    Entry policy (h1_only=False, default — live Phase 2 behaviour):
-      1. Find an M15 OB nested fully inside the H1 OB (strict containment,
-         opposite-color rule). If found, entry = M15 OB proximal.
-      2. Else fallback: entry = H1 OB proximal.
+    Entry: always taken from H1 OB geometry. `entry_zone` selects the line:
+      - "proximal" (default, live) -> OB proximal edge. Standard SMC limit.
+      - "50pct" (backtest only)    -> OB midpoint. Deeper fill, tighter R.
+    Both entries share the same SL (OB distal +/- 1x spread).
 
-    Entry policy (h1_only=True — H1-only backtest mode):
-      M15 OB nest lookup is skipped entirely. Entry is taken from the H1 OB
-      geometry alone. `entry_zone` controls which line of the H1 OB:
-        - "proximal" -> entry at OB proximal edge (standard SMC vet entry).
-        - "50pct"    -> entry at OB midpoint (50% mean). Tighter R, fewer fills.
-      Both entries share the same SL (H1 OB distal +/- spread), so R-distance
-      differs by entry zone and RR on the same TP price differs accordingly.
+    SL: H1 OB distal +/- 1x spread.
 
-    SL: entry-OB distal +/- 1x spread.
-
-    TP swings: H1 swings at lookback=3 (unchanged across modes).
+    TP swings: H1 swings at lookback=3.
       TP1 = nearest opposing H1 swing past entry that clears 1.5R. No swing
             clearing 1.5R -> no trade.
-      TP2 = next H1 swing past TP1 (no RR gate). If no further swing,
-            fallback to dealing-range opposing extreme.
+      TP2 = next opposing H1 swing past TP1 (no RR gate). If none, no TP2;
+            simulator falls back to TP1 + BE-stop policy.
 
-    Limit-order chase guard: if the computed entry sits on the wrong side of
-    current price (LONG entry above current, SHORT entry below), the alert is
-    invalid -- price has moved through the zone.
-    For h1_only mode: the chase guard checks against the H1 OB-touch bar's
-    close, which is what `current_price` represents in that context. A 50pct
-    entry sitting deeper inside the OB than current price is NOT a chase --
-    it is a normal pending limit waiting for further penetration.
+    Limit-order chase guard (proximal entry only):
+      If the proximal entry sits on the wrong side of current price (LONG
+      proximal above current, SHORT proximal below), the alert is invalid --
+      price has already moved through the zone, the limit would chase.
+      The 50pct entry skips the chase guard because by construction it sits
+      deeper inside the OB than the proximal -- it's a pending limit waiting
+      for further penetration, not a market-time decision.
     """
     dp = _dp(pair_conf)
     # Spread unit per decimal_places. dp=5 forex (0.0001/pip), dp=3 JPY (0.01/pip),
@@ -1466,23 +1458,12 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15,
         return {"valid": False,
                 "reason": "H1 OB geometry missing -- zone schema drift."}
 
-    # Try M15 OB nested inside H1 OB (skipped in h1_only mode).
-    m15_ob = None
-    if not h1_only:
-        m15_ob = find_m15_ob_inside_h1(df_m15, bias, h1_top, h1_bot)
-    if m15_ob is not None:
-        ob_top, ob_bot = m15_ob['high'], m15_ob['low']
-        entry_source = "M15 OB Proximal (nested)"
-    else:
-        ob_top, ob_bot = h1_top, h1_bot
-        entry_source = (
-            "H1 OB " + ("50% Mean" if entry_zone == "50pct" else "Proximal")
-            + (" (h1_only)" if h1_only else " (no M15 nest)")
-        )
-
-    # Entry. Proximal = OB edge nearest to price; 50pct = OB midpoint.
+    # H1-only entry: H1 OB geometry, no M15 nest lookup.
+    # Proximal = OB edge nearest to price; 50pct = OB midpoint.
     # SL = OB distal +/- 1x spread (same for both entry zones; R-distance
     # naturally differs because entry differs).
+    ob_top, ob_bot = h1_top, h1_bot
+    entry_source = "H1 OB " + ("50% Mean" if entry_zone == "50pct" else "Proximal")
     ob_mid = (ob_top + ob_bot) / 2.0
     if bias == "LONG":
         entry = ob_mid if entry_zone == "50pct" else ob_top
@@ -1491,21 +1472,16 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15,
         entry = ob_mid if entry_zone == "50pct" else ob_bot
         sl = ob_top + spread_val
 
-    # Limit-order chase guard. Tolerance = 0.5x spread for rounding/tick noise.
-    #
-    # Live behaviour (h1_only=False): the chase guard is correct -- in live
-    # trading the user places the limit AFTER seeing the alert, so if price
-    # has already moved past the OB the limit would be a chase (selling
-    # below current price for a SHORT, buying above for a LONG).
-    #
-    # H1-only backtest behaviour (h1_only=True): skip the chase guard for
-    # BOTH entry zones. The backtest models pre-placed pending limits sitting
-    # at proximal and 50% throughout the OB's lifetime -- not market-time
-    # decisions. Applying the chase guard only to proximal (the original code
-    # path) would bias the proximal vs 50% A/B comparison. Apply or skip
-    # symmetrically.
-    tolerance = 0.5 * spread_val
-    if not h1_only:
+    # Limit-order chase guard — proximal entry only.
+    # If the proximal entry sits on the wrong side of current price, the
+    # limit would chase (LONG buying above market, SHORT selling below).
+    # Tolerance = 0.5x spread for rounding / tick noise.
+    # The 50pct entry skips this guard: it sits deeper in the OB by
+    # construction, so it's a pending limit waiting for further penetration,
+    # not a market-time decision. The backtest dual-entry A/B comparison
+    # depends on both entries getting the same chase-policy treatment.
+    if entry_zone == "proximal":
+        tolerance = 0.5 * spread_val
         if bias == "LONG" and entry > current_price + tolerance:
             return {
                 "valid": False,
@@ -1573,15 +1549,6 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15,
         "rr": round(tp1_rr, 2),
         "entry_source": entry_source,
     }
-    # Pass back the nested M15 OB (if any) so downstream chart/email
-    # rendering can mark the actual entry zone instead of the H1 OB.
-    # None when no M15 OB nested -- callers fall back to the H1 OB.
-    if m15_ob is not None:
-        out["m15_ob"] = {
-            "high": float(m15_ob["high"]),
-            "low":  float(m15_ob["low"]),
-            "ts":   m15_ob["ts"].isoformat() if hasattr(m15_ob["ts"], "isoformat") else str(m15_ob["ts"]),
-        }
     # Post-rounding direction check. Pre-round, the swing list ordering
     # guarantees tp2 > tp1 (LONG) or tp2 < tp1 (SHORT). After rounding to
     # `dp` decimals, two nearby swings can collapse to the same price
@@ -1763,7 +1730,7 @@ def _killzone_hit(utc_hour, pair_type):
 
 
 # PHASE 2 ONLY — sweep quality scorecard. Called only by Phase2_Alert_Engine.py.
-def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=None):
+def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
     bos_tag = ob.get('bos_tag', 'BOS')
     pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
 
@@ -1797,17 +1764,12 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
         bd = {"structure": structure_score}
 
     # ------------------------------------------------------------------
-    # Sweep — UNIFORM detection across phases.
+    # Sweep — H1-only (M15 removed 2026-05-26 in H1-only migration).
     #   H1: consumed from ob['sweep_observed'] (frozen by Phase 1 at OB
-    #       formation). Phase 2 does NOT re-detect H1 sweep.
-    #   M15: detected live by Phase 2 using observe_phase1_sweep on df_m15.
-    #        Same function as P1's H1 detection — same lookback (3), same
-    #        active-swing filter, same scoring components. Only the TF and
-    #        the fallback lookback window differ.
+    #       formation). Phase 2 does NOT re-detect; Phase 1 is source of truth.
     #
-    # If H1 snapshot field is missing from the zone, treat as zero and log
-    # via the missing-field path (schema drift signal). We do NOT re-detect
-    # on H1; Phase 1 is the source of truth.
+    # If the H1 snapshot is missing from the zone, treat as zero — this is a
+    # schema-drift signal worth investigating, not a reason to fabricate one.
     # ------------------------------------------------------------------
     ob_ts_iso = ob.get('ob_timestamp')
 
@@ -1839,47 +1801,7 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
             'hours_before_anchor': None,
         }
 
-    # M15: detect live using the SAME function P1 uses for H1.
-    m15_sweep = {
-        'score': 0.0, 'tier': 'none', 'price': None, 'sweep_idx': None,
-        'sweep_timestamp_iso': None, 'tf': 'M15',
-        'components': {'base': 0.0, 'equal_levels': 0.0, 'equal_levels_matches': 0,
-                       'rejection': 0.0, 'wick_body_ratio': 0.0},
-        'hours_before_anchor': None,
-    }
-    if df_m15 is not None and len(df_m15) > 20 and ob_ts_iso:
-        m15_atr_for_sweep = compute_atr(df_m15)
-        idx_found_m15, on_chart_m15 = locate_ob_candle_idx(df_m15, ob_ts_iso)
-        if on_chart_m15 and m15_atr_for_sweep:
-            ob_idx_m15 = idx_found_m15
-            # M15 has no structural event log of its own; the function will
-            # hit the BOS-pullback fallback path. fallback_lookback=20 ≈ 5h
-            # of M15 — captures the entry-time liquidity grab right before
-            # price taps the zone.
-            direction = 'bullish' if bias == 'LONG' else 'bearish'
-            pair_name_for_sweep = pair_conf.get('name', '') if pair_conf else ''
-            try:
-                m15_payload = observe_phase1_sweep(
-                    df_m15, ob_idx_m15, ob_idx_m15, direction,
-                    m15_atr_for_sweep, pair_type, pair_name_for_sweep,
-                    tf_label='M15', event_type='BOS',
-                    prior_event_idx=None, fallback_lookback=20,
-                )
-            except Exception:
-                m15_payload = {'exists': False}
-            if m15_payload.get('exists'):
-                m15_sweep = {
-                    'score':               float(m15_payload.get('score', 0.0)),
-                    'tier':                m15_payload.get('tier', 'none'),
-                    'price':               m15_payload.get('price'),
-                    'sweep_idx':           m15_payload.get('sweep_idx'),
-                    'sweep_timestamp_iso': m15_payload.get('timestamp'),
-                    'tf':                  'M15',
-                    'components':          m15_payload.get('components', m15_sweep['components']),
-                    'hours_before_anchor': m15_payload.get('hours_before_anchor'),
-                }
-
-    chosen_sweep = select_best_sweep(h1_sweep, m15_sweep)
+    chosen_sweep = h1_sweep
     # Non-JPY forex collapse: sweep is presence-only (1.0 if a qualifying
     # sweep exists, else 0.0). Equal-levels and rejection-quality components
     # are detected and rendered but do NOT add points on these pairs.
@@ -1896,28 +1818,20 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
     sweep_price  = chosen_sweep['price']
     sweep_tf     = chosen_sweep['tf']
 
-    # FVG — independent H1 + M15 scoring, summed, cap 2.0.
-    # H1 FVG = macro displacement (the structural signal).
-    # M15 FVG = micro-displacement at the same location (real confirmation,
-    # not redundant — M15 FVG can exist without H1 and vice versa).
+    # FVG — H1 only (M15 removed 2026-05-26 in H1-only migration).
+    # H1 FVG = macro displacement at OB formation, the structural signal.
     #
-    # Per-timeframe scoring:
-    #   H1:  pristine 1.2 | partial 0.6 | mitigated (was_detected) 0.3 | none 0.0
-    #   M15: pristine 0.8 | partial 0.4 | mitigated (was_detected) 0.2 | none 0.0
+    # Per-mitigation scoring (max 1.0):
+    #   pristine                       -> 1.0  (fresh imbalance still intact)
+    #   partial mitigation             -> 0.5  (institutional intent partly filled)
+    #   fully mitigated (was_detected) -> 0.25 (historical evidence; move was real)
+    #   never detected                 -> 0.0
     #
     # Grading rationale: FVG is evidence of institutional displacement at OB
     # formation. By the time price returns to the OB (alert moment), the FVG
     # is typically filled — so a strict `exists=True` gate scored ~0% on
-    # backtests. Smart fix: read `was_detected` (does the radar's frozen
-    # snapshot show an FVG ever formed?) and grade by current mitigation:
-    #   - 'none' / 'pristine': fresh imbalance still intact -> full credit
-    #   - 'partial': institutional intent partly filled -> half credit
-    #   - 'full': displacement happened, imbalance rebalanced -> quarter
-    #     credit (historical evidence still counts; the move was real)
-    #   - never detected (was_detected=False): no credit
-    #
-    # 16-case combination table is fully covered by the sum rule. Max possible
-    # is 1.2 + 0.8 = 2.0; cap is never exceeded by construction.
+    # backtests. We read `was_detected` (did the radar ever see an FVG form?)
+    # and grade by current mitigation.
     def _grade_single(fvg_obj, pristine_pts, partial_pts):
         if not fvg_obj:
             return 0.0
@@ -1938,15 +1852,14 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None, df_m15=No
             return pristine_pts
         return 0.0
 
-    fvg_h1  = fvg.get('h1')  if isinstance(fvg, dict) else None
-    fvg_m15 = fvg.get('m15') if isinstance(fvg, dict) else None
+    fvg_h1 = fvg.get('h1') if isinstance(fvg, dict) else None
 
     # Backward-compat: if caller passes a single FVG object (legacy shape with
     # 'exists' at top level), treat it as H1.
-    if fvg and isinstance(fvg, dict) and 'exists' in fvg and fvg_h1 is None and fvg_m15 is None:
+    if fvg and isinstance(fvg, dict) and 'exists' in fvg and fvg_h1 is None:
         fvg_h1 = fvg
 
-    bd["fvg"] = min(2.0, _grade_single(fvg_h1, 1.2, 0.6) + _grade_single(fvg_m15, 0.8, 0.4))
+    bd["fvg"] = _grade_single(fvg_h1, 1.0, 0.5)
     # Freshness — driven by Phase 1's lifetime touch counter on the OB.
     # Phase 1 invalidates OBs at 3 touches (smc_radar overuse-mitigation rule),
     # so 3+ touches never reaches Phase 2. Scoring covers 0/1/2 only.
@@ -2017,13 +1930,14 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     """
     Return list of (label, score, max_score, status, explanation) for email rendering.
 
-    Scorecard maxima (post-2026-05-25 killzone removal):
+    Scorecard maxima (post-2026-05-26 H1-only migration):
       Non-JPY forex (EURUSD, NZDUSD, USDCHF):
-        Structure 3.0 | Sweep 1.0 (presence-only) | FVG 2.0 | Freshness 1.5
-        Total = 7.5. Min confidence = 3.5.
+        Structure 3.0 | Sweep 1.0 (presence-only) | FVG 1.0 | Freshness 1.5
+        Total = 6.5.
       JPY / Gold / NAS:
-        Structure 3.0 | Sweep 3.0 | FVG 2.0 | Freshness 1.5
-        Total = 9.5. Min confidence = 5.5.
+        Structure 3.0 | Sweep 3.0 | FVG 1.0 | Freshness 1.5
+        Total = 8.5.
+    No confidence gate — every zone passing proximity + still-valid alerts.
     PD is rendered as a display-only row (max_score = 0) showing range
     geometry and PD% so the trader can use it for judgement, but it
     contributes no points. Macro removed from scoring; still rendered
@@ -2079,14 +1993,12 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         rows.append(("Liquidity Sweep", s, sweep_max, "fail",
                      "No qualifying sweep within recency window before the OB."))
 
-    # 3. FVG — independent H1 + M15 (max 2.0 total, summed and capped).
-    # H1: pristine 1.2 | partial 0.6 | none/full 0.0
-    # M15: pristine 0.8 | partial 0.4 | none/full 0.0
+    # 3. FVG — H1 only (max 1.0).
+    # pristine 1.0 | partial 0.5 | fully mitigated 0.25 | none 0.0
     s = breakdown.get("fvg", 0)
-    fvg_h1  = fvg.get('h1')  if isinstance(fvg, dict) else None
-    fvg_m15 = fvg.get('m15') if isinstance(fvg, dict) else None
+    fvg_h1 = fvg.get('h1') if isinstance(fvg, dict) else None
     # Legacy single-FVG fallback (treat as H1)
-    if fvg and isinstance(fvg, dict) and 'exists' in fvg and fvg_h1 is None and fvg_m15 is None:
+    if fvg and isinstance(fvg, dict) and 'exists' in fvg and fvg_h1 is None:
         fvg_h1 = fvg
 
     def _state(f):
@@ -2097,25 +2009,21 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
             return "absent"
         return "partial" if f.get('mitigation') == 'partial' else "pristine"
 
-    h1_state  = _state(fvg_h1)
-    m15_state = _state(fvg_m15)
-    desc = f"H1 FVG {h1_state}; M15 FVG {m15_state}."
+    h1_state = _state(fvg_h1)
+    desc = f"H1 FVG {h1_state}."
 
-    if s >= 1.6:
-        # Both pristine, or H1 pristine + M15 partial
-        rows.append(("FVG", s, 2.0, "ok",
-                     f"{desc} Strong displacement on both timeframes."))
-    elif s >= 1.0:
-        # H1 pristine alone (1.2), or other partial combos
-        rows.append(("FVG", s, 2.0, "warn",
-                     f"{desc} Displacement present but confluence partial."))
+    if s >= 1.0:
+        rows.append(("FVG", s, 1.0, "ok",
+                     f"{desc} Fresh institutional displacement at OB formation."))
+    elif s >= 0.5:
+        rows.append(("FVG", s, 1.0, "warn",
+                     f"{desc} Displacement present but partly mitigated."))
     elif s > 0:
-        # Only M15 contributing, or partials only
-        rows.append(("FVG", s, 2.0, "warn",
-                     f"{desc} Weak displacement signal."))
+        rows.append(("FVG", s, 1.0, "warn",
+                     f"{desc} Displacement evidence only — imbalance has been filled."))
     else:
-        rows.append(("FVG", s, 2.0, "fail",
-                     f"{desc} No qualifying displacement on either timeframe."))
+        rows.append(("FVG", s, 1.0, "fail",
+                     f"{desc} No qualifying displacement at OB formation."))
     # 4. Freshness — Phase 1 invalidates at 3 touches (overuse mitigation),
     # so the 3+ branch should not fire in practice; kept for legacy zones.
     s = breakdown.get("freshness", 0)

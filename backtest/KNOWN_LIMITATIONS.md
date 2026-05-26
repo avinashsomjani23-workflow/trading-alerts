@@ -21,11 +21,10 @@ trusting any number it produces.
 
 ## Scoring model
 
-- **Scoring calls live `smc_detector.run_scorecard` directly** (with
-  `df_m15=None` for H1-only), so it stays in lockstep with live scoring.
+- **Scoring calls live `smc_detector.run_scorecard` directly** (H1-only
+  since 2026-05-26 migration), so it stays in lockstep with live scoring.
   Killzone is overridden with the alert bar's hour (live wallclock would
-  be wrong for replayed history). M15 FVG component is always 0 by
-  construction in H1-only mode.
+  be wrong for replayed history).
 - **News blackout filter is active in backtest.**
   The harness calls `news_filter.fetch_events()` at run start for the
   date range, pulling from one source:

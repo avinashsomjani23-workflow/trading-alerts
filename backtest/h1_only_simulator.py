@@ -212,7 +212,7 @@ def _ob_age_h1_bars(ob: Dict[str, Any], df_h1: pd.DataFrame,
 def _score_h1_only(alert: Dict[str, Any], pair_conf: Dict[str, Any],
                    df_h1: pd.DataFrame, alert_ts: pd.Timestamp
                    ) -> Tuple[float, Dict[str, float]]:
-    """Score the OB using live run_scorecard with df_m15=None (H1-only).
+    """Score the OB using live run_scorecard (H1-only since 2026-05-26).
     Returns (total, breakdown). Never raises — bad scores log and return 0.
     """
     ob = alert["ob"]
@@ -220,12 +220,11 @@ def _score_h1_only(alert: Dict[str, Any], pair_conf: Dict[str, Any],
     h1_slice = df_h1.loc[:alert_ts]
     fvg_h1 = ob.get("fvg", {"exists": False, "was_detected": False,
                             "mitigation": "none"})
-    fvg_data = {"h1": fvg_h1, "m15": {"exists": False, "was_detected": False,
-                                       "mitigation": "none"}}
+    fvg_data = {"h1": fvg_h1}
     try:
         score_res = smc_detector.run_scorecard(
             bias, h1_slice, ob, fvg_data, alert["current_price"],
-            pair_conf, df_m15=None,
+            pair_conf,
         )
     except Exception as e:
         log_event("h1only_scorecard_error", level="warn",
@@ -278,8 +277,8 @@ def _simulate_single_entry(
 
     try:
         levels = smc_detector.compute_phase2_levels(
-            pair_conf, bias, ob, current_price, df_h1, df_m15=None,
-            h1_only=True, entry_zone=entry_zone,
+            pair_conf, bias, ob, current_price, df_h1,
+            entry_zone=entry_zone,
         )
     except Exception as e:
         log_event("h1only_levels_error", level="error", pair=pair,
@@ -361,11 +360,23 @@ def _simulate_single_entry(
     # Including the alert bar caused 283/1792 cloned-fill rows in the
     # 2026-03 backtest -- physically impossible "fills" on the bar that
     # only just published the alert (see RCA #2, #4).
+    # Two separate clocks:
+    #   - Pre-fill:  limit pends at most MAX_HOLD_H1_BARS bars after alert.
+    #                If price never comes back to entry inside that window,
+    #                emit never_filled.
+    #   - Post-fill: once filled, trade runs at most MAX_HOLD_H1_BARS bars
+    #                before forced timeout. Independent of pre-fill wait.
+    # Earlier version pre-sliced future to MAX_HOLD_H1_BARS bars TOTAL from
+    # alert, conflating the two clocks. A trade that pended N bars only got
+    # MAX_HOLD - N bars to play out, producing false window_end exits at
+    # whatever R the position happened to sit at when the slice ran out
+    # (often a positive number for trades that would have hit SL one bar
+    # later). See RCA Mar 9 EURUSD long, filled bar 46/48 -> window_end at
+    # +0.125R when real SL hit 8 bars after fill.
     fill_walk_start = alert_ts + pd.Timedelta(hours=1)
     future = df_h1.loc[fill_walk_start:]
     if future.empty:
         return None
-    future = future.iloc[: MAX_HOLD_H1_BARS]
 
     filled = False
     fill_ts: Optional[pd.Timestamp] = None
@@ -410,6 +421,11 @@ def _simulate_single_entry(
                 mae_price = entry
                 is_fill_bar_this_iter = True
             else:
+                # Pre-fill cap: limit pends at most MAX_HOLD_H1_BARS bars.
+                # i is 0-indexed bars-since-alert, so >= cap - 1 means we've
+                # already waited the full window without a touch -> give up.
+                if i >= MAX_HOLD_H1_BARS - 1:
+                    break
                 continue
 
         bars_walked_post_fill = i - fill_bar_idx

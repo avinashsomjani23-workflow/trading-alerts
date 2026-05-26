@@ -32,13 +32,13 @@ H1-only is the only mode. Tests the SMC system on H1 data alone:
 - Skips M15 / M5 fetches entirely.
 - **No scoring gate** — every H1 OB-touch fires a trade regardless of
   confluence score. Score is still computed (via live
-  `smc_detector.run_scorecard` with `df_m15=None`) and logged so the user
-  can discover the optimal threshold empirically from the trade outcomes.
+  `smc_detector.run_scorecard`, H1-only since 2026-05-26) and logged so the
+  user can discover the optimal threshold empirically from trade outcomes.
 - **Dual entry** — every OB-touch produces TWO trade rows: one with entry
   at the OB proximal edge, one at the OB 50% mean. Same SL (OB distal),
   same TP price levels (opposing H1 swing liquidity, reused from live
-  `compute_phase2_levels` with `h1_only=True`). R-distance halves on the
-  50% entry, so RR doubles for the same TP.
+  `compute_phase2_levels`). R-distance halves on the 50% entry, so RR
+  doubles for the same TP.
 - Logs `r_if_exit_tp1` AND `r_if_exit_tp2` for every trade so the user can
   see TP1-only behaviour vs default TP2 side by side.
 

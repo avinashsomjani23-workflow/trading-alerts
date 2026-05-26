@@ -12,10 +12,7 @@
       "pair_type": "forex",
       "entry_model": "limit",
       "map_tf": "1h",
-      "radar_tf": "15m",
-      "trigger_tf": "15m",
       "atr_multiplier": 4.0,
-      "min_confidence": 3.5,
       "decimal_places": 5,
       "spread_pips": 2.0,
       "killzones_utc": [["07:00", "10:00"], ["12:00", "17:00"]]
@@ -26,10 +23,7 @@
       "pair_type": "forex",
       "entry_model": "limit",
       "map_tf": "1h",
-      "radar_tf": "15m",
-      "trigger_tf": "15m",
       "atr_multiplier": 4.0,
-      "min_confidence": 5.5,
       "decimal_places": 3,
       "spread_pips": 2.0,
       "killzones_utc": [["03:30", "07:00"], ["07:00", "10:00"], ["12:00", "17:00"]]
@@ -40,10 +34,7 @@
       "pair_type": "forex",
       "entry_model": "limit",
       "map_tf": "1h",
-      "radar_tf": "15m",
-      "trigger_tf": "15m",
       "atr_multiplier": 4.0,
-      "min_confidence": 3.5,
       "decimal_places": 5,
       "spread_pips": 4.0,
       "killzones_utc": [["03:30", "07:00"], ["07:00", "10:00"], ["12:00", "17:00"]]
@@ -54,10 +45,7 @@
       "pair_type": "forex",
       "entry_model": "limit",
       "map_tf": "1h",
-      "radar_tf": "15m",
-      "trigger_tf": "15m",
       "atr_multiplier": 4.0,
-      "min_confidence": 3.5,
       "decimal_places": 5,
       "spread_pips": 2.0,
       "killzones_utc": [["07:00", "10:00"], ["12:00", "17:00"]]
@@ -66,12 +54,9 @@
       "symbol": "NQ=F",
       "name": "NAS100",
       "pair_type": "index",
-      "entry_model": "ltf_choch",
+      "entry_model": "limit",
       "map_tf": "1h",
-      "radar_tf": "15m",
-      "trigger_tf": "5m",
       "atr_multiplier": 4.5,
-      "min_confidence": 5.5,
       "decimal_places": 2,
       "spread_pips": 2.0,
       "killzones_utc": [["13:00", "21:00"]]
@@ -80,12 +65,9 @@
       "symbol": "GC=F",
       "name": "GOLD",
       "pair_type": "commodity",
-      "entry_model": "ltf_choch",
+      "entry_model": "limit",
       "map_tf": "1h",
-      "radar_tf": "15m",
-      "trigger_tf": "5m",
       "atr_multiplier": 4.5,
-      "min_confidence": 5.5,
       "decimal_places": 2,
       "spread_pips": 0.50,
       "killzones_utc": [["07:00", "10:00"], ["12:00", "21:00"]]
@@ -96,8 +78,5 @@
     "news_blackout_hours_before": 2,
     "news_blackout_hours_after": 1,
     "zone_fatigue_threshold": 5
-  },
-  "phase3": {
-    "min_rr_after_slippage": 1.2
   }
 }

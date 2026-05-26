@@ -282,7 +282,7 @@ def pip_unit_label(pair_conf):
     return "pips" if pair_conf.get("pair_type") == "forex" else "points"
 
 
-def atr_distance_label(distance, atr, tf_label="M15"):
+def atr_distance_label(distance, atr, tf_label="H1"):
     if atr is None or atr == 0:
         return ""
     ratio = distance / atr
@@ -493,7 +493,7 @@ def call_gemini_flash(pair, bias, news_headlines):
 
 
 # ---------------------------------------------------------------------------
-# Chart generators — H1 context + M15 approach
+# Chart generators — H1 context + H1 zoomed entry
 # ---------------------------------------------------------------------------
 
 def _base_canvas():
@@ -527,36 +527,158 @@ def _fig_to_b64(fig):
     return b64
 
 
-def build_m15_chart_ob(h1_ob, levels):
-    """
-    When a nested M15 OB was found inside the H1 OB, the M15 chart and the
-    email zone label must mark the M15 OB (that's where we actually enter),
-    NOT the H1 OB. This builds a shallow overlay dict: it inherits H1's
-    metadata (BOS line, FVG, sweep, direction) but overrides the geometry
-    fields (proximal/distal/high/low/ob_timestamp) to the M15 OB.
+def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
+    """H1 zoomed entry chart. Replaces the legacy M15 approach chart.
 
-    Returns the overlay dict, or the original H1 ob if no M15 OB nested.
-    Rule per project owner: BOS/CHoCH stays H1; only geometry switches.
+    Visual choices (per trader preference 2026-05-26):
+      - 30 H1 candles, focused on the OB and approach to it (long candles).
+      - Wider figsize relative to candle count -> visibly larger bodies.
+      - Same colour palette as the wide H1 context chart for consistency.
+      - Renders OB band, entry/SL/TP1/TP2 lines, current price line,
+        FVG box (if present), OB candle outline. No dealing-range band
+        (intentional -- this chart is about the entry, not the macro view).
     """
-    m15_ob = levels.get("m15_ob") if isinstance(levels, dict) else None
-    if not m15_ob:
-        return h1_ob
-    direction = h1_ob.get("direction")  # bullish / bearish
-    m15_high = float(m15_ob["high"])
-    m15_low  = float(m15_ob["low"])
-    # proximal_line is set the same way Phase 1 sets it on the H1 OB:
-    # bullish -> high, bearish -> low. See smc_radar.py:866.
-    if direction == "bullish":
-        prox, dist = m15_high, m15_low
-    else:
-        prox, dist = m15_low, m15_high
-    overlay = dict(h1_ob)
-    overlay["proximal_line"] = prox
-    overlay["distal_line"]   = dist
-    overlay["high"]          = m15_high
-    overlay["low"]           = m15_low
-    overlay["ob_timestamp"]  = m15_ob["ts"]
-    return overlay
+    try:
+        dp = pair_conf.get("decimal_places", 5)
+        df_plot = df_h1.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(30).copy().reset_index(drop=True)
+        n = len(df_plot)
+        if n < 5:
+            return None
+
+        fig, ax = plt.subplots(1, 1, figsize=(11, 5.2), facecolor='#131722')
+        ax.set_facecolor('#131722')
+        for s in ax.spines.values():
+            s.set_color('#2a2a3e')
+
+        # Draw candles -- wider bodies for the zoomed view (0.7 width vs 0.4).
+        for i, row in df_plot.iterrows():
+            o, h, l, c = float(row['Open']), float(row['High']), float(row['Low']), float(row['Close'])
+            if any(np.isnan(v) for v in [o, h, l, c]):
+                continue
+            col = '#26a69a' if c >= o else '#ef5350'
+            ax.plot([i, i], [l, h], color=col, linewidth=1.6, zorder=2)
+            body = abs(c - o) or (h - l) * 0.02
+            ax.add_patch(patches.Rectangle(
+                (i - 0.35, min(o, c)), 0.7, body,
+                facecolor=col, linewidth=0, alpha=0.92, zorder=3
+            ))
+
+        tail_n = 30
+        full_n = len(df_h1)
+        window_start = max(0, full_n - tail_n)
+
+        proximal = float(ob.get('proximal_line', 0))
+        distal   = float(ob.get('distal_line', 0))
+        zone_hi, zone_lo = max(proximal, distal), min(proximal, distal)
+
+        if zone_hi > 0 and zone_lo > 0:
+            ax.add_patch(patches.Rectangle(
+                (0, zone_lo), n + 5, zone_hi - zone_lo,
+                facecolor='#9b59b6', alpha=0.18, zorder=1
+            ))
+            ax.add_patch(patches.Rectangle(
+                (0, zone_lo), n + 5, zone_hi - zone_lo,
+                fill=False, edgecolor='#bb8fce', linestyle=':', linewidth=1.5, zorder=2
+            ))
+
+        # FVG box (H1 only).
+        fvg = ob.get('fvg', {}) or {}
+        if fvg.get('exists'):
+            ft, fb = float(fvg.get('fvg_top', 0)), float(fvg.get('fvg_bottom', 0))
+            c1_ts = fvg.get('c1_timestamp')
+            c1_resolved = None
+            if c1_ts:
+                idx_c1, found_c1 = smc_detector.locate_ob_candle_idx(df_h1, c1_ts)
+                if found_c1:
+                    c1_resolved = idx_c1
+            if ft > 0 and fb > 0 and c1_resolved is not None:
+                mid_abs = c1_resolved + 1
+                mid_local = mid_abs - window_start
+                if 0 <= mid_local < n:
+                    mit = fvg.get('mitigation', 'pristine')
+                    face_col, edge_col = ('#f4d03f', '#f1c40f') if mit == 'partial' else ('#27ae60', '#2ecc71')
+                    ax.add_patch(patches.Rectangle(
+                        (mid_local - 0.6, fb), 3.0, ft - fb,
+                        facecolor=face_col, alpha=0.18, zorder=1
+                    ))
+                    ax.add_patch(patches.Rectangle(
+                        (mid_local - 0.6, fb), 3.0, ft - fb,
+                        fill=False, edgecolor=edge_col, linestyle='--', linewidth=1.2, zorder=2
+                    ))
+
+        # Entry / SL / TP lines.
+        entry_p = float(levels.get('entry', 0)) if isinstance(levels, dict) else 0
+        sl_p    = float(levels.get('sl', 0))    if isinstance(levels, dict) else 0
+        tp1_p   = float(levels.get('tp1', 0))   if isinstance(levels, dict) else 0
+        tp2_p   = float(levels.get('tp2', 0))   if isinstance(levels, dict) else 0
+        if entry_p > 0:
+            ax.axhline(y=entry_p, color='#e67e22', linewidth=1.2, linestyle='--', alpha=0.9, zorder=3)
+        if sl_p > 0:
+            ax.axhline(y=sl_p, color='#e74c3c', linewidth=1.2, linestyle='--', alpha=0.9, zorder=3)
+        if tp1_p > 0:
+            ax.axhline(y=tp1_p, color='#27ae60', linewidth=1.0, linestyle=':', alpha=0.85, zorder=3)
+        if tp2_p > 0:
+            ax.axhline(y=tp2_p, color='#1e8449', linewidth=1.0, linestyle=':', alpha=0.85, zorder=3)
+
+        current = float(df_plot['Close'].iloc[-1])
+        ax.axhline(y=current, color='#ffffff', linewidth=0.9, linestyle='-', alpha=0.55, zorder=2)
+
+        # OB candle outline (white).
+        ob_ts_iso = ob.get('ob_timestamp')
+        if ob_ts_iso:
+            abs_idx, found = smc_detector.locate_ob_candle_idx(df_h1, ob_ts_iso)
+            if found and abs_idx >= window_start:
+                local_idx = abs_idx - window_start
+                if 0 <= local_idx < n:
+                    ob_c_h = float(df_plot['High'].iloc[local_idx])
+                    ob_c_l = float(df_plot['Low'].iloc[local_idx])
+                    ax.add_patch(patches.Rectangle(
+                        (local_idx - 0.45, ob_c_l), 0.9, ob_c_h - ob_c_l,
+                        fill=False, edgecolor='#ffffff', linewidth=1.7, zorder=5
+                    ))
+
+        # Right-edge price labels (entry/SL/TP1/TP2, current price).
+        right_labels = []
+        if entry_p > 0: right_labels.append((entry_p, f" {entry_p:.{dp}f}", '#e67e22'))
+        if sl_p > 0:    right_labels.append((sl_p,    f" {sl_p:.{dp}f}",    '#e74c3c'))
+        if tp1_p > 0:   right_labels.append((tp1_p,   f" {tp1_p:.{dp}f}",   '#27ae60'))
+        if tp2_p > 0:   right_labels.append((tp2_p,   f" {tp2_p:.{dp}f}",   '#1e8449'))
+        right_labels.append((current, f" {current:.{dp}f}", '#ffffff'))
+        right_stacked = smc_detector.stack_labels(right_labels, pair_conf)
+        for adj_price, text, color in right_stacked:
+            ax.text(n + 0.6, adj_price, text, color=color, fontsize=10, va='center',
+                    fontweight='bold', zorder=5)
+
+        # Left-edge OB proximal / distal markers.
+        left_labels = []
+        if zone_hi > 0:
+            left_labels.append((proximal, f"{proximal:.{dp}f}", '#bb8fce'))
+            left_labels.append((distal,   f"{distal:.{dp}f}",   '#bb8fce'))
+        left_stacked = smc_detector.stack_labels(left_labels, pair_conf)
+        for adj_price, text, color in left_stacked:
+            ax.text(-0.7, adj_price, text, color=color, fontsize=9, va='center',
+                    ha='left', fontweight='bold', zorder=5,
+                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
+
+        # Y-axis padded around the most relevant levels.
+        y_min, y_max = float(df_plot['Low'].min()), float(df_plot['High'].max())
+        for val in (zone_lo, zone_hi, entry_p, sl_p, tp1_p, tp2_p):
+            if val > 0:
+                y_min = min(y_min, val)
+                y_max = max(y_max, val)
+        pad = (y_max - y_min) * 0.10
+        ax.set_ylim(y_min - pad, y_max + pad)
+        ax.set_xlim(-1, n + 10)
+        ax.set_title(title, color='#dddddd', fontsize=11, pad=8, loc='left')
+        ax.tick_params(colors='#888', labelsize=9)
+        ax.yaxis.tick_right()
+        ax.set_xticks([])
+        plt.tight_layout(pad=0.5)
+        return _fig_to_b64(fig)
+    except Exception as e:
+        print(f"H1 zoomed chart error: {e}")
+        plt.close('all')
+        return None
 
 
 def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=None):
@@ -808,222 +930,6 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         plt.close('all')
         return None
         
-def generate_m15_chart(df_m15, title, levels, ob, pair_conf, fvg_data, sweep_price,
-                       dealing_range=None):
-    try:
-        dp = pair_conf.get("decimal_places", 5)
-        df_plot = df_m15.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(60).copy().reset_index(drop=True)
-        n = len(df_plot)
-        if n < 5:
-            return None
-
-        fig, ax = _base_canvas()
-        _draw_candles(ax, df_plot)
-
-        tail_n = 60
-        full_n = len(df_m15)
-        window_start = max(0, full_n - tail_n)
-
-        proximal = float(ob.get('proximal_line', 0))
-        distal = float(ob.get('distal_line', 0))
-        zone_hi, zone_lo = max(proximal, distal), min(proximal, distal)
-
-        # --- Zone band ---
-        if zone_hi > 0 and zone_lo > 0:
-            ax.add_patch(patches.Rectangle(
-                (0, zone_lo), n + 5, zone_hi - zone_lo,
-                facecolor='#9b59b6', alpha=0.15, zorder=1
-            ))
-            ax.add_patch(patches.Rectangle(
-                (0, zone_lo), n + 5, zone_hi - zone_lo,
-                fill=False, edgecolor='#bb8fce', linestyle=':', linewidth=1.5, zorder=2
-            ))
-
-        # --- Dealing range EQ line only ---
-        dr_eq = None
-        if dealing_range and dealing_range.get('valid'):
-            dr_eq = float(dealing_range['equilibrium'])
-            ax.axhline(y=dr_eq, color='#5dade2', linewidth=0.9, linestyle='-.', alpha=0.6, zorder=2)
-
-        # --- FVG: outline middle (displacement) candle only, slightly wider for mitigation visibility ---
-        if fvg_data and fvg_data.get('exists'):
-            ft, fb = float(fvg_data.get('fvg_top', 0)), float(fvg_data.get('fvg_bottom', 0))
-            c1_idx = fvg_data.get('c1_idx')
-            if ft > 0 and fb > 0 and c1_idx is not None:
-                mid_abs = int(c1_idx) + 1
-                mid_local = mid_abs - window_start
-                if 0 <= mid_local < n:
-                    fvg_x_start = mid_local - 0.6
-                    fvg_width = 1.8 + 1.2
-                    ax.add_patch(patches.Rectangle(
-                        (fvg_x_start, fb), fvg_width, ft - fb,
-                        facecolor='#27ae60', alpha=0.10, zorder=1
-                    ))
-                    ax.add_patch(patches.Rectangle(
-                        (fvg_x_start, fb), fvg_width, ft - fb,
-                        fill=False, edgecolor='#2ecc71', linestyle='--', linewidth=1.0, zorder=2
-                    ))
-
-        # --- Liquidity sweep wick highlight (M15 only) ---
-        # Draws a dotted rectangle around the wick portion of the sweep candle.
-        # Drawn only if sweep occurred on M15 timeframe.
-        sweep_tf = ob.get('sweep_tf')
-        sweep_ts = ob.get('sweep_timestamp')
-        if sweep_tf == 'M15' and sweep_ts:
-            sw_abs_idx, sw_found = smc_detector.locate_ob_candle_idx(df_m15, sweep_ts)
-            if sw_found and sw_abs_idx >= window_start:
-                sw_local = sw_abs_idx - window_start
-                if 0 <= sw_local < n:
-                    sw_o = float(df_plot['Open'].iloc[sw_local])
-                    sw_h = float(df_plot['High'].iloc[sw_local])
-                    sw_l = float(df_plot['Low'].iloc[sw_local])
-                    sw_c = float(df_plot['Close'].iloc[sw_local])
-                    body_top = max(sw_o, sw_c)
-                    body_bot = min(sw_o, sw_c)
-                    if ob.get('direction') == 'bullish':
-                        wick_lo, wick_hi = sw_l, body_bot
-                    else:
-                        wick_lo, wick_hi = body_top, sw_h
-                    if wick_hi > wick_lo:
-                        ax.add_patch(patches.Rectangle(
-                            (sw_local - 0.45, wick_lo), 0.9, wick_hi - wick_lo,
-                            fill=False, edgecolor='#00e5ff', linestyle=':',
-                            linewidth=1.5, zorder=5
-                        ))
-
-        # --- BOS / CHoCH horizontal line ---
-        # Palette:
-        #   BOS              -> yellow #f1c40f
-        #   Major CHoCH      -> pink   #e91e63
-        #   Minor CHoCH      -> purple #9c27b0  (internal lb-3 break after wall touch — weakening flag)
-        bos_price = float(ob.get('bos_swing_price', 0))
-        bos_tag = ob.get('bos_tag', 'BOS')
-        bos_tier = ob.get('bos_tier', 'Major')
-        if bos_tag == 'BOS':
-            bos_color = '#f1c40f'
-        elif bos_tier == 'Minor':
-            bos_color = '#9c27b0'
-        else:
-            bos_color = '#e91e63'
-        if bos_price > 0:
-            ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
-
-        # --- Entry / SL horizontal lines ---
-        # Dashed to match H1 chart; solid lines were visually competing
-        # with TP lines and crowding the small M15 chart.
-        entry_p = float(levels.get('entry', 0))
-        sl_p = float(levels.get('sl', 0))
-        if entry_p > 0:
-            ax.axhline(y=entry_p, color='#e67e22', linestyle='--', linewidth=1.1, alpha=0.85, zorder=4)
-        if sl_p > 0:
-            ax.axhline(y=sl_p, color='#e74c3c', linestyle='--', linewidth=1.1, alpha=0.85, zorder=4)
-
-        # --- Current price line ---
-        current = float(df_plot['Close'].iloc[-1])
-        ax.axhline(y=current, color='#ffffff', linewidth=0.8, linestyle='-', alpha=0.5, zorder=2)
-
-        # --- OB candle outline (white) ---
-        ob_ts_iso = ob.get('ob_timestamp')
-        if ob_ts_iso:
-            abs_idx, found = smc_detector.locate_ob_candle_idx(df_m15, ob_ts_iso)
-            if found and abs_idx >= window_start:
-                local_idx = abs_idx - window_start
-                if 0 <= local_idx < n:
-                    ob_c_h = float(df_plot['High'].iloc[local_idx])
-                    ob_c_l = float(df_plot['Low'].iloc[local_idx])
-                    ax.add_patch(patches.Rectangle(
-                        (local_idx - 0.5, ob_c_l), 1.0, ob_c_h - ob_c_l,
-                        fill=False, edgecolor='#ffffff', linewidth=1.5, zorder=5
-                    ))
-
-        # --- Right-edge tags: ENTRY, SL, TP1, TP2 (numbers only, colour-matched) ---
-        tp1_p = float(levels.get('tp1', 0))
-        tp2_p = float(levels.get('tp2', 0)) if isinstance(levels, dict) else 0
-        right_labels = []
-        if entry_p > 0:
-            right_labels.append((entry_p, f" {entry_p:.{dp}f}", '#e67e22'))
-        if sl_p > 0:
-            right_labels.append((sl_p, f" {sl_p:.{dp}f}", '#e74c3c'))
-
-        # --- Y-axis: candle range + SL + entry + zone. ---
-        y_min, y_max = float(df_plot['Low'].min()), float(df_plot['High'].max())
-        if sl_p > 0:
-            y_min = min(y_min, sl_p)
-        if entry_p > 0:
-            y_max = max(y_max, entry_p)
-            y_min = min(y_min, entry_p)
-        y_min = min(y_min, zone_lo)
-        y_max = max(y_max, zone_hi)
-        pad = (y_max - y_min) * 0.08
-        ax.set_ylim(y_min - pad, y_max + pad)
-
-        # TP1: line if visible, arrow if outside
-        if tp1_p > 0:
-            y_lo, y_hi = ax.get_ylim()
-            if tp1_p > y_hi:
-                ax.text(n + 1, y_hi - pad * 0.3, f" \u2191 {tp1_p:.{dp}f}",
-                        color='#27ae60', fontsize=10, va='top', fontweight='bold', zorder=5)
-            elif tp1_p < y_lo:
-                ax.text(n + 1, y_lo + pad * 0.3, f" \u2193 {tp1_p:.{dp}f}",
-                        color='#27ae60', fontsize=10, va='bottom', fontweight='bold', zorder=5)
-            else:
-                ax.axhline(y=tp1_p, color='#2ecc71', linestyle='-', linewidth=1.5, alpha=0.95, zorder=4)
-                right_labels.append((tp1_p, f" {tp1_p:.{dp}f}", '#2ecc71'))
-
-        # TP2: line if visible, arrow if outside (same logic as TP1, darker green)
-        if tp2_p > 0:
-            y_lo, y_hi = ax.get_ylim()
-            if tp2_p > y_hi:
-                ax.text(n + 1, y_hi - pad * 0.6, f" \u2191 {tp2_p:.{dp}f}",
-                        color='#1e8449', fontsize=10, va='top', fontweight='bold', zorder=5)
-            elif tp2_p < y_lo:
-                ax.text(n + 1, y_lo + pad * 0.6, f" \u2193 {tp2_p:.{dp}f}",
-                        color='#1e8449', fontsize=10, va='bottom', fontweight='bold', zorder=5)
-            else:
-                ax.axhline(y=tp2_p, color='#27ae60', linestyle='-', linewidth=1.5, alpha=0.95, zorder=4)
-                right_labels.append((tp2_p, f" {tp2_p:.{dp}f}", '#27ae60'))
-
-        right_stacked = smc_detector.stack_labels(right_labels, pair_conf)
-        for adj_price, text, color in right_stacked:
-            ax.text(n + 1, adj_price, text, color=color, fontsize=10, va='center',
-                    fontweight='bold', zorder=5)
-
-        # --- Left-edge tags: proximal, distal, BOS/CHoCH ---
-        left_labels = []
-        if zone_hi > 0:
-            left_labels.append((proximal, f"{proximal:.{dp}f}", '#bb8fce'))
-            left_labels.append((distal, f"{distal:.{dp}f}", '#bb8fce'))
-        if bos_price > 0:
-            left_labels.append((bos_price, f"{bos_price:.{dp}f}", bos_color))
-        left_stacked = smc_detector.stack_labels(left_labels, pair_conf)
-        for adj_price, text, color in left_stacked:
-            ax.text(-1, adj_price, text, color=color, fontsize=8, va='center',
-                    ha='left', fontweight='bold', zorder=5,
-                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
-
-        # --- Mid-chart tags: current price, EQ ---
-        mid_x = n / 2.0
-        center_labels = []
-        center_labels.append((current, f"{current:.{dp}f}", '#ffffff'))
-        if dr_eq is not None:
-            center_labels.append((dr_eq, f"{dr_eq:.{dp}f}", '#5dade2'))
-        center_stacked = smc_detector.stack_labels(center_labels, pair_conf)
-        for adj_price, text, color in center_stacked:
-            ax.text(mid_x, adj_price, text, color=color, fontsize=8, va='center',
-                    ha='center', fontweight='bold', zorder=5,
-                    bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
-
-        ax.set_xlim(-1, n + 14)
-        ax.set_title(title, color='#dddddd', fontsize=11, pad=8, loc='left')
-        ax.tick_params(colors='#888', labelsize=9)
-        ax.yaxis.tick_right()
-        ax.set_xticks([])
-        plt.tight_layout(pad=0.5)
-        return _fig_to_b64(fig)
-    except Exception as e:
-        print(f"M15 chart error: {e}")
-        plt.close('all')
-        return None
 
 
 # ---------------------------------------------------------------------------
@@ -1107,49 +1013,27 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     # Freshness display handled by scorecard row alone; no separate context line.
     bos_tag = ob.get('bos_tag', 'BOS')
     bos_tier = ob.get('bos_tier', 'Major')
-    entry_model = pair_conf.get('entry_model', 'limit')
-    if entry_model == "limit":
-        action_word = "SELL LIMIT" if bias == "SHORT" else "BUY LIMIT"
-        tp2_val = levels.get('tp2')
-        tp2_html = f"TP2: {tp2_val:,.{dp}f} &nbsp;|&nbsp; " if tp2_val is not None else ""
-        action_block = f"""
-            <div style="background:#27ae60;padding:14px 18px;border-radius:10px;margin-bottom:14px;">
-                <p style="color:white;font-size:15px;font-weight:bold;margin:0;">{action_word} at {levels.get('entry'):,.{dp}f}</p>
-                <p style="color:white;margin:4px 0 0;font-size:12px;">
-                    SL: {levels.get('sl'):,.{dp}f} &nbsp;|&nbsp;
-                    TP1: {levels.get('tp1'):,.{dp}f} &nbsp;|&nbsp;
-                    {tp2_html}Risk: {dollar_risk_str}
-                </p>
-            </div>"""
-    else:
-        # Zone label shows the OB we ACTUALLY enter on -- M15 OB if nested,
-        # else H1 OB. Matches what the M15 chart marks.
-        zone_ob = data.get('m15_chart_ob') or ob
-        proximal = float(zone_ob.get('proximal_line', 0))
-        distal = float(zone_ob.get('distal_line', 0))
-        action_block = f"""
-            <div style="background:#e67e22;padding:14px 18px;border-radius:10px;margin-bottom:14px;">
-                <p style="color:white;font-size:15px;font-weight:bold;margin:0;">APPROACHING &mdash; WAIT FOR M5 CHoCH</p>
-                <p style="color:white;margin:6px 0 2px;font-size:12px;">
-                    Zone: {min(proximal, distal):,.{dp}f} &rarr; {max(proximal, distal):,.{dp}f} &nbsp;|&nbsp;
-                    Direction: {bias}
-                </p>
-                <p style="color:white;margin:2px 0 0;font-size:11px;opacity:0.9;">
-                    Projected SL: {levels.get('sl'):,.{dp}f} &nbsp;|&nbsp;
-                    TP1: {levels.get('tp1'):,.{dp}f} &nbsp;|&nbsp;
-                    {(f"TP2: {levels.get('tp2'):,.{dp}f} &nbsp;|&nbsp; " if levels.get('tp2') is not None else "")}Risk: {dollar_risk_str}
-                </p>
-                <p style="color:white;margin:4px 0 0;font-size:11px;opacity:0.85;">
-                    Final entry will be confirmed at M5 CHoCH inside the zone.
-                </p>
-            </div>"""
+    # H1-only migration (2026-05-26): every pair routes through the limit
+    # branch. The legacy ltf_choch (M5 CHoCH) approach block is retired.
+    action_word = "SELL LIMIT" if bias == "SHORT" else "BUY LIMIT"
+    tp2_val = levels.get('tp2')
+    tp2_html = f"TP2: {tp2_val:,.{dp}f} &nbsp;|&nbsp; " if tp2_val is not None else ""
+    action_block = f"""
+        <div style="background:#27ae60;padding:14px 18px;border-radius:10px;margin-bottom:14px;">
+            <p style="color:white;font-size:15px;font-weight:bold;margin:0;">{action_word} at {levels.get('entry'):,.{dp}f}</p>
+            <p style="color:white;margin:4px 0 0;font-size:12px;">
+                SL: {levels.get('sl'):,.{dp}f} &nbsp;|&nbsp;
+                TP1: {levels.get('tp1'):,.{dp}f} &nbsp;|&nbsp;
+                {tp2_html}Risk: {dollar_risk_str}
+            </p>
+        </div>"""
 
-    # Total max is 7.5 for non-JPY forex (sweep collapsed to presence-only 1.0),
-    # 9.5 elsewhere. Mirrors smc_detector.run_scorecard. Killzone removed
-    # from scoring 2026-05-25 (was always-credited noise).
+    # Total max is 6.5 for non-JPY forex (sweep collapsed to presence-only 1.0),
+    # 8.5 elsewhere. Mirrors smc_detector.run_scorecard post-H1-only migration:
+    # Structure 3.0 | Sweep 1.0/3.0 | FVG 1.0 | Freshness 1.5.
     _pname = pair_conf.get('name', '') if pair_conf else ''
     _ptype = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
-    total_max_for_card = 7.5 if (_ptype == 'forex' and 'JPY' not in _pname) else 9.5
+    total_max_for_card = 6.5 if (_ptype == 'forex' and 'JPY' not in _pname) else 8.5
     scorecard_html = build_scorecard_html(scorecard_rows, total_score, total_max_for_card)
 
     distance_html = f"""
@@ -1191,9 +1075,11 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         h1_chart_block = '<div style="padding:10px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:12px;margin-bottom:12px;">&#9888; H1 chart failed to render for this alert. Check GitHub Actions logs.</div>'
 
     if m15_chart_ok:
+        # The "chart_m15" CID is preserved for backward compat with the email
+        # MIME pipeline; the bytes are the H1 zoomed entry chart.
         m15_chart_block = '<img src="cid:chart_m15" style="width:100%;border-radius:6px;margin-bottom:12px;" />'
     else:
-        m15_chart_block = '<div style="padding:10px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:12px;margin-bottom:12px;">&#9888; M15 chart failed to render for this alert. Check GitHub Actions logs.</div>'
+        m15_chart_block = '<div style="padding:10px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:12px;margin-bottom:12px;">&#9888; H1 zoomed chart failed to render for this alert. Check GitHub Actions logs.</div>'
 
     # Score-change driver line: only shown on update emails.
     score_change_line = data.get("score_change_line")
@@ -1243,7 +1129,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">H1 Context</div>
             {h1_chart_block}
             {_chart_legend_html(bos_tag, bos_tier)}
-            <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">M15 Approach</div>
+            <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">H1 Zoomed - Entry Zone</div>
             {m15_chart_block}
             {_chart_legend_html(bos_tag, bos_tier)}
             {sweep_breakdown_html}
@@ -1821,20 +1707,23 @@ if __name__ == "__main__":
             append_scan_log(scan_record)
             continue
 
-        radar_tf = pair_conf.get("radar_tf", "15m")
-        df_m15 = fetch_with_retry(symbol, "5d", radar_tf)
         # 30d H1 mirrors Phase 1's MAX_OB_AGE_DAYS window. If a zone is
         # still active in P1's slate, its OB candle must be locatable on
         # P2's H1 frame too — no silent fallback to "latest candle" inside
         # the scorer.
         df_h1 = fetch_with_retry(symbol, "30d", "1h")
-        if df_m15 is None or df_h1 is None:
-            print(f"  [SKIP] {name}: data unavailable after retries")
+        if df_h1 is None:
+            print(f"  [SKIP] {name}: H1 data unavailable after retries")
             continue
 
-        current_price = float(df_m15['Close'].iloc[-1])
+        # Current price = last H1 close (the forming bar's most recent print
+        # from yfinance — already reflects intra-bar movement). Wick-aware
+        # proximity below uses the forming bar's high/low so an OB-touching
+        # wick mid-hour still fires the proximity gate.
+        current_price = float(df_h1['Close'].iloc[-1])
+        h1_bar_high   = float(df_h1['High'].iloc[-1])
+        h1_bar_low    = float(df_h1['Low'].iloc[-1])
         h1_atr = smc_detector.compute_atr(df_h1)
-        m15_atr = smc_detector.compute_atr(df_m15)
         if not h1_atr:
             continue
 
@@ -1849,18 +1738,31 @@ if __name__ == "__main__":
             proximal = float(ob['proximal_line'])
             distal = float(ob['distal_line'])
             bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
-            distance = abs(current_price - proximal)
+            # Wick-aware proximity. Use the closest point on the forming H1
+            # bar to the OB proximal:
+            #   LONG  (bullish OB, price coming down): closest = bar Low
+            #   SHORT (bearish OB, price coming up):   closest = bar High
+            # Fallback to current_price for the other side. This catches a
+            # wick that pierced toward the OB and reversed within the same
+            # bar — an event the close alone would hide.
+            if bias == "LONG":
+                closest_to_ob = min(current_price, h1_bar_low)
+            else:
+                closest_to_ob = max(current_price, h1_bar_high)
+            distance = abs(closest_to_ob - proximal)
             prox_cap = pair_conf["atr_multiplier"] * h1_atr
 
             zone_outcome = {
                 "direction": ob['direction'],
                 "proximal": proximal,
+                "closest_price": round(closest_to_ob, dp),
+                "current_price": round(current_price, dp),
                 "distance": round(distance, dp),
                 "proximity_cap": round(prox_cap, dp),
                 "result": None
             }
 
-            # 1. Proximity gate
+            # 1. Proximity gate (wick-aware)
             if distance > prox_cap:
                 zone_outcome["result"] = "dropped_proximity"
                 scan_record["zone_outcomes"].append(zone_outcome)
@@ -1901,109 +1803,53 @@ if __name__ == "__main__":
             append_scan_log(scan_record)
             continue
 
-        # 3. Per-pair single-alert: pick nearest-to-price zone. No trend gating.
-        # Trend is computed as INFORMATION ONLY and surfaced in the email banner
-        # so the trader can decide with-trend vs counter-trend at execution time.
+        # H1 trend: information-only banner (no gating). Trader decides
+        # with-trend vs counter-trend at execution time.
         current_trend = bos_counter.get('trend')  # 'bullish' | 'bearish' | None
         scan_record["h1_trend"] = current_trend
 
-        # Nearest-to-price wins across ALL surviving zones, regardless of direction
-        surviving_obs.sort(key=lambda o: abs(current_price - float(o['proximal_line'])))
-        selected_ob = surviving_obs[0]
+        # All surviving zones get their own alert (H1-only migration, 2026-05-26).
+        # Pre-migration code picked nearest-only to dampen M15-noise spam; with
+        # H1-only entries, every legitimate zone deserves visibility. Score gate
+        # also removed — hysteresis dedup still suppresses redundant re-emails.
+        for ob in surviving_obs:
+            # Inject fresh BOS count + ring-overflow flag onto each zone.
+            # Structure is scored from the zone's own bos_tag/bos_tier — the
+            # zone's structural identity does not depend on whether it agrees
+            # with the current dominant trend.
+            ob['bos_sequence_count'] = bos_counter['count']
+            ob['bos_count_maxed'] = bool(bos_counter.get('count_maxed', False))
 
-        # Classify trend alignment for the selected zone (information only)
-        zone_dir = selected_ob.get('direction')
-        if current_trend is None:
-            trend_alignment = "ambiguous"
-            trend_label = "H1 trend ambiguous — no clear BOS sequence"
-        elif current_trend == zone_dir:
-            trend_alignment = "with_trend"
-            trend_label = f"WITH H1 trend (H1 is {current_trend})"
-        else:
-            trend_alignment = "counter_trend"
-            trend_label = f"AGAINST H1 trend (H1 is {current_trend}, zone is {zone_dir})"
+            zone_dir = ob.get('direction')
+            if current_trend is None:
+                trend_alignment = "ambiguous"
+                trend_label = "H1 trend ambiguous — no clear BOS sequence"
+            elif current_trend == zone_dir:
+                trend_alignment = "with_trend"
+                trend_label = f"WITH H1 trend (H1 is {current_trend})"
+            else:
+                trend_alignment = "counter_trend"
+                trend_label = f"AGAINST H1 trend (H1 is {current_trend}, zone is {zone_dir})"
 
-        scan_record["trend_alignment"] = trend_alignment
+            scan_record["trend_alignment"] = trend_alignment
 
-        # Inject fresh BOS count + ring-overflow flag onto selected zone.
-        # Structure is scored from the zone's own bos_tag/bos_tier — the
-        # zone's structural identity does not depend on whether it agrees
-        # with the current dominant trend. Trend alignment is rendered as
-        # an information-only banner in the email. Previously this injection
-        # was gated on `current_trend == zone_dir`, which silently gave
-        # counter-trend zones a phantom "BOS #1" score (the scorecard's
-        # default). Removed the gating.
-        selected_ob['bos_sequence_count'] = bos_counter['count']
-        selected_ob['bos_count_maxed'] = bool(bos_counter.get('count_maxed', False))
-
-        # Now score and alert only the selected zone
-        for ob in [selected_ob]:
             proximal = float(ob['proximal_line'])
             bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
-            zone_top = max(proximal, float(ob['distal_line']))
-            zone_bottom = min(proximal, float(ob['distal_line']))
 
-            # FVG: detect H1 + M15 INDEPENDENTLY in the same time window
-            # anchored to the OB candle. Veteran SMC: H1 FVG is the macro
-            # displacement signature; M15 FVG is the finer-resolution
-            # confirmation in the same window. Both are scored separately.
-            #
-            # H1 FVG: inherited from Phase 1 (radar already detected it with
-            # the OB→OB+7 window). We do NOT redetect on H1.
-            # M15 FVG: detected here on the M15 dataframe using OB→OB+28
-            # M15 candles. Window anchored to OB timestamp.
-            ptype = pair_conf.get("pair_type", "forex")
-            fvg_floor_mult = smc_detector.FVG_NOISE_FLOOR_MULT.get(ptype, 0.20)
-            m15_atr_for_fvg = m15_atr if m15_atr else 0.0
-            atr_floor_m15 = fvg_floor_mult * m15_atr_for_fvg
-
-            # Locate OB candle on M15 via its absolute timestamp.
-            ob_ts_iso = ob.get('ob_timestamp')
-            ob_idx_m15 = None
-            if ob_ts_iso:
-                idx_found_m15, on_chart_m15 = smc_detector.locate_ob_candle_idx(
-                    df_m15, ob_ts_iso
-                )
-                if on_chart_m15:
-                    ob_idx_m15 = idx_found_m15
-
-            fvg_m15 = {"exists": False, "was_detected": False, "mitigation": "none"}
-            if ob_idx_m15 is not None and atr_floor_m15 > 0:
-                m15_window_end = min(
-                    ob_idx_m15 + smc_detector.FVG_WINDOW_M15_CANDLES,
-                    len(df_m15) - 1
-                )
-                fvg_m15 = smc_detector.detect_fvg_in_zone(
-                    df_m15, bias, zone_top, zone_bottom, atr_floor_m15,
-                    leg_start_idx=ob_idx_m15, leg_end_idx=m15_window_end,
-                    pair_type=ptype
-                )
-
+            # FVG — H1 only. Inherited from Phase 1's frozen snapshot
+            # (radar detected with the OB→OB+7 H1 window). P2 does NOT redetect.
             fvg_h1 = ob.get("fvg", {"exists": False, "was_detected": False,
                                     "mitigation": "none"})
-
-            # Bundle for scorecard + downstream consumers.
-            fvg_data = {"h1": fvg_h1, "m15": fvg_m15}
-
-            # Source label for email rendering: which timeframes contributed.
-            srcs = []
-            if fvg_h1.get('exists'):
-                srcs.append("H1")
-            if fvg_m15.get('exists'):
-                srcs.append("M15")
-            fvg_source = "+".join(srcs) if srcs else None
+            fvg_data = {"h1": fvg_h1}
+            fvg_source = "H1" if fvg_h1.get('exists') else None
 
             # Score FIRST. Gemini macro is display-only — don't pay for the
-            # API call until we know the zone is alert-worthy.
+            # API call until we know the zone passes level validity.
             score_res = smc_detector.run_scorecard(
-                bias, df_h1, ob, fvg_data, current_price, pair_conf, df_m15
+                bias, df_h1, ob, fvg_data, current_price, pair_conf
             )
-            if score_res['total'] < pair_conf["min_confidence"]:
-                scan_record["final_action"] = f"score_below_min ({score_res['total']:.1f}<{pair_conf['min_confidence']})"
-                append_scan_log(scan_record)
-                continue
 
-            levels = smc_detector.compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1, df_m15)
+            levels = smc_detector.compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1)
             if not levels['valid']:
                 scan_record["final_action"] = "levels_invalid"
                 append_scan_log(scan_record)
@@ -2025,27 +1871,11 @@ if __name__ == "__main__":
                 fvg=fvg_data
             )
             # Resolve sweep candle timestamp for chart rendering.
-            #
             # H1 sweep: consumed from P1's snapshot. P1's sweep_idx points
             # into P1's H1 dataframe, NOT P2's (different fetches). Always
             # use the timestamp the snapshot carries.
-            #
-            # M15 sweep: detected by P2 just now against THIS df_m15. Both
-            # the timestamp (set inside observe_phase1_sweep) and the idx
-            # are valid against P2's frame. Prefer timestamp for uniformity.
             sweep_tf_resolved = score_res.get('sweep_tf')
             sweep_ts_iso = score_res.get('sweep_timestamp_iso')
-            # Legacy fallback: if timestamp missing (snapshot pre-dates this
-            # field), best-effort idx lookup. Off for H1 (cross-frame), but
-            # harmless for M15 where the idx is from this scan's frame.
-            if not sweep_ts_iso:
-                sweep_idx_resolved = score_res.get('sweep_idx')
-                if sweep_idx_resolved is not None and sweep_tf_resolved == 'M15':
-                    try:
-                        sw_ts = df_m15.index[int(sweep_idx_resolved)]
-                        sweep_ts_iso = sw_ts.isoformat() if hasattr(sw_ts, 'isoformat') else str(sw_ts)
-                    except Exception:
-                        sweep_ts_iso = None
 
             # Inject onto the ob dict so chart functions can locate the sweep
             # candle by timestamp. Non-invasive: ob is reused only for charts.
@@ -2056,7 +1886,7 @@ if __name__ == "__main__":
             pip = pip_size(pair_conf)
             distance_pips_num = round(distance / pip, 1)
             distance_str = f"{distance_pips_num} {pip_unit_label(pair_conf)}"
-            atr_label = atr_distance_label(distance, m15_atr, "M15")
+            atr_label = atr_distance_label(distance, h1_atr, "H1")
 
             trade_data = {
                 "pair": name,
@@ -2080,265 +1910,137 @@ if __name__ == "__main__":
             }
             dr = score_res.get('dealing_range')
 
-            if entry_model == "limit":
-                # Structural dedup key: uses BOS swing price (stable across scans)
-                # instead of OB proximal (which drifts as Phase 1 reselects OB candle).
-                # ob_timestamp hour-bucket disambiguates two structurally distinct
-                # zones that happen to share a swing price (e.g. re-CHoCH at the
-                # same level after a Major CHoCH wipe).
-                bos_swing_px = float(ob.get('bos_swing_price', proximal))
-                bos_tag = ob.get('bos_tag', 'BOS')
-                key_dp = max(0, dp - 1)
-                ob_ts_iso = ob.get('ob_timestamp') or ''
-                ts_bucket = ob_ts_iso[:13] if len(ob_ts_iso) >= 13 else ob_ts_iso
-                zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}_{ts_bucket}"
+            # Unified H1-limit alert path (post-2026-05-26 migration). Every
+            # pair is `entry_model == "limit"`; the legacy `ltf_choch` branch
+            # (Gold/NAS M5 CHoCH route) is retired.
+            #
+            # Structural dedup key: uses BOS swing price (stable across scans)
+            # instead of OB proximal (which drifts as Phase 1 reselects OB candle).
+            # ob_timestamp hour-bucket disambiguates two structurally distinct
+            # zones that happen to share a swing price (e.g. re-CHoCH at the
+            # same level after a Major CHoCH wipe).
+            bos_swing_px = float(ob.get('bos_swing_price', proximal))
+            bos_tag = ob.get('bos_tag', 'BOS')
+            key_dp = max(0, dp - 1)
+            ob_ts_iso = ob.get('ob_timestamp') or ''
+            ts_bucket = ob_ts_iso[:13] if len(ob_ts_iso) >= 13 else ob_ts_iso
+            zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}_{ts_bucket}"
 
-                # Asymmetric hysteresis dedup.
-                # First sighting today → email.
-                # Re-sighting inside the dead band (+0.7 / -0.5) → silent;
-                # we still track high/low water so we can see how much the
-                # score wobbled between emails (diagnostic-only).
-                # Re-sighting crossing the upward or downward threshold →
-                # email with UPDATED prefix + score-drivers line.
-                current_score_raw = float(score_res['total'])
-                current_breakdown = score_res.get('breakdown', {})
-                prior = phase2_zones.get(zone_id)
-                is_update = False
-                prior_score_raw = None
-                prior_breakdown = None
-                hi_water = current_score_raw
-                lo_water = current_score_raw
-                if prior is not None:
-                    prior_score_raw = float(prior.get("score_raw", 0.0))
-                    prior_breakdown = prior.get("breakdown")
-                    prior_hi = float(prior.get("score_high_water", prior_score_raw))
-                    prior_lo = float(prior.get("score_low_water",  prior_score_raw))
-                    hi_water = max(prior_hi, current_score_raw)
-                    lo_water = min(prior_lo, current_score_raw)
-                    direction = hysteresis_should_reemail(current_score_raw, prior_score_raw)
-                    if direction is None:
-                        # Silent — but persist updated watermarks for diagnostics.
-                        prior["score_high_water"] = hi_water
-                        prior["score_low_water"]  = lo_water
-                        # Refresh last_seen_ist so stale-entry GC doesn't evict
-                        # a live silent-band zone.
-                        prior["last_seen_ist"] = ist_now.isoformat()
-                        save_json("phase2_sent.json", phase2_state)
-                        scan_record["final_action"] = (
-                            f"dedup_hysteresis_silent "
-                            f"({prior_score_raw:.1f}->{current_score_raw:.1f}, "
-                            f"band -{SCORE_REEMAIL_DOWN_THRESHOLD:.1f}/+{SCORE_REEMAIL_UP_THRESHOLD:.1f})"
-                        )
-                        append_scan_log(scan_record)
-                        continue
-                    is_update = True
+            # Asymmetric hysteresis dedup.
+            # First sighting today → email.
+            # Re-sighting inside the dead band (+0.7 / -0.5) → silent;
+            # we still track high/low water so we can see how much the
+            # score wobbled between emails (diagnostic-only).
+            # Re-sighting crossing the upward or downward threshold →
+            # email with UPDATED prefix + score-drivers line.
+            current_score_raw = float(score_res['total'])
+            current_breakdown = score_res.get('breakdown', {})
+            prior = phase2_zones.get(zone_id)
+            is_update = False
+            prior_score_raw = None
+            prior_breakdown = None
+            hi_water = current_score_raw
+            lo_water = current_score_raw
+            if prior is not None:
+                prior_score_raw = float(prior.get("score_raw", 0.0))
+                prior_breakdown = prior.get("breakdown")
+                prior_hi = float(prior.get("score_high_water", prior_score_raw))
+                prior_lo = float(prior.get("score_low_water",  prior_score_raw))
+                hi_water = max(prior_hi, current_score_raw)
+                lo_water = min(prior_lo, current_score_raw)
+                direction = hysteresis_should_reemail(current_score_raw, prior_score_raw)
+                if direction is None:
+                    # Silent — but persist updated watermarks for diagnostics.
+                    prior["score_high_water"] = hi_water
+                    prior["score_low_water"]  = lo_water
+                    # Refresh last_seen_ist so stale-entry GC doesn't evict
+                    # a live silent-band zone.
+                    prior["last_seen_ist"] = ist_now.isoformat()
+                    save_json("phase2_sent.json", phase2_state)
+                    scan_record["final_action"] = (
+                        f"dedup_hysteresis_silent "
+                        f"({prior_score_raw:.1f}->{current_score_raw:.1f}, "
+                        f"band -{SCORE_REEMAIL_DOWN_THRESHOLD:.1f}/+{SCORE_REEMAIL_UP_THRESHOLD:.1f})"
+                    )
+                    append_scan_log(scan_record)
+                    continue
+                is_update = True
 
-                # Register zone state in-memory. Persisted AFTER send_email so
-                # a crash mid-send re-attempts the alert next scan (duplicate
-                # is recoverable; silent loss is not). Stores breakdown so
-                # future updates can show driver deltas. Watermarks reset to
-                # the current score at email time.
-                phase2_zones[zone_id] = {
-                    "score_int": score_to_int(current_score_raw),
-                    "score_raw": current_score_raw,
-                    "score_high_water": current_score_raw,
-                    "score_low_water":  current_score_raw,
-                    "breakdown": current_breakdown,
-                    "alert_ist": ist_now.isoformat(),
-                    "last_seen_ist": ist_now.isoformat(),
-                    "bias": bias,
-                    "pair": name
-                }
-                # Limit zones do NOT write to active_watch_state.json.
-                # Phase 3 only handles ltf_choch zones (NAS100, GOLD).
-                m15_chart_ob = build_m15_chart_ob(ob, levels)
-                h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
-                                             f"{name} H1 - {bias} zone context", levels, dr)
-                m15_chart = generate_m15_chart(
-                    df_m15, f"{name} M15 - Approach and entry",
-                    levels, m15_chart_ob, pair_conf, fvg_data.get('m15') if isinstance(fvg_data, dict) and 'm15' in fvg_data else fvg_data, score_res.get('sweep_price'), dr
+            # Register zone state in-memory. Persisted AFTER send_email so
+            # a crash mid-send re-attempts the alert next scan (duplicate
+            # is recoverable; silent loss is not). Stores breakdown so
+            # future updates can show driver deltas. Watermarks reset to
+            # the current score at email time.
+            phase2_zones[zone_id] = {
+                "score_int": score_to_int(current_score_raw),
+                "score_raw": current_score_raw,
+                "score_high_water": current_score_raw,
+                "score_low_water":  current_score_raw,
+                "breakdown": current_breakdown,
+                "alert_ist": ist_now.isoformat(),
+                "last_seen_ist": ist_now.isoformat(),
+                "bias": bias,
+                "pair": name
+            }
+            # H1 wide context + H1 zoomed entry. The "m15_chart" variable name
+            # is preserved through the email plumbing for now (CID = chart_m15,
+            # MIME slot 2) -- the bytes it carries are the zoomed H1 chart.
+            # Renaming the CID would invalidate any cached email templates.
+            h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
+                                         f"{name} H1 - {bias} zone context", levels, dr)
+            m15_chart = generate_h1_zoomed_chart(
+                df_h1, ob, pair_conf,
+                f"{name} H1 zoomed - entry zone", levels
+            )
+            h1_ok = h1_chart is not None
+            m15_ok = m15_chart is not None
+            if not h1_ok:
+                _log_chart_failure(name, "h1_phase2_limit")
+            if not m15_ok:
+                _log_chart_failure(name, "h1_zoomed_phase2_limit")
+
+            if is_update:
+                drivers_line = format_score_driver_line(
+                    prior_score_raw, current_score_raw,
+                    prior_breakdown, current_breakdown
                 )
-                trade_data["m15_chart_ob"] = m15_chart_ob
-
-                h1_ok = h1_chart is not None
-                m15_ok = m15_chart is not None
-                if not h1_ok:
-                    _log_chart_failure(name, "h1_phase2_limit")
-                if not m15_ok:
-                    _log_chart_failure(name, "m15_phase2_limit")
-
-                if is_update:
-                    drivers_line = format_score_driver_line(
-                        prior_score_raw, current_score_raw,
-                        prior_breakdown, current_breakdown
-                    )
-                    subject_prefix = "TRADE READY (UPDATED)"
-                    email_label = (
-                        f"TRADE READY — Score updated {prior_score_raw:.1f} → {current_score_raw:.1f}"
-                    )
-                    trade_data["score_change_line"] = drivers_line
-                    log_action = (
-                        f"alert_sent_TRADE_READY_UPDATED "
-                        f"({prior_score_raw:.1f}->{current_score_raw:.1f})"
-                    )
-                    print_label = (
-                        f"TRADE READY UPDATE (FOREX): {name} "
-                        f"score {prior_score_raw:.1f}->{current_score_raw:.1f}"
-                    )
-                else:
-                    subject_prefix = "TRADE READY"
-                    email_label = "TRADE READY"
-                    log_action = "alert_sent_TRADE_READY"
-                    print_label = f"TRADE READY (FOREX): {name}"
-
-                html = build_trade_email(
-                    trade_data, name, pair_conf, email_label,
-                    scorecard_rows, score_res['total'],
-                    atr_label, distance_str, dollar_risk_str, scan_start_ts,
-                    h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
+                subject_prefix = "TRADE READY (UPDATED)"
+                email_label = (
+                    f"TRADE READY — Score updated {prior_score_raw:.1f} → {current_score_raw:.1f}"
                 )
-                _subj_max = 7.5 if (pair_conf.get('pair_type') == 'forex' and 'JPY' not in name) else 9.5
-                send_email(
-                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/{_subj_max} | {ist_now.strftime('%H:%M IST')}",
-                    html, h1_chart, m15_chart
+                trade_data["score_change_line"] = drivers_line
+                log_action = (
+                    f"alert_sent_TRADE_READY_UPDATED "
+                    f"({prior_score_raw:.1f}->{current_score_raw:.1f})"
                 )
-                # Persist dedup state AFTER send. See comment above.
-                save_json("phase2_sent.json", phase2_state)
-                print(f"  [OK] {print_label}")
-                scan_record["final_action"] = log_action
-                append_scan_log(scan_record)
-            elif entry_model == "ltf_choch":
-                # Structural dedup key: BOS swing price + ob_timestamp hour-bucket.
-                # watch_id reuses the same recipe so Phase 3's watch survives
-                # P1 reselecting the OB candle within the same structural zone.
-                # Previously watch_id was keyed on proximal, which drifted with
-                # every P1 OB-candle reselection and orphaned the prior watch.
-                bos_swing_px = float(ob.get('bos_swing_price', proximal))
-                bos_tag = ob.get('bos_tag', 'BOS')
-                key_dp = max(0, dp - 1)
-                ob_ts_iso = ob.get('ob_timestamp') or ''
-                ts_bucket = ob_ts_iso[:13] if len(ob_ts_iso) >= 13 else ob_ts_iso
-                zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}_{ts_bucket}"
-                watch_id = zone_id  # same recipe; stable across OB reselection
-
-                # Preserve first_seen_ist anchor for 15d watch-state GC.
-                # New watch -> now. Existing watch -> carry through.
-                prior_watch = watch_state.get(watch_id) if isinstance(watch_state, dict) else None
-                first_seen_ist = (prior_watch.get("first_seen_ist") if isinstance(prior_watch, dict)
-                                  else None) or ist_now.isoformat()
-                trade_data["first_seen_ist"] = first_seen_ist
-
-                # Asymmetric hysteresis dedup. Same model as limit branch.
-                current_score_raw = float(score_res['total'])
-                current_breakdown = score_res.get('breakdown', {})
-                prior = phase2_zones.get(zone_id)
-                is_update = False
-                prior_score_raw = None
-                prior_breakdown = None
-                hi_water = current_score_raw
-                lo_water = current_score_raw
-                if prior is not None:
-                    prior_score_raw = float(prior.get("score_raw", 0.0))
-                    prior_breakdown = prior.get("breakdown")
-                    prior_hi = float(prior.get("score_high_water", prior_score_raw))
-                    prior_lo = float(prior.get("score_low_water",  prior_score_raw))
-                    hi_water = max(prior_hi, current_score_raw)
-                    lo_water = min(prior_lo, current_score_raw)
-                    direction = hysteresis_should_reemail(current_score_raw, prior_score_raw)
-                    if direction is None:
-                        # Same zone, inside hysteresis band — silent. But keep
-                        # watch_state fresh so Phase 3 keeps monitoring, and
-                        # persist updated watermarks for diagnostics.
-                        if watch_id in watch_state:
-                            trade_data["alert_ist"] = watch_state[watch_id].get(
-                                "alert_ist", ist_now.isoformat()
-                            )
-                        watch_writes[watch_id] = trade_data
-                        prior["score_high_water"] = hi_water
-                        prior["score_low_water"]  = lo_water
-                        # Refresh last_seen_ist so stale-entry GC doesn't evict
-                        # a live silent-band zone.
-                        prior["last_seen_ist"] = ist_now.isoformat()
-                        save_json("phase2_sent.json", phase2_state)
-                        scan_record["final_action"] = (
-                            f"dedup_hysteresis_silent_ltf "
-                            f"({prior_score_raw:.1f}->{current_score_raw:.1f}, "
-                            f"band -{SCORE_REEMAIL_DOWN_THRESHOLD:.1f}/+{SCORE_REEMAIL_UP_THRESHOLD:.1f})"
-                        )
-                        append_scan_log(scan_record)
-                        continue
-                    is_update = True
-
-                # Register zone state in-memory. Persisted AFTER send_email.
-                phase2_zones[zone_id] = {
-                    "score_int": score_to_int(current_score_raw),
-                    "score_raw": current_score_raw,
-                    "score_high_water": current_score_raw,
-                    "score_low_water":  current_score_raw,
-                    "breakdown": current_breakdown,
-                    "alert_ist": ist_now.isoformat(),
-                    "last_seen_ist": ist_now.isoformat(),
-                    "bias": bias,
-                    "pair": name
-                }
-
-                m15_chart_ob = build_m15_chart_ob(ob, levels)
-                h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
-                                             f"{name} H1 - {bias} zone context", levels, dr)
-                m15_chart = generate_m15_chart(
-                    df_m15, f"{name} M15 - Approach",
-                    levels, m15_chart_ob, pair_conf, fvg_data.get('m15') if isinstance(fvg_data, dict) and 'm15' in fvg_data else fvg_data, score_res.get('sweep_price'), dr
+                print_label = (
+                    f"TRADE READY UPDATE: {name} "
+                    f"score {prior_score_raw:.1f}->{current_score_raw:.1f}"
                 )
-                trade_data["m15_chart_ob"] = m15_chart_ob
+            else:
+                subject_prefix = "TRADE READY"
+                email_label = "TRADE READY"
+                log_action = "alert_sent_TRADE_READY"
+                print_label = f"TRADE READY: {name}"
 
-                h1_ok = h1_chart is not None
-                m15_ok = m15_chart is not None
-                if not h1_ok:
-                    _log_chart_failure(name, "h1_phase2_ltf")
-                if not m15_ok:
-                    _log_chart_failure(name, "m15_phase2_ltf")
-
-                if is_update:
-                    drivers_line = format_score_driver_line(
-                        prior_score_raw, current_score_raw,
-                        prior_breakdown, current_breakdown
-                    )
-                    subject_prefix = "APPROACHING (UPDATED)"
-                    email_label = (
-                        f"APPROACHING — Score updated {prior_score_raw:.1f} → {current_score_raw:.1f}"
-                    )
-                    trade_data["score_change_line"] = drivers_line
-                    log_action = (
-                        f"alert_sent_APPROACHING_UPDATED "
-                        f"({prior_score_raw:.1f}->{current_score_raw:.1f})"
-                    )
-                    print_label = (
-                        f"APPROACHING UPDATE: {name} "
-                        f"score {prior_score_raw:.1f}->{current_score_raw:.1f}"
-                    )
-                else:
-                    subject_prefix = "APPROACHING"
-                    email_label = "APPROACHING"
-                    log_action = "alert_sent_APPROACHING"
-                    print_label = f"LOGGED FOR PHASE 3: {name}"
-
-                html = build_trade_email(
-                    trade_data, name, pair_conf, email_label,
-                    scorecard_rows, score_res['total'],
-                    atr_label, distance_str, dollar_risk_str, scan_start_ts,
-                    h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
-                )
-                _subj_max = 7.5 if (pair_conf.get('pair_type') == 'forex' and 'JPY' not in name) else 9.5
-                send_email(
-                    f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/{_subj_max} | {ist_now.strftime('%H:%M IST')}",
-                    html, h1_chart, m15_chart
-                )
-                # Persist dedup state AFTER send. See comment in limit branch.
-                save_json("phase2_sent.json", phase2_state)
-                watch_writes[watch_id] = trade_data
-                print(f"  [>] {print_label}")
-                scan_record["final_action"] = log_action
-                append_scan_log(scan_record)
+            html = build_trade_email(
+                trade_data, name, pair_conf, email_label,
+                scorecard_rows, score_res['total'],
+                atr_label, distance_str, dollar_risk_str, scan_start_ts,
+                h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
+            )
+            # Subject score-max: 6.5 (non-JPY forex) / 8.5 (JPY/Gold/NAS)
+            # post-Tier 2 (M15 FVG removed, H1 FVG 1.2 → 1.0).
+            _subj_max = 6.5 if (pair_conf.get('pair_type') == 'forex' and 'JPY' not in name) else 8.5
+            send_email(
+                f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/{_subj_max} | {ist_now.strftime('%H:%M IST')}",
+                html, h1_chart, m15_chart
+            )
+            # Persist dedup state AFTER send. See comment above.
+            save_json("phase2_sent.json", phase2_state)
+            print(f"  [OK] {print_label}")
+            scan_record["final_action"] = log_action
+            append_scan_log(scan_record)
 
     save_json("phase2_sent.json", phase2_state)
 
