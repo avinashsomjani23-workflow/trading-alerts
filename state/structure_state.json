@@ -13,7 +13,7 @@
     "last_event_ts": "50",
     "last_event_idx_iso": "50",
     "last_event_chop": false,
-    "last_scanned_ts": "149",
+    "last_scanned_ts": null,
     "fallback_active": false,
     "trend_start_ts": "0",
     "events": [
@@ -333,7 +333,7 @@
     "last_event_ts": "42",
     "last_event_idx_iso": "42",
     "last_event_chop": false,
-    "last_scanned_ts": "149",
+    "last_scanned_ts": null,
     "fallback_active": false,
     "trend_start_ts": "0",
     "events": [
@@ -398,7 +398,7 @@
     "last_event_ts": "74",
     "last_event_idx_iso": "74",
     "last_event_chop": false,
-    "last_scanned_ts": "149",
+    "last_scanned_ts": null,
     "fallback_active": false,
     "trend_start_ts": "0",
     "events": [
@@ -478,7 +478,7 @@
     "last_event_ts": "73",
     "last_event_idx_iso": "73",
     "last_event_chop": false,
-    "last_scanned_ts": "149",
+    "last_scanned_ts": null,
     "fallback_active": false,
     "trend_start_ts": "0",
     "events": [
@@ -543,7 +543,7 @@
     "last_event_ts": "72",
     "last_event_idx_iso": "72",
     "last_event_chop": false,
-    "last_scanned_ts": "149",
+    "last_scanned_ts": null,
     "fallback_active": false,
     "trend_start_ts": "0",
     "events": [
@@ -608,7 +608,7 @@
     "last_event_ts": "146",
     "last_event_idx_iso": "146",
     "last_event_chop": false,
-    "last_scanned_ts": "149",
+    "last_scanned_ts": null,
     "fallback_active": false,
     "trend_start_ts": "128",
     "events": [
