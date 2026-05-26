@@ -176,6 +176,18 @@ FVG_WINDOW_M15_CANDLES = 40
 # median minimum — that one rejected small candles; this rejects oversized.
 OB_MAX_RANGE_ATR_MULT = 2.0
 
+# PHASE 1 ONLY — Minimum swing leg size in ATR(14) units, applied AFTER the
+# lookback-3 geometric swing detection. A candidate swing is kept only if the
+# leg from the previous kept opposite-type swing is at least this multiple of
+# the *average* H1 ATR across the leg (Option C — measures volatility *during*
+# the move, not at a single bar). The first swing in any series is kept
+# unconditionally (no prior reference). Reasoning and benchmark catalogue in
+# Benchmarking.md section 8 — no public SMC lib filters swing magnitude in
+# ATR, so this calibration is ours. Start 1.5x (set 2026-05-26 after a quick
+# script showed 1.0x filtered only 1-7% of swings — barely active); 1.5x cuts
+# 6-20% across pairs. Tune from backtest.
+MIN_LEG_ATR_MULT = 1.5
+
 # ---------------------------------------------------------------------------
 # Liquidity sweep — pair-aware tolerance for "equal highs / equal lows" detection.
 # Two prior swings (out of last 3 same-type swings near the swept swing) are
@@ -381,9 +393,63 @@ def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
         "last_event_type": None,
         "source": f"legacy_window_{lookback}h"
     }
+# PHASE 1 ONLY — rolling True Range series used by the ATR leg-size filter
+# below. Length matches the input df; first element is NaN (no prior close).
+def _true_range_series(df):
+    H = df['High'].values.astype(float)
+    L = df['Low'].values.astype(float)
+    C = df['Close'].values.astype(float)
+    tr = np.full(len(df), np.nan, dtype=float)
+    for i in range(1, len(df)):
+        tr[i] = max(H[i] - L[i], abs(H[i] - C[i - 1]), abs(L[i] - C[i - 1]))
+    return tr
+
+# PHASE 1 ONLY — filters a time-ordered swing list by minimum leg size in ATR
+# units. The first swing passes unconditionally. Each subsequent swing must
+# satisfy |price - prev_kept_opposite.price| >= min_mult * mean_atr_across_leg.
+# Same-type consecutive swings (high->high, low->low) bypass the filter — they
+# describe trend continuation, not a leg; only opposite-type transitions form
+# a measurable leg.
+def _filter_swings_by_leg_atr(swings, df, period=14, min_mult=MIN_LEG_ATR_MULT):
+    if not swings or df is None or len(df) < period + 1 or min_mult <= 0:
+        return swings
+    tr = _true_range_series(df)
+    # Rolling mean TR of length `period` — element i is mean of tr[i-period+1..i].
+    # We slice into this when measuring a leg's average volatility.
+    kept = []
+    last_opp_by_type = {}  # 'high' -> last kept low, 'low' -> last kept high
+    for s in swings:
+        opp = 'low' if s['type'] == 'high' else 'high'
+        ref = last_opp_by_type.get(opp)
+        if ref is None:
+            # No prior opposite swing — first measurable point. Keep.
+            kept.append(s)
+            last_opp_by_type[s['type']] = s
+            continue
+        a, b = ref['idx'], s['idx']
+        if b <= a:
+            # Defensive: out-of-order swing. Drop rather than divide by zero.
+            continue
+        leg_tr = tr[a + 1: b + 1]  # TR values across the leg, inclusive of swing bar
+        leg_tr = leg_tr[~np.isnan(leg_tr)]
+        if len(leg_tr) == 0:
+            kept.append(s)
+            last_opp_by_type[s['type']] = s
+            continue
+        avg_atr = float(np.mean(leg_tr))
+        leg_size = abs(s['price'] - ref['price'])
+        if leg_size >= min_mult * avg_atr:
+            kept.append(s)
+            last_opp_by_type[s['type']] = s
+        # else: leg too small — discard as noise. Do NOT update last_opp_by_type;
+        # the next opposite swing is still measured against the same reference.
+    return kept
+
 # PHASE 1 ONLY — extracts swing highs/lows for context tagging in smc_radar.py.
 # Default lookback was changed 4->3 in commit 8300876 (2026-05-18).
-def get_swing_points(df, lookback=3, bounds=None):
+# `min_leg_atr_mult`: if set, applies the ATR leg-size filter after geometric
+# detection. Pass None to skip (legacy behaviour).
+def get_swing_points(df, lookback=3, bounds=None, min_leg_atr_mult=MIN_LEG_ATR_MULT):
     if df is None or len(df) < lookback * 2 + 1:
         return []
     H, L = df['High'].values.astype(float), df['Low'].values.astype(float)
@@ -399,7 +465,10 @@ def get_swing_points(df, lookback=3, bounds=None):
             swings.append({"type": "high", "price": float(H[i]), "idx": i, "ts": df.index[i]})
         if L[i] < min(min(wl_left), min(wl_right)):
             swings.append({"type": "low", "price": float(L[i]), "idx": i, "ts": df.index[i]})
-    return sorted(swings, key=lambda s: s["idx"])
+    swings = sorted(swings, key=lambda s: s["idx"])
+    if min_leg_atr_mult is not None and min_leg_atr_mult > 0:
+        swings = _filter_swings_by_leg_atr(swings, df, min_mult=min_leg_atr_mult)
+    return swings
 
 
 # PHASE 2 ONLY — counts BOS events since last Major CHoCH. Reads dealing_range
@@ -1564,136 +1633,6 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     return out
 
 
-# UNUSED — defined but no callsite anywhere. Safe to delete; left for now.
-def compute_dynamic_levels(pair_conf, bias, ob, fvg, current_price, df_trigger):
-    dp = _dp(pair_conf)
-    spread_val = pair_conf.get("spread_pips", 2) * (0.0001 if dp == 5 else 0.01)
-
-    # OB candle geometry. Phase 1's canonical fields are 'high' and 'low'
-    # (set by smc_radar.py when the OB is built). We read those directly;
-    # the previous multi-key fallback hid schema drift and could silently
-    # collapse to proximal=distal on malformed zones. Strict read: if a
-    # zone is missing 'high'/'low', return invalid rather than guess.
-    try:
-        ob_top    = float(ob['high'])
-        ob_bottom = float(ob['low'])
-    except (KeyError, TypeError, ValueError):
-        return {"valid": False,
-                "reason": "OB candle geometry missing — zone schema drift."}
-
-    sl = ob_bottom - spread_val if bias == "LONG" else ob_top + spread_val
-    ob_prox = ob_top if bias == "LONG" else ob_bottom
-    ob_mean = (ob_top + ob_bottom) / 2.0
-
-    # FVG proximal selection for entry cascade. Prefer H1 pristine first,
-    # then M15 pristine, then any partial. Pristine FVGs offer cleaner entries;
-    # partial FVGs have already been touched and aren't reliable limit prices.
-    fvg_prox = None
-    if fvg and isinstance(fvg, dict):
-        # New dual-FVG shape: {'h1': {...}, 'm15': {...}}
-        candidates = []
-        if 'h1' in fvg or 'm15' in fvg:
-            for tf_key in ('h1', 'm15'):  # H1 first
-                f = fvg.get(tf_key)
-                if f and f.get('exists') and f.get('mitigation') == 'pristine':
-                    candidates.append(f)
-            if not candidates:
-                # Fall back to partials, same priority
-                for tf_key in ('h1', 'm15'):
-                    f = fvg.get(tf_key)
-                    if f and f.get('exists'):
-                        candidates.append(f)
-        # Legacy single-FVG shape
-        elif fvg.get('exists'):
-            candidates.append(fvg)
-
-        if candidates:
-            chosen = candidates[0]
-            fvg_prox = float(chosen['fvg_top']) if bias == "LONG" else float(chosen['fvg_bottom'])
-
-    swings = get_swing_points(df_trigger, lookback=10)
-    tp_targets = [
-        s['price'] for s in swings
-        if (bias == "LONG" and s['type'] == 'high' and s['price'] > ob_prox)
-        or (bias == "SHORT" and s['type'] == 'low' and s['price'] < ob_prox)
-    ]
-    tp_targets.sort(reverse=(bias == "SHORT"))
-
-    entry_model = pair_conf.get("pair_type", "forex")
-    final_entry, final_rr, entry_source, tp1 = None, 0.0, "", None
-
-    def check_rr(entry_test):
-        # Walk swing targets in priority order. If none clears the 1.5R bar,
-        # return (0.0, None) so the outer guard kills the trade. The previous
-        # behaviour invented a synthetic 2.0R target when no real swing
-        # existed — veteran rule: no clean target, no trade.
-        risk = abs(entry_test - sl)
-        if risk == 0:
-            return 0.0, None
-        for target in tp_targets:
-            rr = abs(target - entry_test) / risk
-            if rr >= 1.5:
-                return rr, target
-        return 0.0, None
-
-    if entry_model == "forex":
-        attempts = []
-        if fvg_prox:
-            attempts.append((fvg_prox, "FVG Proximal"))
-        attempts.append((ob_prox, "OB Proximal"))
-        attempts.append((ob_mean, "OB 50% Mean"))
-        for price, name in attempts:
-            rr, tp_val = check_rr(price)
-            if rr >= 1.5:
-                final_entry, entry_source, final_rr, tp1 = price, name, rr, tp_val
-                break
-    else:
-        final_entry, entry_source = ob_prox, "OB Proximal Limit"
-        final_rr, tp1 = check_rr(final_entry)
-
-    if final_entry is None or final_rr < 1.5:
-        # Either no entry attempt cleared 1.5R, or there was no qualifying
-        # swing target in front of the entry. Both paths kill the trade.
-        return {
-            "valid": False,
-            "reason": "No swing target >= 1.5R in front of entry — no trade."
-            if not tp_targets else "R:R < 1.5 on all cascade attempts"
-        }
-
-    # Entry-side validation (forex limit orders only).
-    # A BUY LIMIT must sit at or below current price; a SELL LIMIT at or above.
-    # If the cascade picked an entry on the wrong side of price, price has already
-    # moved through the zone — skip the alert rather than chase.
-    # Small tolerance = 0.5x spread to avoid false fails on rounding / tick noise.
-    if entry_model == "forex":
-        tolerance = 0.5 * spread_val
-        if bias == "LONG" and final_entry > current_price + tolerance:
-            return {
-                "valid": False,
-                "reason": (f"Entry {round(final_entry, dp)} is above current price "
-                           f"{round(current_price, dp)} — LONG limit would chase price.")
-            }
-        if bias == "SHORT" and final_entry < current_price - tolerance:
-            return {
-                "valid": False,
-                "reason": (f"Entry {round(final_entry, dp)} is below current price "
-                           f"{round(current_price, dp)} — SHORT limit would chase price.")
-            }
-
-    risk = abs(final_entry - sl)
-    tp2 = final_entry + (risk * 4.0) if bias == "LONG" else final_entry - (risk * 4.0)
-
-    return {
-        "valid": True,
-        "entry": round(final_entry, dp),
-        "sl": round(sl, dp),
-        "tp1": round(tp1, dp),
-        "tp2": round(tp2, dp),
-        "rr": round(final_rr, 2),
-        "entry_source": entry_source
-    }
-
-
 def _killzone_hit(utc_hour, pair_type):
     """Kill zone windows in UTC. IST is for display only.
 
@@ -2094,8 +2033,11 @@ def detect_ltf_choch(df_m5, bias, bounds):
     if df_m5 is None or len(df_m5) < 10:
         return {"fired": False, "level": None}
 
-    # Swings across full window — no bounds filter
-    swings = get_swing_points(df_m5, lookback=3)
+    # Swings across full window — no bounds filter.
+    # Pass min_leg_atr_mult=None: the H1-tuned MIN_LEG_ATR_MULT does not apply
+    # to M5 (different volatility magnitude). Phase 3 is currently dormant; if
+    # M5 trading is reactivated, calibrate a separate M5 multiplier.
+    swings = get_swing_points(df_m5, lookback=3, min_leg_atr_mult=None)
     if len(swings) < 1:
         return {"fired": False, "level": None}
 
