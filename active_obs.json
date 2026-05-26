@@ -32,12 +32,12 @@
       "zones": [
         {
           "zone_id": "XAU07",
-          "status": "active",
-          "drop_reason": null,
+          "status": "dropped",
+          "drop_reason": "mitigated_distal_break",
           "first_seen_iso": "2026-05-25T18:33:32.661319",
           "first_seen_label": "18:33 IST",
-          "last_seen_iso": "2026-05-26T09:33:36.068528",
-          "last_seen_label": "09:33 IST",
+          "last_seen_iso": "2026-05-26T10:33:31.593171",
+          "last_seen_label": "10:33 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "6",
           "direction": "bearish",
