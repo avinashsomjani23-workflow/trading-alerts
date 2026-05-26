@@ -1734,33 +1734,33 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
     bos_tag = ob.get('bos_tag', 'BOS')
     pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
 
-    # Structure score grid (May 2026 — out-of-10 scorecard, max 3.0):
-    #   Major CHoCH                 -> 3.0  (opposite wall break — trend reversal confirmed)
-    #   Major BOS #1-2 since CHoCH  -> 2.5  (early continuation, smart money still loading)
-    #   Minor CHoCH                 -> 2.0  (wall rejected + internal lb-3 break — trend weakening)
-    #   Minor BOS                   -> 1.5  (internal lb-3 continuation; walls don't move)
-    #   Major BOS #3 .. caution-1   -> 1.5  (mid-trend; commodity/index only)
-    #   Major BOS >= caution        -> 1.0  (exhausted)
+    # Structure score grid (2026-05-26 scoring rewrite — max 4):
+    #   Major CHoCH                 -> 4  (opposite wall break — trend reversal confirmed)
+    #   Major BOS #1-2 since CHoCH  -> 3  (early continuation, smart money still loading)
+    #   Minor CHoCH                 -> 3  (wall rejected + internal lb-3 break — trend weakening)
+    #   Minor BOS                   -> 2  (internal lb-3 continuation; walls don't move)
+    #   Major BOS #3 .. caution-1   -> 2  (mid-trend; commodity/index only)
+    #   Major BOS >= caution        -> 1  (exhausted)
     # Caution thresholds reflect typical pair behaviour: forex mean-reverts
     # faster, indices sustain trends longer.
     bos_tier = ob.get('bos_tier', 'Major')
     if bos_tag == 'CHoCH':
-        bd = {"structure": 3.0 if bos_tier == 'Major' else 2.0}
+        bd = {"structure": 4 if bos_tier == 'Major' else 3}
     elif bos_tier == 'Minor':
         # Minor BOS: continuation break of internal lb-3 swing inside the
         # active leg. Walls don't move; trend doesn't flip. Real signal but
         # weaker than Major BOS (no wall break) and weaker than Minor CHoCH
         # (no preceding wall rejection).
-        bd = {"structure": 1.5}
+        bd = {"structure": 2}
     else:
         bos_seq = ob.get('bos_sequence_count', 1)
         caution_threshold = {'forex': 3, 'index': 5, 'commodity': 4}.get(pair_type, 3)
         if bos_seq >= caution_threshold:
-            structure_score = 1.0
+            structure_score = 1
         elif bos_seq <= 2:
-            structure_score = 2.5
+            structure_score = 3
         else:
-            structure_score = 1.5
+            structure_score = 2
         bd = {"structure": structure_score}
 
     # ------------------------------------------------------------------
@@ -1818,39 +1818,25 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
     sweep_price  = chosen_sweep['price']
     sweep_tf     = chosen_sweep['tf']
 
-    # FVG — H1 only (M15 removed 2026-05-26 in H1-only migration).
+    # FVG — H1 only (2026-05-26 scoring rewrite — max 2):
     # H1 FVG = macro displacement at OB formation, the structural signal.
     #
-    # Per-mitigation scoring (max 1.0):
-    #   pristine                       -> 1.0  (fresh imbalance still intact)
-    #   partial mitigation             -> 0.5  (institutional intent partly filled)
-    #   fully mitigated (was_detected) -> 0.25 (historical evidence; move was real)
-    #   never detected                 -> 0.0
+    # Per-mitigation scoring (max 2):
+    #   pristine                       -> 2  (fresh imbalance still intact)
+    #   partial mitigation             -> 1  (institutional intent partly filled)
+    #   fully mitigated (was_detected) -> 0  (historical evidence only -- not scored)
+    #   never detected                 -> 0
     #
     # Grading rationale: FVG is evidence of institutional displacement at OB
-    # formation. By the time price returns to the OB (alert moment), the FVG
-    # is typically filled — so a strict `exists=True` gate scored ~0% on
-    # backtests. We read `was_detected` (did the radar ever see an FVG form?)
-    # and grade by current mitigation.
+    # formation. We score current usability: only currently-present FVGs count.
+    # A "ghost" FVG (was_detected=True but already filled) carries no live edge.
     def _grade_single(fvg_obj, pristine_pts, partial_pts):
-        if not fvg_obj:
-            return 0.0
-        # Currently-valid imbalance: full credit, with partial half-credit.
-        if fvg_obj.get('exists'):
-            mit = fvg_obj.get('mitigation', 'pristine')
-            if mit == 'partial':
-                return partial_pts
-            return pristine_pts
-        # No longer present, but the radar recorded that it formed.
-        # Mitigation tells us how the imbalance was consumed.
-        if fvg_obj.get('was_detected'):
-            mit = fvg_obj.get('mitigation', 'full')
-            if mit == 'partial':
-                return partial_pts
-            if mit == 'full':
-                return round(pristine_pts * 0.25, 2)
-            return pristine_pts
-        return 0.0
+        if not fvg_obj or not fvg_obj.get('exists'):
+            return 0
+        mit = fvg_obj.get('mitigation', 'pristine')
+        if mit == 'partial':
+            return partial_pts
+        return pristine_pts
 
     fvg_h1 = fvg.get('h1') if isinstance(fvg, dict) else None
 
@@ -1859,21 +1845,15 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
     if fvg and isinstance(fvg, dict) and 'exists' in fvg and fvg_h1 is None:
         fvg_h1 = fvg
 
-    bd["fvg"] = _grade_single(fvg_h1, 1.0, 0.5)
-    # Freshness — driven by Phase 1's lifetime touch counter on the OB.
-    # Phase 1 invalidates OBs at 3 touches (smc_radar overuse-mitigation rule),
-    # so 3+ touches never reaches Phase 2. Scoring covers 0/1/2 only.
-    #   0 touches  -> 1.5 (pristine — single highest-edge condition in SMC)
-    #   1 touch    -> 0.75 (partial; institutional order partly filled)
-    #   2 touches  -> 0.0 (fatigued; one more touch and Phase 1 kills it)
+    bd["fvg"] = _grade_single(fvg_h1, 2, 1)
+    # Freshness — binary (2026-05-26 scoring rewrite — max 1):
+    # Phase 1 invalidates OBs at 3 touches; we only ever see touches=0,1,2.
+    #   0 touches  -> 1 (pristine; institutional order untouched)
+    #   1+ touches -> 0 (used; smart money interest diminishes after first tap)
+    # The previous half-credit at 1 touch muddied the signal. A zone is either
+    # untouched or it isn't.
     touches = int(ob.get('touches', 0))
-    if touches == 0:
-        bd["freshness"] = 1.5
-    elif touches == 1:
-        bd["freshness"] = 0.75
-    else:
-        # touches == 2; touches >= 3 invalidated upstream so won't reach here
-        bd["freshness"] = 0.0
+    bd["freshness"] = 1 if touches == 0 else 0
 
     # Premium / Discount — REMOVED FROM SCORING (May 2026 overhaul).
     # Geometry is consumed from Phase 1's snapshot on the zone — Phase 1 is
@@ -1930,13 +1910,16 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     """
     Return list of (label, score, max_score, status, explanation) for email rendering.
 
-    Scorecard maxima (post-2026-05-26 H1-only migration):
+    Scorecard maxima (2026-05-26 scoring rewrite — whole numbers, asymmetric):
       Non-JPY forex (EURUSD, NZDUSD, USDCHF):
-        Structure 3.0 | Sweep 1.0 (presence-only) | FVG 1.0 | Freshness 1.5
-        Total = 6.5.
+        Structure 4 | Sweep 1 (presence-only) | FVG 2 | Freshness 1
+        Total = 8.
       JPY / Gold / NAS:
-        Structure 3.0 | Sweep 3.0 | FVG 1.0 | Freshness 1.5
-        Total = 8.5.
+        Structure 4 | Sweep 3 (quality-graded) | FVG 2 | Freshness 1
+        Total = 10.
+    The forex/non-forex sweep asymmetry is intentional: forex pairs lack
+    centralized stop pools so sweep quality is noise; presence alone signals.
+    Gold/NAS/JPY have real institutional stop levels so quality matters.
     No confidence gate — every zone passing proximity + still-valid alerts.
     PD is rendered as a display-only row (max_score = 0) showing range
     geometry and PD% so the trader can use it for judgement, but it
@@ -1957,35 +1940,35 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     bos_count_maxed = bool(ob.get('bos_count_maxed', False))
     seq_str = f"#{bos_seq}+" if bos_count_maxed else f"#{bos_seq}"
     if bos_tag_local == 'CHoCH' and bos_tier_local == 'Major':
-        rows.append(("Structure", s, 3.0, "ok",
+        rows.append(("Structure", s, 4, "ok",
                      "Major CHoCH — trend has reversed (lookback=3 break, reversal from premium/discount)."))
     elif bos_tag_local == 'CHoCH' and bos_tier_local == 'Minor':
-        rows.append(("Structure", s, 3.0, "warn",
+        rows.append(("Structure", s, 4, "warn",
                      "Minor CHoCH — wall rejected then internal swing broken; trend weakening, not yet reversed."))
     elif bos_tag_local == 'BOS' and bos_tier_local == 'Minor':
-        rows.append(("Structure", s, 3.0, "warn",
+        rows.append(("Structure", s, 4, "warn",
                      "Minor BOS — internal lookback-3 continuation break; trend alive but no wall moved."))
-    elif s >= 2.5:
-        rows.append(("Structure", s, 3.0, "ok",
+    elif s >= 3:
+        rows.append(("Structure", s, 4, "ok",
                       f"Early continuation (BOS {seq_str} since last Major CHoCH) — smart money still loading."))
-    elif s >= 1.5:
-        rows.append(("Structure", s, 3.0, "warn",
+    elif s >= 2:
+        rows.append(("Structure", s, 4, "warn",
                       f"Mid-trend continuation (BOS {seq_str} since last Major CHoCH)."))
-    elif s >= 1.0:
-        rows.append(("Structure", s, 3.0, "fail",
+    elif s >= 1:
+        rows.append(("Structure", s, 4, "fail",
                       f"Late continuation (BOS {seq_str} since last Major CHoCH) — trend may be exhausted."))
     else:
-        rows.append(("Structure", s, 3.0, "fail", "No confirmed BOS or CHoCH."))
+        rows.append(("Structure", s, 4, "fail", "No confirmed BOS or CHoCH."))
 
     # 2. Liquidity Sweep — scorecard shows PRESENCE only.
     # Quality breakdown rendered separately above Macro Context in email.
-    # Max is 1.0 (presence-only) for non-JPY forex, 3.0 elsewhere.
+    # Max is 1 (presence-only) for non-JPY forex, 3 (quality-graded) elsewhere.
     s = breakdown.get("sweep", 0)
     comps = sweep_components or {}
     presence = comps.get('base', 0.0)
     pair_name_for_row = pair_conf.get('name', '') if pair_conf else ''
     pair_type_for_row = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
-    sweep_max = 1.0 if (pair_type_for_row == 'forex' and 'JPY' not in pair_name_for_row) else 3.0
+    sweep_max = 1 if (pair_type_for_row == 'forex' and 'JPY' not in pair_name_for_row) else 3
     if presence > 0 and sweep_price is not None:
         rows.append(("Liquidity Sweep", s, sweep_max, "ok",
                      f"{sweep_tf} sweep confirmed at {sweep_price:.{dp}f}. See breakdown below charts."))
@@ -1993,8 +1976,7 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         rows.append(("Liquidity Sweep", s, sweep_max, "fail",
                      "No qualifying sweep within recency window before the OB."))
 
-    # 3. FVG — H1 only (max 1.0).
-    # pristine 1.0 | partial 0.5 | fully mitigated 0.25 | none 0.0
+    # 3. FVG — H1 only (max 2). pristine 2 | partial 1 | none/mitigated 0
     s = breakdown.get("fvg", 0)
     fvg_h1 = fvg.get('h1') if isinstance(fvg, dict) else None
     # Legacy single-FVG fallback (treat as H1)
@@ -2012,33 +1994,29 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     h1_state = _state(fvg_h1)
     desc = f"H1 FVG {h1_state}."
 
-    if s >= 1.0:
-        rows.append(("FVG", s, 1.0, "ok",
+    if s >= 2:
+        rows.append(("FVG", s, 2, "ok",
                      f"{desc} Fresh institutional displacement at OB formation."))
-    elif s >= 0.5:
-        rows.append(("FVG", s, 1.0, "warn",
+    elif s >= 1:
+        rows.append(("FVG", s, 2, "warn",
                      f"{desc} Displacement present but partly mitigated."))
-    elif s > 0:
-        rows.append(("FVG", s, 1.0, "warn",
-                     f"{desc} Displacement evidence only — imbalance has been filled."))
     else:
-        rows.append(("FVG", s, 1.0, "fail",
-                     f"{desc} No qualifying displacement at OB formation."))
-    # 4. Freshness — Phase 1 invalidates at 3 touches (overuse mitigation),
-    # so the 3+ branch should not fire in practice; kept for legacy zones.
+        rows.append(("FVG", s, 2, "fail",
+                     f"{desc} No qualifying displacement (absent or fully filled)."))
+    # 4. Freshness — binary (max 1). Phase 1 invalidates at 3 touches.
     s = breakdown.get("freshness", 0)
     touches = int(ob.get('touches', 0))
     if touches == 0:
-        rows.append(("Freshness", s, 1.5, "ok",
+        rows.append(("Freshness", s, 1, "ok",
                      "Pristine — zone untouched since it was formed."))
     elif touches == 1:
-        rows.append(("Freshness", s, 1.5, "warn",
-                     "Tested 1x since formation — partial mitigation."))
+        rows.append(("Freshness", s, 1, "fail",
+                     "Tested 1x since formation — institutional order partly filled."))
     elif touches == 2:
-        rows.append(("Freshness", s, 1.5, "fail",
+        rows.append(("Freshness", s, 1, "fail",
                      "Tested 2x since formation — one more touch invalidates."))
     else:
-        rows.append(("Freshness", s, 1.5, "fail",
+        rows.append(("Freshness", s, 1, "fail",
                      f"Tested {touches}x since formation — zone fatigued (legacy)."))
 
     # 5. Premium / Discount — DISPLAY ONLY (no longer contributes points).

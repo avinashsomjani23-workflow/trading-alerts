@@ -1924,7 +1924,9 @@ _EXCEL_COL_NAMES = {
     "r_realised":        "R Achieved (TP2-ride)",
     "pnl_usd":           "Dollar P&L (TP2-ride)",
     "r_if_exit_tp1":     "R if Closed at TP1",
+    "pnl_usd_tp1":       "Dollar P&L (TP1-only)",
     "r_if_runner":       "R if TP1 + Runner",
+    "pnl_usd_runner":    "Dollar P&L (TP1+Runner)",
     "mfe_r":             "Best Price Reached (R)",
     "mae_r":             "Worst Price Reached (R)",
     "bars_to_exit":      "Hours Held",
@@ -2010,6 +2012,12 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
         # Make sure r_if_runner is populated for every row so the new Excel
         # column has data. _attach_runner_r is idempotent.
         _attach_runner_r(filled)
+        # Dollar P&L under TP1-only and TP1+runner. Same formula as the
+        # TP2-ride scoreboard uses internally (R × risk_usd), so per-row
+        # sums reconcile to the email's headline totals.
+        for t in filled:
+            t["pnl_usd_tp1"]    = round(float(t.get("r_if_exit_tp1") or 0.0) * risk_usd, 0)
+            t["pnl_usd_runner"] = round(float(t.get("r_if_runner")  or 0.0) * risk_usd, 0)
         df = pd.DataFrame(filled)
 
         # Day of week — sourced from fill_ts (when the trade was actually
@@ -2085,7 +2093,8 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
             "TP1 Reward:Risk": 14, "TP2 Reward:Risk": 14,
             "How Trade Closed": 24, "Exit Price": 12,
             "R Achieved (TP2-ride)": 18, "Dollar P&L (TP2-ride)": 20,
-            "R if Closed at TP1": 18, "R if TP1 + Runner": 18,
+            "R if Closed at TP1": 18, "Dollar P&L (TP1-only)": 20,
+            "R if TP1 + Runner": 18, "Dollar P&L (TP1+Runner)": 22,
             "Proximal R": 12, "Proximal Dollar P&L": 18,
             "50% R": 12, "50% Dollar P&L": 18,
             "Best Price Reached (R)": 20, "Worst Price Reached (R)": 20,
@@ -2387,6 +2396,64 @@ def _score_table_html(buckets: List[Dict]) -> str:
     return f"<table><thead>{rows}</thead></table>"  # already has header in rows
 
 
+def _exit_policy_summary_html(sb_prox: Dict, sb_prox_tp1: Dict,
+                              sb_mid: Dict, sb_mid_tp1: Dict) -> str:
+    """Compact TP1-only vs TP2-ride summary, placed right under the headline.
+
+    The user trades TP1 most of the time in practice; this surfaces what
+    TP1-only would have made vs the current TP2-ride policy, per entry zone.
+    Every figure comes from `_aggregate_for_exit` over the same filtered
+    trade list as the headline, so totals reconcile.
+    """
+    def _cell(sb: Dict) -> str:
+        total = sb.get("total_pnl_usd", 0)
+        exp_r = sb.get("expectancy_r", 0)
+        exp_d = sb.get("expectancy_usd", 0)
+        color = "#27ae60" if total >= 0 else "#e74c3c"
+        return (f"<span style='color:{color};font-weight:600;'>{_m(total)}</span> "
+                f"<span style='color:#888;'>&middot; avg {_r(exp_r)} "
+                f"({_m(exp_d)}/trade)</span>")
+
+    def _row(zone_label: str, sb_tp1: Dict, sb_tp2: Dict) -> str:
+        return (
+            f"<tr>"
+            f"<td style='padding:6px 10px;font-weight:600;color:#555;'>{zone_label}</td>"
+            f"<td style='padding:6px 10px;'>{_cell(sb_tp1)}</td>"
+            f"<td style='padding:6px 10px;'>{_cell(sb_tp2)}</td>"
+            f"</tr>"
+        )
+
+    header = (
+        f"<tr style='background:#f8f9fa;'>"
+        f"<th style='padding:6px 10px;text-align:left;font-size:11px;"
+        f"color:#888;text-transform:uppercase;letter-spacing:0.04em;'></th>"
+        f"<th style='padding:6px 10px;text-align:left;font-size:11px;"
+        f"color:#888;text-transform:uppercase;letter-spacing:0.04em;'>"
+        f"TP1-only (book at TP1)</th>"
+        f"<th style='padding:6px 10px;text-align:left;font-size:11px;"
+        f"color:#888;text-transform:uppercase;letter-spacing:0.04em;'>"
+        f"TP2-ride (current policy)</th>"
+        f"</tr>"
+    )
+    return (
+        f"<div style='margin-top:18px;padding:12px 14px;"
+        f"border:1px solid #eee;border-radius:6px;background:#fcfcfc;'>"
+        f"<div style='font-size:11px;color:#888;text-transform:uppercase;"
+        f"letter-spacing:0.06em;margin-bottom:6px;'>Exit policy &mdash; "
+        f"what each policy would have paid</div>"
+        f"<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
+        f"{header}"
+        f"{_row('Proximal entry', sb_prox_tp1, sb_prox)}"
+        f"{_row('50% mean entry', sb_mid_tp1, sb_mid)}"
+        f"</table>"
+        f"<div style='font-size:11px;color:#888;margin-top:6px;'>"
+        f"Same trade set on both sides &mdash; only the exit differs. "
+        f"TP1-only closes the full position at TP1; TP2-ride is the current "
+        f"default (full position rides to TP2, SL to BE after TP1).</div>"
+        f"</div>"
+    )
+
+
 def _entry_comparison_html(sb_prox: Dict, sb_mid: Dict,
                            fill_prox: Dict, fill_mid: Dict,
                            prox_trades: List[Dict[str, Any]],
@@ -2419,6 +2486,15 @@ def _entry_comparison_html(sb_prox: Dict, sb_mid: Dict,
         _row("Avg R (TP2-ride, current)",
              _r(sb_prox.get("expectancy_r", 0)),
              _r(sb_mid.get("expectancy_r", 0))),
+        _row("Avg $/trade (TP2-ride, current)",
+             _m(sb_prox.get("expectancy_usd", 0)),
+             _m(sb_mid.get("expectancy_usd", 0))),
+        _row("Avg R (TP1-only)",
+             _r(sb_prox_tp1.get("expectancy_r", 0)),
+             _r(sb_mid_tp1.get("expectancy_r", 0))),
+        _row("Avg $/trade (TP1-only)",
+             _m(sb_prox_tp1.get("expectancy_usd", 0)),
+             _m(sb_mid_tp1.get("expectancy_usd", 0))),
         _row("Total P&L &mdash; TP1-only",
              _m(sb_prox_tp1.get("total_pnl_usd", 0)),
              _m(sb_mid_tp1.get("total_pnl_usd", 0))),
@@ -2780,16 +2856,19 @@ def _build_group_html(
       <div class="val" style="color:{pnl_color_prox};">{_m(total_pnl_prox)}</div>
       <div class="meta">{n_prox_filled} filled &middot;
         {sb_prox.get('win_rate_pct', 0):.0f}% won &middot;
-        avg {_r(sb_prox.get('expectancy_r', 0))}</div>
+        avg {_r(sb_prox.get('expectancy_r', 0))} ({_m(sb_prox.get('expectancy_usd', 0))}/trade)</div>
     </div>
     <div class="summary-card" style="border-left:4px solid #34495e;">
       <div class="label">50% mean entry</div>
       <div class="val" style="color:{pnl_color_mid};">{_m(total_pnl_mid)}</div>
       <div class="meta">{n_mid_filled} filled &middot;
         {sb_mid.get('win_rate_pct', 0):.0f}% won &middot;
-        avg {_r(sb_mid.get('expectancy_r', 0))}</div>
+        avg {_r(sb_mid.get('expectancy_r', 0))} ({_m(sb_mid.get('expectancy_usd', 0))}/trade)</div>
     </div>
   </div>
+
+  {_exit_policy_summary_html(sb_prox, sb_prox_tp1, sb_mid, sb_mid_tp1)}
+
   <p style="font-size:12px;color:#888;margin-top:14px;">
     Aggregates above and in every section below are scoped to
     {group_label.lower()} pairs only. Numbers reconcile within this email.
@@ -3129,16 +3208,19 @@ def write_h1_only_report(
       <div class="val" style="color:{pnl_color_prox};">{_m(total_pnl_prox)}</div>
       <div class="meta">{n_prox_filled} filled &middot;
         {sb_prox.get('win_rate_pct', 0):.0f}% won &middot;
-        avg {_r(sb_prox.get('expectancy_r', 0))}</div>
+        avg {_r(sb_prox.get('expectancy_r', 0))} ({_m(sb_prox.get('expectancy_usd', 0))}/trade)</div>
     </div>
     <div class="summary-card" style="border-left:4px solid #34495e;">
       <div class="label">50% mean entry</div>
       <div class="val" style="color:{pnl_color_mid};">{_m(total_pnl_mid)}</div>
       <div class="meta">{n_mid_filled} filled &middot;
         {sb_mid.get('win_rate_pct', 0):.0f}% won &middot;
-        avg {_r(sb_mid.get('expectancy_r', 0))}</div>
+        avg {_r(sb_mid.get('expectancy_r', 0))} ({_m(sb_mid.get('expectancy_usd', 0))}/trade)</div>
     </div>
   </div>
+
+  {_exit_policy_summary_html(sb_prox, sb_prox_tp1, sb_mid, sb_mid_tp1)}
+
   <p style="font-size:12px;color:#888;margin-top:14px;">
     Each section below is a self-contained analysis of one entry zone.
     Numbers within a section reconcile to that zone's headline.

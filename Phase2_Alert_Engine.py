@@ -1028,12 +1028,12 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             </p>
         </div>"""
 
-    # Total max is 6.5 for non-JPY forex (sweep collapsed to presence-only 1.0),
-    # 8.5 elsewhere. Mirrors smc_detector.run_scorecard post-H1-only migration:
-    # Structure 3.0 | Sweep 1.0/3.0 | FVG 1.0 | Freshness 1.5.
+    # Total max is 8 for non-JPY forex (sweep is presence-only),
+    # 10 elsewhere (sweep quality-graded). Mirrors smc_detector.run_scorecard
+    # post-2026-05-26 scoring rewrite: Structure 4 | Sweep 1 or 3 | FVG 2 | Freshness 1.
     _pname = pair_conf.get('name', '') if pair_conf else ''
     _ptype = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
-    total_max_for_card = 6.5 if (_ptype == 'forex' and 'JPY' not in _pname) else 8.5
+    total_max_for_card = 8 if (_ptype == 'forex' and 'JPY' not in _pname) else 10
     scorecard_html = build_scorecard_html(scorecard_rows, total_score, total_max_for_card)
 
     distance_html = f"""
@@ -2029,9 +2029,9 @@ if __name__ == "__main__":
                 atr_label, distance_str, dollar_risk_str, scan_start_ts,
                 h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
             )
-            # Subject score-max: 6.5 (non-JPY forex) / 8.5 (JPY/Gold/NAS)
-            # post-Tier 2 (M15 FVG removed, H1 FVG 1.2 → 1.0).
-            _subj_max = 6.5 if (pair_conf.get('pair_type') == 'forex' and 'JPY' not in name) else 8.5
+            # Subject score-max: 8 (non-JPY forex) / 10 (JPY/Gold/NAS)
+            # per 2026-05-26 scoring rewrite (whole numbers, asymmetric sweep).
+            _subj_max = 8 if (pair_conf.get('pair_type') == 'forex' and 'JPY' not in name) else 10
             send_email(
                 f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/{_subj_max} | {ist_now.strftime('%H:%M IST')}",
                 html, h1_chart, m15_chart

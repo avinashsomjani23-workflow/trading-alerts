@@ -571,6 +571,12 @@ def _empty_state() -> Dict[str, Any]:
         "last_scanned_ts": None,
         "fallback_active": False,
         "trend_start_ts": None,               # ISO ts of the last Major CHoCH candle (or earliest candle on cold start). Anchors the opposite-wall trail across the WHOLE trend, not just the latest leg.
+        # Minor BOS de-dup: ISO ts of the lb-3 pivot most recently consumed by
+        # a Minor BOS. Subsequent closes that "break" the SAME pivot do not
+        # re-fire. Only a NEWER (higher-idx) pivot can trigger the next Minor
+        # BOS. Resets on Major event (trend flip or Major BOS) since the leg
+        # boundary moves and prior continuation memory is no longer relevant.
+        "last_minor_bos_pivot_ts": None,
         "events": [],                         # ring of last EVENT_RING_MAX qualified events
     }
 
@@ -744,6 +750,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
     leg_start_idx        = 0
     trend_start_idx      = 0  # Anchor for OPPOSITE-wall trailing on BOS Major and stale-wall replacement. Resets ONLY on Major CHoCH (or cold start). leg_start_idx still advances on every Major event for promote/refresh of the trend-direction wall.
     fallback_active      = state.get("fallback_active", False)
+    last_minor_bos_pivot_ts = state.get("last_minor_bos_pivot_ts")
     events_ring          = list(state.get("events", []))
 
     last_event_local_idx: Optional[int] = None
@@ -1212,6 +1219,15 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             lo, hi = leg_start_idx + 1, i - 1
             if lo <= hi:
                 pivot = _most_recent_swing_in_window(swings_lb3, target_type, lo, hi)
+                # De-dup against already-consumed pivot. Once a Minor BOS has
+                # broken pivot P, subsequent closes past the SAME P must not
+                # fire a fresh event — pivot is "spent." Compare on ISO ts
+                # (stable across slice rewindowing) not idx (slice-relative).
+                # Only a strictly NEWER pivot ts can trigger the next event.
+                if pivot is not None and last_minor_bos_pivot_ts is not None:
+                    p_ts = pivot.get('ts')
+                    if p_ts is not None and p_ts <= last_minor_bos_pivot_ts:
+                        pivot = None
                 if pivot is not None:
                     pivot_price = float(pivot['price'])
                     if trend == 'bullish':
@@ -1232,6 +1248,10 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                                 'ts':    pivot.get('ts'),
                             }
                             event_displacement = disp
+                            # Pivot is now spent. Subsequent bars cannot re-
+                            # break the same swing high/low; the next Minor
+                            # BOS needs a fresh, later lb-3 swing.
+                            last_minor_bos_pivot_ts = pivot.get('ts')
                         else:
                             _log_safe({
                                 'candle_ts': _ts_iso(df, i), 'pair': pair_name, 'timeframe': 'H1',
@@ -1475,6 +1495,10 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             last_event_chop      = chop_this_event
             leg_start_idx        = i
             fallback_active      = False
+            # Major event resets Minor BOS continuation memory. New leg gets
+            # a clean swing pool — any earlier "spent" pivot is no longer
+            # inside the active leg anyway.
+            last_minor_bos_pivot_ts = None
 
         _ring_append({
             'type':                 event_kind,
@@ -1722,6 +1746,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         "last_scanned_ts":        _ts_iso(df, n - 1),
         "fallback_active":        bool(fallback_active),
         "trend_start_ts":         _ts_iso(df, trend_start_idx) if 0 <= trend_start_idx < n else None,
+        "last_minor_bos_pivot_ts": last_minor_bos_pivot_ts,
         "events":                 events_ring,
         # Non-persisted diagnostic — caller must strip before save_state().
         # See PLACEHOLDER_DIAG_KEY constant.
