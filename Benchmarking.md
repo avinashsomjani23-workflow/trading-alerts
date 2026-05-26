@@ -201,6 +201,7 @@ JPY/NZD Asia-tail (03:30–07:00 UTC): kept as a hard-filter window only because
 
 ### joshyattridge swing_length = 50 default
 - Too coarse. Misses internal structure. Our cross-TF cascade handles granularity properly.
+- **Why they chose 50 (researched 2026-05-26):** single-TF indicators (LuxAlgo, joshyattridge) lack a dealing range or cross-TF cascade. Lookback=50 on H1 ≈ ~2 days of bars ≈ approximates daily/H4 swings. They use wide lookback as a poor-man's higher-TF anchor. Also reduces Pine repaint on TradingView. Not relevant to us — we have a dealing range (currently H1-derived; D1 planned) + H1→M15 cascade. Our lookback=3 + ATR leg-size filter (see section 8) preserves intraday granularity while filtering noise.
 
 ### joshyattridge OB selection by lowest-low
 - Doesn't enforce opposing-candle rule. We pick most-recent opposing candle. Correct.
@@ -216,3 +217,33 @@ JPY/NZD Asia-tail (03:30–07:00 UTC): kept as a hard-filter window only because
 
 ### DavidCico/Enhanced-Event-Driven-Backtester
 - Event-queue framework for systems routing real orders. Overkill for "log would-be alerts to CSV." `backtesting.py` is the chosen harness (see BACKLOG.md).
+
+---
+
+## 8. ATR thresholds in external SMC libs — catalog
+
+Research note (2026-05-26): documenting where public SMC implementations use ATR-based thresholds. Source-of-truth catalog so we don't re-search.
+
+### LuxAlgo
+| Use case | Threshold | Notes |
+|---|---|---|
+| Equal high / equal low tolerance (EQH/EQL) | `0.1 × ATR` | Two-pivot comparison. If `|current_pivot - previous_pivot| < 0.1 × ATR`, levels are equal. |
+| OB candidate range cap | `2 × ATR` | OB candle's `(high - low)` must be ≤ 2× ATR. Rejects news/volatility-spike candles. **Already adopted — section 1.** |
+| FVG noise filter | Cumulative-average-body % (NOT ATR) | LuxAlgo uses body-size % instead of ATR for FVG minimum size. |
+| Zone overlap prevention | ATR-based threshold | Supply/demand zones around swing points use ATR-based spacing to avoid overlap. Exact multiplier not documented in the public Pine source. |
+| Swing detection | **No ATR threshold.** Lookback only. |
+
+### joshyattridge
+| Use case | Threshold | Notes |
+|---|---|---|
+| Equal levels / liquidity zones | `% of total range` (NOT ATR) | Drifts with dataset size — rejected, see section 7. |
+| Swing detection | **No ATR threshold.** Lookback only (default 50). |
+| FVG / OB sizing | **No ATR threshold** in public API. |
+
+### Vacuum confirmed
+- **No public SMC implementation filters swing magnitude in ATR units.** Lookback is the only swing-validation mechanism in both major libs. Our planned `MIN_LEG_ATR_MULT` (see BACKLOG) puts us ahead of public standards on this dimension, not behind. Calibration is on us — no external default to copy.
+
+### ICT trader practice (not code)
+- Stop loss placement: 10–20 pips beyond a swing on FX (multiple ICT tutorials).
+- Implied "real swing size" on EURUSD H1: 15–25 pips ≈ 1.5–2.5× H1 ATR (with current ATR ≈ 9.7 pips).
+- This is loose evidence, not measurable code, but it's the only external anchor for what discretionary SMC traders treat as a tradeable swing.
