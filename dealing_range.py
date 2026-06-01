@@ -674,6 +674,32 @@ def _trail_inside_leg(side: str, swings: List[Dict[str, Any]],
     return {'idx': best['idx'], 'price': best['price'], 'ts': best['ts']}
 
 
+def _needs_cold_start(prior_state: Optional[Dict[str, Any]]) -> bool:
+    """True if prior_state cannot support an incremental walk and must be
+    rebuilt from scratch.
+
+    Cold when prices are missing (genuine first run / empty state) OR when
+    prices exist but the anchoring timestamps are null. The latter is a
+    POISONED state: a wipe or any write through a df without a usable datetime
+    source leaves prices intact but nulls every ts (ceiling/floor/
+    last_scanned). Incremental mode then carries un-anchorable events forward
+    forever — events never resolve to a candle, so no OB is ever built and the
+    pair emits 0 zones permanently. Treating null-ts-with-prices as cold makes
+    the system self-heal on the next scan instead of staying dead."""
+    if (prior_state is None
+            or prior_state.get("ceiling_price") is None
+            or prior_state.get("floor_price") is None):
+        return True
+    # Priced but unanchorable -> poisoned. A genuine warm state always has at
+    # least one wall ts and a last_scanned_ts to drive the incremental walk.
+    if (prior_state.get("ceiling_ts") is None
+            and prior_state.get("floor_ts") is None):
+        return True
+    if prior_state.get("last_scanned_ts") is None:
+        return True
+    return False
+
+
 def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                   pair_name: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -706,11 +732,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
     swings_lb3 = detect_swings(df, lookback=SWING_LOOKBACK)
 
     state = prior_state if prior_state else _empty_state()
-    is_cold_start = (
-        prior_state is None
-        or prior_state.get("ceiling_price") is None
-        or prior_state.get("floor_price") is None
-    )
+    is_cold_start = _needs_cold_start(prior_state)
 
     start_i = 0
     if not is_cold_start and prior_state.get("last_scanned_ts"):
@@ -1788,11 +1810,7 @@ def update_pair(df, prior_state: Optional[Dict[str, Any]],
 
     # For cold-start cap the window. After cold-start, the full df is fine
     # because incremental walk only processes new candles.
-    is_cold = (
-        prior_state is None
-        or prior_state.get("ceiling_price") is None
-        or prior_state.get("floor_price") is None
-    )
+    is_cold = _needs_cold_start(prior_state)
     if is_cold:
         df_used = df.tail(COLDSTART_WINDOW_H1).copy().reset_index(drop=True) \
                   if len(df) > COLDSTART_WINDOW_H1 else df
