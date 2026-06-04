@@ -176,17 +176,14 @@ FVG_WINDOW_M15_CANDLES = 40
 # median minimum — that one rejected small candles; this rejects oversized.
 OB_MAX_RANGE_ATR_MULT = 2.0
 
-# PHASE 1 ONLY — Minimum swing leg size in ATR(14) units, applied AFTER the
-# lookback-3 geometric swing detection. A candidate swing is kept only if the
-# leg from the previous kept opposite-type swing is at least this multiple of
-# the *average* H1 ATR across the leg (Option C — measures volatility *during*
-# the move, not at a single bar). The first swing in any series is kept
-# unconditionally (no prior reference). Reasoning and benchmark catalogue in
-# Benchmarking.md section 8 — no public SMC lib filters swing magnitude in
-# ATR, so this calibration is ours. Start 1.5x (set 2026-05-26 after a quick
-# script showed 1.0x filtered only 1-7% of swings — barely active); 1.5x cuts
-# 6-20% across pairs. Tune from backtest.
-MIN_LEG_ATR_MULT = 1.5
+# Minimum swing leg size in ATR(14) units, applied AFTER lookback-3 geometric
+# swing detection. SINGLE SOURCE OF TRUTH lives in dealing_range (the lowest
+# layer); re-exported here so existing references keep working and there is one
+# value, one filter implementation. See dealing_range.MIN_LEG_ATR_MULT and
+# dealing_range._filter_swings_by_leg_atr. Reasoning / benchmark catalogue in
+# Benchmarking.md section 8 (1.5x cuts 6-20% of swings across pairs).
+import dealing_range as _dr_const
+MIN_LEG_ATR_MULT = _dr_const.MIN_LEG_ATR_MULT
 
 # ---------------------------------------------------------------------------
 # Liquidity sweep — pair-aware tolerance for "equal highs / equal lows" detection.
@@ -393,62 +390,12 @@ def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
         "last_event_type": None,
         "source": f"legacy_window_{lookback}h"
     }
-# PHASE 1 ONLY — rolling True Range series used by the ATR leg-size filter
-# below. Length matches the input df; first element is NaN (no prior close).
-def _true_range_series(df):
-    H = df['High'].values.astype(float)
-    L = df['Low'].values.astype(float)
-    C = df['Close'].values.astype(float)
-    tr = np.full(len(df), np.nan, dtype=float)
-    for i in range(1, len(df)):
-        tr[i] = max(H[i] - L[i], abs(H[i] - C[i - 1]), abs(L[i] - C[i - 1]))
-    return tr
-
-# PHASE 1 ONLY — filters a time-ordered swing list by minimum leg size in ATR
-# units. The first swing passes unconditionally. Each subsequent swing must
-# satisfy |price - prev_kept_opposite.price| >= min_mult * mean_atr_across_leg.
-# Same-type consecutive swings (high->high, low->low) bypass the filter — they
-# describe trend continuation, not a leg; only opposite-type transitions form
-# a measurable leg.
-def _filter_swings_by_leg_atr(swings, df, period=14, min_mult=MIN_LEG_ATR_MULT):
-    if not swings or df is None or len(df) < period + 1 or min_mult <= 0:
-        return swings
-    tr = _true_range_series(df)
-    # Rolling mean TR of length `period` — element i is mean of tr[i-period+1..i].
-    # We slice into this when measuring a leg's average volatility.
-    kept = []
-    last_opp_by_type = {}  # 'high' -> last kept low, 'low' -> last kept high
-    for s in swings:
-        opp = 'low' if s['type'] == 'high' else 'high'
-        ref = last_opp_by_type.get(opp)
-        if ref is None:
-            # No prior opposite swing — first measurable point. Keep.
-            kept.append(s)
-            last_opp_by_type[s['type']] = s
-            continue
-        a, b = ref['idx'], s['idx']
-        if b <= a:
-            # Defensive: out-of-order swing. Drop rather than divide by zero.
-            continue
-        leg_tr = tr[a + 1: b + 1]  # TR values across the leg, inclusive of swing bar
-        leg_tr = leg_tr[~np.isnan(leg_tr)]
-        if len(leg_tr) == 0:
-            kept.append(s)
-            last_opp_by_type[s['type']] = s
-            continue
-        avg_atr = float(np.mean(leg_tr))
-        leg_size = abs(s['price'] - ref['price'])
-        if leg_size >= min_mult * avg_atr:
-            kept.append(s)
-            last_opp_by_type[s['type']] = s
-        # else: leg too small — discard as noise. Do NOT update last_opp_by_type;
-        # the next opposite swing is still measured against the same reference.
-    return kept
-
 # PHASE 1 ONLY — extracts swing highs/lows for context tagging in smc_radar.py.
 # Default lookback was changed 4->3 in commit 8300876 (2026-05-18).
 # `min_leg_atr_mult`: if set, applies the ATR leg-size filter after geometric
-# detection. Pass None to skip (legacy behaviour).
+# detection. Pass None to skip (e.g. M5 / Phase 3, where the H1-tuned multiple
+# does not apply). The ATR filter itself is the single implementation owned by
+# dealing_range — this function only does geometry, then delegates filtering.
 def get_swing_points(df, lookback=3, bounds=None, min_leg_atr_mult=MIN_LEG_ATR_MULT):
     if df is None or len(df) < lookback * 2 + 1:
         return []
@@ -467,7 +414,8 @@ def get_swing_points(df, lookback=3, bounds=None, min_leg_atr_mult=MIN_LEG_ATR_M
             swings.append({"type": "low", "price": float(L[i]), "idx": i, "ts": df.index[i]})
     swings = sorted(swings, key=lambda s: s["idx"])
     if min_leg_atr_mult is not None and min_leg_atr_mult > 0:
-        swings = _filter_swings_by_leg_atr(swings, df, min_mult=min_leg_atr_mult)
+        import dealing_range as _dr
+        swings = _dr._filter_swings_by_leg_atr(swings, df, min_mult=min_leg_atr_mult)
     return swings
 
 

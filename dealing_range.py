@@ -115,6 +115,17 @@ except Exception:
 # walls; informational weakening flag only.
 SWING_LOOKBACK = 3
 
+# Minimum swing leg size in ATR(14) units, applied AFTER lookback=3 geometric
+# detection. A confirmed pivot is only kept if the leg into it (distance from
+# the previous kept opposite-type swing) is >= MIN_LEG_ATR_MULT * the average
+# H1 ATR across that leg. This is the SINGLE definition of an H1 swing: every
+# consumer (trend, CHoCH, BOS, walls, sweep scoring, charts) reads swings that
+# have passed BOTH the lb-3 geometry gate AND this ATR leg-size gate. Tiny
+# triangles never become structural swings. Owned here (lowest layer);
+# smc_detector.get_swing_points calls down into _filter_swings_by_leg_atr so
+# there is exactly one implementation.
+MIN_LEG_ATR_MULT = 1.5
+
 # Leg-size threshold = displacement of the break candle's CLOSE PAST the wall
 # (or pivot) it just broke. Major and Minor CHoCH share the same threshold
 # (0.60× ATR) — the depth of the broken swing differs, but a noise filter
@@ -276,7 +287,73 @@ def _ts_iso(df, idx: int) -> Optional[str]:
 
 # --- Swing detection ---------------------------------------------------------
 
-def detect_swings(df, lookback: int = SWING_LOOKBACK) -> List[Dict[str, Any]]:
+def _true_range_series(df) -> List[float]:
+    """Per-candle True Range, length == len(df). Element 0 is NaN (no prior
+    close). Pure-python True Range; lives here (lowest layer) so the ATR
+    leg-size filter has no cross-import. smc_detector delegates to it.
+    """
+    H = df['High'].values.astype(float)
+    L = df['Low'].values.astype(float)
+    C = df['Close'].values.astype(float)
+    n = len(df)
+    tr = [float('nan')] * n
+    for i in range(1, n):
+        tr[i] = max(H[i] - L[i], abs(H[i] - C[i - 1]), abs(L[i] - C[i - 1]))
+    return tr
+
+
+def _filter_swings_by_leg_atr(swings: List[Dict[str, Any]], df,
+                              period: int = 14,
+                              min_mult: float = MIN_LEG_ATR_MULT
+                              ) -> List[Dict[str, Any]]:
+    """Filter a time-ordered swing list by minimum leg size in ATR units.
+
+    The first swing passes unconditionally (no prior opposite swing to measure
+    a leg against). Each subsequent swing must satisfy
+        |price - prev_kept_opposite.price| >= min_mult * mean_TR_across_leg
+    where the leg spans (prev_kept_opposite.idx, this_swing.idx].
+
+    Same-type consecutive swings (high->high, low->low) bypass the test — they
+    describe trend continuation, not a measurable leg; only opposite-type
+    transitions form a leg whose size we can measure. A swing that fails is
+    dropped WITHOUT updating the reference, so the next opposite swing is still
+    measured against the same surviving anchor.
+
+    SINGLE SOURCE OF TRUTH for the ATR leg-size gate. smc_detector calls this.
+    """
+    if not swings or df is None or len(df) < period + 1 or min_mult <= 0:
+        return swings
+    tr = _true_range_series(df)
+    kept: List[Dict[str, Any]] = []
+    last_opp_by_type: Dict[str, Dict[str, Any]] = {}  # 'high'->last kept low, 'low'->last kept high
+    for s in swings:
+        opp = 'low' if s['type'] == 'high' else 'high'
+        ref = last_opp_by_type.get(opp)
+        if ref is None:
+            kept.append(s)
+            last_opp_by_type[s['type']] = s
+            continue
+        a, b = ref['idx'], s['idx']
+        if b <= a:
+            # Defensive: out-of-order swing. Drop rather than divide by zero.
+            continue
+        leg_tr = [v for v in tr[a + 1: b + 1] if v == v]  # drop NaN (v==v is False for NaN)
+        if not leg_tr:
+            kept.append(s)
+            last_opp_by_type[s['type']] = s
+            continue
+        avg_atr = sum(leg_tr) / len(leg_tr)
+        leg_size = abs(s['price'] - ref['price'])
+        if leg_size >= min_mult * avg_atr:
+            kept.append(s)
+            last_opp_by_type[s['type']] = s
+        # else: leg too small -> discard as noise; reference unchanged.
+    return kept
+
+
+def detect_swings(df, lookback: int = SWING_LOOKBACK,
+                  min_leg_atr_mult: Optional[float] = MIN_LEG_ATR_MULT
+                  ) -> List[Dict[str, Any]]:
     """
     Find confirmed swing highs and swing lows over the entire df.
 
@@ -288,6 +365,12 @@ def detect_swings(df, lookback: int = SWING_LOOKBACK) -> List[Dict[str, Any]]:
 
     Strict comparison: equal highs / equal lows do NOT register as swings.
     A flat top / flat bottom across the window correctly produces no swing.
+
+    After geometric detection, the ATR leg-size filter is applied (unless
+    min_leg_atr_mult is None or <= 0). This is the single H1 swing definition:
+    lb-3 geometry PLUS a leg that is large enough in ATR terms. Tiny triangles
+    are removed. Pass min_leg_atr_mult=None ONLY for non-H1 / diagnostic use
+    where the H1-tuned multiple does not apply.
 
     Returns list sorted by idx, each entry:
       {'type': 'high'|'low', 'idx': i, 'price': float, 'ts': iso}
@@ -312,6 +395,8 @@ def detect_swings(df, lookback: int = SWING_LOOKBACK) -> List[Dict[str, Any]]:
         if min_neighbour_l is not None and L[i] < min_neighbour_l:
             out.append({'type': 'low',  'idx': i, 'price': float(L[i]), 'ts': _ts_iso(df, i)})
     out.sort(key=lambda s: s['idx'])
+    if min_leg_atr_mult is not None and min_leg_atr_mult > 0:
+        out = _filter_swings_by_leg_atr(out, df, min_mult=min_leg_atr_mult)
     return out
 
 
@@ -581,7 +666,8 @@ def _empty_state() -> Dict[str, Any]:
     }
 
 
-def _resolve_placeholder(side: str, df, leg_start_idx: int, leg_end_idx: int
+def _resolve_placeholder(side: str, df, leg_start_idx: int, leg_end_idx: int,
+                         swings: List[Dict[str, Any]]
                          ) -> Tuple[Optional[Dict[str, Any]], bool]:
     """
     Try to resolve a placeholder wall on `side` ('ceiling' or 'floor') by
@@ -589,12 +675,18 @@ def _resolve_placeholder(side: str, df, leg_start_idx: int, leg_end_idx: int
     floor) inside [leg_start_idx, leg_end_idx]. Returns (swing_dict_or_None,
     is_placeholder).
 
-    Swings are detected on the LEG SLICE only — candles outside the leg
-    (notably the BOS candle that sits at leg_start_idx - 0) are not part of
-    the lookback=3 neighbour window. Reason: a BOS / CHoCH break candle is
-    not a structural pivot. Including it as a neighbour blocks every
-    leg-internal swing whose high is below the break candle, which is the
-    normal post-BOS state.
+    DETECT-ONCE-THEN-PICK: swings are NOT re-detected here. The caller passes
+    the single full-df swing pool (`swings`, already lb-3 + ATR-filtered) and
+    this function SELECTS the qualifying swing from it by absolute index range.
+    This is what guarantees the wall is anchored to a real (ATR-qualified)
+    swing — the same pool trend/CHoCH/BOS use — and removes the old per-slice
+    re-detection where a tiny window could have nothing for the ATR filter to
+    measure against.
+
+    The break candle at leg_start_idx is naturally excluded: candidates are
+    taken from (leg_start_idx, leg_end_idx], so the break candle is never a
+    candidate, and full-df detection already gave every interior swing its true
+    lookback-3 neighbours.
 
     If no confirmed leg-internal swing is present, returns (rolling_extreme,
     True) where rolling_extreme is a synthetic dict with the highest H or
@@ -603,22 +695,13 @@ def _resolve_placeholder(side: str, df, leg_start_idx: int, leg_end_idx: int
     if df is None or leg_start_idx >= leg_end_idx:
         return None, True
 
-    # Leg slice [leg_start_idx + 1 ... leg_end_idx] inclusive.
-    # We pass leg_start_idx+1 as the caller's `leg_start_idx`, so the slice
-    # is df.iloc[leg_start_idx : leg_end_idx + 1].
-    slice_lo = leg_start_idx
-    slice_hi_excl = leg_end_idx + 1
-    leg_df = df.iloc[slice_lo:slice_hi_excl]
-
     target_type = 'high' if side == 'ceiling' else 'low'
-    leg_swings = detect_swings(leg_df, lookback=SWING_LOOKBACK)
-    # Translate slice-local idx back to absolute df idx.
+    # Select from the shared pool: same-type swings strictly inside the leg.
+    # (leg_start_idx, leg_end_idx] — break candle (leg_start_idx) excluded.
     candidates = [
-        {'type': s['type'],
-         'idx': slice_lo + int(s['idx']),
-         'price': float(s['price']),
-         'ts': _ts_iso(df, slice_lo + int(s['idx']))}
-        for s in leg_swings if s['type'] == target_type
+        {'type': s['type'], 'idx': s['idx'], 'price': float(s['price']), 'ts': s['ts']}
+        for s in swings
+        if s['type'] == target_type and leg_start_idx < s['idx'] <= leg_end_idx
     ]
     if candidates:
         if side == 'ceiling':
@@ -844,7 +927,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         if side == 'ceiling':
             if not ceiling["is_placeholder"]:
                 return
-            promoted, is_ph = _resolve_placeholder('ceiling', df, leg_start_idx + 1, current_i)
+            promoted, is_ph = _resolve_placeholder('ceiling', df, leg_start_idx + 1, current_i, swings_lb3)
             if promoted is None:
                 return
             if is_ph:
@@ -858,7 +941,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         else:
             if not floor["is_placeholder"]:
                 return
-            promoted, is_ph = _resolve_placeholder('floor', df, leg_start_idx + 1, current_i)
+            promoted, is_ph = _resolve_placeholder('floor', df, leg_start_idx + 1, current_i, swings_lb3)
             if promoted is None:
                 return
             if is_ph:
@@ -1616,13 +1699,15 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             out["reason"] = "no_interior_window"
             return out
 
-        # Mirror the resolver: detect swings on the leg slice, not full df.
-        # leg_start_idx+1 == lo, leg_end_idx == hi.
-        slice_lo, slice_hi_excl = lo, hi + 1
-        leg_df = df.iloc[slice_lo:slice_hi_excl]
+        # Mirror the resolver: SELECT from the shared full-df swing pool
+        # (swings_lb3, lb-3 + ATR filtered) by absolute index range, exactly as
+        # _resolve_placeholder now does. Same-type swings in (leg_start_idx,
+        # current_i] == (lo-1, hi]; lo == leg_start_idx+1, hi == current_i.
         target_type = 'high' if side == 'ceiling' else 'low'
-        leg_swings = detect_swings(leg_df, lookback=SWING_LOOKBACK)
-        leg_swings_typed = [s for s in leg_swings if s['type'] == target_type]
+        leg_swings_typed = [
+            s for s in swings_lb3
+            if s['type'] == target_type and (lo - 1) < s['idx'] <= hi
+        ]
         out["leg_lb3_swings"] = len(leg_swings_typed)
 
         if leg_swings_typed:
@@ -1632,15 +1717,17 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                 best = max(leg_swings_typed, key=lambda s: s['price'])
             else:
                 best = min(leg_swings_typed, key=lambda s: s['price'])
-            abs_idx = slice_lo + int(best['idx'])
+            abs_idx = int(best['idx'])
             out["reason"] = "swings_present_but_not_promoted"
             out["candidate_idx"]   = int(abs_idx)
             out["candidate_ts"]    = _ts_iso(df, abs_idx)
             out["candidate_price"] = float(best['price'])
             return out
 
-        # No leg-internal lb3 swing. Identify the rolling extreme inside the
-        # leg and why it isn't a swing within the leg slice.
+        # No leg-internal swing was promotable. Identify the rolling extreme
+        # inside the leg and why it isn't an ATR-qualified lb-3 swing. The
+        # resolver now uses FULL-DF neighbour windows (detect-once-then-pick),
+        # so neighbour checks below run on the full df, not a leg slice.
         H_arr = df['High'].values.astype(float)
         L_arr = df['Low'].values.astype(float)
         arr = H_arr if side == 'ceiling' else L_arr
@@ -1654,23 +1741,19 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         out["rolling_extreme_price"] = ext_price
         out["candles_after_extreme"] = int(current_i - ext_idx)
 
-        # Leg-relative position of the extreme.
-        ext_slice_idx = ext_idx - slice_lo
-        slice_len = slice_hi_excl - slice_lo
-
-        # Need SWING_LOOKBACK candles on each side WITHIN the leg slice.
-        if ext_slice_idx < SWING_LOOKBACK:
-            out["reason"] = "left_edge_insufficient_in_leg"
+        # Need SWING_LOOKBACK candles on each side WITHIN the full df.
+        if ext_idx < SWING_LOOKBACK:
+            out["reason"] = "left_edge_insufficient_in_df"
             out["left_candles_needed"]  = int(SWING_LOOKBACK)
-            out["left_candles_present"] = int(ext_slice_idx)
+            out["left_candles_present"] = int(ext_idx)
             return out
-        if ext_slice_idx + SWING_LOOKBACK >= slice_len:
-            out["reason"] = "right_edge_insufficient_in_leg"
+        if ext_idx + SWING_LOOKBACK >= n:
+            out["reason"] = "right_edge_insufficient_in_df"
             out["right_candles_needed"]  = int(SWING_LOOKBACK)
-            out["right_candles_present"] = int(slice_len - 1 - ext_slice_idx)
+            out["right_candles_present"] = int(n - 1 - ext_idx)
             return out
 
-        # Neighbour windows inside the leg slice only.
+        # Full-df neighbour windows around the extreme.
         l_lo = ext_idx - SWING_LOOKBACK
         l_hi = ext_idx                       # exclusive
         r_lo = ext_idx + 1
@@ -1697,15 +1780,17 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
                         blocker_side = "right"; blocker_idx = j; blocker_val = float(L_arr[j]); break
 
         if blocker_idx is not None:
-            out["reason"] = "blocked_by_neighbour_in_leg"
+            out["reason"] = "blocked_by_neighbour"
             out["blocker_side"]  = blocker_side
             out["blocker_idx"]   = int(blocker_idx)
             out["blocker_ts"]    = _ts_iso(df, blocker_idx)
             out["blocker_value"] = blocker_val
         else:
-            # Extreme has clean neighbours inside the leg. Shouldn't happen —
-            # detect_swings on the leg slice would have returned it.
-            out["reason"] = "rule_satisfied_but_no_swing_detected"
+            # Extreme passes lb-3 geometry on the full df, yet wasn't promoted.
+            # With detect-once-then-pick the only remaining reason is the ATR
+            # leg-size filter: the extreme IS a geometric pivot but its leg was
+            # too small, so it never entered the shared pool.
+            out["reason"] = "geometric_swing_dropped_by_atr_filter"
 
         return out
 

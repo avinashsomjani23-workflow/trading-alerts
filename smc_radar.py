@@ -1579,21 +1579,40 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                 linestyle=':', alpha=0.6, zorder=2
             )
 
-        # --- Swing triangles ---
-        # lookback-3 filled triangles render across the visible window
-        # (structural swings; drive walls / BOS / both CHoCH tiers).
+        # --- Swing markers (triangles + broken-swing X) ---
+        # lookback-3 + ATR-filtered structural swings (the SAME pool that drives
+        # walls / BOS / CHoCH — get_swing_points applies the ATR leg filter by
+        # default). A swing whose timestamp matches a structural event's
+        # broken_swing_ts is drawn as an X (it was broken to print a BOS/CHoCH,
+        # Major or Minor); every other swing is a triangle.
         SWING_COLOR = '#d4a017'
+        BROKEN_COLOR = '#e74c3c'
         try:
             swings_lb3 = smc_detector.get_swing_points(full_df, lookback=3)
         except Exception:
             swings_lb3 = []
+        # Set of broken-swing timestamps (ISO strings) from the event ring.
+        # Every event kind counts: Major/Minor BOS and Major/Minor CHoCH.
+        broken_ts = set()
+        for _e in ((walls or {}).get('events') or []):
+            _bts = _e.get('broken_swing_ts')
+            if _bts:
+                broken_ts.add(_bts)
         # Visual offset based on chart vertical span (not pixels).
         marker_offset = (y_max - y_min) * 0.012
         for s in swings_lb3:
             xi = s['idx'] - window_start
             if not (0 <= xi < n_plot):
                 continue
-            if s['type'] == 'high':
+            # Normalise the swing ts to ISO for comparison with the event ring.
+            s_ts = s.get('ts')
+            s_ts_iso = s_ts.isoformat() if hasattr(s_ts, 'isoformat') else s_ts
+            is_broken = s_ts_iso in broken_ts
+            if is_broken:
+                # Broken swing -> X at the swing price (no directional offset).
+                ax.scatter([xi], [s['price']], marker='x',
+                           s=55, color=BROKEN_COLOR, linewidths=1.6, zorder=7)
+            elif s['type'] == 'high':
                 ax.scatter([xi], [s['price'] + marker_offset], marker='v',
                            s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
                            linewidths=1.0, zorder=6)
