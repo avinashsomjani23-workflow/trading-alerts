@@ -13,7 +13,7 @@
     "last_event_ts": "2026-06-04T11:00:00+01:00",
     "last_event_idx_iso": "2026-06-04T11:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-04T18:00:00+01:00",
+    "last_scanned_ts": "2026-06-04T19:00:00+01:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-04T11:00:00+01:00",
     "last_minor_bos_pivot_ts": null,
@@ -281,7 +281,7 @@
       "confirmed_floor_ts": "2026-06-01T13:00:00+00:00",
       "n_confirmed_highs": 4,
       "n_confirmed_lows": 3,
-      "current_price": 1.1626555919647217,
+      "current_price": 1.162520408630371,
       "contained": true,
       "source": "h4",
       "stats": {
@@ -289,9 +289,9 @@
         "full4": 36,
         "short": 4,
         "bars_per_candle": {
-          "2": 2,
+          "1": 2,
           "4": 36,
-          "1": 2
+          "2": 2
         }
       }
     },
@@ -314,9 +314,9 @@
   },
   "USDJPY": {
     "trend": "bullish",
-    "ceiling_price": 160.093994140625,
-    "ceiling_ts": "2026-06-03T21:00:00+01:00",
-    "ceiling_is_placeholder": true,
+    "ceiling_price": 160.031005859375,
+    "ceiling_ts": "2026-06-04T16:00:00+01:00",
+    "ceiling_is_placeholder": false,
     "floor_price": 159.57400512695312,
     "floor_ts": "2026-06-04T05:00:00+01:00",
     "floor_is_placeholder": false,
@@ -326,7 +326,7 @@
     "last_event_ts": "2026-06-03T20:00:00+01:00",
     "last_event_idx_iso": "2026-06-03T20:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-04T18:00:00+01:00",
+    "last_scanned_ts": "2026-06-04T19:00:00+01:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-03T20:00:00+01:00",
     "last_minor_bos_pivot_ts": null,
@@ -515,6 +515,12 @@
         "type": "low",
         "price": 159.74200439453125,
         "broken": false
+      },
+      {
+        "ts": "2026-06-04T16:00:00+01:00",
+        "type": "high",
+        "price": 160.031005859375,
+        "broken": false
       }
     ],
     "h4_range": {
@@ -534,7 +540,7 @@
       "confirmed_floor_ts": "2026-06-04T01:00:00+00:00",
       "n_confirmed_highs": 4,
       "n_confirmed_lows": 4,
-      "current_price": 159.9770050048828,
+      "current_price": 159.9810028076172,
       "contained": true,
       "source": "h4",
       "stats": {
@@ -542,9 +548,9 @@
         "full4": 36,
         "short": 4,
         "bars_per_candle": {
-          "2": 2,
+          "1": 2,
           "4": 36,
-          "1": 2
+          "2": 2
         }
       }
     },
@@ -579,7 +585,7 @@
     "last_event_ts": "2026-06-03T06:00:00+01:00",
     "last_event_idx_iso": "2026-06-03T06:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-04T18:00:00+01:00",
+    "last_scanned_ts": "2026-06-04T19:00:00+01:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-01T02:00:00+01:00",
     "last_minor_bos_pivot_ts": null,
@@ -691,12 +697,6 @@
       }
     ],
     "swings": [
-      {
-        "ts": "2026-05-27T15:00:00+01:00",
-        "type": "high",
-        "price": 0.5911563038825989,
-        "broken": false
-      },
       {
         "ts": "2026-05-27T18:00:00+01:00",
         "type": "low",
@@ -847,7 +847,7 @@
       "confirmed_floor_ts": "2026-06-01T13:00:00+00:00",
       "n_confirmed_highs": 3,
       "n_confirmed_lows": 2,
-      "current_price": 0.5877857804298401,
+      "current_price": 0.5876476764678955,
       "contained": true,
       "source": "h4",
       "stats": {
@@ -855,9 +855,9 @@
         "full4": 36,
         "short": 4,
         "bars_per_candle": {
-          "2": 2,
+          "1": 2,
           "4": 36,
-          "1": 2
+          "2": 2
         }
       }
     },
@@ -872,7 +872,7 @@
       "last_bos": {
         "tier": "Major",
         "direction": "up",
-        "ts": "2026-06-02T07:00:00+01:00",
+        "ts": "2026-06-01T22:00:00+01:00",
         "wall": 0.5936832427978516
       },
       "label": "H1 TRANSITION \u2014 CHoCH from DOWN (awaiting BOS to flip or reclaim)"
@@ -892,7 +892,7 @@
     "last_event_ts": "2026-06-02T07:00:00+01:00",
     "last_event_idx_iso": "2026-06-02T07:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-04T18:00:00+01:00",
+    "last_scanned_ts": "2026-06-04T19:00:00+01:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-02T07:00:00+01:00",
     "last_minor_bos_pivot_ts": "2026-06-04T03:00:00+01:00",
@@ -1196,7 +1196,7 @@
       "confirmed_floor_ts": "2026-06-02T05:00:00+00:00",
       "n_confirmed_highs": 4,
       "n_confirmed_lows": 2,
-      "current_price": 0.7888200283050537,
+      "current_price": 0.7888299822807312,
       "contained": true,
       "source": "h4",
       "stats": {
@@ -1204,10 +1204,8 @@
         "full4": 36,
         "short": 3,
         "bars_per_candle": {
-          "3": 1,
-          "4": 36,
-          "2": 1,
-          "1": 1
+          "2": 3,
+          "4": 36
         }
       }
     },
@@ -1242,7 +1240,7 @@
     "last_event_ts": "2026-06-02T10:00:00-04:00",
     "last_event_idx_iso": "2026-06-02T10:00:00-04:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-04T12:00:00-04:00",
+    "last_scanned_ts": "2026-06-04T13:00:00-04:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-28T11:00:00-04:00",
     "last_minor_bos_pivot_ts": null,
@@ -1494,6 +1492,12 @@
         "type": "high",
         "price": 30544.5,
         "broken": false
+      },
+      {
+        "ts": "2026-06-04T10:00:00-04:00",
+        "type": "low",
+        "price": 30151.0,
+        "broken": false
       }
     ],
     "h4_range": {
@@ -1513,34 +1517,35 @@
       "confirmed_floor_ts": "2026-06-01T13:00:00+00:00",
       "n_confirmed_highs": 4,
       "n_confirmed_lows": 2,
-      "current_price": 30490.5,
+      "current_price": 30548.0,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
-        "full4": 33,
-        "short": 6,
+        "full4": 32,
+        "short": 8,
         "bars_per_candle": {
-          "4": 33,
-          "3": 6
+          "3": 7,
+          "4": 32,
+          "1": 1
         }
       }
     },
     "structure_v2": {
-      "state": "down",
+      "state": "transition",
       "ranging": false,
-      "prior_trend": null,
-      "choch": false,
-      "choch_ts": null,
+      "prior_trend": "down",
+      "choch": true,
+      "choch_ts": "2026-06-04T13:00:00-04:00",
       "defended": 30531.0,
-      "broken_swing_ts": null,
+      "broken_swing_ts": "2026-06-04T03:00:00-04:00",
       "last_bos": {
         "tier": "Minor",
         "direction": "down",
         "ts": "2026-06-04T04:00:00-04:00",
         "wall": null
       },
-      "label": "H1 trend DOWN"
+      "label": "H1 TRANSITION \u2014 CHoCH from DOWN (awaiting BOS to flip or reclaim)"
     }
   },
   "GOLD": {
@@ -1557,7 +1562,7 @@
     "last_event_ts": "2026-06-02T00:00:00-04:00",
     "last_event_idx_iso": "2026-06-02T00:00:00-04:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-04T12:00:00-04:00",
+    "last_scanned_ts": "2026-06-04T13:00:00-04:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-02T00:00:00-04:00",
     "last_minor_bos_pivot_ts": "2026-06-04T00:00:00-04:00",
@@ -1699,12 +1704,6 @@
       }
     ],
     "swings": [
-      {
-        "ts": "2026-05-27T04:00:00-04:00",
-        "type": "high",
-        "price": 4529.5,
-        "broken": true
-      },
       {
         "ts": "2026-05-27T09:00:00-04:00",
         "type": "low",
@@ -1879,16 +1878,17 @@
       "confirmed_floor_ts": "2026-06-03T22:00:00+00:00",
       "n_confirmed_highs": 2,
       "n_confirmed_lows": 3,
-      "current_price": 4508.60009765625,
+      "current_price": 4506.5,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
-        "full4": 33,
-        "short": 6,
+        "full4": 32,
+        "short": 8,
         "bars_per_candle": {
-          "4": 33,
-          "3": 6
+          "3": 7,
+          "4": 32,
+          "1": 1
         }
       }
     },
