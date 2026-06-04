@@ -419,6 +419,46 @@ def get_swing_points(df, lookback=3, bounds=None, min_leg_atr_mult=MIN_LEG_ATR_M
     return swings
 
 
+# --- Shared chart-swing helpers ---------------------------------------------
+# SINGLE SOURCE consumers. Charts (Phase 1 + Phase 2) read the persisted swing
+# pool from dealing_range state and position it by timestamp. No chart detects
+# swings itself, so every chart shows identical triangles / X markers.
+
+def swings_for_chart(walls):
+    """Return the persisted lb-3+ATR swing list from dealing_range state.
+
+    `walls` is the per-pair structure-state dict (carries 'swings'). Returns a
+    list of {ts, type, price, broken} or [] when absent (e.g. legacy state
+    written before swings were persisted — caller renders no markers, never
+    crashes)."""
+    if not isinstance(walls, dict):
+        return []
+    sw = walls.get('swings')
+    return sw if isinstance(sw, list) else []
+
+
+def build_ts_to_local_x(df_plot):
+    """Map each plotted candle's ISO timestamp -> its local x index (0-based).
+
+    Lets a chart place a persisted swing (keyed by ts) at the right candle
+    regardless of how the plot window was sliced. Uses 'Datetime' column if
+    present, else the index. Returns {} on any failure (markers simply skip)."""
+    out = {}
+    try:
+        if 'Datetime' in df_plot.columns:
+            ts_seq = df_plot['Datetime']
+        else:
+            ts_seq = df_plot.index
+        for x in range(len(df_plot)):
+            raw = ts_seq.iloc[x] if hasattr(ts_seq, 'iloc') else ts_seq[x]
+            iso = raw.isoformat() if hasattr(raw, 'isoformat') else (str(raw) if raw is not None else None)
+            if iso is not None:
+                out[iso] = x
+    except Exception:
+        return {}
+    return out
+
+
 # PHASE 2 ONLY — counts BOS events since last Major CHoCH. Reads dealing_range
 # event state. Called only by Phase2_Alert_Engine.py.
 def compute_bos_sequence_count(pair_name):

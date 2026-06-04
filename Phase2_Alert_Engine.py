@@ -518,6 +518,54 @@ def _draw_candles(ax, df_plot):
         ))
 
 
+def _p2_swing_markers(ax, df_h1, window_start, n, pair_conf, y_min, y_max):
+    """Render swing triangles + broken-swing X on a Phase 2 H1 chart.
+
+    SINGLE SOURCE: reads the persisted lb-3+ATR swing pool from dealing_range
+    state (walls['swings']) — the exact swings Phase 1 renders. Phase 2 detects
+    nothing itself. Each swing is positioned by ts using locate_ob_candle_idx
+    (same df_h1 index frame as the sweep / FVG markers), then shifted to local
+    plot x via window_start. Any failure is swallowed so a chart never breaks on
+    marker rendering. broken -> red X; else gold triangle."""
+    try:
+        import dealing_range as _dr
+        pair_name = (pair_conf or {}).get('name')
+        if not pair_name:
+            return
+        state = _dr.load_state() or {}
+        walls = state.get(pair_name) or {}
+        swings = smc_detector.swings_for_chart(walls)
+        if not swings:
+            return
+        SWING_COLOR = '#d4a017'
+        BROKEN_COLOR = '#e74c3c'
+        offset = (y_max - y_min) * 0.012
+        for s in swings:
+            ts = s.get('ts')
+            if not ts:
+                continue
+            abs_i, found = smc_detector.locate_ob_candle_idx(df_h1, ts)
+            if not found:
+                continue
+            xi = abs_i - window_start
+            if not (0 <= xi < n):
+                continue
+            price = s['price']
+            if s.get('broken'):
+                ax.scatter([xi], [price], marker='x', s=55,
+                           color=BROKEN_COLOR, linewidths=1.6, zorder=7)
+            elif s['type'] == 'high':
+                ax.scatter([xi], [price + offset], marker='v', s=42,
+                           color=SWING_COLOR, edgecolors=SWING_COLOR,
+                           linewidths=1.0, zorder=6)
+            else:
+                ax.scatter([xi], [price - offset], marker='^', s=42,
+                           color=SWING_COLOR, edgecolors=SWING_COLOR,
+                           linewidths=1.0, zorder=6)
+    except Exception:
+        return
+
+
 def _fig_to_b64(fig):
     buf = BytesIO()
     fig.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#131722')
@@ -530,20 +578,25 @@ def _fig_to_b64(fig):
 def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
     """H1 zoomed entry chart. Replaces the legacy M15 approach chart.
 
-    Visual choices (per trader preference 2026-05-26):
-      - 30 H1 candles, focused on the OB and approach to it (long candles).
+    Visual choices (per trader preference 2026-05-26, window 30 -> 60 on
+    2026-06-04 for more approach context):
+      - 60 H1 candles, focused on the OB and approach to it (long candles).
       - Wider figsize relative to candle count -> visibly larger bodies.
       - Same colour palette as the wide H1 context chart for consistency.
       - Renders OB band, entry/SL/TP1/TP2 lines, current price line,
-        FVG box (if present), OB candle outline. No dealing-range band
-        (intentional -- this chart is about the entry, not the macro view).
+        FVG box (if present), OB candle outline, swing triangles + broken-swing
+        X. No dealing-range band (intentional -- this chart is about the entry,
+        not the macro view).
     """
     try:
         dp = pair_conf.get("decimal_places", 5)
-        df_plot = df_h1.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(30).copy().reset_index(drop=True)
+        tail_n = 60
+        df_plot = df_h1.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(tail_n).copy().reset_index(drop=True)
         n = len(df_plot)
         if n < 5:
             return None
+        # window_start in the raw df_h1 index frame (matches locate_ob_candle_idx)
+        window_start = max(0, len(df_h1) - tail_n)
 
         fig, ax = plt.subplots(1, 1, figsize=(11, 5.2), facecolor='#131722')
         ax.set_facecolor('#131722')
@@ -660,6 +713,10 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
                     ha='left', fontweight='bold', zorder=5,
                     bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
 
+        # Swing triangles + broken-swing X (single source: dealing_range state).
+        _p2_swing_markers(ax, df_h1, window_start, n, pair_conf,
+                          float(df_plot['Low'].min()), float(df_plot['High'].max()))
+
         # Y-axis padded around the most relevant levels.
         y_min, y_max = float(df_plot['Low'].min()), float(df_plot['High'].max())
         for val in (zone_lo, zone_hi, entry_p, sl_p, tp1_p, tp2_p):
@@ -684,7 +741,14 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
 def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=None):
     try:
         dp = pair_conf.get("decimal_places", 5)
-        df_plot = df_h1.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(80).copy().reset_index(drop=True)
+        # Window widened 80 -> 130 to match the Phase 1 context chart. Same
+        # figsize as before, so 130 candles render at Phase 1 proportions
+        # (not stretched / thinned). Phase 2 functionality is unchanged.
+        # window_start uses raw df_h1 length (same index frame as
+        # locate_ob_candle_idx, which indexes df_h1) to preserve the existing
+        # sweep / FVG / marker positioning contract.
+        tail_n = 130
+        df_plot = df_h1.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(tail_n).copy().reset_index(drop=True)
         n = len(df_plot)
         if n < 5:
             return None
@@ -692,7 +756,6 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         fig, ax = _base_canvas()
         _draw_candles(ax, df_plot)
 
-        tail_n = 80
         full_n = len(df_h1)
         window_start = max(0, full_n - tail_n)
 
@@ -906,6 +969,14 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                     ha='center', fontweight='bold', zorder=5,
                     bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
 
+        # --- Swing markers (triangles + broken-swing X) -----------------------
+        # SINGLE SOURCE: same persisted lb-3+ATR swing pool from dealing_range
+        # state that Phase 1 renders. Phase 2 does NOT detect swings itself.
+        # Positioned by ts via locate_ob_candle_idx (the same df_h1 index frame
+        # used for the sweep / FVG markers). broken -> X, else triangle.
+        _p2_swing_markers(ax, df_h1, window_start, n, pair_conf,
+                          float(df_plot['Low'].min()), float(df_plot['High'].max()))
+
         # --- Y-axis range ---
         y_min, y_max = float(df_plot['Low'].min()), float(df_plot['High'].max())
         for val in [zone_lo, zone_hi]:
@@ -918,7 +989,7 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             y_max = max(y_max, entry_p)
         pad = (y_max - y_min) * 0.08
         ax.set_ylim(y_min - pad, y_max + pad)
-        ax.set_xlim(-1, n + 14)
+        ax.set_xlim(-1, n + 8)
         ax.set_title(title, color='#dddddd', fontsize=11, pad=8, loc='left')
         ax.tick_params(colors='#888', labelsize=9)
         ax.yaxis.tick_right()

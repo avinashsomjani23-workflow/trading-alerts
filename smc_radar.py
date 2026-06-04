@@ -9,6 +9,7 @@ import time
 import google.generativeai as genai
 import smc_detector
 import dealing_range
+import trend_state  # NEW pure-swing H1 trend label (isolated; gates nothing)
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -1580,46 +1581,37 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
             )
 
         # --- Swing markers (triangles + broken-swing X) ---
-        # lookback-3 + ATR-filtered structural swings (the SAME pool that drives
-        # walls / BOS / CHoCH — get_swing_points applies the ATR leg filter by
-        # default). A swing whose timestamp matches a structural event's
-        # broken_swing_ts is drawn as an X (it was broken to print a BOS/CHoCH,
-        # Major or Minor); every other swing is a triangle.
+        # SINGLE SOURCE: consume the persisted swing pool from dealing_range
+        # state (walls['swings']) — the SAME lb-3+ATR swings that drove trend /
+        # CHoCH / BOS / walls. The chart does NOT detect swings itself. Each
+        # persisted swing carries `broken`: True -> X (it was taken to print a
+        # BOS/CHoCH, Major or Minor), False -> triangle. Positioned by ts.
         SWING_COLOR = '#d4a017'
         BROKEN_COLOR = '#e74c3c'
-        try:
-            swings_lb3 = smc_detector.get_swing_points(full_df, lookback=3)
-        except Exception:
-            swings_lb3 = []
-        # Set of broken-swing timestamps (ISO strings) from the event ring.
-        # Every event kind counts: Major/Minor BOS and Major/Minor CHoCH.
-        broken_ts = set()
-        for _e in ((walls or {}).get('events') or []):
-            _bts = _e.get('broken_swing_ts')
-            if _bts:
-                broken_ts.add(_bts)
-        # Visual offset based on chart vertical span (not pixels).
         marker_offset = (y_max - y_min) * 0.012
-        for s in swings_lb3:
-            xi = s['idx'] - window_start
-            if not (0 <= xi < n_plot):
-                continue
-            # Normalise the swing ts to ISO for comparison with the event ring.
-            s_ts = s.get('ts')
-            s_ts_iso = s_ts.isoformat() if hasattr(s_ts, 'isoformat') else s_ts
-            is_broken = s_ts_iso in broken_ts
-            if is_broken:
-                # Broken swing -> X at the swing price (no directional offset).
-                ax.scatter([xi], [s['price']], marker='x',
-                           s=55, color=BROKEN_COLOR, linewidths=1.6, zorder=7)
-            elif s['type'] == 'high':
-                ax.scatter([xi], [s['price'] + marker_offset], marker='v',
-                           s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
-                           linewidths=1.0, zorder=6)
-            else:
-                ax.scatter([xi], [s['price'] - marker_offset], marker='^',
-                           s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
-                           linewidths=1.0, zorder=6)
+        swings_persisted = smc_detector.swings_for_chart(walls)
+        if swings_persisted:
+            # ts -> absolute idx over full_df, then shift to local plot x.
+            ts_to_abs = smc_detector.build_ts_to_local_x(full_df)
+            for s in swings_persisted:
+                abs_i = ts_to_abs.get(s.get('ts'))
+                if abs_i is None:
+                    continue  # ts not in this df at all
+                xi = abs_i - window_start
+                if not (0 <= xi < n_plot):
+                    continue  # swing outside the plotted window
+                price = s['price']
+                if s.get('broken'):
+                    ax.scatter([xi], [price], marker='x',
+                               s=55, color=BROKEN_COLOR, linewidths=1.6, zorder=7)
+                elif s['type'] == 'high':
+                    ax.scatter([xi], [price + marker_offset], marker='v',
+                               s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
+                               linewidths=1.0, zorder=6)
+                else:
+                    ax.scatter([xi], [price - marker_offset], marker='^',
+                               s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
+                               linewidths=1.0, zorder=6)
 
         # --- Sweep candle marker (Phase 1 sweep observation) ---
         # Star at the wick tip + dotted level line from sweep candle BACK
@@ -2611,7 +2603,8 @@ def _summarise_last_ob_attempt(ob_build_diagnostics):
 
 
 def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
-                                  last_event, ob_build_diagnostics=None):
+                                  last_event, ob_build_diagnostics=None,
+                                  h1_trend_info=None):
     """Card for a pair with no active OB and no recently-dropped OB.
 
     The vet wants to see WHY there's nothing to trade and what to wait for.
@@ -2647,15 +2640,25 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
     w = walls or {}
     ceil_px = w.get('ceiling_price')
     floor_px = w.get('floor_price')
-    trend = w.get('trend')
+    # H1 trend comes from the NEW pure-swing trend system (h1_trend_info),
+    # NOT the old wall `trend` field. If unavailable, the trend line is simply
+    # omitted rather than falling back to the wall-trend.
     range_parts = []
     if ceil_px is not None and floor_px is not None:
         range_parts.append(
             f"DR {floor_px:.{dp}f} → {ceil_px:.{dp}f} "
             f"({ceil_px - floor_px:.{dp}f} pts)"
         )
-    if trend:
-        range_parts.append(f"H1 trend: {trend}")
+    if h1_trend_info and h1_trend_info.get('state'):
+        state = h1_trend_info['state']
+        prior = h1_trend_info.get('prior_trend')
+        if state == 'ranging' and prior:
+            trend_txt = f"{prior.upper()} → ranging (CoC)"
+        elif state in ('up', 'down'):
+            trend_txt = state.upper()
+        else:
+            trend_txt = "undefined"
+        range_parts.append(f"H1 trend: {trend_txt}")
     range_line = " &middot; ".join(range_parts) if range_parts else ""
     caption = (
         f"No active OB. Last structure event: {le_label}."
@@ -3972,6 +3975,17 @@ def run_radar():
                 "broken_swing_price": _le_bws,
             }
 
+            # H1 trend label — NEW pure-swing trend system (trend_state.py).
+            # Information only; gates nothing. Reads the same shared lb-3+ATR
+            # swing pool as walls/BOS/CHoCH but is fully isolated from the old
+            # wall `trend` field (which stays as dealing-range plumbing). This
+            # is the ONLY trend surfaced to the trader in the Phase 1 email.
+            try:
+                h1_trend_info = trend_state.compute_trend(df) if df is not None else None
+            except Exception as _te:
+                logging.warning(f"[trend_state] {pair_name} compute_trend failed: {_te}")
+                h1_trend_info = None
+
             # Bookkeeping drops (structure_supplanted / aged_out / data_*) get
             # the one-liner regardless of whether we render an active card.
             for sz in dropped_today:
@@ -4150,6 +4164,7 @@ def run_radar():
                                     pair_name, dp, cid, ist_ts_full,
                                     pair_walls, last_event,
                                     ob_build_diagnostics=ob_build_diag,
+                                    h1_trend_info=h1_trend_info,
                                 )
                             )
                             _attach_chart(chart_b64, cid)
@@ -4160,6 +4175,7 @@ def run_radar():
                                     pair_name, dp, None, ist_ts_full,
                                     pair_walls, last_event,
                                     ob_build_diagnostics=ob_build_diag,
+                                    h1_trend_info=h1_trend_info,
                                 )
                             )
 
@@ -4194,6 +4210,7 @@ def run_radar():
                                 pair_name, dp, cid, ist_ts_full,
                                 pair_walls, last_event,
                                 ob_build_diagnostics=ob_build_diag,
+                                h1_trend_info=h1_trend_info,
                             )
                         )
                         _attach_chart(chart_b64, cid)
@@ -4204,6 +4221,7 @@ def run_radar():
                                 pair_name, dp, None, ist_ts_full,
                                 pair_walls, last_event,
                                 ob_build_diagnostics=ob_build_diag,
+                                h1_trend_info=h1_trend_info,
                             )
                         )
 

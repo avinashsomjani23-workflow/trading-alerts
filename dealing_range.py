@@ -663,6 +663,7 @@ def _empty_state() -> Dict[str, Any]:
         # boundary moves and prior continuation memory is no longer relevant.
         "last_minor_bos_pivot_ts": None,
         "events": [],                         # ring of last EVENT_RING_MAX qualified events
+        "swings": [],                         # persisted lb-3+ATR swing pool (single source for chart markers)
     }
 
 
@@ -1836,6 +1837,24 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
             'range_low':    float(rng_lo),
         })
 
+    # --- Persisted swing list (SINGLE SOURCE OF TRUTH for chart markers) ----
+    # The ONE filtered swing pool (lb-3 + ATR) that drove trend / CHoCH / BOS /
+    # walls in this walk, emitted so every chart consumes the SAME swings rather
+    # than re-detecting. Keyed by ts (window-independent). `broken` is True when
+    # this swing's ts matches a structural event's broken_swing_ts in the ring
+    # (any kind: Major/Minor BOS, Major/Minor CHoCH) -> rendered as an X; all
+    # others render as triangles. No chart calls a swing detector of its own.
+    _broken_ts = {e.get("broken_swing_ts") for e in events_ring if e.get("broken_swing_ts")}
+    swings_persisted = [
+        {
+            "ts":     s["ts"],
+            "type":   s["type"],
+            "price":  float(s["price"]),
+            "broken": s["ts"] in _broken_ts,
+        }
+        for s in swings_lb3 if s.get("ts")
+    ]
+
     new_state = {
         "trend":                  trend,
         "ceiling_price":          ceiling["price"],
@@ -1855,6 +1874,7 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
         "trend_start_ts":         _ts_iso(df, trend_start_idx) if 0 <= trend_start_idx < n else None,
         "last_minor_bos_pivot_ts": last_minor_bos_pivot_ts,
         "events":                 events_ring,
+        "swings":                 swings_persisted,
         # Non-persisted diagnostic — caller must strip before save_state().
         # See PLACEHOLDER_DIAG_KEY constant.
         PLACEHOLDER_DIAG_KEY:     placeholder_diag,
