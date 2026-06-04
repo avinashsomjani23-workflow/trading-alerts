@@ -13,9 +13,9 @@
     "last_event_ts": "2026-05-29T15:00:00+01:00",
     "last_event_idx_iso": "2026-05-29T15:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-03T19:00:00+01:00",
+    "last_scanned_ts": "2026-06-04T05:00:00+01:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-26T13:00:00+01:00",
+    "trend_start_ts": "2026-05-26T23:00:00+01:00",
     "last_minor_bos_pivot_ts": "2026-06-01T22:00:00+01:00",
     "events": [
       {
@@ -112,21 +112,21 @@
   },
   "USDJPY": {
     "trend": "bullish",
-    "ceiling_price": 159.99000549316406,
-    "ceiling_ts": "2026-06-02T19:00:00+01:00",
-    "ceiling_is_placeholder": false,
+    "ceiling_price": 160.093994140625,
+    "ceiling_ts": "2026-06-03T21:00:00+01:00",
+    "ceiling_is_placeholder": true,
     "floor_price": 159.08999633789062,
     "floor_ts": "2026-05-29T16:00:00+01:00",
     "floor_is_placeholder": false,
     "last_event_type": "BOS",
     "last_event_tier": "Major",
     "last_event_direction": "bullish",
-    "last_event_ts": "2026-06-02T15:00:00+01:00",
-    "last_event_idx_iso": "2026-06-02T15:00:00+01:00",
+    "last_event_ts": "2026-06-03T20:00:00+01:00",
+    "last_event_idx_iso": "2026-06-03T20:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-03T19:00:00+01:00",
+    "last_scanned_ts": "2026-06-04T05:00:00+01:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-26T14:00:00+01:00",
+    "trend_start_ts": "2026-05-26T23:00:00+01:00",
     "last_minor_bos_pivot_ts": null,
     "events": [
       {
@@ -248,6 +248,21 @@
         "impulse_start_ts": "2026-06-02T09:00:00+01:00",
         "impulse_start_price": 159.64700317382812,
         "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-06-03T20:00:00+01:00",
+        "broken_swing_price": 159.99000549316406,
+        "broken_swing_ts": "2026-06-02T19:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.8749690925574879,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-06-03T09:00:00+01:00",
+        "impulse_start_price": 159.3509979248047,
+        "trend_after": "bullish"
       }
     ]
   },
@@ -265,9 +280,9 @@
     "last_event_ts": "2026-05-26T13:00:00+01:00",
     "last_event_idx_iso": "2026-05-26T13:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-03T19:00:00+01:00",
+    "last_scanned_ts": "2026-06-04T05:00:00+01:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-26T13:00:00+01:00",
+    "trend_start_ts": "2026-05-26T23:00:00+01:00",
     "last_minor_bos_pivot_ts": "2026-06-03T00:00:00+01:00",
     "events": [
       {
@@ -364,9 +379,9 @@
   },
   "USDCHF": {
     "trend": "bullish",
-    "ceiling_price": 0.7925900220870972,
-    "ceiling_ts": "2026-06-03T18:00:00+01:00",
-    "ceiling_is_placeholder": true,
+    "ceiling_price": 0.7927299737930298,
+    "ceiling_ts": "2026-06-03T19:00:00+01:00",
+    "ceiling_is_placeholder": false,
     "floor_price": 0.7883899807929993,
     "floor_ts": "2026-06-03T12:00:00+01:00",
     "floor_is_placeholder": false,
@@ -376,7 +391,7 @@
     "last_event_ts": "2026-06-03T08:00:00+01:00",
     "last_event_idx_iso": "2026-06-03T08:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-03T19:00:00+01:00",
+    "last_scanned_ts": "2026-06-04T05:00:00+01:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-03T08:00:00+01:00",
     "last_minor_bos_pivot_ts": "2026-06-03T09:00:00+01:00",
@@ -562,7 +577,7 @@
     "last_event_ts": "2026-06-02T10:00:00-04:00",
     "last_event_idx_iso": "2026-06-02T10:00:00-04:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-03T13:00:00-04:00",
+    "last_scanned_ts": "2026-06-03T23:00:00-04:00",
     "fallback_active": false,
     "trend_start_ts": "2026-05-26T02:00:00-04:00",
     "last_minor_bos_pivot_ts": null,
@@ -691,8 +706,8 @@
   },
   "GOLD": {
     "trend": "bearish",
-    "ceiling_price": 4496.5,
-    "ceiling_ts": "2026-06-03T07:00:00-04:00",
+    "ceiling_price": 4627.10009765625,
+    "ceiling_ts": "2026-05-29T11:00:00-04:00",
     "ceiling_is_placeholder": false,
     "floor_price": 4467.2001953125,
     "floor_ts": "2026-06-03T05:00:00-04:00",
@@ -703,9 +718,9 @@
     "last_event_ts": "2026-06-03T00:00:00-04:00",
     "last_event_idx_iso": "2026-06-03T00:00:00-04:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-03T13:00:00-04:00",
+    "last_scanned_ts": "2026-06-03T23:00:00-04:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-06-03T00:00:00-04:00",
+    "trend_start_ts": "2026-05-22T06:00:00-04:00",
     "last_minor_bos_pivot_ts": null,
     "events": [
       {
