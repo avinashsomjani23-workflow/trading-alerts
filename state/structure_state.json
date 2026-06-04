@@ -1,0 +1,1592 @@
+{
+  "EURUSD": {
+    "trend": "bearish",
+    "ceiling_price": 1.1615750789642334,
+    "ceiling_ts": "2026-06-04T01:00:00+01:00",
+    "ceiling_is_placeholder": false,
+    "floor_price": 1.1598236560821533,
+    "floor_ts": "2026-06-03T23:00:00+01:00",
+    "floor_is_placeholder": false,
+    "last_event_type": "CHoCH",
+    "last_event_tier": "Major",
+    "last_event_direction": "bearish",
+    "last_event_ts": "2026-06-03T13:00:00+01:00",
+    "last_event_idx_iso": "2026-06-03T13:00:00+01:00",
+    "last_event_chop": false,
+    "last_scanned_ts": "2026-06-04T10:00:00+01:00",
+    "fallback_active": false,
+    "trend_start_ts": "2026-06-03T13:00:00+01:00",
+    "last_minor_bos_pivot_ts": null,
+    "events": [
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-05-28T00:00:00+01:00",
+        "broken_swing_price": 1.162520408630371,
+        "broken_swing_ts": "2026-05-27T18:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.5847450339668071,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-27T22:00:00+01:00",
+        "impulse_start_price": 1.1640088558197021,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Minor",
+        "direction": "bearish",
+        "candle_ts": "2026-05-29T04:00:00+01:00",
+        "broken_swing_price": 1.1648223400115967,
+        "broken_swing_ts": "2026-05-28T21:00:00+01:00",
+        "broken_was_wall": false,
+        "displacement_atr": 1.1736176799380857,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-29T02:00:00+01:00",
+        "impulse_start_price": 1.16604483127594,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Minor",
+        "direction": "bearish",
+        "candle_ts": "2026-05-29T09:00:00+01:00",
+        "broken_swing_price": 1.163873314857483,
+        "broken_swing_ts": "2026-05-29T05:00:00+01:00",
+        "broken_was_wall": false,
+        "displacement_atr": 0.9765242067245679,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-29T07:00:00+01:00",
+        "impulse_start_price": 1.1657729148864746,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-05-29T15:00:00+01:00",
+        "broken_swing_price": 1.1664528846740723,
+        "broken_swing_ts": "2026-05-27T13:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.5717602545360736,
+        "chop": false,
+        "reversal_pct": 0.0,
+        "impulse_start_ts": "2026-05-28T05:00:00+01:00",
+        "impulse_start_price": 1.1590172052383423,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Minor",
+        "direction": "bullish",
+        "candle_ts": "2026-06-02T07:00:00+01:00",
+        "broken_swing_price": 1.1644154787063599,
+        "broken_swing_ts": "2026-06-01T22:00:00+01:00",
+        "broken_was_wall": false,
+        "displacement_atr": 1.3703671854845645,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-06-02T02:00:00+01:00",
+        "impulse_start_price": 1.1631964445114136,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-06-03T13:00:00+01:00",
+        "broken_swing_price": 1.1610356569290161,
+        "broken_swing_ts": "2026-06-01T15:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.9718806432195374,
+        "chop": false,
+        "reversal_pct": 0.8365187852991732,
+        "impulse_start_ts": "2026-06-02T13:00:00+01:00",
+        "impulse_start_price": 1.1659088134765625,
+        "trend_after": "bearish"
+      }
+    ],
+    "swings": [
+      {
+        "ts": "2026-05-27T13:00:00+01:00",
+        "type": "high",
+        "price": 1.1664528846740723,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-27T18:00:00+01:00",
+        "type": "low",
+        "price": 1.162520408630371,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-27T22:00:00+01:00",
+        "type": "high",
+        "price": 1.1640088558197021,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T05:00:00+01:00",
+        "type": "low",
+        "price": 1.1590172052383423,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T17:00:00+01:00",
+        "type": "high",
+        "price": 1.1663167476654053,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T21:00:00+01:00",
+        "type": "low",
+        "price": 1.1648223400115967,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-29T02:00:00+01:00",
+        "type": "high",
+        "price": 1.16604483127594,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T05:00:00+01:00",
+        "type": "low",
+        "price": 1.163873314857483,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-29T07:00:00+01:00",
+        "type": "high",
+        "price": 1.1657729148864746,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T09:00:00+01:00",
+        "type": "low",
+        "price": 1.1629259586334229,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T16:00:00+01:00",
+        "type": "high",
+        "price": 1.168770432472229,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T07:00:00+01:00",
+        "type": "high",
+        "price": 1.1668611764907837,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T15:00:00+01:00",
+        "type": "low",
+        "price": 1.1610356569290161,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-01T18:00:00+01:00",
+        "type": "high",
+        "price": 1.1640088558197021,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T22:00:00+01:00",
+        "type": "high",
+        "price": 1.1644154787063599,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-02T02:00:00+01:00",
+        "type": "low",
+        "price": 1.1631964445114136,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T13:00:00+01:00",
+        "type": "high",
+        "price": 1.1659088134765625,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T19:00:00+01:00",
+        "type": "low",
+        "price": 1.1617100238800049,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T00:00:00+01:00",
+        "type": "low",
+        "price": 1.16225004196167,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T09:00:00+01:00",
+        "type": "low",
+        "price": 1.1609008312225342,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T23:00:00+01:00",
+        "type": "low",
+        "price": 1.1598236560821533,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-04T01:00:00+01:00",
+        "type": "high",
+        "price": 1.1615750789642334,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-04T04:00:00+01:00",
+        "type": "low",
+        "price": 1.1606314182281494,
+        "broken": false
+      }
+    ]
+  },
+  "USDJPY": {
+    "trend": "bullish",
+    "ceiling_price": 160.093994140625,
+    "ceiling_ts": "2026-06-03T21:00:00+01:00",
+    "ceiling_is_placeholder": true,
+    "floor_price": 159.57400512695312,
+    "floor_ts": "2026-06-04T05:00:00+01:00",
+    "floor_is_placeholder": false,
+    "last_event_type": "CHoCH",
+    "last_event_tier": "Major",
+    "last_event_direction": "bullish",
+    "last_event_ts": "2026-06-03T20:00:00+01:00",
+    "last_event_idx_iso": "2026-06-03T20:00:00+01:00",
+    "last_event_chop": false,
+    "last_scanned_ts": "2026-06-04T10:00:00+01:00",
+    "fallback_active": false,
+    "trend_start_ts": "2026-06-03T20:00:00+01:00",
+    "last_minor_bos_pivot_ts": null,
+    "events": [
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-05-28T17:00:00+01:00",
+        "broken_swing_price": 159.24099731445312,
+        "broken_swing_ts": "2026-05-27T13:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.6907518431127718,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-28T04:00:00+01:00",
+        "impulse_start_price": 159.6529998779297,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Minor",
+        "direction": "bearish",
+        "candle_ts": "2026-06-03T08:00:00+01:00",
+        "broken_swing_price": 159.8070068359375,
+        "broken_swing_ts": "2026-06-03T02:00:00+01:00",
+        "broken_was_wall": false,
+        "displacement_atr": 0.892938789375591,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-06-03T00:00:00+01:00",
+        "impulse_start_price": 159.9980010986328,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-06-03T20:00:00+01:00",
+        "broken_swing_price": 159.9969940185547,
+        "broken_swing_ts": "2026-06-03T08:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.6233990396533203,
+        "chop": false,
+        "reversal_pct": 0.22262210796915166,
+        "impulse_start_ts": "2026-06-03T09:00:00+01:00",
+        "impulse_start_price": 159.3509979248047,
+        "trend_after": "bullish"
+      }
+    ],
+    "swings": [
+      {
+        "ts": "2026-05-27T13:00:00+01:00",
+        "type": "low",
+        "price": 159.24099731445312,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-27T18:00:00+01:00",
+        "type": "high",
+        "price": 159.5800018310547,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-27T22:00:00+01:00",
+        "type": "low",
+        "price": 159.39100646972656,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T04:00:00+01:00",
+        "type": "high",
+        "price": 159.6529998779297,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T17:00:00+01:00",
+        "type": "low",
+        "price": 159.10499572753906,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T22:00:00+01:00",
+        "type": "low",
+        "price": 159.16600036621094,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T05:00:00+01:00",
+        "type": "high",
+        "price": 159.3780059814453,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T07:00:00+01:00",
+        "type": "low",
+        "price": 159.18800354003906,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T15:00:00+01:00",
+        "type": "high",
+        "price": 159.35800170898438,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T16:00:00+01:00",
+        "type": "low",
+        "price": 159.08999633789062,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T19:00:00+01:00",
+        "type": "high",
+        "price": 159.30599975585938,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T07:00:00+01:00",
+        "type": "high",
+        "price": 159.50100708007812,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T15:00:00+01:00",
+        "type": "high",
+        "price": 159.76400756835938,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T19:00:00+01:00",
+        "type": "high",
+        "price": 159.76499938964844,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T22:00:00+01:00",
+        "type": "low",
+        "price": 159.531005859375,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T01:00:00+01:00",
+        "type": "high",
+        "price": 159.7270050048828,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T19:00:00+01:00",
+        "type": "high",
+        "price": 159.99000549316406,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T22:00:00+01:00",
+        "type": "low",
+        "price": 159.8159942626953,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T00:00:00+01:00",
+        "type": "high",
+        "price": 159.9980010986328,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T02:00:00+01:00",
+        "type": "low",
+        "price": 159.8070068359375,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-03T08:00:00+01:00",
+        "type": "high",
+        "price": 159.9969940185547,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-03T21:00:00+01:00",
+        "type": "high",
+        "price": 160.093994140625,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-04T05:00:00+01:00",
+        "type": "low",
+        "price": 159.57400512695312,
+        "broken": false
+      }
+    ]
+  },
+  "NZDUSD": {
+    "trend": "bearish",
+    "ceiling_price": 0.5946363806724548,
+    "ceiling_ts": "2026-06-02T07:00:00+01:00",
+    "ceiling_is_placeholder": false,
+    "floor_price": 0.5867855548858643,
+    "floor_ts": "2026-06-04T04:00:00+01:00",
+    "floor_is_placeholder": false,
+    "last_event_type": "BOS",
+    "last_event_tier": "Major",
+    "last_event_direction": "bearish",
+    "last_event_ts": "2026-06-03T06:00:00+01:00",
+    "last_event_idx_iso": "2026-06-03T06:00:00+01:00",
+    "last_event_chop": false,
+    "last_scanned_ts": "2026-06-04T10:00:00+01:00",
+    "fallback_active": false,
+    "trend_start_ts": "2026-06-01T02:00:00+01:00",
+    "last_minor_bos_pivot_ts": null,
+    "events": [
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-05-28T04:00:00+01:00",
+        "broken_swing_price": 0.5888240933418274,
+        "broken_swing_ts": "2026-05-27T18:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 2.153497342579097,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-28T02:00:00+01:00",
+        "impulse_start_price": 0.5912261605262756,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-05-28T15:00:00+01:00",
+        "broken_swing_price": 0.5912261605262756,
+        "broken_swing_ts": "2026-05-28T02:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.3314046788274958,
+        "chop": false,
+        "reversal_pct": 0.0,
+        "impulse_start_ts": "2026-05-28T05:00:00+01:00",
+        "impulse_start_price": 0.5866823196411133,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-05-29T00:00:00+01:00",
+        "broken_swing_price": 0.5936479568481445,
+        "broken_swing_ts": "2026-05-28T17:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.7090087304742136,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": null,
+        "impulse_start_price": null,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-06-01T02:00:00+01:00",
+        "broken_swing_price": 0.5983365774154663,
+        "broken_swing_ts": "2026-05-29T19:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.359848652150229,
+        "chop": false,
+        "reversal_pct": 0.8061645671401769,
+        "impulse_start_ts": "2026-05-29T20:00:00+01:00",
+        "impulse_start_price": 0.5992329716682434,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-06-01T10:00:00+01:00",
+        "broken_swing_price": 0.5968011021614075,
+        "broken_swing_ts": "2026-06-01T04:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 2.579950826671378,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": null,
+        "impulse_start_price": null,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Minor",
+        "direction": "bearish",
+        "candle_ts": "2026-06-03T05:00:00+01:00",
+        "broken_swing_price": 0.5921714901924133,
+        "broken_swing_ts": "2026-06-03T00:00:00+01:00",
+        "broken_was_wall": false,
+        "displacement_atr": 1.090249252830411,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-06-03T03:00:00+01:00",
+        "impulse_start_price": 0.5936832427978516,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-06-03T06:00:00+01:00",
+        "broken_swing_price": 0.5913310647010803,
+        "broken_swing_ts": "2026-06-01T15:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.785301002605892,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-06-03T03:00:00+01:00",
+        "impulse_start_price": 0.5936832427978516,
+        "trend_after": "bearish"
+      }
+    ],
+    "swings": [
+      {
+        "ts": "2026-05-27T15:00:00+01:00",
+        "type": "high",
+        "price": 0.5911563038825989,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-27T18:00:00+01:00",
+        "type": "low",
+        "price": 0.5888240933418274,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-27T21:00:00+01:00",
+        "type": "high",
+        "price": 0.5904930233955383,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T00:00:00+01:00",
+        "type": "low",
+        "price": 0.5892404317855835,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T02:00:00+01:00",
+        "type": "high",
+        "price": 0.5912261605262756,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-28T05:00:00+01:00",
+        "type": "low",
+        "price": 0.5866823196411133,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T17:00:00+01:00",
+        "type": "high",
+        "price": 0.5936479568481445,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-29T16:00:00+01:00",
+        "type": "high",
+        "price": 0.5994485020637512,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T19:00:00+01:00",
+        "type": "low",
+        "price": 0.5983365774154663,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-01T04:00:00+01:00",
+        "type": "low",
+        "price": 0.5968011021614075,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-01T15:00:00+01:00",
+        "type": "low",
+        "price": 0.5913310647010803,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-01T18:00:00+01:00",
+        "type": "high",
+        "price": 0.5945656895637512,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T01:00:00+01:00",
+        "type": "low",
+        "price": 0.5920662879943848,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T07:00:00+01:00",
+        "type": "high",
+        "price": 0.5946363806724548,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T10:00:00+01:00",
+        "type": "low",
+        "price": 0.5925574898719788,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T13:00:00+01:00",
+        "type": "high",
+        "price": 0.5940005779266357,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T14:00:00+01:00",
+        "type": "low",
+        "price": 0.5923819541931152,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T19:00:00+01:00",
+        "type": "low",
+        "price": 0.5920662879943848,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T00:00:00+01:00",
+        "type": "low",
+        "price": 0.5921714901924133,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-03T03:00:00+01:00",
+        "type": "high",
+        "price": 0.5936832427978516,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-04T02:00:00+01:00",
+        "type": "high",
+        "price": 0.5878203511238098,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-04T04:00:00+01:00",
+        "type": "low",
+        "price": 0.5867855548858643,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-04T07:00:00+01:00",
+        "type": "high",
+        "price": 0.5877857804298401,
+        "broken": false
+      }
+    ]
+  },
+  "USDCHF": {
+    "trend": "bearish",
+    "ceiling_price": 0.7927299737930298,
+    "ceiling_ts": "2026-06-03T19:00:00+01:00",
+    "ceiling_is_placeholder": false,
+    "floor_price": 0.786050021648407,
+    "floor_ts": "2026-06-02T22:00:00+01:00",
+    "floor_is_placeholder": false,
+    "last_event_type": "CHoCH",
+    "last_event_tier": "Major",
+    "last_event_direction": "bearish",
+    "last_event_ts": "2026-06-02T07:00:00+01:00",
+    "last_event_idx_iso": "2026-06-02T07:00:00+01:00",
+    "last_event_chop": false,
+    "last_scanned_ts": "2026-06-04T10:00:00+01:00",
+    "fallback_active": false,
+    "trend_start_ts": "2026-06-02T07:00:00+01:00",
+    "last_minor_bos_pivot_ts": null,
+    "events": [
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-05-28T02:00:00+01:00",
+        "broken_swing_price": 0.787559986114502,
+        "broken_swing_ts": "2026-05-27T17:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.094775430451111,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-27T22:00:00+01:00",
+        "impulse_start_price": 0.7856299877166748,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-05-28T17:00:00+01:00",
+        "broken_swing_price": 0.7842299938201904,
+        "broken_swing_ts": "2026-05-27T13:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.7262949385582017,
+        "chop": false,
+        "reversal_pct": 1.0,
+        "impulse_start_ts": "2026-05-28T04:00:00+01:00",
+        "impulse_start_price": 0.7899199724197388,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Minor",
+        "direction": "bearish",
+        "candle_ts": "2026-05-29T11:00:00+01:00",
+        "broken_swing_price": 0.7832499742507935,
+        "broken_swing_ts": "2026-05-29T07:00:00+01:00",
+        "broken_was_wall": false,
+        "displacement_atr": 0.5683747277469549,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-29T04:00:00+01:00",
+        "impulse_start_price": 0.784600019454956,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-05-29T12:00:00+01:00",
+        "broken_swing_price": 0.7828800082206726,
+        "broken_swing_ts": "2026-05-28T22:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.8000161335137898,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-29T04:00:00+01:00",
+        "impulse_start_price": 0.784600019454956,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-06-01T15:00:00+01:00",
+        "broken_swing_price": 0.784600019454956,
+        "broken_swing_ts": "2026-05-29T04:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 2.831521300719734,
+        "chop": false,
+        "reversal_pct": 0.0,
+        "impulse_start_ts": "2026-05-29T15:00:00+01:00",
+        "impulse_start_price": 0.7795000076293945,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-06-02T07:00:00+01:00",
+        "broken_swing_price": 0.7856799960136414,
+        "broken_swing_ts": "2026-06-01T18:00:00+01:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.1263343760363542,
+        "chop": false,
+        "reversal_pct": 1.0,
+        "impulse_start_ts": "2026-06-02T02:00:00+01:00",
+        "impulse_start_price": 0.7871999740600586,
+        "trend_after": "bearish"
+      }
+    ],
+    "swings": [
+      {
+        "ts": "2026-05-27T08:00:00+01:00",
+        "type": "low",
+        "price": 0.7845699787139893,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-27T13:00:00+01:00",
+        "type": "low",
+        "price": 0.7842299938201904,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-27T17:00:00+01:00",
+        "type": "high",
+        "price": 0.787559986114502,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-27T22:00:00+01:00",
+        "type": "low",
+        "price": 0.7856299877166748,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T04:00:00+01:00",
+        "type": "high",
+        "price": 0.7899199724197388,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T08:00:00+01:00",
+        "type": "low",
+        "price": 0.787310004234314,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T11:00:00+01:00",
+        "type": "high",
+        "price": 0.7899100184440613,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T22:00:00+01:00",
+        "type": "low",
+        "price": 0.7828800082206726,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-29T02:00:00+01:00",
+        "type": "low",
+        "price": 0.7830399870872498,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T04:00:00+01:00",
+        "type": "high",
+        "price": 0.784600019454956,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-29T07:00:00+01:00",
+        "type": "low",
+        "price": 0.7832499742507935,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-29T15:00:00+01:00",
+        "type": "low",
+        "price": 0.7795000076293945,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T19:00:00+01:00",
+        "type": "high",
+        "price": 0.7825499773025513,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T20:00:00+01:00",
+        "type": "low",
+        "price": 0.7799199819564819,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T03:00:00+01:00",
+        "type": "high",
+        "price": 0.7833999991416931,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T07:00:00+01:00",
+        "type": "low",
+        "price": 0.7819600105285645,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T15:00:00+01:00",
+        "type": "high",
+        "price": 0.7884399890899658,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T18:00:00+01:00",
+        "type": "low",
+        "price": 0.7856799960136414,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-01T22:00:00+01:00",
+        "type": "low",
+        "price": 0.785319983959198,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T02:00:00+01:00",
+        "type": "high",
+        "price": 0.7871999740600586,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T07:00:00+01:00",
+        "type": "low",
+        "price": 0.7843899726867676,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T19:00:00+01:00",
+        "type": "high",
+        "price": 0.7884100079536438,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T22:00:00+01:00",
+        "type": "low",
+        "price": 0.786050021648407,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T01:00:00+01:00",
+        "type": "high",
+        "price": 0.7884500026702881,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T09:00:00+01:00",
+        "type": "high",
+        "price": 0.7895200252532959,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T12:00:00+01:00",
+        "type": "low",
+        "price": 0.7883899807929993,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T19:00:00+01:00",
+        "type": "high",
+        "price": 0.7927299737930298,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T22:00:00+01:00",
+        "type": "low",
+        "price": 0.7901999950408936,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-04T03:00:00+01:00",
+        "type": "low",
+        "price": 0.7903599739074707,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-04T07:00:00+01:00",
+        "type": "low",
+        "price": 0.7901300191879272,
+        "broken": false
+      }
+    ]
+  },
+  "NAS100": {
+    "trend": "bullish",
+    "ceiling_price": 30763.25,
+    "ceiling_ts": "2026-06-02T16:00:00-04:00",
+    "ceiling_is_placeholder": false,
+    "floor_price": 30216.5,
+    "floor_ts": "2026-05-28T21:00:00-04:00",
+    "floor_is_placeholder": false,
+    "last_event_type": "BOS",
+    "last_event_tier": "Major",
+    "last_event_direction": "bullish",
+    "last_event_ts": "2026-06-02T10:00:00-04:00",
+    "last_event_idx_iso": "2026-06-02T10:00:00-04:00",
+    "last_event_chop": false,
+    "last_scanned_ts": "2026-06-04T04:00:00-04:00",
+    "fallback_active": false,
+    "trend_start_ts": "2026-05-28T11:00:00-04:00",
+    "last_minor_bos_pivot_ts": null,
+    "events": [
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-05-27T05:00:00-04:00",
+        "broken_swing_price": 30159.25,
+        "broken_swing_ts": "2026-05-26T21:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.5702432585329059,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-27T02:00:00-04:00",
+        "impulse_start_price": 30055.75,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-05-27T10:00:00-04:00",
+        "broken_swing_price": 30055.75,
+        "broken_swing_ts": "2026-05-27T02:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.2144069394682255,
+        "chop": true,
+        "reversal_pct": 1.0,
+        "impulse_start_ts": "2026-05-27T08:00:00-04:00",
+        "impulse_start_price": 30379.0,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-05-28T11:00:00-04:00",
+        "broken_swing_price": 30136.25,
+        "broken_swing_ts": "2026-05-27T18:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.3543277390156516,
+        "chop": false,
+        "reversal_pct": 0.0,
+        "impulse_start_ts": "2026-05-28T00:00:00-04:00",
+        "impulse_start_price": 29763.0,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-05-29T09:00:00-04:00",
+        "broken_swing_price": 30344.5,
+        "broken_swing_ts": "2026-05-28T13:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.8427305298887422,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-29T03:00:00-04:00",
+        "impulse_start_price": 30265.75,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-06-01T13:00:00-04:00",
+        "broken_swing_price": 30595.25,
+        "broken_swing_ts": "2026-05-31T23:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.7893645106543467,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-06-01T09:00:00-04:00",
+        "impulse_start_price": 30291.5,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-06-02T10:00:00-04:00",
+        "broken_swing_price": 30586.0,
+        "broken_swing_ts": "2026-06-02T05:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.5940033943051103,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-06-02T09:00:00-04:00",
+        "impulse_start_price": 30423.75,
+        "trend_after": "bullish"
+      }
+    ],
+    "swings": [
+      {
+        "ts": "2026-05-26T21:00:00-04:00",
+        "type": "high",
+        "price": 30159.25,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-27T02:00:00-04:00",
+        "type": "low",
+        "price": 30055.75,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-27T08:00:00-04:00",
+        "type": "high",
+        "price": 30379.0,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-27T10:00:00-04:00",
+        "type": "low",
+        "price": 29877.5,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-27T18:00:00-04:00",
+        "type": "high",
+        "price": 30136.25,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-28T00:00:00-04:00",
+        "type": "low",
+        "price": 29763.0,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T06:00:00-04:00",
+        "type": "low",
+        "price": 29863.5,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T13:00:00-04:00",
+        "type": "high",
+        "price": 30344.5,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-28T18:00:00-04:00",
+        "type": "high",
+        "price": 30362.0,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T21:00:00-04:00",
+        "type": "low",
+        "price": 30216.5,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T03:00:00-04:00",
+        "type": "low",
+        "price": 30265.75,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T10:00:00-04:00",
+        "type": "high",
+        "price": 30536.0,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T14:00:00-04:00",
+        "type": "low",
+        "price": 30291.0,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-31T23:00:00-04:00",
+        "type": "high",
+        "price": 30595.25,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-01T04:00:00-04:00",
+        "type": "low",
+        "price": 30443.75,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T09:00:00-04:00",
+        "type": "low",
+        "price": 30291.5,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T13:00:00-04:00",
+        "type": "high",
+        "price": 30693.0,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T23:00:00-04:00",
+        "type": "low",
+        "price": 30317.75,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T05:00:00-04:00",
+        "type": "high",
+        "price": 30586.0,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-02T09:00:00-04:00",
+        "type": "low",
+        "price": 30423.75,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T16:00:00-04:00",
+        "type": "high",
+        "price": 30763.25,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T19:00:00-04:00",
+        "type": "low",
+        "price": 30561.25,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T09:00:00-04:00",
+        "type": "high",
+        "price": 30807.75,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T15:00:00-04:00",
+        "type": "high",
+        "price": 30694.75,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T18:00:00-04:00",
+        "type": "low",
+        "price": 30368.5,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T21:00:00-04:00",
+        "type": "high",
+        "price": 30531.0,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T22:00:00-04:00",
+        "type": "low",
+        "price": 30352.5,
+        "broken": false
+      }
+    ]
+  },
+  "GOLD": {
+    "trend": "bullish",
+    "ceiling_price": 4571.2998046875,
+    "ceiling_ts": "2026-06-02T03:00:00-04:00",
+    "ceiling_is_placeholder": false,
+    "floor_price": 4467.2001953125,
+    "floor_ts": "2026-06-03T05:00:00-04:00",
+    "floor_is_placeholder": false,
+    "last_event_type": "CHoCH",
+    "last_event_tier": "Major",
+    "last_event_direction": "bullish",
+    "last_event_ts": "2026-06-02T00:00:00-04:00",
+    "last_event_idx_iso": "2026-06-02T00:00:00-04:00",
+    "last_event_chop": false,
+    "last_scanned_ts": "2026-06-04T04:00:00-04:00",
+    "fallback_active": false,
+    "trend_start_ts": "2026-06-02T00:00:00-04:00",
+    "last_minor_bos_pivot_ts": "2026-06-03T07:00:00-04:00",
+    "events": [
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-05-27T07:00:00-04:00",
+        "broken_swing_price": 4478.5,
+        "broken_swing_ts": "2026-05-27T02:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.1271514311736637,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-27T04:00:00-04:00",
+        "impulse_start_price": 4529.5,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-05-27T23:00:00-04:00",
+        "broken_swing_price": 4431.0,
+        "broken_swing_ts": "2026-05-27T09:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.4340461307322845,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-27T18:00:00-04:00",
+        "impulse_start_price": 4502.0,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-05-28T12:00:00-04:00",
+        "broken_swing_price": 4529.5,
+        "broken_swing_ts": "2026-05-27T04:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.6863172480363691,
+        "chop": false,
+        "reversal_pct": -0.07983792212701613,
+        "impulse_start_ts": "2026-05-28T00:00:00-04:00",
+        "impulse_start_price": 4395.60009765625,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-05-29T02:00:00-04:00",
+        "broken_swing_price": 4547.10009765625,
+        "broken_swing_ts": "2026-05-28T14:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 0.4073220666194409,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-05-28T19:00:00-04:00",
+        "impulse_start_price": 4519.5,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-05-29T10:00:00-04:00",
+        "broken_swing_price": 4574.39990234375,
+        "broken_swing_ts": "2026-05-29T06:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.1606363020683321,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": null,
+        "impulse_start_price": null,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bearish",
+        "candle_ts": "2026-06-01T09:00:00-04:00",
+        "broken_swing_price": 4519.5,
+        "broken_swing_ts": "2026-05-28T19:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 2.1984765804407567,
+        "chop": false,
+        "reversal_pct": 4.618068653338363,
+        "impulse_start_ts": "2026-05-29T11:00:00-04:00",
+        "impulse_start_price": 4627.10009765625,
+        "trend_after": "bearish"
+      },
+      {
+        "type": "CHoCH",
+        "tier": "Major",
+        "direction": "bullish",
+        "candle_ts": "2026-06-02T00:00:00-04:00",
+        "broken_swing_price": 4525.60009765625,
+        "broken_swing_ts": "2026-06-01T13:00:00-04:00",
+        "broken_was_wall": true,
+        "displacement_atr": 1.2331641509874594,
+        "chop": false,
+        "reversal_pct": 0.0,
+        "impulse_start_ts": "2026-06-01T21:00:00-04:00",
+        "impulse_start_price": 4492.2998046875,
+        "trend_after": "bullish"
+      },
+      {
+        "type": "BOS",
+        "tier": "Minor",
+        "direction": "bullish",
+        "candle_ts": "2026-06-04T00:00:00-04:00",
+        "broken_swing_price": 4496.5,
+        "broken_swing_ts": "2026-06-03T07:00:00-04:00",
+        "broken_was_wall": false,
+        "displacement_atr": 0.6472742700119103,
+        "chop": false,
+        "reversal_pct": null,
+        "impulse_start_ts": "2026-06-03T18:00:00-04:00",
+        "impulse_start_price": 4450.10009765625,
+        "trend_after": "bullish"
+      }
+    ],
+    "swings": [
+      {
+        "ts": "2026-05-27T02:00:00-04:00",
+        "type": "low",
+        "price": 4478.5,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-27T04:00:00-04:00",
+        "type": "high",
+        "price": 4529.5,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-27T09:00:00-04:00",
+        "type": "low",
+        "price": 4431.0,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-27T18:00:00-04:00",
+        "type": "high",
+        "price": 4502.0,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T00:00:00-04:00",
+        "type": "low",
+        "price": 4395.60009765625,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T06:00:00-04:00",
+        "type": "low",
+        "price": 4405.5,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-28T14:00:00-04:00",
+        "type": "high",
+        "price": 4547.10009765625,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-28T19:00:00-04:00",
+        "type": "low",
+        "price": 4519.5,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-28T21:00:00-04:00",
+        "type": "high",
+        "price": 4551.2001953125,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-29T06:00:00-04:00",
+        "type": "high",
+        "price": 4574.39990234375,
+        "broken": true
+      },
+      {
+        "ts": "2026-05-29T11:00:00-04:00",
+        "type": "high",
+        "price": 4627.10009765625,
+        "broken": false
+      },
+      {
+        "ts": "2026-05-31T18:00:00-04:00",
+        "type": "low",
+        "price": 4554.10009765625,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T05:00:00-04:00",
+        "type": "low",
+        "price": 4518.60009765625,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T07:00:00-04:00",
+        "type": "high",
+        "price": 4542.7998046875,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T10:00:00-04:00",
+        "type": "low",
+        "price": 4476.0,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-01T13:00:00-04:00",
+        "type": "high",
+        "price": 4525.60009765625,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-01T21:00:00-04:00",
+        "type": "low",
+        "price": 4492.2998046875,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T03:00:00-04:00",
+        "type": "high",
+        "price": 4571.2998046875,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T14:00:00-04:00",
+        "type": "low",
+        "price": 4508.0,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T19:00:00-04:00",
+        "type": "low",
+        "price": 4490.5,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-02T20:00:00-04:00",
+        "type": "high",
+        "price": 4525.10009765625,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T00:00:00-04:00",
+        "type": "high",
+        "price": 4516.10009765625,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T05:00:00-04:00",
+        "type": "low",
+        "price": 4467.2001953125,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-03T07:00:00-04:00",
+        "type": "high",
+        "price": 4496.5,
+        "broken": true
+      },
+      {
+        "ts": "2026-06-03T18:00:00-04:00",
+        "type": "low",
+        "price": 4450.10009765625,
+        "broken": false
+      },
+      {
+        "ts": "2026-06-04T00:00:00-04:00",
+        "type": "high",
+        "price": 4511.2001953125,
+        "broken": false
+      }
+    ]
+  }
+}
