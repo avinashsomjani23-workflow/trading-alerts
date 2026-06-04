@@ -13,9 +13,9 @@
     "last_event_ts": "2026-05-29T15:00:00+01:00",
     "last_event_idx_iso": "2026-05-29T15:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-04T05:00:00+01:00",
+    "last_scanned_ts": "2026-06-04T06:00:00+01:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-26T23:00:00+01:00",
+    "trend_start_ts": "2026-05-27T00:00:00+01:00",
     "last_minor_bos_pivot_ts": "2026-06-01T22:00:00+01:00",
     "events": [
       {
@@ -124,9 +124,9 @@
     "last_event_ts": "2026-06-03T20:00:00+01:00",
     "last_event_idx_iso": "2026-06-03T20:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-04T05:00:00+01:00",
+    "last_scanned_ts": "2026-06-04T06:00:00+01:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-26T23:00:00+01:00",
+    "trend_start_ts": "2026-05-27T00:00:00+01:00",
     "last_minor_bos_pivot_ts": null,
     "events": [
       {
@@ -280,9 +280,9 @@
     "last_event_ts": "2026-05-26T13:00:00+01:00",
     "last_event_idx_iso": "2026-05-26T13:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-04T05:00:00+01:00",
+    "last_scanned_ts": "2026-06-04T06:00:00+01:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-26T23:00:00+01:00",
+    "trend_start_ts": "2026-05-27T00:00:00+01:00",
     "last_minor_bos_pivot_ts": "2026-06-03T00:00:00+01:00",
     "events": [
       {
@@ -391,7 +391,7 @@
     "last_event_ts": "2026-06-03T08:00:00+01:00",
     "last_event_idx_iso": "2026-06-03T08:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-04T05:00:00+01:00",
+    "last_scanned_ts": "2026-06-04T06:00:00+01:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-03T08:00:00+01:00",
     "last_minor_bos_pivot_ts": "2026-06-03T09:00:00+01:00",
@@ -577,9 +577,9 @@
     "last_event_ts": "2026-06-02T10:00:00-04:00",
     "last_event_idx_iso": "2026-06-02T10:00:00-04:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-03T23:00:00-04:00",
+    "last_scanned_ts": "2026-06-04T00:00:00-04:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-26T02:00:00-04:00",
+    "trend_start_ts": "2026-05-26T08:00:00-04:00",
     "last_minor_bos_pivot_ts": null,
     "events": [
       {
@@ -718,9 +718,9 @@
     "last_event_ts": "2026-06-03T00:00:00-04:00",
     "last_event_idx_iso": "2026-06-03T00:00:00-04:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-03T23:00:00-04:00",
+    "last_scanned_ts": "2026-06-04T00:00:00-04:00",
     "fallback_active": false,
-    "trend_start_ts": "2026-05-22T06:00:00-04:00",
+    "trend_start_ts": "2026-05-26T08:00:00-04:00",
     "last_minor_bos_pivot_ts": null,
     "events": [
       {
