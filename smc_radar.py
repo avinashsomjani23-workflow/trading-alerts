@@ -9,7 +9,8 @@ import time
 import google.generativeai as genai
 import smc_detector
 import dealing_range
-import trend_state  # NEW pure-swing H1 trend label (isolated; gates nothing)
+import h4_range  # H4-derived dealing range (built from H1, mapped onto H1)
+import structure_engine  # single CHoCH / BOS / transition engine (drives the H1 trend banner)
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -299,6 +300,11 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
         'dropped_this_scan': dropped_this_scan or [],
         'diagnostics': diagnostics or [],
         'placeholder_diagnostic': placeholder_diagnostic,
+        # STAGE 1/2 verification — H4-derived dealing range (live + confirmed)
+        # and the new single-CHoCH structure read, captured per scan so old vs
+        # new can be compared over time before Stage 3 cutover. Gates nothing.
+        'h4_range': walls.get('h4_range'),
+        'structure_v2': walls.get('structure_v2'),
         # TEMP DIAG — remove with OB build verification.
         # Per-event ledger of how detect_smc_radar handled each BOS/CHoCH:
         # built or dropped (with the gate that fired). One entry per event in
@@ -2603,8 +2609,7 @@ def _summarise_last_ob_attempt(ob_build_diagnostics):
 
 
 def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
-                                  last_event, ob_build_diagnostics=None,
-                                  h1_trend_info=None):
+                                  last_event, ob_build_diagnostics=None):
     """Card for a pair with no active OB and no recently-dropped OB.
 
     The vet wants to see WHY there's nothing to trade and what to wait for.
@@ -2640,22 +2645,23 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
     w = walls or {}
     ceil_px = w.get('ceiling_price')
     floor_px = w.get('floor_price')
-    # H1 trend comes from the NEW pure-swing trend system (h1_trend_info),
-    # NOT the old wall `trend` field. If unavailable, the trend line is simply
-    # omitted rather than falling back to the wall-trend.
+    # H1 trend comes from the single structure engine (structure_v2 on state):
+    # up / down / transition, with `ranging` as a flag inside up/down. The old
+    # wall `trend` field is NOT used.
     range_parts = []
     if ceil_px is not None and floor_px is not None:
         range_parts.append(
             f"DR {floor_px:.{dp}f} → {ceil_px:.{dp}f} "
             f"({ceil_px - floor_px:.{dp}f} pts)"
         )
-    if h1_trend_info and h1_trend_info.get('state'):
-        state = h1_trend_info['state']
-        prior = h1_trend_info.get('prior_trend')
-        if state == 'ranging' and prior:
-            trend_txt = f"{prior.upper()} → ranging (CoC)"
+    sv2 = (walls or {}).get('structure_v2') or {}
+    if sv2.get('state'):
+        state = sv2['state']
+        prior = sv2.get('prior_trend')
+        if state == 'transition' and prior:
+            trend_txt = f"{prior.upper()} → transition (CHoCH)"
         elif state in ('up', 'down'):
-            trend_txt = state.upper()
+            trend_txt = state.upper() + (" (ranging)" if sv2.get('ranging') else "")
         else:
             trend_txt = "undefined"
         range_parts.append(f"H1 trend: {trend_txt}")
@@ -3754,6 +3760,28 @@ def run_radar():
             # Strip non-persisted diagnostic before saving — it stays in
             # the in-memory copy for downstream scan logging only.
             placeholder_diag = new_walls.pop(dealing_range.PLACEHOLDER_DIAG_KEY, None)
+            # STAGE 1 (additive): attach the H4-derived dealing range. Built from
+            # the same H1 df, mapped onto H1 as price levels. Does NOT replace the
+            # old wall fields yet — compute_pd_position prefers h4_range when
+            # present and valid, else falls back to the legacy walls. Failure here
+            # must never break the scan: on any error the block is simply absent.
+            try:
+                _h4 = h4_range.compute_h4_range(df)
+                new_walls["h4_range"] = _h4
+            except Exception as _h4err:
+                logging.warning(f"[h4_range] {name} compute failed: {_h4err}")
+                new_walls["h4_range"] = {"valid": False, "source": "error"}
+            # Single structure engine: one CHoCH (premium/discount reversal +
+            # defended-swing break on the FROZEN confirmed H4 range), transition
+            # state, two-way BOS. Stored on state under 'structure_v2' and read
+            # by the H1 trend banner. Does NOT gate OB building (Stage 3 note:
+            # OB events still come from the legacy wall engine — see below).
+            try:
+                new_walls["structure_v2"] = structure_engine.compute_structure(
+                    df, new_walls.get("h4_range"))
+            except Exception as _sverr:
+                logging.warning(f"[structure_engine] {name} compute failed: {_sverr}")
+                new_walls["structure_v2"] = {"state": "error"}
             structure_state_all[name] = new_walls
             dealing_range.save_state(structure_state_all)
             if new_walls.get("fallback_active"):
@@ -3975,16 +4003,9 @@ def run_radar():
                 "broken_swing_price": _le_bws,
             }
 
-            # H1 trend label — NEW pure-swing trend system (trend_state.py).
-            # Information only; gates nothing. Reads the same shared lb-3+ATR
-            # swing pool as walls/BOS/CHoCH but is fully isolated from the old
-            # wall `trend` field (which stays as dealing-range plumbing). This
-            # is the ONLY trend surfaced to the trader in the Phase 1 email.
-            try:
-                h1_trend_info = trend_state.compute_trend(df) if df is not None else None
-            except Exception as _te:
-                logging.warning(f"[trend_state] {pair_name} compute_trend failed: {_te}")
-                h1_trend_info = None
+            # H1 trend / CHoCH / transition is surfaced from structure_v2,
+            # computed once in the wall-update block and carried on pair_walls.
+            # The banner reads it directly off walls — no recompute here.
 
             # Bookkeeping drops (structure_supplanted / aged_out / data_*) get
             # the one-liner regardless of whether we render an active card.
@@ -4164,7 +4185,6 @@ def run_radar():
                                     pair_name, dp, cid, ist_ts_full,
                                     pair_walls, last_event,
                                     ob_build_diagnostics=ob_build_diag,
-                                    h1_trend_info=h1_trend_info,
                                 )
                             )
                             _attach_chart(chart_b64, cid)
@@ -4175,7 +4195,6 @@ def run_radar():
                                     pair_name, dp, None, ist_ts_full,
                                     pair_walls, last_event,
                                     ob_build_diagnostics=ob_build_diag,
-                                    h1_trend_info=h1_trend_info,
                                 )
                             )
 
@@ -4210,7 +4229,6 @@ def run_radar():
                                 pair_name, dp, cid, ist_ts_full,
                                 pair_walls, last_event,
                                 ob_build_diagnostics=ob_build_diag,
-                                h1_trend_info=h1_trend_info,
                             )
                         )
                         _attach_chart(chart_b64, cid)
@@ -4221,7 +4239,6 @@ def run_radar():
                                 pair_name, dp, None, ist_ts_full,
                                 pair_walls, last_event,
                                 ob_build_diagnostics=ob_build_diag,
-                                h1_trend_info=h1_trend_info,
                             )
                         )
 

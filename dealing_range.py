@@ -1979,6 +1979,35 @@ def compute_pd_position(price: float, walls: Dict[str, Any]) -> Dict[str, Any]:
                 "tentative": True, "fallback_active": False, "pd_position": None,
                 "range_high": 0.0, "range_low": 0.0, "equilibrium": 0.0}
 
+    # STAGE 1: prefer the H4-derived dealing range when present and valid. This
+    # is the LIVE range (broken-wall live tracking applied) — used for display,
+    # containment, and pd_position. The CHoCH 25% gate must NOT read this; it
+    # reads the frozen `confirmed_*` block via compute_pd_confirmed() instead.
+    # Legacy walls remain the fallback until the old engine is removed (Stage 3).
+    h4 = walls.get("h4_range")
+    if isinstance(h4, dict) and h4.get("valid") and h4.get("ceiling") is not None \
+            and h4.get("floor") is not None and h4["ceiling"] > h4["floor"]:
+        c = float(h4["ceiling"]); f = float(h4["floor"])
+        width = c - f
+        pos = (float(price) - f) / width if width > 0 else None
+        # "tentative" now means: a wall is riding the live extreme (broken),
+        # i.e. not a confirmed swing. Surfaced for labelling, mirrors the old
+        # placeholder semantics so downstream consumers keep working unchanged.
+        cbrk = bool(h4.get("ceiling_broken"))
+        fbrk = bool(h4.get("floor_broken"))
+        return {
+            "valid": True,
+            "range_high": c,
+            "range_low":  f,
+            "equilibrium": (c + f) / 2.0,
+            "pd_position": pos,
+            "ceiling_is_placeholder": cbrk,
+            "floor_is_placeholder":   fbrk,
+            "tentative":              cbrk or fbrk,
+            "fallback_active":        False,
+            "source": "h4_live",
+        }
+
     ceiling = walls.get("ceiling_price")
     floor   = walls.get("floor_price")
     cph = bool(walls.get("ceiling_is_placeholder", True))
@@ -2025,4 +2054,45 @@ def compute_pd_position(price: float, walls: Dict[str, Any]) -> Dict[str, Any]:
         "tentative":              tentative,
         "fallback_active":        fb,
         "source": src,
+    }
+
+
+def compute_pd_confirmed(price: float, walls: Dict[str, Any]) -> Dict[str, Any]:
+    """STABLE premium/discount reference for the CHoCH 25% gate (Stage 2).
+
+    Reads ONLY the H4 `confirmed_*` range (both walls are confirmed swings, NO
+    broken-wall live tracking). A moving range makes the 25% gate jitter and
+    fire false CHoCHs, so the gate must read this frozen range — never the live
+    one from compute_pd_position.
+
+    Returns:
+      {
+        "valid":       bool,    # confirmed range present and non-degenerate
+        "range_high":  float,
+        "range_low":   float,
+        "equilibrium": float,
+        "pd_position": float|None,  # 0=floor, 1=ceiling
+        "premium_floor":  float,    # >= this = top 25% (premium gate line)
+        "discount_ceil":  float,    # <= this = bottom 25% (discount gate line)
+        "source":      str,
+      }
+    """
+    h4 = (walls or {}).get("h4_range")
+    if not (isinstance(h4, dict) and h4.get("confirmed_valid")
+            and h4.get("confirmed_ceiling") is not None
+            and h4.get("confirmed_floor") is not None
+            and h4["confirmed_ceiling"] > h4["confirmed_floor"]):
+        return {"valid": False, "source": "no_confirmed_h4", "pd_position": None}
+    c = float(h4["confirmed_ceiling"]); f = float(h4["confirmed_floor"])
+    width = c - f
+    pos = (float(price) - f) / width if width > 0 else None
+    return {
+        "valid": True,
+        "range_high": c,
+        "range_low":  f,
+        "equilibrium": (c + f) / 2.0,
+        "pd_position": pos,
+        "premium_floor": f + PREMIUM_PCT * width,   # top 25% line
+        "discount_ceil": f + DISCOUNT_PCT * width,  # bottom 25% line
+        "source": "h4_confirmed",
     }

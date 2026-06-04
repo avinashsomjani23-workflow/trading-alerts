@@ -333,13 +333,26 @@ def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
         walls = None
 
     proximal = float(ob.get("proximal_line", 0.0)) if ob else 0.0
-    if walls and walls.get("ceiling_price") is not None and walls.get("floor_price") is not None:
+    # Enter the structural-PD branch when EITHER a valid H4 dealing range exists
+    # OR the legacy walls are present. The H4 range is the primary source now
+    # (compute_pd_position prefers it internally), so gating this branch on the
+    # legacy walls alone would discard a valid H4 range whenever the old engine
+    # had no walls — letting the dead old engine veto the live one. compute_pd_
+    # position returns valid=False safely if neither source is usable.
+    _h4 = walls.get("h4_range") if walls else None
+    _h4_ok = isinstance(_h4, dict) and bool(_h4.get("valid"))
+    _legacy_ok = bool(walls and walls.get("ceiling_price") is not None
+                      and walls.get("floor_price") is not None)
+    if walls and (_h4_ok or _legacy_ok):
         pd_info = _DR.compute_pd_position(proximal, walls)
         chop_flag = bool(walls.get("last_event_chop", False))
         last_event_type = walls.get("last_event_type")
         if pd_info.get("valid"):
             tentative = bool(pd_info.get("tentative", False))
-            if pd_info.get("fallback_active"):
+            if pd_info.get("source") == "h4_live":
+                # Honest label: range came from the H4 dealing range, not walls.
+                source = "h4_dealing_range"
+            elif pd_info.get("fallback_active"):
                 source = "structural_fallback_window"
             elif tentative:
                 source = "structural_tentative"
