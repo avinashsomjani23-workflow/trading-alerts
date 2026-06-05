@@ -303,5 +303,20 @@
     "ts": "2026-06-05T17:35:42.120583",
     "pair": "GOLD",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-06-05T18:35:34.030261",
+    "pair": "USDJPY",
+    "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-06-05T18:35:39.467195",
+    "pair": "NZDUSD",
+    "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-06-05T18:35:44.281439",
+    "pair": "GOLD",
+    "reason": "no candidates field, attempt 3"
   }
 ]

@@ -56,22 +56,58 @@
       "pair": "NAS100"
     },
     "GOLD_LONG_CHoCH_4529.5_2026-05-28T06": {
-      "score_int": 7,
-      "score_raw": 7.0,
-      "score_high_water": 7.0,
-      "score_low_water": 7.0,
+      "score_int": 6,
+      "score_raw": 6.0,
+      "score_high_water": 6.0,
+      "score_low_water": 6.0,
       "breakdown": {
         "structure": 4,
+        "sweep": 0.0,
+        "fvg": 1,
+        "freshness": 1,
+        "pd": 0.0,
+        "killzone": 0.0
+      },
+      "alert_ist": "2026-06-05T18:35:32.787987",
+      "last_seen_ist": "2026-06-05T18:35:32.787987",
+      "bias": "LONG",
+      "pair": "GOLD"
+    },
+    "USDJPY_LONG_BOS_159.31_2026-05-29T20": {
+      "score_int": 4,
+      "score_raw": 4.0,
+      "score_high_water": 4.0,
+      "score_low_water": 4.0,
+      "breakdown": {
+        "structure": 2,
+        "sweep": 0.0,
+        "fvg": 1,
+        "freshness": 1,
+        "pd": 0.0,
+        "killzone": 0.0
+      },
+      "alert_ist": "2026-06-05T18:35:32.787987",
+      "last_seen_ist": "2026-06-05T18:35:32.787987",
+      "bias": "LONG",
+      "pair": "USDJPY"
+    },
+    "NZDUSD_SHORT_BOS_0.5862_2026-06-05T11": {
+      "score_int": 4,
+      "score_raw": 4.0,
+      "score_high_water": 4.0,
+      "score_low_water": 4.0,
+      "breakdown": {
+        "structure": 1,
         "sweep": 0.0,
         "fvg": 2,
         "freshness": 1,
         "pd": 0.0,
         "killzone": 0.0
       },
-      "alert_ist": "2026-06-04T21:35:42.263646",
-      "last_seen_ist": "2026-06-05T17:35:39.085541",
-      "bias": "LONG",
-      "pair": "GOLD"
+      "alert_ist": "2026-06-05T18:35:32.787987",
+      "last_seen_ist": "2026-06-05T18:35:32.787987",
+      "bias": "SHORT",
+      "pair": "NZDUSD"
     }
   }
 }
