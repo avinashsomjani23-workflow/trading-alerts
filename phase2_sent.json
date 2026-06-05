@@ -33,25 +33,25 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-04T21:35:42.263646",
-      "last_seen_ist": "2026-06-05T10:35:33.501097",
+      "last_seen_ist": "2026-06-05T11:35:30.325479",
       "bias": "SHORT",
       "pair": "USDCHF"
     },
     "NAS100_LONG_BOS_30136.2_2026-05-28T09": {
-      "score_int": 4,
-      "score_raw": 4.0,
-      "score_high_water": 4.0,
-      "score_low_water": 4.0,
+      "score_int": 3,
+      "score_raw": 3.0,
+      "score_high_water": 3.0,
+      "score_low_water": 3.0,
       "breakdown": {
-        "structure": 2,
+        "structure": 3,
         "sweep": 0.0,
-        "fvg": 1,
-        "freshness": 1,
+        "fvg": 0,
+        "freshness": 0,
         "pd": 0.0,
         "killzone": 0.0
       },
-      "alert_ist": "2026-06-04T21:35:42.263646",
-      "last_seen_ist": "2026-06-05T10:35:33.501097",
+      "alert_ist": "2026-06-05T11:35:30.325479",
+      "last_seen_ist": "2026-06-05T11:35:30.325479",
       "bias": "LONG",
       "pair": "NAS100"
     },
@@ -69,7 +69,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-04T21:35:42.263646",
-      "last_seen_ist": "2026-06-05T10:35:33.501097",
+      "last_seen_ist": "2026-06-05T11:35:30.325479",
       "bias": "LONG",
       "pair": "GOLD"
     }
