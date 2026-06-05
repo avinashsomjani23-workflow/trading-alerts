@@ -13,7 +13,7 @@
     "last_event_ts": "2026-06-04T11:00:00+01:00",
     "last_event_idx_iso": "2026-06-04T11:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-05T09:00:00+01:00",
+    "last_scanned_ts": "2026-06-05T10:00:00+01:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-04T11:00:00+01:00",
     "last_minor_bos_pivot_ts": null,
@@ -263,18 +263,17 @@
       "confirmed_floor_ts": "2026-06-01T13:00:00+00:00",
       "n_confirmed_highs": 5,
       "n_confirmed_lows": 2,
-      "current_price": 1.1637378931045532,
+      "current_price": 1.1640088558197021,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
         "full4": 36,
-        "short": 3,
+        "short": 4,
         "bars_per_candle": {
-          "3": 1,
+          "2": 2,
           "4": 36,
-          "1": 1,
-          "2": 1
+          "1": 2
         }
       }
     },
@@ -309,7 +308,7 @@
     "last_event_ts": "2026-06-03T20:00:00+01:00",
     "last_event_idx_iso": "2026-06-03T20:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-05T09:00:00+01:00",
+    "last_scanned_ts": "2026-06-05T10:00:00+01:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-03T20:00:00+01:00",
     "last_minor_bos_pivot_ts": null,
@@ -517,18 +516,17 @@
       "confirmed_floor_ts": "2026-06-04T01:00:00+00:00",
       "n_confirmed_highs": 4,
       "n_confirmed_lows": 4,
-      "current_price": 159.94400024414062,
+      "current_price": 159.9409942626953,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
         "full4": 36,
-        "short": 3,
+        "short": 4,
         "bars_per_candle": {
-          "3": 1,
+          "2": 2,
           "4": 36,
-          "1": 1,
-          "2": 1
+          "1": 2
         }
       }
     },
@@ -554,16 +552,16 @@
     "ceiling_price": 0.5946363806724548,
     "ceiling_ts": "2026-06-02T07:00:00+01:00",
     "ceiling_is_placeholder": false,
-    "floor_price": 0.5853430032730103,
-    "floor_ts": "2026-06-05T02:00:00+01:00",
-    "floor_is_placeholder": true,
+    "floor_price": 0.586166501045227,
+    "floor_ts": "2026-06-05T07:00:00+01:00",
+    "floor_is_placeholder": false,
     "last_event_type": "BOS",
     "last_event_tier": "Major",
     "last_event_direction": "bearish",
     "last_event_ts": "2026-06-05T02:00:00+01:00",
     "last_event_idx_iso": "2026-06-05T02:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-05T09:00:00+01:00",
+    "last_scanned_ts": "2026-06-05T10:00:00+01:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-01T02:00:00+01:00",
     "last_minor_bos_pivot_ts": null,
@@ -809,6 +807,12 @@
         "type": "low",
         "price": 0.5853430032730103,
         "broken": false
+      },
+      {
+        "ts": "2026-06-05T07:00:00+01:00",
+        "type": "low",
+        "price": 0.586166501045227,
+        "broken": false
       }
     ],
     "h4_range": {
@@ -828,36 +832,35 @@
       "confirmed_floor_ts": "2026-06-01T13:00:00+00:00",
       "n_confirmed_highs": 3,
       "n_confirmed_lows": 1,
-      "current_price": 0.5875440835952759,
+      "current_price": 0.5873715281486511,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
         "full4": 36,
-        "short": 3,
+        "short": 4,
         "bars_per_candle": {
-          "3": 1,
+          "2": 2,
           "4": 36,
-          "1": 1,
-          "2": 1
+          "1": 2
         }
       }
     },
     "structure_v2": {
-      "state": "transition",
+      "state": "down",
       "ranging": false,
-      "prior_trend": "down",
-      "choch": true,
-      "choch_ts": "2026-06-05T09:00:00+01:00",
+      "prior_trend": null,
+      "choch": false,
+      "choch_ts": null,
       "defended": 0.5875095129013062,
-      "broken_swing_ts": "2026-06-05T00:00:00+01:00",
+      "broken_swing_ts": null,
       "last_bos": {
         "tier": "Minor",
         "direction": "down",
         "ts": "2026-06-05T02:00:00+01:00",
         "wall": null
       },
-      "label": "H1 TRANSITION \u2014 CHoCH from DOWN (awaiting BOS to flip or reclaim)"
+      "label": "H1 trend DOWN"
     }
   },
   "USDCHF": {
@@ -874,7 +877,7 @@
     "last_event_ts": "2026-06-02T07:00:00+01:00",
     "last_event_idx_iso": "2026-06-02T07:00:00+01:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-05T09:00:00+01:00",
+    "last_scanned_ts": "2026-06-05T10:00:00+01:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-02T07:00:00+01:00",
     "last_minor_bos_pivot_ts": "2026-06-04T03:00:00+01:00",
@@ -1172,16 +1175,18 @@
       "confirmed_floor_ts": "2026-06-04T09:00:00+00:00",
       "n_confirmed_highs": 3,
       "n_confirmed_lows": 3,
-      "current_price": 0.7877200245857239,
+      "current_price": 0.7881199717521667,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
-        "full4": 37,
-        "short": 1,
+        "full4": 36,
+        "short": 3,
         "bars_per_candle": {
-          "4": 37,
-          "2": 1
+          "3": 1,
+          "4": 36,
+          "2": 1,
+          "1": 1
         }
       }
     },
@@ -1216,7 +1221,7 @@
     "last_event_ts": "2026-06-04T20:00:00-04:00",
     "last_event_idx_iso": "2026-06-04T20:00:00-04:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-05T03:00:00-04:00",
+    "last_scanned_ts": "2026-06-05T04:00:00-04:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-04T20:00:00-04:00",
     "last_minor_bos_pivot_ts": null,
@@ -1502,17 +1507,17 @@
       "confirmed_floor_ts": "2026-06-01T13:00:00+00:00",
       "n_confirmed_highs": 5,
       "n_confirmed_lows": 1,
-      "current_price": 30151.75,
+      "current_price": 30158.75,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
-        "full4": 31,
-        "short": 9,
+        "full4": 32,
+        "short": 8,
         "bars_per_candle": {
-          "2": 1,
-          "3": 8,
-          "4": 31
+          "1": 1,
+          "3": 7,
+          "4": 32
         }
       }
     },
@@ -1547,7 +1552,7 @@
     "last_event_ts": "2026-06-02T00:00:00-04:00",
     "last_event_idx_iso": "2026-06-02T00:00:00-04:00",
     "last_event_chop": false,
-    "last_scanned_ts": "2026-06-05T03:00:00-04:00",
+    "last_scanned_ts": "2026-06-05T04:00:00-04:00",
     "fallback_active": false,
     "trend_start_ts": "2026-06-02T00:00:00-04:00",
     "last_minor_bos_pivot_ts": "2026-06-04T00:00:00-04:00",
@@ -1851,17 +1856,17 @@
       "confirmed_floor_ts": "2026-06-03T22:00:00+00:00",
       "n_confirmed_highs": 3,
       "n_confirmed_lows": 2,
-      "current_price": 4491.7001953125,
+      "current_price": 4490.2001953125,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
-        "full4": 31,
-        "short": 9,
+        "full4": 32,
+        "short": 8,
         "bars_per_candle": {
-          "2": 1,
-          "3": 8,
-          "4": 31
+          "1": 1,
+          "3": 7,
+          "4": 32
         }
       }
     },
