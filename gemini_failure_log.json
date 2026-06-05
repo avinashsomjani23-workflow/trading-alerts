@@ -263,5 +263,15 @@
     "ts": "2026-06-05T11:35:37.258330",
     "pair": "GOLD",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-06-05T12:35:35.784623",
+    "pair": "NAS100",
+    "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-06-05T12:35:41.668160",
+    "pair": "GOLD",
+    "reason": "no candidates field, attempt 3"
   }
 ]
