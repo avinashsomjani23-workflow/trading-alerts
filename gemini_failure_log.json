@@ -278,5 +278,15 @@
     "ts": "2026-06-05T13:35:36.920215",
     "pair": "GOLD",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-06-05T14:35:33.195631",
+    "pair": "USDCHF",
+    "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-06-05T14:35:34.640552",
+    "pair": "GOLD",
+    "reason": "no candidates field, attempt 3"
   }
 ]
