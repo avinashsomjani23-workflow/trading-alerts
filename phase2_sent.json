@@ -1,5 +1,5 @@
 {
-  "day_id": "2026-06-04",
+  "day_id": "2026-06-05",
   "zones": {
     "EURUSD_LONG_CHoCH_1.1616_2026-06-04T08": {
       "score_int": 8,
@@ -33,7 +33,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-04T21:35:42.263646",
-      "last_seen_ist": "2026-06-05T00:35:31.773934",
+      "last_seen_ist": "2026-06-05T09:35:43.471187",
       "bias": "SHORT",
       "pair": "USDCHF"
     },
@@ -51,7 +51,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-04T21:35:42.263646",
-      "last_seen_ist": "2026-06-05T00:35:31.773934",
+      "last_seen_ist": "2026-06-05T09:35:43.471187",
       "bias": "LONG",
       "pair": "NAS100"
     },
@@ -69,7 +69,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-04T21:35:42.263646",
-      "last_seen_ist": "2026-06-05T00:35:31.773934",
+      "last_seen_ist": "2026-06-05T09:35:43.471187",
       "bias": "LONG",
       "pair": "GOLD"
     }
