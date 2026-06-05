@@ -298,5 +298,10 @@
     "ts": "2026-06-05T16:35:35.835252",
     "pair": "GOLD",
     "reason": "no candidates field, attempt 3"
+  },
+  {
+    "ts": "2026-06-05T17:35:42.120583",
+    "pair": "GOLD",
+    "reason": "no candidates field, attempt 3"
   }
 ]
