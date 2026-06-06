@@ -1840,20 +1840,53 @@ def _walk_forward(df, prior_state: Optional[Dict[str, Any]] = None,
     # --- Persisted swing list (SINGLE SOURCE OF TRUTH for chart markers) ----
     # The ONE filtered swing pool (lb-3 + ATR) that drove trend / CHoCH / BOS /
     # walls in this walk, emitted so every chart consumes the SAME swings rather
-    # than re-detecting. Keyed by ts (window-independent). `broken` is True when
-    # this swing's ts matches a structural event's broken_swing_ts in the ring
-    # (any kind: Major/Minor BOS, Major/Minor CHoCH) -> rendered as an X; all
-    # others render as triangles. No chart calls a swing detector of its own.
+    # than re-detecting. Keyed by ts (window-independent). No chart calls a swing
+    # detector of its own, and no chart re-derives "which break matters" — that
+    # decision is made HERE, once, and carried on the swing dict.
+    #
+    # Two flags per swing:
+    #   broken          — True if this swing's ts matches ANY structural event's
+    #                     broken_swing_ts in the ring (history of breaks).
+    #   is_setup_break  — True for the ONE swing broken by the LAST event (the
+    #                     break that defines the current dealing range / OB).
+    #                     Charts draw the X on exactly this swing, nothing else.
+    #
+    # The last event's broken swing can scroll out of swings_lb3 (the detection
+    # window moves forward while the event ring remembers further back). When
+    # that happens we INJECT the broken level back into the pool from the event
+    # record, so the chart always has the one level it must mark. Without this,
+    # pairs like USDJPY would silently lose their setup-break X.
     _broken_ts = {e.get("broken_swing_ts") for e in events_ring if e.get("broken_swing_ts")}
+    _setup_event = next(
+        (e for e in events_ring if e.get("candle_ts") == last_event_ts), None
+    ) if last_event_ts else None
+    _setup_break_ts = _setup_event.get("broken_swing_ts") if _setup_event else None
+
     swings_persisted = [
         {
-            "ts":     s["ts"],
-            "type":   s["type"],
-            "price":  float(s["price"]),
-            "broken": s["ts"] in _broken_ts,
+            "ts":             s["ts"],
+            "type":           s["type"],
+            "price":          float(s["price"]),
+            "broken":         s["ts"] in _broken_ts,
+            "is_setup_break": bool(_setup_break_ts) and s["ts"] == _setup_break_ts,
         }
         for s in swings_lb3 if s.get("ts")
     ]
+
+    # Inject the setup-break swing if the detection window no longer holds it.
+    if _setup_break_ts and not any(sw["is_setup_break"] for sw in swings_persisted):
+        _bp = _setup_event.get("broken_swing_price")
+        if _bp is not None:
+            # A swing broken to the UPSIDE (price closed above it) is a high;
+            # broken to the DOWNSIDE is a low. Event direction tells us which.
+            _inj_type = "high" if _setup_event.get("direction") == "bullish" else "low"
+            swings_persisted.append({
+                "ts":             _setup_break_ts,
+                "type":           _inj_type,
+                "price":          float(_bp),
+                "broken":         True,
+                "is_setup_break": True,
+            })
 
     new_state = {
         "trend":                  trend,

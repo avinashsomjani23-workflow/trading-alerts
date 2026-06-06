@@ -544,14 +544,16 @@ def _draw_candles(ax, df_plot):
 
 
 def _p2_swing_markers(ax, df_h1, window_start, n, pair_conf, y_min, y_max):
-    """Render swing triangles + broken-swing X on a Phase 2 H1 chart.
+    """Render swing triangles + current-setup broken-swing X on a Phase 2 chart.
 
     SINGLE SOURCE: reads the persisted lb-3+ATR swing pool from dealing_range
     state (walls['swings']) — the exact swings Phase 1 renders. Phase 2 detects
     nothing itself. Each swing is positioned by ts using locate_ob_candle_idx
     (same df_h1 index frame as the sweep / FVG markers), then shifted to local
     plot x via window_start. Any failure is swallowed so a chart never breaks on
-    marker rendering. broken -> red X; else gold triangle."""
+    marker rendering. The X marks ONLY the swing whose break defined the current
+    setup — the one broken by the most recent BOS/CHoCH (last_event's
+    broken_swing_ts). Every other swing renders as its plain gold triangle."""
     try:
         import dealing_range as _dr
         pair_name = (pair_conf or {}).get('name')
@@ -562,8 +564,11 @@ def _p2_swing_markers(ax, df_h1, window_start, n, pair_conf, y_min, y_max):
         swings = smc_detector.swings_for_chart(walls)
         if not swings:
             return
+        # Which break matters is decided in dealing_range (the `is_setup_break`
+        # flag on the swing). Phase 2 does not re-derive it — it just reads it,
+        # exactly like the Phase 1 radar. One source, one decision.
         SWING_COLOR = '#d4a017'
-        BROKEN_COLOR = '#e74c3c'
+        SETUP_BREAK_COLOR = '#ffffff'  # max contrast on dark bg + red/green candles; bold X marker, distinct from the thin white price line
         offset = (y_max - y_min) * 0.012
         for s in swings:
             ts = s.get('ts')
@@ -576,9 +581,9 @@ def _p2_swing_markers(ax, df_h1, window_start, n, pair_conf, y_min, y_max):
             if not (0 <= xi < n):
                 continue
             price = s['price']
-            if s.get('broken'):
-                ax.scatter([xi], [price], marker='x', s=55,
-                           color=BROKEN_COLOR, linewidths=1.6, zorder=7)
+            if s.get('is_setup_break'):
+                ax.scatter([xi], [price], marker='x', s=70,
+                           color=SETUP_BREAK_COLOR, linewidths=2.0, zorder=8)
             elif s['type'] == 'high':
                 ax.scatter([xi], [price + offset], marker='v', s=42,
                            color=SWING_COLOR, edgecolors=SWING_COLOR,
