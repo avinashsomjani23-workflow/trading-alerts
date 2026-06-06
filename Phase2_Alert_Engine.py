@@ -476,13 +476,38 @@ def call_gemini_flash(pair, bias, news_headlines):
     last_err = "unknown"
     for attempt in range(3):
         try:
-            r = requests.post(url, json=body, timeout=20).json()
+            resp = requests.post(url, json=body, timeout=20)
+            r = resp.json()
             if "candidates" in r:
                 return json.loads(r["candidates"][0]["content"]["parts"][0]["text"].strip())
-            last_err = f"no candidates field, attempt {attempt + 1}"
+
+            # No candidates -> the body always says why. Capture the real reason
+            # instead of discarding it (a blind "no candidates field" string is
+            # what made every past failure undiagnosable).
+            if "error" in r:
+                code = r["error"].get("code", resp.status_code)
+                msg  = str(r["error"].get("message", ""))[:120]
+                last_err = f"API error {code}: {msg}"
+                # 429 (rate limit / quota) and 503 (overloaded) are transient.
+                # Back off so the per-minute window can reset — instant retries
+                # just keep us over the limit and burn quota. Anything else
+                # (bad key, bad request) is deterministic; retrying won't help.
+                if code in (429, 503) and attempt < 2:
+                    wait = 10 * (attempt + 1)  # 10s, then 20s
+                    print(f"  [GEMINI] {pair}: {code}, backing off {wait}s "
+                          f"(attempt {attempt + 1}/3)")
+                    time.sleep(wait)
+                    continue
+                break
+            elif r.get("promptFeedback", {}).get("blockReason"):
+                last_err = f"blocked: {r['promptFeedback']['blockReason']}"
+                break  # safety block is deterministic — same prompt, same result
+            else:
+                last_err = f"no candidates, unknown body: {str(r)[:120]}"
         except Exception as e:
             last_err = f"{type(e).__name__}: {str(e)[:80]}"
-            time.sleep(3)
+            if attempt < 2:
+                time.sleep(3)
 
     # All attempts failed — log and surface the failure HONESTLY to the
     # trader. Previously this returned a fake "safe" summary that read like
