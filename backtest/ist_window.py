@@ -8,10 +8,8 @@ Window (single source of truth, expressed in UTC):
   forex / commodity : 03:30 .. 18:30 UTC  (=  09:00 .. 24:00 IST)
   index             : 13:00 .. 20:00 UTC  (=  18:30 .. 01:30 IST)
 
-These are the same UTC bounds referenced in smc_detector._killzone_hit's
-docstring. Kept separate here because killzone is a *scoring confluence*
-inside the window; the IST gate is a *hard filter* that drops alerts
-fully outside the window.
+The IST gate is a *hard filter*: alerts that fall fully outside the
+trading window above are dropped.
 """
 
 from __future__ import annotations

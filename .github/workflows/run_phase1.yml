@@ -26,7 +26,7 @@ jobs:
           # P1 owns these files. yfinance_stale_log is shared with P2/P3 (append-only).
           # state/phase1_scans/ is a directory of monthly .jsonl diagnostic logs —
           # we stage anything under it so new/modified files all get committed.
-          ALL_FILES="active_obs.json emailed_zones.json email_gate.json yfinance_stale_log.json state/structure_state.json"
+          ALL_FILES="active_obs.json email_gate.json yfinance_stale_log.json state/structure_state.json"
           FILES=""
           for f in $ALL_FILES; do
             if [ -e "$f" ]; then FILES="$FILES $f"; fi

@@ -92,16 +92,6 @@ def _slice_closed_before(df: pd.DataFrame, wall_clock_ts: pd.Timestamp
     return df[df.index < wall_clock_ts]
 
 
-def _slice_up_to(df: pd.DataFrame, ts: pd.Timestamp) -> pd.DataFrame:
-    """Legacy inclusive slice. Retained for back-compat in helpers that
-    operate on already-closed history (e.g. mitigation replay where the
-    caller has already excluded the in-progress bar). Do NOT use for the
-    live P1 simulation slice — that must use _slice_closed_before."""
-    if df is None or df.empty:
-        return pd.DataFrame()
-    return df.loc[:ts]
-
-
 def _is_ob_mitigated_replay(direction: str, distal: float, proximal: float,
                             df_h1_slice: pd.DataFrame,
                             ob_ts: Optional[str]) -> Tuple[bool, str]:

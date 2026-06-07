@@ -273,24 +273,4 @@ def is_news_blackout(
 # Cache (file-backed, opt-in)
 # ---------------------------------------------------------------------------
 
-def cache_events(events_dict: Dict[str, Any], path: str) -> None:
-    """Serialise an events dict to JSON. Datetimes are isoformat strings."""
-    serialisable = {
-        "events": [
-            {**e, "ts_utc": e["ts_utc"].isoformat()}
-            for e in events_dict.get("events", [])
-        ],
-        "coverage": events_dict.get("coverage", {}),
-    }
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(serialisable, f, indent=2)
 
-
-def load_cached_events(path: str) -> Optional[Dict[str, Any]]:
-    if not os.path.exists(path):
-        return None
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    for e in data.get("events", []):
-        e["ts_utc"] = datetime.fromisoformat(e["ts_utc"])
-    return data

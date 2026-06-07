@@ -261,12 +261,7 @@ SWEEP_SCORE_BASE_MAX        = 1.5   # presence (wick + close-back, bias-aligned,
 SWEEP_SCORE_EQUAL_LEVEL_MAX = 0.5   # 0 / 0.25 / 0.5 for 0 / 1 / 2 prior matches in last 3 swings
 SWEEP_SCORE_REJECTION_MAX   = 1.0   # 0 / 0.33 / 0.66 / 1.0 for wick:body ratio < 1 / 1-2 / 2-3 / >3
 
-# INTERNAL — when both H1 and M15 sweeps are detected, M15 only outranks H1 if
-# it scores at least this multiple of the H1 score. Consumed by sweep scoring.
-SWEEP_M15_OVER_H1_BUFFER = 1.10
 
-
-# UNUSED — defined but no callsite anywhere. Safe to delete; left for now.
 def trading_hours_between(ts_earlier, ts_later):
     """
     Count Mon–Fri hours between two timestamps. Both treated as naive UTC.
@@ -1178,32 +1173,6 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     return best[2]
 
 
-# UNUSED — defined but no callsite anywhere. Safe to delete; left for now.
-def select_best_sweep(h1_result, m15_result):
-    """
-    Choose between H1 and M15 sweep results applying the M15-over-H1 buffer.
-
-    Rules:
-      - If neither has a score, return the H1 'none' shape.
-      - If only one has a score, return that one.
-      - If both have a score, M15 wins ONLY when m15_score > h1_score * BUFFER.
-        Otherwise H1 wins (default to higher TF).
-
-    Returns the chosen sweep dict.
-    """
-    h1_score  = h1_result.get('score', 0.0) if h1_result else 0.0
-    m15_score = m15_result.get('score', 0.0) if m15_result else 0.0
-    if h1_score == 0.0 and m15_score == 0.0:
-        return h1_result if h1_result else m15_result
-    if h1_score == 0.0:
-        return m15_result
-    if m15_score == 0.0:
-        return h1_result
-    if m15_score > h1_score * SWEEP_M15_OVER_H1_BUFFER:
-        return m15_result
-    return h1_result
-
-
 # NEW
 # NEW
 # SHARED P1+P2+P3 — 3-candle FVG detection inside a zone. Called by:
@@ -1435,54 +1404,6 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
     return _empty
 
 
-# UNUSED — defined but no callsite anywhere. Safe to delete; left for now.
-def find_m15_ob_inside_h1(df_m15, bias, h1_ob_high, h1_ob_low):
-    """
-    Find the most recent M15 order block nested inside the H1 OB zone.
-
-    Definition (SMC, applied to M15 inside the H1 OB zone):
-      Bullish OB (LONG bias)  -> most recent BEARISH (red) M15 candle whose
-                                 full high-to-low range sits strictly inside
-                                 [h1_ob_low, h1_ob_high].
-      Bearish OB (SHORT bias) -> most recent BULLISH (green) M15 candle whose
-                                 full high-to-low range sits strictly inside
-                                 [h1_ob_low, h1_ob_high].
-
-    Strict containment: candle high <= h1 high AND candle low >= h1 low.
-    Wicks must also fit; partial overlap rejects.
-
-    Returns dict {'high': float, 'low': float, 'idx': int, 'ts': ts} or None.
-    """
-    if df_m15 is None or len(df_m15) == 0:
-        return None
-    O = df_m15['Open'].values.astype(float)
-    H = df_m15['High'].values.astype(float)
-    L = df_m15['Low'].values.astype(float)
-    C = df_m15['Close'].values.astype(float)
-    # Scan backward — most recent first.
-    # Body-size filter mirrors Phase 1's is_valid_ob_candle (smc_radar.py:481):
-    # body must exceed 20% of candle range. Below that is near-doji territory
-    # with no directional intent — not a true OB.
-    for i in range(len(df_m15) - 1, -1, -1):
-        if not (L[i] >= h1_ob_low and H[i] <= h1_ob_high):
-            continue
-        rng = H[i] - L[i]
-        if rng <= 0:
-            continue
-        body = abs(C[i] - O[i])
-        if body <= rng * 0.20:
-            continue  # near-doji — skip, keep walking back
-        is_bearish = C[i] < O[i]
-        is_bullish = C[i] > O[i]
-        if bias == "LONG" and is_bearish:
-            return {'high': float(H[i]), 'low': float(L[i]),
-                    'idx': i, 'ts': df_m15.index[i]}
-        if bias == "SHORT" and is_bullish:
-            return {'high': float(H[i]), 'low': float(L[i]),
-                    'idx': i, 'ts': df_m15.index[i]}
-    return None
-
-
 # PHASE 2 ONLY — computes SL/TP1/TP2 from H1 structure.
 # (Phase 3 historically called this too. Phase 3 is disabled in the H1-only
 # migration; if it is ever re-enabled, this function's H1-only behaviour is
@@ -1632,41 +1553,6 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
             out["tp2_rr"] = round(abs(tp2 - entry) / risk, 2)
         # else: tp2 collapsed onto tp1 (or wrong side) -> emit no tp2.
     return out
-
-
-def _killzone_hit(utc_hour, pair_type):
-    """Kill zone windows in UTC. IST is for display only.
-
-    Tightened to discrete institutional windows. Dead hours (London lunch
-    10-12 UTC for Forex) excluded -- they used to inflate the confluence
-    score on low-quality setups.
-
-    Windows (UTC), aligned with config.json killzones_utc:
-      - Forex (EURUSD, USDCHF, USDJPY, NZDUSD): 07-10, 12-17
-      - Index (NAS100):                          13-21 (NY core, full session)
-      - Commodity (Gold):                        07-10, 12-21 (London + full NY)
-
-    Asymmetry rationale: Forex desks shut at London close (~17 UTC), so
-    the late-NY hours are dead for currency pairs. NAS and Gold are NY-
-    institutionally driven through cash close (~21 UTC), so we keep
-    scoring credit through that window.
-
-    NOTE: this function only controls the +0.5 score input. The hard
-    alert-suppression filter is config-driven via killzones_utc and lives
-    in backtest/killzone.py (and Phase 2 equivalents). USDJPY and NZDUSD
-    additionally allow an Asia-tail (03:30-07:00 UTC) hard-filter window
-    that this scoring function does NOT credit -- pair-type granularity
-    is too coarse to distinguish JPY/NZD from EUR/CHF. Asia-tail JPY/NZD
-    trades will fire as alerts but lose the +0.5 killzone confluence.
-    Trade-off chosen for simplicity over special-casing.
-    """
-    if pair_type == "forex":
-        return (7 <= utc_hour < 10) or (12 <= utc_hour < 17)
-    if pair_type == "commodity":
-        return (7 <= utc_hour < 10) or (12 <= utc_hour < 21)
-    if pair_type == "index":
-        return 13 <= utc_hour < 21
-    return False
 
 
 # PHASE 2 ONLY — sweep quality scorecard. Called only by Phase2_Alert_Engine.py.
@@ -2077,67 +1963,6 @@ def detect_ltf_choch(df_m5, bias, bounds):
     return {"fired": False, "level": None}
 
 
-# UNUSED — defined but no callsite anywhere. Safe to delete; left for now.
-def check_opposite_bos(pair_name, bias, since_ts=None):
-    """Return True if a structural event opposite to `bias` has fired since
-    `since_ts` for the given pair.
-
-    Reads from dealing_range structure_state.json — does NOT walk-forward.
-
-    What counts as "opposite structure":
-      - BOS in the opposite direction         -> True
-      - Major CHoCH in the opposite direction -> True
-    Minor CHoCH does NOT invalidate a zone (consistent with the locked rule
-    that Minor does not flip trend).
-
-    `bias`: 'LONG' or 'SHORT'.
-    `since_ts`: datetime (tz-aware or UTC-naive) — events with candle_ts >
-                since_ts qualify. None means "any event in the ring".
-    """
-    if bias not in ('LONG', 'SHORT'):
-        return False
-
-    try:
-        import dealing_range as _dr
-        state_all = _dr.load_state()
-        pair_state = state_all.get(pair_name) or {}
-    except Exception:
-        return False
-
-    events = pair_state.get('events', []) or []
-    if not events:
-        return False
-
-    opposite_dir = 'bearish' if bias == 'LONG' else 'bullish'
-
-    # Normalize since_ts to UTC-naive ISO string for direct comparison with
-    # the event ring's candle_ts (which is stored as ISO).
-    since_iso = None
-    if since_ts is not None:
-        try:
-            ts = since_ts
-            if hasattr(ts, 'tzinfo') and ts.tzinfo is not None:
-                ts = ts.astimezone(None).replace(tzinfo=None)
-            if hasattr(ts, 'isoformat'):
-                since_iso = ts.isoformat()
-        except Exception:
-            since_iso = None
-
-    for ev in events:
-        if ev.get('direction') != opposite_dir:
-            continue
-        kind = ev.get('type')
-        tier = ev.get('tier')
-        # Only BOS or Major CHoCH count as zone-killing structure.
-        if not (kind == 'BOS' or (kind == 'CHoCH' and tier == 'Major')):
-            continue
-        if since_iso is None:
-            return True
-        ev_ts = ev.get('candle_ts')
-        if ev_ts and ev_ts > since_iso:
-            return True
-
-    return False
 # SHARED P1+P2 — H1 break candle span for BOS distance. Phase 1 uses it for
 # context tagging; Phase 2 uses it for chart annotation. Phase 3 unaffected.
 def compute_h1_break_candle_span(df_h1, ob, h1_atr):

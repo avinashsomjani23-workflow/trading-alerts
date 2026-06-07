@@ -53,5 +53,3 @@ def detect_regime(start: str, end: str) -> Tuple[str, Optional[str]]:
     return "bau", None
 
 
-def regime_label_pretty(regime: str) -> str:
-    return {"war": "WAR regime", "bau": "BAU regime"}.get(regime, regime)

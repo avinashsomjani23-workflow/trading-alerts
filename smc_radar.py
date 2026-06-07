@@ -58,16 +58,16 @@ ZONE_PROXIMITY_THRESHOLDS = {
 }
 
 # ---------------------------------------------------------------------------
-# Two-OB system. OB1 (Primary) = closest bias-correct OB within
-# OB1_INNER_LIMIT_ATR x H1 ATR. OB2 (Alternative) = best Pristine OB in the
-# ring [OB1_INNER_LIMIT_ATR, OB2_OUTER_LIMIT_ATR] x H1 ATR. OB2 surfaces
-# the next zone above/below if price travels past OB1, even when no OB1
-# exists. OBs beyond OB2_OUTER_LIMIT_ATR are dropped at proximity_gate.
-# Phase 2 / Phase 3 only consume OB1 (primary). When price moves into OB2's
-# range, OB2 naturally re-classifies as OB1 on the next scan.
+# Two-OB system (single proximity window, no inner/outer ring, no trend gate).
+# Both surfaced OBs use ONE gate: proximal within OB_PROXIMITY_ATR x H1 ATR.
+# Selection: keep the nearest TWO OBs inside the window; on a tie/ranking,
+# Pristine (touches == 0) is preferred over Tested. No direction/trend gating —
+# buy and sell zones compete purely on distance + pristine-ness. Phase 2 fires
+# on whichever OBs are within its tighter gate (see Phase2_Alert_Engine).
+# OBs beyond OB_PROXIMITY_ATR are dropped at proximity_gate.
 # ---------------------------------------------------------------------------
-OB1_INNER_LIMIT_ATR = 4.0
-OB2_OUTER_LIMIT_ATR = 12.0
+OB_PROXIMITY_ATR = 5.0   # Phase 1 surfacing window (both OBs)
+OB_MAX_KEEP = 2          # hard cap on surfaced OBs
 
 # ---------------------------------------------------------------------------
 # STALENESS THRESHOLDS (B3)
@@ -82,11 +82,6 @@ STALENESS_HOURS = {
 # EMAIL GATE CONFIG (B6) — state-based timer
 # ---------------------------------------------------------------------------
 EMAIL_GATE_MINUTES = 100  # Email sent if ≥100 min since last email
-
-# ---------------------------------------------------------------------------
-# STATE COMPACTION (B7)
-# ---------------------------------------------------------------------------
-ZONE_MAX_AGE_DAYS = 14  # Drop zones whose last_seen is older than this
 
 # ---------------------------------------------------------------------------
 # OB PERSISTENCE — hard age cap on slate OBs
@@ -108,13 +103,6 @@ OB_MAX_AGE_DAYS = 15
 def get_ist_now():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
-def get_day_start_ist():
-    """Return today's 09:00 IST as isoformat string — daily slate boundary."""
-    now = get_ist_now()
-    if now.hour >= 9:
-        return now.replace(hour=9, minute=0, second=0, microsecond=0).isoformat()
-    else:
-        return (now - timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0).isoformat()
 
 # ---------------------------------------------------------------------------
 # ATOMIC SAVE (A3) + LOGGING HELPERS (B3)
@@ -353,76 +341,6 @@ def _check_staleness(df, interval):
 # ZONE STATE PERSISTENCE
 # ---------------------------------------------------------------------------
 
-def load_zone_state():
-    return load_json_safe("emailed_zones.json", {})
-
-
-def save_zone_state(state):
-    save_json_atomic("emailed_zones.json", state)
-
-
-def zones_match(ob, stored, pair_type):
-    if ob["direction"] != stored["direction"]:
-        return False
-    threshold = ZONE_PROXIMITY_THRESHOLDS.get(pair_type, 0.0003)
-    return abs(ob["proximal_line"] - stored["proximal"]) <= threshold
-
-
-def detect_zone_changes(ob, stored, dp):
-    changes = []
-    if ob["touches"] > stored["touches"]:
-        diff = ob["touches"] - stored["touches"]
-        new_status = ob["status"]
-        changes.append(f"New touch detected (+{diff}). Status now: {new_status}.")
-    if ob["fvg"]["exists"] != stored["fvg_valid"]:
-        if not ob["fvg"]["exists"] and stored["fvg_valid"]:
-            changes.append("FVG mitigated since last scan.")
-        elif ob["fvg"]["exists"] and not stored["fvg_valid"]:
-            changes.append("FVG now confirmed (was absent).")
-    return changes
-
-
-def compact_zone_state(zone_state):
-    """
-    B7: Drop zones whose last_seen is older than ZONE_MAX_AGE_DAYS.
-    Keeps counter keys and __day__ marker intact.
-    """
-    cutoff = get_ist_now() - timedelta(days=ZONE_MAX_AGE_DAYS)
-    removed_count = 0
-
-    for key in list(zone_state.keys()):
-        if key.startswith("__"):
-            continue
-        if not isinstance(zone_state[key], list):
-            continue
-
-        kept = []
-        for z in zone_state[key]:
-            last_seen_str = z.get("last_seen_ist") or z.get("first_seen_ist")
-            if not last_seen_str:
-                kept.append(z)
-                continue
-            # last_seen_ist stored as "HH:MM IST" label, not full ISO, so
-            # fall back to first_seen_ist if stored as ISO, else keep.
-            try:
-                if "T" in last_seen_str:
-                    last_dt = datetime.fromisoformat(last_seen_str)
-                    if last_dt < cutoff:
-                        removed_count += 1
-                        continue
-                # Label format "HH:MM IST" — cannot age-test; keep
-                kept.append(z)
-            except Exception:
-                kept.append(z)
-
-        if kept:
-            zone_state[key] = kept
-        else:
-            del zone_state[key]
-
-    if removed_count > 0:
-        logging.info(f"Compaction: removed {removed_count} stale zones.")
-        print(f"  [COMPACT] Removed {removed_count} zones older than {ZONE_MAX_AGE_DAYS} days.")
 
 # ---------------------------------------------------------------------------
 # ZONE REFERENCE ID
@@ -433,17 +351,6 @@ ZONE_ID_PREFIX = {
     "USDCHF": "CHF", "NAS100": "NAS", "GOLD":   "XAU"
 }
 
-def get_next_zone_id(zone_state, name):
-    counter_key = f"__counter_{name}__"
-    current = zone_state.get(counter_key, 0) + 1
-    zone_state[counter_key] = current
-    prefix = ZONE_ID_PREFIX.get(name, name[:3].upper())
-    return f"{prefix}{current:02d}"
-
-def reset_daily_counters(zone_state, names):
-    for name in names:
-        counter_key = f"__counter_{name}__"
-        zone_state[counter_key] = 0
 
 # ---------------------------------------------------------------------------
 # DATA FETCH WITH RETRY + STALENESS (B3, B5)
@@ -745,20 +652,18 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         diag['ob_proximal'] = ob_proximal
         diag['ob_distal'] = ob_low if ev_dir == 'bullish' else ob_high
 
-        # Proximity gate. Two-OB system: keep OBs out to OB2_OUTER_LIMIT_ATR
-        # so the outer-ring (alternative) OB is preserved. The OB1 vs OB2
-        # split happens post-dedupe via _split_primary_alternative below.
-        # Anything beyond OB2_OUTER_LIMIT_ATR is dropped — those OBs aren't
-        # actionable in the current chart context regardless of quality.
+        # Proximity gate. Single window: drop any OB whose proximal sits beyond
+        # OB_PROXIMITY_ATR from current price. The nearest-two selection (with
+        # pristine preference) happens post-dedupe via _split_primary_alternative.
         if h1_atr_for_leg and h1_atr_for_leg > 0:
-            if abs(current_price_now - ob_proximal) > OB2_OUTER_LIMIT_ATR * h1_atr_for_leg:
+            if abs(current_price_now - ob_proximal) > OB_PROXIMITY_ATR * h1_atr_for_leg:
                 diag['drop_gate'] = 'proximity_gate'
                 diag['drop_detail'] = {
                     'ob_proximal': ob_proximal,
                     'current_price': current_price_now,
                     'h1_atr': float(h1_atr_for_leg),
                     'distance_atr': abs(current_price_now - ob_proximal) / h1_atr_for_leg,
-                    'limit_atr': OB2_OUTER_LIMIT_ATR,
+                    'limit_atr': OB_PROXIMITY_ATR,
                 }
                 ob_build_diagnostics.append(diag)
                 print(_diag_short(diag))
@@ -994,22 +899,12 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
 
     filtered = _dedupe_same_leg(filtered)
 
-    # Two-OB split per direction.
-    #   OB1 (Primary):     bias-correct OB closest to current price within
-    #                      OB1_INNER_LIMIT_ATR x H1 ATR. Touch state ignored
-    #                      (current behaviour preserved — Pristine or Tested
-    #                      both qualify; closest wins).
-    #   OB2 (Alternative): best Pristine OB in the outer ring
-    #                      (OB1_INNER_LIMIT_ATR, OB2_OUTER_LIMIT_ATR] x H1 ATR.
-    #                      Same direction as bias. Tested OBs do not qualify.
-    #                      Pick by confluence count, freshness tiebreak. OB2
-    #                      surfaces independently of OB1 — when no OB1 exists,
-    #                      OB2 still shows.
-    # Each OB carries 'role' = 'primary' | 'alternative' for downstream
-    # consumers (Phase 2/3 only consume primary; chart renders both).
+    # Surface the nearest two OBs within OB_PROXIMITY_ATR of price, any
+    # direction, pristine preferred on ties. No trend gating. Each kept OB
+    # carries 'role' = 'primary' (nearest) | 'alternative' (next) for
+    # downstream consumers (chart renders both; Phase 2 fires per its own gate).
     cur_price = float(C[-1])
-    h1_trend = (walls or {}).get('trend')  # 'bullish' | 'bearish' | None
-    filtered = _split_primary_alternative(filtered, cur_price, h1_trend)
+    filtered = _split_primary_alternative(filtered, cur_price)
 
     # Strip the private dedupe hint before returning.
     for o in filtered:
@@ -1049,67 +944,33 @@ def _count_confluences(ob):
     return n
 
 
-def _split_primary_alternative(obs, cur_price, h1_trend=None):
+def _split_primary_alternative(obs, cur_price):
     """
-    Pick one global OB1 (Primary) + one global OB2 (Alternative) across ALL
-    directions. No type filter — buy and sell zones compete together.
+    Surface the nearest TWO OBs within OB_PROXIMITY_ATR of current price, across
+    ALL directions (buy and sell zones compete together — no trend gating).
 
-    OB1: closest OB of any type to current price, within OB1_INNER_LIMIT_ATR
-         x H1 ATR. Pristine or Tested both qualify.
-
-    OB2: best Pristine OB (touches == 0) in the outer ring
-         (OB1_INNER_LIMIT_ATR, OB2_OUTER_LIMIT_ATR] x H1 ATR, excluding
-         whatever was picked as OB1. Sort key: confluence count desc, then
-         trend alignment (with-trend preferred), then freshness (bos_idx desc).
-
-    OB2 is independent of OB1 — may be a different direction. OB2 surfaces
-    even when no OB1 exists.
+    Selection: rank every in-window OB by distance to price (nearest first);
+    on equal distance, Pristine (touches == 0) is preferred over Tested. Keep
+    up to OB_MAX_KEEP. The nearest kept OB is tagged 'primary', the next
+    'alternative' — role is positional only (Phase 2 fires on whichever OBs
+    fall inside its own tighter gate).
     """
-    primary = None
-    primary_dist_atr = None
-    alt_candidates = []
-
+    in_window = []
     for ob in obs:
         atr = float(ob.get('h1_atr') or 0.0)
         if atr <= 0:
             continue
-        dist = abs(cur_price - float(ob['proximal_line']))
-        dist_atr = dist / atr
+        dist_atr = abs(cur_price - float(ob['proximal_line'])) / atr
         ob['_distance_atr'] = round(dist_atr, 3)
+        if dist_atr <= OB_PROXIMITY_ATR:
+            in_window.append(ob)
 
-        if dist_atr <= OB1_INNER_LIMIT_ATR:
-            if primary is None or dist_atr < primary_dist_atr:
-                primary = ob
-                primary_dist_atr = dist_atr
-        elif dist_atr <= OB2_OUTER_LIMIT_ATR:
-            if int(ob.get('touches', 0)) == 0:
-                alt_candidates.append(ob)
+    # Nearest first; pristine breaks ties (touches asc => 0 before >0).
+    in_window.sort(key=lambda o: (o['_distance_atr'], int(o.get('touches', 0))))
 
-    kept = []
-    if primary is not None:
-        primary['role'] = 'primary'
-        kept.append(primary)
-
-    # Exclude OB1 from alt pool (by zone_id if available, else by identity).
-    primary_id = (primary or {}).get('zone_id')
-    if primary_id:
-        alt_candidates = [o for o in alt_candidates if o.get('zone_id') != primary_id]
-    elif primary is not None:
-        alt_candidates = [o for o in alt_candidates if o is not primary]
-
-    if alt_candidates:
-        def _alt_sort_key(o):
-            confluences = _count_confluences(o)
-            # With-trend scores 1, against-trend or unknown scores 0.
-            with_trend = 1 if (h1_trend and o.get('direction') == h1_trend) else 0
-            freshness = int(o.get('bos_idx', 0))
-            return (confluences, with_trend, freshness)
-
-        alt_candidates.sort(key=_alt_sort_key, reverse=True)
-        alt = alt_candidates[0]
-        alt['role'] = 'alternative'
-        kept.append(alt)
-
+    kept = in_window[:OB_MAX_KEEP]
+    for i, ob in enumerate(kept):
+        ob['role'] = 'primary' if i == 0 else 'alternative'
     return kept
 
 # ---------------------------------------------------------------------------
@@ -1920,133 +1781,10 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
 # GEMINI NARRATIVE
 # ---------------------------------------------------------------------------
 
-def generate_zone_narrative(ob, name, dp, current_price):
-    if not GEMINI_API_KEY:
-        return _fallback_narrative(ob, name, dp, current_price)
-
-    direction    = "bullish demand" if ob['direction'] == 'bullish' else "bearish supply"
-    proximal     = ob['proximal_line']
-    distal       = ob['distal_line']
-    pip_unit     = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
-    zone_pips    = round(abs(proximal - distal) / pip_unit, 1)
-    dist_pips    = round(abs(current_price - proximal) / pip_unit, 1)
-    if ob['fvg'].get('exists'):
-        mit = ob['fvg'].get('mitigation', 'pristine')
-        if mit == 'partial':
-            fvg_status = (
-                f"partially mitigated FVG between {ob['fvg']['fvg_bottom']:.{dp}f} "
-                f"and {ob['fvg']['fvg_top']:.{dp}f} (price tagged proximal, distal intact)"
-            )
-        else:
-            fvg_status = (
-                f"pristine FVG between {ob['fvg']['fvg_bottom']:.{dp}f} "
-                f"and {ob['fvg']['fvg_top']:.{dp}f}"
-            )
-    elif ob['fvg'].get('was_detected'):
-        fvg_status = "FVG fully mitigated — zone relies on OB alone"
-    else:
-        fvg_status = "no FVG present"
-    ratio        = round(ob['ob_body'] / ob['median_leg_body'], 2) if ob['median_leg_body'] > 0 else 0
-
-    event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
-    logging.info(f"[OB_BODY_RATIO] {name} zone {ob.get('zone_id','?')}: ob_body={ob['ob_body']:.{dp}f} median_leg={ob['median_leg_body']:.{dp}f} ratio={ratio}x")
-    prompt = f"""You are a veteran SMC (Smart Money Concepts) prop trader writing a zone briefing for another experienced SMC trader.
-Be direct. No fluff. No pleasantries. Four sentences only. One paragraph.
-
-ZONE DATA — use these exact values, do not recalculate:
-- Pair: {name}
-- Bias: {direction} | Structure event: {event_label}
-- Proximal: {proximal:.{dp}f} | Distal: {distal:.{dp}f}
-- Zone width: {zone_pips} pips
-- FVG: {fvg_status}
-- Zone status: {ob['status']}
-- Current price: {current_price:.{dp}f} | Distance to proximal: {dist_pips} pips
-
-WRITE EXACTLY FOUR SENTENCES IN THIS ORDER:
-1. What structure event ({event_label}) created this zone and why institutional accumulation is likely here.
-2. OB quality: assess whether pristine or tested means strength or caution.
-3. FVG assessment: displacement confirmation present or absent, and what that means for zone conviction.
-4. Current price context: distance to zone ({dist_pips} pips), whether price is approaching or far, and what to watch for.
-
-STRICT OUTPUT RULES:
-- Plain text only
-- No bullet points, no headers, no markdown, no bold, no numbers
-- Four sentences, one paragraph
-- Do not repeat the zone levels in every sentence"""
-
-    try:
-        model    = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.3,
-                max_output_tokens=300,
-                thinking_config=genai.types.ThinkingConfig(thinking_budget=0)
-            )
-        )
-        response = model.generate_content(prompt)
-        text     = response.text.strip()
-        if len(text) < 50:
-            return _fallback_narrative(ob, name, dp, current_price)
-        return text
-    except Exception as e:
-        logging.error(f"Gemini narrative error for {name}: {e}")
-        return _fallback_narrative(ob, name, dp, current_price)
-
-
-def _fallback_narrative(ob, name, dp, current_price):
-    pip_unit  = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
-    dist_pips = round(abs(current_price - ob['proximal_line']) / pip_unit, 1)
-    if ob['fvg'].get('exists'):
-        mit = ob['fvg'].get('mitigation', 'pristine')
-        if mit == 'partial':
-            fvg_line = (
-                f"FVG partially mitigated between {ob['fvg']['fvg_bottom']:.{dp}f}–{ob['fvg']['fvg_top']:.{dp}f} "
-                f"— proximal tagged, distal still intact."
-            )
-        else:
-            fvg_line = (
-                f"FVG confirmed between {ob['fvg']['fvg_bottom']:.{dp}f}–{ob['fvg']['fvg_top']:.{dp}f}, "
-                f"adding displacement confluence."
-            )
-    elif ob['fvg'].get('was_detected'):
-        fvg_line = "FVG fully mitigated — zone relies on OB alone for confluence."
-    else:
-        fvg_line = "No FVG present — zone relies on OB alone for confluence."
-    event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
-    logging.info(f"[OB_BODY_RATIO] {name} zone {ob.get('zone_id','?')}: ob_body={ob['ob_body']:.{dp}f} median_leg={ob['median_leg_body']:.{dp}f} ratio={round(ob['ob_body']/ob['median_leg_body'],2):.2f}x (fallback narrative)")
-    return (
-        f"{event_label} confirmed the {ob['direction']} shift. "
-        f"{fvg_line} "
-        f"Current price is {dist_pips} pips from proximal — "
-        f"{'approaching zone, watch for reaction.' if dist_pips < 50 else 'still distant, no action yet.'}"
-    )
 
 # ---------------------------------------------------------------------------
 # EMAIL ASSEMBLY
 # ---------------------------------------------------------------------------
-
-def _format_dr_walls_cell(walls):
-    """Render the DR Walls cell. Per-wall anchored/placeholder status."""
-    if not walls or not isinstance(walls, dict):
-        return "<span style='color:#888;'>&mdash;</span>"
-    if walls.get("fallback_active"):
-        return "<span style='color:#e74c3c;'>&#9888; Fallback</span>"
-    ceiling_ph = walls.get("ceiling_is_placeholder", True)
-    floor_ph   = walls.get("floor_is_placeholder", True)
-    if not ceiling_ph and not floor_ph:
-        return "<span style='color:#27ae60;'>&#10003; Both anchored</span>"
-    if ceiling_ph and floor_ph:
-        return "<span style='color:#e67e22;'>&#9888; Both placeholder</span>"
-    if ceiling_ph:
-        # Ceiling tentative, floor anchored.
-        return (
-            "<span style='color:#e67e22;'>&#9888; Ceiling placeholder</span>"
-            "<span style='color:#666;font-size:10px;'>&nbsp;/ floor anchored</span>"
-        )
-    return (
-        "<span style='color:#e67e22;'>&#9888; Floor placeholder</span>"
-        "<span style='color:#666;font-size:10px;'>&nbsp;/ ceiling anchored</span>"
-    )
 
 
 def _walls_icon_cell(walls):
@@ -2261,67 +1999,6 @@ def _render_sweep_observation_html(sweep_obs, dp):
         f"{tier_emoji} {tier.title()}</span>"
     )
 
-
-def build_new_zone_card_html(ob, name, dp, narrative, cid, ist_timestamp, zone_id="—"):
-    direction  = "Bullish (Demand)" if ob['direction'] == 'bullish' else "Bearish (Supply)"
-    dir_color  = '#27ae60' if ob['direction'] == 'bullish' else '#e74c3c'
-    stat_color = '#27ae60' if 'Pristine' in ob['status'] else '#e67e22'
-    mit = ob['fvg'].get('mitigation', 'none')
-    if ob['fvg'].get('exists') and mit == 'partial':
-        fvg_line = "FVG: <span style='color:#f1c40f;'>◐ Partial</span>"
-    elif ob['fvg'].get('exists'):
-        fvg_line = "FVG: <span style='color:#27ae60;'>✓ Pristine</span>"
-    elif ob['fvg'].get('was_detected'):
-        fvg_line = "FVG: <span style='color:#888;'>✗ Mitigated</span>"
-    else:
-        fvg_line = "FVG: <span style='color:#888;'>None</span>"
-
-    # Sweep observation badge — Phase 1 snapshot. Same render path used by
-    # build_active_zone_card_html for consistency across NEW and active cards.
-    sweep_line = _render_sweep_observation_html(ob.get('sweep_observed'), dp)
-
-    pip_unit  = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
-    zone_pips = round(abs(ob['proximal_line'] - ob['distal_line']) / pip_unit, 1)
-
-    chart_html = (
-        f'<img src="cid:{cid}" style="width:100%;max-width:600px;border-radius:6px;'
-        f'border:1px solid #2a2a3e;display:block;" />'
-        if cid else
-        '<div style="padding:8px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:11px;">&#9888; Chart failed to render.</div>'
-    )
-    # Legend rendered ONCE at the end of the email (see send_master_digest_v2),
-    # not per-card — frees up vertical space on phones.
-
-    return f"""
-    <div style="margin-bottom:28px;padding:16px;background:#1a1a2e;border-radius:8px;
-                border-left:4px solid {dir_color};">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;
-                  margin-bottom:10px;flex-wrap:wrap;gap:6px;">
-        <div>
-          <span style="font-size:10px;color:#888;font-family:monospace;margin-right:6px;">{zone_id}</span>
-          <span style="font-size:14px;font-weight:bold;color:#eee;">{name}</span>
-          <span style="font-size:12px;color:{dir_color};margin-left:8px;">{direction}</span>
-          <span style="background:#27ae60;color:#fff;font-size:9px;padding:2px 6px;
-                       border-radius:3px;margin-left:6px;font-weight:bold;">NEW</span>
-        </div>
-        <span style="font-size:10px;color:#666;">{ist_timestamp} IST</span>
-      </div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;">
-        <span style="font-size:11px;color:#aaa;">
-          <b>Width</b> {zone_pips} pips
-        </span>
-        <span style="font-size:11px;color:{stat_color};">
-          <b>Status</b> {ob['status']}
-        </span>
-        <span style="font-size:11px;color:#aaa;">{fvg_line}</span>
-        <span style="font-size:11px;color:#aaa;">{sweep_line}</span>
-      </div>
-      <p style="font-size:12px;color:#bbb;line-height:1.6;margin:0 0 12px 0;
-                border-left:3px solid #2a2a3e;padding-left:10px;">
-        {narrative}
-      </p>
-      {chart_html}
-    </div>"""
 
 def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
                                  current_price=None, in_progress=False):
@@ -2711,8 +2388,8 @@ def build_zone_changed_notice_html(prev_zone_id, new_zone_id, prev_zone_status, 
 
 def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
     """
-    Wrapper around generate_zone_narrative that injects H1 ATR into the prompt
-    and fallback. Calls Gemini with ATR-aware prompt; falls back to local
+    Generates the LLM zone narrative with H1 ATR injected into the prompt.
+    Calls Gemini with the ATR-aware prompt; falls back to the local
     narrative on failure.
     """
     if not GEMINI_API_KEY:
@@ -2835,133 +2512,7 @@ def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr):
         f"{fvg_line} "
         f"{distance_line}"
     )
-def build_changed_zone_html(stored_zone, changes, name, dp, cid=None):
-    direction = "Bullish" if stored_zone['direction'] == 'bullish' else "Bearish"
-    dir_color = '#27ae60' if stored_zone['direction'] == 'bullish' else '#e74c3c'
-    change_items = "".join(
-        f'<li style="margin:3px 0;color:#e0c080;">{c}</li>' for c in changes
-    )
-    zone_id = stored_zone.get('zone_id', '—')
-    chart_html = (
-        f'<img src="cid:{cid}" style="width:100%;max-width:600px;border-radius:6px;'
-        f'border:1px solid #2a2a3e;display:block;margin-top:10px;" />'
-        if cid else ''
-    )
-    return f"""
-    <div style="margin-bottom:16px;padding:12px 14px;background:#2d2a1a;
-                border-left:4px solid #e67e22;border-radius:6px;">
-      <div style="margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <span style="font-size:10px;color:#888;font-family:monospace;">{zone_id}</span>
-        <span style="font-size:12px;font-weight:bold;color:#eee;">{name}</span>
-        <span style="font-size:11px;color:{dir_color};">{direction}</span>
-        <span style="background:#e67e22;color:#fff;font-size:9px;padding:1px 5px;
-                     border-radius:3px;">UPDATE</span>
-        <span style="font-size:11px;color:#888;font-family:monospace;">
-          {stored_zone['proximal']:.{dp}f} / {stored_zone['distal']:.{dp}f}
-        </span>
-      </div>
-      <ul style="margin:0;padding-left:16px;font-size:11px;line-height:1.7;">
-        {change_items}
-      </ul>
-      {chart_html}
-    </div>"""
 
-
-def build_repeat_zone_html(stored_zone, name, dp):
-    direction = "Bullish" if stored_zone['direction'] == 'bullish' else "Bearish"
-    dir_color = '#27ae60' if stored_zone['direction'] == 'bullish' else '#e74c3c'
-    return f"""
-    <div style="margin-bottom:6px;padding:7px 10px;background:#111827;
-                border-left:3px solid #2a2a3e;border-radius:3px;">
-      <span style="font-size:10px;color:#666;font-family:monospace;margin-right:6px;">{stored_zone.get('zone_id','—')}</span>
-      <span style="font-size:11px;font-weight:bold;color:#aaa;">{name}</span>
-      <span style="font-size:11px;color:{dir_color};margin-left:6px;">{direction}</span>
-      <span style="font-size:11px;color:#666;margin-left:6px;font-family:monospace;">
-        {stored_zone['proximal']:.{dp}f} / {stored_zone['distal']:.{dp}f}
-      </span>
-      <span style="font-size:10px;color:#555;margin-left:8px;">
-        since {stored_zone['first_seen_ist']} · unchanged
-      </span>
-    </div>"""
-
-
-def send_master_digest(summary_table_html, new_zone_cards, changed_zone_blocks,
-                       repeat_zone_lines, attachments, zone_count, ist_time):
-    new_cards_html     = "".join(new_zone_cards)
-    changed_block_html = "".join(changed_zone_blocks)
-    repeat_html        = "".join(repeat_zone_lines)
-
-    sections = ""
-    if new_zone_cards:
-        sections += f"""
-        <div style="margin-bottom:20px;">
-          <h3 style="color:#27ae60;font-size:12px;letter-spacing:1px;margin:0 0 10px 0;
-                     text-transform:uppercase;border-bottom:1px solid #1e3a2f;padding-bottom:6px;">
-            New Zones ({len(new_zone_cards)})
-          </h3>
-          {new_cards_html}
-        </div>"""
-
-    if changed_zone_blocks:
-        sections += f"""
-        <div style="margin-bottom:20px;">
-          <h3 style="color:#e67e22;font-size:12px;letter-spacing:1px;margin:0 0 10px 0;
-                     text-transform:uppercase;border-bottom:1px solid #2d2a1a;padding-bottom:6px;">
-            Zone Updates ({len(changed_zone_blocks)})
-          </h3>
-          {changed_block_html}
-        </div>"""
-
-    if repeat_zone_lines:
-        sections += f"""
-        <div style="margin-bottom:8px;">
-          <h3 style="color:#555;font-size:11px;letter-spacing:1px;margin:0 0 8px 0;
-                     text-transform:uppercase;">
-            Active · Unchanged ({len(repeat_zone_lines)})
-          </h3>
-          {repeat_html}
-        </div>"""
-
-    master_html = f"""<html>
-<body style="font-family:Arial,sans-serif;background:#0d0d1a;padding:16px;margin:0;">
-<div style="max-width:650px;margin:auto;background:#13131f;border-radius:10px;
-            overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.4);">
-  <div style="background:#0d0d1a;padding:18px 20px;border-bottom:1px solid #1a1a2e;">
-    <h2 style="color:#eee;margin:0;font-size:18px;letter-spacing:1px;">
-      PHASE 1 SCOUT DIGEST
-    </h2>
-    <p style="color:#555;margin:4px 0 0;font-size:11px;">
-      {zone_count} active zones · updated {ist_time} IST
-    </p>
-  </div>
-  <div style="padding:18px 20px;">
-    {summary_table_html}
-    {sections}
-  </div>
-  <div style="background:#0d0d1a;padding:12px 20px;border-top:1px solid #1a1a2e;text-align:center;">
-    <p style="color:#333;font-size:10px;margin:0;">
-      SMC Alert Engine v2.0 · Institutional Order Flow · {ist_time} IST
-    </p>
-  </div>
-</div>
-</body></html>"""
-
-    msg           = MIMEMultipart("related")
-    msg['From']   = EMAIL_CONFIG['sender']
-    msg['To']     = ", ".join(EMAIL_CONFIG['recipient'])
-    msg['Subject']= f"Scout Digest | {zone_count} Zones | {ist_time}"
-    msg.attach(MIMEText(master_html, 'html'))
-    for img in attachments:
-        msg.attach(img)
-
-    with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
-        server.starttls()
-        server.login(EMAIL_CONFIG['sender'], EMAIL_CONFIG['password'])
-        server.sendmail(EMAIL_CONFIG['sender'], EMAIL_CONFIG['recipient'], msg.as_string())
-
-    logging.info(f"Digest sent: {zone_count} zones, {len(new_zone_cards)} new, "
-                 f"{len(changed_zone_blocks)} updated, {len(repeat_zone_lines)} unchanged.")
-    print(f"Digest sent: {zone_count} zones total.")
 
 # ---------------------------------------------------------------------------
 # MAIN RUNNER
@@ -3200,17 +2751,6 @@ def load_slate():
 
 def save_slate(slate):
     save_json_atomic(SLATE_FILE, slate)
-
-
-def init_fresh_slate(ist_now, pair_names):
-    """Build empty slate for a new trading day. Counters at zero per pair."""
-    return {
-        "slate_date": ist_now.strftime('%Y-%m-%d'),
-        "slate_started_iso": ist_now.isoformat(),
-        "pairs": {name: {"next_id_counter": 0, "zones": [],
-                          "last_displayed_zone_id": None}
-                  for name in pair_names}
-    }
 
 
 def find_matching_slate_zone(fresh_zone, slate_zones, pair_type):
@@ -3494,13 +3034,13 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
             pass  # if we can't compare, fall through to other checks
 
     # --- out_of_proximity ---
-    # Drop zones that have drifted beyond OB2_OUTER_LIMIT_ATR from current
-    # price. Replaces the daily slate wipe's cleanup of distant zones.
+    # Drop zones that have drifted beyond OB_PROXIMITY_ATR from current price.
+    # Replaces the daily slate wipe's cleanup of distant zones.
     # Only fires when h1_atr is known and positive.
     if h1_atr and h1_atr > 0 and current_price is not None:
         proximal = slate_zone.get('proximal_line')
         if proximal is not None:
-            if abs(current_price - proximal) > OB2_OUTER_LIMIT_ATR * h1_atr:
+            if abs(current_price - proximal) > OB_PROXIMITY_ATR * h1_atr:
                 return 'out_of_proximity'
 
     # --- mitigated_distal_break / mitigated_three_touches ---

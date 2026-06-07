@@ -94,6 +94,3 @@ def log_event(event: Dict[str, Any]) -> None:
         pass
 
 
-def log_event_safe(event: Dict[str, Any]) -> None:
-    """Public alias used by callers that prefer an explicit 'safe' name."""
-    log_event(event)
