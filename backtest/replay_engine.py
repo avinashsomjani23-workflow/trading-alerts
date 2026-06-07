@@ -1,15 +1,15 @@
 """Bar-by-bar H1 replay through live SMC detection modules.
 
 Walks H1 candles one at a time. At each H1 close, slices H1 data up to that
-bar and calls the live `dealing_range.update_pair` and
+bar and calls the live `smc_radar.compute_pair_walls` and
 `smc_radar.detect_smc_radar` functions to get OBs that would have existed at
 that moment.
 
 Hard rule: every slice asserted to end at or before the replay timestamp.
 Lookahead = bug.
 
-State (dealing_range walls, event ring) is kept in-memory per pair and
-threaded through update_pair calls — never written to live JSON.
+State (structure walls, event ring) is recomputed per pair from each H1 slice
+(compute_structure is stateless) and kept in-memory — never written to live JSON.
 """
 
 from __future__ import annotations
@@ -29,8 +29,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-import dealing_range          # live module — read-only use
-import smc_radar              # live module — read-only use
+import smc_radar              # live module — read-only use (compute_pair_walls + detect_smc_radar)
 import smc_detector           # live module — read-only use
 
 from backtest.run_logger import log_event
@@ -188,11 +187,14 @@ def replay_pair(
         just_closed = h1_slice.iloc[-1]
         just_closed_ts = h1_slice.index[-1]
 
-        # --- Step 1: update dealing_range walls + event ring -----------------
+        # --- Step 1: build structure + dealing-range state -------------------
+        # Mirror live Phase 1 exactly: smc_radar.compute_pair_walls runs the H4
+        # range + v2 structure engine and returns the same `walls` dict the live
+        # scan persists. compute_structure is pure (recomputes from the whole
+        # slice each bar), so there is no incremental state to thread — dr_state
+        # just holds the latest snapshot for parity with live.
         try:
-            new_state = dealing_range.update_pair(
-                h1_slice, state.dr_state.get(pair_name), pair_conf
-            )
+            new_state = smc_radar.compute_pair_walls(h1_slice, pair_name)
             state.dr_state[pair_name] = new_state
         except Exception as e:
             # Detection errors shouldn't abort the whole walk — log and skip bar.
@@ -202,11 +204,9 @@ def replay_pair(
                       error=f"{type(e).__name__}: {e}")
             continue
 
-        # dealing_range.update_pair returns the walls state dict at the top
-        # level (ceiling_price, floor_price, trend, events, ...). Live smc_radar
-        # passes the whole state as `walls=` and reads events from state['events'].
-        # Earlier code looked for non-existent sub-keys 'walls' and 'event_ring'
-        # which silently passed empty events → 0 OBs → 0 alerts on every run.
+        # `walls` carries ceiling_price, floor_price, trend, events, swings, ...
+        # Live smc_radar passes the whole dict as `walls=` and reads the event
+        # ring from walls['events'].
         walls = new_state or {}
         events = walls.get("events", [])
         if events:
@@ -465,15 +465,15 @@ def _normalize_obs_result(result: Any) -> List[Dict[str, Any]]:
 
     Live return shape (confirmed from source):
       {"current_price": float,
-       "active_unmitigated_obs": [ob, ...],
+       "active_zones": [ob, ...],
        "ob_build_diagnostics": [...]}
     """
     if result is None:
         return []
     if isinstance(result, dict):
         # Primary shape used by live smc_radar.detect_smc_radar
-        if "active_unmitigated_obs" in result:
-            obs = result["active_unmitigated_obs"]
+        if "active_zones" in result:
+            obs = result["active_zones"]
             if isinstance(obs, list):
                 return [o for o in obs if isinstance(o, dict) and o.get("proximal_line")]
         # Fallback shapes (future-proofing)

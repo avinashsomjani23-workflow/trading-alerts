@@ -10,7 +10,6 @@ import google.generativeai as genai
 import smc_detector
 import dealing_range
 import h4_range  # H4-derived dealing range (built from H1, mapped onto H1)
-import structure_engine  # single CHoCH / BOS / transition engine (drives the H1 trend banner)
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -233,15 +232,10 @@ def _backfill_phase1_scan_log():
 def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
                               slate_zones, fresh_zones, dropped_this_scan,
                               diagnostics=None, placeholder_diagnostic=None,
-                              ob_build_diagnostics=None):  # TEMP DIAG — remove with OB build verification
-    """Construct a single per-pair scan record (snapshot of decisions).
-
-    `placeholder_diagnostic`: structured per-side explanation of why a wall
-    remains tentative (or that it's anchored). Sourced from
-    `dealing_range.update_pair()` under PLACEHOLDER_DIAG_KEY. May be None
-    when the walk took an early-return path (no new candle / empty df).
-    """
+                              ob_build_diagnostics=None):
+    """Construct a single per-pair scan record (snapshot of decisions)."""
     walls = walls or {}
+    sv2 = walls.get('structure_v2') or {}
     active = []
     for sz in slate_zones:
         if sz.get('status') != 'active':
@@ -269,7 +263,17 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
         'source': 'scan',
         'pair': pair_name,
         'current_price': current_price,
+        # trend from v2 swing engine: 'bullish' | 'bearish' | None
         'trend': walls.get('trend'),
+        # H1 structure detail for forensics
+        'structure': {
+            'state':            sv2.get('state'),
+            'flip_unconfirmed': sv2.get('flip_unconfirmed'),
+            'ranging':          sv2.get('ranging'),
+            'defended':         sv2.get('defended'),
+            'choch_flip_count': sv2.get('choch_flip_count'),
+            'label':            sv2.get('label'),
+        },
         'walls': {
             'ceiling_price': walls.get('ceiling_price'),
             'ceiling_is_placeholder': walls.get('ceiling_is_placeholder'),
@@ -287,16 +291,7 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
         'active_zones': active,
         'dropped_this_scan': dropped_this_scan or [],
         'diagnostics': diagnostics or [],
-        'placeholder_diagnostic': placeholder_diagnostic,
-        # STAGE 1/2 verification — H4-derived dealing range (live + confirmed)
-        # and the new single-CHoCH structure read, captured per scan so old vs
-        # new can be compared over time before Stage 3 cutover. Gates nothing.
         'h4_range': walls.get('h4_range'),
-        'structure_v2': walls.get('structure_v2'),
-        # TEMP DIAG — remove with OB build verification.
-        # Per-event ledger of how detect_smc_radar handled each BOS/CHoCH:
-        # built or dropped (with the gate that fired). One entry per event in
-        # dealing_range.events for this pair, in chronological order.
         'ob_build_diagnostics': ob_build_diagnostics or [],
     }
 
@@ -404,17 +399,11 @@ def is_valid_ob_candle(open_p, close_p, high_p, low_p):
 
 
 def _event_label(bos_tag, bos_tier):
-    # Single source of truth for the human-readable structural-event label.
-    # Both BOS and CHoCH carry a Major/Minor tier. Minor BOS = continuation
-    # break of an internal lb-3 swing inside the active leg (walls don't move,
-    # trend doesn't flip); Major BOS = trend-direction wall break.
+    # Human-readable structural-event label.
+    # Two BOS tiers: 'BOS' (internal swing break) and 'Range' (H4 wall break).
     if bos_tag == 'BOS':
-        if bos_tier == 'Minor':
-            return 'Minor BOS'
-        return 'BOS'
-    if bos_tier == 'Minor':
-        return 'Minor CHoCH'
-    return 'Major CHoCH'
+        return 'Range BOS' if bos_tier == 'Range' else 'BOS'
+    return 'CHoCH'
 
 
 # ---------------------------------------------------------------------------
@@ -483,7 +472,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
 
     if not events:
         return {"current_price": current_price_now,
-                "active_unmitigated_obs": [],
+                "active_zones": [],
                 "ob_build_diagnostics": ob_build_diagnostics}  # TEMP DIAG
 
     def _ts_for_idx(idx_val):
@@ -523,7 +512,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
 
     for ev_pos, ev in enumerate(events):
         ev_type = ev.get('type')           # 'BOS' | 'CHoCH'
-        ev_tier = ev.get('tier')           # 'Major' | 'Minor'
+        ev_tier = ev.get('tier')           # 'BOS' | 'Range' | 'Major'(legacy)
         ev_dir  = ev.get('direction')      # 'bullish' | 'bearish'
 
         # Most recent OPPOSING-direction structural event (Major/Minor BOS
@@ -562,14 +551,11 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'ob_distal':   None,
         }
 
-        # Update BOS chain bookkeeping. Only Major BOS contributes to the
-        # chain count — Minor BOS is a continuation sub-event, not a fresh
-        # leg, so it must not inflate the count Phase 2 uses to score caution.
-        if ev_type == 'CHoCH' and ev_tier == 'Major':
+        # BOS chain count: CHoCH resets, any BOS (plain or Range) increments.
+        if ev_type == 'CHoCH':
             bos_seq_counter = 0
-        elif ev_type == 'BOS' and ev_tier == 'Major':
+        elif ev_type == 'BOS' and ev_tier in ('BOS', 'Range', 'Major'):
             bos_seq_counter += 1
-        # Minor BOS, Minor CHoCH: do not touch the counter.
 
         # Locate the break candle and impulse-leg start in CURRENT df.
         bos_idx = _idx_from_ts(ev.get('candle_ts'))
@@ -913,8 +899,54 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
 
     return {
         "current_price": cur_price,
-        "active_unmitigated_obs": filtered,
+        "active_zones": filtered,
         "ob_build_diagnostics": ob_build_diagnostics,  # TEMP DIAG
+    }
+
+
+def compute_pair_walls(df, pair_name=""):
+    """Build the per-pair structure-state ('walls') dict from an H1 df.
+
+    SINGLE SOURCE for assembling the dict every downstream consumer reads
+    (trend, dealing-range walls, event ring, swings). Runs the H4 dealing range
+    (h4_range) + the v2 structure engine (dealing_range.compute_structure) and
+    packs the result. Pure read over `df`; never writes state. Inner H4 /
+    structure failures degrade to a cold-start dict — never raises.
+
+    Used by live Phase 1 (run_radar) and the backtest replay engine so both
+    produce identical state. ceiling_price / floor_price come from the H4
+    confirmed swing high / low; None until the H4 range is valid (cold start).
+    """
+    try:
+        _h4 = h4_range.compute_h4_range(df)
+    except Exception as _h4err:
+        logging.warning(f"[h4_range] {pair_name} compute failed: {_h4err}")
+        _h4 = {"valid": False, "source": "error"}
+
+    try:
+        _sv2 = dealing_range.compute_structure(df, _h4)
+    except Exception as _sverr:
+        logging.error(f"[structure] {pair_name} compute failed: {_sverr}")
+        _sv2 = {"state": "error", "events": [], "trend": None, "swings": []}
+
+    _h4_valid = _h4.get("valid") and _h4.get("ceiling") is not None and _h4.get("floor") is not None
+    return {
+        "trend":                  _sv2.get("trend"),
+        "ceiling_price":          float(_h4["ceiling"]) if _h4_valid else None,
+        "ceiling_is_placeholder": bool(_h4.get("ceiling_broken", False)) if _h4_valid else True,
+        "floor_price":            float(_h4["floor"])   if _h4_valid else None,
+        "floor_is_placeholder":   bool(_h4.get("floor_broken", False))   if _h4_valid else True,
+        "last_event_type":        (_sv2.get("last_bos") or {}).get("kind"),
+        "last_event_tier":        "Major",
+        "last_event_direction":   (_sv2.get("last_bos") or {}).get("direction"),
+        "last_event_ts":          (_sv2.get("last_bos") or {}).get("ts"),
+        "last_event_chop":        False,
+        "last_scanned_ts":        None,
+        "fallback_active":        not _h4_valid,
+        "events":                 _sv2.get("events", []),
+        "swings":                 _sv2.get("swings", []),
+        "h4_range":               _h4,
+        "structure_v2":           _sv2,
     }
 
 
@@ -1305,13 +1337,13 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
         if has_ob:
             bos_price = float(ob['bos_swing_price'])
             _btag = ob.get('bos_tag', 'BOS')
-            _btier = ob.get('bos_tier', 'Major')
-            if _btag == 'BOS':
-                bos_color = '#00897b' if _btier == 'Minor' else '#00bcd4'
-            elif _btier == 'Minor':
-                bos_color = '#9c27b0'
-            else:
+            _btier = ob.get('bos_tier', 'BOS')
+            if _btag == 'CHoCH':
                 bos_color = '#ff9800'
+            elif _btier == 'Range':
+                bos_color = '#00897b'  # teal = Range BOS (H4 wall break)
+            else:
+                bos_color = '#00bcd4'  # cyan = plain BOS
             # Greyed for invalidated zones (the structure is historical now).
             line_alpha = 0.3 if is_invalidated else 0.7
             edge_color = '#888888' if is_invalidated else bos_color
@@ -1342,16 +1374,16 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
             #     defining the current dealing range without us widening the
             #     candle window (which would shrink price detail).
             le_type = last_event.get('type')
-            le_tier = last_event.get('tier', 'Major')
+            le_tier = last_event.get('tier', 'BOS')
             le_dir  = last_event.get('direction')
             le_ts   = last_event.get('ts')
             le_bws  = last_event.get('broken_swing_price')
-            if le_type == 'BOS':
-                ev_color = '#00897b' if le_tier == 'Minor' else '#00bcd4'
-            elif le_tier == 'Minor':
-                ev_color = '#9c27b0'
-            else:
+            if le_type == 'CHoCH':
                 ev_color = '#ff9800'
+            elif le_tier == 'Range':
+                ev_color = '#00897b'
+            else:
+                ev_color = '#00bcd4'
             le_idx = None
             if le_ts:
                 # Match against full_df since window_start may chop history.
@@ -1408,9 +1440,9 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                     ax.axhline(y=bws_f, color=ev_color, linewidth=0.8,
                                linestyle='--', alpha=0.55, zorder=2)
                     if le_type == 'BOS':
-                        ev_name = "Minor BOS" if le_tier == 'Minor' else "BOS"
+                        ev_name = "Range BOS" if le_tier == 'Range' else "BOS"
                     else:
-                        ev_name = f"{le_tier} CHoCH"
+                        ev_name = "CHoCH"
                     dir_part = f" {le_dir}" if le_dir else ""
                     age_part = (f" · {candles_ago}c ago"
                                 if candles_ago is not None else "")
@@ -1851,15 +1883,13 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
         else:
             bias_glyph, bias_col = '&#9660;', '#e74c3c'
 
-        # --- Event chip (kept per user requirement: structure type stays).
-        _tier = z.get('bos_tier', 'Major')
+        # --- Event chip: BOS / Range BOS / CHoCH.
+        _tier = z.get('bos_tier', 'BOS')
         if z['bos_tag'] == 'BOS':
-            if _tier == 'Minor':
-                ev_color, ev_text = '#00897b', 'mBOS'
+            if _tier == 'Range':
+                ev_color, ev_text = '#00897b', 'RangeBOS'
             else:
                 ev_color, ev_text = '#00bcd4', 'BOS'
-        elif _tier == 'Minor':
-            ev_color, ev_text = '#9c27b0', 'mCH'
         else:
             ev_color, ev_text = '#ff9800', 'CHoCH'
         event_chip = (f"<span style='background:{ev_color};color:#000;font-size:9px;"
@@ -2303,7 +2333,7 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
         'border-radius:4px;color:#5dade2;font-size:11px;">Structure-only chart unavailable.</div>'
     )
     le_type  = (last_event or {}).get('type')
-    le_tier  = (last_event or {}).get('tier', 'Major')
+    le_tier  = (last_event or {}).get('tier', 'BOS')
     le_dir   = (last_event or {}).get('direction')
     le_ts    = (last_event or {}).get('ts')
     le_label = "—"
@@ -2313,9 +2343,9 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
         except Exception:
             ts_short = str(le_ts)
         if le_type == 'BOS':
-            ev_name = "Minor BOS" if le_tier == 'Minor' else "BOS"
+            ev_name = "Range BOS" if le_tier == 'Range' else "BOS"
         else:
-            ev_name = f"{le_tier} CHoCH"
+            ev_name = "CHoCH"
         le_label = f"{ev_name} {le_dir} on {ts_short}"
 
     # Facts only — dealing range bounds + H1 trend. No generic guidance about
@@ -2336,11 +2366,11 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
     sv2 = (walls or {}).get('structure_v2') or {}
     if sv2.get('state'):
         state = sv2['state']
-        prior = sv2.get('prior_trend')
-        if state == 'transition' and prior:
-            trend_txt = f"{prior.upper()} → transition (CHoCH)"
-        elif state in ('up', 'down'):
-            trend_txt = state.upper() + (" (ranging)" if sv2.get('ranging') else "")
+        if state in ('up', 'down'):
+            if sv2.get('flip_unconfirmed') and sv2.get('prior_trend'):
+                trend_txt = f"{state.upper()} (CHoCH from {sv2['prior_trend'].upper()}, unconfirmed)"
+            else:
+                trend_txt = state.upper() + (" (ranging)" if sv2.get('ranging') else "")
         else:
             trend_txt = "undefined"
         range_parts.append(f"H1 trend: {trend_txt}")
@@ -3282,66 +3312,40 @@ def run_radar():
         pairs_with_fresh_data.add(name)
         pair_dfs[name] = df
 
-        # --- DEALING RANGE WALL UPDATE (single source of truth) ---
-        # Load prior state for this pair, walk forward through fresh H1 data,
-        # update walls if any breaks fired, save back. Phase 2 reads only.
+        # --- STRUCTURE + DEALING RANGE UPDATE (v2 engine, single source of truth) ---
+        # compute_structure is the sole trend/CHoCH/BOS engine. It emits the
+        # event ring that detect_smc_radar uses to build OBs, and the trend
+        # that Phase 2 reads via compute_bos_sequence_count. No legacy wall
+        # engine. Dealing range walls come from H4 swing highs/lows only.
         new_walls = {}
         placeholder_diag = None
         try:
             structure_state_all = dealing_range.load_state()
-            prior_walls = structure_state_all.get(name)
-            # DIAG: log df shape going into update_pair so corruption source is identifiable from production logs.
-            try:
-                _df_cols = list(df.columns) if df is not None else None
-                _df_idx_type = type(df.index).__name__ if df is not None else None
-                _df_has_dt_col = ('Datetime' in (_df_cols or []))
-                logging.info(f"[ts-diag] {name} df cols={_df_cols} idx_type={_df_idx_type} has_Datetime_col={_df_has_dt_col} len={len(df) if df is not None else 0}")
-            except Exception as _diag_err:
-                logging.warning(f"[ts-diag] {name} log failed: {_diag_err}")
-            new_walls = dealing_range.update_pair(df, prior_walls, pair) or {}
-            # Strip non-persisted diagnostic before saving — it stays in
-            # the in-memory copy for downstream scan logging only.
-            placeholder_diag = new_walls.pop(dealing_range.PLACEHOLDER_DIAG_KEY, None)
-            # STAGE 1 (additive): attach the H4-derived dealing range. Built from
-            # the same H1 df, mapped onto H1 as price levels. Does NOT replace the
-            # old wall fields yet — compute_pd_position prefers h4_range when
-            # present and valid, else falls back to the legacy walls. Failure here
-            # must never break the scan: on any error the block is simply absent.
-            try:
-                _h4 = h4_range.compute_h4_range(df)
-                new_walls["h4_range"] = _h4
-            except Exception as _h4err:
-                logging.warning(f"[h4_range] {name} compute failed: {_h4err}")
-                new_walls["h4_range"] = {"valid": False, "source": "error"}
-            # Single structure engine: one CHoCH (premium/discount reversal +
-            # defended-swing break on the FROZEN confirmed H4 range), transition
-            # state, two-way BOS. Stored on state under 'structure_v2' and read
-            # by the H1 trend banner. Does NOT gate OB building (Stage 3 note:
-            # OB events still come from the legacy wall engine — see below).
-            try:
-                new_walls["structure_v2"] = structure_engine.compute_structure(
-                    df, new_walls.get("h4_range"))
-            except Exception as _sverr:
-                logging.warning(f"[structure_engine] {name} compute failed: {_sverr}")
-                new_walls["structure_v2"] = {"state": "error"}
+
+            # Single source: H4 range + v2 structure engine + walls assembly,
+            # extracted to compute_pair_walls so live Phase 1 and the backtest
+            # replay engine build identical state.
+            new_walls = compute_pair_walls(df, name)
+
             structure_state_all[name] = new_walls
             dealing_range.save_state(structure_state_all)
-            if new_walls.get("fallback_active"):
-                logging.warning(
-                    f"[{name}] Dealing-range fallback active — no BOS/CHoCH in cold-start window."
-                )
-                print(f"  [WALLS] {name}: fallback active (last 72h high/low used).")
-            elif new_walls.get("last_event_chop"):
-                print(f"  [WALLS] {name}: rapid CHoCH within 5 candles — possible chop.")
+
+            if new_walls["fallback_active"]:
+                logging.warning(f"[{name}] H4 range not yet valid — ceiling/floor absent (cold start).")
+                print(f"  [STRUCTURE] {name}: H4 range cold-starting, walls absent.")
+            else:
+                sv2_label = (new_walls.get("structure_v2") or {}).get("label", "")
+                print(f"  [STRUCTURE] {name}: {sv2_label}  events={len(new_walls['events'])}")
+
         except Exception as _dr_err:
-            logging.error(f"[{name}] dealing_range update failed: {_dr_err}")
-            print(f"  [WALLS ERR] {name}: {_dr_err}")
+            logging.error(f"[{name}] structure update failed: {_dr_err}")
+            print(f"  [STRUCTURE ERR] {name}: {_dr_err}")
 
         result        = detect_smc_radar(df, pair_type=ptype,
                                           events=new_walls.get('events', []),
                                           walls=new_walls, pair_name=name)
         current_price = result["current_price"]
-        fresh_zones   = result["active_unmitigated_obs"]
+        fresh_zones   = result["active_zones"]
         # TEMP DIAG — remove with OB build verification.
         ob_build_diag = result.get("ob_build_diagnostics", [])
         h1_atr        = smc_detector.compute_atr(df) or 0.0

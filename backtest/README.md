@@ -5,7 +5,7 @@ the trading system *would have done* on a given week.
 
 ## Hard rules
 
-- **Zero edits to live code.** This folder imports `smc_radar`, `dealing_range`,
+- **Zero edits to live code.** This folder imports `smc_radar`,
   `smc_detector`, etc. read-only. It never writes to live JSON state files. All
   state writes go to `backtest/state/`.
 - **No live email sent.** Backtest never calls live SMTP plumbing.
@@ -17,7 +17,7 @@ the trading system *would have done* on a given week.
 1. Fetch historical OHLC from yfinance for the requested date range.
 2. Walk H1 bars one at a time. At each H1 close:
    - Slice H1 + M15 (+ M5 if available) up to that timestamp.
-   - Feed slices to `dealing_range.update_pair` and `smc_radar.detect_smc_radar`.
+   - Feed slices to `smc_radar.compute_pair_walls` and `smc_radar.detect_smc_radar`.
    - Score the OB (mirrors Phase 2 confluence scoring — see compromise note below).
    - If score >= min_confidence, emit a "would-be alert".
 3. For each emitted alert, simulate the trade:

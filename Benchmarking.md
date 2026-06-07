@@ -28,14 +28,14 @@ Calibration questions (test X vs Y on historical data) live in BACKLOG.md, not h
 ### PD-array gate on OBs (premium / discount)
 - **Source:** vet methodology (also referenced in LuxAlgo's PD bands, though they use narrow 5% bands — see section 7).
 - **Rule:** bullish OBs valid only if proximal sits in the discount half (≤ equilibrium) of the dealing range. Bearish OBs valid only in the premium half (≥ equilibrium). Applied to all OBs (BOS and CHoCH alike).
-- **Failure mode:** fails open when wall geometry is unavailable (`compute_pd_position` returns `valid=False`) OR cold-start fallback range is active (`fallback_active=True`). We cannot trust the gate without real walls.
+- **Failure mode:** fails open when the dealing range is unavailable (`compute_pd_position` returns `valid=False`) OR a cold-start fallback range is active (`fallback_active=True`). We cannot trust the gate without a valid dealing range.
 - **Where:** `smc_radar.detect_smc_radar` build loop, after `ob_proximal` is computed and before the proximity gate. Uses `dealing_range.compute_pd_position`.
 - **Open question (BACKLOG):** should BOS-OBs in late-trend impulse legs be treated more leniently? Currently they get the same gate as CHoCH-OBs.
 
-### OB tier labelling (BOS / Major CHoCH / Minor CHoCH)
-- **Reasoning:** BOS detection is single-tier (always Major). CHoCH detection has a Major / Minor split: Major = opposite-wall break (trend flips); Minor = internal lookback=3 break after a wall touch within MINOR_CHOCH_WALL_TOUCH_ATR * ATR (trend weakening, does not flip). Both tiers use the same lookback=3 swing pool — geometry distinguishes them. The OB inherits this from its source event.
-- **Where:** `smc_radar._event_label` helper. Used by Phase 1 chart title, Gemini prompts, and fallback narratives. Existing `_phase1_chart_legend_html` already applied the same labelling for chart legends.
-- **Why it matters:** downstream display / scoring can distinguish a Minor-CHoCH OB (early-warning, trend not yet flipped) from a Major-CHoCH OB (genuine reversal anchor) without re-deriving from `bos_tag` + `bos_tier`.
+### OB / event tier labelling (BOS / Range BOS / CHoCH)
+- **Reasoning:** the H1 engine emits ONE CHoCH definition — no Major/Minor split. BOS is split by geometry into plain BOS (internal swing break) and Range BOS (the broken swing aligns with an H4 dealing-range wall — higher conviction). CHoCH flips the trend on its own candle. The OB inherits its source event's `type` + `tier`.
+- **Where:** `smc_radar._event_label` helper. Used by Phase 1 chart title, Gemini prompts, and fallback narratives.
+- **Why it matters:** downstream display / scoring can distinguish a Range BOS (break at the dealing-range boundary) from a plain BOS, and a CHoCH (reversal anchor) from a continuation, without re-deriving from `bos_tag` + `bos_tier`.
 
 ---
 
@@ -54,9 +54,9 @@ Calibration questions (test X vs Y on historical data) live in BACKLOG.md, not h
 
 ### BOS — ours
 - Crossover-based detection (same as LuxAlgo). ✓
-- Adds 0.4× ATR leg-displacement gate past the broken wall (LuxAlgo lacks this). ✓
-- Distinguishes range-wall breaks from internal-swing breaks (LuxAlgo's tiers fire structural events on internal too, just labeled). ✓
-- Chop flag: CHoCH within 5 candles of prior event tagged for review. LuxAlgo has none. ✓
+- Adds 0.4× ATR leg-displacement gate past the broken swing (LuxAlgo lacks this). ✓
+- Distinguishes H4-dealing-range-wall breaks (Range BOS) from internal-swing breaks (plain BOS). ✓
+- Chop flag (rapid-CHoCH thrash detection): planned, not yet wired. LuxAlgo has none.
 
 ### CHoCH — handling of internal swings (the micro-swing scenario)
 
@@ -64,9 +64,9 @@ Calibration questions (test X vs Y on historical data) live in BACKLOG.md, not h
 
 **joshyattridge:** single lookback (50 default). The 130 swing does not qualify. They miss the break entirely.
 
-**Ours:** single lookback=3 pool. Major CHoCH = opposite-wall break (trend flips). Minor CHoCH = internal lb-3 break gated by a wall-touch precondition (price tested the trend-direction wall within MINOR_CHOCH_WALL_TOUCH_ATR * ATR in the current leg); informational only — trend does not flip, walls do not move. Mid-range lb-3 breaks without a wall touch are noise and produce no event.
+**Ours:** single lookback=3 pool, further filtered by a minimum ATR leg size (`MIN_LEG_ATR_MULT`), so a micro-swing like the 130 example never becomes a structural swing — it can neither define nor break structure. CHoCH fires only when the defended swing (last HL in an uptrend / last LH in a downtrend) is closed through against trend by >= 1.0 × ATR, with the reversal extreme in the premium/discount 25% of the frozen H4 range. One CHoCH definition — no Major/Minor split, no separate internal tier. The flip is unconfirmed until price locks one full structural leg past the broken level; it reverts if price reclaims the origin extreme.
 
-**Status:** implemented in `dealing_range._pick_choch_pivot`.
+**Status:** implemented in `dealing_range.compute_structure`.
 
 ### Sweep — LuxAlgo (EQH/EQL)
 - Pivot high/low with small lookback (3 each side).
@@ -109,7 +109,7 @@ Calibration questions (test X vs Y on historical data) live in BACKLOG.md, not h
 
 ### CHoCH explicit trend state
 - LuxAlgo tracks `trend` and `itrend` as integers. Cleaner than implicit state.
-- Ours: explicit `trend` variable in `dealing_range.py` line 498-504. Matches LuxAlgo's pattern. Correct.
+- Ours: explicit `state` (up / down / undefined) in `dealing_range.compute_structure`. Matches LuxAlgo's pattern. Correct.
 
 ### FVG noise floor
 - LuxAlgo: cumulative-average-body %. Ours: ATR-based.

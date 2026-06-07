@@ -467,20 +467,17 @@ def build_ts_to_local_x(df_plot):
     return out
 
 
-# PHASE 2 ONLY — counts BOS events since last Major CHoCH. Reads dealing_range
+# PHASE 2 ONLY — counts BOS events since the last CHoCH. Reads dealing_range
 # event state. Called only by Phase2_Alert_Engine.py.
 def compute_bos_sequence_count(pair_name):
-    """Count BOS events since the most recent Major CHoCH for the given pair.
+    """Count BOS events since the most recent CHoCH for the given pair.
 
     Reads from dealing_range's structure_state.json — single source of truth.
     Detection lives in dealing_range.py; this function does NOT walk-forward.
 
-    Counter rules (matches dealing_range tier semantics):
-      - Major BOS            -> increments counter
-      - Major CHoCH          -> resets counter (trend flipped)
-      - Minor BOS            -> ignored (continuation sub-event inside the
-                                 active leg; not a fresh leg, no count bump)
-      - Minor CHoCH          -> ignored (does NOT flip trend, does NOT reset)
+    Counter rules (matches dealing_range event semantics):
+      - BOS  (plain or Range) -> increments counter
+      - CHoCH                 -> resets counter (trend flipped)
 
     Returns:
       {
@@ -490,8 +487,8 @@ def compute_bos_sequence_count(pair_name):
       }
 
     `count` reports the position of the LATEST BOS (i.e. how many BOS events
-    have printed since the last Major CHoCH, including the latest). If the
-    most recent event is a CHoCH, count is reported as 1 (the CHoCH "is" the
+    have printed since the last CHoCH, including the latest). If the most
+    recent event is a CHoCH, count is reported as 1 (the CHoCH "is" the
     structure event of interest at that moment; downstream scoring uses tier).
     """
     try:
@@ -506,18 +503,20 @@ def compute_bos_sequence_count(pair_name):
     if not events:
         return {'count': 1, 'trend': trend, 'count_maxed': False}
 
-    # Walk events forward; reset on Major CHoCH; increment on Major BOS.
+    # Walk events forward.
+    # CHoCH resets the counter. Both BOS and Range BOS increment it.
+    # Range BOS is the more significant break (at the dealing range wall)
+    # but both count — the caution threshold applies to the full sequence.
     count = 0
     for ev in events:
         kind = ev.get('type')
         tier = ev.get('tier')
-        if kind == 'CHoCH' and tier == 'Major':
+        if kind == 'CHoCH':
             count = 0
-        elif kind == 'BOS' and tier == 'Major':
+        elif kind == 'BOS' and tier in ('BOS', 'Range', 'Major'):
             count += 1
-        # Minor BOS, Minor CHoCH: ignored.
 
-    # If no BOS has fired since last Major CHoCH, report count=1 so callers
+    # If no BOS has fired since the last CHoCH, report count=1 so callers
     # treating the latest event as "the structural anchor" don't divide-by-zero.
     if count == 0:
         count = 1
@@ -1569,15 +1568,13 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
     #   Major BOS >= caution        -> 1  (exhausted)
     # Caution thresholds reflect typical pair behaviour: forex mean-reverts
     # faster, indices sustain trends longer.
-    bos_tier = ob.get('bos_tier', 'Major')
+    bos_tier = ob.get('bos_tier', 'BOS')
     if bos_tag == 'CHoCH':
-        bd = {"structure": 4 if bos_tier == 'Major' else 3}
-    elif bos_tier == 'Minor':
-        # Minor BOS: continuation break of internal lb-3 swing inside the
-        # active leg. Walls don't move; trend doesn't flip. Real signal but
-        # weaker than Major BOS (no wall break) and weaker than Minor CHoCH
-        # (no preceding wall rejection).
-        bd = {"structure": 2}
+        bd = {"structure": 4}
+    elif bos_tier == 'Range':
+        # Range BOS: broke through the H4 dealing range wall. Higher-conviction
+        # than a plain BOS — score same as CHoCH entry (4).
+        bd = {"structure": 4}
     else:
         bos_seq = ob.get('bos_sequence_count', 1)
         caution_threshold = {'forex': 3, 'index': 5, 'commodity': 4}.get(pair_type, 3)
@@ -1765,15 +1762,12 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     bos_tier_local = ob.get('bos_tier', 'Major')
     bos_count_maxed = bool(ob.get('bos_count_maxed', False))
     seq_str = f"#{bos_seq}+" if bos_count_maxed else f"#{bos_seq}"
-    if bos_tag_local == 'CHoCH' and bos_tier_local == 'Major':
+    if bos_tag_local == 'CHoCH':
         rows.append(("Structure", s, 4, "ok",
-                     "Major CHoCH — trend has reversed (lookback=3 break, reversal from premium/discount)."))
-    elif bos_tag_local == 'CHoCH' and bos_tier_local == 'Minor':
-        rows.append(("Structure", s, 4, "warn",
-                     "Minor CHoCH — wall rejected then internal swing broken; trend weakening, not yet reversed."))
-    elif bos_tag_local == 'BOS' and bos_tier_local == 'Minor':
-        rows.append(("Structure", s, 4, "warn",
-                     "Minor BOS — internal lookback-3 continuation break; trend alive but no wall moved."))
+                     "CHoCH — trend reversed: defended swing broken by >= 1.0 ATR."))
+    elif bos_tag_local == 'BOS' and bos_tier_local == 'Range':
+        rows.append(("Structure", s, 4, "ok",
+                     f"Range BOS {seq_str} — broke through H4 dealing range wall with displacement."))
     elif s >= 3:
         rows.append(("Structure", s, 4, "ok",
                       f"Early continuation (BOS {seq_str} since last Major CHoCH) — smart money still loading."))
