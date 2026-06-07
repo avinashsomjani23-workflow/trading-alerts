@@ -884,7 +884,7 @@ def _compute_context_tags(swept_price, swept_type, df, anchor_ts,
 def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
                          tf_atr, pair_type, pair_name, tf_label='H1',
                          event_type='BOS', prior_event_idx=None,
-                         fallback_lookback=6):
+                         fallback_lookback=48):
     """
     Sweep observation — uniform detection used by BOTH Phase 1 (H1 snapshot
     at OB formation) and Phase 2 (M15 entry-time sweep).
@@ -974,34 +974,31 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     if not all_swings:
         return not_observed
 
-    # Search window low bound — event-type specific.
+    # Search window low bound.
     #
-    # CHoCH: [prior_event_idx, ob_idx]. The catalysing sweep for a trend
-    # turn often sits at the prior trend's terminal extreme, so the window
-    # spans the full prior leg.
+    # Both BOS and CHoCH anchor to `prior_event_idx` — the most recent
+    # OPPOSING-direction structural turn (the level the current leg launched
+    # from). For a BOS this is the CHoCH / opposite-direction BOS that began
+    # the trend; for a CHoCH it's the prior trend's terminal event. The sweep
+    # that fuels the impulse always sits INSIDE the leg, i.e. at or after this
+    # anchor — so anchoring here guarantees the target liquidity is in-window.
     #
-    # BOS: [most recent counter-trend pullback extreme, ob_idx]. A BOS only
-    # hunts the liquidity of the pullback that preceded its impulse — not
-    # the liquidity at the trend leg's origin. The pullback extreme is the
-    # most recent same-direction-as-target swing (low for bullish BOS, high
-    # for bearish BOS) strictly before impulse_start_idx. Fallback when no
-    # such swing exists in the loaded data: ob_idx - fallback_lookback candles.
-    if event_type == 'BOS':
-        pullback_idx = None
-        for s in reversed(all_swings):
-            if s['type'] != swing_type_we_want:
-                continue
-            if s['idx'] < int(impulse_start_idx):
-                pullback_idx = int(s['idx'])
-                break
-        if pullback_idx is not None:
-            search_lo = pullback_idx
-        else:
-            search_lo = max(0, int(ob_idx) - int(fallback_lookback))
-    elif prior_event_idx is not None and int(prior_event_idx) >= 0:
+    # REGRESSION NOTE: a prior version split BOS onto a "find most recent
+    # pullback swing before impulse_start_idx" walk. get_swing_points tags the
+    # sweep candle itself (the leg's terminal extreme) as a swing, so that walk
+    # latched search_lo onto the sweep candle and excluded the very level being
+    # swept — sweeps went silently undetected. Unified anchor restored.
+    #
+    # Fallback (no resolvable prior event): walk back from the impulse start,
+    # NOT from ob_idx. Starting at ob_idx - N can land inside the impulse leg
+    # (where the sweep candle lives) and reproduce the same self-collision.
+    # impulse_start_idx is the first candle of the impulse; the sweep target
+    # sits at or before it, so we begin the window strictly there and extend
+    # back by fallback_lookback to capture the pullback that was swept.
+    if prior_event_idx is not None and int(prior_event_idx) >= 0:
         search_lo = min(int(prior_event_idx), int(impulse_start_idx))
     else:
-        search_lo = max(0, int(ob_idx) - int(fallback_lookback))
+        search_lo = max(0, int(impulse_start_idx) - int(fallback_lookback))
 
     if search_lo < 0:
         search_lo = 0

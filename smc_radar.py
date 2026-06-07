@@ -1822,8 +1822,10 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
 def _walls_icon_cell(walls):
     """Compact icon for the Walls column in the phone summary table.
 
-    ✓✓ both anchored, ✓– one anchored, –– cold-start fallback. Tooltip via
-    title= holds the long-form label so a long-press on phones reveals it.
+    ✓ = anchored wall, ○ = tentative (placeholder, pending swing confirmation),
+    — — = cold-start fallback. The hollow circle reads as "not yet confirmed"
+    rather than the old ⚠ which looked like an error. Tooltip via title= holds
+    the long-form label so a long-press on phones reveals it.
     """
     if not walls or not isinstance(walls, dict):
         return ("<span style='color:#888;' title='No wall data'>&mdash;&mdash;</span>")
@@ -1835,10 +1837,10 @@ def _walls_icon_cell(walls):
     if not cph and not fph:
         return "<span style='color:#27ae60;' title='Both walls anchored'>&#10003;&#10003;</span>"
     if cph and fph:
-        return "<span style='color:#e67e22;' title='Both walls placeholder'>&#9888;&#9888;</span>"
+        return "<span style='color:#e67e22;' title='Both walls tentative (pending swing confirmation)'>&#9675;&#9675;</span>"
     if cph:
-        return "<span style='color:#e67e22;' title='Ceiling placeholder, floor anchored'>&#9888;&#10003;</span>"
-    return "<span style='color:#e67e22;' title='Floor placeholder, ceiling anchored'>&#10003;&#9888;</span>"
+        return "<span style='color:#e67e22;' title='Ceiling tentative, floor anchored'>&#9675;&#10003;</span>"
+    return "<span style='color:#e67e22;' title='Floor tentative, ceiling anchored'>&#10003;&#9675;</span>"
 
 
 def _pip_unit(dp):
@@ -1873,9 +1875,23 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
           <td style="padding:6px 4px;text-align:center;color:#666;font-size:13px;">&mdash;</td>
           <td style="padding:6px 4px;text-align:center;color:#666;font-size:13px;">&mdash;</td>
           <td style="padding:6px 4px;text-align:center;color:#666;font-size:13px;">&mdash;</td>
+          <td style="padding:6px 4px;text-align:right;color:#666;font-size:11px;">&mdash;</td>
           <td style="padding:6px 4px;text-align:center;font-size:11px;">{walls_cell}</td>
         </tr>"""
             continue
+
+        # --- Dist cell: ATR-distance to proximal — primary tradeability rank.
+        # 'in zone' when price is inside; — when ATR or price unavailable.
+        _atr = z.get('h1_atr', 0.0) or 0.0
+        _cp  = z.get('current_price')
+        if z.get('in_progress'):
+            dist_cell = "<span style='color:#f1c40f;font-weight:bold;'>in zone</span>"
+        elif _atr > 0 and _cp is not None and z.get('proximal') is not None:
+            _d = abs(_cp - z['proximal']) / _atr
+            _dc = '#27ae60' if _d <= 1.5 else ('#f1c40f' if _d <= 3 else '#888')
+            dist_cell = f"<span style='color:{_dc};'>{_d:.1f}&#215;</span>"
+        else:
+            dist_cell = "<span style='color:#666;'>&mdash;</span>"
 
         # --- Bias glyph (kept per user requirement: trend direction stays).
         if z['direction'] == 'bullish':
@@ -1947,6 +1963,7 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
           <td style="padding:6px 4px;text-align:center;color:{ob_col};font-size:13px;" title="{ob_title}">{ob_glyph}</td>
           <td style="padding:6px 4px;text-align:center;color:{fvg_col};font-size:13px;" title="{fvg_title}">{fvg_glyph}</td>
           <td style="padding:6px 4px;text-align:center;color:{sw_col};font-size:13px;" title="{sw_title}">{sw_glyph}</td>
+          <td style="padding:6px 4px;text-align:right;font-size:11px;">{dist_cell}</td>
           <td style="padding:6px 4px;text-align:center;font-size:11px;">{walls_cell}</td>
         </tr>"""
 
@@ -1964,6 +1981,7 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
             <th style="padding:6px 4px;text-align:center;color:#666;font-size:9px;font-weight:normal;text-transform:uppercase;letter-spacing:0.4px;">OB</th>
             <th style="padding:6px 4px;text-align:center;color:#666;font-size:9px;font-weight:normal;text-transform:uppercase;letter-spacing:0.4px;">FVG</th>
             <th style="padding:6px 4px;text-align:center;color:#666;font-size:9px;font-weight:normal;text-transform:uppercase;letter-spacing:0.4px;">Sweep</th>
+            <th style="padding:6px 4px;text-align:right;color:#666;font-size:9px;font-weight:normal;text-transform:uppercase;letter-spacing:0.4px;">Dist</th>
             <th style="padding:6px 4px;text-align:center;color:#666;font-size:9px;font-weight:normal;text-transform:uppercase;letter-spacing:0.4px;">Walls</th>
           </tr>
         </thead>
@@ -2056,18 +2074,51 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
     pip_unit  = _pip_unit(dp)
     zone_pips = round(abs(sz['proximal_line'] - sz['distal_line']) / pip_unit, 1)
     h1_atr_val = sz.get('h1_atr', 0.0)
-    # H1 ATR rendered in pips (was raw price units — confusing across pairs).
-    atr_pips_display = (
-        f"{round(h1_atr_val / pip_unit, 1)} p" if h1_atr_val > 0 else "—"
-    )
+    # Width rendered as ATR multiple — raw pips aren't comparable across
+    # instruments (a 4-pip NZD zone is tight, a 190-pip NAS zone is too).
+    # Pips kept secondary so the absolute size is still on the card.
+    if h1_atr_val > 0:
+        width_atr = abs(sz['proximal_line'] - sz['distal_line']) / h1_atr_val
+        width_text = f"{width_atr:.1f}× ATR ({zone_pips}p)"
+    else:
+        width_text = f"{zone_pips} pips"
+
+    # Dist as ATR multiple (primary decision driver) + pips secondary. Sorting
+    # of cards keys off the same ratio (see send path).
     if current_price is not None:
         if in_progress:
             dist_text = "<span style='color:#f1c40f;font-weight:bold;'>in zone</span>"
         else:
             dist_pips_val = round(abs(current_price - sz['proximal_line']) / pip_unit, 1)
-            dist_text = f"{dist_pips_val} pips"
+            if h1_atr_val > 0:
+                dist_atr = abs(current_price - sz['proximal_line']) / h1_atr_val
+                dist_text = f"{dist_atr:.1f}× ATR ({dist_pips_val}p)"
+            else:
+                dist_text = f"{dist_pips_val} pips"
     else:
         dist_text = "—"
+
+    # H1 trend state — canonical three-state field from structure_v2
+    # (up | down | undefined). Distinct from the OB's own bias. ranging /
+    # transition / unconfirmed sub-flags are intentionally NOT shown here.
+    _sv2 = (sz.get('walls') or {}).get('structure_v2') or {}
+    _state = _sv2.get('state')
+    if _state == 'up':
+        trend_text, trend_col = 'Up', '#27ae60'
+    elif _state == 'down':
+        trend_text, trend_col = 'Down', '#e74c3c'
+    else:
+        trend_text, trend_col = 'Undefined', '#888'
+
+    # Sweep status for the chip row. The standalone "Sweep: None" line below
+    # the chips is dropped — absence is shown here and in the table dash.
+    _sw = sz.get('sweep_observed') or {}
+    if _sw.get('exists'):
+        _sw_tier = (_sw.get('tier') or 'weak').lower()
+        _sw_col = {'textbook': '#27ae60', 'decent': '#f1c40f', 'weak': '#888'}.get(_sw_tier, '#888')
+        sweep_chip = f"<span style='color:{_sw_col};'>★ {_sw_tier.title()}</span>"
+    else:
+        sweep_chip = "<span style='color:#888;'>None</span>"
 
     is_new = sz.get('is_new_this_scan', False)
     new_badge = ""
@@ -2085,10 +2136,8 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
         'border-radius:4px;color:#e74c3c;font-size:11px;">&#9888; Chart unavailable.</div>'
     )
     # Legend rendered ONCE at the end of the email (see send_master_digest_v2),
-    # not per-card — frees up vertical space on phones.
-
-    # Phase 1 sweep snapshot — same renderer as NEW card.
-    sweep_line = _render_sweep_observation_html(sz.get('sweep_observed'), dp)
+    # not per-card — frees up vertical space on phones. The standalone
+    # "Sweep: None" line is dropped — sweep state now lives in the chip row.
 
     return f"""
     <div style="margin-bottom:28px;padding:16px;background:#1a1a2e;border-radius:8px;
@@ -2105,7 +2154,7 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
       </div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;">
         <span style="font-size:11px;color:#aaa;">
-          <b>Width</b> {zone_pips} pips
+          <b>Width</b> {width_text}
         </span>
         <span style="font-size:11px;color:{stat_color};">
           <b>Status</b> {status_label}
@@ -2114,11 +2163,13 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
           <b style="color:#bb8fce;">Dist</b> {dist_text}
         </span>
         <span style="font-size:11px;color:#aaa;">
-          <b style="color:#bb8fce;">H1 ATR</b> {atr_pips_display}
+          <b style="color:#bb8fce;">Trend</b> <span style="color:{trend_col};">{trend_text}</span>
+        </span>
+        <span style="font-size:11px;color:#aaa;">
+          <b>Sweep</b> {sweep_chip}
         </span>
         <span style="font-size:11px;color:#aaa;">{fvg_line}</span>
       </div>
-      <div style="margin-bottom:10px;font-size:11px;color:#aaa;">{sweep_line}</div>
       <p style="font-size:12px;color:#bbb;line-height:1.6;margin:0 0 12px 0;
                 border-left:3px solid #2a2a3e;padding-left:10px;">
         {narrative}
@@ -2458,32 +2509,39 @@ def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
     ratio = round(ob['ob_body'] / ob['median_leg_body'], 2) if ob['median_leg_body'] > 0 else 0
 
     event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
-    distance_brief = "price is INSIDE the zone (mitigation in progress)" if in_zone \
-                     else f"price is {dist_pips} pips from proximal"
+    # Qualitative proximity band only — the prompt forbids quoting numbers, so
+    # feed the model a word, not a pip figure it might parrot back.
+    if in_zone:
+        distance_brief = "price is INSIDE the zone (mitigation in progress)"
+    elif atr_pips and dist_pips <= 1.5 * atr_pips:
+        distance_brief = "price is arriving at the zone"
+    elif atr_pips and dist_pips <= 3 * atr_pips:
+        distance_brief = "price is nearing the zone"
+    else:
+        distance_brief = "price is still distant from the zone"
     logging.info(f"[OB_BODY_RATIO] {name} zone {ob.get('zone_id','?')}: ob_body={ob['ob_body']:.{dp}f} median_leg={ob['median_leg_body']:.{dp}f} ratio={ratio}x")
     prompt = f"""You are a veteran SMC (Smart Money Concepts) prop trader writing a zone briefing for another experienced SMC trader.
-Be direct. No fluff. No pleasantries. Four sentences only. One paragraph.
+Be direct. No fluff. No pleasantries. Three sentences only. One paragraph.
 
-ZONE DATA — use these exact values, do not recalculate. ALL distances in PIPS.
+The reader already sees the numbers (zone width, distance, H1 ATR, FVG state, OB status) on the card above your text. DO NOT restate them. Give judgment the numbers cannot — the structural read and what would confirm or kill the setup.
+
+ZONE CONTEXT (for your reasoning only — do not quote these figures back):
 - Pair: {name}
 - Bias: {direction} | Structure event: {event_label}
-- Zone width: {zone_pips} pips
 - FVG: {fvg_status}
 - Zone status: {ob.get('status', 'Pristine')}
-- H1 ATR: {atr_display}
 - {distance_brief}
 
-WRITE EXACTLY FOUR SENTENCES IN THIS ORDER:
-1. What structure event ({event_label}) created this zone and why institutional accumulation is likely here.
-2. OB quality: assess whether pristine or tested means strength or caution.
-3. FVG assessment: displacement confirmation present or absent, and what that means for zone conviction.
-4. Current price context: state distance in pips, compare to H1 ATR ({atr_display}), and what to watch for. Use only pips for distance, never raw price.
+WRITE EXACTLY THREE SENTENCES IN THIS ORDER:
+1. The structural read: what the {event_label} tells you about where this zone sits (with trend / counter-trend, premium/discount) and why smart money may defend it.
+2. Conviction: weigh OB freshness and FVG displacement together — is this a clean setup or one to distrust, and why.
+3. What to watch: the single condition that would confirm the trade, and the one that would invalidate the zone.
 
 STRICT OUTPUT RULES:
 - Plain text only
-- No bullet points, no headers, no markdown, no bold, no numbers
-- Four sentences, one paragraph
-- Do not repeat the zone levels in every sentence"""
+- No bullet points, no headers, no markdown, no bold, no numbers, no pip figures, no distances
+- Three sentences, one paragraph
+- Judgment only — never restate the card's metrics"""
 
     try:
         model = genai.GenerativeModel(
@@ -2505,43 +2563,44 @@ STRICT OUTPUT RULES:
 
 
 def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr):
-    pip_unit  = _pip_unit(dp)
-    dist_pips = round(abs(current_price - ob['proximal_line']) / pip_unit, 1)
-    atr_pips  = round(h1_atr / pip_unit, 1) if h1_atr > 0 else None
-    atr_display = f"{atr_pips} pips" if atr_pips is not None else "n/a"
+    # Judgment-only fallback. The card chips already carry width, distance,
+    # H1 ATR, FVG state and OB status — this paragraph must NOT restate them.
+    # It gives the structural read + what confirms / kills the zone.
     z_lo = min(ob['proximal_line'], ob['distal_line'])
     z_hi = max(ob['proximal_line'], ob['distal_line'])
     in_zone = z_lo <= current_price <= z_hi
+    is_tested = 'Pristine' not in ob.get('status', 'Pristine')
 
     if ob['fvg'].get('exists'):
         mit = ob['fvg'].get('mitigation', 'pristine')
-        fvg_w_pips = round(abs(ob['fvg']['fvg_top'] - ob['fvg']['fvg_bottom']) / pip_unit, 1)
         if mit == 'partial':
-            fvg_line = (
-                f"FVG partially mitigated ({fvg_w_pips} pips wide) "
-                f"— proximal tagged, distal still intact."
-            )
+            conviction = ("OB carries partial-FVG displacement — proximal already "
+                          "tagged, so conviction is moderate; the distal half is "
+                          "where the unfilled imbalance still sits.")
         else:
-            fvg_line = (
-                f"FVG confirmed ({fvg_w_pips} pips wide), adding displacement confluence."
-            )
+            conviction = ("OB is backed by a clean displacement FVG — the strongest "
+                          "form of this setup.")
     elif ob['fvg'].get('was_detected'):
-        fvg_line = "FVG fully mitigated — zone relies on OB alone for confluence."
+        conviction = ("The FVG has been filled, so the zone rests on the OB alone — "
+                      "treat conviction as reduced.")
     else:
-        fvg_line = "No FVG present — zone relies on OB alone for confluence."
+        conviction = ("No FVG formed, so the zone rests on the OB alone — demand "
+                      "tighter confirmation before trusting it.")
+    if is_tested:
+        conviction += " The OB has already been tested, so expect a weaker reaction than a pristine block."
+
     event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
+    side = "demand" if ob['direction'] == 'bullish' else "supply"
+    structural = (f"{event_label} flipped structure {ob['direction']}, leaving this "
+                  f"{side} zone as the origin smart money may defend on the retrace.")
     if in_zone:
-        distance_line = f"Price is INSIDE the zone — mitigation in progress, watch for reaction (H1 ATR {atr_display})."
-    elif dist_pips < 50:
-        distance_line = f"Current price is {dist_pips} pips from proximal (H1 ATR {atr_display}) — approaching zone, watch for reaction."
+        watch = ("Price is mitigating it now — watch the reaction candle for a "
+                 "rejection that holds, and stand down if it closes through the distal.")
     else:
-        distance_line = f"Current price is {dist_pips} pips from proximal (H1 ATR {atr_display}) — still distant, no immediate action."
+        watch = ("Wait for price to reach the zone and reject; a clean close beyond "
+                 "the distal invalidates it.")
     logging.info(f"[OB_BODY_RATIO] {name} zone {ob.get('zone_id','?')}: ob_body={ob['ob_body']:.{dp}f} median_leg={ob['median_leg_body']:.{dp}f} ratio={round(ob['ob_body']/ob['median_leg_body'],2):.2f}x (fallback narrative)")
-    return (
-        f"{event_label} confirmed the {ob['direction']} shift. "
-        f"{fvg_line} "
-        f"{distance_line}"
-    )
+    return f"{structural} {conviction} {watch}"
 
 
 # ---------------------------------------------------------------------------
@@ -3601,6 +3660,8 @@ def run_radar():
                     "is_changed": False,
                     "is_placeholder_row": False,
                     "in_progress": in_progress,
+                    "h1_atr": sz.get("h1_atr", 0.0),
+                    "current_price": current_price,
                     "walls": pair_walls
                 })
 
@@ -3626,10 +3687,20 @@ def run_radar():
                     in_progress=in_progress
                 )
 
-                if sz.get("is_new_this_scan", False):
-                    new_zone_cards.append(card_html)
+                # Sort key: ATR-distance to proximal, closest first. In-zone
+                # cards rank first (key -1). Cards without ATR/price sink last.
+                _h1_atr_for_sort = sz.get("h1_atr", 0.0) or 0.0
+                if in_progress:
+                    sort_key = -1.0
+                elif _h1_atr_for_sort > 0:
+                    sort_key = abs(current_price - sz["proximal_line"]) / _h1_atr_for_sort
                 else:
-                    unchanged_zone_cards.append(card_html)
+                    sort_key = float("inf")
+
+                if sz.get("is_new_this_scan", False):
+                    new_zone_cards.append((sort_key, card_html))
+                else:
+                    unchanged_zone_cards.append((sort_key, card_html))
 
                 if chart_b64:
                     _attach_chart(chart_b64, cid)
@@ -3824,6 +3895,11 @@ def run_radar():
         if (all_zones_for_table or dropped_lines or
                 invalidation_cards or inactive_pair_cards):
             summary_table = build_summary_table_html(all_zones_for_table, dp_map, pair_prices)
+            # Active-zone cards were collected as (atr_distance, html) tuples.
+            # Sort closest-first so the actionable zone sits at the top, then
+            # drop the keys back to plain HTML strings before the banner prepend.
+            new_zone_cards = [h for _, h in sorted(new_zone_cards, key=lambda t: t[0])]
+            unchanged_zone_cards = [h for _, h in sorted(unchanged_zone_cards, key=lambda t: t[0])]
             try:
                 # Prepend structure banner to the first section that has content.
                 _banner_html = (
