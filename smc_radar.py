@@ -1935,11 +1935,20 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
         else:
             dist_cell = "<span style='color:#666;'>&mdash;</span>"
 
-        # --- Bias glyph (kept per user requirement: trend direction stays).
-        if z['direction'] == 'bullish':
+        # --- Bias glyph = H1 TREND (structure_v2.state), NOT the zone's own
+        # direction. Bias and Trend are the same concept and MUST share one
+        # source — the card's Trend field reads structure_v2.state too, and the
+        # placeholder rows above do as well. Reading z['direction'] here (the
+        # supply/demand side of the zone) made a bearish zone in an uptrend show
+        # ▼ while the card showed Up — the contradiction the trader flagged. The
+        # zone's own side is already conveyed by the Event chip + zone card.
+        _bias_state = (walls.get('structure_v2') or {}).get('state')
+        if _bias_state == 'up':
             bias_glyph, bias_col = '&#9650;', '#27ae60'
-        else:
+        elif _bias_state == 'down':
             bias_glyph, bias_col = '&#9660;', '#e74c3c'
+        else:
+            bias_glyph, bias_col = '&mdash;', '#666'
 
         # --- Event chip: BOS / Range BOS / CHoCH.
         _tier = z.get('bos_tier', 'BOS')
@@ -2095,11 +2104,19 @@ def _render_sweep_observation_html(sweep_obs, dp):
 
 
 def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
-                                 current_price=None, in_progress=False):
+                                 current_price=None, in_progress=False,
+                                 walls=None):
     """
     Render an active zone card. Used for both NEW and UNCHANGED active zones.
     NEW badge is rendered inline based on sz['is_new_this_scan'].
     Distance to proximal shown in pips. 'In zone' label when in_progress.
+
+    `walls`: the per-pair structure dict (compute_pair_walls output) for THIS
+    scan. The slate zone `sz` persisted in active_obs.json carries no `walls`
+    key, so the H1-trend read below must take it from the live scan, not from
+    the zone — otherwise Trend always renders "Undefined" while the summary
+    table (which is fed pair_walls directly) shows the real bias, a direct
+    contradiction. Falls back to sz['walls'] for any caller that still embeds it.
     """
     direction  = "Bullish (Demand)" if sz['direction'] == 'bullish' else "Bearish (Supply)"
     dir_color  = '#27ae60' if sz['direction'] == 'bullish' else '#e74c3c'
@@ -2147,7 +2164,7 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
     # H1 trend state — canonical three-state field from structure_v2
     # (up | down | undefined). Distinct from the OB's own bias. ranging /
     # transition / unconfirmed sub-flags are intentionally NOT shown here.
-    _sv2 = (sz.get('walls') or {}).get('structure_v2') or {}
+    _sv2 = ((walls or sz.get('walls')) or {}).get('structure_v2') or {}
     _state = _sv2.get('state')
     if _state == 'up':
         trend_text, trend_col = 'Up', '#27ae60'
@@ -3730,7 +3747,8 @@ def run_radar():
                     cid if chart_b64 else None,
                     ist_ts_full,
                     current_price=current_price,
-                    in_progress=in_progress
+                    in_progress=in_progress,
+                    walls=pair_walls
                 )
 
                 # Sort key: ATR-distance to proximal, closest first. In-zone
