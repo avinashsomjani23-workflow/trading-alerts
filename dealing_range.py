@@ -558,8 +558,17 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     def _push_event(ev_type: str, direction: str, candle_ts: Optional[str],
                     broken_price: Optional[float], imp_start_ts: Optional[str],
                     from_zone: bool, trend_after: Optional[str],
-                    tier: str = "Major",
+                    tier: str = "BOS",
                     broken_swing_ts_arg: Optional[str] = None) -> None:
+        # Tier is a BOS sub-type only: 'BOS' (internal swing break) or 'Range'
+        # (H4 dealing-range wall break). A CHoCH has NO BOS sub-tier — its tier
+        # mirrors its type ('CHoCH'). The dead legacy value 'Major'/'Minor' must
+        # never be emitted: it leaked into last_event_tier, the scan log and the
+        # audit rows, and there is no Major/Minor in the v2 engine. Forcing the
+        # tier here at the single emit point makes that leak structurally
+        # impossible regardless of what any caller passes.
+        if ev_type == "CHoCH":
+            tier = "CHoCH"
         ev = {
             "type":               ev_type,
             "tier":               tier,

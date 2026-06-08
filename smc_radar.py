@@ -402,9 +402,28 @@ def _event_label(bos_tag, bos_tier):
     # NOTE: 'Major'/'Minor' do not exist in the v2 engine — only BOS / Range BOS
     # / CHoCH. Any 'Major' reaching here is a legacy default and is treated as
     # plain BOS.
-    if bos_tag == 'BOS':
+    #
+    # `bos_tag` arrives from two sources with different vocabularies:
+    #   - OB zones use the bos_tag field: 'BOS' | 'CHoCH'.
+    #   - The zoneless-pair structure marker passes last_bos.kind, which is
+    #     'BOS' | 'BOS_BIRTH' (cold-start birth break) | 'CHoCH' |
+    #     'CHoCH_FAILED' (attempted reversal that price reclaimed — trend
+    #     resumed, so structurally a continuation, NOT a flip).
+    # A BIRTH break is a BOS, not a trend flip. The previous `else -> CHoCH`
+    # mislabeled BOTH 'BOS_BIRTH' (a BOS) and 'CHoCH_FAILED' (a continuation) as
+    # CHoCH — a veteran would read either as a reversal that never happened.
+    # Match every known tag explicitly so the label is always the honest event.
+    if bos_tag in ('BOS', 'BOS_BIRTH'):
         return 'Range BOS' if bos_tier == 'Range' else 'BOS'
-    return 'CHoCH'
+    if bos_tag == 'CHoCH':
+        return 'CHoCH'
+    if bos_tag == 'CHoCH_FAILED':
+        # The flip was attempted and failed; the prior trend resumed. Name it
+        # for what it is so the marker never implies a reversal occurred.
+        return 'CHoCH failed (trend resumed)'
+    # Unknown/None tag: do not silently call it a CHoCH. Fall back to the
+    # neutral 'BOS' label rather than inventing a reversal.
+    return 'BOS'
 
 
 def _dir_arrow(direction):
