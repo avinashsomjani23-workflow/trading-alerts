@@ -402,28 +402,30 @@ def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
 # Default lookback was changed 4->3 in commit 8300876 (2026-05-18).
 # `min_leg_atr_mult`: if set, applies the ATR leg-size filter after geometric
 # detection. Pass None to skip (e.g. M5 / Phase 3, where the H1-tuned multiple
-# does not apply). The ATR filter itself is the single implementation owned by
-# dealing_range — this function only does geometry, then delegates filtering.
+# does not apply).
+#
+# SINGLE SOURCE (2026-06): geometry is NOT reimplemented here. This is a thin
+# wrapper over dealing_range.detect_swings — the one lb-3 geometry + ATR
+# leg-filter definition every consumer reads. Previously this function carried
+# a second, parallel copy of the geometry loop; the two agreed today but could
+# silently desync on any future edit to one and not the other (the exact
+# "one concept, two implementations" trap). Now there is one implementation.
+#
+# `bounds` (optional {'max','min'}): legacy filter that drops swings whose
+# high/low pierces the bounds. No live caller passes it; retained for signature
+# compatibility and applied post-detection if ever supplied.
+#
+# Return shape is identical to detect_swings: {'type','idx','price','ts'} with
+# `ts` as an ISO string. (The old wrapper returned `ts` as a pandas Timestamp;
+# no caller reads `ts` from this function, so the representation change is inert.
+# Verified callsites: smc_detector sweep observation, Phase 2 TP swings, Phase 3
+# CHoCH — all read only idx/type/price.)
 def get_swing_points(df, lookback=3, bounds=None, min_leg_atr_mult=MIN_LEG_ATR_MULT):
-    if df is None or len(df) < lookback * 2 + 1:
-        return []
-    H, L = df['High'].values.astype(float), df['Low'].values.astype(float)
-    swings = []
-    for i in range(lookback, len(H) - lookback):
-        if bounds and (H[i] > bounds['max'] or L[i] < bounds['min']):
-            continue
-        wh_left  = H[i - lookback: i]
-        wh_right = H[i + 1: i + lookback + 1]
-        wl_left  = L[i - lookback: i]
-        wl_right = L[i + 1: i + lookback + 1]
-        if H[i] > max(max(wh_left), max(wh_right)):
-            swings.append({"type": "high", "price": float(H[i]), "idx": i, "ts": df.index[i]})
-        if L[i] < min(min(wl_left), min(wl_right)):
-            swings.append({"type": "low", "price": float(L[i]), "idx": i, "ts": df.index[i]})
-    swings = sorted(swings, key=lambda s: s["idx"])
-    if min_leg_atr_mult is not None and min_leg_atr_mult > 0:
-        import dealing_range as _dr
-        swings = _dr._filter_swings_by_leg_atr(swings, df, min_mult=min_leg_atr_mult)
+    import dealing_range as _dr
+    swings = _dr.detect_swings(df, lookback=lookback, min_leg_atr_mult=min_leg_atr_mult)
+    if bounds:
+        swings = [s for s in swings
+                  if not (s['price'] > bounds['max'] or s['price'] < bounds['min'])]
     return swings
 
 

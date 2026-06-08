@@ -442,7 +442,10 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
 
     Event ring schema (matches detect_smc_radar expectations exactly):
       type:               'BOS' | 'CHoCH'
-      tier:               'Major'  (v2 has one tier only)
+      tier:               'BOS' | 'Range' for BOS events ('Range' = H4 wall
+                          break); an internal placeholder for CHoCH (never
+                          surfaced — there is NO Major/Minor in v2; the only
+                          user-facing event types are BOS / Range BOS / CHoCH).
       direction:          'bullish' | 'bearish'   (direction of the move)
       candle_ts:          iso — the bar on which the event fired
       impulse_start_ts:   iso — start of the impulse leg (for OB walk-back)
@@ -521,6 +524,10 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     state       = _UNDEF
     prior_trend: Optional[str]   = None
     defended:    Optional[float] = None
+    # The swing dict whose price == `defended`, or None when `defended` was set
+    # from a raw leg extreme (failure-window reversal). Travels with `defended`
+    # so a CHoCH can report the EXACT swing it broke (by ts), not a guess.
+    defended_swing: Optional[Dict[str, Any]] = None
     choch                        = False
     choch_ts:   Optional[str]   = None
     broken_swing_ts: Optional[str] = None
@@ -551,7 +558,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     def _push_event(ev_type: str, direction: str, candle_ts: Optional[str],
                     broken_price: Optional[float], imp_start_ts: Optional[str],
                     from_zone: bool, trend_after: Optional[str],
-                    tier: str = "Major") -> None:
+                    tier: str = "Major",
+                    broken_swing_ts_arg: Optional[str] = None) -> None:
         ev = {
             "type":               ev_type,
             "tier":               tier,
@@ -559,6 +567,14 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             "candle_ts":          candle_ts,
             "impulse_start_ts":   imp_start_ts,
             "broken_swing_price": float(broken_price) if broken_price is not None else None,
+            # ISO ts of the EXACT swing object that was broken, captured at
+            # detection time. None when the broken level was a raw leg extreme
+            # (failure-window reversal) rather than a confirmed swing — in that
+            # case there is no swing to mark. This is the ONLY reliable handle
+            # on the broken swing: price-matching is ambiguous (equal highs/lows
+            # are common) and same-direction type rules are wrong (a CHoCH can
+            # break either a high or a low depending on how `defended` was set).
+            "broken_swing_ts":    broken_swing_ts_arg,
             "broken_was_wall":    True if tier == "Range" else False,
             "reversal_pct":       1.0 if from_zone else 0.0,
             "trend_after":        trend_after,
@@ -603,6 +619,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     state = _UP; prior_trend = None; choch = False
                     choch_origin = None; choch_level = None; choch_from_zone = False
                     defended = leg_extreme_low if leg_extreme_low is not None else defended
+                    defended_swing = None  # raw leg extreme, not a confirmed swing
                     leg_extreme_high = hi_i; leg_extreme_low = lo_i
                     leg_start = ci
                     impulse_start_ts = _ts_iso(df, ci)
@@ -620,6 +637,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     state = _DOWN; prior_trend = None; choch = False
                     choch_origin = None; choch_level = None; choch_from_zone = False
                     defended = leg_extreme_high if leg_extreme_high is not None else defended
+                    defended_swing = None  # raw leg extreme, not a confirmed swing
                     leg_extreme_high = hi_i; leg_extreme_low = lo_i
                     leg_start = ci
                     impulse_start_ts = _ts_iso(df, ci)
@@ -637,7 +655,12 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 choch = True
                 ts_now = _ts_iso(df, ci)
                 choch_ts = ts_now
-                broken_swing_ts = recent_low["ts"] if recent_low else None
+                # The broken swing is the one whose price == `defended` (the
+                # level just taken out) — captured from defended_swing BEFORE
+                # defended is reassigned below. None if `defended` was a raw
+                # leg extreme (no confirmed swing to mark).
+                broken_defended_ts = defended_swing["ts"] if defended_swing else None
+                broken_swing_ts = broken_defended_ts
                 choch_level  = defended
                 choch_origin = leg_extreme_high
                 choch_from_zone = _reversed_from_premium(rev_idx, ci)
@@ -646,20 +669,25 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 old_impulse  = impulse_start_ts
                 impulse_start_ts = ts_now
                 defended     = leg_extreme_high
+                defended_swing = None  # raw leg extreme until next LH confirms
                 leg_extreme_high = hi_i; leg_extreme_low = lo_i
                 leg_start    = ci
                 choch_flip_count += 1
                 last_bos = {"kind": "CHoCH", "direction": _DOWN,
                             "ts": ts_now, "from_zone": choch_from_zone}
                 _push_event("CHoCH", "bearish", ts_now, choch_level,
-                            old_impulse, choch_from_zone, "bearish")
+                            old_impulse, choch_from_zone, "bearish",
+                            broken_swing_ts_arg=broken_defended_ts)
         elif state == _DOWN and defended is not None and rearm_block_dir != _UP:
             if c > defended + choch_disp:
                 rev_idx = recent_low["idx"] if recent_low else leg_start
                 choch = True
                 ts_now = _ts_iso(df, ci)
                 choch_ts = ts_now
-                broken_swing_ts = recent_high["ts"] if recent_high else None
+                # Broken swing == the swing whose price == `defended`, captured
+                # before defended is reassigned. None if it was a leg extreme.
+                broken_defended_ts = defended_swing["ts"] if defended_swing else None
+                broken_swing_ts = broken_defended_ts
                 choch_level  = defended
                 choch_origin = leg_extreme_low
                 choch_from_zone = _reversed_from_discount(rev_idx, ci)
@@ -668,38 +696,47 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 old_impulse  = impulse_start_ts
                 impulse_start_ts = ts_now
                 defended     = leg_extreme_low
+                defended_swing = None  # raw leg extreme until next HL confirms
                 leg_extreme_high = hi_i; leg_extreme_low = lo_i
                 leg_start    = ci
                 choch_flip_count += 1
                 last_bos = {"kind": "CHoCH", "direction": _UP,
                             "ts": ts_now, "from_zone": choch_from_zone}
                 _push_event("CHoCH", "bullish", ts_now, choch_level,
-                            old_impulse, choch_from_zone, "bullish")
+                            old_impulse, choch_from_zone, "bullish",
+                            broken_swing_ts_arg=broken_defended_ts)
 
         # ---- 3. BIRTH (cold start) ---------------------------------------------
         if state == _UNDEF:
             if recent_high is not None and c > recent_high["price"]:
                 state    = _UP
                 defended = recent_low["price"] if recent_low else recent_high["price"]
+                # defended is a real swing (recent_low, or recent_high fallback).
+                defended_swing = recent_low if recent_low else recent_high
                 leg_start = ci
                 ts_now = _ts_iso(df, ci)
                 impulse_start_ts = (recent_low["ts"] if recent_low
                                     else recent_high["ts"] if recent_high
                                     else ts_now)
                 last_bos = {"kind": "BOS_BIRTH", "direction": _UP, "ts": ts_now}
+                # Birth BOS breaks recent_high (the high price just exceeded).
                 _push_event("BOS", "bullish", ts_now, recent_high["price"],
-                            impulse_start_ts, False, "bullish", "BOS")
+                            impulse_start_ts, False, "bullish", "BOS",
+                            broken_swing_ts_arg=recent_high["ts"])
             elif recent_low is not None and c < recent_low["price"]:
                 state    = _DOWN
                 defended = recent_high["price"] if recent_high else recent_low["price"]
+                defended_swing = recent_high if recent_high else recent_low
                 leg_start = ci
                 ts_now = _ts_iso(df, ci)
                 impulse_start_ts = (recent_high["ts"] if recent_high
                                     else recent_low["ts"] if recent_low
                                     else ts_now)
                 last_bos = {"kind": "BOS_BIRTH", "direction": _DOWN, "ts": ts_now}
+                # Birth BOS breaks recent_low (the low price just broken).
                 _push_event("BOS", "bearish", ts_now, recent_low["price"],
-                            impulse_start_ts, False, "bearish", "BOS")
+                            impulse_start_ts, False, "bearish", "BOS",
+                            broken_swing_ts_arg=recent_low["ts"])
 
         # ---- 4. INGEST swings (MAINTAIN + BOS only) ----------------------------
         for s in by_known.get(ci, ()):
@@ -717,6 +754,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                            and lows[-1]["price"]  > lows[-2]["price"])
                 if made_hh:
                     broken_price = highs[-2]["price"]
+                    broken_high  = highs[-2]
                     # Displacement gate: close at confirmation bar must clear
                     # the broken swing by >= BOS_ATR_MULT * H1 ATR.
                     if c > broken_price + bos_disp:
@@ -728,9 +766,11 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                                     else "BOS")
                         last_bos = {"kind": "BOS", "direction": _UP,
                                     "ts": ts_now, "tier": bos_tier}
+                        # BOS up breaks highs[-2] (a confirmed swing high).
                         _push_event("BOS", "bullish", ts_now,
                                     broken_price, impulse_start_ts, False,
-                                    "bullish", bos_tier)
+                                    "bullish", bos_tier,
+                                    broken_swing_ts_arg=broken_high["ts"])
                         impulse_start_ts = highs[-2]["ts"] if len(highs) >= 2 else impulse_start_ts
                         trend_dir_swings_since_extend = 0
                         if rearm_block_dir == _DOWN:
@@ -738,6 +778,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     # else: swing confirmed but no meaningful displacement — not a BOS
                 elif made_hl:
                     defended = lows[-1]["price"]
+                    defended_swing = lows[-1]  # confirmed swing low (the new HL)
                     leg_extreme_high = float(H[ci])
                     impulse_start_ts = lows[-1]["ts"]
                     trend_dir_swings_since_extend = 0
@@ -752,6 +793,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                            and highs[-1]["price"] < highs[-2]["price"])
                 if made_ll:
                     broken_price = lows[-2]["price"]
+                    broken_low   = lows[-2]
                     if c < broken_price - bos_disp:
                         ts_now = _ts_iso(df, ci)
                         bos_tier = ("Range" if h4_floor is not None
@@ -759,15 +801,18 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                                     else "BOS")
                         last_bos = {"kind": "BOS", "direction": _DOWN,
                                     "ts": ts_now, "tier": bos_tier}
+                        # BOS down breaks lows[-2] (a confirmed swing low).
                         _push_event("BOS", "bearish", ts_now,
                                     broken_price, impulse_start_ts, False,
-                                    "bearish", bos_tier)
+                                    "bearish", bos_tier,
+                                    broken_swing_ts_arg=broken_low["ts"])
                         impulse_start_ts = lows[-2]["ts"] if len(lows) >= 2 else impulse_start_ts
                         trend_dir_swings_since_extend = 0
                         if rearm_block_dir == _UP:
                             rearm_block_dir = None
                 elif made_lh:
                     defended = highs[-1]["price"]
+                    defended_swing = highs[-1]  # confirmed swing high (the new LH)
                     leg_extreme_low = float(L[ci])
                     impulse_start_ts = highs[-1]["ts"]
                     trend_dir_swings_since_extend = 0
@@ -800,6 +845,32 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     # trend key in 'bullish'/'bearish'/None for Phase 2 compatibility
     _trend_map = {_UP: "bullish", _DOWN: "bearish"}
     trend_out = _trend_map.get(state)
+
+    # --- Tag the current-setup broken swing (`is_setup_break`) -----------------
+    # The chart renderers (smc_radar + Phase 2) draw a white X on the swing the
+    # CURRENT setup broke, falling back to a plain triangle otherwise. That flag
+    # was read in both renderers but never written here — so the X never drew.
+    #
+    # We tag exactly ONE swing: the broken swing of the MOST RECENT event,
+    # matched by its EXACT ts (`broken_swing_ts`, captured at detection time
+    # from the real swing object). This is the only sound handle:
+    #   - price-matching is ambiguous — equal highs/lows are common, so a price
+    #     can map to several swings (verified: 17 of 43 live events).
+    #   - "bullish→high / bearish→low" is wrong — a CHoCH can break either a
+    #     high or a low depending on how `defended` was set (verified on GOLD).
+    # When broken_swing_ts is None (event broke a raw leg extreme, not a
+    # confirmed swing) we tag nothing — there is no swing to mark, which is
+    # the honest outcome. Recomputed every scan; never stale; no flag ring.
+    for s in swings:
+        if "is_setup_break" in s:
+            del s["is_setup_break"]
+    if events_ring:
+        _bts = events_ring[-1].get("broken_swing_ts")
+        if _bts:
+            for s in swings:
+                if s.get("ts") == _bts:
+                    s["is_setup_break"] = True
+                    break
 
     return {
         "state":            state,

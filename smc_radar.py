@@ -214,7 +214,11 @@ def _backfill_phase1_scan_log():
                         'chop': bool(ev.get('chop', False)),
                         'broken_was_wall': bool(ev.get('broken_was_wall', False)),
                         'broken_swing_price': ev.get('broken_swing_price'),
-                        'displacement_atr': ev.get('displacement_atr'),
+                        # NOTE: 'displacement_atr' removed — the v2 event ring
+                        # (dealing_range._push_event) does not emit it; the read
+                        # was always None. It only existed in pre-2026-05-25
+                        # archived state. Don't reintroduce without the engine
+                        # emitting it.
                         'reversal_pct': ev.get('reversal_pct'),
                     },
                     'active_zones': [],
@@ -386,24 +390,41 @@ def fetch_data(ticker, interval, period, retries=2):
 # ---------------------------------------------------------------------------
 # SMC DETECTION
 # ---------------------------------------------------------------------------
-
-def is_valid_ob_candle(open_p, close_p, high_p, low_p):
-    # Body minimum 20% of candle range. Below this is near-doji territory —
-    # no clear directional intent. The backward walk continues to older
-    # opposing candles if the most recent one fails this check.
-    body = abs(open_p - close_p)
-    rng  = high_p - low_p
-    if rng == 0:
-        return False
-    return body > (rng * 0.20)
+# NOTE: the former is_valid_ob_candle() (20%-body anti-doji gate) was removed
+# 2026-06 — it skipped the true origin order block whenever that candle was a
+# doji. OB selection now takes the first opposing candle from the break that
+# isn't an oversized news bar. See detect_smc_radar's walk-back comment.
 
 
 def _event_label(bos_tag, bos_tier):
     # Human-readable structural-event label.
     # Two BOS tiers: 'BOS' (internal swing break) and 'Range' (H4 wall break).
+    # NOTE: 'Major'/'Minor' do not exist in the v2 engine — only BOS / Range BOS
+    # / CHoCH. Any 'Major' reaching here is a legacy default and is treated as
+    # plain BOS.
     if bos_tag == 'BOS':
         return 'Range BOS' if bos_tier == 'Range' else 'BOS'
     return 'CHoCH'
+
+
+def _dir_arrow(direction):
+    """Up/down glyph for a structural event direction. Empty when unknown.
+
+    'bullish'/'up' -> ' ↑ (up)' ; 'bearish'/'down' -> ' ↓ (down)'.
+    Lets every CHoCH/BOS mention read its direction without the chart, per the
+    trader's requirement to never have to verify direction off the candles.
+    """
+    d = (direction or '').lower()
+    if d in ('bullish', 'up'):
+        return ' ↑ (up)'
+    if d in ('bearish', 'down'):
+        return ' ↓ (down)'
+    return ''
+
+
+def _event_label_dir(bos_tag, bos_tier, direction):
+    """Event label WITH direction, e.g. 'BOS ↑ (up)', 'CHoCH ↓ (down)'."""
+    return _event_label(bos_tag, bos_tier) + _dir_arrow(direction)
 
 
 # ---------------------------------------------------------------------------
@@ -431,7 +452,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     Build OB zones from BOS / CHoCH events emitted by dealing_range.py.
 
     No detection happens here — the events list is the single source of
-    truth for structural events (BOS, Major CHoCH, Minor CHoCH). For each
+    truth for structural events (BOS, Range BOS, CHoCH — no Major/Minor). For each
     event in the ring, we resolve the break candle and impulse-leg start
     from absolute timestamps (idx is NOT portable across scans since the
     yfinance window rolls), then walk back through the impulse leg to find
@@ -504,8 +525,8 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
 
     # BOS sequence count is recomputed by Phase 2 fresh from state — but we
     # also stamp it on each fresh OB at emit time so downstream slate dedupe /
-    # logging has a value. Counter resets on Major CHoCH only (Minor CHoCH
-    # does NOT flip trend, so does NOT reset BOS chain).
+    # logging has a value. Counter resets on any CHoCH (CHoCH flips the trend,
+    # which restarts the BOS continuation chain).
     bos_seq_counter = 0
     last_choch_local_idx: Optional[int] = None  # idx in this df, or None
     active_obs = []
@@ -515,8 +536,8 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         ev_tier = ev.get('tier')           # 'BOS' | 'Range' | 'Major'(legacy)
         ev_dir  = ev.get('direction')      # 'bullish' | 'bearish'
 
-        # Most recent OPPOSING-direction structural event (Major/Minor BOS
-        # or Major/Minor CHoCH against this event's direction). Used to
+        # Most recent OPPOSING-direction structural event (a BOS or CHoCH
+        # against this event's direction). Used to
         # widen the sweep search window — the opposing event marks the
         # start of the current trend leg, and the catalysing sweep often
         # sits at or near that turn. Resolved from the events ring.
@@ -594,16 +615,27 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         if median_leg_body == 0:
             median_leg_body = 0.0001
 
-        # Walk back from break candle through impulse leg to find OB.
-        # First opposing candle that passes range cap + body minimum wins.
-        # TEMP DIAG — remove with OB build verification.
-        # Track which sub-gate rejected the leg so we can tell whether the
-        # walk found no opposing candle at all, all of them were oversized,
-        # or all of them were near-doji.
+        # Walk back from the break candle through the impulse leg to find the OB.
+        #
+        # SMC definition (LOCKED 2026-06, decided with the trader): the order
+        # block is the FIRST opposing candle walking back from the break — i.e.
+        # the last opposing candle before the displacement leg. For a bullish
+        # move that is the last down-candle before the up-impulse; for a bearish
+        # move, the last up-candle before the down-impulse. Walking back from the
+        # break, "last before the impulse" and "first from the break" are the
+        # SAME candle on a clean leg — so the first opposing candle wins.
+        #
+        # The ONLY rejection is the oversized guard: a candle wider than
+        # OB_MAX_RANGE_ATR_MULT * ATR is a news/volatility bar, not a clean
+        # institutional block — skip it and keep walking. The previous 20%-body
+        # (anti-doji) filter was REMOVED: it silently skipped the true origin
+        # block whenever that candle happened to be a doji (e.g. CHF19's 04:00
+        # block), landing on a deeper, wrong candle glued near the break. A tight
+        # candle is still a valid order block in SMC — body size does not change
+        # which candle is the origin.
         ob_idx = -1
         opposing_count = 0
         oversized_count = 0
-        doji_count = 0
         for j in range(bos_idx - 1, impulse_start_idx - 1, -1):
             if (ev_dir == 'bullish' and C[j] < O[j]) or \
                (ev_dir == 'bearish' and C[j] > O[j]):
@@ -612,18 +644,14 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                     if (H[j] - L[j]) > smc_detector.OB_MAX_RANGE_ATR_MULT * h1_atr_for_leg:
                         oversized_count += 1
                         continue
-                if is_valid_ob_candle(O[j], C[j], H[j], L[j]):
-                    ob_idx = j
-                    break
-                else:
-                    doji_count += 1
+                ob_idx = j
+                break
         if ob_idx == -1:
             diag['drop_gate'] = 'no_qualifying_ob_candle'
             diag['drop_detail'] = {
                 'leg_len': int(bos_idx - impulse_start_idx),
                 'opposing_candles_in_leg': opposing_count,
                 'oversized_rejected': oversized_count,
-                'doji_rejected': doji_count,
                 'h1_atr': float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
             }
             ob_build_diagnostics.append(diag)
@@ -740,9 +768,11 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             logging.warning(f"[dealing_range] OB snapshot failed: {_dr_snap_err}")
             dealing_range_snapshot = {'valid': False, 'source': 'snapshot_error'}
 
-        # 'bos_tag' is the legacy field name for the structural event type.
-        # Kept for backwards compatibility with chart / scoring / dedupe code.
-        # 'bos_tier' carries the Major / Minor distinction (Major for BOS).
+        # 'bos_tag' is the legacy field name for the structural event type
+        # ('BOS' | 'CHoCH'). Kept for backwards compatibility with chart /
+        # scoring / dedupe code.
+        # 'bos_tier' carries the BOS sub-type: 'BOS' (internal swing break) or
+        # 'Range' (H4 dealing-range wall break). No Major/Minor in v2.
         active_obs.append({
             'bos_idx':            bos_idx,
             'bos_timestamp':      bos_timestamp_str,
@@ -930,6 +960,11 @@ def compute_pair_walls(df, pair_name=""):
         _sv2 = {"state": "error", "events": [], "trend": None, "swings": []}
 
     _h4_valid = _h4.get("valid") and _h4.get("ceiling") is not None and _h4.get("floor") is not None
+    # Last event's REAL tier ('BOS' | 'Range'), read from the event ring — never
+    # the legacy "Major". The v2 engine has one structural tier; the only
+    # distinction that exists is plain BOS vs Range BOS (H4 wall break) vs CHoCH.
+    _events = _sv2.get("events", []) or []
+    _last_event_tier = _events[-1].get("tier") if _events else None
     return {
         "trend":                  _sv2.get("trend"),
         "ceiling_price":          float(_h4["ceiling"]) if _h4_valid else None,
@@ -937,7 +972,7 @@ def compute_pair_walls(df, pair_name=""):
         "floor_price":            float(_h4["floor"])   if _h4_valid else None,
         "floor_is_placeholder":   bool(_h4.get("floor_broken", False))   if _h4_valid else True,
         "last_event_type":        (_sv2.get("last_bos") or {}).get("kind"),
-        "last_event_tier":        "Major",
+        "last_event_tier":        _last_event_tier,
         "last_event_direction":   (_sv2.get("last_bos") or {}).get("direction"),
         "last_event_ts":          (_sv2.get("last_bos") or {}).get("ts"),
         "last_event_chop":        False,
@@ -1399,7 +1434,8 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                 if 0 <= local_i < n_plot:
                     ax.axvline(x=local_i, color=ev_color, linewidth=0.8,
                                linestyle='--', alpha=0.45, zorder=2)
-                    ax.text(local_i, y_max, f"  {le_type} {le_tier}",
+                    ax.text(local_i, y_max,
+                            "  " + _event_label_dir(le_type, le_tier, le_dir),
                             color=ev_color, fontsize=8, fontweight='bold',
                             ha='left', va='top', zorder=7,
                             bbox=dict(facecolor='#131722', edgecolor='none',
@@ -1439,14 +1475,10 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                         candles_ago = max(0, n_full - 1 - le_idx)
                     ax.axhline(y=bws_f, color=ev_color, linewidth=0.8,
                                linestyle='--', alpha=0.55, zorder=2)
-                    if le_type == 'BOS':
-                        ev_name = "Range BOS" if le_tier == 'Range' else "BOS"
-                    else:
-                        ev_name = "CHoCH"
-                    dir_part = f" {le_dir}" if le_dir else ""
+                    ev_name = _event_label_dir(le_type, le_tier, le_dir)
                     age_part = (f" · {candles_ago}c ago"
                                 if candles_ago is not None else "")
-                    ax.text(0, bws_f, f"  {ev_name}{dir_part}{age_part}",
+                    ax.text(0, bws_f, f"  {ev_name}{age_part}",
                             color=ev_color, fontsize=8, fontweight='bold',
                             ha='left', va='center', zorder=7,
                             bbox=dict(facecolor='#131722', edgecolor='none',
@@ -1779,7 +1811,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
 
         if has_ob:
             direction_label = "Demand" if ob['direction'] == 'bullish' else "Supply"
-            event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
+            event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'BOS'))
             state_label = "INVALIDATED" if is_invalidated else ob.get('status', 'Pristine')
             title = (
                 f"{pair_name} | {direction_label} Zone | {event_label} | "
@@ -1867,10 +1899,20 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
         # All confluence cells dashed; walls cell still drawn so user can
         # see structure health at a glance.
         if z.get('is_placeholder_row'):
+            # Bias cell: show H1 trend even with no zone, from the same
+            # structure_v2.state source the zone card uses (▲ up / ▼ down /
+            # — undefined). Lets the user read direction on zoneless pairs.
+            _ph_state = ((walls.get('structure_v2') or {}).get('state'))
+            if _ph_state == 'up':
+                ph_bias = "<span style='color:#27ae60;'>&#9650;</span>"
+            elif _ph_state == 'down':
+                ph_bias = "<span style='color:#e74c3c;'>&#9660;</span>"
+            else:
+                ph_bias = "<span style='color:#666;'>&mdash;</span>"
             rows += f"""
         <tr style="background:transparent;border-bottom:1px solid #2a2a3e;opacity:0.55;">
           <td style="padding:6px 6px;font-weight:bold;color:#aaa;font-size:12px;white-space:nowrap;">{name}</td>
-          <td style="padding:6px 4px;text-align:center;color:#666;font-size:13px;">&mdash;</td>
+          <td style="padding:6px 4px;text-align:center;font-size:13px;">{ph_bias}</td>
           <td style="padding:6px 4px;text-align:center;color:#666;font-size:10px;">&mdash;</td>
           <td style="padding:6px 4px;text-align:center;color:#666;font-size:13px;">&mdash;</td>
           <td style="padding:6px 4px;text-align:center;color:#666;font-size:13px;">&mdash;</td>
@@ -1989,12 +2031,17 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
       </table>
     </div>"""
 
-def _phase1_chart_legend_html(bos_tag="BOS", bos_tier="Major"):
+def _phase1_chart_legend_html(bos_tag="BOS", bos_tier=None):
     """Colour-code legend rendered ONCE at the bottom of the Phase 1 digest.
 
     Args kept for backwards-compat call sites, but ignored — the global legend
-    surfaces ALL three structure-event colours at once instead of switching
-    based on a single zone's event.
+    surfaces ALL structure-event colours at once instead of switching based on
+    a single zone's event.
+
+    The v2 engine has ONE structural tier — there is no Major/Minor. The only
+    event types are BOS (internal swing break), Range BOS (H4 dealing-range wall
+    break) and CHoCH (trend flip). Colours below match the chart exactly:
+    plain BOS #00bcd4, Range BOS #00897b, CHoCH #ff9800.
     """
     items = [
         ('#bb8fce', 'Primary zone band (OB1 — closest to price) / greyed when invalidated'),
@@ -2003,10 +2050,9 @@ def _phase1_chart_legend_html(bos_tag="BOS", bos_tier="Major"):
         ('#2ecc71', 'FVG pristine (displacement)'),
         ('#f1c40f', 'FVG partial (proximal touched)'),
         ('#888888', 'FVG mitigated (ghost) / Invalidated zone'),
-        ('#00bcd4', 'Major BOS break candle / level (wall break)'),
-        ('#00897b', 'Minor BOS break candle / level (internal continuation)'),
-        ('#ff9800', 'Major CHoCH break candle / level'),
-        ('#9c27b0', 'Minor CHoCH break candle / level'),
+        ('#00bcd4', 'BOS break candle / level (internal swing break)'),
+        ('#00897b', 'Range BOS break candle / level (H4 dealing-range wall break)'),
+        ('#ff9800', 'CHoCH break candle / level (trend flip)'),
         ('#5dade2', 'Dealing range walls (dotted=anchored, dashed=placeholder; far walls render as edge labels)'),
         ('#85c1e9', 'Equilibrium (50%)'),
         ('#d4a017', 'Swing: ▲▼ lookback-3 (structural swings — walls / BOS / CHoCH)'),
@@ -2215,7 +2261,7 @@ def _slate_zone_to_ob_shape(sz):
     return {
         "direction": sz["direction"],
         "bos_tag":   sz.get("bos_tag", "BOS"),
-        "bos_tier":  sz.get("bos_tier", "Major"),
+        "bos_tier":  sz.get("bos_tier", "BOS"),
         "proximal_line": sz["proximal_line"],
         "distal_line":   sz["distal_line"],
         "high":      sz["high"],
@@ -2508,7 +2554,7 @@ def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
         fvg_status = "no FVG present"
     ratio = round(ob['ob_body'] / ob['median_leg_body'], 2) if ob['median_leg_body'] > 0 else 0
 
-    event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
+    event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'BOS'))
     # Qualitative proximity band only — the prompt forbids quoting numbers, so
     # feed the model a word, not a pip figure it might parrot back.
     if in_zone:
@@ -2589,7 +2635,7 @@ def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr):
     if is_tested:
         conviction += " The OB has already been tested, so expect a weaker reaction than a pristine block."
 
-    event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'Major'))
+    event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'BOS'))
     side = "demand" if ob['direction'] == 'bullish' else "supply"
     structural = (f"{event_label} flipped structure {ob['direction']}, leaving this "
                   f"{side} zone as the origin smart money may defend on the retrace.")
@@ -2702,7 +2748,7 @@ def send_master_digest_v2(summary_table_html, new_zone_cards, unchanged_zone_car
 
     # Single legend at the very bottom — replaces the per-card legend that
     # previously bloated every chart card.
-    legend_html = _phase1_chart_legend_html('BOS', 'Major')
+    legend_html = _phase1_chart_legend_html('BOS', 'BOS')
 
     master_html = f"""<html>
 <body style="font-family:Arial,sans-serif;background:#0d0d1a;padding:16px;margin:0;">
@@ -2889,7 +2935,7 @@ def fresh_to_slate_zone(fresh_zone, zone_id, ist_now, current_price, dp):
         "ob_timestamp": fresh_zone.get("ob_timestamp"),
         "direction": fresh_zone["direction"],
         "bos_tag": fresh_zone["bos_tag"],
-        "bos_tier": fresh_zone.get("bos_tier", "Major"),
+        "bos_tier": fresh_zone.get("bos_tier", "BOS"),
         "broken_was_wall": fresh_zone.get("broken_was_wall", False),
         "reversal_pct": fresh_zone.get("reversal_pct"),
         "bos_timestamp": fresh_zone.get("bos_timestamp"),
@@ -3075,9 +3121,9 @@ def refresh_slate_zone(slate_zone, fresh_zone, ist_now, current_price, dp):
     slate_zone["dealing_range"] = fresh_zone.get(
         "dealing_range", slate_zone.get("dealing_range", {"valid": False})
     )
-    # Tier / context refresh (Major / Minor distinction may change if a
-    # later re-emission upgrades the structural classification).
-    slate_zone["bos_tier"]      = fresh_zone.get("bos_tier", slate_zone.get("bos_tier", "Major"))
+    # Tier / context refresh (BOS vs Range BOS may change if a later
+    # re-emission reclassifies the break against the H4 wall).
+    slate_zone["bos_tier"]      = fresh_zone.get("bos_tier", slate_zone.get("bos_tier", "BOS"))
     slate_zone["broken_was_wall"] = fresh_zone.get("broken_was_wall",
                                                     slate_zone.get("broken_was_wall", False))
     slate_zone["reversal_pct"]  = fresh_zone.get("reversal_pct", slate_zone.get("reversal_pct"))
@@ -3647,7 +3693,7 @@ def run_radar():
                     "direction": sz["direction"],
                     "proximal": sz["proximal_line"], "distal": sz["distal_line"],
                     "bos_tag": sz["bos_tag"],
-                    "bos_tier": sz.get("bos_tier", "Major"),
+                    "bos_tier": sz.get("bos_tier", "BOS"),
                     "status": sz.get("status_label", "Pristine"),
                     "touches": sz.get("touches", 0),
                     "fvg_valid": sz["fvg"].get("exists", False),
