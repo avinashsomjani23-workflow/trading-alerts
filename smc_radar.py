@@ -727,11 +727,13 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'mitigated_at_idx': fvg_result.get('mitigated_at_idx')
         }
 
-        # Phase 1 sweep observation — snapshot semantics. Symmetric window
-        # for BOS and CHoCH: [prior_opposing_event_idx, ob_idx]. The opposing
-        # event marks where the current trend leg started; the catalysing
-        # sweep often sits at or near that turn. Falls back to a 48-candle
-        # lookback inside observe_phase1_sweep when prior_event_idx is None.
+        # Phase 1 sweep observation — snapshot semantics. Window is the OB's
+        # OWN impulse leg [impulse_start_idx, ob_idx] (LOCKED 2026-06): the
+        # validating sweep is the local liquidity run that fuels the displacement
+        # which built this zone, so it can only live inside the leg. prior_event_idx
+        # is still passed for signature compatibility but no longer sets the lower
+        # bound — see observe_phase1_sweep's window comment for why the prior
+        # opposing/same-direction event anchors were wrong on continuation BOS.
         try:
             sweep_obs = smc_detector.observe_phase1_sweep(
                 df, ob_idx, impulse_start_idx, ev_dir,

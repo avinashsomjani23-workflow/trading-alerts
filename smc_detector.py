@@ -978,29 +978,43 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
 
     # Search window low bound.
     #
-    # Both BOS and CHoCH anchor to `prior_event_idx` — the most recent
-    # OPPOSING-direction structural turn (the level the current leg launched
-    # from). For a BOS this is the CHoCH / opposite-direction BOS that began
-    # the trend; for a CHoCH it's the prior trend's terminal event. The sweep
-    # that fuels the impulse always sits INSIDE the leg, i.e. at or after this
-    # anchor — so anchoring here guarantees the target liquidity is in-window.
+    # LOCKED 2026-06 (decided with the trader, verified on real USDJPY swings):
+    # the sweep that VALIDATES an order block is the local liquidity run inside
+    # that OB's OWN impulse leg — the stop-run price took immediately before the
+    # displacement that built the zone. The OB is, by definition, the origin of
+    # this leg, so its fueling sweep can ONLY live in [impulse_start_idx, ob_idx]
+    # (ob_idx <= bos_idx; the OB candle is the latest the sweep can be — see the
+    # engulfing / rejection-block allowance below). Anchoring here is correct in
+    # EVERY case because the window cannot reach liquidity from an earlier leg.
     #
-    # REGRESSION NOTE: a prior version split BOS onto a "find most recent
-    # pullback swing before impulse_start_idx" walk. get_swing_points tags the
-    # sweep candle itself (the leg's terminal extreme) as a swing, so that walk
-    # latched search_lo onto the sweep candle and excluded the very level being
-    # swept — sweeps went silently undetected. Unified anchor restored.
+    # WHY THE PRIOR ANCHORS WERE WRONG (both tested and rejected on USDJPY):
+    #   - prior OPPOSING event (old rule): on a continuation BOS deep in a
+    #     trend this reaches back to the trend's origin and grabs unrelated old
+    #     liquidity (picked 159.09 / 159.531, candles before this leg existed).
+    #   - prior SAME-direction break: still sits before this leg, picked 159.574
+    #     — also outside the leg that built the zone.
+    #   The only rule that selects the local fueling run (159.706) every time is
+    #   constraining the window to the impulse leg itself.
     #
-    # Fallback (no resolvable prior event): walk back from the impulse start,
-    # NOT from ob_idx. Starting at ob_idx - N can land inside the impulse leg
-    # (where the sweep candle lives) and reproduce the same self-collision.
-    # impulse_start_idx is the first candle of the impulse; the sweep target
-    # sits at or before it, so we begin the window strictly there and extend
-    # back by fallback_lookback to capture the pullback that was swept.
-    if prior_event_idx is not None and int(prior_event_idx) >= 0:
-        search_lo = min(int(prior_event_idx), int(impulse_start_idx))
+    # `prior_event_idx` is no longer used for the lower bound. It is still
+    # accepted for signature/caller compatibility (Phase 2 passes it) but the
+    # leg bound supersedes it.
+    #
+    # REGRESSION NOTE (still relevant): get_swing_points tags the sweep candle
+    # itself (the leg's terminal extreme) as a swing. That does NOT break the
+    # leg-bounded window: the candidate loop below requires the swept target to
+    # be a swing with idx STRICTLY less than the candidate candle (s['idx'] < i),
+    # so a sweep candle can never sweep its own level. The earlier failure was a
+    # backward "find pullback before impulse_start" walk that latched search_lo
+    # ONTO the sweep candle; a forward leg window has no such collision.
+    #
+    # `fallback_lookback` is retained for Phase 2 (M15), which has no structural
+    # impulse leg of its own and walks back from impulse_start by this many
+    # candles. Phase 1 (H1) always has the leg, so it never hits the fallback.
+    if impulse_start_idx is not None:
+        search_lo = int(impulse_start_idx)
     else:
-        search_lo = max(0, int(impulse_start_idx) - int(fallback_lookback))
+        search_lo = max(0, int(ob_idx) - int(fallback_lookback))
 
     if search_lo < 0:
         search_lo = 0
