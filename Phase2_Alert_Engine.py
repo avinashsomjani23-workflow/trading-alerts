@@ -54,6 +54,32 @@ def score_to_int(score):
         return -1
 
 
+def scorecard_real_max(pair_conf):
+    """Real (internal) maximum for a pair's confluence scorecard.
+
+    Non-JPY forex tops out at 8 — its sweep is presence-only (max 1) because
+    spot forex has no centralized stop pool, so sweep *quality* is noise.
+    JPY / Gold / NAS top out at 10 (sweep quality-graded, max 3). This mirrors
+    smc_detector.run_scorecard. The per-line math in the email body always
+    shows this true max.
+    """
+    name = pair_conf.get('name', '') if pair_conf else ''
+    ptype = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
+    return 8 if (ptype == 'forex' and 'JPY' not in name) else 10
+
+
+def normalized_score(raw, pair_conf):
+    """Forex caps at 8, others at 10 — different ceilings make a 7/8 and a
+    7/10 look equal at a glance when they are not. Rescale to a common /10
+    so a EURUSD alert is directly comparable to a XAUUSD alert. Used for the
+    email banner header and the subject line ONLY; the body keeps real math.
+    """
+    real_max = scorecard_real_max(pair_conf)
+    if real_max <= 0:
+        return 0.0
+    return round(float(raw) / real_max * 10.0, 1)
+
+
 # Hysteresis thresholds for re-emailing the same zone. Asymmetric on purpose:
 # losing a confluence is a stronger reason to re-alert than gaining one.
 # A zone wobbling 6.4 <-> 7.0 doesn't cross either threshold and stays silent.
@@ -805,19 +831,20 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             ))
 
         # --- BOS / CHoCH horizontal line ---
-        # Palette:
-        #   BOS              -> yellow #f1c40f
-        #   Major CHoCH      -> pink   #e91e63
-        #   Minor CHoCH      -> purple #9c27b0  (internal lb-3 break after wall touch — weakening flag)
+        # Palette (matches smc_radar chart + _chart_legend_html; v2 has no
+        # Major/Minor — only BOS / Range BOS / CHoCH):
+        #   BOS        -> cyan  #00bcd4  (internal swing break)
+        #   Range BOS  -> teal  #00897b  (H4 dealing-range wall break)
+        #   CHoCH      -> orange #ff9800 (trend flip)
         bos_price = float(ob.get('bos_swing_price', 0))
         bos_tag = ob.get('bos_tag', 'BOS')
-        bos_tier = ob.get('bos_tier', 'Major')
-        if bos_tag == 'BOS':
-            bos_color = '#f1c40f'
-        elif bos_tier == 'Minor':
-            bos_color = '#9c27b0'
+        bos_tier = ob.get('bos_tier', 'BOS')
+        if bos_tag == 'CHoCH':
+            bos_color = '#ff9800'
+        elif bos_tier == 'Range':
+            bos_color = '#00897b'
         else:
-            bos_color = '#e91e63'
+            bos_color = '#00bcd4'
         if bos_price > 0:
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
 
@@ -1037,7 +1064,12 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
 # Email assembly
 # ---------------------------------------------------------------------------
 
-def build_scorecard_html(rows, total, total_max=10.0):
+def build_scorecard_html(rows, total, total_max=10.0, display_total=None):
+    """Per-row math and the header `total/total_max` are the REAL score
+    (8 for non-JPY forex, 10 otherwise). `display_total`, when given, is the
+    /10-normalized score shown as the headline so alerts compare across
+    instruments; the real math is kept beside it for trust.
+    """
     body = ""
     for label, score, max_score, status, expl in rows:
         if status == "info":
@@ -1060,29 +1092,45 @@ def build_scorecard_html(rows, total, total_max=10.0):
           <td style="padding:5px 8px;color:#bbb;font-size:12px;line-height:1.45;">{expl}</td>
         </tr>"""
 
+    if display_total is not None and float(total_max) != 10.0:
+        # Headline is the /10-normalized score; real math shown beside it.
+        headline = (
+            f'<span style="color:#eee;font-size:14px;font-weight:bold;">{display_total}/10</span>'
+            f'<span style="color:#888;font-size:11px;font-weight:normal;">'
+            f' &nbsp;(real {total}/{total_max})</span>'
+        )
+    else:
+        headline = f'<span style="color:#eee;font-size:14px;font-weight:bold;">{total}/{total_max}</span>'
     return f"""
     <div style="margin-bottom:14px;">
       <div style="color:#aaa;font-size:11px;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">
-        Confluence Scorecard &mdash; <span style="color:#eee;font-size:14px;font-weight:bold;">{total}/{total_max}</span>
+        Confluence Scorecard &mdash; {headline}
       </div>
       <table style="width:100%;border-collapse:collapse;background:#1a1a2e;border-radius:6px;">
         <tbody>{body}</tbody>
       </table>
     </div>"""
 
-def _chart_legend_html(bos_tag="BOS", bos_tier="Major"):
-    """Colour-code legend rendered below each chart. Cosmetic only."""
-    if bos_tag == 'BOS':
-        bos_color, bos_label = '#f1c40f', 'BOS'
-    elif bos_tier == 'Minor':
-        bos_color, bos_label = '#9c27b0', 'Minor CHoCH'
-    else:
-        bos_color, bos_label = '#e91e63', 'Major CHoCH'
+def _chart_legend_html(bos_tag="BOS", bos_tier="BOS"):
+    """Colour-code legend rendered below each chart. Cosmetic only.
+
+    Args kept for backwards-compat call sites but ignored — like the Phase 1
+    legend, this surfaces ALL structure-event colours at once instead of
+    switching on a single zone's event.
+
+    The v2 engine has ONE structural tier — there is no Major/Minor. The only
+    event types are BOS (internal swing break), Range BOS (H4 dealing-range
+    wall break) and CHoCH (trend flip). Colours below match the chart exactly
+    (see smc_radar chart rendering): BOS #00bcd4, Range BOS #00897b,
+    CHoCH #ff9800.
+    """
     items = [
         ('#bb8fce', 'Zone band (proximal/distal)'),
         ('#2ecc71', 'FVG pristine (displacement)'),
         ('#f1c40f', 'FVG partial (proximal touched)'),
-        (bos_color, f'{bos_label} break candle / level'),
+        ('#00bcd4', 'BOS break candle / level (internal swing break)'),
+        ('#00897b', 'Range BOS break candle / level (H4 dealing-range wall break)'),
+        ('#ff9800', 'CHoCH break candle / level (trend flip)'),
         ('#ffffff', 'OB candle / current price'),
         ('#e67e22', 'Entry'),
         ('#e74c3c', 'Stop loss'),
@@ -1113,7 +1161,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     levels = data.get('levels', {})
     # Freshness display handled by scorecard row alone; no separate context line.
     bos_tag = ob.get('bos_tag', 'BOS')
-    bos_tier = ob.get('bos_tier', 'Major')
+    bos_tier = ob.get('bos_tier', 'BOS')
     # H1-only migration (2026-05-26): every pair routes through the limit
     # branch. The legacy ltf_choch (M5 CHoCH) approach block is retired.
     action_word = "SELL LIMIT" if bias == "SHORT" else "BUY LIMIT"
@@ -1129,13 +1177,16 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             </p>
         </div>"""
 
-    # Total max is 8 for non-JPY forex (sweep is presence-only),
-    # 10 elsewhere (sweep quality-graded). Mirrors smc_detector.run_scorecard
-    # post-2026-05-26 scoring rewrite: Structure 4 | Sweep 1 or 3 | FVG 2 | Freshness 1.
-    _pname = pair_conf.get('name', '') if pair_conf else ''
-    _ptype = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
-    total_max_for_card = 8 if (_ptype == 'forex' and 'JPY' not in _pname) else 10
-    scorecard_html = build_scorecard_html(scorecard_rows, total_score, total_max_for_card)
+    # Body shows the REAL math: total max is 8 for non-JPY forex (sweep is
+    # presence-only), 10 elsewhere (sweep quality-graded). Mirrors
+    # smc_detector.run_scorecard: Structure 4 | Sweep 1 or 3 | FVG 2 | Freshness 1.
+    # The headline is additionally normalized to /10 so forex and gold/NAS/JPY
+    # alerts compare on one scale (real math kept beside it).
+    total_max_for_card = scorecard_real_max(pair_conf)
+    display_total = normalized_score(total_score, pair_conf)
+    scorecard_html = build_scorecard_html(
+        scorecard_rows, total_score, total_max_for_card, display_total=display_total
+    )
 
     distance_html = f"""
     <div style="margin-bottom:12px;padding:8px 12px;background:#0d0d1a;border-left:3px solid #00bcd4;border-radius:4px;font-size:12px;color:#bbb;">
@@ -1829,7 +1880,8 @@ if __name__ == "__main__":
             continue
 
         # BOS sequence count is read from dealing_range state (single source of
-        # truth). Counter resets on Major CHoCH; Minor CHoCH does NOT reset it.
+        # truth). Counter resets on CHoCH (v2 has no Major/Minor); any BOS
+        # (plain or Range) increments it.
         bos_counter = smc_detector.compute_bos_sequence_count(name)
 
         scan_record["current_price"] = current_price
@@ -2019,7 +2071,7 @@ if __name__ == "__main__":
             # instead of OB proximal (which drifts as Phase 1 reselects OB candle).
             # ob_timestamp hour-bucket disambiguates two structurally distinct
             # zones that happen to share a swing price (e.g. re-CHoCH at the
-            # same level after a Major CHoCH wipe).
+            # same level after a prior CHoCH wipe).
             bos_swing_px = float(ob.get('bos_swing_price', proximal))
             bos_tag = ob.get('bos_tag', 'BOS')
             key_dp = max(0, dp - 1)
@@ -2130,11 +2182,12 @@ if __name__ == "__main__":
                 atr_label, distance_str, dollar_risk_str, scan_start_ts,
                 h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
             )
-            # Subject score-max: 8 (non-JPY forex) / 10 (JPY/Gold/NAS)
-            # per 2026-05-26 scoring rewrite (whole numbers, asymmetric sweep).
-            _subj_max = 8 if (pair_conf.get('pair_type') == 'forex' and 'JPY' not in name) else 10
+            # Subject shows the /10-normalized score so forex and gold/NAS/JPY
+            # alerts are comparable at a glance. Real math (out of 8 or 10)
+            # lives in the email body scorecard.
+            _subj_score = normalized_score(score_res['total'], pair_conf)
             send_email(
-                f"{subject_prefix} | {name} | {bias} | Score {score_res['total']:.1f}/{_subj_max} | {ist_now.strftime('%H:%M IST')}",
+                f"{subject_prefix} | {name} | {bias} | Score {_subj_score:.1f}/10 | {ist_now.strftime('%H:%M IST')}",
                 html, h1_chart, m15_chart
             )
             # Persist dedup state AFTER send. See comment above.

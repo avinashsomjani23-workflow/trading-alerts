@@ -902,8 +902,8 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
       - BOS:   `[prior_event_idx, ob_idx]` when prior_event_idx is given
         (symmetric with CHoCH — covers the entire trend leg the BOS is
         continuing). Caller passes the most recent OPPOSING-direction
-        structural event (Major/Minor BOS or Major/Minor CHoCH that
-        reversed the trend). Fallback when prior_event_idx is None or
+        structural event (a BOS / Range BOS / CHoCH that reversed the
+        trend; v2 has no Major/Minor). Fallback when prior_event_idx is None or
         unresolvable: `max(0, ob_idx - fallback_lookback)`.
 
     `fallback_lookback`: candle count used when no structural anchor is
@@ -1572,13 +1572,15 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
     bos_tag = ob.get('bos_tag', 'BOS')
     pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
 
-    # Structure score grid (2026-05-26 scoring rewrite — max 4):
-    #   Major CHoCH                 -> 4  (opposite wall break — trend reversal confirmed)
-    #   Major BOS #1-2 since CHoCH  -> 3  (early continuation, smart money still loading)
-    #   Minor CHoCH                 -> 3  (wall rejected + internal lb-3 break — trend weakening)
-    #   Minor BOS                   -> 2  (internal lb-3 continuation; walls don't move)
-    #   Major BOS #3 .. caution-1   -> 2  (mid-trend; commodity/index only)
-    #   Major BOS >= caution        -> 1  (exhausted)
+    # Structure score grid (max 4). The v2 engine emits exactly THREE
+    # structural event types — CHoCH, BOS, Range BOS — with NO Major/Minor
+    # tier (see smc_radar._event_label). The grid maps directly onto them:
+    #   CHoCH                       -> 4  (trend reversal confirmed)
+    #   Range BOS                   -> 4  (clean break-off through the H4
+    #                                      dealing-range wall — reversal-grade)
+    #   plain BOS #1-2 since CHoCH  -> 3  (early continuation, smart money still loading)
+    #   plain BOS #3 .. caution-1   -> 2  (mid-trend)
+    #   plain BOS >= caution        -> 1  (exhausted)
     # Caution thresholds reflect typical pair behaviour: forex mean-reverts
     # faster, indices sustain trends longer.
     bos_tier = ob.get('bos_tier', 'BOS')
@@ -1768,11 +1770,12 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     dp = _dp(pair_conf)
     rows = []
 
-    # 1. Structure — pair-aware BOS sequence + Major/Minor CHoCH tier.
+    # 1. Structure — pair-aware BOS sequence + event type (CHoCH / BOS /
+    #    Range BOS; v2 has no Major/Minor tier).
     s = breakdown.get("structure", 0)
     bos_seq = ob.get('bos_sequence_count', 1)
     bos_tag_local = ob.get('bos_tag', 'BOS')
-    bos_tier_local = ob.get('bos_tier', 'Major')
+    bos_tier_local = ob.get('bos_tier', 'BOS')
     bos_count_maxed = bool(ob.get('bos_count_maxed', False))
     seq_str = f"#{bos_seq}+" if bos_count_maxed else f"#{bos_seq}"
     if bos_tag_local == 'CHoCH':
@@ -1783,13 +1786,13 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
                      f"Range BOS {seq_str} — broke through H4 dealing range wall with displacement."))
     elif s >= 3:
         rows.append(("Structure", s, 4, "ok",
-                      f"Early continuation (BOS {seq_str} since last Major CHoCH) — smart money still loading."))
+                      f"Early continuation (BOS {seq_str} since last CHoCH) — smart money still loading."))
     elif s >= 2:
         rows.append(("Structure", s, 4, "warn",
-                      f"Mid-trend continuation (BOS {seq_str} since last Major CHoCH)."))
+                      f"Mid-trend continuation (BOS {seq_str} since last CHoCH)."))
     elif s >= 1:
         rows.append(("Structure", s, 4, "fail",
-                      f"Late continuation (BOS {seq_str} since last Major CHoCH) — trend may be exhausted."))
+                      f"Late continuation (BOS {seq_str} since last CHoCH) — trend may be exhausted."))
     else:
         rows.append(("Structure", s, 4, "fail", "No confirmed BOS or CHoCH."))
 
