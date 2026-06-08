@@ -813,36 +813,20 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 lows.append(s)
                 recent_low = s
 
+            # Maintain the BOS break target + the protected (defended) swing.
+            # The BOS itself no longer fires here — it fires ON-CLOSE in sec. 2b.
+            # Here we only keep the targets current as confirmed swings arrive:
+            #   - trend-direction swing (low in DOWN / high in UP) => new BOS
+            #     break target (most-recent confirmed swing point to break next).
+            #   - counter-trend swing (HL in UP / LH in DOWN) => new `defended`
+            #     swing for the CHoCH check (unchanged from before).
             if state == _UP:
-                made_hh = (s["type"] == "high" and len(highs) >= 2
-                           and highs[-1]["price"] > highs[-2]["price"])
                 made_hl = (s["type"] == "low"  and len(lows)  >= 2
                            and lows[-1]["price"]  > lows[-2]["price"])
-                if made_hh:
-                    broken_price = highs[-2]["price"]
-                    broken_high  = highs[-2]
-                    # Displacement gate: close at confirmation bar must clear
-                    # the broken swing by >= BOS_ATR_MULT * H1 ATR.
-                    if c > broken_price + bos_disp:
-                        ts_now = _ts_iso(df, ci)
-                        # Range BOS: broken swing aligns with H4 ceiling
-                        # (within BOS_ATR_MULT * H1 ATR). Otherwise plain BOS.
-                        bos_tier = ("Range" if h4_ceiling is not None
-                                    and abs(broken_price - h4_ceiling) <= bos_disp
-                                    else "BOS")
-                        last_bos = {"kind": "BOS", "direction": _UP,
-                                    "ts": ts_now, "tier": bos_tier}
-                        # BOS up breaks highs[-2] (a confirmed swing high).
-                        _push_event("BOS", "bullish", ts_now,
-                                    broken_price, impulse_start_ts, False,
-                                    "bullish", bos_tier,
-                                    broken_swing_ts_arg=broken_high["ts"])
-                        impulse_start_ts = highs[-2]["ts"] if len(highs) >= 2 else impulse_start_ts
-                        trend_dir_swings_since_extend = 0
-                        if rearm_block_dir == _DOWN:
-                            rearm_block_dir = None
-                    # else: swing confirmed but no meaningful displacement — not a BOS
-                elif made_hl:
+                if s["type"] == "high":
+                    # New confirmed swing high = next BOS-up break target.
+                    bos_break_high = highs[-1]
+                if made_hl:
                     defended = lows[-1]["price"]
                     defended_swing = lows[-1]  # confirmed swing low (the new HL)
                     leg_extreme_high = float(H[ci])
@@ -853,30 +837,12 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 elif s["type"] == "low":
                     trend_dir_swings_since_extend += 1
             elif state == _DOWN:
-                made_ll = (s["type"] == "low"  and len(lows)  >= 2
-                           and lows[-1]["price"]  < lows[-2]["price"])
                 made_lh = (s["type"] == "high" and len(highs) >= 2
                            and highs[-1]["price"] < highs[-2]["price"])
-                if made_ll:
-                    broken_price = lows[-2]["price"]
-                    broken_low   = lows[-2]
-                    if c < broken_price - bos_disp:
-                        ts_now = _ts_iso(df, ci)
-                        bos_tier = ("Range" if h4_floor is not None
-                                    and abs(broken_price - h4_floor) <= bos_disp
-                                    else "BOS")
-                        last_bos = {"kind": "BOS", "direction": _DOWN,
-                                    "ts": ts_now, "tier": bos_tier}
-                        # BOS down breaks lows[-2] (a confirmed swing low).
-                        _push_event("BOS", "bearish", ts_now,
-                                    broken_price, impulse_start_ts, False,
-                                    "bearish", bos_tier,
-                                    broken_swing_ts_arg=broken_low["ts"])
-                        impulse_start_ts = lows[-2]["ts"] if len(lows) >= 2 else impulse_start_ts
-                        trend_dir_swings_since_extend = 0
-                        if rearm_block_dir == _UP:
-                            rearm_block_dir = None
-                elif made_lh:
+                if s["type"] == "low":
+                    # New confirmed swing low = next BOS-down break target.
+                    bos_break_low = lows[-1]
+                if made_lh:
                     defended = highs[-1]["price"]
                     defended_swing = highs[-1]  # confirmed swing high (the new LH)
                     leg_extreme_low = float(L[ci])
