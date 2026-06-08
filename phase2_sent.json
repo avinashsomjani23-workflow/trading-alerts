@@ -110,20 +110,20 @@
       "pair": "NZDUSD"
     },
     "USDJPY_SHORT_CHoCH_160.08_2026-06-08T07": {
-      "score_int": 6,
-      "score_raw": 6.0,
-      "score_high_water": 6.0,
-      "score_low_water": 6.0,
+      "score_int": 5,
+      "score_raw": 5.0,
+      "score_high_water": 5.0,
+      "score_low_water": 5.0,
       "breakdown": {
         "structure": 4,
         "sweep": 0.0,
-        "fvg": 1,
+        "fvg": 0,
         "freshness": 1,
         "pd": 0.0,
         "killzone": 0.0
       },
-      "alert_ist": "2026-06-08T17:35:32.340653",
-      "last_seen_ist": "2026-06-08T19:35:37.989932",
+      "alert_ist": "2026-06-08T20:35:35.421639",
+      "last_seen_ist": "2026-06-08T20:35:35.421639",
       "bias": "SHORT",
       "pair": "USDJPY"
     }
