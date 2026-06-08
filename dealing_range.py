@@ -547,6 +547,17 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     leg_extreme_low:  Optional[float] = None
     leg_start = 0
 
+    # BOS break target (Option B — fire on-close, no swing-confirm lag).
+    # In a downtrend `bos_break_low` is the most-recent CONFIRMED swing low; a
+    # close below its price - bos_disp fires a BOS on that candle (mirrors how
+    # CHoCH fires on-close vs `defended`). In an uptrend `bos_break_high` is the
+    # most-recent confirmed swing high. After a BOS fires the target is cleared
+    # (set None) so the same spent swing cannot re-fire; it re-seeds when the
+    # next confirmed trend-direction swing forms. None = no valid target yet
+    # (e.g. just after a CHoCH flip / birth, before the next swing confirms).
+    bos_break_low:  Optional[Dict[str, Any]] = None
+    bos_break_high: Optional[Dict[str, Any]] = None
+
     # impulse_start_ts: the timestamp of the swing that anchors the start of
     # the current impulse leg (last swing in the trend direction before current
     # move). This is what detect_smc_radar uses to walk back and find the OB.
@@ -715,6 +726,46 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             old_impulse, choch_from_zone, "bullish",
                             broken_swing_ts_arg=broken_defended_ts)
 
+        # ---- 2b. BOS (continuation, fire ON-CLOSE) -----------------------------
+        # Symmetric to the CHoCH check above: fire the instant a close clears the
+        # most-recent confirmed swing in the trend direction by >= bos_disp. No
+        # swing-confirm lag (the old `made_ll`/`made_hh` path waited for the NEXT
+        # swing to confirm, then reported `lows[-2]` — a stale, often already-
+        # broken level). Gated by `rearm_block_dir` exactly like CHoCH so a
+        # failed-CHoCH whipsaw cannot fire a false BOS. Runs AFTER the failure-
+        # window block (which `continue`s) so it can never preempt a reversal.
+        # Does NOT touch `defended`/`leg_extreme_*` — continuation must not reset
+        # the protected swing. Target is cleared after firing so the same spent
+        # swing cannot re-fire; it re-seeds on the next confirmed swing (sec. 4).
+        if state == _DOWN and bos_break_low is not None and rearm_block_dir != _UP:
+            broken_price = bos_break_low["price"]
+            if c < broken_price - bos_disp:
+                ts_now = _ts_iso(df, ci)
+                bos_tier = ("Range" if h4_floor is not None
+                            and abs(broken_price - h4_floor) <= bos_disp
+                            else "BOS")
+                last_bos = {"kind": "BOS", "direction": _DOWN,
+                            "ts": ts_now, "tier": bos_tier}
+                _push_event("BOS", "bearish", ts_now, broken_price,
+                            impulse_start_ts, False, "bearish", bos_tier,
+                            broken_swing_ts_arg=bos_break_low["ts"])
+                trend_dir_swings_since_extend = 0
+                bos_break_low = None  # spent — re-seeds on next confirmed low
+        elif state == _UP and bos_break_high is not None and rearm_block_dir != _DOWN:
+            broken_price = bos_break_high["price"]
+            if c > broken_price + bos_disp:
+                ts_now = _ts_iso(df, ci)
+                bos_tier = ("Range" if h4_ceiling is not None
+                            and abs(broken_price - h4_ceiling) <= bos_disp
+                            else "BOS")
+                last_bos = {"kind": "BOS", "direction": _UP,
+                            "ts": ts_now, "tier": bos_tier}
+                _push_event("BOS", "bullish", ts_now, broken_price,
+                            impulse_start_ts, False, "bullish", bos_tier,
+                            broken_swing_ts_arg=bos_break_high["ts"])
+                trend_dir_swings_since_extend = 0
+                bos_break_high = None  # spent — re-seeds on next confirmed high
+
         # ---- 3. BIRTH (cold start) ---------------------------------------------
         if state == _UNDEF:
             if recent_high is not None and c > recent_high["price"]:
@@ -732,6 +783,9 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 _push_event("BOS", "bullish", ts_now, recent_high["price"],
                             impulse_start_ts, False, "bullish", "BOS",
                             broken_swing_ts_arg=recent_high["ts"])
+                # recent_high is now spent (just broken). Next BOS-up target is
+                # the next confirmed swing high; cleared until it forms.
+                bos_break_high = None; bos_break_low = None
             elif recent_low is not None and c < recent_low["price"]:
                 state    = _DOWN
                 defended = recent_high["price"] if recent_high else recent_low["price"]
@@ -746,6 +800,9 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 _push_event("BOS", "bearish", ts_now, recent_low["price"],
                             impulse_start_ts, False, "bearish", "BOS",
                             broken_swing_ts_arg=recent_low["ts"])
+                # recent_low is now spent (just broken). Next BOS-down target is
+                # the next confirmed swing low; cleared until it forms.
+                bos_break_low = None; bos_break_high = None
 
         # ---- 4. INGEST swings (MAINTAIN + BOS only) ----------------------------
         for s in by_known.get(ci, ()):
