@@ -86,6 +86,14 @@ def normalized_score(raw, pair_conf):
 SCORE_REEMAIL_UP_THRESHOLD   = 0.7   # current >= prior + 0.7 -> re-email up
 SCORE_REEMAIL_DOWN_THRESHOLD = 0.5   # current <= prior - 0.5 -> re-email down
 
+# Re-entry flicker guard. A zone that leaves proximity and returns re-emails
+# (plain TRADE READY — price has come back). But a zone hovering on the
+# proximity boundary must NOT spam an email every hour it jitters across the
+# line. We only arm the re-entry trigger once price has pulled beyond
+# REENTRY_EXIT_MULT x the proximity cap since the last email — i.e. a genuine
+# departure, not boundary noise.
+REENTRY_EXIT_MULT = 1.5
+
 
 def _ob_in_killzone_label(ob, pair_conf):
     """Render a human-readable label for whether the OB candle landed in a
@@ -1777,20 +1785,31 @@ if __name__ == "__main__":
         # the end-of-scan concurrency-safe merge.
         save_json("active_watch_state.json", watch_kept)
     watch_state = watch_kept
-    # --- Phase 2 dedup state — lifetime model (no daily reset) ---
-    # Structure: { "day_id": "YYYY-MM-DD",  # retained for backward-compat reads; no longer used to wipe
+    # --- Phase 2 dedup state — lifetime model with daily re-send ---
+    # Structure: { "day_id": "YYYY-MM-DD",  # informational only; no longer wipes
     #              "zones": { zone_id: {"score_int": ..., "score_raw": ...,
     #                                    "alert_ist": ..., "last_seen_ist": ...,
+    #                                    "last_email_day": "YYYY-MM-DD",
+    #                                    "reentry_armed": bool,
+    #                                    "max_exit_distance": float,
     #                                    "breakdown": ..., ...} } }
     #
     # A zone's dedup entry lives as long as the zone itself lives in P1's
-    # active_obs slate. Re-emails are governed ONLY by the asymmetric
-    # hysteresis band (+0.7 / -0.5). Calendar rollovers do NOT re-spam.
+    # active_obs slate. Re-emails fire on FOUR triggers (see the scoring loop):
+    #   - fresh:       first ever sighting
+    #   - still_valid: first sighting of a NEW trading day, still in proximity
+    #                  (re-sends regardless of score — a zone valid across days
+    #                   re-emails once per day)
+    #   - reentry:     price left proximity (>1.5x cap) and returned, any day
+    #   - updated:     same-day score crosses +0.7 / -0.5
+    # Same-day, in-proximity, in-band re-sightings stay silent.
     #
     # Stale-entry garbage collection: any entry whose last_seen_ist is older
-    # than DEDUP_STALE_DAYS days is evicted at load time. Conservative window
-    # so a transient yfinance hiccup that skips one P2 scan never evicts a
-    # live zone's dedup state.
+    # than DEDUP_STALE_DAYS days is evicted at load time. last_seen_ist is now
+    # refreshed even when a zone is OUT of proximity (as long as P1 still hands
+    # it to P2), so a live-but-distant zone is never GC'd — only a zone P1 has
+    # actually dropped ages out. Conservative window so a transient yfinance
+    # hiccup that skips one P2 scan never evicts a live zone's dedup state.
     DEDUP_STALE_DAYS = 7
     phase2_state = load_json("phase2_sent.json", {"day_id": None, "zones": {}})
 
@@ -1905,6 +1924,19 @@ if __name__ == "__main__":
             distance = abs(closest_to_ob - proximal)
             prox_cap = pair_conf["atr_multiplier"] * h1_atr
 
+            # Structural dedup key built HERE (before the proximity gate) so the
+            # out-of-proximity branch can keep the zone's dedup entry alive and
+            # arm the re-entry trigger. Stashed on the ob for the scoring loop.
+            # Key uses BOS swing price (stable across scans) + ob_timestamp
+            # hour-bucket; see the scoring loop's original derivation.
+            bos_swing_px = float(ob.get('bos_swing_price', proximal))
+            bos_tag = ob.get('bos_tag', 'BOS')
+            key_dp = max(0, dp - 1)
+            ob_ts_iso = ob.get('ob_timestamp') or ''
+            ts_bucket = ob_ts_iso[:13] if len(ob_ts_iso) >= 13 else ob_ts_iso
+            zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}_{ts_bucket}"
+            ob['_zone_id'] = zone_id
+
             zone_outcome = {
                 "direction": ob['direction'],
                 "proximal": proximal,
@@ -1919,6 +1951,19 @@ if __name__ == "__main__":
             if distance > prox_cap:
                 zone_outcome["result"] = "dropped_proximity"
                 scan_record["zone_outcomes"].append(zone_outcome)
+                # Out-of-proximity does NOT delete the zone (Phase 1 owns
+                # deletion). Keep the dedup entry alive (refresh last_seen so
+                # GC never evicts a still-live zone) and track the furthest
+                # departure. Once price pulls beyond REENTRY_EXIT_MULT x the
+                # cap, arm the re-entry trigger so a genuine return re-emails.
+                prior_oop = phase2_zones.get(zone_id)
+                if prior_oop is not None:
+                    prior_oop["last_seen_ist"] = ist_now.isoformat()
+                    prior_oop["max_exit_distance"] = max(
+                        float(prior_oop.get("max_exit_distance", 0.0)), distance
+                    )
+                    if prior_oop["max_exit_distance"] >= REENTRY_EXIT_MULT * prox_cap:
+                        prior_oop["reentry_armed"] = True
                 continue
 
             # 2. OB still-active gate. Phase 1 owns the canonical drop decision,
@@ -2067,57 +2112,62 @@ if __name__ == "__main__":
             # pair is `entry_model == "limit"`; the legacy `ltf_choch` branch
             # (Gold/NAS M5 CHoCH route) is retired.
             #
-            # Structural dedup key: uses BOS swing price (stable across scans)
-            # instead of OB proximal (which drifts as Phase 1 reselects OB candle).
-            # ob_timestamp hour-bucket disambiguates two structurally distinct
-            # zones that happen to share a swing price (e.g. re-CHoCH at the
-            # same level after a prior CHoCH wipe).
-            bos_swing_px = float(ob.get('bos_swing_price', proximal))
-            bos_tag = ob.get('bos_tag', 'BOS')
-            key_dp = max(0, dp - 1)
-            ob_ts_iso = ob.get('ob_timestamp') or ''
-            ts_bucket = ob_ts_iso[:13] if len(ob_ts_iso) >= 13 else ob_ts_iso
-            zone_id = f"{name}_{bias}_{bos_tag}_{round(bos_swing_px, key_dp)}_{ts_bucket}"
+            # Structural dedup key was built (and stashed on the ob) in the
+            # proximity loop above so the out-of-proximity branch could share it.
+            zone_id = ob['_zone_id']
 
-            # Asymmetric hysteresis dedup.
-            # First sighting today → email.
-            # Re-sighting inside the dead band (+0.7 / -0.5) → silent;
-            # we still track high/low water so we can see how much the
-            # score wobbled between emails (diagnostic-only).
-            # Re-sighting crossing the upward or downward threshold →
-            # email with UPDATED prefix + score-drivers line.
+            # Re-email triggers (in priority order):
+            #   1. fresh       — never emailed → TRADE READY
+            #   2. reentry     — left proximity (>1.5x cap) and returned, any
+            #                    day → TRADE READY (plain; price has come back)
+            #   3. still_valid — new trading day, still in proximity, any
+            #                    score → TRADE READY (STILL VALID)
+            #   4. updated     — same day, score crosses +0.7/-0.5 → UPDATED
+            #   - silent       — same day, in proximity, score in dead band
             current_score_raw = float(score_res['total'])
             current_breakdown = score_res.get('breakdown', {})
             prior = phase2_zones.get(zone_id)
-            is_update = False
+            today_id = get_day_id_ist(ist_now)
+            email_kind = "fresh"            # fresh | reentry | still_valid | updated
             prior_score_raw = None
             prior_breakdown = None
+            prior_alert_ist = None
             hi_water = current_score_raw
             lo_water = current_score_raw
             if prior is not None:
                 prior_score_raw = float(prior.get("score_raw", 0.0))
                 prior_breakdown = prior.get("breakdown")
+                prior_alert_ist = prior.get("alert_ist")
                 prior_hi = float(prior.get("score_high_water", prior_score_raw))
                 prior_lo = float(prior.get("score_low_water",  prior_score_raw))
                 hi_water = max(prior_hi, current_score_raw)
                 lo_water = min(prior_lo, current_score_raw)
-                direction = hysteresis_should_reemail(current_score_raw, prior_score_raw)
-                if direction is None:
-                    # Silent — but persist updated watermarks for diagnostics.
-                    prior["score_high_water"] = hi_water
-                    prior["score_low_water"]  = lo_water
-                    # Refresh last_seen_ist so stale-entry GC doesn't evict
-                    # a live silent-band zone.
-                    prior["last_seen_ist"] = ist_now.isoformat()
-                    save_json("phase2_sent.json", phase2_state)
-                    scan_record["final_action"] = (
-                        f"dedup_hysteresis_silent "
-                        f"({prior_score_raw:.1f}->{current_score_raw:.1f}, "
-                        f"band -{SCORE_REEMAIL_DOWN_THRESHOLD:.1f}/+{SCORE_REEMAIL_UP_THRESHOLD:.1f})"
-                    )
-                    append_scan_log(scan_record)
-                    continue
-                is_update = True
+
+                if prior.get("reentry_armed"):
+                    # Price genuinely left the zone and came back — fresh approach.
+                    email_kind = "reentry"
+                elif prior.get("last_email_day") != today_id:
+                    # New trading day, zone still in proximity & valid.
+                    email_kind = "still_valid"
+                else:
+                    # Same trading day, continuously in proximity → hysteresis.
+                    direction = hysteresis_should_reemail(current_score_raw, prior_score_raw)
+                    if direction is None:
+                        # Silent — but persist updated watermarks for diagnostics.
+                        prior["score_high_water"] = hi_water
+                        prior["score_low_water"]  = lo_water
+                        # Refresh last_seen_ist so stale-entry GC doesn't evict
+                        # a live silent-band zone.
+                        prior["last_seen_ist"] = ist_now.isoformat()
+                        save_json("phase2_sent.json", phase2_state)
+                        scan_record["final_action"] = (
+                            f"dedup_hysteresis_silent "
+                            f"({prior_score_raw:.1f}->{current_score_raw:.1f}, "
+                            f"band -{SCORE_REEMAIL_DOWN_THRESHOLD:.1f}/+{SCORE_REEMAIL_UP_THRESHOLD:.1f})"
+                        )
+                        append_scan_log(scan_record)
+                        continue
+                    email_kind = "updated"
 
             # Register zone state in-memory. Persisted AFTER send_email so
             # a crash mid-send re-attempts the alert next scan (duplicate
@@ -2130,8 +2180,16 @@ if __name__ == "__main__":
                 "score_high_water": current_score_raw,
                 "score_low_water":  current_score_raw,
                 "breakdown": current_breakdown,
-                "alert_ist": ist_now.isoformat(),
+                # First-alert time is preserved across re-emails so STILL VALID
+                # carryovers retain when the zone was originally flagged.
+                "alert_ist": prior_alert_ist or ist_now.isoformat(),
                 "last_seen_ist": ist_now.isoformat(),
+                # Daily-reset + re-entry tracking. Stamping last_email_day=today
+                # suppresses a second daily reminder; clearing the re-entry flag
+                # and exit watermark re-arms the flicker guard from zero.
+                "last_email_day": today_id,
+                "reentry_armed": False,
+                "max_exit_distance": 0.0,
                 "bias": bias,
                 "pair": name
             }
@@ -2152,7 +2210,7 @@ if __name__ == "__main__":
             if not m15_ok:
                 _log_chart_failure(name, "h1_zoomed_phase2_limit")
 
-            if is_update:
+            if email_kind == "updated":
                 drivers_line = format_score_driver_line(
                     prior_score_raw, current_score_raw,
                     prior_breakdown, current_breakdown
@@ -2170,7 +2228,19 @@ if __name__ == "__main__":
                     f"TRADE READY UPDATE: {name} "
                     f"score {prior_score_raw:.1f}->{current_score_raw:.1f}"
                 )
-            else:
+            elif email_kind == "still_valid":
+                # Next-day reminder for a zone still sitting in proximity.
+                subject_prefix = "TRADE READY (STILL VALID)"
+                email_label = "TRADE READY — still valid"
+                log_action = "alert_sent_TRADE_READY_STILL_VALID"
+                print_label = f"TRADE READY STILL VALID: {name}"
+            elif email_kind == "reentry":
+                # Price left proximity and came back — plain TRADE READY.
+                subject_prefix = "TRADE READY"
+                email_label = "TRADE READY"
+                log_action = "alert_sent_TRADE_READY_REENTRY"
+                print_label = f"TRADE READY RE-ENTRY: {name}"
+            else:  # fresh
                 subject_prefix = "TRADE READY"
                 email_label = "TRADE READY"
                 log_action = "alert_sent_TRADE_READY"
