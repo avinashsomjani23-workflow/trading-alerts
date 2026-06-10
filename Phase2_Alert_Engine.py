@@ -614,16 +614,25 @@ def _p2_swing_markers(ax, df_h1, window_start, n, pair_conf, y_min, y_max):
             xi = abs_i - window_start
             if not (0 <= xi < n):
                 continue
-            price = s['price']
+            # Anchor to the candle's ACTUAL extreme at abs_i (high -> High,
+            # low -> Low), not the price stored in state — yfinance revises
+            # recent intraday bars, so the stored price can float the marker
+            # off its candle. Mirrors the Phase 1 radar fix.
+            is_high = (s['type'] == 'high')
+            try:
+                candle_price = float(df_h1['High'].iloc[abs_i]) if is_high \
+                    else float(df_h1['Low'].iloc[abs_i])
+            except Exception:
+                continue
             if s.get('is_setup_break'):
-                ax.scatter([xi], [price], marker='x', s=70,
+                ax.scatter([xi], [candle_price], marker='x', s=70,
                            color=SETUP_BREAK_COLOR, linewidths=2.0, zorder=8)
-            elif s['type'] == 'high':
-                ax.scatter([xi], [price + offset], marker='v', s=42,
+            elif is_high:
+                ax.scatter([xi], [candle_price + offset], marker='v', s=42,
                            color=SWING_COLOR, edgecolors=SWING_COLOR,
                            linewidths=1.0, zorder=6)
             else:
-                ax.scatter([xi], [price - offset], marker='^', s=42,
+                ax.scatter([xi], [candle_price - offset], marker='^', s=42,
                            color=SWING_COLOR, edgecolors=SWING_COLOR,
                            linewidths=1.0, zorder=6)
     except Exception:

@@ -376,6 +376,16 @@ def fetch_data(ticker, interval, period, retries=2):
                 if isinstance(df.columns, pd.MultiIndex):
                     df.columns = [col[0] for col in df.columns]
                 tailed = df.tail(150).copy().reset_index()
+                # Normalize the datetime column to UTC at the fetch boundary so
+                # detection, persisted swing ts, and the chart all speak one
+                # timezone. yfinance returns GC=F (gold) in US/Eastern on some
+                # fetches and UTC on others; without this, persisted swings and
+                # freshly fetched candles can disagree on tz and markers misplace.
+                _dt_col = 'Datetime' if 'Datetime' in tailed.columns else (
+                    'Date' if 'Date' in tailed.columns else None)
+                if _dt_col is not None:
+                    _s = pd.to_datetime(tailed[_dt_col], utc=True)
+                    tailed[_dt_col] = _s
                 is_stale, age_hours = _check_staleness(tailed, interval)
                 if not is_stale:
                     return tailed
@@ -1535,13 +1545,17 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
             le_idx = None
             if le_ts:
                 # Match against full_df since window_start may chop history.
-                ts_col = full_df['Datetime'] if 'Datetime' in full_df.columns else full_df.index
-                for k in range(len(full_df)):
-                    raw = ts_col.iloc[k] if hasattr(ts_col, 'iloc') else ts_col[k]
-                    raw_iso = raw.isoformat() if hasattr(raw, 'isoformat') else str(raw)
-                    if raw_iso == le_ts:
-                        le_idx = k
-                        break
+                # Compare UTC instants, not isoformat strings — the event ts may
+                # be persisted in a different timezone than the chart's candles
+                # (see smc_detector.ts_to_utc_instant).
+                le_inst = smc_detector.ts_to_utc_instant(le_ts)
+                if le_inst is not None:
+                    ts_col = full_df['Datetime'] if 'Datetime' in full_df.columns else full_df.index
+                    for k in range(len(full_df)):
+                        raw = ts_col.iloc[k] if hasattr(ts_col, 'iloc') else ts_col[k]
+                        if smc_detector.ts_to_utc_instant(raw) == le_inst:
+                            le_idx = k
+                            break
             if le_idx is not None and le_idx >= window_start:
                 local_i = le_idx - window_start
                 if 0 <= local_i < n_plot:
@@ -1640,22 +1654,30 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
             # ts -> absolute idx over full_df, then shift to local plot x.
             ts_to_abs = smc_detector.build_ts_to_local_x(full_df)
             for s in swings_persisted:
-                abs_i = ts_to_abs.get(s.get('ts'))
+                abs_i = ts_to_abs.get(smc_detector.ts_to_utc_instant(s.get('ts')))
                 if abs_i is None:
                     continue  # ts not in this df at all
                 xi = abs_i - window_start
                 if not (0 <= xi < n_plot):
                     continue  # swing outside the plotted window
-                price = s['price']
+                # Anchor the marker to the candle's ACTUAL extreme at the
+                # matched column — high swing -> H[xi], low swing -> L[xi] —
+                # not the price stored in state. yfinance revises recent
+                # intraday bars between the detection run and the render run;
+                # the stored price then no longer equals the bar at that
+                # column, which floats the X off its candle. The column comes
+                # from the timestamp; the price must come from the same bar.
+                is_high = (s['type'] == 'high')
+                candle_price = float(H[xi]) if is_high else float(L[xi])
                 if s.get('is_setup_break'):
-                    ax.scatter([xi], [price], marker='x',
+                    ax.scatter([xi], [candle_price], marker='x',
                                s=70, color=SETUP_BREAK_COLOR, linewidths=2.0, zorder=8)
-                elif s['type'] == 'high':
-                    ax.scatter([xi], [price + marker_offset], marker='v',
+                elif is_high:
+                    ax.scatter([xi], [candle_price + marker_offset], marker='v',
                                s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
                                linewidths=1.0, zorder=6)
                 else:
-                    ax.scatter([xi], [price - marker_offset], marker='^',
+                    ax.scatter([xi], [candle_price - marker_offset], marker='^',
                                s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
                                linewidths=1.0, zorder=6)
 

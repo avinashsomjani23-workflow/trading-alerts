@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 # ============================================================================
@@ -447,12 +447,42 @@ def swings_for_chart(walls):
     return sw if isinstance(sw, list) else []
 
 
+def ts_to_utc_instant(raw):
+    """Normalize any timestamp form to a UTC-aware pandas Timestamp, or None.
+
+    The same instant can be serialized in different timezones across runs —
+    yfinance returns GC=F (gold) in US/Eastern on some fetches and UTC on
+    others. String equality on isoformat() then fails ('...-04:00' vs
+    '...+00:00') even though both name the same moment, so persisted-swing
+    markers silently drop or land on the wrong candle. Comparing the UTC
+    instant instead is tz-agnostic. A tz-naive input is assumed UTC (the feed
+    is normalized to UTC at the fetch boundary). Returns None on any failure so
+    callers simply skip rather than crash."""
+    if raw is None:
+        return None
+    try:
+        ts = pd.Timestamp(raw)
+    except Exception:
+        return None
+    if ts is None or pd.isna(ts):
+        return None
+    try:
+        if ts.tzinfo is None:
+            return ts.tz_localize('UTC')
+        return ts.tz_convert('UTC')
+    except Exception:
+        return None
+
+
 def build_ts_to_local_x(df_plot):
-    """Map each plotted candle's ISO timestamp -> its local x index (0-based).
+    """Map each plotted candle's UTC instant -> its local x index (0-based).
 
     Lets a chart place a persisted swing (keyed by ts) at the right candle
-    regardless of how the plot window was sliced. Uses 'Datetime' column if
-    present, else the index. Returns {} on any failure (markers simply skip)."""
+    regardless of how the plot window was sliced. Keyed by UTC instant (not the
+    raw isoformat string) so a swing persisted in one timezone still matches a
+    chart rendered in another — see ts_to_utc_instant. Uses 'Datetime' column
+    if present, else the index. Returns {} on any failure (markers simply
+    skip)."""
     out = {}
     try:
         if 'Datetime' in df_plot.columns:
@@ -461,9 +491,9 @@ def build_ts_to_local_x(df_plot):
             ts_seq = df_plot.index
         for x in range(len(df_plot)):
             raw = ts_seq.iloc[x] if hasattr(ts_seq, 'iloc') else ts_seq[x]
-            iso = raw.isoformat() if hasattr(raw, 'isoformat') else (str(raw) if raw is not None else None)
-            if iso is not None:
-                out[iso] = x
+            inst = ts_to_utc_instant(raw)
+            if inst is not None:
+                out[inst] = x
     except Exception:
         return {}
     return out
@@ -2125,7 +2155,11 @@ def locate_ob_candle_idx(df, ob_timestamp_iso):
     try:
         target = datetime.fromisoformat(ob_timestamp_iso)
         if target.tzinfo is not None:
-            target = target.astimezone(None).replace(tzinfo=None)
+            # Normalize to UTC-naive to match the candle side below (line ~2167
+            # converts each df timestamp to UTC-naive). astimezone(None) would
+            # convert to the LOCAL machine tz, skewing the comparison by the
+            # machine's UTC offset for any tz-aware ts (e.g. gold's -04:00).
+            target = target.astimezone(timezone.utc).replace(tzinfo=None)
     except Exception:
         return 0, False
 
