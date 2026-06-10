@@ -1,5 +1,5 @@
 {
-  "day_id": "2026-06-09",
+  "day_id": "2026-06-10",
   "zones": {
     "EURUSD_LONG_CHoCH_1.1616_2026-06-04T08": {
       "score_int": 8,
@@ -126,6 +126,24 @@
       "last_seen_ist": "2026-06-08T23:35:32.975382",
       "bias": "SHORT",
       "pair": "USDJPY"
+    },
+    "GOLD_SHORT_BOS_4259.9_2026-06-09T16": {
+      "score_int": 6,
+      "score_raw": 6.1,
+      "score_high_water": 6.1,
+      "score_low_water": 6.1,
+      "breakdown": {
+        "structure": 1,
+        "sweep": 2.08,
+        "fvg": 2,
+        "freshness": 1,
+        "pd": 0.0,
+        "killzone": 0.0
+      },
+      "alert_ist": "2026-06-10T09:35:34.799782",
+      "last_seen_ist": "2026-06-10T09:35:34.799782",
+      "bias": "SHORT",
+      "pair": "GOLD"
     }
   }
 }
