@@ -3307,13 +3307,18 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
     # Drop zones that have drifted beyond OB_PROXIMITY_ATR from current price.
     # Replaces the daily slate wipe's cleanup of distant zones.
     # Only fires when h1_atr is known and positive.
-    # EXEMPTION: the last-event OB (role == 'primary' = OB1) is never dropped
-    # for distance — it surfaces regardless of proximity (trader decision
-    # 2026-06-10). Its role is re-assigned fresh every scan, so once it stops
-    # being the last event it loses 'primary' and becomes droppable again.
-    # Missing role => NOT exempt (fail safe: only an explicit 'primary' is OB1).
-    is_ob1 = slate_zone.get('role') == 'primary'
-    if h1_atr and h1_atr > 0 and current_price is not None and not is_ob1:
+    #
+    # NO OB1 exemption here — and that is correct. This function is ONLY called
+    # for slate zones that did NOT match a fresh OB this scan (see run_radar
+    # reconcile: matched zones `continue` before this). The CURRENT last-event
+    # OB (OB1) is exempt from the build-loop proximity gate, so it is always
+    # produced fresh and therefore always MATCHES — it never reaches here.
+    # Any zone that does reach here is, by definition, NOT this scan's OB1
+    # (at most a FORMER OB1, now superseded). Exempting on the slate's stale
+    # `role` would make a superseded far OB1 immortal (role is never refreshed
+    # on unmatched zones). So a former OB1 that drifted away is dropped here,
+    # exactly as it should be.
+    if h1_atr and h1_atr > 0 and current_price is not None:
         proximal = slate_zone.get('proximal_line')
         if proximal is not None:
             if abs(current_price - proximal) > OB_PROXIMITY_ATR * h1_atr:
