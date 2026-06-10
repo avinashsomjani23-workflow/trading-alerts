@@ -141,10 +141,10 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-10T09:35:34.799782",
-      "last_seen_ist": "2026-06-10T21:35:35.223365",
+      "last_seen_ist": "2026-06-10T22:35:39.792387",
       "bias": "SHORT",
       "pair": "GOLD",
-      "max_exit_distance": 120.2998046875
+      "max_exit_distance": 121.2001953125
     }
   }
 }
