@@ -1949,6 +1949,10 @@ if __name__ == "__main__":
             zone_outcome = {
                 "direction": ob['direction'],
                 "proximal": proximal,
+                # `distal` added for backtest/live parity (Tier-B OB identity).
+                # Data already in scope (line ~1920); additive log field only.
+                "distal": round(distal, dp),
+                "ob_timestamp": ob.get('ob_timestamp'),
                 "closest_price": round(closest_to_ob, dp),
                 "current_price": round(current_price, dp),
                 "distance": round(distance, dp),
@@ -2061,6 +2065,17 @@ if __name__ == "__main__":
                 scan_record["final_action"] = "levels_invalid"
                 append_scan_log(scan_record)
                 continue
+
+            # Record the fired-alert trade levels for backtest/live parity
+            # (Tier-B). Keyed by zone_id so the extractor can join to the
+            # zone_outcome above. Additive log only — no decision/branch change.
+            scan_record.setdefault("fired_levels", {})[ob.get('_zone_id', zone_id)] = {
+                "entry": levels.get("entry"),
+                "sl":    levels.get("sl"),
+                "tp1":   levels.get("tp1"),
+                "tp2":   levels.get("tp2"),
+                "rr":    levels.get("rr"),
+            }
 
             # Score + levels passed. NOW fetch macro context — only spent on
             # zones that will actually email.
