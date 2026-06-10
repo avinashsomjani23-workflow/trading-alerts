@@ -236,19 +236,28 @@ def _filter_swings_by_leg_atr(swings: List[Dict[str, Any]], df,
 
 
 def detect_swings(df, lookback: int = SWING_LOOKBACK,
-                  min_leg_atr_mult: Optional[float] = MIN_LEG_ATR_MULT
+                  min_leg_atr_mult: Optional[float] = MIN_LEG_ATR_MULT,
+                  right_lookback: Optional[int] = None
                   ) -> List[Dict[str, Any]]:
     """
     Find confirmed swing highs and swing lows over the entire df.
 
     A candle at idx i is:
       - a swing high if H[i] is STRICTLY GREATER than every other high in
-        the window [i-lookback, i+lookback].
+        the window [i-lookback, i+right_lookback].
       - a swing low  if L[i] is STRICTLY LESS than every other low in
-        the window [i-lookback, i+lookback].
+        the window [i-lookback, i+right_lookback].
 
     Strict comparison: equal highs / equal lows do NOT register as swings.
     A flat top / flat bottom across the window correctly produces no swing.
+
+    right_lookback (default = lookback): how many bars to the RIGHT a pivot
+    must dominate to be detected. The left side stays = lookback (the real
+    pivot geometry). A SMALLER right_lookback lets the most recent pivot be
+    seen sooner (fewer bars must print after it) — used by h4_range to make
+    the newest dealing-range wall appear earlier without changing the level a
+    fully-confirmed pivot resolves to. Symmetric (right=left) is the H1
+    default and is unchanged.
 
     After geometric detection, the ATR leg-size filter is applied (unless
     min_leg_atr_mult is None or <= 0). This is the single H1 swing definition:
@@ -259,18 +268,19 @@ def detect_swings(df, lookback: int = SWING_LOOKBACK,
     Returns list sorted by idx, each entry:
       {'type': 'high'|'low', 'idx': i, 'price': float, 'ts': iso}
     """
-    if df is None or len(df) < lookback * 2 + 1:
+    rb = lookback if right_lookback is None else right_lookback
+    if df is None or len(df) < lookback + rb + 1:
         return []
     H = df['High'].values.astype(float)
     L = df['Low'].values.astype(float)
     n = len(df)
     out = []
-    for i in range(lookback, n - lookback):
+    for i in range(lookback, n - rb):
         # Compare against every neighbour in window EXCLUDING i itself.
         wh_left  = H[i - lookback: i]
-        wh_right = H[i + 1: i + lookback + 1]
+        wh_right = H[i + 1: i + rb + 1]
         wl_left  = L[i - lookback: i]
-        wl_right = L[i + 1: i + lookback + 1]
+        wl_right = L[i + 1: i + rb + 1]
         # Use Python max/min on numpy slices — fine for small windows.
         max_neighbour_h = max(max(wh_left), max(wh_right)) if len(wh_left) and len(wh_right) else None
         min_neighbour_l = min(min(wl_left), min(wl_right)) if len(wl_left) and len(wl_right) else None

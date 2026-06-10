@@ -60,6 +60,15 @@ H4_ANCHOR_HOUR_UTC = 1
 SWING_LOOKBACK   = _dr.SWING_LOOKBACK         # 3
 MIN_LEG_ATR_MULT = _dr.MIN_LEG_ATR_MULT       # 1.5
 
+# Right-side lookback for the NEWEST wall only. A fully-confirmed H4 pivot needs
+# SWING_LOOKBACK (3) bars on each side, so the symmetric range was ~6 H4 bars
+# (~24h) late. We re-detect with a SHORTER right window so the most-recent pivot
+# is seen after fewer bars print, surfacing the live wall sooner. The level is
+# the SAME pivot the symmetric pass would later confirm — only its visibility is
+# earlier. Used for the LIVE wall only; the frozen confirmed_* range (CHoCH gate)
+# still reads the symmetric pass so that gate never jitters.
+WALL_RIGHT_LOOKBACK = 1
+
 # Minimum H1 bars in the window to even attempt an H4 range. Need enough H4
 # candles to confirm a swing on each side (lb*2+1) plus headroom.
 _MIN_H1_BARS = 80
@@ -231,6 +240,18 @@ def compute_h4_range(df, min_leg_atr_mult: Optional[float] = MIN_LEG_ATR_MULT) -
     out['n_confirmed_highs'] = len(highs)
     out['n_confirmed_lows'] = len(lows)
 
+    # Early (faster) swing pass — same left geometry + same ATR leg filter, but
+    # only WALL_RIGHT_LOOKBACK bars required to the right. This surfaces the most
+    # recent pivot ~SWING_LOOKBACK - WALL_RIGHT_LOOKBACK H4 bars sooner. Used ONLY
+    # to advance the LIVE wall; the symmetric `highs`/`lows` above still drive the
+    # frozen confirmed_* range that the CHoCH gate reads.
+    early = _dr.detect_swings(h4, lookback=SWING_LOOKBACK,
+                              min_leg_atr_mult=min_leg_atr_mult,
+                              right_lookback=WALL_RIGHT_LOOKBACK)
+    early_conf = [s for s in early if s['idx'] + WALL_RIGHT_LOOKBACK < n]
+    early_highs = [s for s in early_conf if s['type'] == 'high']
+    early_lows = [s for s in early_conf if s['type'] == 'low']
+
     # Live price = last H1 close.
     try:
         price = float(df['Close'].to_numpy(dtype=float)[-1])
@@ -248,6 +269,8 @@ def compute_h4_range(df, min_leg_atr_mult: Optional[float] = MIN_LEG_ATR_MULT) -
     conf_floor = float(floor_s['price'])
 
     # --- Last fully-confirmed range (frozen reference for the CHoCH gate) ----
+    # Reads the SYMMETRIC pass only — never the early pass — so the gate stays
+    # frozen and does not jitter when a faster wall advances.
     if conf_ceiling > conf_floor:
         out['confirmed_valid'] = True
         out['confirmed_ceiling'] = conf_ceiling
@@ -255,6 +278,22 @@ def compute_h4_range(df, min_leg_atr_mult: Optional[float] = MIN_LEG_ATR_MULT) -
         out['confirmed_eq'] = (conf_ceiling + conf_floor) / 2.0
         out['confirmed_ceiling_ts'] = _iso(ceil_s.get('ts'))
         out['confirmed_floor_ts'] = _iso(floor_s.get('ts'))
+
+    # --- Advance the LIVE wall to the earlier pivot when one exists ----------
+    # If the early pass found a more-recent qualifying pivot than the symmetric
+    # one, the live wall jumps to it now instead of waiting for full confirmation.
+    # Guarded by the same ATR leg filter (early pivots already passed it), so a
+    # tiny noise pivot can never become a wall.
+    if early_highs:
+        e_ceil = max(early_highs, key=lambda s: s['idx'])
+        if e_ceil['idx'] > ceil_s['idx']:
+            ceil_s = e_ceil
+            conf_ceiling = float(e_ceil['price'])
+    if early_lows:
+        e_floor = max(early_lows, key=lambda s: s['idx'])
+        if e_floor['idx'] > floor_s['idx']:
+            floor_s = e_floor
+            conf_floor = float(e_floor['price'])
 
     # --- Live range (broken-wall live tracking) -----------------------------
     ceiling = conf_ceiling
