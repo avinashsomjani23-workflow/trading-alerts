@@ -2675,7 +2675,12 @@ def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr):
 
     event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'BOS'))
     side = "demand" if ob['direction'] == 'bullish' else "supply"
-    structural = (f"{event_label} flipped structure {ob['direction']}, leaving this "
+    # A CHoCH flips structure; a BOS (incl. Range BOS / birth) continues it.
+    # Using the right verb keeps the narrative honest — a BOS card must never
+    # read "flipped structure". `event_label` is the single source of truth for
+    # the event type here.
+    structural_verb = "flipped structure" if event_label == 'CHoCH' else "continued structure"
+    structural = (f"{event_label} {structural_verb} {ob['direction']}, leaving this "
                   f"{side} zone as the origin smart money may defend on the retrace.")
     if in_zone:
         watch = ("Price is mitigating it now — watch the reaction candle for a "
