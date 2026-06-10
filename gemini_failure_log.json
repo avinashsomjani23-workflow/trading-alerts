@@ -403,5 +403,10 @@
     "ts": "2026-06-10T18:36:09.513581",
     "pair": "GOLD",
     "reason": "API error 429: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and bi"
+  },
+  {
+    "ts": "2026-06-10T19:36:12.269055",
+    "pair": "GOLD",
+    "reason": "API error 429: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and bi"
   }
 ]
