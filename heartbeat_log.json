@@ -1,24 +1,5 @@
 [
   {
-    "ts": "2026-04-29T09:02:28.156347",
-    "ts_human": "09:02 IST, 29 Apr 2026",
-    "ob_count_total": 6,
-    "ob_count_per_pair": {
-      "EURUSD": 1,
-      "USDJPY": 1,
-      "NZDUSD": 2,
-      "USDCHF": 0,
-      "NAS100": 1,
-      "GOLD": 1
-    },
-    "ob_age_hrs": 0.005038968611111111,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "issue_count": 0,
-    "issues": []
-  },
-  {
     "ts": "2026-04-29T12:02:31.044989",
     "ts_human": "12:02 IST, 29 Apr 2026",
     "ob_count_total": 4,
@@ -1028,5 +1009,30 @@
     "smtp_fails_3h": 0,
     "issue_count": 0,
     "issues": []
+  },
+  {
+    "ts": "2026-06-10T12:35:35.835827",
+    "ts_human": "12:35 IST, 10 Jun 2026",
+    "ob_count_total": 4,
+    "ob_count_per_pair": {
+      "EURUSD": 1,
+      "USDJPY": 0,
+      "NZDUSD": 1,
+      "USDCHF": 0,
+      "NAS100": 1,
+      "GOLD": 1
+    },
+    "ob_age_hrs": 0.005368350833333334,
+    "gemini_fails_3h": 4,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 1,
+    "issues": [
+      {
+        "title": "4 Gemini API failures in last 3h",
+        "action": "Check gemini_failure_log.json \u2014 likely rate limit or key issue."
+      }
+    ]
   }
 ]
