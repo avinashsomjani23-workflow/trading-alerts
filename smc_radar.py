@@ -292,6 +292,14 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
             'ts': walls.get('last_event_ts'),
             'chop': bool(walls.get('last_event_chop', False)),
         },
+        # Live state-machine signal (may be a transient non-event like
+        # 'CHoCH_FAILED'/'BOS_BIRTH'). Separate from last_event so the two
+        # never collide. Forensics only.
+        'last_structure_signal': walls.get('last_structure_signal'),
+        # Full event ring snapshot. structure_state.json is overwritten every
+        # scan, so without this the BOS/CHoCH history is unrecoverable from the
+        # logs. Persisting it per scan lets any past event be reconstructed.
+        'events': sv2.get('events', []),
         'active_zones': active,
         'dropped_this_scan': dropped_this_scan or [],
         'diagnostics': diagnostics or [],
@@ -390,10 +398,24 @@ def fetch_data(ticker, interval, period, retries=2):
 # ---------------------------------------------------------------------------
 # SMC DETECTION
 # ---------------------------------------------------------------------------
-# NOTE: the former is_valid_ob_candle() (20%-body anti-doji gate) was removed
-# 2026-06 — it skipped the true origin order block whenever that candle was a
-# doji. OB selection now takes the first opposing candle from the break that
-# isn't an oversized news bar. See detect_smc_radar's walk-back comment.
+# is_valid_ob_candle (20%-body anti-doji gate) — RESTORED 2026-06-10 by trader
+# decision. The deletion was never approved. An order block must show
+# directional intent; a near-doji opposing candle is indecision, not an
+# institutional block. The walk-back continues to older opposing candles when
+# the most recent one fails this check. The detection METHOD is unchanged
+# (still the first opposing candle from the break) — this filter only skips
+# dojis, exactly as before.
+
+
+def is_valid_ob_candle(open_p, close_p, high_p, low_p):
+    # Body minimum 20% of candle range. Below this is near-doji territory —
+    # no clear directional intent. The backward walk continues to older
+    # opposing candles if the most recent one fails this check.
+    body = abs(open_p - close_p)
+    rng  = high_p - low_p
+    if rng == 0:
+        return False
+    return body > (rng * 0.20)
 
 
 def _event_label(bos_tag, bos_tier):
@@ -550,6 +572,16 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     last_choch_local_idx: Optional[int] = None  # idx in this df, or None
     active_obs = []
 
+    # Candle ts of the MOST RECENT real structural event (BOS|CHoCH). Its OB is
+    # OB1 (the last-event order block) and must NOT be dropped by the build-loop
+    # proximity gate — OB1 surfaces regardless of distance (trader decision
+    # 2026-06-10). All other events' OBs are still proximity-gated here.
+    last_event_ts = None
+    for _ev in reversed(events):
+        if _ev.get('type') in ('BOS', 'CHoCH'):
+            last_event_ts = _ev.get('candle_ts')
+            break
+
     for ev_pos, ev in enumerate(events):
         ev_type = ev.get('type')           # 'BOS' | 'CHoCH'
         ev_tier = ev.get('tier')           # 'BOS' | 'Range' | 'Major'(legacy)
@@ -644,17 +676,18 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         # break, "last before the impulse" and "first from the break" are the
         # SAME candle on a clean leg — so the first opposing candle wins.
         #
-        # The ONLY rejection is the oversized guard: a candle wider than
-        # OB_MAX_RANGE_ATR_MULT * ATR is a news/volatility bar, not a clean
-        # institutional block — skip it and keep walking. The previous 20%-body
-        # (anti-doji) filter was REMOVED: it silently skipped the true origin
-        # block whenever that candle happened to be a doji (e.g. CHF19's 04:00
-        # block), landing on a deeper, wrong candle glued near the break. A tight
-        # candle is still a valid order block in SMC — body size does not change
-        # which candle is the origin.
+        # Two rejections while walking back:
+        #   - oversized guard: a candle wider than OB_MAX_RANGE_ATR_MULT * ATR
+        #     is a news/volatility bar, not a clean institutional block.
+        #   - body/doji guard (is_valid_ob_candle, 20% of range): a near-doji
+        #     opposing candle is indecision, not an order block — skip it and
+        #     keep walking to the next opposing candle.
+        # Neither changes the detection METHOD (still the first qualifying
+        # opposing candle from the break) — they only skip news bars and dojis.
         ob_idx = -1
         opposing_count = 0
         oversized_count = 0
+        doji_count = 0
         for j in range(bos_idx - 1, impulse_start_idx - 1, -1):
             if (ev_dir == 'bullish' and C[j] < O[j]) or \
                (ev_dir == 'bearish' and C[j] > O[j]):
@@ -663,14 +696,18 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                     if (H[j] - L[j]) > smc_detector.OB_MAX_RANGE_ATR_MULT * h1_atr_for_leg:
                         oversized_count += 1
                         continue
-                ob_idx = j
-                break
+                if is_valid_ob_candle(O[j], C[j], H[j], L[j]):
+                    ob_idx = j
+                    break
+                else:
+                    doji_count += 1
         if ob_idx == -1:
             diag['drop_gate'] = 'no_qualifying_ob_candle'
             diag['drop_detail'] = {
                 'leg_len': int(bos_idx - impulse_start_idx),
                 'opposing_candles_in_leg': opposing_count,
                 'oversized_rejected': oversized_count,
+                'doji_rejected': doji_count,
                 'h1_atr': float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
             }
             ob_build_diagnostics.append(diag)
@@ -685,10 +722,14 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         diag['ob_proximal'] = ob_proximal
         diag['ob_distal'] = ob_low if ev_dir == 'bullish' else ob_high
 
-        # Proximity gate. Single window: drop any OB whose proximal sits beyond
-        # OB_PROXIMITY_ATR from current price. The nearest-two selection (with
-        # pristine preference) happens post-dedupe via _split_primary_alternative.
-        if h1_atr_for_leg and h1_atr_for_leg > 0:
+        # Proximity gate. Drop any OB whose proximal sits beyond
+        # OB_PROXIMITY_ATR from current price — EXCEPT the last-event OB (OB1),
+        # which surfaces regardless of distance (trader decision 2026-06-10).
+        # OB2 selection (closest, gated) happens post-dedupe in
+        # _split_primary_alternative.
+        is_last_event_ob = (last_event_ts is not None
+                            and ev.get('candle_ts') == last_event_ts)
+        if h1_atr_for_leg and h1_atr_for_leg > 0 and not is_last_event_ob:
             if abs(current_price_now - ob_proximal) > OB_PROXIMITY_ATR * h1_atr_for_leg:
                 diag['drop_gate'] = 'proximity_gate'
                 diag['drop_detail'] = {
@@ -981,21 +1022,42 @@ def compute_pair_walls(df, pair_name=""):
         _sv2 = {"state": "error", "events": [], "trend": None, "swings": []}
 
     _h4_valid = _h4.get("valid") and _h4.get("ceiling") is not None and _h4.get("floor") is not None
-    # Last event's REAL tier ('BOS' | 'Range'), read from the event ring — never
-    # the legacy "Major". The v2 engine has one structural tier; the only
-    # distinction that exists is plain BOS vs Range BOS (H4 wall break) vs CHoCH.
+    # last_event_* describes the most recent REAL structural event. ALL of its
+    # fields (type / tier / direction / ts) are sourced from ONE place — the
+    # event ring's last entry — so they can never describe two different events.
+    #
+    # The previous code split the sources: type/direction/ts came from
+    # `last_bos` (the live state-machine scratchpad, which also holds transient
+    # non-events like 'CHoCH_FAILED' and 'BOS_BIRTH') while tier came from the
+    # ring. When last_bos held a CHoCH_FAILED, the four fields described two
+    # unrelated events at different times/directions (verified live on USDJPY).
+    #
+    # The ring only ever contains real, fired events ('BOS'|'CHoCH', tier
+    # 'BOS'|'Range'|'CHoCH'), so it is the single correct source. The live
+    # state-machine scratchpad value (incl. transient CHoCH_FAILED / BOS_BIRTH)
+    # is exposed SEPARATELY as `last_structure_signal` for forensics — never
+    # collides with last_event.
     _events = _sv2.get("events", []) or []
-    _last_event_tier = _events[-1].get("tier") if _events else None
+    _last_ev = _events[-1] if _events else {}
+    _last_bos = _sv2.get("last_bos") or {}
     return {
         "trend":                  _sv2.get("trend"),
         "ceiling_price":          float(_h4["ceiling"]) if _h4_valid else None,
         "ceiling_is_placeholder": bool(_h4.get("ceiling_broken", False)) if _h4_valid else True,
         "floor_price":            float(_h4["floor"])   if _h4_valid else None,
         "floor_is_placeholder":   bool(_h4.get("floor_broken", False))   if _h4_valid else True,
-        "last_event_type":        (_sv2.get("last_bos") or {}).get("kind"),
-        "last_event_tier":        _last_event_tier,
-        "last_event_direction":   (_sv2.get("last_bos") or {}).get("direction"),
-        "last_event_ts":          (_sv2.get("last_bos") or {}).get("ts"),
+        "last_event_type":        _last_ev.get("type"),
+        "last_event_tier":        _last_ev.get("tier"),
+        "last_event_direction":   _last_ev.get("direction"),
+        "last_event_ts":          _last_ev.get("candle_ts"),
+        # Live state-machine signal (may be a transient non-event such as
+        # 'CHoCH_FAILED' / 'BOS_BIRTH'). Kept separate so it never corrupts the
+        # last_event_* fields above. Forensics only.
+        "last_structure_signal":  {
+            "kind":      _last_bos.get("kind"),
+            "direction": _last_bos.get("direction"),
+            "ts":        _last_bos.get("ts"),
+        },
         "last_event_chop":        False,
         "last_scanned_ts":        None,
         "fallback_active":        not _h4_valid,
@@ -1034,31 +1096,61 @@ def _count_confluences(ob):
 
 def _split_primary_alternative(obs, cur_price):
     """
-    Surface the nearest TWO OBs within OB_PROXIMITY_ATR of current price, across
-    ALL directions (buy and sell zones compete together — no trend gating).
+    Surface up to two OBs (trader spec, LOCKED 2026-06-10):
 
-    Selection: rank every in-window OB by distance to price (nearest first);
-    on equal distance, Pristine (touches == 0) is preferred over Tested. Keep
-    up to OB_MAX_KEEP. The nearest kept OB is tagged 'primary', the next
-    'alternative' — role is positional only (Phase 2 fires on whichever OBs
-    fall inside its own tighter gate).
+      OB1 = 'primary'     — the LAST-EVENT order block: the OB built from the
+                            most recent structural event (highest bos_idx),
+                            regardless of type (BOS or CHoCH). NOT gated by
+                            proximity — it always surfaces while it exists, so
+                            the vet can always see where the last structural OB
+                            sits, even when price has run far from it.
+
+      OB2 = 'alternative' — the CLOSEST-DISTANCE order block to current price,
+                            across ALL directions (buy and sell compete; OB2
+                            may be the opposite direction to OB1). Proximity-
+                            GATED at OB_PROXIMITY_ATR; pristine breaks ties.
+                            Chosen from the remaining OBs (OB1 excluded) so OB1
+                            and OB2 are always distinct when both exist.
+
+    Edge cases (all confirmed with trader):
+      - Last event produced no OB (walk-back failed / out of window): OB1 empty,
+        OB2 still surfaces. (no OB to show is the honest outcome)
+      - OB1 and the closest OB are the SAME OB: show it once as OB1; no OB2.
+      - No OB within the proximity window: OB2 empty (OB1 may still show).
+
+    Distance (in ATR) is stamped on every OB for downstream display/logging.
     """
-    in_window = []
+    # Stamp distance on all OBs (used for OB2 ranking + display).
     for ob in obs:
         atr = float(ob.get('h1_atr') or 0.0)
-        if atr <= 0:
+        ob['_distance_atr'] = (round(abs(cur_price - float(ob['proximal_line'])) / atr, 3)
+                               if atr > 0 else None)
+
+    # --- OB1: last-event OB = highest bos_idx (most recent event). Ungated. ---
+    ob1 = None
+    obs_with_idx = [o for o in obs if o.get('bos_idx') is not None]
+    if obs_with_idx:
+        ob1 = max(obs_with_idx, key=lambda o: int(o['bos_idx']))
+
+    # --- OB2: closest OB within proximity, excluding OB1, any direction. ------
+    in_window = []
+    for ob in obs:
+        if ob is ob1:
             continue
-        dist_atr = abs(cur_price - float(ob['proximal_line'])) / atr
-        ob['_distance_atr'] = round(dist_atr, 3)
-        if dist_atr <= OB_PROXIMITY_ATR:
+        d = ob.get('_distance_atr')
+        if d is not None and d <= OB_PROXIMITY_ATR:
             in_window.append(ob)
-
-    # Nearest first; pristine breaks ties (touches asc => 0 before >0).
+    # Nearest first; pristine (touches == 0) breaks ties.
     in_window.sort(key=lambda o: (o['_distance_atr'], int(o.get('touches', 0))))
+    ob2 = in_window[0] if in_window else None
 
-    kept = in_window[:OB_MAX_KEEP]
-    for i, ob in enumerate(kept):
-        ob['role'] = 'primary' if i == 0 else 'alternative'
+    kept = []
+    if ob1 is not None:
+        ob1['role'] = 'primary'
+        kept.append(ob1)
+    if ob2 is not None:
+        ob2['role'] = 'alternative'
+        kept.append(ob2)
     return kept
 
 # ---------------------------------------------------------------------------
@@ -2320,7 +2412,7 @@ def _slate_zone_to_ob_shape(sz):
 
 
 _INVALIDATION_REASON_LONG = {
-    "mitigated_distal_break":  "price closed beyond distal — zone is dead",
+    "mitigated_distal_break":  "price wicked through distal — zone is dead",
     "mitigated_three_touches": "proximal was wicked three times — zone is mitigated",
     "structure_supplanted":    "fresher structure on the same leg replaced this OB",
     "aged_out_of_window":      f"OB older than {OB_MAX_AGE_DAYS} days — auto-retired",
@@ -3215,7 +3307,13 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
     # Drop zones that have drifted beyond OB_PROXIMITY_ATR from current price.
     # Replaces the daily slate wipe's cleanup of distant zones.
     # Only fires when h1_atr is known and positive.
-    if h1_atr and h1_atr > 0 and current_price is not None:
+    # EXEMPTION: the last-event OB (role == 'primary' = OB1) is never dropped
+    # for distance — it surfaces regardless of proximity (trader decision
+    # 2026-06-10). Its role is re-assigned fresh every scan, so once it stops
+    # being the last event it loses 'primary' and becomes droppable again.
+    # Missing role => NOT exempt (fail safe: only an explicit 'primary' is OB1).
+    is_ob1 = slate_zone.get('role') == 'primary'
+    if h1_atr and h1_atr > 0 and current_price is not None and not is_ob1:
         proximal = slate_zone.get('proximal_line')
         if proximal is not None:
             if abs(current_price - proximal) > OB_PROXIMITY_ATR * h1_atr:
