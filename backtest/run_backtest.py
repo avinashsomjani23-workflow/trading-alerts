@@ -107,18 +107,18 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         log_event("abort_no_pairs", level="error", requested=pair_names)
         return None
 
-    # Backtest-only proximity caps. Live config.json stays at 4.0/4.5; the
-    # backtest uses tighter caps because Phase 2 in backtest fires hourly on
-    # closed-bar wicks (no microstructure noise), so the live padding isn't
-    # needed. Trader-set: 3.0 ATR for FX, 3.5 ATR for index/commodity.
-    BACKTEST_ATR_MULT = {"forex": 3.0, "index": 3.5, "commodity": 3.5}
+    # Proximity cap = the LIVE config.json value (identical to live). The
+    # previous BACKTEST_ATR_MULT override (3.0/3.5) made the backtest fire
+    # alerts at a WIDER proximity than live (2.5/3.0), so the backtest saw more
+    # / earlier alerts than live ever would. Per trader decision (2026-06-12)
+    # the two must be identical. We now leave p["atr_multiplier"] at the config
+    # value untouched, so replay_engine reads the same cap live does. Self-
+    # syncing: change config.json and both move together.
     for p in pairs_to_run:
         live_mult = p.get("atr_multiplier")
-        bt_mult = BACKTEST_ATR_MULT.get(p.get("pair_type"), live_mult)
-        p["atr_multiplier"] = bt_mult
-        log_event("backtest_atr_override", pair=p["name"],
+        log_event("backtest_atr_cap", pair=p["name"],
                   pair_type=p.get("pair_type"),
-                  live=live_mult, backtest=bt_mult)
+                  live=live_mult, backtest=live_mult)
 
     state = replay_engine.ReplayState()
     all_alerts: list = []

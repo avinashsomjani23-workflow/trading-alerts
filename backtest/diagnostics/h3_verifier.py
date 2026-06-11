@@ -21,6 +21,14 @@ import pandas as pd
 
 RECON_TOL = 1e-6  # absolute USD tolerance for pnl reconciliation
 
+# MUST match h1_only_simulator.MAX_HOLD_H1_BARS (the pre-fill cap): the
+# simulator gives up waiting for a limit fill after this many bars. The
+# verifier must apply the SAME cap or it false-flags a never_filled row whose
+# entry is touched only AFTER the window (a touch the simulator correctly
+# ignored). Value mirrored, not imported, to keep the verifier free of
+# trading-path imports; see h1_only_simulator.py:46 / :427.
+MAX_HOLD_H1_BARS = 48
+
 
 @dataclass
 class VerifyResult:
@@ -84,13 +92,17 @@ def verify_trade_rows(df: pd.DataFrame, rows: List[Dict[str, Any]],
                 res.add(row, "never_filled_has_fill", f"fill_ts={row.get('fill_ts')}")
             if r not in (0, 0.0, None):
                 res.add(row, "never_filled_nonzero_r", f"r_realised={r}")
-            # Assert no bar in the pend window actually touched entry.
+            # Assert no bar in the pend window actually touched entry. Apply the
+            # SAME 48-bar pre-fill cap the simulator uses â a touch after the
+            # window is correctly NOT a fill, so scanning all future bars here
+            # would false-flag look-ahead.
             if alert_ts is not None and entry is not None:
-                pend = df.loc[alert_ts + pd.Timedelta(hours=1):]
+                pend = df.loc[alert_ts + pd.Timedelta(hours=1):].iloc[:MAX_HOLD_H1_BARS]
                 touched = _first_fill_bar(pend, bias, entry)
                 if touched is not None:
                     res.add(row, "never_filled_but_touchable",
-                            f"entry {entry} was touched at {touched} within data")
+                            f"entry {entry} was touched at {touched} within "
+                            f"{MAX_HOLD_H1_BARS}-bar pend window")
             continue
 
         # --- filled rows ---------------------------------------------------
