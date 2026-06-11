@@ -148,20 +148,20 @@
       "reentry_armed": true
     },
     "EURUSD_LONG_CHoCH_1.1538_2026-06-08T09": {
-      "score_int": 6,
-      "score_raw": 6.0,
-      "score_high_water": 6.0,
-      "score_low_water": 6.0,
+      "score_int": 5,
+      "score_raw": 5.0,
+      "score_high_water": 5.0,
+      "score_low_water": 5.0,
       "breakdown": {
         "structure": 4,
         "sweep": 0.0,
         "fvg": 1,
-        "freshness": 1,
+        "freshness": 0,
         "pd": 0.0,
         "killzone": 0.0
       },
       "alert_ist": "2026-06-11T14:35:34.751017",
-      "last_seen_ist": "2026-06-11T17:35:51.947581",
+      "last_seen_ist": "2026-06-11T18:35:33.779025",
       "last_email_day": "2026-06-11",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
