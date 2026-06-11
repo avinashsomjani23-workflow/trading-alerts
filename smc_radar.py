@@ -891,7 +891,11 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         )
         if not mitigated:
             ob['touches'] = touches
-            ob['status']  = 'Pristine' if touches == 0 else f'Tested ({touches}x)'
+            # Touches counted by is_ob_mitigated_phase1 are PROXIMAL wick-touches
+            # (a distal wick is terminal — it kills the zone, it never accrues as
+            # a "touch"). Label says "proximal" so the email is unambiguous about
+            # which line was hit (trader request 2026-06-10).
+            ob['status']  = 'Pristine' if touches == 0 else f'Tested ({touches}x proximal)'
             tracked_obs.append(ob)
         else:
             # TEMP DIAG — flip the previously-built diag entry to dropped.
@@ -2379,8 +2383,8 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
 def build_dropped_zone_line(sz, name, dp):
     """One-line note for a dropped zone."""
     reason_map = {
-        "mitigated_distal_break": "invalidated — price touched distal",
-        "mitigated_three_touches": "mitigated — proximal hit 3 times",
+        "mitigated_distal_break": "invalidated — a wick hit the DISTAL line (zone dead)",
+        "mitigated_three_touches": "mitigated — the PROXIMAL line was wicked 3 times (exhausted)",
         "structure_supplanted": "replaced by fresher structure (same leg)",
         "aged_out_of_window": f"OB older than {OB_MAX_AGE_DAYS} days — retired",
         "data_unavailable": "pair fetch failed — zone unverifiable",
@@ -2434,8 +2438,8 @@ def _slate_zone_to_ob_shape(sz):
 
 
 _INVALIDATION_REASON_LONG = {
-    "mitigated_distal_break":  "price wicked through distal — zone is dead",
-    "mitigated_three_touches": "proximal was wicked three times — zone is mitigated",
+    "mitigated_distal_break":  "a wick pierced the DISTAL line — zone is dead",
+    "mitigated_three_touches": "the PROXIMAL line was wicked three times — zone is mitigated (exhausted)",
     "structure_supplanted":    "fresher structure on the same leg replaced this OB",
     "aged_out_of_window":      f"OB older than {OB_MAX_AGE_DAYS} days — auto-retired",
     "data_unavailable":        "pair data feed failed — could not verify the zone",
@@ -2485,7 +2489,7 @@ _OB_DROP_GATE_LABELS = {
     "no_qualifying_ob_candle": "no opposing candle in the leg qualified",
     "pd_array_gate":          "OB sat on the wrong side of equilibrium",
     "proximity_gate":          "price too far from OB to be actionable",
-    "post_build_mitigation":   "OB built then died (close beyond distal or 3 touches)",
+    "post_build_mitigation":   "OB built then died (wick to distal, or proximal wicked 3 times)",
 }
 
 
@@ -3348,8 +3352,9 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
 
     # --- mitigated_distal_break / mitigated_three_touches ---
     # Uses is_ob_mitigated_phase1 — single source of truth for Phase 1.
-    # Rule: close beyond distal (strict, no ATR buffer). Wick alone never
-    # invalidates. 3 wick touches at proximal = mitigated.
+    # Rule (WICK-based, no ATR buffer): a wick to/through the distal line kills
+    # the zone; 3 wick touches at the proximal line = mitigated. (Earlier docs
+    # here said "close beyond distal" — stale; the function is wick-based.)
     if df is not None and len(df) > 0:
         try:
             distal = slate_zone['distal_line']

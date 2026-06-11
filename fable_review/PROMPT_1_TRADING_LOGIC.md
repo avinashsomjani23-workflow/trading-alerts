@@ -40,11 +40,13 @@ honest. If something is weak, say it plainly. Do not soften to be agreeable.
 - OB1 (most recent event) bypasses the proximity gate and always surfaces. Signal or noise?
 - Only 2 OBs ever surface per pair (OB1 + closest). Does capping at 2 drop setups a vet wants?
 
-**3. The invalidation rule (reference §4.9, §6 items 2–3) — look here hard**
-- A bullish OB dies when a single **wick** touches the OB low (distal), and 3 wick-touches at
-  proximal also kill it. Is wick-based distal invalidation correct, or too aggressive — and is
-  it inconsistent that FVG mitigation is close-based for gold/NAS but OB distal is wick-based
-  for all pairs?
+**3. The invalidation rule (reference §4.9, §6 item 3) — look here hard**
+- The rule (now consistent across Phase 1 and Phase 2, and correctly documented): a bullish OB
+  dies when a single **wick** touches the OB low (distal); 3 wick-touches at proximal also kill
+  it. The trader accepts wick-based as intentional. Your job: is wick-based distal invalidation
+  correct, or too aggressive — and specifically, is it inconsistent that FVG mitigation is
+  close-based for gold/NAS (they wick through on news) but OB-distal is wick-based for ALL
+  pairs? Should gold/NAS get close-based OB-distal mitigation too?
 
 **4. Sweep + FVG confluence (reference §4.7, §4.8)**
 - Is the sweep model (active-target-only, survivorship check, base/equal-levels/rejection

@@ -2089,8 +2089,17 @@ def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx, end_idx=N
     drop reason) AND Phase 2 (mid-day still-active gate before scoring).
 
     Replay candles in [start_idx, end_idx) and apply Phase 1 mitigation:
-      - CLOSE beyond distal -> mitigated_distal_break (zone dead).
+      - WICK to/through distal -> mitigated_distal_break (zone dead). NOTE this
+        is WICK-based, not close-based: a single wick to the distal line kills
+        the zone (bullish: L[m] <= distal; bearish: H[m] >= distal). Decided
+        with the trader 2026-06-10 — institutions defend the line, so a wick
+        that reaches it has already filled the resting orders.
       - WICK into proximal counts as a touch; 3 touches -> mitigated_three_touches.
+      Both checks are WICK-based. Any docstring/comment elsewhere that says
+      "close beyond distal" is stale — this function is the source of truth.
+
+    The `touches` returned are PROXIMAL touches only (a distal hit is terminal,
+    it never accrues as a touch).
 
     Args:
         direction: 'bullish' | 'bearish'.

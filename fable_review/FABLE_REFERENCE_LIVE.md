@@ -23,6 +23,31 @@ trading logic yourself; you are reasoning, not implementing.
 
 ---
 
+## Changes already applied (2026-06-10) — review the FIXED system, not these bugs
+These were found in the first pass and already fixed in code. They are listed so you don't
+re-flag them; you MAY still critique the fixed design.
+- **Invalidation window aligned.** Phase 2's still-alive gate now starts mitigation at the
+  structural-event candle + 1 (BOS/CHoCH + 1), matching Phase 1. It no longer scans the
+  impulse leg (OB+1). All three call sites now use event-candle+1. (§5.1)
+- **DOC-DRIFT removed.** OB mitigation is WICK-based (a wick to the distal line kills the
+  zone; 3 proximal wick-touches = exhausted). Docstrings/comments that said "close beyond
+  distal" were corrected to match the code. The wick-based rule is intentional and kept. (§4.9)
+- **Email touch clarity.** Drop/invalidation emails now name the line explicitly ("wick hit the
+  DISTAL line", "PROXIMAL line wicked 3×") and the active-zone status reads
+  "Tested (Nx proximal)". (§4.11, §5)
+- **ATR de-duplicated.** `dealing_range._compute_atr` now delegates to the single cached
+  `smc_detector.compute_atr` (lazy import) with a raw fallback. One ATR implementation. (§3)
+- **News filter rewired (see §5.5).** Live Phase 2 now uses the real ForexFactory scheduled
+  high-impact calendar (`news_filter.py`), fetched once per scan, mapped to each pair's
+  currencies, surfaced as a deterministic blackout/next-event banner. The old generic-RSS
+  scrape is gone; Gemini now summarises the real scheduled events (demoted to secondary colour).
+
+Still OPEN (fair game, NOT yet fixed): BOS-sequence-count computed two ways (§6), two H1 chart
+renderers (§6), no score gate (§6), non-JPY-forex sweep collapse (§6), and all methodology
+questions.
+
+---
+
 ## 0. System in one paragraph
 
 Automated SMC alert system. **H1 timeframe only.** 6 instruments: EURUSD, NZDUSD, USDJPY,
@@ -106,14 +131,12 @@ re-derivation is NOT identical to Phase 1's (see DOC-DRIFT and §8).
 
 ## 3. ATR and the full knob inventory (verified file:line + value)
 
-### ATR — note there are TWO implementations
+### ATR — single implementation (de-duplicated 2026-06-10)
 - `smc_detector.compute_atr(df, period=14)` [smc_detector.py:96] — mean of True Range over
-  last `period` bars. **Memoised** on an OHLC fingerprint (`_ATR_CACHE`). Used by the OB
-  builder, Phase 2, charts.
-- `dealing_range._compute_atr(df, period=14)` [dealing_range.py:95] — a **duplicate**,
-  uncached, "mirror … to avoid circular import." The entire structure engine
-  (`compute_structure`) and the swing leg-filter run on THIS copy.
-- They compute the same value today (mean of last 14 TR). Two implementations of one concept.
+  last `period` bars. **Memoised** on an OHLC fingerprint (`_ATR_CACHE`). The single source.
+- `dealing_range._compute_atr(df, period=14)` [dealing_range.py:95] — now a thin delegator to
+  `smc_detector.compute_atr` (lazy import to avoid the load-time circular import), with a raw
+  fallback so it still never raises. Verified to return identical values. One concept, one body.
 
 ### Knob table (constant, file:line, value, what it gates, what it can move)
 
@@ -313,12 +336,15 @@ recent **ghost** (fully-mitigated) for chart context.
 
 ### 4.9 OB mitigation — `is_ob_mitigated_phase1(...)` [smc_detector.py:2086]
 Single source of truth for "is this OB dead?". Replays candles in `[start_idx, end_idx)`:
-- **DOC-DRIFT:** the docstring and the comments in `determine_drop_reason` say "CLOSE beyond
-  distal" — but the **code is WICK-based**: bullish OB dies when `L[m] <= distal` (a wick to/
-  below the OB low), not a close. Line [smc_detector.py:2124] confirms; inline comment admits
-  "Wick-touch on distal kills the zone (was: close beyond distal)." **This is a real, aggressive
-  invalidation rule that the docs misdescribe.** Treat the code as truth and flag the mismatch.
+- **WICK-based (intentional, docs now corrected).** A bullish OB dies when `L[m] <= distal`
+  (a wick to/below the OB low — NOT a close); bearish mirror. The trader accepts this
+  aggressive rule: a wick reaching the line has filled the resting orders. Docstrings that
+  used to say "close beyond distal" were fixed to match the code.
 - A wick into `proximal` counts as a touch; **3 touches → mitigated** (`mitigated_three_touches`).
+  Touches are PROXIMAL only (a distal hit is terminal). Emails now name the line hit.
+- Methodology still open (§6): wick-distal kill is aggressive, and it's worth asking whether
+  gold/NAS (which wick through levels on news, and get close-based FVG mitigation) should also
+  get close-based OB-distal mitigation rather than wick-based.
 
 ### 4.10 `get_dealing_range(...)` [smc_detector.py:303]
 Wrapper that returns the dealing range for display/snapshot. Prefers the H4 live range from
@@ -361,12 +387,12 @@ Entry point at [Phase2_Alert_Engine.py:1739]. Per scan:
    `distance > prox_cap` → not dropped from slate (Phase 1 owns deletion); instead the dedup
    entry is kept alive, `max_exit_distance` tracked, and **re-entry armed** once price pulls
    beyond `1.5 × cap`.
-5. **Still-alive gate** [line 1978]: locate the OB candle by ts on P2's frame, then
-   `is_ob_mitigated_phase1` from `ob_idx_gate + 1`. If mitigated → drop without alerting.
-   **DOC-DRIFT / INCONSISTENCY:** Phase 2 scans from **OB+1** (includes the impulse leg
-   candles between OB and BOS), while Phase 1 scans from **BOS+1** (`detect_smc_radar`) /
-   after-BOS (`determine_drop_reason`). Same function, different start index → Phase 2 can
-   count touches / see a distal kill that Phase 1 would not. Flag as a real divergence (§8).
+5. **Still-alive gate** [line ~1985]: locate the structural-event candle by `bos_timestamp`
+   on P2's frame, then `is_ob_mitigated_phase1` from **event-candle + 1** (BOS/CHoCH + 1). If
+   mitigated → drop without alerting. **(Fixed 2026-06-10 — was OB+1.)** This now matches Phase
+   1 (`detect_smc_radar` mitigation from bos_idx+1, `determine_drop_reason` after-BOS), so the
+   two processes agree on whether a zone is alive. Falls back to OB ts only for a legacy zone
+   missing `bos_timestamp`.
 
 ### 5.2 Levels — `compute_phase2_levels(...)` [smc_detector.py:1453]
 - Entry: OB **proximal** edge (live). `entry_zone="50pct"` (OB midpoint) exists but is
@@ -406,11 +432,27 @@ cap and returned) → **still_valid** (new trading day, still in proximity, any 
 silent. Score watermarks (`score_high_water`/`low_water`) persisted; `last_seen_ist` refreshed
 even out-of-proximity so a live-but-distant zone is never GC'd.
 
-### 5.5 News filter (`news_filter.py`)
-ForexFactory (`_FF_THISWEEK_URL`) + Reuters calendar fetch; `is_news_blackout(...)`
-[news_filter.py:240] flags whether a pair's currencies have a high-impact event within
-`news_blackout_hours_before/after` (2h / 1h from config). **Verify whether this is actually
-wired into the live alert decision or only surfaced as context** — confirm before relying on it.
+### 5.5 News (rewired 2026-06-10 — now the real scheduled calendar)
+- **Source:** `news_filter.py` — ForexFactory high-impact economic calendar (NFP, CPI, FOMC,
+  ECB, BoE, etc.), parsed to UTC, per-currency. `currencies_for_pair` maps each pair to its
+  currencies (e.g. EURUSD → {USD, EUR}; GOLD/NAS100 → {USD}). This module was previously wired
+  only into the backtest; it is now wired into live Phase 2.
+- **Fetch once per scan** (`fetch_scheduled_news`, [Phase2_Alert_Engine.py]) over
+  `[now − 3h, now + 24h]`; shared across all 6 pairs (the feed is per-week, not per-pair).
+- **Per-pair context** (`get_pair_news_context`): slices the shared list to the pair's
+  currencies, computes an **asymmetric blackout** window (config: 2h before / 1h after a
+  high-impact event), the **next upcoming** event, and a headlines string.
+- **Email banner** (deterministic, primary): RED "NEWS BLACKOUT" when inside the window; AMBER
+  "next high-impact event in Xh" when one is upcoming; GREEN "no scheduled events" when clear;
+  RED "calendar incomplete — check manually" if the fetch failed (clear ≠ unchecked).
+- **Gemini** (`call_gemini_flash`) is kept but **demoted to secondary "Macro colour (AI)"** and
+  now receives the REAL scheduled events as input (via `fetch_macro_news(name, news_ctx)`)
+  instead of a generic global RSS — so its summary is finally about pair-relevant events.
+- **The old path is gone:** the generic `forexlive.com/feed/news` scrape (unfiltered, last-10
+  headlines, no pair/impact/time filter) was the reason "not much relevant news" showed up.
+- **Still open to critique:** blackout does NOT block the alert (informational banner only) —
+  is that the right call for a discretionary trader, or should a blackout suppress/flag harder?
+  And FF covers scheduled releases only (no unscheduled geopolitical shocks).
 
 ### 5.6 Charts + email (cosmetic, but large)
 - **Two H1 chart renderers exist:** `smc_radar.generate_h1_chart` [smc_radar.py:1170] (Phase 1
@@ -420,47 +462,49 @@ wired into the live alert decision or only surfaced as context** — confirm bef
   [Phase2_Alert_Engine.py:1169] + `send_email` (SMTP via Gmail app password).
 - A **heartbeat** subsystem [Phase2_Alert_Engine.py:1395–1735] emails system health every few
   hours and on failure patterns.
-- Macro context via Gemini Flash (`call_gemini_flash`) — display-only, fetched only after a
-  zone passes level validity.
+- The Phase 2 trade email renders, in order: action block → trend banner → distance → zone
+  context → scorecard → H1 context chart → H1 zoomed chart → sweep breakdown → **news banner
+  (deterministic FF calendar, §5.5)** → macro colour (AI, secondary). `build_trade_email`
+  [Phase2_Alert_Engine.py:1169]. (These builders have been fully read — no blind spots.)
 
 ---
 
 ## 6. Honest list of suspected weak / risky / duplicated spots (starting points, not gospel)
 
-Verify each against the file:line before trusting. These are leads for both reviews.
+Verify each against the file:line before trusting. These are leads for both reviews. Items
+marked FIXED are done — listed only so you understand the current state.
 
-1. **Mitigation start-index inconsistency (Phase 1 BOS+1 vs Phase 2 OB+1).** Same function,
-   different window → Phase 2 can invalidate or count touches Phase 1 wouldn't (§5.1).
-2. **DOC-DRIFT on distal mitigation.** Docs say close-based, code is wick-based (§4.9). The
-   actual rule (a single wick to the OB low kills the zone) is aggressive — is it what a vet
-   wants, and is the doc lying about it dangerous?
-3. **Wick-based distal kill, methodology question.** Gold/NAS wick through levels constantly;
-   FVG mitigation is close-based for them but OB distal mitigation is wick-based for ALL pairs.
-   Possible internal inconsistency in how "a wick doesn't count" is applied.
+1. ~~Mitigation start-index inconsistency~~ **FIXED** — Phase 2 now uses event-candle+1 (§5.1).
+2. ~~DOC-DRIFT on distal mitigation~~ **FIXED** — docs match the wick-based code (§4.9).
+3. **Wick-based distal kill, methodology question (OPEN).** A single wick to the distal kills
+   the zone for ALL pairs, yet FVG mitigation is close-based for gold/NAS (they wick through
+   on news). Is wick-distal too aggressive for gold/NAS specifically? Should OB-distal
+   mitigation also be close-based there?
 4. **`compute_structure` is one ~500-line stateful loop, recomputed from full df every scan.**
-   Correctness aside, it is hard to test in isolation and high-bug-surface. The block ORDER
-   (failure-window `continue` pre-empts BOS/CHoCH) is load-bearing and subtle.
-5. **Two ATR implementations** (cached `compute_atr` vs uncached `_compute_atr`). One concept,
-   two bodies — drift risk.
-6. **Two H1 chart renderers** — duplication, sync-by-hand.
-7. **`_idx_from_ts` linear scan per event in the OB builder** (O(events×bars)).
-8. **OB1 bypasses the proximity gate** — a far-away OB1 always surfaces. Vet question: signal
-   or noise? Does an OB 8×ATR away help or mislead?
+   Hard to test in isolation, high bug-surface; the block ORDER (failure-window `continue`
+   pre-empts BOS/CHoCH) is load-bearing and subtle.
+5. ~~Two ATR implementations~~ **FIXED** — single implementation via delegation (§3).
+6. **Two H1 chart renderers** (smc_radar vs Phase2) — duplication, sync-by-hand. OPEN.
+7. **`_idx_from_ts` linear scan per event in the OB builder** (O(events×bars)). OPEN.
+8. **OB1 bypasses the proximity gate** — a far-away OB1 always surfaces. Signal or noise?
 9. **No score gate anywhere** — the whole scorecard is advisory. (Owner's plan: add a gate
-   after measuring whether score predicts outcome. So critique scoring's *construction* and
-   say what you'd measure to decide a gate, but don't assume one exists.)
-10. **Non-JPY forex sweep collapse to presence-only** — deliberate, but a real methodology call
-    worth a second opinion: does discarding sweep quality on EURUSD/NZDUSD/USDCHF throw away edge?
-11. **BOS sequence count has two computation paths** — `detect_smc_radar`'s per-event counter
-    (stamped on the OB) and `compute_bos_sequence_count` (Phase 2 reads the ring fresh). Confirm
-    they agree; if not, structure score can disagree with reality.
+   after measuring whether score predicts outcome. Critique scoring's *construction* and say
+   what to measure to decide a gate; don't assume one exists.)
+10. **Non-JPY forex sweep collapse to presence-only** — deliberate; does discarding sweep
+    quality on EURUSD/NZDUSD/USDCHF throw away edge?
+11. **BOS sequence count has two computation paths (OPEN).** `detect_smc_radar` stamps a
+    per-event count on each OB; Phase 2 then OVERWRITES both surviving OBs with the latest
+    whole-ring count (`compute_bos_sequence_count`) before scoring. For OB2 (an earlier event)
+    that overwrite is arguably wrong — its structure score uses the latest count, not its own.
+    Worth deciding which source is correct per-OB.
 12. **TP depends entirely on H1 swing availability** — thin-swing regimes silently produce
-    "no trade." Quantify how often, and whether that's correct or a coverage hole.
-13. **PD + killzone computed but scored 0** — dead weight in the scorer; either wire them
-    meaningfully or stop computing them.
-14. **News filter may be context-only** — confirm whether it actually blocks alerts.
-15. **Declared-but-maybe-unwired config** (`zone_fatigue_threshold`, news blackout) — verify
-    each declared knob is actually consumed.
+    "no trade." How often, and is that correct or a coverage hole?
+13. **PD + killzone computed but scored 0** — dead weight in the scorer; wire meaningfully or
+    stop computing.
+14. ~~News filter context-only / generic-RSS~~ **FIXED** — real FF calendar wired (§5.5). The
+    remaining open question is whether a blackout should merely warn or actively suppress.
+15. **Declared-but-maybe-unwired config** (`zone_fatigue_threshold`) — verify it's consumed
+    anywhere; if not, delete it.
 
 ---
 

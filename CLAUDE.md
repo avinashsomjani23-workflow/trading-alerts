@@ -1,5 +1,17 @@
 # Trading Alerts System — Project Guide for Claude
 
+## NON-NEGOTIABLE — RESPONSE FORMAT (READ EVERY TURN)
+
+Every response must follow these three rules. No exceptions. No partial compliance.
+
+1. **Bullet points and headers only.** No paragraphs. Structure every response with headers and bullets.
+2. **Never verbose.** Every word must earn its place. If a sentence can be shorter without losing meaning, shorten it.
+3. **Plain English only.** Simple words. Simple sentence structure. No difficult explanations.
+
+If any of these are violated, the response is wrong. Rewrite before sending.
+
+---
+
 ## NON-NEGOTIABLE — ANTI-SYCOPHANCY (READ EVERY TURN)
 
 Sycophancy in this project causes wrong trading logic and lost money. Every recurrence is a system failure.

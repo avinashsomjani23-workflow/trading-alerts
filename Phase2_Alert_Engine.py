@@ -10,7 +10,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
@@ -18,6 +18,7 @@ import base64
 from io import BytesIO
 import xml.etree.ElementTree as ET
 import smc_detector
+import news_filter
 
 with open("config.json") as f:
     config = json.load(f)
@@ -470,16 +471,110 @@ def _log_smtp_failure(recipient, reason):
 # Macro news + Gemini
 # ---------------------------------------------------------------------------
 
-def fetch_macro_news(pair_name):
+# News blackout window (hours) from config.json scoring block.
+_NEWS_CFG = config.get("scoring", {})
+NEWS_BLACKOUT_BEFORE_H = float(_NEWS_CFG.get("news_blackout_hours_before", 2))
+NEWS_BLACKOUT_AFTER_H  = float(_NEWS_CFG.get("news_blackout_hours_after", 1))
+# How far ahead to surface scheduled high-impact events in the alert.
+NEWS_LOOKAHEAD_HOURS = 24
+
+
+def fetch_scheduled_news(now_utc=None):
+    """Fetch the ForexFactory scheduled HIGH-impact calendar ONCE per scan.
+
+    Returns (events, coverage_ok). This is the SAME single-source calendar the
+    backtest uses (news_filter.py) — wired into live Phase 2 here so the alert
+    surfaces the events that actually move these pairs (NFP, CPI, FOMC, ECB,
+    BoE, etc.), instead of the old generic-RSS scrape that rarely contained the
+    pair-relevant event. Fetched once and shared across all pairs in the scan.
+    """
+    if now_utc is None:
+        now_utc = datetime.now(timezone.utc)
+    start = now_utc - timedelta(hours=max(NEWS_BLACKOUT_AFTER_H, 3))
+    end   = now_utc + timedelta(hours=NEWS_LOOKAHEAD_HOURS)
     try:
-        r = requests.get("https://www.forexlive.com/feed/news", timeout=10)
-        headlines = [
-            f"- {item.find('title').text}"
-            for item in ET.fromstring(r.content).findall('.//item')[:10]
-        ]
-        return "\n".join(headlines)
-    except Exception:
-        return "Could not fetch latest news."
+        res = news_filter.fetch_events(start, end, sources=("ff",))
+        cov = res.get("coverage", {})
+        coverage_ok = all(cov.values()) if cov else False
+        return res.get("events", []), coverage_ok
+    except Exception as e:
+        print(f"  [NEWS] calendar fetch failed: {type(e).__name__}: {e}")
+        return [], False
+
+
+def get_pair_news_context(pair_name, events, coverage_ok, now_utc=None):
+    """Build the per-pair scheduled-news context from the shared calendar.
+
+    Deterministic — no LLM. Returns a dict the email renders directly:
+      blackout:        bool   (now is inside [event-before, event+after])
+      blackout_event:  dict|None
+      next_event:      dict|None (nearest upcoming high-impact event for the pair)
+      mins_to_next:    float|None
+      relevant:        list   (all pair-relevant events in the window, time-ordered)
+      coverage_ok:     bool
+      headlines_text:  str    (fed to Gemini so its summary is about real events)
+    """
+    if now_utc is None:
+        now_utc = datetime.now(timezone.utc)
+    ccys = news_filter.currencies_for_pair(pair_name)
+    relevant = sorted(
+        (e for e in events if e.get("currency") in ccys),
+        key=lambda e: e["ts_utc"],
+    )
+
+    # Asymmetric blackout (config: before=2h, after=1h). is_news_blackout is
+    # symmetric, so evaluate the window explicitly here.
+    before = timedelta(hours=NEWS_BLACKOUT_BEFORE_H)
+    after  = timedelta(hours=NEWS_BLACKOUT_AFTER_H)
+    blackout = False
+    blackout_event = None
+    for e in relevant:
+        if (e["ts_utc"] - before) <= now_utc <= (e["ts_utc"] + after):
+            blackout = True
+            blackout_event = e
+            break
+
+    upcoming = [e for e in relevant if e["ts_utc"] >= now_utc]
+    next_event = upcoming[0] if upcoming else None
+    mins_to_next = (
+        (next_event["ts_utc"] - now_utc).total_seconds() / 60.0
+        if next_event else None
+    )
+
+    if relevant:
+        headlines_text = "\n".join(
+            f"- {e['ts_utc'].strftime('%a %H:%M UTC')} {e['currency']} "
+            f"HIGH: {e.get('title', '')}"
+            for e in relevant
+        )
+    else:
+        headlines_text = (
+            f"No scheduled HIGH-impact events for {sorted(ccys)} in the next "
+            f"{NEWS_LOOKAHEAD_HOURS}h (ForexFactory calendar)."
+        )
+
+    return {
+        "blackout":       blackout,
+        "blackout_event": blackout_event,
+        "next_event":     next_event,
+        "mins_to_next":   mins_to_next,
+        "relevant":       relevant,
+        "coverage_ok":    coverage_ok,
+        "headlines_text": headlines_text,
+    }
+
+
+def fetch_macro_news(pair_name, news_ctx=None):
+    """Headlines string handed to Gemini. Now sourced from the scheduled FF
+    calendar (via get_pair_news_context) so the AI summary is about real,
+    pair-relevant events instead of a generic global feed. `news_ctx` is the
+    precomputed per-pair context; falls back to a self-contained fetch if a
+    caller doesn't pass it (defensive — keeps the old signature working).
+    """
+    if news_ctx is None:
+        events, cov = fetch_scheduled_news()
+        news_ctx = get_pair_news_context(pair_name, events, cov)
+    return news_ctx.get("headlines_text", "Could not fetch latest news.")
 
 
 def call_gemini_flash(pair, bias, news_headlines):
@@ -1262,9 +1357,66 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
 
     sweep_breakdown_html = build_sweep_breakdown_html(data, dp)
 
-    # Macro context block. If Gemini failed, render a distinct unavailable
-    # banner so the trader knows to manually check news — NOT a fake
-    # "no events" summary that misleads.
+    # Scheduled-news banner (DETERMINISTIC — ForexFactory high-impact calendar
+    # mapped to the pair's currencies). This is the primary, relevant news
+    # signal; the Gemini line below is secondary freeform colour. Red when we
+    # are inside a blackout window, amber when a high-impact event is upcoming,
+    # grey when the calendar is clear, and a distinct note if the fetch was
+    # incomplete (so "clear" is never confused with "couldn't check").
+    news_ctx = data.get('news_ctx') or {}
+
+    def _fmt_delta(mins):
+        if mins is None:
+            return ""
+        if mins < 60:
+            return f"{int(mins)}m"
+        return f"{int(mins // 60)}h {int(mins % 60)}m"
+
+    if not news_ctx:
+        news_banner_html = ""
+    elif news_ctx.get('blackout') and news_ctx.get('blackout_event'):
+        ev = news_ctx['blackout_event']
+        news_banner_html = (
+            '<div style="margin-top:12px;padding:10px 12px;background:#2d1a1a;'
+            'border-left:3px solid #e74c3c;border-radius:4px;font-size:12px;'
+            'color:#ffb3b3;line-height:1.5;">'
+            '<b style="color:#e74c3c;">&#9888; NEWS BLACKOUT:</b> '
+            f"{ev['currency']} HIGH-impact — {ev.get('title','')} "
+            f"at {ev['ts_utc'].strftime('%a %H:%M UTC')}. "
+            'Inside the blackout window — avoid fresh entries.</div>'
+        )
+    elif news_ctx.get('next_event'):
+        ev = news_ctx['next_event']
+        news_banner_html = (
+            '<div style="margin-top:12px;padding:10px 12px;background:#2a2a1a;'
+            'border-left:3px solid #f39c12;border-radius:4px;font-size:12px;'
+            'color:#f0d28a;line-height:1.5;">'
+            '<b style="color:#f39c12;">&#128197; Next high-impact event:</b> '
+            f"{ev['currency']} {ev.get('title','')} in "
+            f"{_fmt_delta(news_ctx.get('mins_to_next'))} "
+            f"({ev['ts_utc'].strftime('%a %H:%M UTC')}).</div>"
+        )
+    elif not news_ctx.get('coverage_ok'):
+        news_banner_html = (
+            '<div style="margin-top:12px;padding:10px 12px;background:#2d1a1a;'
+            'border-left:3px solid #e74c3c;border-radius:4px;font-size:12px;'
+            'color:#ffb3b3;line-height:1.5;">'
+            '<b style="color:#e74c3c;">&#9888; News calendar incomplete:</b> '
+            'the ForexFactory fetch failed — check the economic calendar '
+            'manually before entering.</div>'
+        )
+    else:
+        news_banner_html = (
+            '<div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;'
+            'border-left:3px solid #27ae60;border-radius:4px;font-size:12px;'
+            'color:#bbb;line-height:1.5;">'
+            '<b style="color:#9ad29a;">&#9989; News:</b> no scheduled '
+            f'high-impact events for this pair in the next {NEWS_LOOKAHEAD_HOURS}h.</div>'
+        )
+
+    # Macro context block (SECONDARY — freeform AI colour on the real events
+    # above). If Gemini failed, render a distinct unavailable banner so the
+    # trader knows to manually check — NOT a fake "no events" summary.
     if data.get('macro_unavailable'):
         macro_html = (
             '<div style="margin-top:12px;padding:10px 12px;background:#2d1a1a;'
@@ -1280,7 +1432,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             f'<div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;'
             f'border-left:3px solid #888;border-radius:4px;font-size:12px;'
             f'color:#bbb;line-height:1.5;">'
-            f'<b style="color:#eee;">Macro Context:</b> {_ms}</div>'
+            f'<b style="color:#eee;">Macro colour (AI):</b> {_ms}</div>'
         )
 
     return f"""<html><body style="font-family:Arial,sans-serif;background:#0d0d1a;padding:12px;margin:0;">
@@ -1302,6 +1454,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             {m15_chart_block}
             {_chart_legend_html(bos_tag, bos_tier)}
             {sweep_breakdown_html}
+            {news_banner_html}
             {macro_html}
         </div>
     </div></body></html>"""
@@ -1865,6 +2018,15 @@ if __name__ == "__main__":
     dollar_risk = balance * (risk_pct / 100.0)
     dollar_risk_str = f"${dollar_risk:,.0f}"
 
+    # Scheduled high-impact news calendar — fetched ONCE for the whole scan and
+    # shared across all pairs (the FF feed is per-week, not per-pair). Replaces
+    # the old per-pair generic-RSS scrape. Per-pair relevance is sliced from
+    # this shared list in the scoring loop via get_pair_news_context.
+    news_now_utc = datetime.now(timezone.utc)
+    news_events, news_coverage_ok = fetch_scheduled_news(news_now_utc)
+    print(f"  [NEWS] FF calendar: {len(news_events)} high-impact events in window "
+          f"(coverage_ok={news_coverage_ok})")
+
     for pair_conf in config["pairs"]:
         symbol = pair_conf["symbol"]
         name = pair_conf["name"]
@@ -1980,28 +2142,40 @@ if __name__ == "__main__":
                 continue
 
             # 2. OB still-active gate. Phase 1 owns the canonical drop decision,
-            # but P1 only runs hourly. Between P1 cycles, price can close beyond
-            # the distal — that invalidates the zone. We replay candles from
-            # the OB candle to NOW on P2's H1 frame, using the same mitigation
-            # rule as P1. If invalidated, drop without scoring/alerting.
-            ob_ts_iso_gate = ob.get('ob_timestamp')
-            if ob_ts_iso_gate:
-                ob_idx_gate, on_chart_gate = smc_detector.locate_ob_candle_idx(
-                    df_h1, ob_ts_iso_gate
+            # but P1 only runs hourly. Between P1 cycles, price can invalidate
+            # the zone. We replay candles on P2's H1 frame using the SAME
+            # mitigation rule AND the SAME window as Phase 1.
+            #
+            # Window = from the candle AFTER the structural-event (BOS/CHoCH)
+            # candle, NOT after the OB candle. The OB becomes a live zone only
+            # once displacement breaks structure; the candles between the OB and
+            # the break are the impulse leg that BUILT the zone, not tests of it.
+            # Phase 1 (detect_smc_radar mitigation + determine_drop_reason) both
+            # start at event-candle + 1; starting at OB + 1 here let the impulse
+            # leg count phantom touches / distal hits and silently disagree with
+            # Phase 1. `bos_timestamp` holds the event candle ts (BOS or CHoCH).
+            ob_ts_iso_gate  = ob.get('ob_timestamp')
+            bos_ts_iso_gate = ob.get('bos_timestamp')
+            # Prefer the event (BOS/CHoCH) candle for the window start; fall back
+            # to the OB candle only if the event ts is missing (legacy zone).
+            gate_anchor_ts = bos_ts_iso_gate or ob_ts_iso_gate
+            if gate_anchor_ts:
+                anchor_idx_gate, on_chart_gate = smc_detector.locate_ob_candle_idx(
+                    df_h1, gate_anchor_ts
                 )
                 if on_chart_gate:
                     mitigated, mit_reason, _touches = smc_detector.is_ob_mitigated_phase1(
                         ob['direction'], distal, proximal, df_h1,
-                        start_idx=ob_idx_gate + 1,
+                        start_idx=anchor_idx_gate + 1,
                     )
                     if mitigated:
                         zone_outcome["result"] = f"dropped_invalidated_{mit_reason}"
                         scan_record["zone_outcomes"].append(zone_outcome)
                         continue
                 else:
-                    # OB older than 30d H1 fetch — should be vanishingly rare
-                    # given P1's MAX_OB_AGE_DAYS guard. Skip the alert rather
-                    # than score against an OB we can't locate.
+                    # Event candle older than 30d H1 fetch — should be vanishingly
+                    # rare given P1's MAX_OB_AGE_DAYS guard. Skip the alert rather
+                    # than score against a zone we can't locate.
                     zone_outcome["result"] = "dropped_ob_off_chart"
                     scan_record["zone_outcomes"].append(zone_outcome)
                     continue
@@ -2077,9 +2251,14 @@ if __name__ == "__main__":
                 "rr":    levels.get("rr"),
             }
 
-            # Score + levels passed. NOW fetch macro context — only spent on
-            # zones that will actually email.
-            gemini_risk = call_gemini_flash(name, bias, fetch_macro_news(name))
+            # Score + levels passed. NOW build news context — only spent on
+            # zones that will actually email. The deterministic scheduled-event
+            # context (blackout + next event) comes from the shared FF calendar;
+            # Gemini gets those same real events to summarise (not generic RSS).
+            news_ctx = get_pair_news_context(
+                name, news_events, news_coverage_ok, news_now_utc
+            )
+            gemini_risk = call_gemini_flash(name, bias, fetch_macro_news(name, news_ctx))
 
             # B2: Pass fvg_source, dealing_range, pd_position, plus new sweep
             # tier + components + age into scorecard rows for richer narration.
@@ -2122,6 +2301,7 @@ if __name__ == "__main__":
                 "sweep_hours_before_ob": score_res.get('sweep_hours_before_ob'),
                 "macro_summary": gemini_risk.get("macro_summary"),
                 "macro_unavailable": bool(gemini_risk.get("macro_unavailable", False)),
+                "news_ctx": news_ctx,
                 "levels": levels,
                 "ob": ob,
                 "alert_ist": ist_now.isoformat(),

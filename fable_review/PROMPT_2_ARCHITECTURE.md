@@ -54,9 +54,10 @@ connected, would make tuning easier. Be brutally honest.
   live zone, schema drift between writer and reader.
 - The slate reconcile / drop-reason / "hold if no concrete reason" design. Sound, or a place
   ghosts accumulate?
-- The mitigation start-index inconsistency (Phase 1 BOS+1 vs Phase 2 OB+1, reference §5.1) —
-  is this an architecture smell (two callers of one function disagreeing on inputs) and how
-  should it be structurally prevented?
+- The mitigation start-index bug (two callers of one function disagreeing on the window) was
+  just fixed by hand (now all use event-candle+1). Treat it as a CASE STUDY: what structural
+  change (a single shared "zone-active-window" helper? a typed Zone object?) would prevent this
+  class of "two callers pass different inputs to one function" bug from recurring?
 
 **5. Observability + failure handling (reference §4.11, §5.5–5.6)**
 - Scan logs, heartbeat, stale-data gates, failure logs. Is the system observable enough that a

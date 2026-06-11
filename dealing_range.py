@@ -93,22 +93,33 @@ STATE_PATH = os.path.join(STATE_DIR, "structure_state.json")
 # --- ATR (local copy to avoid import cycle) ----------------------------------
 
 def _compute_atr(df, period: int = 14) -> Optional[float]:
-    """Mirror of smc_detector.compute_atr — duplicated to avoid circular import."""
+    """ATR(14). Single source of truth is smc_detector.compute_atr (which is
+    memoised). We delegate to it via a LAZY import — a top-level import would be
+    circular (smc_detector imports this module at load time). The previous
+    duplicated body has been removed so there is one ATR implementation, one
+    value. A raw fallback below preserves "never raises" if the import ever
+    fails, and computes the identical mean-of-last-`period`-TR.
+    """
     if df is None or len(df) < period + 1:
         return None
-    H = df['High'].values.astype(float)
-    L = df['Low'].values.astype(float)
-    C = df['Close'].values.astype(float)
-    trs = []
-    for i in range(1, len(C)):
-        tr = max(H[i] - L[i], abs(H[i] - C[i - 1]), abs(L[i] - C[i - 1]))
-        trs.append(tr)
-    if len(trs) < period:
-        return None
-    sumv = 0.0
-    for v in trs[-period:]:
-        sumv += v
-    return sumv / period
+    try:
+        import smc_detector as _sd
+        return _sd.compute_atr(df, period=period)
+    except Exception:
+        # Defensive raw fallback (import path broken). Identical math to
+        # smc_detector._atr_compute_raw: mean of the last `period` true ranges.
+        try:
+            H = df['High'].values.astype(float)
+            L = df['Low'].values.astype(float)
+            C = df['Close'].values.astype(float)
+            trs = []
+            for i in range(1, len(C)):
+                trs.append(max(H[i] - L[i], abs(H[i] - C[i - 1]), abs(L[i] - C[i - 1])))
+            if len(trs) < period:
+                return None
+            return sum(trs[-period:]) / period
+        except Exception:
+            return None
 
 
 # --- Atomic JSON I/O ---------------------------------------------------------
