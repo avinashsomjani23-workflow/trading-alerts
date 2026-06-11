@@ -93,16 +93,29 @@ def _slice_closed_before(df: pd.DataFrame, wall_clock_ts: pd.Timestamp
 
 def _is_ob_mitigated_replay(direction: str, distal: float, proximal: float,
                             df_h1_slice: pd.DataFrame,
-                            ob_ts: Optional[str]) -> Tuple[bool, str]:
-    """Wrap live mitigation logic; returns (mitigated, reason)."""
-    if not ob_ts:
+                            anchor_ts: Optional[str],
+                            distal_mode: str = "close") -> Tuple[bool, str]:
+    """Wrap live mitigation logic; returns (mitigated, reason).
+
+    Window = from the candle AFTER the structural-event (BOS/CHoCH) candle,
+    matching live Phase 1 (smc_radar mitigation + determine_drop_reason) and
+    Phase 2's gate. `anchor_ts` MUST be the event candle ts (bos_timestamp),
+    NOT the OB ts: candles between the OB and the break are the impulse leg
+    that BUILT the zone, not tests of it. Starting at ob_idx+1 let that leg
+    count phantom touches / distal hits and silently disagree with live.
+
+    `distal_mode` flows from the per-instrument config (resolve_distal_mode) so
+    the backtest applies the SAME distal rule as live Phase 1/2.
+    """
+    if not anchor_ts:
         return False, ""
     try:
-        ob_idx, found = smc_detector.locate_ob_candle_idx(df_h1_slice, ob_ts)
+        anchor_idx, found = smc_detector.locate_ob_candle_idx(df_h1_slice, anchor_ts)
         if not found:
             return False, ""
         mitigated, reason, _ = smc_detector.is_ob_mitigated_phase1(
-            direction, distal, proximal, df_h1_slice, start_idx=ob_idx + 1
+            direction, distal, proximal, df_h1_slice, start_idx=anchor_idx + 1,
+            distal_mode=distal_mode,
         )
         return bool(mitigated), reason or ""
     except Exception as e:
@@ -247,15 +260,20 @@ def replay_pair(
         just_closed_high = float(just_closed["High"])
         just_closed_low = float(just_closed["Low"])
 
-        # Drop mitigated OBs from active list. Mitigation now uses the
-        # wick-touch-distal rule (smc_detector.is_ob_mitigated_phase1 was
-        # updated to match SMC textbook). Yield a diagnostic event so the
-        # zone register knows which OBs died and why.
+        # Drop mitigated OBs from active list. Distal rule is per-instrument
+        # via distal_invalidation_mode (default 'close'; 'wick' tunable) — same
+        # knob the live engines read, so backtest P&L reflects live behaviour.
+        # Yield a diagnostic event so the zone register knows which OBs died.
+        _distal_mode = smc_detector.resolve_distal_mode(pair_conf)
         kept = []
         for ob in state.active_obs[pair_name]:
+            # Anchor on the BOS/CHoCH candle (live parity); fall back to the OB
+            # candle only for legacy OBs missing bos_timestamp.
+            _anchor_ts = ob.get("bos_timestamp") or ob.get("ob_timestamp")
             mitigated, mit_reason = _is_ob_mitigated_replay(
                 ob.get("direction"), float(ob["distal_line"]),
-                float(ob["proximal_line"]), h1_slice, ob.get("ob_timestamp")
+                float(ob["proximal_line"]), h1_slice, _anchor_ts,
+                distal_mode=_distal_mode,
             )
             if mitigated:
                 zone_id = ob.get("ob_timestamp") or f"{ob.get('direction')}_{ob.get('proximal_line')}"

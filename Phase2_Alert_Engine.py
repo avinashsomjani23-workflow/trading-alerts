@@ -2149,6 +2149,7 @@ if __name__ == "__main__":
                     mitigated, mit_reason, _touches = smc_detector.is_ob_mitigated_phase1(
                         ob['direction'], distal, proximal, df_h1,
                         start_idx=anchor_idx_gate + 1,
+                        distal_mode=smc_detector.resolve_distal_mode(pair_conf),
                     )
                     if mitigated:
                         zone_outcome["result"] = f"dropped_invalidated_{mit_reason}"

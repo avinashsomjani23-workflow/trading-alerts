@@ -2083,31 +2083,57 @@ def compute_h1_break_candle_span(df_h1, ob, h1_atr):
 # SHARED P1+P2 — OB mitigation check (close beyond distal OR 3 wick touches).
 # Phase 1 uses it inside determine_drop_reason(); Phase 2 uses it as a
 # mitigation gate before alerting. Despite the name, this is NOT Phase 1 only.
-def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx, end_idx=None):
+def resolve_distal_mode(pair_conf):
+    """
+    Resolve the per-instrument distal-invalidation mode from a pair config dict.
+    Returns 'close' (default) or 'wick'. Single resolver so Phase 1 and Phase 2
+    can never disagree on the rule for a given instrument.
+
+      - 'close': a candle must CLOSE beyond the distal to invalidate the zone.
+                 A wick that pierces the distal and closes back inside is a
+                 liquidity grab the OB absorbs — zone stays alive. This is the
+                 documented SMC rule and the default.
+      - 'wick':  a single wick to/through the distal kills the zone. Stricter;
+                 retained only as a backtest-tunable experiment.
+
+    Anything other than the literal string 'wick' resolves to 'close', so a
+    missing/typo'd config value fails safe to the documented behaviour.
+    """
+    if not isinstance(pair_conf, dict):
+        return "close"
+    mode = str(pair_conf.get("distal_invalidation_mode", "close")).strip().lower()
+    return "wick" if mode == "wick" else "close"
+
+
+def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx,
+                           end_idx=None, distal_mode="close"):
     """
     Single-source-of-truth OB mitigation check. Used by Phase 1 (canonical
     drop reason) AND Phase 2 (mid-day still-active gate before scoring).
 
     Replay candles in [start_idx, end_idx) and apply Phase 1 mitigation:
-      - WICK to/through distal -> mitigated_distal_break (zone dead). NOTE this
-        is WICK-based, not close-based: a single wick to the distal line kills
-        the zone (bullish: L[m] <= distal; bearish: H[m] >= distal). Decided
-        with the trader 2026-06-10 — institutions defend the line, so a wick
-        that reaches it has already filled the resting orders.
+      - DISTAL break -> mitigated_distal_break (zone dead). Governed by
+        `distal_mode` (per-instrument, see resolve_distal_mode):
+          * 'close' (default): bullish C[m] < distal; bearish C[m] > distal.
+            A wick alone never invalidates — it's the liquidity grab the OB
+            is built to absorb.
+          * 'wick': bullish L[m] <= distal; bearish H[m] >= distal. A single
+            wick to the distal kills the zone. Backtest-tunable only.
       - WICK into proximal counts as a touch; 3 touches -> mitigated_three_touches.
-      Both checks are WICK-based. Any docstring/comment elsewhere that says
-      "close beyond distal" is stale — this function is the source of truth.
+        The proximal touch count is ALWAYS wick-based regardless of distal_mode.
 
-    The `touches` returned are PROXIMAL touches only (a distal hit is terminal,
+    The `touches` returned are PROXIMAL touches only (a distal break is terminal,
     it never accrues as a touch).
 
     Args:
-        direction: 'bullish' | 'bearish'.
-        distal:    OB distal price.
-        proximal:  OB proximal price.
-        df:        H1 OHLC dataframe.
-        start_idx: first idx to inspect (exclusive of OB candle is up to caller).
-        end_idx:   one past last idx to inspect; defaults to len(df).
+        direction:   'bullish' | 'bearish'.
+        distal:      OB distal price.
+        proximal:    OB proximal price.
+        df:          H1 OHLC dataframe.
+        start_idx:   first idx to inspect (exclusive of OB candle is up to caller).
+        end_idx:     one past last idx to inspect; defaults to len(df).
+        distal_mode: 'close' (default) | 'wick'. Resolve via resolve_distal_mode
+                     so live and backtest read the SAME per-instrument value.
 
     Returns:
         (mitigated: bool, reason: Optional[str], touches: int)
@@ -2122,6 +2148,8 @@ def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx, end_idx=N
     if start_idx >= end_idx:
         return False, None, 0
 
+    use_wick_distal = (str(distal_mode).strip().lower() == "wick")
+
     C = df['Close'].values.astype(float)
     H = df['High'].values.astype(float)
     L = df['Low'].values.astype(float)
@@ -2129,13 +2157,15 @@ def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx, end_idx=N
     touches = 0
     for m in range(start_idx, end_idx):
         if direction == 'bullish':
-            # Wick-touch on distal kills the zone (was: close beyond distal).
-            if L[m] <= distal:
+            distal_broken = (L[m] <= distal) if use_wick_distal else (C[m] < distal)
+            if distal_broken:
                 return True, 'mitigated_distal_break', touches
+            # Proximal touch is always wick-based.
             if L[m] <= proximal:
                 touches += 1
         else:
-            if H[m] >= distal:
+            distal_broken = (H[m] >= distal) if use_wick_distal else (C[m] > distal)
+            if distal_broken:
                 return True, 'mitigated_distal_break', touches
             if H[m] >= proximal:
                 touches += 1

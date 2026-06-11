@@ -35,6 +35,15 @@ logging.basicConfig(
 with open("config.json") as f:
     config_master = json.load(f)
 
+# Per-name pair-config lookup. Used to resolve per-instrument settings (e.g.
+# distal_invalidation_mode) inside detection code without re-scanning the list.
+_PAIR_CONF_BY_NAME = {p.get("name"): p for p in config_master.get("pairs", [])}
+
+
+def _pair_conf_for_name(pair_name):
+    """Return the config block for a pair name, or {} if unknown (fail-safe)."""
+    return _PAIR_CONF_BY_NAME.get(pair_name, {})
+
 EMAIL_CONFIG = {
     "sender":      os.environ.get("GMAIL_ADDRESS", "avinash.somjani23@gmail.com"),
     "recipient":   config_master["account"].get("alert_emails", ["avinash.somjani23@gmail.com"]),
@@ -882,12 +891,15 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         ob_build_diagnostics.append(diag)
 # Mitigation + touch tracking. Sets 'touches' and 'status' on each OB.
     # Must run BEFORE dedupe so the touch-state test in dedupe is meaningful.
-    # Mitigation rule: see is_ob_mitigated_phase1 (close-based, strict, no ATR).
+    # Mitigation rule: see is_ob_mitigated_phase1. Distal mode is per-instrument
+    # (default 'close'); resolved once here so Phase 1 + Phase 2 stay in lockstep.
+    _distal_mode = smc_detector.resolve_distal_mode(_pair_conf_for_name(pair_name))
     tracked_obs = []
     for ob in active_obs:
         mitigated, _reason, touches = is_ob_mitigated_phase1(
             ob['direction'], ob['distal_line'], ob['proximal_line'],
-            df, start_idx=ob['bos_idx'] + 1, end_idx=n
+            df, start_idx=ob['bos_idx'] + 1, end_idx=n,
+            distal_mode=_distal_mode,
         )
         if not mitigated:
             ob['touches'] = touches
@@ -3294,7 +3306,7 @@ def refresh_slate_zone(slate_zone, fresh_zone, ist_now, current_price, dp):
     slate_zone["role"] = fresh_zone.get("role", slate_zone.get("role", "primary"))
 
 
-def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_pair, pair_type):
+def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_pair, pair_type, pair_name=None):
     """
     Return concrete drop reason. Every drop must map to ONE of these checks.
     No "unknown" or "structure_invalidated" fallback — silent fails are the
@@ -3352,9 +3364,10 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
 
     # --- mitigated_distal_break / mitigated_three_touches ---
     # Uses is_ob_mitigated_phase1 — single source of truth for Phase 1.
-    # Rule (WICK-based, no ATR buffer): a wick to/through the distal line kills
-    # the zone; 3 wick touches at the proximal line = mitigated. (Earlier docs
-    # here said "close beyond distal" — stale; the function is wick-based.)
+    # Rule (no ATR buffer): distal break invalidates per the per-instrument
+    # distal_invalidation_mode (default 'close' = candle closes beyond distal;
+    # 'wick' = a wick to the distal kills it). 3 wick touches at the proximal
+    # line = mitigated. See is_ob_mitigated_phase1 (single source of truth).
     if df is not None and len(df) > 0:
         try:
             distal = slate_zone['distal_line']
@@ -3384,7 +3397,10 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
 
             mitigated, reason, _touches = is_ob_mitigated_phase1(
                 direction, distal, proximal, df,
-                start_idx=scan_start, end_idx=len(df)
+                start_idx=scan_start, end_idx=len(df),
+                distal_mode=smc_detector.resolve_distal_mode(
+                    _pair_conf_for_name(pair_name)
+                ),
             )
             if mitigated and reason:
                 return reason
@@ -3664,7 +3680,7 @@ def run_radar():
             if sz["zone_id"] in matched_slate_ids:
                 continue
             reason = determine_drop_reason(
-                sz, current_price, df, h1_atr, fresh_zones, ptype
+                sz, current_price, df, h1_atr, fresh_zones, ptype, pair_name=name
             )
             if reason is None:
                 # No concrete reason. Keep zone alive, log for investigation.
