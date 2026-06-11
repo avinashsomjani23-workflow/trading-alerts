@@ -413,5 +413,20 @@
     "ts": "2026-06-10T20:36:13.094504",
     "pair": "GOLD",
     "reason": "API error 429: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and bi"
+  },
+  {
+    "ts": "2026-06-12T00:36:32.929399",
+    "pair": "NAS100",
+    "reason": "API error 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+  },
+  {
+    "ts": "2026-06-12T00:37:04.172140",
+    "pair": "GOLD",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-12T00:37:34.737509",
+    "pair": "GOLD",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
   }
 ]
