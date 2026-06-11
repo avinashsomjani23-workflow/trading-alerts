@@ -471,12 +471,14 @@ def _log_smtp_failure(recipient, reason):
 # Macro news + Gemini
 # ---------------------------------------------------------------------------
 
-# News blackout window (hours) from config.json scoring block.
+# News blackout window (hours) from config.json scoring block. This IS the only
+# window we flag on: an event is relevant only while now sits inside
+# [event - before, event + after]. We deliberately do NOT surface events further
+# out (e.g. an ECB print 7h away) — that flagged on every event and was noise.
+# Bump to 3/2 in config if a wider avoidance window is wanted.
 _NEWS_CFG = config.get("scoring", {})
 NEWS_BLACKOUT_BEFORE_H = float(_NEWS_CFG.get("news_blackout_hours_before", 2))
 NEWS_BLACKOUT_AFTER_H  = float(_NEWS_CFG.get("news_blackout_hours_after", 1))
-# How far ahead to surface scheduled high-impact events in the alert.
-NEWS_LOOKAHEAD_HOURS = 24
 
 
 def fetch_scheduled_news(now_utc=None):
@@ -490,8 +492,11 @@ def fetch_scheduled_news(now_utc=None):
     """
     if now_utc is None:
         now_utc = datetime.now(timezone.utc)
-    start = now_utc - timedelta(hours=max(NEWS_BLACKOUT_AFTER_H, 3))
-    end   = now_utc + timedelta(hours=NEWS_LOOKAHEAD_HOURS)
+    # Fetch only enough to evaluate the flag window: from `after` hours behind
+    # (so a just-passed event still blacks out) to `before` hours ahead (so we
+    # see an event we are about to enter the window of). No 24h lookahead.
+    start = now_utc - timedelta(hours=NEWS_BLACKOUT_AFTER_H + 0.5)
+    end   = now_utc + timedelta(hours=NEWS_BLACKOUT_BEFORE_H + 0.5)
     try:
         res = news_filter.fetch_events(start, end, sources=("ff",))
         cov = res.get("coverage", {})
@@ -505,12 +510,14 @@ def fetch_scheduled_news(now_utc=None):
 def get_pair_news_context(pair_name, events, coverage_ok, now_utc=None):
     """Build the per-pair scheduled-news context from the shared calendar.
 
-    Deterministic — no LLM. Returns a dict the email renders directly:
+    Deterministic — no LLM. Only the avoidance window is relevant: a pair is
+    flagged ONLY while now sits inside [event - before, event + after]. Events
+    outside that window are not surfaced (no "event in 7h" noise).
+
+    Returns a dict the email renders directly:
       blackout:        bool   (now is inside [event-before, event+after])
       blackout_event:  dict|None
-      next_event:      dict|None (nearest upcoming high-impact event for the pair)
-      mins_to_next:    float|None
-      relevant:        list   (all pair-relevant events in the window, time-ordered)
+      relevant:        list   (pair-relevant events in the fetched window)
       coverage_ok:     bool
       headlines_text:  str    (fed to Gemini so its summary is about real events)
     """
@@ -522,8 +529,7 @@ def get_pair_news_context(pair_name, events, coverage_ok, now_utc=None):
         key=lambda e: e["ts_utc"],
     )
 
-    # Asymmetric blackout (config: before=2h, after=1h). is_news_blackout is
-    # symmetric, so evaluate the window explicitly here.
+    # Asymmetric blackout (config: before=2h, after=1h). This is the ONLY flag.
     before = timedelta(hours=NEWS_BLACKOUT_BEFORE_H)
     after  = timedelta(hours=NEWS_BLACKOUT_AFTER_H)
     blackout = False
@@ -534,13 +540,6 @@ def get_pair_news_context(pair_name, events, coverage_ok, now_utc=None):
             blackout_event = e
             break
 
-    upcoming = [e for e in relevant if e["ts_utc"] >= now_utc]
-    next_event = upcoming[0] if upcoming else None
-    mins_to_next = (
-        (next_event["ts_utc"] - now_utc).total_seconds() / 60.0
-        if next_event else None
-    )
-
     if relevant:
         headlines_text = "\n".join(
             f"- {e['ts_utc'].strftime('%a %H:%M UTC')} {e['currency']} "
@@ -549,15 +548,14 @@ def get_pair_news_context(pair_name, events, coverage_ok, now_utc=None):
         )
     else:
         headlines_text = (
-            f"No scheduled HIGH-impact events for {sorted(ccys)} in the next "
-            f"{NEWS_LOOKAHEAD_HOURS}h (ForexFactory calendar)."
+            f"No scheduled HIGH-impact events for {sorted(ccys)} inside the "
+            f"news window ({NEWS_BLACKOUT_BEFORE_H:g}h before / "
+            f"{NEWS_BLACKOUT_AFTER_H:g}h after)."
         )
 
     return {
         "blackout":       blackout,
         "blackout_event": blackout_event,
-        "next_event":     next_event,
-        "mins_to_next":   mins_to_next,
         "relevant":       relevant,
         "coverage_ok":    coverage_ok,
         "headlines_text": headlines_text,
@@ -1365,13 +1363,6 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     # incomplete (so "clear" is never confused with "couldn't check").
     news_ctx = data.get('news_ctx') or {}
 
-    def _fmt_delta(mins):
-        if mins is None:
-            return ""
-        if mins < 60:
-            return f"{int(mins)}m"
-        return f"{int(mins // 60)}h {int(mins % 60)}m"
-
     if not news_ctx:
         news_banner_html = ""
     elif news_ctx.get('blackout') and news_ctx.get('blackout_event'):
@@ -1383,18 +1374,8 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             '<b style="color:#e74c3c;">&#9888; NEWS BLACKOUT:</b> '
             f"{ev['currency']} HIGH-impact — {ev.get('title','')} "
             f"at {ev['ts_utc'].strftime('%a %H:%M UTC')}. "
-            'Inside the blackout window — avoid fresh entries.</div>'
-        )
-    elif news_ctx.get('next_event'):
-        ev = news_ctx['next_event']
-        news_banner_html = (
-            '<div style="margin-top:12px;padding:10px 12px;background:#2a2a1a;'
-            'border-left:3px solid #f39c12;border-radius:4px;font-size:12px;'
-            'color:#f0d28a;line-height:1.5;">'
-            '<b style="color:#f39c12;">&#128197; Next high-impact event:</b> '
-            f"{ev['currency']} {ev.get('title','')} in "
-            f"{_fmt_delta(news_ctx.get('mins_to_next'))} "
-            f"({ev['ts_utc'].strftime('%a %H:%M UTC')}).</div>"
+            f"Inside the news window ({NEWS_BLACKOUT_BEFORE_H:g}h before / "
+            f"{NEWS_BLACKOUT_AFTER_H:g}h after) — avoid fresh entries.</div>"
         )
     elif not news_ctx.get('coverage_ok'):
         news_banner_html = (
@@ -1410,8 +1391,9 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             '<div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;'
             'border-left:3px solid #27ae60;border-radius:4px;font-size:12px;'
             'color:#bbb;line-height:1.5;">'
-            '<b style="color:#9ad29a;">&#9989; News:</b> no scheduled '
-            f'high-impact events for this pair in the next {NEWS_LOOKAHEAD_HOURS}h.</div>'
+            '<b style="color:#9ad29a;">&#9989; News:</b> clear — no high-impact '
+            f'event within the news window ({NEWS_BLACKOUT_BEFORE_H:g}h before / '
+            f'{NEWS_BLACKOUT_AFTER_H:g}h after).</div>'
         )
 
     # Macro context block (SECONDARY — freeform AI colour on the real events

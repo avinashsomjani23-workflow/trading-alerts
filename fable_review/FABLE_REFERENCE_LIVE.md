@@ -437,14 +437,16 @@ even out-of-proximity so a live-but-distant zone is never GC'd.
   ECB, BoE, etc.), parsed to UTC, per-currency. `currencies_for_pair` maps each pair to its
   currencies (e.g. EURUSD → {USD, EUR}; GOLD/NAS100 → {USD}). This module was previously wired
   only into the backtest; it is now wired into live Phase 2.
-- **Fetch once per scan** (`fetch_scheduled_news`, [Phase2_Alert_Engine.py]) over
-  `[now − 3h, now + 24h]`; shared across all 6 pairs (the feed is per-week, not per-pair).
+- **Fetch once per scan** (`fetch_scheduled_news`) over only the flag window
+  `[now − (after+0.5h), now + (before+0.5h)]`; shared across all 6 pairs (feed is per-week).
 - **Per-pair context** (`get_pair_news_context`): slices the shared list to the pair's
-  currencies, computes an **asymmetric blackout** window (config: 2h before / 1h after a
-  high-impact event), the **next upcoming** event, and a headlines string.
-- **Email banner** (deterministic, primary): RED "NEWS BLACKOUT" when inside the window; AMBER
-  "next high-impact event in Xh" when one is upcoming; GREEN "no scheduled events" when clear;
-  RED "calendar incomplete — check manually" if the fetch failed (clear ≠ unchecked).
+  currencies and computes the **asymmetric blackout** flag (config: 2h before / 1h after).
+  The ONLY thing flagged is "now is inside [event−before, event+after]". Events outside that
+  window are deliberately NOT surfaced (an earlier 24h "next event in Xh" banner flagged on
+  every event — e.g. an ECB print 7h out — and was removed as noise 2026-06-10).
+- **Email banner** (deterministic, primary): RED "NEWS BLACKOUT" inside the window; GREEN
+  "clear — no high-impact event within the window" otherwise; RED "calendar incomplete — check
+  manually" if the fetch failed (clear ≠ unchecked).
 - **Gemini** (`call_gemini_flash`) is kept but **demoted to secondary "Macro colour (AI)"** and
   now receives the REAL scheduled events as input (via `fetch_macro_news(name, news_ctx)`)
   instead of a generic global RSS — so its summary is finally about pair-relevant events.
