@@ -176,6 +176,13 @@ FVG_WINDOW_M15_CANDLES = 40
 # median minimum — that one rejected small candles; this rejects oversized.
 OB_MAX_RANGE_ATR_MULT = 2.0
 
+# Touch re-arm distance (ATR units). A proximal touch is counted once per
+# APPROACH: after a touch, price must pull back away from the proximal by this
+# distance before another touch can register. Without this, a multi-hour
+# consolidation resting on the proximal racked up 3 per-bar "touches" and
+# falsely mitigated a zone that a vet calls ONE test. Self-scaling on ATR.
+OB_TOUCH_REARM_ATR = 0.5
+
 # Minimum swing leg size in ATR(14) units, applied AFTER lookback-3 geometric
 # swing detection. SINGLE SOURCE OF TRUTH lives in dealing_range (the lowest
 # layer); re-exported here so existing references keep working and there is one
@@ -211,6 +218,15 @@ SWEEP_WICK_PIERCE_MIN_ATR = {
     "index":     0.08,
     "commodity": 0.08
 }
+
+# Sweep window: how many candles to extend the search BEFORE the impulse-leg
+# start, to catch the stop-run that TURNED the market (the classic
+# sweep -> base -> impulse sequence, where the sweep precedes the leg by a candle
+# or two). Kept small and ALWAYS floored at the prior structural event so it can
+# never reach an earlier leg's unrelated liquidity (the 2026-06 over-reach that
+# the impulse-leg-only lock fixed). Survivorship + active-target filters still
+# discard anything that isn't the local fueling sweep.
+SWEEP_LOOKBACK_BEFORE_IMPULSE = 3
 
 # INTERNAL — round-number grid used by Phase 1 context tagging. Tight tolerance —
 # being "near a round number" must mean within a few pips, not 30. yfinance wick
@@ -1010,25 +1026,25 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     #
     # LOCKED 2026-06 (decided with the trader, verified on real USDJPY swings):
     # the sweep that VALIDATES an order block is the local liquidity run inside
-    # that OB's OWN impulse leg — the stop-run price took immediately before the
-    # displacement that built the zone. The OB is, by definition, the origin of
-    # this leg, so its fueling sweep can ONLY live in [impulse_start_idx, ob_idx]
-    # (ob_idx <= bos_idx; the OB candle is the latest the sweep can be — see the
-    # engulfing / rejection-block allowance below). Anchoring here is correct in
-    # EVERY case because the window cannot reach liquidity from an earlier leg.
+    # that OB's OWN impulse leg PLUS a small lookback before it — the stop-run
+    # price took immediately before the displacement that built the zone. The OB
+    # is the origin of this leg, so its fueling sweep lives in
+    # [impulse_start - SWEEP_LOOKBACK_BEFORE_IMPULSE, ob_idx], FLOORED at the prior
+    # structural event. The lookback (2026-06) catches the common case where the
+    # sweep candle is a candle or two BEFORE the impulse start (sweep -> base ->
+    # impulse); the prior-event floor keeps it from reaching an earlier leg.
     #
-    # WHY THE PRIOR ANCHORS WERE WRONG (both tested and rejected on USDJPY):
-    #   - prior OPPOSING event (old rule): on a continuation BOS deep in a
-    #     trend this reaches back to the trend's origin and grabs unrelated old
-    #     liquidity (picked 159.09 / 159.531, candles before this leg existed).
-    #   - prior SAME-direction break: still sits before this leg, picked 159.574
-    #     — also outside the leg that built the zone.
-    #   The only rule that selects the local fueling run (159.706) every time is
-    #   constraining the window to the impulse leg itself.
+    # WHY THE OLD UNBOUNDED PRIOR ANCHORS WERE WRONG (tested + rejected on USDJPY):
+    #   - prior OPPOSING event: on a continuation BOS deep in a trend this reached
+    #     back to the trend's origin and grabbed unrelated old liquidity (picked
+    #     159.09 / 159.531, candles before this leg existed).
+    #   - prior SAME-direction break: still sat before this leg (159.574).
+    #   The fix is NOT "impulse leg only" but "impulse leg + a few candles, hard-
+    #   floored at the prior event" — local enough to stay on the fueling run
+    #   (159.706), bounded enough to never reach the earlier leg.
     #
-    # `prior_event_idx` is no longer used for the lower bound. It is still
-    # accepted for signature/caller compatibility (Phase 2 passes it) but the
-    # leg bound supersedes it.
+    # `prior_event_idx` is now used as the LOWER-BOUND FLOOR (not the anchor):
+    # the lookback can extend before impulse_start but never past the prior event.
     #
     # REGRESSION NOTE (still relevant): get_swing_points tags the sweep candle
     # itself (the leg's terminal extreme) as a swing. That does NOT break the
@@ -1042,7 +1058,17 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
     # impulse leg of its own and walks back from impulse_start by this many
     # candles. Phase 1 (H1) always has the leg, so it never hits the fallback.
     if impulse_start_idx is not None:
-        search_lo = int(impulse_start_idx)
+        # Extend a few candles BEFORE the impulse start to catch the sweep that
+        # turned the market (sweep -> base -> impulse). FLOOR at the prior
+        # structural event (prior_event_idx + 1) so the window can never reach an
+        # earlier leg's unrelated liquidity — the exact over-reach the
+        # impulse-leg-only lock fixed. With no prior event, just clamp at 0.
+        search_lo = int(impulse_start_idx) - SWEEP_LOOKBACK_BEFORE_IMPULSE
+        if prior_event_idx is not None:
+            try:
+                search_lo = max(search_lo, int(prior_event_idx) + 1)
+            except (TypeError, ValueError):
+                pass
     else:
         search_lo = max(0, int(ob_idx) - int(fallback_lookback))
 
@@ -1463,10 +1489,12 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     SL: H1 OB distal +/- 1x spread.
 
     TP swings: H1 swings at lookback=3.
-      TP1 = nearest opposing H1 swing past entry that clears 1.5R. No swing
-            clearing 1.5R -> no trade.
-      TP2 = next opposing H1 swing past TP1 (no RR gate). If none, no TP2;
-            simulator falls back to TP1 + BE-stop policy.
+      TP1 = nearest opposing H1 swing past entry that clears 1.5R. If NO swing
+            clears 1.5R, fall back to the H4 dealing-range wall (ceiling for
+            LONG / floor for SHORT) if it clears 1.5R. If neither qualifies ->
+            no trade (reason 'no_qualifying_target', logged for counting).
+      TP2 = next opposing H1 swing past TP1 (no RR gate). None when TP1 is the
+            wall, or when no further swing exists; simulator rides TP1 + BE-stop.
 
     Limit-order chase guard (proximal entry only):
       If the proximal entry sits on the wrong side of current price (LONG
@@ -1555,12 +1583,38 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
             tp1_idx_in_opposing = i
             break
 
+    # TP1 fallback ladder (2026-06). A fresh CHoCH often has NO opposing
+    # leg-filtered swing >= 1.5R yet, which silently no-traded the best setups.
+    # Fallback to the H4 dealing-range WALL — the institutional draw on liquidity
+    # (LONG aims at the ceiling, SHORT at the floor). The wall is frozen per-OB on
+    # ob['dealing_range'] (no state load, no wobble) and still must clear 1.5R.
+    tp1_source = "swing"
+    if tp1 is None:
+        dr_for_tp = ob.get('dealing_range') if isinstance(ob, dict) else None
+        wall = None
+        if isinstance(dr_for_tp, dict) and dr_for_tp.get('valid'):
+            wall = dr_for_tp.get('range_high') if bias == "LONG" else dr_for_tp.get('range_low')
+        try:
+            wall = float(wall) if wall is not None else None
+        except (TypeError, ValueError):
+            wall = None
+        if wall is not None:
+            on_side = (wall > entry) if bias == "LONG" else (wall < entry)
+            wall_rr = abs(wall - entry) / risk
+            if on_side and wall_rr >= 1.5:
+                tp1 = wall
+                tp1_rr = wall_rr
+                tp1_idx_in_opposing = None  # wall has no swing index -> no swing TP2
+                tp1_source = "h4_wall"
+
     if tp1 is None:
         return {
             "valid": False,
-            "reason": ("No opposing H1 swing >= 1.5R past entry -- no trade."
-                       if not opposing else
-                       "All opposing H1 swings past entry yield R:R < 1.5."),
+            # Distinct, machine-readable reason so the scan log can COUNT how often
+            # a real setup is dropped purely for lack of a target (the quiet
+            # no-trade hole). Was previously two prose strings that were hard to tally.
+            "reason": ("no_qualifying_target -- no opposing H1 swing and no H4 wall "
+                       ">= 1.5R past entry."),
             "entry": round(entry, dp),
             "sl": round(sl, dp),
         }
@@ -1568,10 +1622,10 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     # TP2: next opposing swing past TP1. No RR gate, no fallback.
     # Textbook SMC: TP2 is the next real liquidity pool past TP1. If none
     # exists in the swing series, the trade rides TP1 -> BE-stop (handled
-    # by the simulator). Synthesising TP2 from the dealing range produced
-    # collisions with TP1 after rounding and is not how a vet sets targets.
+    # by the simulator). When TP1 is the H4 wall (no swing index), there is no
+    # swing-based TP2 -- the wall is the final target.
     tp2 = None
-    if tp1_idx_in_opposing + 1 < len(opposing):
+    if tp1_idx_in_opposing is not None and tp1_idx_in_opposing + 1 < len(opposing):
         tp2 = opposing[tp1_idx_in_opposing + 1]
 
     out = {
@@ -1581,6 +1635,7 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         "tp1": round(tp1, dp),
         "rr": round(tp1_rr, 2),
         "entry_source": entry_source,
+        "tp1_source": tp1_source,  # "swing" | "h4_wall"
     }
     # Post-rounding direction check. Pre-round, the swing list ordering
     # guarantees tp2 > tp1 (LONG) or tp2 < tp1 (SHORT). After rounding to
@@ -1595,6 +1650,40 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
             out["tp2_rr"] = round(abs(tp2 - entry) / risk, 2)
         # else: tp2 collapsed onto tp1 (or wrong side) -> emit no tp2.
     return out
+
+
+# SHARED — killzone membership test. Single source of truth for killzone
+# scoring (used by run_scorecard on the OB candle) AND the live "approaching
+# during killzone" info line. Mirrors Phase2._ob_in_killzone_label's window
+# math, but returns a plain bool and lives in the lower layer so the scorer
+# (and the backtest) can call it without importing Phase 2.
+def _ts_in_killzone(ts_iso, killzones_utc):
+    """True if the H1 candle at ts_iso (UTC ISO) overlaps any killzone window.
+    killzones_utc = [["07:00","10:00"], ...] in UTC. Treats the candle as a
+    1-hour block. Returns False on any missing/bad input (never raises)."""
+    if not ts_iso or not killzones_utc:
+        return False
+    try:
+        dt = datetime.fromisoformat(str(ts_iso).replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc)
+        hour_start = dt.hour * 60 + dt.minute
+        hour_end = hour_start + 60
+        for w in killzones_utc:
+            if not isinstance(w, (list, tuple)) or len(w) != 2:
+                continue
+            try:
+                sh, sm = (int(x) for x in str(w[0]).split(":"))
+                eh, em = (int(x) for x in str(w[1]).split(":"))
+            except (ValueError, AttributeError):
+                continue
+            start_min = sh * 60 + sm
+            end_min = eh * 60 + em
+            if hour_start < end_min and hour_end > start_min:
+                return True
+        return False
+    except Exception:
+        return False
 
 
 # PHASE 2 ONLY — sweep quality scorecard. Called only by Phase2_Alert_Engine.py.
@@ -1615,7 +1704,13 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
     # faster, indices sustain trends longer.
     bos_tier = ob.get('bos_tier', 'BOS')
     if bos_tag == 'CHoCH':
-        bd = {"structure": 4}
+        # CHoCH tiering (2026-06): a CHoCH that reversed FROM the premium/discount
+        # extreme of the H4 range is the textbook reversal -> 4. A mid-range CHoCH
+        # is still a confirmed reversal (so it must rank >= an early continuation
+        # BOS, which is 3), but it lacks the premium/discount location quality -> 3.
+        # reversal_pct == 1.0 is the from-zone flag carried on the OB by Phase 1.
+        choch_from_zone = float(ob.get('reversal_pct') or 0.0) >= 1.0
+        bd = {"structure": 4 if choch_from_zone else 3}
     elif bos_tier == 'Range':
         # Range BOS: broke through the H4 dealing range wall. Higher-conviction
         # than a plain BOS — score same as CHoCH entry (4).
@@ -1742,14 +1837,16 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
         rng_width = dr["range_high"] - dr["range_low"]
         if rng_width > 0:
             pd_position = (proximal - dr["range_low"]) / rng_width
-    bd["pd"] = 0.0  # PD removed from scoring; display-only.
-    # Killzone — removed from scoring 2026-05-25. The hard filter
-    # (config.json killzones_utc) already drops every alert outside the
-    # killzone window, so 100% of alerts would have scored the +0.5 bonus.
-    # A confluence that fires for every alert is not a confluence -- it's
-    # noise in the total. Killzone presence is still surfaced via the
-    # ob_session / fill_session / killzone_alignment fields on each row.
-    bd["killzone"] = 0.0
+    bd["pd"] = 0.0  # PD removed from scoring; display-only (trader decision).
+    # Killzone — RE-ADDED to scoring 2026-06. There is NO hard killzone filter in
+    # the live path: alerts fire at all hours, so OB-in-killzone is a real, varying
+    # confluence (the old "the filter drops every off-session alert" comment was
+    # false and has been removed). We score the OB CANDLE's killzone membership —
+    # i.e. was the order block formed during institutional (London/NY) hours, a
+    # zone-quality signal. The entry/approach-time killzone is shown as INFO only
+    # (it flickers per scan and the limit's fill time is unknown), never scored.
+    kz_windows = pair_conf.get("killzones_utc") if pair_conf else None
+    bd["killzone"] = 1.0 if _ts_in_killzone(ob.get("ob_timestamp"), kz_windows) else 0.0
 
     # Macro removed from scorecard. Still surfaced as email-only context.
 
@@ -1778,13 +1875,13 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     """
     Return list of (label, score, max_score, status, explanation) for email rendering.
 
-    Scorecard maxima (2026-05-26 scoring rewrite — whole numbers, asymmetric):
+    Scorecard maxima (killzone +1 re-added 2026-06):
       Non-JPY forex (EURUSD, NZDUSD, USDCHF):
-        Structure 4 | Sweep 1 (presence-only) | FVG 2 | Freshness 1
-        Total = 8.
+        Structure 4 | Sweep 1 (presence-only) | FVG 2 | Freshness 1 | Killzone 1
+        Total = 9.
       JPY / Gold / NAS:
-        Structure 4 | Sweep 3 (quality-graded) | FVG 2 | Freshness 1
-        Total = 10.
+        Structure 4 | Sweep 3 (quality-graded) | FVG 2 | Freshness 1 | Killzone 1
+        Total = 11.
     The forex/non-forex sweep asymmetry is intentional: forex pairs lack
     centralized stop pools so sweep quality is noise; presence alone signals.
     Gold/NAS/JPY have real institutional stop levels so quality matters.
@@ -1809,8 +1906,13 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     bos_count_maxed = bool(ob.get('bos_count_maxed', False))
     seq_str = f"#{bos_seq}+" if bos_count_maxed else f"#{bos_seq}"
     if bos_tag_local == 'CHoCH':
-        rows.append(("Structure", s, 4, "ok",
-                     "CHoCH — trend reversed: defended swing broken by >= 1.0 ATR."))
+        choch_from_zone = float(ob.get('reversal_pct') or 0.0) >= 1.0
+        if choch_from_zone:
+            rows.append(("Structure", s, 4, "ok",
+                         "CHoCH from premium/discount extreme — textbook reversal."))
+        else:
+            rows.append(("Structure", s, 4, "warn",
+                         "CHoCH (mid-range) — confirmed reversal, but not from a range extreme."))
     elif bos_tag_local == 'BOS' and bos_tier_local == 'Range':
         rows.append(("Structure", s, 4, "ok",
                      f"Range BOS {seq_str} — broke through H4 dealing range wall with displacement."))
@@ -1932,12 +2034,100 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         rows.append(("Premium / Discount", 0.0, 0.0, "info",
                       f"H1 OB proximal at {pd_pct_str} of H1 dealing range ({zone_label}). {dr_src}{dr_tag}{chop_tag}"))
     
-    # Killzone removed from scorecard 2026-05-25. The hard filter already
-    # ensures every alert is in-killzone, so the row was always green and
-    # added no information. Killzone context is now in the per-row
-    # alignment fields (ob_session, fill_session, killzone_alignment).
+    # 6. Killzone — OB formed during the pair's institutional killzone (max 1).
+    # Re-added to scoring 2026-06 (no hard killzone filter exists, so this varies).
+    kz = breakdown.get("killzone", 0.0)
+    if kz >= 1.0:
+        rows.append(("Killzone", int(kz), 1, "ok",
+                     "OB formed inside a killzone window — institutional hours."))
+    else:
+        rows.append(("Killzone", int(kz), 1, "warn",
+                     "OB formed outside killzone hours."))
 
     return rows
+
+
+# PHASE 2 ONLY — setup classifier. A thin layer over fields ALREADY computed:
+# recognises when the confluences line up into a named, textbook SMC pattern and
+# returns a badge + a one-line mentor note. No detection, no new data. The score
+# is a linear sum (it can't see HOW the ingredients relate); this encodes the
+# interaction logic the sum misses — WHERE the event happened (range extreme),
+# WHAT sequence it's in (first leg vs late), and WHICH direction vs trend/range.
+def classify_setup(ob, pd_position, trend_alignment):
+    """Return (name, note, kind) for a recognised setup, or (None, None, None).
+
+    kind is 'premium' (high-conviction, green) or 'caution' (avoid-ish, red).
+    Pure — reads only fields on the OB plus the PD position. Edge guards:
+      - pd_position may be None (range invalid) -> the location test fails
+        CLOSED for the positive 'First Pullback' badge (we never claim "cheap
+        side" we can't prove), and is simply skipped for the caution.
+      - reversal_pct is only meaningful on a CHoCH; the from-zone test is only
+        reached on CHoCH events.
+      - sweep TIER is graded for every pair (the non-JPY-forex presence-only
+        collapse affects the SCORE, not the tier), so the tier test is valid
+        across instruments.
+    """
+    bos_tag   = ob.get('bos_tag')
+    bos_tier  = ob.get('bos_tier')
+    direction = ob.get('direction')
+    touches   = int(ob.get('touches', 0) or 0)
+    seq       = int(ob.get('bos_sequence_count', 0) or 0)
+    fvg       = ob.get('fvg') or {}
+    fvg_exists = bool(fvg.get('exists'))
+    fvg_mit    = fvg.get('mitigation')
+    sweep      = ob.get('sweep_observed') or {}
+    sweep_exists = bool(sweep.get('exists'))
+    sweep_tier   = (sweep.get('tier') or 'none')
+    from_zone    = float(ob.get('reversal_pct') or 0.0) >= 1.0
+
+    # --- A+ "Reversal at the Wall" -------------------------------------------
+    # CHoCH that reversed from the range extreme, with a real sweep, an untouched
+    # zone, and a live gap. Every ingredient tells the SAME story: smart money
+    # loaded at the extreme. The richest SMC reversal there is.
+    if (bos_tag == 'CHoCH' and from_zone
+            and sweep_exists and sweep_tier in ('textbook', 'decent')
+            and touches == 0
+            and fvg_exists and fvg_mit != 'full'):
+        return ("A+ Reversal at the Wall",
+                "Liquidity was swept at the range extreme, structure flipped, and "
+                "the zone is untouched with a live gap. This is the textbook SMC "
+                "reversal — the cleanest setup the system flags.",
+                "premium")
+
+    # --- A "First Pullback" ---------------------------------------------------
+    # The first BOS after a CHoCH is the youngest, least-crowded point of a new
+    # trend — maximum runway. Require entry from the CHEAP side (discount for
+    # longs / premium for shorts); pd unknown => no badge (we don't guess).
+    pd_cheap_side = (pd_position is not None and (
+        (direction == 'bullish' and pd_position <= 0.5) or
+        (direction == 'bearish' and pd_position >= 0.5)))
+    if (bos_tag == 'BOS' and bos_tier != 'Range'
+            and seq == 1
+            and trend_alignment == 'with_trend'
+            and touches == 0
+            and fvg_exists and fvg_mit == 'pristine'
+            and pd_cheap_side):
+        return ("A First Pullback",
+                "The first pullback of a brand-new trend, entering from the "
+                "discounted side with a fresh, untouched gap — maximum runway and "
+                "minimum trend-exhaustion risk.",
+                "premium")
+
+    # --- Caution "Late-Trend Chase" ------------------------------------------
+    # Third-or-later leg of a mature trend, entered from the EXPENSIVE side.
+    pd_expensive_side = (pd_position is not None and (
+        (direction == 'bullish' and pd_position >= 0.5) or
+        (direction == 'bearish' and pd_position <= 0.5)))
+    if bos_tag == 'BOS' and seq >= 3 and pd_expensive_side:
+        return ("Caution: Late-Trend Chase",
+                "This is the third-or-later leg of a mature trend, entered from "
+                "the expensive side — you may be buying exactly what smart money "
+                "is distributing into. Treat with suspicion.",
+                "caution")
+
+    return (None, None, None)
+
+
 # PHASE 3 ONLY — detects M5 CHoCH inside H1 zone bounds (Phase 3 entry trigger).
 def detect_ltf_choch(df_m5, bias, bounds):
     """
@@ -2106,7 +2296,7 @@ def resolve_distal_mode(pair_conf):
 
 
 def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx,
-                           end_idx=None, distal_mode="close"):
+                           end_idx=None, distal_mode="close", atr=None):
     """
     Single-source-of-truth OB mitigation check. Used by Phase 1 (canonical
     drop reason) AND Phase 2 (mid-day still-active gate before scoring).
@@ -2121,9 +2311,17 @@ def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx,
             wick to the distal kills the zone. Backtest-tunable only.
       - WICK into proximal counts as a touch; 3 touches -> mitigated_three_touches.
         The proximal touch count is ALWAYS wick-based regardless of distal_mode.
+        Touches are counted ONCE PER APPROACH (excursion-based, 2026-06): after a
+        touch, price must pull back beyond proximal by OB_TOUCH_REARM_ATR * atr
+        before another touch registers. A zone price merely sits on for hours is
+        therefore ONE test, not three — fixing the per-bar over-count that used to
+        delete fresh, coiling zones (and zero their freshness score).
 
     The `touches` returned are PROXIMAL touches only (a distal break is terminal,
     it never accrues as a touch).
+
+    `atr` is the H1 ATR used to scale the re-arm distance. If None/<=0, the re-arm
+    falls back to OB_TOUCH_REARM_ATR * OB width so the function still works.
 
     Args:
         direction:   'bullish' | 'bearish'.
@@ -2154,21 +2352,35 @@ def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx,
     H = df['High'].values.astype(float)
     L = df['Low'].values.astype(float)
 
+    # Re-arm distance for excursion-based touch counting. Self-scaling on ATR;
+    # falls back to a fraction of OB width when ATR is unavailable.
+    if atr and atr > 0:
+        rearm = OB_TOUCH_REARM_ATR * float(atr)
+    else:
+        rearm = OB_TOUCH_REARM_ATR * abs(float(proximal) - float(distal))
+
     touches = 0
+    armed = True   # True => a fresh approach can register a touch
     for m in range(start_idx, end_idx):
         if direction == 'bullish':
             distal_broken = (L[m] <= distal) if use_wick_distal else (C[m] < distal)
             if distal_broken:
                 return True, 'mitigated_distal_break', touches
-            # Proximal touch is always wick-based.
-            if L[m] <= proximal:
+            # Proximal touch is always wick-based, counted once per approach.
+            if armed and L[m] <= proximal:
                 touches += 1
+                armed = False
+            elif (not armed) and L[m] > proximal + rearm:
+                armed = True   # price pulled clearly away -> next visit is a new touch
         else:
             distal_broken = (H[m] >= distal) if use_wick_distal else (C[m] > distal)
             if distal_broken:
                 return True, 'mitigated_distal_break', touches
-            if H[m] >= proximal:
+            if armed and H[m] >= proximal:
                 touches += 1
+                armed = False
+            elif (not armed) and H[m] < proximal - rearm:
+                armed = True
         if touches >= 3:
             return True, 'mitigated_three_touches', touches
 

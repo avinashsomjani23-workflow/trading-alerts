@@ -58,15 +58,16 @@ def score_to_int(score):
 def scorecard_real_max(pair_conf):
     """Real (internal) maximum for a pair's confluence scorecard.
 
-    Non-JPY forex tops out at 8 — its sweep is presence-only (max 1) because
-    spot forex has no centralized stop pool, so sweep *quality* is noise.
-    JPY / Gold / NAS top out at 10 (sweep quality-graded, max 3). This mirrors
-    smc_detector.run_scorecard. The per-line math in the email body always
-    shows this true max.
+    Components (mirrors smc_detector.run_scorecard):
+      Structure 4 | Sweep 1 (non-JPY forex, presence-only) or 3 (JPY/Gold/NAS,
+      quality-graded) | FVG 2 | Freshness 1 | Killzone 1.
+    So non-JPY forex tops out at 9, JPY/Gold/NAS at 11. (Killzone +1 re-added
+    to scoring 2026-06.) The per-line math in the email body always shows this
+    true max; the headline normalises to /10 for cross-instrument comparison.
     """
     name = pair_conf.get('name', '') if pair_conf else ''
     ptype = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
-    return 8 if (ptype == 'forex' and 'JPY' not in name) else 10
+    return 9 if (ptype == 'forex' and 'JPY' not in name) else 11
 
 
 def normalized_score(raw, pair_conf):
@@ -1275,6 +1276,28 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     # H1-only migration (2026-05-26): every pair routes through the limit
     # branch. The legacy ltf_choch (M5 CHoCH) approach block is retired.
     action_word = "SELL LIMIT" if bias == "SHORT" else "BUY LIMIT"
+
+    # Setup badge — the mentor's verdict, rendered FIRST so it frames everything
+    # below it. Green star for a high-conviction named pattern; red warning for a
+    # caution pattern. Nothing rendered when no named pattern matched (most
+    # alerts) — the badge means something precisely because it is rare.
+    _badge = data.get("setup_badge")
+    if _badge and _badge.get("name"):
+        if _badge.get("kind") == "caution":
+            _bg, _border, _ic, _title_col = "#2d1a1a", "#e74c3c", "&#9888;", "#ff8a80"
+        else:
+            _bg, _border, _ic, _title_col = "#10241a", "#2ecc71", "&#11088;", "#7fe3a0"
+        setup_badge_html = (
+            f'<div style="background:{_bg};border:1px solid {_border};border-left:5px solid '
+            f'{_border};border-radius:10px;padding:12px 16px;margin-bottom:14px;">'
+            f'<div style="color:{_title_col};font-size:15px;font-weight:bold;margin-bottom:4px;">'
+            f'{_ic} {_badge["name"]}</div>'
+            f'<div style="color:#dcdcdc;font-size:12px;line-height:1.5;">{_badge.get("note","")}</div>'
+            f'</div>'
+        )
+    else:
+        setup_badge_html = ""
+
     tp2_val = levels.get('tp2')
     tp2_html = f"TP2: {tp2_val:,.{dp}f} &nbsp;|&nbsp; " if tp2_val is not None else ""
     action_block = f"""
@@ -1303,10 +1326,17 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         <b style="color:#eee;">Distance:</b> {distance_str} &nbsp;&middot;&nbsp; {atr_label}
     </div>"""
 
-    # Killzone-alignment annotation: did the OB candle land in a killzone?
-    # Fill side is unknown until we actually fill, so we only show the OB
-    # side here. SMC hypothesis: OB-in-killzone setups outperform.
+    # Killzone annotation. OB-side is SCORED (zone formed in institutional
+    # hours). The approach side is INFO ONLY — whether price is approaching the
+    # zone right now during a killzone. It is not scored (it flickers per scan
+    # and the limit fill time is unknown), but it helps the trader judge timing.
     ob_in_kz_label = _ob_in_killzone_label(ob, pair_conf)
+    _now_utc_iso = (get_ist_now() - timedelta(hours=5, minutes=30)).isoformat()
+    _approach_in_kz = smc_detector._ts_in_killzone(
+        _now_utc_iso, (pair_conf or {}).get("killzones_utc")
+    )
+    approach_label = ("<b style='color:#27ae60;'>in killzone</b>" if _approach_in_kz
+                      else "<b style='color:#e67e22;'>outside killzone</b>")
 
     context_html = f"""
     <div style="margin-bottom:12px;font-size:11px;color:#888;">
@@ -1314,6 +1344,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         &nbsp;&middot;&nbsp; Proximal {ob.get('proximal_line', 0):.{dp}f}
         / Distal {ob.get('distal_line', 0):.{dp}f}
         &nbsp;&middot;&nbsp; <b style="color:#aaa;">OB candle:</b> {ob_in_kz_label}
+        &nbsp;&middot;&nbsp; <b style="color:#aaa;">Approaching now:</b> {approach_label} <i>(info)</i>
     </div>"""
 
     # Trend banner (information only — trader decides whether to take counter-trend)
@@ -1424,6 +1455,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             <p style="color:#888;margin:4px 0 0;font-size:11px;">{ist_time}</p>
         </div>
         <div style="padding:14px 18px;">
+            {setup_badge_html}
             {action_block}
             {trend_banner_html}
             {distance_html}
@@ -1490,12 +1522,28 @@ def build_sweep_breakdown_html(data, dp):
 
     total = base + eq_score + rej_score
 
+    # Swept-level LOCATION (info only). The context tags (round number, session
+    # high/low, prior-day high/low) are already computed by Phase 1 and frozen on
+    # the OB. On non-JPY forex the sweep score is presence-only, so WHERE the
+    # level sits (a round number / session level) is the quality signal that
+    # actually matters — surfaced here for the trader to judge, not scored. Shown
+    # for all pairs (no per-pair branch = nothing to maintain).
+    tags = (((data.get('ob') or {}).get('sweep_observed') or {}).get('context_tags')) or []
+    if tags:
+        pretty = ", ".join(str(t).replace('_', ' ') for t in tags)
+        location_html = (f'<div>&#128205; <b style="color:#eee;">Swept level sits at:</b> '
+                         f'{pretty}</div>')
+    else:
+        location_html = ('<div style="color:#888;">&#128205; Swept level: no round-number / '
+                         'session / prior-day confluence.</div>')
+
     return f"""
     <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #00bcd4;border-radius:4px;font-size:12px;color:#bbb;line-height:1.6;">
         <div style="color:#eee;font-weight:bold;margin-bottom:6px;letter-spacing:0.5px;">SWEEP QUALITY BREAKDOWN</div>
         <div>{presence_icon} <b style="color:#eee;">Presence:</b> {base:.2f}/1.5 &middot; {sweep_tf} sweep at {sweep_price_str}, {hrs_str}</div>
         <div>{eq_icon} <b style="color:#eee;">Equal Levels:</b> {eq_score:.2f}/0.5 &middot; {eq_label}</div>
         <div>{rej_icon} <b style="color:#eee;">Rejection Quality:</b> {rej_score:.2f}/1.0 &middot; {rej_label} (ratio {wb_ratio:.1f})</div>
+        {location_html}
         <div style="margin-top:4px;color:#eee;"><b>Total: {total:.2f}/3.0</b></div>
     </div>"""
 def send_email(subject, html_body, h1_chart_b64, m15_chart_b64):
@@ -2150,6 +2198,7 @@ if __name__ == "__main__":
                         ob['direction'], distal, proximal, df_h1,
                         start_idx=anchor_idx_gate + 1,
                         distal_mode=smc_detector.resolve_distal_mode(pair_conf),
+                        atr=h1_atr,
                     )
                     if mitigated:
                         zone_outcome["result"] = f"dropped_invalidated_{mit_reason}"
@@ -2181,11 +2230,14 @@ if __name__ == "__main__":
         # H1-only entries, every legitimate zone deserves visibility. Score gate
         # also removed — hysteresis dedup still suppresses redundant re-emails.
         for ob in surviving_obs:
-            # Inject fresh BOS count + ring-overflow flag onto each zone.
-            # Structure is scored from the zone's own bos_tag/bos_tier — the
-            # zone's structural identity does not depend on whether it agrees
-            # with the current dominant trend.
-            ob['bos_sequence_count'] = bos_counter['count']
+            # BOS sequence count is PER-OB. Phase 1 stamps each OB with the BOS
+            # count AT ITS OWN EVENT and persists it on the slate. OB2 belongs to
+            # an EARLIER event than OB1, so it must keep its own (lower) count —
+            # NOT today's whole-ring total. We therefore READ the persisted value
+            # and only fall back to the live ring count for legacy slate zones
+            # written before this field existed (they age out within ~15 days).
+            if ob.get('bos_sequence_count') is None:
+                ob['bos_sequence_count'] = bos_counter['count']  # legacy fallback
             ob['bos_count_maxed'] = bool(bos_counter.get('count_maxed', False))
 
             zone_dir = ob.get('direction')
@@ -2222,6 +2274,15 @@ if __name__ == "__main__":
                 scan_record["final_action"] = "levels_invalid"
                 append_scan_log(scan_record)
                 continue
+
+            # Setup classifier — recognise named textbook patterns (badge + note).
+            # Reads only already-computed fields; pd_position from the scorecard.
+            setup_name, setup_note, setup_kind = smc_detector.classify_setup(
+                ob, score_res.get('pd_position'), trend_alignment
+            )
+            # Log the badge so a future "badged vs unbadged outcome" study has the
+            # label from day one (Fable's process note).
+            scan_record["setup_badge"] = setup_name
 
             # Record the fired-alert trade levels for backtest/live parity
             # (Tier-B). Keyed by zone_id so the extractor can join to the
@@ -2285,6 +2346,8 @@ if __name__ == "__main__":
                 "macro_summary": gemini_risk.get("macro_summary"),
                 "macro_unavailable": bool(gemini_risk.get("macro_unavailable", False)),
                 "news_ctx": news_ctx,
+                "setup_badge": ({"name": setup_name, "note": setup_note, "kind": setup_kind}
+                                if setup_name else None),
                 "levels": levels,
                 "ob": ob,
                 "alert_ist": ist_now.isoformat(),
@@ -2440,11 +2503,17 @@ if __name__ == "__main__":
                 h1_chart_ok=h1_ok, m15_chart_ok=m15_ok
             )
             # Subject shows the /10-normalized score so forex and gold/NAS/JPY
-            # alerts are comparable at a glance. Real math (out of 8 or 10)
-            # lives in the email body scorecard.
+            # alerts are comparable at a glance. Real math lives in the body.
+            # A named setup (if any) goes right after the prefix so the verdict
+            # is visible in the inbox without opening the email; the name is
+            # self-describing, so no symbols are needed.
             _subj_score = normalized_score(score_res['total'], pair_conf)
+            _setup_subj = trade_data.get("setup_badge")
+            _badge_subj = (f"{_setup_subj['name']} | "
+                           if _setup_subj and _setup_subj.get("name") else "")
             send_email(
-                f"{subject_prefix} | {name} | {bias} | Score {_subj_score:.1f}/10 | {ist_now.strftime('%H:%M IST')}",
+                f"{subject_prefix} | {_badge_subj}{name} | {bias} | "
+                f"Score {_subj_score:.1f}/10 | {ist_now.strftime('%H:%M IST')}",
                 html, h1_chart, m15_chart
             )
             # Persist dedup state AFTER send. See comment above.

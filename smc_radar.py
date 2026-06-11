@@ -899,7 +899,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         mitigated, _reason, touches = is_ob_mitigated_phase1(
             ob['direction'], ob['distal_line'], ob['proximal_line'],
             df, start_idx=ob['bos_idx'] + 1, end_idx=n,
-            distal_mode=_distal_mode,
+            distal_mode=_distal_mode, atr=h1_atr_for_leg,
         )
         if not mitigated:
             ob['touches'] = touches
@@ -1003,12 +1003,13 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
 
     filtered = _dedupe_same_leg(filtered)
 
-    # Surface the nearest two OBs within OB_PROXIMITY_ATR of price, any
-    # direction, pristine preferred on ties. No trend gating. Each kept OB
-    # carries 'role' = 'primary' (nearest) | 'alternative' (next) for
-    # downstream consumers (chart renders both; Phase 2 fires per its own gate).
+    # Surface OB1 (last-event) + OB2 (best alternative within the window). OB2
+    # now prefers WITH-TREND zones over a closer counter-trend zone (a with-trend
+    # setup that is still actionable beats a nearer counter-trend one). H1 trend
+    # comes from the structure engine; None falls back to nearest-wins.
     cur_price = float(C[-1])
-    filtered = _split_primary_alternative(filtered, cur_price)
+    _trend = (walls or {}).get('trend')  # 'bullish' | 'bearish' | None
+    filtered = _split_primary_alternative(filtered, cur_price, trend=_trend)
 
     # Strip the private dedupe hint before returning.
     for o in filtered:
@@ -1120,9 +1121,10 @@ def _count_confluences(ob):
     return n
 
 
-def _split_primary_alternative(obs, cur_price):
+def _split_primary_alternative(obs, cur_price, trend=None):
     """
-    Surface up to two OBs (trader spec, LOCKED 2026-06-10):
+    Surface up to two OBs (trader spec, LOCKED 2026-06-10; OB2 trend-priority
+    added 2026-06):
 
       OB1 = 'primary'     — the LAST-EVENT order block: the OB built from the
                             most recent structural event (highest bos_idx),
@@ -1131,12 +1133,15 @@ def _split_primary_alternative(obs, cur_price):
                             the vet can always see where the last structural OB
                             sits, even when price has run far from it.
 
-      OB2 = 'alternative' — the CLOSEST-DISTANCE order block to current price,
-                            across ALL directions (buy and sell compete; OB2
-                            may be the opposite direction to OB1). Proximity-
-                            GATED at OB_PROXIMITY_ATR; pristine breaks ties.
-                            Chosen from the remaining OBs (OB1 excluded) so OB1
-                            and OB2 are always distinct when both exist.
+      OB2 = 'alternative' — the best order block within OB_PROXIMITY_ATR, OB1
+                            excluded. Ranking (2026-06): WITH-TREND first, then
+                            nearest, then pristine. A with-trend zone that is
+                            still inside the window beats a closer counter-trend
+                            zone (higher-probability setup). `trend` is the H1
+                            trend ('bullish'|'bearish'|None); None => nearest-wins
+                            (old behaviour). If no with-trend zone is in the
+                            window, the nearest counter-trend one fills the slot
+                            (the slot is never left empty when a candidate exists).
 
     Edge cases (all confirmed with trader):
       - Last event produced no OB (walk-back failed / out of window): OB1 empty,
@@ -1158,7 +1163,10 @@ def _split_primary_alternative(obs, cur_price):
     if obs_with_idx:
         ob1 = max(obs_with_idx, key=lambda o: int(o['bos_idx']))
 
-    # --- OB2: closest OB within proximity, excluding OB1, any direction. ------
+    # --- OB2: best OB within proximity, excluding OB1. ------------------------
+    # Rank: with-trend first, then nearest, then pristine. A with-trend zone in
+    # the window beats a closer counter-trend one; if none is with-trend, the
+    # key degrades to (nearest, pristine) so the nearest counter-trend wins.
     in_window = []
     for ob in obs:
         if ob is ob1:
@@ -1166,8 +1174,12 @@ def _split_primary_alternative(obs, cur_price):
         d = ob.get('_distance_atr')
         if d is not None and d <= OB_PROXIMITY_ATR:
             in_window.append(ob)
-    # Nearest first; pristine (touches == 0) breaks ties.
-    in_window.sort(key=lambda o: (o['_distance_atr'], int(o.get('touches', 0))))
+
+    def _ob2_key(o):
+        with_trend = (trend is not None and o.get('direction') == trend)
+        return (0 if with_trend else 1, o['_distance_atr'], int(o.get('touches', 0)))
+
+    in_window.sort(key=_ob2_key)
     ob2 = in_window[0] if in_window else None
 
     kept = []
@@ -3123,6 +3135,10 @@ def fresh_to_slate_zone(fresh_zone, zone_id, ist_now, current_price, dp):
         "impulse_start_idx": fresh_zone["impulse_start_idx"],
         "impulse_start_price": fresh_zone["impulse_start_price"],
         "bos_swing_price": fresh_zone["bos_swing_price"],
+        # Per-OB BOS sequence count, stamped by detect_smc_radar at the OB's OWN
+        # event. Persisted so Phase 2 scores OB2 with its own count, not today's
+        # whole-ring total (which mislabelled an early OB2 as "exhausted").
+        "bos_sequence_count": fresh_zone.get("bos_sequence_count", 1),
         "touches": fresh_zone.get("touches", 0),
         "status_label": fresh_zone.get("status", "Pristine"),
         "h1_atr": fresh_zone.get("h1_atr", 0.0),
@@ -3274,6 +3290,11 @@ def refresh_slate_zone(slate_zone, fresh_zone, ist_now, current_price, dp):
     slate_zone["impulse_start_idx"]    = fresh_zone["impulse_start_idx"]
     slate_zone["impulse_start_price"]  = fresh_zone["impulse_start_price"]
     slate_zone["bos_swing_price"]      = fresh_zone["bos_swing_price"]
+    # Per-OB BOS count — refresh from the fresh scan so a re-detected OB keeps an
+    # accurate, current per-event count (and a refreshed zone never loses the
+    # field, which would silently re-introduce the legacy fallback).
+    slate_zone["bos_sequence_count"]   = fresh_zone.get(
+        "bos_sequence_count", slate_zone.get("bos_sequence_count", 1))
     slate_zone["touches"]       = fresh_zone.get("touches", 0)
     slate_zone["status_label"]  = fresh_zone.get("status", "Pristine")
     slate_zone["h1_atr"]        = fresh_zone.get("h1_atr", 0.0)
@@ -3401,6 +3422,7 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
                 distal_mode=smc_detector.resolve_distal_mode(
                     _pair_conf_for_name(pair_name)
                 ),
+                atr=h1_atr,
             )
             if mitigated and reason:
                 return reason
