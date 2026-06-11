@@ -167,6 +167,48 @@
       "max_exit_distance": 0.0,
       "bias": "LONG",
       "pair": "EURUSD"
+    },
+    "EURUSD_SHORT_CHoCH_1.1537_2026-06-11T11": {
+      "score_int": 5,
+      "score_raw": 5.0,
+      "score_high_water": 5.0,
+      "score_low_water": 5.0,
+      "breakdown": {
+        "structure": 4,
+        "sweep": 0.0,
+        "fvg": 0,
+        "freshness": 1,
+        "pd": 0.0,
+        "killzone": 0.0
+      },
+      "alert_ist": "2026-06-11T20:35:38.408894",
+      "last_seen_ist": "2026-06-11T20:35:38.408894",
+      "last_email_day": "2026-06-11",
+      "reentry_armed": false,
+      "max_exit_distance": 0.0,
+      "bias": "SHORT",
+      "pair": "EURUSD"
+    },
+    "NZDUSD_SHORT_BOS_0.5788_2026-06-11T04": {
+      "score_int": 3,
+      "score_raw": 3.0,
+      "score_high_water": 3.0,
+      "score_low_water": 3.0,
+      "breakdown": {
+        "structure": 1,
+        "sweep": 0.0,
+        "fvg": 1,
+        "freshness": 1,
+        "pd": 0.0,
+        "killzone": 0.0
+      },
+      "alert_ist": "2026-06-11T20:35:38.408894",
+      "last_seen_ist": "2026-06-11T20:35:38.408894",
+      "last_email_day": "2026-06-11",
+      "reentry_armed": false,
+      "max_exit_distance": 0.0,
+      "bias": "SHORT",
+      "pair": "NZDUSD"
     }
   }
 }
