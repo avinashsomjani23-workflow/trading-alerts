@@ -498,5 +498,10 @@
     "ts": "2026-06-12T11:38:41.757566",
     "pair": "GOLD",
     "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-12T12:36:24.942536",
+    "pair": "NAS100",
+    "reason": "API error 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
   }
 ]
