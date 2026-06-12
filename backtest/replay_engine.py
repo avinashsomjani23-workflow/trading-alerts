@@ -440,13 +440,19 @@ def replay_pair(
                 if (diag["closest_dist_atr_seen"] is None
                         or dist_in_atr < diag["closest_dist_atr_seen"]):
                     diag["closest_dist_atr_seen"] = dist_in_atr
+                # scanlog: track nearest zone this bar (observe-only).
+                if _bt_nearest is None or dist_in_atr < _bt_nearest[0]:
+                    _bt_nearest = (dist_in_atr, ob.get("ob_timestamp"), direction)
 
             # Cooling -> armed transition (price has cleared re-arm band)
             if ob_state["state"] == "cooling" and wick_distance > rearm_cap:
                 ob_state["state"] = "armed"
                 diag["alerts_rearmed"] += 1
+                _scanlog().event("re_arm", pair=pair_name, ts=str(h1_ts),
+                                 ob_timestamp=ob.get("ob_timestamp"))
 
             if ob_state["state"] != "armed":
+                _bt_any_cooling = True   # scanlog: a zone is waiting to re-arm
                 continue
             if wick_distance > prox_cap:
                 continue
