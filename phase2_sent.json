@@ -1,60 +1,6 @@
 {
   "day_id": "2026-06-12",
   "zones": {
-    "GOLD_LONG_CHoCH_4529.5_2026-05-28T06": {
-      "score_int": 6,
-      "score_raw": 6.0,
-      "score_high_water": 6.0,
-      "score_low_water": 6.0,
-      "breakdown": {
-        "structure": 4,
-        "sweep": 0.0,
-        "fvg": 1,
-        "freshness": 1,
-        "pd": 0.0,
-        "killzone": 0.0
-      },
-      "alert_ist": "2026-06-05T18:35:32.787987",
-      "last_seen_ist": "2026-06-05T18:35:32.787987",
-      "bias": "LONG",
-      "pair": "GOLD"
-    },
-    "USDJPY_LONG_BOS_159.31_2026-05-29T20": {
-      "score_int": 4,
-      "score_raw": 4.0,
-      "score_high_water": 4.0,
-      "score_low_water": 4.0,
-      "breakdown": {
-        "structure": 2,
-        "sweep": 0.0,
-        "fvg": 1,
-        "freshness": 1,
-        "pd": 0.0,
-        "killzone": 0.0
-      },
-      "alert_ist": "2026-06-05T18:35:32.787987",
-      "last_seen_ist": "2026-06-05T18:35:32.787987",
-      "bias": "LONG",
-      "pair": "USDJPY"
-    },
-    "NZDUSD_SHORT_BOS_0.5862_2026-06-05T11": {
-      "score_int": 4,
-      "score_raw": 4.0,
-      "score_high_water": 4.0,
-      "score_low_water": 4.0,
-      "breakdown": {
-        "structure": 1,
-        "sweep": 0.0,
-        "fvg": 2,
-        "freshness": 1,
-        "pd": 0.0,
-        "killzone": 0.0
-      },
-      "alert_ist": "2026-06-05T18:35:32.787987",
-      "last_seen_ist": "2026-06-05T18:35:32.787987",
-      "bias": "SHORT",
-      "pair": "NZDUSD"
-    },
     "USDJPY_SHORT_CHoCH_160.08_2026-06-08T07": {
       "score_int": 5,
       "score_raw": 5.0,
@@ -170,7 +116,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-12T17:35:36.303961",
+      "last_seen_ist": "2026-06-12T18:35:33.963022",
       "last_email_day": "2026-06-12",
       "reentry_armed": false,
       "max_exit_distance": 0.4149932861328125,
@@ -212,7 +158,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-12T17:35:36.303961",
+      "last_seen_ist": "2026-06-12T18:35:33.963022",
       "last_email_day": "2026-06-12",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -254,7 +200,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-12T17:35:36.303961",
+      "last_seen_ist": "2026-06-12T18:35:33.963022",
       "last_email_day": "2026-06-12",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -275,7 +221,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-12T17:35:36.303961",
+      "last_seen_ist": "2026-06-12T18:35:33.963022",
       "last_email_day": "2026-06-12",
       "reentry_armed": false,
       "max_exit_distance": 573.75,
@@ -296,7 +242,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-12T17:35:36.303961",
+      "last_seen_ist": "2026-06-12T18:35:33.963022",
       "last_email_day": "2026-06-12",
       "reentry_armed": true,
       "max_exit_distance": 110.10009765625,
@@ -317,7 +263,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-12T00:35:46.176964",
-      "last_seen_ist": "2026-06-12T17:35:36.303961",
+      "last_seen_ist": "2026-06-12T18:35:33.963022",
       "last_email_day": "2026-06-12",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -325,20 +271,20 @@
       "pair": "GOLD"
     },
     "NZDUSD_LONG_BOS_0.5829_2026-06-12T05": {
-      "score_int": 7,
-      "score_raw": 7.0,
-      "score_high_water": 7.0,
-      "score_low_water": 7.0,
+      "score_int": 4,
+      "score_raw": 4.0,
+      "score_high_water": 4.0,
+      "score_low_water": 4.0,
       "breakdown": {
         "structure": 3,
         "sweep": 0.0,
-        "fvg": 2,
-        "freshness": 1,
+        "fvg": 0,
+        "freshness": 0,
         "pd": 0.0,
         "killzone": 1.0
       },
       "alert_ist": "2026-06-12T15:35:36.772251",
-      "last_seen_ist": "2026-06-12T17:35:36.303961",
+      "last_seen_ist": "2026-06-12T18:35:33.963022",
       "last_email_day": "2026-06-12",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
