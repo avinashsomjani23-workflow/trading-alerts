@@ -683,5 +683,20 @@
     "ts": "2026-06-12T22:38:40.429464",
     "pair": "GOLD",
     "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-12T23:36:39.782077",
+    "pair": "NZDUSD",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-12T23:37:10.850773",
+    "pair": "GOLD",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-12T23:37:41.438586",
+    "pair": "GOLD",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
   }
 ]
