@@ -41,3 +41,5 @@
 {"ts": "2026-06-12T14:45:49.645760+00:00", "level": "info", "event": "ob_dedup_skip", "pair": "GOLD", "alert_ts": "2026-06-11 23:00:00+00:00", "ob_ts": "2026-06-09T10:00:00+00:00", "direction": "bearish", "alert_seq": 2}
 {"ts": "2026-06-12T14:45:49.645894+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "GOLD", "trades": 8, "news_blocked": 0, "ist_blocked": 2, "killzone_dropped_alerts": 1}
 {"ts": "2026-06-12T14:45:57.950680+00:00", "level": "info", "event": "report_written", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20260609_20260612", "total_alerts": 14, "total_trades": 20}
+{"ts": "2026-06-12T14:46:02.754471+00:00", "level": "info", "event": "logs_pushed_to_github", "run_id": "h1only_20260609_20260612", "sha": "c9a5e03c"}
+{"ts": "2026-06-12T14:46:02.800401+00:00", "level": "info", "event": "run_end"}

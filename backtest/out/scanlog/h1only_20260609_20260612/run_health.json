@@ -1,15 +1,15 @@
 {
   "run_id": "h1only_20260609_20260612",
-  "overall": "FAIL",
-  "exit_code": 1,
+  "overall": "PASS",
+  "exit_code": 0,
   "warnings_present": false,
-  "headline_pnl_usd": -2500.0,
-  "content_hash": "084190c8d3691b49cfca3afb82d57e1230d66530f28662362bbdf0e8ce761f2e",
+  "headline_pnl_usd": -1500.0,
+  "content_hash": "716cf9d763a15b7e013d364b2de6a777a3d46afeb1d8a33581850cfbd97f91d1",
   "condition_counts": {
     "DEDUP_SUPPRESSED": 4
   },
   "event_counts": {
-    "ob_seen": 11,
+    "ob_seen": 12,
     "alert": 14,
     "ob_mitigated": 5,
     "re_arm": 6,
@@ -19,9 +19,9 @@
   },
   "outcome_counts": {
     "ALERT": 13,
-    "RE_ARM_WAIT": 76,
+    "RE_ARM_WAIT": 73,
     "NO_ZONE": 45,
-    "OUT_OF_RANGE": 7
+    "OUT_OF_RANGE": 10
   },
   "gates": [
     {
@@ -29,11 +29,11 @@
       "description": "Sum pnl_usd == Sum r_realised*risk, and equals reporting headline",
       "threshold": "rel_tol 1e-09",
       "observed": {
-        "headline_usd": -2500.0,
+        "headline_usd": -1500.0,
         "reported": -1500.0,
         "row_mismatches": 0
       },
-      "verdict": "FAIL"
+      "verdict": "PASS"
     },
     {
       "id": "G2",
@@ -75,8 +75,8 @@
       "description": "headline recomputed from r_realised only; tp1/tp2 excluded",
       "threshold": "independent recompute",
       "observed": {
-        "realised_headline": -2500.0,
-        "tp2_headline_for_contrast": -2500.0
+        "realised_headline": -1500.0,
+        "tp2_headline_for_contrast": -1500.0
       },
       "verdict": "PASS"
     },
@@ -84,7 +84,7 @@
       "id": "G7",
       "description": "content hash of scan_log + events recorded for re-run compare",
       "threshold": "recorded",
-      "observed": "084190c8d3691b49cfca3afb82d57e1230d66530f28662362bbdf0e8ce761f2e",
+      "observed": "716cf9d763a15b7e013d364b2de6a777a3d46afeb1d8a33581850cfbd97f91d1",
       "verdict": "PASS"
     },
     {
