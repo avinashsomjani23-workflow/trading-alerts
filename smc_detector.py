@@ -1837,7 +1837,10 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
         rng_width = dr["range_high"] - dr["range_low"]
         if rng_width > 0:
             pd_position = (proximal - dr["range_low"]) / rng_width
-    bd["pd"] = 0.0  # PD removed from scoring; display-only (trader decision).
+    # PD is NOT scored (removed May 2026 overhaul). It is display-only — the
+    # "Premium / Discount" info row renders pd_position for trader judgement.
+    # No 'pd' key is added to the breakdown so it never appears as a scored
+    # 0-point line in the scorecard / phase2_sent ledger.
     # Killzone — RE-ADDED to scoring 2026-06. There is NO hard killzone filter in
     # the live path: alerts fire at all hours, so OB-in-killzone is a real, varying
     # confluence (the old "the filter drops every off-session alert" comment was
@@ -2293,6 +2296,70 @@ def resolve_distal_mode(pair_conf):
         return "close"
     mode = str(pair_conf.get("distal_invalidation_mode", "close")).strip().lower()
     return "wick" if mode == "wick" else "close"
+
+
+def compute_break_quality(df, bos_idx, broken_price, direction, atr, event_type='BOS'):
+    """EVENT-AWARE, pair-aware displacement quality of the break candle.
+
+    Quality is judged RELATIVE TO THE EVENT'S OWN minimum displacement, because a
+    BOS and a CHoCH require very different displacement to fire in the first place:
+      - CHoCH min = STRUCTURE_CHOCH_ATR_MULT (1.0 ATR)
+      - BOS / Range BOS min = BOS_ATR_MULT   (0.4 ATR)
+    These are read from dealing_range (the single source — no duplicated numbers),
+    so if those engine thresholds ever change, break quality re-anchors itself
+    automatically (no maintenance). Judging both against a fixed bar would mark
+    every CHoCH "strong" by construction — the bug this fixes.
+
+    The event minimum is the QUALIFYING FLOOR — a break cannot exist below it,
+    so `excess` (= displacement / floor) is always >= 1.0. We grade HOW FAR PAST
+    THE FLOOR the break cleared, never against the floor itself (grading against
+    the floor would call a bare-minimum break "good", which is meaningless).
+
+    Measures (all in ATR units, so pair-aware):
+      - close_beyond_atr : how far PAST the broken level the candle CLOSED.
+      - body_atr         : candle body size — momentum / conviction (gate only).
+      - excess           : close_beyond_atr / event_min  (times over the floor).
+
+    Buckets (how many times the break cleared its own required minimum):
+      strong   = excess >= 2.5 AND body >= 1.0 ATR  (exceptional force; can NEVER
+                                                      be the bare minimum)
+      solid    = 1.5 <= excess < 2.5                (decisive — the typical good break)
+      marginal = excess < 1.5                       (barely over the floor — caution)
+
+    Returns {'tier','close_beyond_atr','body_atr','excess'}; marginal/zeros on bad input.
+    """
+    out = {'tier': 'marginal', 'close_beyond_atr': 0.0, 'body_atr': 0.0, 'excess': 0.0}
+    try:
+        if df is None or atr is None or atr <= 0 or bos_idx is None or broken_price is None:
+            return out
+        i = int(bos_idx)
+        if i < 0 or i >= len(df):
+            return out
+        # Event-specific minimum displacement, read from the engine constants.
+        event_min = (_dr_const.STRUCTURE_CHOCH_ATR_MULT if event_type == 'CHoCH'
+                     else _dr_const.BOS_ATR_MULT)
+        if not event_min or event_min <= 0:
+            event_min = 0.4
+        o = float(df['Open'].iloc[i]); c = float(df['Close'].iloc[i])
+        body_atr = abs(c - o) / atr
+        if direction == 'bullish':
+            close_beyond = c - float(broken_price)
+        else:
+            close_beyond = float(broken_price) - c
+        close_beyond_atr = max(close_beyond, 0.0) / atr
+        excess = close_beyond_atr / event_min
+        if excess >= 2.5 and body_atr >= 1.0:
+            tier = 'strong'
+        elif excess >= 1.5:
+            tier = 'solid'
+        else:
+            tier = 'marginal'
+        return {'tier': tier,
+                'close_beyond_atr': round(close_beyond_atr, 2),
+                'body_atr': round(body_atr, 2),
+                'excess': round(excess, 2)}
+    except Exception:
+        return out
 
 
 def is_ob_mitigated_phase1(direction, distal, proximal, df, start_idx,

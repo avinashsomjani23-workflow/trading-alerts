@@ -33,6 +33,7 @@ import smc_radar              # live module — read-only use (compute_pair_wall
 import smc_detector           # live module — read-only use
 
 from backtest.run_logger import log_event
+from backtest.scanlog import get_active as _scanlog
 
 
 class ReplayState:
@@ -186,6 +187,10 @@ def replay_pair(
         "closest_dist_atr_seen": None,  # min (distance / h1_atr) ever observed
     }
 
+    # Heartbeat contract (SPEC Â§2.2 / G2): declare how many bars the walk will
+    # visit so the health layer can prove every one produced a scan record.
+    _scanlog().declare_walk(pair_name, len(h1_in_window.index))
+
     for h1_ts in h1_in_window.index:
         diag["bars_walked"] += 1
         # P1 sees only CLOSED bars. The bar opened at h1_ts is in progress.
@@ -193,6 +198,10 @@ def replay_pair(
         _assert_no_lookahead(h1_slice, h1_ts, "H1")
         if len(h1_slice) < MIN_WARMUP:
             diag["warmup_skipped"] += 1
+            _scanlog().scan(pair=pair_name, ts=h1_ts, index=df_h1.index,
+                            outcome="WARMUP_SKIP", n_bars_in_slice=len(h1_slice),
+                            bt_conditions=["WARMUP_SKIP"])
+            _scanlog().condition("WARMUP_SKIP", pair=pair_name)
             continue
 
         # The "just-closed" bar: the most recent bar whose open is < h1_ts.
@@ -215,6 +224,12 @@ def replay_pair(
             log_event("dr_error", level="error", echo=(diag["dr_errors"] <= 3),
                       pair=pair_name, ts=str(h1_ts),
                       error=f"{type(e).__name__}: {e}")
+            _scanlog().scan(pair=pair_name, ts=h1_ts, index=df_h1.index,
+                            outcome="DEGENERATE_SKIP",
+                            bt_conditions=["DEGENERATE_BAR"])
+            _scanlog().condition("DEGENERATE_BAR", pair=pair_name, ts=str(h1_ts),
+                                 where="compute_pair_walls",
+                                 error=f"{type(e).__name__}: {e}")
             continue
 
         # `walls` carries ceiling_price, floor_price, trend, events, swings, ...
@@ -245,14 +260,27 @@ def replay_pair(
             log_event("radar_error", level="error", echo=(diag["radar_errors"] <= 3),
                       pair=pair_name, ts=str(h1_ts),
                       error=f"{type(e).__name__}: {e}")
+            _scanlog().scan(pair=pair_name, ts=h1_ts, index=df_h1.index,
+                            outcome="DEGENERATE_SKIP",
+                            bt_conditions=["DEGENERATE_BAR"])
+            _scanlog().condition("DEGENERATE_BAR", pair=pair_name, ts=str(h1_ts),
+                                 where="detect_smc_radar",
+                                 error=f"{type(e).__name__}: {e}")
             continue
 
         if not obs_result:
+            _scanlog().scan(pair=pair_name, ts=h1_ts, index=df_h1.index,
+                            outcome="NO_ZONE", n_active_zones=0)
             continue
         # detect_smc_radar can return a dict, list, or tuple depending on version
         # Normalise to list of OB dicts.
+        if not isinstance(obs_result, dict):
+            _scanlog().condition("NORMALIZE_NONDICT", pair=pair_name,
+                                 ts=str(h1_ts), shape=type(obs_result).__name__)
         obs = _normalize_obs_result(obs_result)
         if not obs:
+            _scanlog().scan(pair=pair_name, ts=h1_ts, index=df_h1.index,
+                            outcome="NO_ZONE", n_active_zones=0)
             continue
         diag["bars_with_obs_returned"] += 1
 
@@ -278,6 +306,9 @@ def replay_pair(
             if mitigated:
                 zone_id = ob.get("ob_timestamp") or f"{ob.get('direction')}_{ob.get('proximal_line')}"
                 state.ob_alert_state[pair_name].pop(zone_id, None)
+                _scanlog().event("ob_mitigated", pair=pair_name, ts=str(h1_ts),
+                                 ob_timestamp=ob.get("ob_timestamp"),
+                                 reason=mit_reason or "mitigated")
                 yield {
                     "kind": "ob_mitigated",
                     "pair": pair_name,
@@ -303,6 +334,9 @@ def replay_pair(
                         diag["obs_aged_out"] += 1
                         zone_id = ob_ts_iso
                         state.ob_alert_state[pair_name].pop(zone_id, None)
+                        _scanlog().event("ob_aged_out", pair=pair_name,
+                                         ts=str(h1_ts), ob_timestamp=ob_ts_iso,
+                                         age_days=round(age_days, 2))
                         yield {
                             "kind": "ob_mitigated",
                             "pair": pair_name,
@@ -330,6 +364,12 @@ def replay_pair(
                 "last_fire_ts": None,
             }
             diag["new_obs_added"] += 1
+            _scanlog().event("ob_seen", pair=pair_name, ts=str(h1_ts),
+                             ob_timestamp=ob.get("ob_timestamp"),
+                             bos_timestamp=ob.get("bos_timestamp"),
+                             direction=ob.get("direction"),
+                             proximal=ob.get("proximal_line"),
+                             distal=ob.get("distal_line"))
             yield {
                 "kind": "ob_seen",
                 "pair": pair_name,
@@ -356,10 +396,26 @@ def replay_pair(
         #   * exhausted=True: an alert that produced a fill exhausts the
         #     OB permanently. Set by run_backtest after the simulator runs.
         h1_atr = smc_detector.compute_atr(h1_slice)
+        _scanlog().note_post_warmup_bar(pair_name, atr_is_nan=not h1_atr)
         if not h1_atr:
+            _scanlog().scan(pair=pair_name, ts=h1_ts, index=df_h1.index,
+                            outcome="NAN_ATR_SKIP", atr=None,
+                            n_active_zones=len(state.active_obs[pair_name]),
+                            bt_conditions=["NAN_ATR_SKIP"])
+            _scanlog().condition("NAN_ATR_SKIP", pair=pair_name, ts=str(h1_ts))
             continue
         prox_cap = pair_conf["atr_multiplier"] * h1_atr
         rearm_cap = prox_cap + REARM_EXTRA_ATR * h1_atr
+
+        # --- scanlog per-bar accumulators (behaviour-neutral; SPEC Â§2.2) -----
+        # These only OBSERVE the loop below to produce exactly one heartbeat
+        # record for this bar after it finishes. They change no branch, value,
+        # or yield. Grep `_bt_` to remove all instrumentation in this block.
+        _bt_n_zones = len(state.active_obs[pair_name])
+        _bt_fired = False
+        _bt_any_cooling = False
+        _bt_nearest = None        # (dist_atr, ob_ts, direction)
+        _bt_trend = (walls or {}).get("trend")
 
         for ob in state.active_obs[pair_name]:
             zone_id = ob.get("ob_timestamp") or f"{ob.get('direction')}_{ob.get('proximal_line')}"

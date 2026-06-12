@@ -1347,6 +1347,27 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         &nbsp;&middot;&nbsp; <b style="color:#aaa;">Approaching now:</b> {approach_label} <i>(info)</i>
     </div>"""
 
+    # Break quality — how far PAST its required minimum the structural break
+    # cleared (event-aware: a CHoCH must clear more than a BOS to qualify, so we
+    # grade times-over-the-floor, not a fixed ATR bar). Info only. The number
+    # IS the reason for the verdict, so they stay consistent.
+    _bq = ob.get('break_quality') or {}
+    _bq_tier = _bq.get('tier')
+    _bq_excess = _bq.get('excess')
+    if _bq_tier and _bq_excess:
+        _bq_col = {'strong': '#27ae60', 'solid': '#f1c40f',
+                   'marginal': '#e67e22'}.get(_bq_tier, '#888')
+        _bq_word = {'strong': 'Strong', 'solid': 'Solid',
+                    'marginal': 'Marginal'}.get(_bq_tier, _bq_tier)
+        break_quality_html = (
+            '<div style="margin-bottom:12px;font-size:11px;color:#888;">'
+            '<b style="color:#aaa;">Break:</b> '
+            f'<b style="color:{_bq_col};">{_bq_word}</b> &middot; cleared '
+            f'{_bq_excess}&times; the required displacement</div>'
+        )
+    else:
+        break_quality_html = ""
+
     # Trend banner (information only — trader decides whether to take counter-trend)
     trend_alignment = data.get("trend_alignment", "ambiguous")
     trend_label = data.get("trend_label", "H1 trend unavailable")
@@ -1460,6 +1481,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             {trend_banner_html}
             {distance_html}
             {context_html}
+            {break_quality_html}
             {scorecard_html}
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">H1 Context</div>
             {h1_chart_block}

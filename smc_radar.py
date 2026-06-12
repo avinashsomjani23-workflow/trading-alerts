@@ -870,6 +870,11 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'bos_tier':           ev_tier,
             'broken_was_wall':    bool(ev.get('broken_was_wall', False)),
             'reversal_pct':       ev.get('reversal_pct'),
+            # Pair-aware displacement quality of the break candle (frozen here,
+            # consumed by Phase 2 for the email — never recomputed).
+            'break_quality':      smc_detector.compute_break_quality(
+                                      df, bos_idx, bos_swing_price, ev_dir,
+                                      h1_atr_for_leg, event_type=ev_type),
             'high':               ob_high,
             'low':                ob_low,
             'proximal_line':      ob_high if ev_dir == 'bullish' else ob_low,
@@ -3139,6 +3144,8 @@ def fresh_to_slate_zone(fresh_zone, zone_id, ist_now, current_price, dp):
         # event. Persisted so Phase 2 scores OB2 with its own count, not today's
         # whole-ring total (which mislabelled an early OB2 as "exhausted").
         "bos_sequence_count": fresh_zone.get("bos_sequence_count", 1),
+        # Frozen break/displacement quality of the event candle (info display).
+        "break_quality": fresh_zone.get("break_quality", {"tier": "marginal"}),
         "touches": fresh_zone.get("touches", 0),
         "status_label": fresh_zone.get("status", "Pristine"),
         "h1_atr": fresh_zone.get("h1_atr", 0.0),
@@ -3295,6 +3302,8 @@ def refresh_slate_zone(slate_zone, fresh_zone, ist_now, current_price, dp):
     # field, which would silently re-introduce the legacy fallback).
     slate_zone["bos_sequence_count"]   = fresh_zone.get(
         "bos_sequence_count", slate_zone.get("bos_sequence_count", 1))
+    slate_zone["break_quality"] = fresh_zone.get(
+        "break_quality", slate_zone.get("break_quality", {"tier": "marginal"}))
     slate_zone["touches"]       = fresh_zone.get("touches", 0)
     slate_zone["status_label"]  = fresh_zone.get("status", "Pristine")
     slate_zone["h1_atr"]        = fresh_zone.get("h1_atr", 0.0)
