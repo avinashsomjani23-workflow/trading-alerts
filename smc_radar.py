@@ -507,7 +507,8 @@ def _event_label_dir(bos_tag, bos_tier, direction):
 is_ob_mitigated_phase1 = smc_detector.is_ob_mitigated_phase1
 
 
-def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=None):
+def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=None,
+                     min_ob_range_atr=None):
     """
     Build OB zones from BOS / CHoCH events emitted by dealing_range.py.
 
@@ -527,12 +528,21 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                 placeholder/fallback flags). Used for the PD-array gate
                 (bullish OBs only valid in discount, bearish in premium).
                 When None or fallback is active, the gate fails open.
+        min_ob_range_atr: OB candidate range FLOOR in ATR units. A candle whose
+                (high - low) is below this * ATR is skipped during the walk-back
+                (the walk continues to the next opposing candle). None resolves
+                to the live default smc_detector.OB_MIN_RANGE_ATR_MULT so live
+                behaviour is unchanged; the backtest injects other values to
+                retune without editing live code.
     """
     n = len(df)
     O = df['Open'].values
     C = df['Close'].values
     H = df['High'].values
     L = df['Low'].values
+    # None -> live default. Backtest passes an explicit value to retune.
+    if min_ob_range_atr is None:
+        min_ob_range_atr = smc_detector.OB_MIN_RANGE_ATR_MULT
     h1_atr_for_leg = smc_detector.compute_atr(df)
     current_price_now = float(C[-1]) if n > 0 else 0.0
 
@@ -695,25 +705,36 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         # break, "last before the impulse" and "first from the break" are the
         # SAME candle on a clean leg — so the first opposing candle wins.
         #
-        # Two rejections while walking back:
+        # Three rejections while walking back:
         #   - oversized guard: a candle wider than OB_MAX_RANGE_ATR_MULT * ATR
         #     is a news/volatility bar, not a clean institutional block.
+        #   - undersized guard: a candle narrower than min_ob_range_atr * ATR is
+        #     too small in the live volatility regime to be an order block — a
+        #     pause inside the leg, not the displacement origin. Range-based
+        #     (high - low), so a small-body / long-wick rejection candle still
+        #     passes (its range is large). Skip and keep walking.
         #   - body/doji guard (is_valid_ob_candle, 20% of range): a near-doji
         #     opposing candle is indecision, not an order block — skip it and
         #     keep walking to the next opposing candle.
-        # Neither changes the detection METHOD (still the first qualifying
-        # opposing candle from the break) — they only skip news bars and dojis.
+        # None changes the detection METHOD (still the first qualifying opposing
+        # candle from the break) — they only skip news bars, dojis, and candles
+        # too small to hold institutional orders.
         ob_idx = -1
         opposing_count = 0
         oversized_count = 0
+        undersized_count = 0
         doji_count = 0
         for j in range(bos_idx - 1, impulse_start_idx - 1, -1):
             if (ev_dir == 'bullish' and C[j] < O[j]) or \
                (ev_dir == 'bearish' and C[j] > O[j]):
                 opposing_count += 1
                 if h1_atr_for_leg and h1_atr_for_leg > 0:
-                    if (H[j] - L[j]) > smc_detector.OB_MAX_RANGE_ATR_MULT * h1_atr_for_leg:
+                    cand_range = H[j] - L[j]
+                    if cand_range > smc_detector.OB_MAX_RANGE_ATR_MULT * h1_atr_for_leg:
                         oversized_count += 1
+                        continue
+                    if cand_range < min_ob_range_atr * h1_atr_for_leg:
+                        undersized_count += 1
                         continue
                 if is_valid_ob_candle(O[j], C[j], H[j], L[j]):
                     ob_idx = j
@@ -726,7 +747,9 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                 'leg_len': int(bos_idx - impulse_start_idx),
                 'opposing_candles_in_leg': opposing_count,
                 'oversized_rejected': oversized_count,
+                'undersized_rejected': undersized_count,
                 'doji_rejected': doji_count,
+                'min_ob_range_atr': float(min_ob_range_atr),
                 'h1_atr': float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
             }
             ob_build_diagnostics.append(diag)
@@ -2562,6 +2585,7 @@ def _summarise_last_ob_attempt(ob_build_diagnostics):
     if gate == 'no_qualifying_ob_candle':
         opposing = int(detail.get('opposing_candles_in_leg') or 0)
         oversized = int(detail.get('oversized_rejected') or 0)
+        undersized = int(detail.get('undersized_rejected') or 0)
         doji = int(detail.get('doji_rejected') or 0)
         leg_len = int(detail.get('leg_len') or 0)
         if opposing == 0:
@@ -2572,7 +2596,11 @@ def _summarise_last_ob_attempt(ob_build_diagnostics):
         else:
             parts = []
             if oversized:
-                parts.append(f"{oversized} rejected (body > 2x H1 ATR)")
+                parts.append(f"{oversized} rejected (range > 2x H1 ATR)")
+            if undersized:
+                parts.append(
+                    f"{undersized} rejected (range < {detail.get('min_ob_range_atr', 0.3)}x H1 ATR)"
+                )
             if doji:
                 parts.append(f"{doji} rejected (near-doji)")
             sub = "; ".join(parts) if parts else "all failed body/wick checks"

@@ -1,0 +1,46 @@
+{
+  "run_id": "h1only_20260609_20260612",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-06-12T14:39:34.346298+00:00",
+  "git_sha": "ed4896b",
+  "risk_usd": 250.0,
+  "min_warmup_bars": 50,
+  "fetch_pad_days": 35,
+  "pairs": [
+    {
+      "name": "NZDUSD",
+      "symbol": "NZDUSD=X",
+      "requested_start": "2026-06-09T00:00:00+00:00",
+      "requested_end": "2026-06-12T00:00:00+00:00",
+      "served_start": "2026-05-05T00:00:00+00:00",
+      "served_end": "2026-06-11T22:00:00+00:00",
+      "n_bars": 666,
+      "fingerprint": "da668904bb789b9c",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "GOLD",
+      "symbol": "GC=F",
+      "requested_start": "2026-06-09T00:00:00+00:00",
+      "requested_end": "2026-06-12T00:00:00+00:00",
+      "served_start": "2026-05-05T00:00:00+00:00",
+      "served_end": "2026-06-12T00:00:00+00:00",
+      "n_bars": 616,
+      "fingerprint": "8a65c5175646e1e3",
+      "prox_cap_atr": 3.0
+    }
+  ],
+  "knobs": {
+    "NZDUSD.atr_multiplier": 2.5,
+    "NZDUSD.distal_invalidation_mode": "close",
+    "NZDUSD.spread_pips": 4.0,
+    "GOLD.atr_multiplier": 3.0,
+    "GOLD.distal_invalidation_mode": "close",
+    "GOLD.spread_pips": 0.5
+  },
+  "versions": {
+    "python": "3.14.5",
+    "pandas": "3.0.3",
+    "yfinance": "1.3.0"
+  }
+}
