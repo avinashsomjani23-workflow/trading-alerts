@@ -206,7 +206,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-12T09:35:33.349582",
+      "last_seen_ist": "2026-06-12T10:35:33.947018",
       "last_email_day": "2026-06-12",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -235,12 +235,12 @@
       "pair": "NZDUSD"
     },
     "NZDUSD_SHORT_BOS_0.5824_2026-06-09T11": {
-      "score_int": 1,
-      "score_raw": 1.0,
-      "score_high_water": 1.0,
-      "score_low_water": 1.0,
+      "score_int": 3,
+      "score_raw": 3.0,
+      "score_high_water": 3.0,
+      "score_low_water": 3.0,
       "breakdown": {
-        "structure": 1,
+        "structure": 3,
         "sweep": 0.0,
         "fvg": 0,
         "freshness": 0,
@@ -248,7 +248,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-12T09:35:33.349582",
+      "last_seen_ist": "2026-06-12T10:35:33.947018",
       "last_email_day": "2026-06-12",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -290,7 +290,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-12T09:35:33.349582",
+      "last_seen_ist": "2026-06-12T10:35:33.947018",
       "last_email_day": "2026-06-12",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -311,7 +311,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-12T09:35:33.349582",
+      "last_seen_ist": "2026-06-12T10:35:33.947018",
       "last_email_day": "2026-06-12",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -332,7 +332,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-12T09:35:33.349582",
+      "last_seen_ist": "2026-06-12T10:35:33.947018",
       "last_email_day": "2026-06-12",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -353,7 +353,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-12T00:35:46.176964",
-      "last_seen_ist": "2026-06-12T09:35:33.349582",
+      "last_seen_ist": "2026-06-12T10:35:33.947018",
       "last_email_day": "2026-06-12",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
