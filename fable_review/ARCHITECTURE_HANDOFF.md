@@ -53,10 +53,12 @@ committed before this handoff. The architecture work happens ON TOP of this stat
   logged. **MEDIUM maintenance** (hand rules) — the no-maintenance version is data-driven once
   the per-alert outcome log exists (Wave 1 item below).
 - **Break quality** `smc_detector.compute_break_quality(df, bos_idx, broken_price, direction,
-  atr, event_type)` → tier (strong/decent/weak) judged EVENT-AWARE: quality = how far the close
-  cleared the event's OWN minimum displacement (CHoCH 1.0 ATR, BOS 0.4 ATR, read live from
-  dealing_range constants). Frozen on the OB (`break_quality`), persisted on the slate, shown as
-  an info line. Info-only (not scored).
+  atr, event_type)` → bucket (marginal / solid / strong) judged EVENT-AWARE: the event minimum
+  (CHoCH 1.0 ATR, BOS 0.4 ATR, read live from dealing_range constants) is the qualifying FLOOR;
+  we grade `excess` = displacement ÷ floor (always ≥1.0). marginal <1.5× | solid 1.5–2.5× |
+  strong ≥2.5× with body ≥1.0 ATR. Frozen on the OB (`break_quality`), persisted, shown as an
+  info line ("Break: Solid · cleared 1.9× the required displacement"). Info-only (not scored).
+  Cutoffs (1.5 / 2.5) are vet starting points — confirm with the Wave-1 outcome log before trusting.
 
 Live data (2026-06-12) confirmed all of the above behave correctly. Treat this as the baseline.
 

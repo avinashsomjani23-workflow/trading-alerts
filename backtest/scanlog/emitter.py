@@ -220,7 +220,11 @@ class ScanLog:
         rec = {"kind": kind, "emit_ts": _now_iso()}
         rec.update(fields)
         self._events_f.write(json.dumps(rec, default=str) + "\n")
-        self._bump_content_hash(rec)
+        # Determinism stamp (G7) hashes CONTENT, not wall-clock. emit_ts is the
+        # only non-deterministic field on an event record, so exclude it; two
+        # runs over identical data then produce identical hashes.
+        hashed = {k: v for k, v in rec.items() if k != "emit_ts"}
+        self._bump_content_hash(hashed)
 
     @contextmanager
     def span(self, name: str, **ctx: Any) -> Iterator[None]:

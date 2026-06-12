@@ -27,9 +27,62 @@ from backtest import h1_only_reporting
 from backtest import ist_window
 from backtest import killzone as killzone_filter
 from backtest.run_logger import RunLogger, log_event
+from backtest.scanlog import emitter as scanlog_emitter
+from backtest.scanlog import gates as scanlog_gates
 import news_filter
 
 RESULTS_ROOT = _REPO_ROOT / "backtest" / "results"
+SCANLOG_ROOT = _REPO_ROOT / "backtest" / "out" / "scanlog"
+
+
+def _git_sha() -> str:
+    """Short git SHA of the repo, for the manifest. Empty string on failure."""
+    import subprocess
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(_REPO_ROOT), capture_output=True, text=True, timeout=10,
+        ).stdout.strip()
+    except Exception:
+        return ""
+
+
+def _build_scanlog(run_id, start, end, pairs_to_run, dfs, risk_usd, fetch_pad_days):
+    """Open the per-run ScanLog with a complete manifest (SPEC Â§2.1).
+
+    Manifest is written FIRST, before any scanning. `dfs` maps pair name ->
+    served H1 frame (already loaded). The proximity cap recorded per pair is the
+    backtest atr_multiplier in force AFTER the override - the permanent record of
+    the live-vs-backtest divergence.
+    """
+    pairs_served = []
+    knobs = {}
+    for p in pairs_to_run:
+        name = p["name"]
+        df = dfs.get(name)
+        served = {
+            "name": name,
+            "symbol": p["symbol"],
+            "requested_start": start.isoformat(),
+            "requested_end": end.isoformat(),
+            "served_start": (df.index.min().isoformat() if df is not None and not df.empty else None),
+            "served_end": (df.index.max().isoformat() if df is not None and not df.empty else None),
+            "n_bars": (int(len(df)) if df is not None else 0),
+            "fingerprint": scanlog_emitter.fingerprint(df) if df is not None else "none",
+            "prox_cap_atr": p.get("atr_multiplier"),
+        }
+        pairs_served.append(served)
+        # Every Â§3 knob that can drift, read live per pair.
+        knobs[f"{name}.atr_multiplier"] = p.get("atr_multiplier")
+        knobs[f"{name}.distal_invalidation_mode"] = p.get("distal_invalidation_mode")
+        knobs[f"{name}.spread_pips"] = p.get("spread_pips")
+    manifest = scanlog_emitter.build_manifest(
+        run_id=run_id, git_sha=_git_sha(), risk_usd=risk_usd,
+        min_warmup_bars=50, pairs_served=pairs_served, knobs=knobs,
+        fetch_pad_days=fetch_pad_days,
+    )
+    out_dir = SCANLOG_ROOT / run_id
+    return scanlog_emitter.ScanLog.begin(out_dir, manifest), knobs
 
 
 def _load_config() -> dict:
@@ -57,7 +110,8 @@ def _regime_label_for(regime: str, start: datetime, end: datetime):
 
 def run(start: datetime, end: datetime, pair_names: list,
         regime: str = "auto", risk_usd: float = 250.0,
-        send_email: bool = False) -> Path:
+        send_email: bool = False,
+        min_ob_range_atr: float = None) -> Path:
     cfg = _load_config()
 
     # Regime: 'auto' (default) consults WAR_REGIME_WEEKS.json. Explicit
@@ -82,7 +136,8 @@ def run(start: datetime, end: datetime, pair_names: list,
 
     try:
         return _run_h1_only(cfg, start, end, pair_names, regime,
-                            risk_usd, send_email, out_dir, run_id)
+                            risk_usd, send_email, out_dir, run_id,
+                            min_ob_range_atr=min_ob_range_atr)
     except Exception as e:
         log_event("run_fatal", level="error", error=f"{type(e).__name__}: {e}")
         raise
@@ -92,7 +147,7 @@ def run(start: datetime, end: datetime, pair_names: list,
 
 
 def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
-                 out_dir, run_id):
+                 out_dir, run_id, min_ob_range_atr=None):
     """H1-only backtest run.
 
       - Skips M15 + M5 data fetches entirely (faster, no yfinance 60d issue).
@@ -156,12 +211,33 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
               events=len(news_events), coverage=news_coverage,
               range=f"{news_start.isoformat()}..{news_end.isoformat()}")
 
+    # --- Pre-load every pair's H1 data BEFORE scanning so the scanlog manifest
+    # can be written first (SPEC Â§2.1: an unrecorded run never executes). Data
+    # is parquet-cached, so this pass is cheap. The manifest then captures the
+    # served window + fingerprint per pair before a single bar is walked.
+    dfs: dict = {}
+    for pair_conf in pairs_to_run:
+        dfs[pair_conf["name"]] = data_loader.load_bars(
+            pair_conf["symbol"], "1h", fetch_start, end)
+    scanlog, manifest_knobs = _build_scanlog(
+        run_id, start, end, pairs_to_run, dfs, risk_usd,
+        fetch_pad_days=35)
+    print(f"  [scanlog] manifest written -> {scanlog.run_dir}")
+    # YF_CLAMP: served history starts later than requested (yfinance 720d cap).
+    # Recorded as a WARN condition so the gate table shows it, never hidden.
+    for pair_conf in pairs_to_run:
+        _df = dfs.get(pair_conf["name"])
+        if _df is not None and not _df.empty and _df.index.min() > walk_start_ts:
+            scanlog.condition("YF_CLAMP", pair=pair_conf["name"],
+                              requested_start=str(walk_start_ts),
+                              served_start=str(_df.index.min()))
+
     for pair_conf in pairs_to_run:
         name = pair_conf["name"]
         symbol = pair_conf["symbol"]
         print(f"\n=== {name} ({symbol}) ===")
 
-        df_h1 = data_loader.load_bars(symbol, "1h", fetch_start, end)
+        df_h1 = dfs.get(name)
         if df_h1 is None or df_h1.empty:
             log_event("pair_skip", level="warn", pair=name,
                       reason="h1_unavailable")
@@ -176,6 +252,7 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         for event in replay_engine.replay_pair(
             pair_conf, df_h1,
             state=state, walk_start_ts=walk_start_ts, walk_end_ts=walk_end_ts,
+            min_ob_range_atr=min_ob_range_atr,
         ):
             if event["kind"] == "alert":
                 alerts_for_pair.append(event)
@@ -219,6 +296,10 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                           alert_ts=str(alert["ts"]),
                           ob_ts=ob_key[0], direction=ob_key[1],
                           alert_seq=int(alert.get("alert_seq", 1)))
+                scanlog.condition("DEDUP_SUPPRESSED", pair=name,
+                                  ob_timestamp=ob_key[0], direction=ob_key[1])
+                scanlog.event("alert_suppressed_dedup", pair=name,
+                              ob_timestamp=ob_key[0], direction=ob_key[1])
                 continue
             seen_obs.add(ob_key)
             # Killzone gate -- alerts outside the pair's configured killzone
@@ -283,6 +364,27 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                     n_blocked_for_pair += 1
                 if ist_blocked:
                     n_ist_blocked_for_pair += 1
+                # scanlog: fill + exit events with the full causality chain so
+                # G1 (P&L reconciliation) and G3 (causality) can judge each
+                # trade. r_if_exit_* are carried but tagged hypothetical (G6).
+                if row.get("fill_ts"):
+                    scanlog.event("trade_fill", pair=name,
+                                  alert_ts=row.get("alert_ts"),
+                                  fill_ts=row.get("fill_ts"),
+                                  entry=row.get("entry"),
+                                  entry_zone=row.get("entry_zone"))
+                scanlog.event("trade_exit", pair=name,
+                              alert_ts=row.get("alert_ts"),
+                              ob_timestamp=row.get("ob_timestamp"),
+                              bos_timestamp=row.get("bos_timestamp"),
+                              fill_ts=row.get("fill_ts"),
+                              exit_ts=row.get("exit_ts"),
+                              exit_reason=row.get("exit_reason"),
+                              r_realised=row.get("r_realised"),
+                              pnl_usd=row.get("pnl_usd"),
+                              r_if_exit_tp1=row.get("r_if_exit_tp1"),
+                              r_if_exit_tp2=row.get("r_if_exit_tp2"),
+                              hypothetical=True)
                 log_event("trade_simulated", pair=name,
                           alert_ts=str(alert["ts"]),
                           entry_zone=row.get("entry_zone"),
@@ -356,6 +458,25 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
               total_alerts=len(all_alerts), total_trades=len(all_trades))
     print(f"\nH1-only report written to {report_dir}")
 
+    # --- SCAN-LOG HARD GATE (SPEC Â§4) -------------------------------------
+    # Evaluate every gate against the records this run produced, then decide
+    # PASS/FAIL. The reporting headline (realised P&L) is reconciled against a
+    # figure recomputed independently from r_realised (G1). A fresh live read
+    # of the knobs detects mid-run drift (G5). On FAIL we STILL email - the
+    # user asked to be told exactly what broke, not to fail silently - then we
+    # raise so the process exits non-zero and the run is not trusted.
+    health = _finalize_scanlog(
+        scanlog, all_trades, risk_usd, report_dir, pairs_to_run,
+        manifest_knobs)
+    print(scanlog_gates.render_table(health, scanlog))
+    if not health.passed:
+        _email_scanlog_failure(report_dir, scanlog, health, start, end, regime)
+        scanlog.close()
+        _zip_scanlog(scanlog.run_dir)
+        raise SystemExit(
+            f"SCAN-LOG GATE FAILED for {run_id} - see run_health.json. "
+            f"Failure email sent. Run NOT trusted (exit 1).")
+
     # Update cross-run registry BEFORE commit so registry.json + BACKTEST_LOG.md
     # land in the same commit as the run's log files. If registry update runs
     # AFTER commit, its output files are unstaged when the push retries, which
@@ -394,7 +515,112 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
             log_event("email_failed", level="error",
                       error=f"{type(e).__name__}: {e}")
 
+    # PASS path: close + zip the scanlog (fast write during run, small on disk).
+    scanlog.close()
+    _zip_scanlog(scanlog.run_dir)
+
     return report_dir
+
+
+def _read_realised_headline(report_dir) -> float:
+    """The reporting layer's realised headline, summed across both scoreboards.
+    G1 requires our independent r_realised figure to equal this. Returns 0.0 if
+    summary.json is absent (the gate then reconciles only the per-row sum)."""
+    p = report_dir / "summary.json"
+    if not p.exists():
+        return None
+    try:
+        s = json.loads(p.read_text(encoding="utf-8"))
+        boards = s.get("scoreboards", {})
+        total = 0.0
+        for key in ("proximal_realised", "fifty_pct_realised"):
+            total += float(boards.get(key, {}).get("total_pnl_usd", 0.0))
+        return round(total, 6)
+    except Exception:
+        return None
+
+
+def _finalize_scanlog(scanlog, all_trades, risk_usd, report_dir,
+                      pairs_to_run, manifest_knobs):
+    """Re-read knobs live (G5 drift check), then evaluate every gate."""
+    recheck = {}
+    for p in pairs_to_run:
+        recheck[f"{p['name']}.atr_multiplier"] = p.get("atr_multiplier")
+        recheck[f"{p['name']}.distal_invalidation_mode"] = p.get("distal_invalidation_mode")
+        recheck[f"{p['name']}.spread_pips"] = p.get("spread_pips")
+    return scanlog_gates.evaluate(
+        scanlog=scanlog, trades=all_trades, risk_usd=risk_usd,
+        reported_headline_usd=_read_realised_headline(report_dir),
+        manifest_recheck_knobs=recheck,
+    )
+
+
+def _zip_scanlog(run_dir) -> None:
+    """Compress the scan log artifacts at run end (SPEC Â§8: compress, never
+    sample). The .jsonl files zip ~10x; the report CLI reads either form."""
+    import zipfile
+    try:
+        targets = [run_dir / "scan_log.jsonl", run_dir / "events.jsonl"]
+        for t in targets:
+            if not t.exists():
+                continue
+            zp = t.with_suffix(t.suffix + ".gz.zip")
+            with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as zf:
+                zf.write(t, arcname=t.name)
+            t.unlink()  # keep only the compressed copy
+        print(f"  [scanlog] compressed artifacts in {run_dir}")
+    except Exception as e:
+        print(f"  [scanlog zip skipped: {e}]")
+
+
+def _email_scanlog_failure(report_dir, scanlog, health, start, end, regime):
+    """Send a plain failure email naming exactly what broke (user decision:
+    a hard stop must still tell me what needs repairing, not fail silently)."""
+    try:
+        import os, smtplib
+        from email.mime.text import MIMEText
+        sender = os.environ.get("GMAIL_ADDRESS")
+        password = os.environ.get("GMAIL_APP_PASSWORD")
+        to = (os.environ.get("BACKTEST_EMAIL") or sender
+              or "avinash.somjani98@gmail.com")
+        failed = [g for g in health.gates if g.verdict == "FAIL"]
+        lines = [
+            f"BACKTEST SCAN-LOG GATE FAILED  ({start.date()} -> {end.date()}, {regime})",
+            f"run: {report_dir.name}",
+            "",
+            "What broke (each line is a failed safety gate):",
+        ]
+        for g in failed:
+            lines.append(f"  [{g.id}] {g.description}")
+            lines.append(f"        observed: {g.observed}")
+        nz = {k: v for k, v in scanlog.condition_counts.items()
+              if v and k in ("ALERT_LOOKAHEAD_BLOCKED", "FILL_BEFORE_ALERT",
+                             "TREND_CONTRADICTION", "ZONE_STATE_CONTRADICTION",
+                             "CONFIG_DRIFT", "PNL_MISMATCH", "HEARTBEAT_GAP",
+                             "TS_NOT_BOUNDARY", "TZ_NAIVE", "UNCLASSIFIED_CONDITION")}
+        if nz:
+            lines.append("")
+            lines.append("Red-flag conditions hit:")
+            for code, n in sorted(nz.items()):
+                lines.append(f"  {code}: {n}")
+        lines += ["", "The run was NOT trusted and NOT pushed. Fix and re-run.",
+                  f"Full detail: {report_dir / 'run_health.json'}"]
+        body = "\n".join(lines)
+        if not sender or not password:
+            print("  [scanlog failure email skipped: SMTP env not set]")
+            print(body)
+            return
+        msg = MIMEText(body)
+        msg["Subject"] = f"[BACKTEST FAILED] {report_dir.name} - scan-log gate"
+        msg["From"] = sender
+        msg["To"] = to
+        with smtplib.SMTP("smtp.gmail.com", 587) as s:
+            s.starttls()
+            s.login(sender, password)
+            s.send_message(msg)
+        print(f"  [scanlog failure email sent] -> {to}")
+    except Exception as e:
+        print(f"  [scanlog failure email error: {e}]")
 
 
 def main():
@@ -407,13 +633,17 @@ def main():
                     help="auto reads backtest/WAR_REGIME_WEEKS.json; explicit war/bau overrides")
     ap.add_argument("--risk-usd", type=float, default=250.0)
     ap.add_argument("--email", action="store_true", help="Send report email")
+    ap.add_argument("--min-ob-range-atr", type=float, default=None,
+                    help="OB candidate range floor in ATR units. Omit to use the "
+                         "live default (smc_detector.OB_MIN_RANGE_ATR_MULT). Set "
+                         "e.g. 0.3/0.4/0.5 to retune the OB-size gate per run.")
     args = ap.parse_args()
 
     start = _parse_date(args.start)
     end = _parse_date(args.end)
     pairs = [p.strip() for p in args.pairs.split(",") if p.strip()]
     out_dir = run(start, end, pairs, regime=args.regime, risk_usd=args.risk_usd,
-                  send_email=args.email)
+                  send_email=args.email, min_ob_range_atr=args.min_ob_range_atr)
 
     # Registry update + log persistence to GitHub happen INSIDE _run_h1_only,
     # before the email is sent. If we reached this point, both succeeded

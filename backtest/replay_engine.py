@@ -129,6 +129,7 @@ def replay_pair(
     state: ReplayState,
     walk_start_ts: pd.Timestamp,
     walk_end_ts: pd.Timestamp,
+    min_ob_range_atr: Optional[float] = None,
 ) -> Iterator[Dict[str, Any]]:
     """Walk H1 bars in [walk_start_ts, walk_end_ts] and yield events.
 
@@ -254,6 +255,7 @@ def replay_pair(
                     events=events,
                     walls=walls,
                     pair_name=pair_name,
+                    min_ob_range_atr=min_ob_range_atr,
                 )
         except Exception as e:
             diag["radar_errors"] += 1
@@ -475,6 +477,16 @@ def replay_pair(
                                   echo=True, pair=pair_name,
                                   h1_ts=str(h1_ts), bos_ts=str(bos_ts),
                                   ob_ts=ob.get("ob_timestamp"))
+                        # scanlog: guard #3 - a future-stamped OB tried to
+                        # alert. FAIL condition (auto-promotes to a finding).
+                        _scanlog().condition("ALERT_LOOKAHEAD_BLOCKED",
+                                             pair=pair_name, h1_ts=str(h1_ts),
+                                             bos_ts=str(bos_ts),
+                                             ob_ts=ob.get("ob_timestamp"))
+                        _scanlog().event("alert_lookahead_blocked",
+                                         pair=pair_name, h1_ts=str(h1_ts),
+                                         bos_ts=str(bos_ts),
+                                         ob_ts=ob.get("ob_timestamp"))
                         continue
                 except Exception:
                     pass
@@ -484,6 +496,27 @@ def replay_pair(
             ob_state["state"] = "cooling"
             ob_state["fire_count"] += 1
             ob_state["last_fire_ts"] = h1_ts
+            # scanlog: record the alert with its causality chain + trend
+            # context. trend_alignment is derived (bullish OB + bullish trend =
+            # with_trend). The backtest fires counter-trend by design, so a
+            # with/against label is NOT a contradiction. A real contradiction
+            # would be an unparseable trend value or a missing direction while
+            # an alignment is asserted - those raise TREND_CONTRADICTION.
+            _bt_align = (
+                "with_trend" if (_bt_trend and (
+                    (_bt_trend == "bullish" and direction == "bullish") or
+                    (_bt_trend == "bearish" and direction == "bearish")))
+                else "against_trend" if _bt_trend else "no_trend")
+            if _bt_trend not in (None, "bullish", "bearish"):
+                _scanlog().condition("TREND_CONTRADICTION", pair=pair_name,
+                                     ts=str(h1_ts), trend=str(_bt_trend),
+                                     direction=direction)
+            _scanlog().event("alert", pair=pair_name, alert_ts=str(h1_ts),
+                             ob_timestamp=ob.get("ob_timestamp"),
+                             bos_timestamp=ob.get("bos_timestamp"),
+                             direction=direction, alert_seq=ob_state["fire_count"],
+                             trend=_bt_trend, trend_alignment=_bt_align)
+            _bt_fired = True
             yield {
                 "kind": "alert",
                 "pair": pair_name,
@@ -502,6 +535,30 @@ def replay_pair(
                 "alert_bar_low": just_closed_low,
                 "alert_bar_ts": just_closed_ts,
             }
+
+        # scanlog: exactly one heartbeat for this fully-processed bar. Outcome
+        # priority ALERT > RE_ARM_WAIT > OUT_OF_RANGE > NO_ZONE. This is the
+        # record G2 counts; every non-skipped bar lands here.
+        if _bt_fired:
+            _bt_outcome = "ALERT"
+        elif _bt_n_zones == 0:
+            _bt_outcome = "NO_ZONE"
+        elif _bt_nearest is not None and _bt_nearest[0] <= pair_conf["atr_multiplier"]:
+            _bt_outcome = "RE_ARM_WAIT" if _bt_any_cooling else "OUT_OF_RANGE"
+        elif _bt_any_cooling:
+            _bt_outcome = "RE_ARM_WAIT"
+        else:
+            _bt_outcome = "OUT_OF_RANGE"
+        _scanlog().scan(
+            pair=pair_name, ts=h1_ts, index=df_h1.index, outcome=_bt_outcome,
+            just_closed_ts=str(just_closed_ts), n_bars_in_slice=len(h1_slice),
+            atr=h1_atr, trend=_bt_trend, n_active_zones=_bt_n_zones,
+            nearest_zone=({"ob_timestamp": _bt_nearest[1],
+                           "direction": _bt_nearest[2],
+                           "distance_atr": round(_bt_nearest[0], 4)}
+                          if _bt_nearest else None),
+            prox_cap_atr=pair_conf["atr_multiplier"],
+        )
 
     closest = diag["closest_dist_atr_seen"]
     closest_str = f"{closest:.2f}×ATR" if closest is not None else "n/a"
