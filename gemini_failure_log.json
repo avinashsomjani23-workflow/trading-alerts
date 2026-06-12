@@ -503,5 +503,10 @@
     "ts": "2026-06-12T12:36:24.942536",
     "pair": "NAS100",
     "reason": "API error 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+  },
+  {
+    "ts": "2026-06-12T15:36:27.771993",
+    "pair": "GOLD",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
   }
 ]
