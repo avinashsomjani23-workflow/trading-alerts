@@ -94,14 +94,13 @@
         "sweep": 2.75,
         "fvg": 1,
         "freshness": 1,
-        "pd": 0.0,
         "killzone": 1.0
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-15T23:35:40.062565",
-      "last_email_day": "2026-06-12",
-      "reentry_armed": true,
-      "max_exit_distance": 0.4409942626953125,
+      "last_seen_ist": "2026-06-16T00:35:45.748366",
+      "last_email_day": "2026-06-15",
+      "reentry_armed": false,
+      "max_exit_distance": 0.0,
       "bias": "SHORT",
       "pair": "USDJPY"
     },
@@ -405,10 +404,10 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-15T11:35:43.571905",
-      "last_seen_ist": "2026-06-15T23:35:40.062565",
+      "last_seen_ist": "2026-06-16T00:35:45.748366",
       "last_email_day": "2026-06-15",
       "reentry_armed": true,
-      "max_exit_distance": 0.0037822723388671875,
+      "max_exit_distance": 0.004186034202575684,
       "bias": "SHORT",
       "pair": "EURUSD"
     },
@@ -445,7 +444,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-15T19:35:41.221027",
-      "last_seen_ist": "2026-06-15T23:35:40.062565",
+      "last_seen_ist": "2026-06-16T00:35:45.748366",
       "last_email_day": "2026-06-15",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -465,12 +464,32 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-15T21:35:46.616335",
-      "last_seen_ist": "2026-06-15T23:35:40.062565",
+      "last_seen_ist": "2026-06-16T00:35:45.748366",
       "last_email_day": "2026-06-15",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
       "bias": "SHORT",
       "pair": "USDCHF"
+    },
+    "EURUSD_LONG_BOS_1.1586_2026-06-12T20": {
+      "score_int": 5,
+      "score_raw": 5.0,
+      "score_high_water": 5.0,
+      "score_low_water": 5.0,
+      "breakdown": {
+        "structure": 3,
+        "sweep": 0.0,
+        "fvg": 1,
+        "freshness": 1,
+        "killzone": 0.0
+      },
+      "alert_ist": "2026-06-16T00:35:45.748366",
+      "last_seen_ist": "2026-06-16T00:35:45.748366",
+      "last_email_day": "2026-06-15",
+      "reentry_armed": false,
+      "max_exit_distance": 0.0,
+      "bias": "LONG",
+      "pair": "EURUSD"
     }
   }
 }
