@@ -116,7 +116,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-15T13:35:36.576381",
+      "last_seen_ist": "2026-06-15T14:35:46.578377",
       "last_email_day": "2026-06-12",
       "reentry_armed": true,
       "max_exit_distance": 0.4409942626953125,
@@ -284,7 +284,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-12T15:35:36.772251",
-      "last_seen_ist": "2026-06-15T13:35:36.576381",
+      "last_seen_ist": "2026-06-15T14:35:46.578377",
       "last_email_day": "2026-06-12",
       "reentry_armed": true,
       "max_exit_distance": 0.003174722194671631,
@@ -324,7 +324,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-15T09:35:36.934267",
-      "last_seen_ist": "2026-06-15T13:35:36.576381",
+      "last_seen_ist": "2026-06-15T14:35:46.578377",
       "last_email_day": "2026-06-15",
       "reentry_armed": false,
       "max_exit_distance": 0.0021543502807617188,
@@ -344,10 +344,10 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-15T09:35:36.934267",
-      "last_seen_ist": "2026-06-15T13:35:36.576381",
+      "last_seen_ist": "2026-06-15T14:35:46.578377",
       "last_email_day": "2026-06-15",
-      "reentry_armed": false,
-      "max_exit_distance": 501.75,
+      "reentry_armed": true,
+      "max_exit_distance": 820.5,
       "bias": "LONG",
       "pair": "NAS100"
     },
@@ -404,7 +404,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-15T10:35:38.926664",
-      "last_seen_ist": "2026-06-15T13:35:36.576381",
+      "last_seen_ist": "2026-06-15T14:35:46.578377",
       "last_email_day": "2026-06-15",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -424,7 +424,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-15T11:35:43.571905",
-      "last_seen_ist": "2026-06-15T13:35:36.576381",
+      "last_seen_ist": "2026-06-15T14:35:46.578377",
       "last_email_day": "2026-06-15",
       "reentry_armed": false,
       "max_exit_distance": 0.0032434463500976562,
