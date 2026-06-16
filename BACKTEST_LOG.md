@@ -1,15 +1,16 @@
 # Backtest Registry
 
-*Last updated: 2026-06-16 16:35 UTC*
+*Last updated: 2026-06-16 16:57 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **1** of 1
-- Total filled trades across all runs: **15**
-- Average expectancy across runs: **-0.24R**
+- Runs completed: **2** of 2
+- Total filled trades across all runs: **23**
+- Average expectancy across runs: **-0.42R**
 
+- **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
 
 ---
 
@@ -59,5 +60,52 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | 5-6 | 1 | 0.0% | -1.00R |
 | 6-7 | 3 | 33.3% | +0.10R |
 | 7+ | 3 | 66.7% | +0.93R |
+
+---
+
+### h1only_20240819_20240823
+
+**Group 1 — Study** | 2024-08-19 to 2024-08-23 | Regime: `bau`
+Market: *BAU choppy — post-Yen-carry-unwind settle*
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 8 (of 38 rows) |
+| Win rate | 12.5% |
+| Expectancy | -0.60R |
+| Max drawdown | +9.27R |
+| Longest losing streak | 7 trades |
+| Proximal fill rate | 42.1% |
+| 50% fill rate | 42.1% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| GOLD | 2 | 50.0% | +0.59R |
+| EURUSD | 2 | 0.0% | -1.00R |
+| NAS100 | 2 | 0.0% | -1.00R |
+| USDJPY | 2 | 0.0% | -1.00R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 7 | 14.3% | -0.80R |
+| London | 3 | 33.3% | +0.59R |
+| NY | 7 | 28.6% | -0.40R |
+| Other | 1 | 100.0% | +1.71R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 2-3 | 1 | 0.0% | -1.00R |
+| 3-4 | 1 | 0.0% | -1.00R |
+| 4-5 | 2 | 0.0% | -1.00R |
+| 5-6 | 2 | 50.0% | +0.59R |
+| 6-7 | 1 | 0.0% | -1.00R |
+| 7+ | 1 | 0.0% | -1.00R |
 
 ---
