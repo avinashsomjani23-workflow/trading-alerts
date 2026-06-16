@@ -1624,6 +1624,34 @@ def _count_recent_log_entries(log_path, window_hours, ist_now):
         return 0
 
 
+def _count_recent_by_kind(log_path, window_hours, ist_now):
+    """Like _count_recent_log_entries but returns {kind: count} for entries in
+    the window. Used for the P1-degrade heartbeat rule, where one log file holds
+    several degrade kinds (p1_email_fail / walls_h4_error / walls_structure_error)
+    and the action text names which ones fired."""
+    out = {}
+    try:
+        entries = load_json(log_path, [])
+        if not isinstance(entries, list):
+            return out
+        cutoff = ist_now - timedelta(hours=window_hours)
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            ts_str = e.get("ts")
+            if not ts_str:
+                continue
+            try:
+                if datetime.fromisoformat(ts_str) >= cutoff:
+                    k = e.get("kind", "unknown")
+                    out[k] = out.get(k, 0) + 1
+            except Exception:
+                continue
+        return out
+    except Exception:
+        return out
+
+
 def _get_active_obs_mtime_hours(ist_now):
     """Return hours since active_obs.json was last modified. None if missing."""
     try:
@@ -1810,6 +1838,21 @@ def collect_heartbeat_diagnostics(ist_now, active_obs):
             "action": "Check smtp_failure_log.json. Likely bad GMAIL_APP_PASSWORD or Gmail outage. Alerts may have been lost."
         })
 
+    # Rule 8 (1B): silent Phase-1 degrades. p1_degrade_log.json is P1-owned;
+    # read it the same way Rule 1 reads active_obs.json mtime. Any occurrence
+    # matters — an email-send fail means a digest was lost; a walls compute
+    # exception means a pair degraded to a placeholder with no structure.
+    p1_degrades = _count_recent_by_kind(
+        "p1_degrade_log.json", HEARTBEAT_WINDOW_HOURS, ist_now
+    )
+    p1_degrade_total = sum(p1_degrades.values())
+    if p1_degrade_total >= 1:
+        breakdown = ", ".join(f"{k}×{v}" for k, v in sorted(p1_degrades.items()))
+        issues.append({
+            "title": f"{p1_degrade_total} silent Phase-1 degrade(s) in last {HEARTBEAT_WINDOW_HOURS}h ({breakdown})",
+            "action": "Check p1_degrade_log.json + P1 Actions tab. p1_email_fail=a digest was lost; walls_*_error=a pair degraded to a placeholder (no structure/OBs)."
+        })
+
     return {
         "issues": issues,
         "ob_count": ob_count,
@@ -1818,6 +1861,7 @@ def collect_heartbeat_diagnostics(ist_now, active_obs):
         "yf_stale": yf_stale,
         "chart_fails": chart_fails,
         "smtp_fails": smtp_fails,
+        "p1_degrade_total": p1_degrade_total,
     }
 
 

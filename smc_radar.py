@@ -131,6 +131,31 @@ def load_json_safe(path, default):
         return default
 
 
+def log_p1_degrade(kind, **fields):
+    """Append one line to p1_degrade_log.json for a SILENT Phase-1 degrade.
+
+    Wave-1 1B: some P1 failures (digest send fail, wall cold-start) only did a
+    logging.error / fell through to a placeholder — invisible to the Phase-2
+    heartbeat, so a partially-broken P1 looked healthy. This records them in the
+    SAME shape the heartbeat already counts (ts + fields), reusing the existing
+    _count_recent_log_entries pattern rather than a parallel counter mechanism.
+
+    P1-OWNED file (committed by the P1 Actions job). The heartbeat (P2) reads it
+    the same already-accepted way it reads active_obs.json mtime. Capped at 200.
+    Never raises — a logging failure must not break the scan.
+    """
+    try:
+        log = load_json_safe("p1_degrade_log.json", [])
+        if not isinstance(log, list):
+            log = []
+        entry = {"ts": get_ist_now().isoformat(), "kind": kind}
+        entry.update(fields)
+        log.append(entry)
+        save_json_atomic("p1_degrade_log.json", log[-200:])
+    except Exception as e:
+        print(f"  [LOG ERR] p1 degrade log: {e}")
+
+
 # ---------------------------------------------------------------------------
 # PHASE 1 SCAN LOG (forensic trail)
 # ---------------------------------------------------------------------------
@@ -1049,12 +1074,19 @@ def compute_pair_walls(df, pair_name=""):
     except Exception as _h4err:
         logging.warning(f"[h4_range] {pair_name} compute failed: {_h4err}")
         _h4 = {"valid": False, "source": "error"}
+        # 1B: an EXCEPTION here (not a normal cold start) degrades walls to a
+        # placeholder silently. Surface it. Normal "H4 not valid yet" is NOT
+        # logged — only the compute exception is a real failure.
+        log_p1_degrade("walls_h4_error", pair=pair_name, reason=str(_h4err)[:200])
 
     try:
         _sv2 = dealing_range.compute_structure(df, _h4)
     except Exception as _sverr:
         logging.error(f"[structure] {pair_name} compute failed: {_sverr}")
         _sv2 = {"state": "error", "events": [], "trend": None, "swings": []}
+        # 1B: structure-engine exception → degraded (no events/trend) silently.
+        log_p1_degrade("walls_structure_error", pair=pair_name,
+                       reason=str(_sverr)[:200])
 
     _h4_valid = _h4.get("valid") and _h4.get("ceiling") is not None and _h4.get("floor") is not None
     # last_event_* describes the most recent REAL structural event. ALL of its
@@ -4202,6 +4234,8 @@ def run_radar():
             except Exception as e:
                 logging.error(f"Digest send failed: {e}")
                 print(f"  [EMAIL ERR] {e}")
+                # 1B: surface the silent P1 send failure to the heartbeat.
+                log_p1_degrade("p1_email_fail", reason=str(e)[:200])
         else:
             print("  No zones in slate. Digest skipped.")
 
