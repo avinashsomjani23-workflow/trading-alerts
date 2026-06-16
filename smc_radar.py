@@ -10,6 +10,7 @@ import google.generativeai as genai
 import smc_detector
 import dealing_range
 import h4_range  # H4-derived dealing range (built from H1, mapped onto H1)
+import charts  # shared H1 chart style engine (Wave 2 item 2C)
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -76,6 +77,16 @@ ZONE_PROXIMITY_THRESHOLDS = {
 # ---------------------------------------------------------------------------
 OB_PROXIMITY_ATR = 5.0   # Phase 1 surfacing window (both OBs)
 OB_MAX_KEEP = 2          # hard cap on surfaced OBs
+
+# ---------------------------------------------------------------------------
+# RANGING (INFORMATION ONLY — gates nothing). Two-component definition:
+#   1. Structure stalled: structure_v2 'ranging' flag (no new extreme for
+#      STRUCTURE_RANGING_STALE=2 counter-swings; resets on every fresh extreme).
+#   2. Range compressed: dealing-range height < RANGING_DR_ATR_MULT * H1 ATR.
+# Both must be true. The ratio is volatility-normalised so ONE multiplier
+# works for FX, Gold and NAS (DR and ATR both scale with the instrument).
+# Shown as plain-English email text; never blocks or scores a trade.
+RANGING_DR_ATR_MULT = 5.0
 
 # ---------------------------------------------------------------------------
 # STALENESS THRESHOLDS (B3)
@@ -831,7 +842,13 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'ghost_c1_idx': fvg_result.get('ghost_c1_idx'),
             'ghost_c3_idx': fvg_result.get('ghost_c3_idx'),
             'ghost_c1_timestamp': fvg_result.get('ghost_c1_timestamp'),
-            'mitigated_at_idx': fvg_result.get('mitigated_at_idx')
+            'mitigated_at_idx': fvg_result.get('mitigated_at_idx'),
+            # ISO of the bar where the FVG was fully mitigated. mitigated_at_idx
+            # is local to P1's H1 frame and does not translate to the backtest's
+            # separate H1 fetch; the timestamp is the only stable cross-fetch
+            # anchor (same rationale as c1_timestamp above). Lets the backtest
+            # decide fresh-vs-stale by comparing fill time to the approach leg.
+            'mitigated_at_iso': fvg_result.get('mitigated_at_iso')
         }
 
         # Phase 1 sweep observation — snapshot semantics. Window is the OB's
@@ -1416,28 +1433,11 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
         # forces a wider y span.
         candle_range = max(candle_hi - candle_lo, 1e-9)
         required_range = y_max - y_min
-        ratio = required_range / candle_range
-        base_h = 7.5
-        if ratio > 1.5:
-            base_h = min(11.0, 7.5 + (ratio - 1.5) * 1.7)
-        fig, ax = plt.subplots(1, 1, figsize=(12, base_h), facecolor='#131722')
-        ax.set_facecolor('#131722')
-        for spine in ax.spines.values():
-            spine.set_color('#2a2a3e')
+        base_h = charts.adaptive_height(required_range, candle_range)
+        fig, ax = charts.base_canvas(fig_height=base_h)
 
-        # --- Candles (thin bodies, fat wicks) ---
-        BODY_W = 0.55
-        WICK_W = 1.5
-        for i in range(n_plot):
-            o, h, l, c = float(O[i]), float(H[i]), float(L[i]), float(C[i])
-            col = '#26a69a' if c >= o else '#ef5350'
-            ax.plot([i, i], [l, h], color=col, linewidth=WICK_W, zorder=2,
-                    solid_capstyle='butt')
-            body = abs(c - o) or (h - l) * 0.02
-            ax.add_patch(patches.Rectangle(
-                (i - BODY_W/2, min(o, c)), BODY_W, body,
-                facecolor=col, linewidth=0, alpha=0.95, zorder=3
-            ))
+        # --- Candles (canonical thin bodies, fat wicks — shared style engine) ---
+        charts.draw_candles(ax, O, H, L, C)
 
         # --- Zone band ---
         # Greyed out when invalidated (dead zone — corpse only).
@@ -2029,15 +2029,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
         ax.set_xticks([])
 
         plt.tight_layout(pad=0.5)
-        buf = BytesIO()
-        fig.savefig(
-            buf, format='png', dpi=150, bbox_inches='tight',
-            facecolor='#131722', edgecolor='none'
-        )
-        buf.seek(0)
-        b64 = base64.b64encode(buf.read()).decode()
-        plt.close(fig)
-        return b64
+        return charts.fig_to_b64(fig)
 
     except Exception as e:
         logging.error(f"Chart error: {e}")
@@ -2634,8 +2626,46 @@ def _summarise_last_ob_attempt(ob_build_diagnostics):
     )
 
 
+def evaluate_ranging(walls, h1_atr, dp):
+    """Two-component ranging verdict (INFORMATION ONLY — gates nothing).
+
+    ranging = structure stalled (structure_v2 'ranging') AND range compressed
+    (DR height < RANGING_DR_ATR_MULT * H1 ATR). Returns:
+        (is_ranging: bool, reason: Optional[str])
+    `reason` is plain-English email text with the numbers filled in, or None
+    when not ranging / inputs unusable. Fails safe to (False, None) on any
+    missing or zero input — an info flag must never fire on bad data.
+    """
+    sv2 = (walls or {}).get('structure_v2') or {}
+    state = sv2.get('state')
+    if state not in ('up', 'down'):
+        return False, None                      # undefined -> never ranging
+    if not sv2.get('ranging'):
+        return False, None                      # Component 1: structure not stalled
+    try:
+        atr = float(h1_atr)
+        ceil_px = float((walls or {}).get('ceiling_price'))
+        floor_px = float((walls or {}).get('floor_price'))
+    except (TypeError, ValueError):
+        return False, None
+    dr_height = ceil_px - floor_px
+    if atr <= 0 or dr_height <= 0:
+        return False, None                      # bad data -> fail safe
+    ratio = dr_height / atr
+    if ratio >= RANGING_DR_ATR_MULT:
+        return False, None                      # Component 2: range not compressed
+    extreme = "high" if state == 'up' else "low"
+    reason = (
+        f"trend stalled (no new {extreme} for 2+ swings) and range is tight "
+        f"({dr_height:.{dp}f} vs {atr:.{dp}f} ATR = {ratio:.1f}x, "
+        f"under {RANGING_DR_ATR_MULT:.0f}x)"
+    )
+    return True, reason
+
+
 def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
-                                  last_event, ob_build_diagnostics=None):
+                                  last_event, ob_build_diagnostics=None,
+                                  h1_atr=None):
     """Card for a pair with no active OB and no recently-dropped OB.
 
     The vet wants to see WHY there's nothing to trade and what to wait for.
@@ -2687,7 +2717,12 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
             if sv2.get('flip_unconfirmed') and sv2.get('prior_trend'):
                 trend_txt = f"{state.upper()} (CHoCH from {sv2['prior_trend'].upper()}, unconfirmed)"
             else:
-                trend_txt = state.upper() + (" (ranging)" if sv2.get('ranging') else "")
+                # Two-component ranging verdict (info only). Falls back to the
+                # bare trend when not ranging or ATR unavailable.
+                _is_rng, _rng_reason = evaluate_ranging(walls, h1_atr, dp)
+                trend_txt = state.upper() + (
+                    f" — ranging ({_rng_reason})" if _is_rng else ""
+                )
         else:
             trend_txt = "undefined"
         range_parts.append(f"H1 trend: {trend_txt}")
@@ -4104,6 +4139,7 @@ def run_radar():
                                     pair_name, dp, cid, ist_ts_full,
                                     pair_walls, last_event,
                                     ob_build_diagnostics=ob_build_diag,
+                                    h1_atr=pair_atrs.get(pair_name),
                                 )
                             )
                             _attach_chart(chart_b64, cid)
@@ -4114,6 +4150,7 @@ def run_radar():
                                     pair_name, dp, None, ist_ts_full,
                                     pair_walls, last_event,
                                     ob_build_diagnostics=ob_build_diag,
+                                    h1_atr=pair_atrs.get(pair_name),
                                 )
                             )
 
@@ -4148,6 +4185,7 @@ def run_radar():
                                 pair_name, dp, cid, ist_ts_full,
                                 pair_walls, last_event,
                                 ob_build_diagnostics=ob_build_diag,
+                                h1_atr=pair_atrs.get(pair_name),
                             )
                         )
                         _attach_chart(chart_b64, cid)
@@ -4158,6 +4196,7 @@ def run_radar():
                                 pair_name, dp, None, ist_ts_full,
                                 pair_walls, last_event,
                                 ob_build_diagnostics=ob_build_diag,
+                                h1_atr=pair_atrs.get(pair_name),
                             )
                         )
 

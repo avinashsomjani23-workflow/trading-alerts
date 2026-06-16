@@ -1424,7 +1424,8 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
                     "ghost_top": ft, "ghost_bottom": fb,
                     "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
                     "ghost_c1_timestamp": _idx_to_iso(k),
-                    "mitigated_at_idx": full_fill_idx
+                    "mitigated_at_idx": full_fill_idx,
+                    "mitigated_at_iso": _idx_to_iso(full_fill_idx)
                 }
                 continue
             return {
@@ -1462,7 +1463,8 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
                     "ghost_top": ft, "ghost_bottom": fb,
                     "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
                     "ghost_c1_timestamp": _idx_to_iso(k),
-                    "mitigated_at_idx": full_fill_idx
+                    "mitigated_at_idx": full_fill_idx,
+                    "mitigated_at_iso": _idx_to_iso(full_fill_idx)
                 }
                 continue
             return {

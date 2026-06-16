@@ -19,6 +19,7 @@ from io import BytesIO
 import xml.etree.ElementTree as ET
 import smc_detector
 import news_filter
+import charts  # shared H1 chart style engine (Wave 2 item 2C)
 
 with open("config.json") as f:
     config = json.load(f)
@@ -650,25 +651,21 @@ def call_gemini_flash(pair, bias, news_headlines):
 # ---------------------------------------------------------------------------
 
 def _base_canvas():
-    fig, ax = plt.subplots(1, 1, figsize=(12, 5.0), facecolor='#131722')
-    ax.set_facecolor('#131722')
-    for s in ax.spines.values():
-        s.set_color('#2a2a3e')
-    return fig, ax
+    # Phase 2 context chart keeps its fixed (shorter) figure height; canvas
+    # theming comes from the shared style engine (charts.py).
+    return charts.base_canvas(fig_height=charts.FIG_HEIGHT_P2)
 
 
 def _draw_candles(ax, df_plot):
-    for i, row in df_plot.iterrows():
-        o, h, l, c = float(row['Open']), float(row['High']), float(row['Low']), float(row['Close'])
-        if any(np.isnan(v) for v in [o, h, l, c]):
-            continue
-        col = '#26a69a' if c >= o else '#ef5350'
-        ax.plot([i, i], [l, h], color=col, linewidth=1.2, zorder=2)
-        body = abs(c - o) or (h - l) * 0.02
-        ax.add_patch(patches.Rectangle(
-            (i - 0.4, min(o, c)), 0.8, body,
-            facecolor=col, linewidth=0, alpha=0.9, zorder=3
-        ))
+    # Canonical candle look (shared with Phase 1): thin body / fat wick. This is
+    # the 2C drift fix — Phase 2 candles previously rendered squatter (0.8/1.2).
+    charts.draw_candles(
+        ax,
+        df_plot['Open'].to_numpy(dtype=float),
+        df_plot['High'].to_numpy(dtype=float),
+        df_plot['Low'].to_numpy(dtype=float),
+        df_plot['Close'].to_numpy(dtype=float),
+    )
 
 
 def _p2_swing_markers(ax, df_h1, window_start, n, pair_conf, y_min, y_max):
@@ -734,12 +731,8 @@ def _p2_swing_markers(ax, df_h1, window_start, n, pair_conf, y_min, y_max):
 
 
 def _fig_to_b64(fig):
-    buf = BytesIO()
-    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#131722')
-    buf.seek(0)
-    b64 = base64.b64encode(buf.read()).decode()
-    plt.close(fig)
-    return b64
+    # One save path, shared with Phase 1 (charts.py).
+    return charts.fig_to_b64(fig)
 
 
 def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
@@ -765,23 +758,21 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
         # window_start in the raw df_h1 index frame (matches locate_ob_candle_idx)
         window_start = max(0, len(df_h1) - tail_n)
 
-        fig, ax = plt.subplots(1, 1, figsize=(11, 5.2), facecolor='#131722')
-        ax.set_facecolor('#131722')
-        for s in ax.spines.values():
-            s.set_color('#2a2a3e')
+        fig, ax = charts.base_canvas(fig_height=charts.FIG_HEIGHT_ZOOM,
+                                     fig_width=charts.FIG_WIDTH_ZOOM)
 
-        # Draw candles -- wider bodies for the zoomed view (0.7 width vs 0.4).
-        for i, row in df_plot.iterrows():
-            o, h, l, c = float(row['Open']), float(row['High']), float(row['Low']), float(row['Close'])
-            if any(np.isnan(v) for v in [o, h, l, c]):
-                continue
-            col = '#26a69a' if c >= o else '#ef5350'
-            ax.plot([i, i], [l, h], color=col, linewidth=1.6, zorder=2)
-            body = abs(c - o) or (h - l) * 0.02
-            ax.add_patch(patches.Rectangle(
-                (i - 0.35, min(o, c)), 0.7, body,
-                facecolor=col, linewidth=0, alpha=0.92, zorder=3
-            ))
+        # Draw candles -- INTENTIONALLY wider bodies for the zoomed entry view
+        # (close-up; not the drift the 2C unify fixed). Colours are the shared
+        # palette so they can never drift from the context/scout charts.
+        charts.draw_candles(
+            ax,
+            df_plot['Open'].to_numpy(dtype=float),
+            df_plot['High'].to_numpy(dtype=float),
+            df_plot['Low'].to_numpy(dtype=float),
+            df_plot['Close'].to_numpy(dtype=float),
+            body_w=charts.BODY_W_ZOOM, wick_w=charts.WICK_W_ZOOM,
+            body_alpha=charts.BODY_ALPHA_ZOOM, butt_cap=False,
+        )
 
         tail_n = 30
         full_n = len(df_h1)
