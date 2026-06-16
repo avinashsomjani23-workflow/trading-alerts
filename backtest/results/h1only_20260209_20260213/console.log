@@ -1,0 +1,239 @@
+[INFO] run_start regime=war regime_label=Russia-Ukraine full-scale invasion mode=h1_only start=2026-02-09 end=2026-02-13 pairs=['EURUSD', 'NZDUSD', 'USDJPY', 'USDCHF', 'NAS100', 'GOLD'] risk_usd=250.0 send_email=True
+[INFO] backtest_atr_cap pair=EURUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDJPY pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=NZDUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDCHF pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=NAS100 pair_type=index live=3.0 backtest=3.0
+[INFO] backtest_atr_cap pair=GOLD pair_type=commodity live=3.0 backtest=3.0
+
+[H1-ONLY MODE] start=2026-02-09 end=2026-02-13 pairs=['EURUSD', 'NZDUSD', 'USDJPY', 'USDCHF', 'NAS100', 'GOLD'] risk_per_trade=$250
+  No M15/M5 fetches. No scoring gate. Dual entry per OB.
+  News: 0 High-impact events fetched (coverage: {'ff': False})
+[INFO] news_fetched events=0 coverage={'ff': False} range=2026-02-08T00:00:00+00:00..2026-02-14T00:00:00+00:00
+  [scanlog] manifest written -> /home/runner/work/trading-alerts/trading-alerts/backtest/out/scanlog/h1only_20260209_20260213
+
+=== EURUSD (EURUSD=X) ===
+[INFO] pair_data_loaded pair=EURUSD h1_rows=692 h1_first=2026-01-05 00:00:00+00:00 h1_last=2026-02-13 00:00:00+00:00
+[INFO] pair_funnel pair=EURUSD bars_walked=97 warmup_skipped=0 dr_errors=0 radar_errors=0 bars_with_events=97 bars_with_obs=97 new_obs=8 prox_checks=447 closest_dist_atr=0.0 atr_multiplier_cap=2.5 alerts=11 alerts_resuppressed=0 alerts_rearmed=7 obs_aged_out=0
+  [DIAG EURUSD] walked=97 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=97 bars_with_obs=97 new_obs=8 prox_checks=447 closest=0.00×ATR (cap=2.5×ATR) alerts=11 resuppressed=0 rearmed=7 aged_out=0
+[INFO] pair_alerts_collected pair=EURUSD alerts=11 mode=h1_only
+  EURUSD: 11 OB-touch alerts
+[INFO] killzone_drop pair=EURUSD alert_ts=2026-02-09 00:00:00+00:00 utc_hour=0 utc_minute=0 windows=07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-09 00:00:00+00:00 entry_zone=proximal score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-09 00:00:00+00:00 entry_zone=50pct score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] killzone_drop pair=EURUSD alert_ts=2026-02-09 01:00:00+00:00 utc_hour=1 utc_minute=0 windows=07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-09 01:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=tp2 r_realised=3.464 r_if_exit_tp1=3.69 r_if_exit_tp2=4.05 pnl_usd=866.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-09 01:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=tp2 r_realised=5.921 r_if_exit_tp1=7.014 r_if_exit_tp2=7.638 pnl_usd=1480.25 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-09 07:00:00+00:00 entry_zone=proximal score=6.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-09 07:00:00+00:00 entry_zone=50pct score=6.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-09 09:00:00+00:00 entry_zone=proximal score=3.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-09 09:00:00+00:00 entry_zone=50pct score=3.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-09 13:00:00+00:00 entry_zone=proximal score=7.0 model=h1_only exit_reason=tp2 r_realised=2.196 r_if_exit_tp1=1.8 r_if_exit_tp2=2.42 pnl_usd=549.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-09 13:00:00+00:00 entry_zone=50pct score=7.0 model=h1_only exit_reason=tp2 r_realised=4.447 r_if_exit_tp1=4.107 r_if_exit_tp2=5.241 pnl_usd=1111.75 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] killzone_drop pair=EURUSD alert_ts=2026-02-09 17:00:00+00:00 utc_hour=17 utc_minute=0 windows=07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-09 17:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=tp2 r_realised=1.957 r_if_exit_tp1=1.67 r_if_exit_tp2=2.09 pnl_usd=489.25 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-09 17:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=EURUSD alert_ts=2026-02-11 14:00:00+00:00 ob_ts=2026-02-06T21:00:00+00:00 direction=bullish alert_seq=2
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-11 14:00:00+00:00 entry_zone=proximal score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-11 14:00:00+00:00 entry_zone=50pct score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-11 14:00:00+00:00 entry_zone=proximal score=8.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=EURUSD alert_ts=2026-02-11 14:00:00+00:00 entry_zone=50pct score=8.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=EURUSD alert_ts=2026-02-12 10:00:00+00:00 ob_ts=2026-01-30T10:00:00+00:00 direction=bearish alert_seq=2
+[INFO] ob_dedup_skip pair=EURUSD alert_ts=2026-02-12 17:00:00+00:00 ob_ts=2026-02-11T10:00:00+00:00 direction=bearish alert_seq=2
+[INFO] pair_trades_simulated pair=EURUSD trades=16 news_blocked=0 ist_blocked=4 killzone_dropped_alerts=3
+  EURUSD: 16 simulated trade rows (2 per qualified OB-touch; 0 news-blocked, 4 IST-blocked, 3 killzone-dropped alerts)
+
+=== USDJPY (JPY=X) ===
+[INFO] pair_data_loaded pair=USDJPY h1_rows=670 h1_first=2026-01-05 00:00:00+00:00 h1_last=2026-02-13 00:00:00+00:00
+[INFO] pair_funnel pair=USDJPY bars_walked=97 warmup_skipped=0 dr_errors=0 radar_errors=0 bars_with_events=97 bars_with_obs=97 new_obs=10 prox_checks=271 closest_dist_atr=0.0 atr_multiplier_cap=2.5 alerts=16 alerts_resuppressed=0 alerts_rearmed=9 obs_aged_out=0
+  [DIAG USDJPY] walked=97 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=97 bars_with_obs=97 new_obs=10 prox_checks=271 closest=0.00×ATR (cap=2.5×ATR) alerts=16 resuppressed=0 rearmed=9 aged_out=0
+[INFO] pair_alerts_collected pair=USDJPY alerts=16 mode=h1_only
+  USDJPY: 16 OB-touch alerts
+[INFO] killzone_drop pair=USDJPY alert_ts=2026-02-09 01:00:00+00:00 utc_hour=1 utc_minute=0 windows=03:30-07:00 UTC, 07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-09 01:00:00+00:00 entry_zone=proximal score=1.0 model=h1_only exit_reason=tp2 r_realised=2.389 r_if_exit_tp1=1.58 r_if_exit_tp2=2.73 pnl_usd=597.25 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-09 01:00:00+00:00 entry_zone=50pct score=1.0 model=h1_only exit_reason=tp2 r_realised=4.436 r_if_exit_tp1=3.531 r_if_exit_tp2=5.531 pnl_usd=1109.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] killzone_drop pair=USDJPY alert_ts=2026-02-09 02:00:00+00:00 utc_hour=2 utc_minute=0 windows=03:30-07:00 UTC, 07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-09 02:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-09 02:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=USDJPY alert_ts=2026-02-09 07:00:00+00:00 ob_ts=2026-02-03T20:00:00+00:00 direction=bullish alert_seq=2
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-09 14:00:00+00:00 entry_zone=proximal score=2.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-09 14:00:00+00:00 entry_zone=50pct score=2.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-09 15:00:00+00:00 entry_zone=proximal score=2.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-09 15:00:00+00:00 entry_zone=50pct score=2.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=USDJPY alert_ts=2026-02-10 03:00:00+00:00 ob_ts=2026-01-30T15:00:00+00:00 direction=bullish alert_seq=2
+[INFO] killzone_drop pair=USDJPY alert_ts=2026-02-10 03:00:00+00:00 utc_hour=3 utc_minute=0 windows=03:30-07:00 UTC, 07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-10 03:00:00+00:00 entry_zone=proximal score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-10 03:00:00+00:00 entry_zone=50pct score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-10 14:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-10 14:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-10 16:00:00+00:00 entry_zone=proximal score=3.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-10 16:00:00+00:00 entry_zone=50pct score=3.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] killzone_drop pair=USDJPY alert_ts=2026-02-11 02:00:00+00:00 utc_hour=2 utc_minute=0 windows=03:30-07:00 UTC, 07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-11 02:00:00+00:00 entry_zone=proximal score=6.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-11 02:00:00+00:00 entry_zone=50pct score=6.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] killzone_drop pair=USDJPY alert_ts=2026-02-11 03:00:00+00:00 utc_hour=3 utc_minute=0 windows=03:30-07:00 UTC, 07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-11 03:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-11 03:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=USDJPY alert_ts=2026-02-11 13:00:00+00:00 ob_ts=2026-02-10T23:00:00+00:00 direction=bearish alert_seq=2
+[INFO] ob_dedup_skip pair=USDJPY alert_ts=2026-02-11 14:00:00+00:00 ob_ts=2026-02-10T11:00:00+00:00 direction=bearish alert_seq=2
+[INFO] ob_dedup_skip pair=USDJPY alert_ts=2026-02-12 07:00:00+00:00 ob_ts=2026-02-10T23:00:00+00:00 direction=bearish alert_seq=3
+[INFO] ob_dedup_skip pair=USDJPY alert_ts=2026-02-12 13:00:00+00:00 ob_ts=2026-02-10T23:00:00+00:00 direction=bearish alert_seq=4
+[INFO] killzone_drop pair=USDJPY alert_ts=2026-02-12 21:00:00+00:00 utc_hour=21 utc_minute=0 windows=03:30-07:00 UTC, 07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-12 21:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDJPY alert_ts=2026-02-12 21:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] pair_trades_simulated pair=USDJPY trades=20 news_blocked=0 ist_blocked=12 killzone_dropped_alerts=6
+  USDJPY: 20 simulated trade rows (2 per qualified OB-touch; 0 news-blocked, 12 IST-blocked, 6 killzone-dropped alerts)
+
+=== NZDUSD (NZDUSD=X) ===
+[INFO] pair_data_loaded pair=NZDUSD h1_rows=692 h1_first=2026-01-05 00:00:00+00:00 h1_last=2026-02-13 00:00:00+00:00
+[INFO] pair_funnel pair=NZDUSD bars_walked=97 warmup_skipped=0 dr_errors=0 radar_errors=0 bars_with_events=97 bars_with_obs=88 new_obs=11 prox_checks=302 closest_dist_atr=0.0 atr_multiplier_cap=2.5 alerts=16 alerts_resuppressed=0 alerts_rearmed=6 obs_aged_out=0
+  [DIAG NZDUSD] walked=97 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=97 bars_with_obs=88 new_obs=11 prox_checks=302 closest=0.00×ATR (cap=2.5×ATR) alerts=16 resuppressed=0 rearmed=6 aged_out=0
+[INFO] pair_alerts_collected pair=NZDUSD alerts=16 mode=h1_only
+  NZDUSD: 16 OB-touch alerts
+[INFO] killzone_drop pair=NZDUSD alert_ts=2026-02-09 00:00:00+00:00 utc_hour=0 utc_minute=0 windows=03:30-07:00 UTC, 07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-09 00:00:00+00:00 entry_zone=proximal score=3.0 model=h1_only exit_reason=sl r_realised=0.0 r_if_exit_tp1=1.63 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-09 00:00:00+00:00 entry_zone=50pct score=3.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] killzone_drop pair=NZDUSD alert_ts=2026-02-09 02:00:00+00:00 utc_hour=2 utc_minute=0 windows=03:30-07:00 UTC, 07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-09 02:00:00+00:00 entry_zone=proximal score=7.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-09 02:00:00+00:00 entry_zone=50pct score=7.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-09 07:00:00+00:00 entry_zone=proximal score=6.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-09 07:00:00+00:00 entry_zone=50pct score=6.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-09 14:00:00+00:00 entry_zone=proximal score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-09 14:00:00+00:00 entry_zone=50pct score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-09 15:00:00+00:00 entry_zone=proximal score=3.0 model=h1_only exit_reason=timeout r_realised=0.376 r_if_exit_tp1=0.376 r_if_exit_tp2=0.376 pnl_usd=94.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-09 15:00:00+00:00 entry_zone=50pct score=3.0 model=h1_only exit_reason=window_end r_realised=2.11 r_if_exit_tp1=2.11 r_if_exit_tp2=2.11 pnl_usd=527.5 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-10 04:00:00+00:00 entry_zone=proximal score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-10 04:00:00+00:00 entry_zone=50pct score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-10 15:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=tp2 r_realised=1.341 r_if_exit_tp1=1.6 r_if_exit_tp2=1.78 pnl_usd=335.25 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-10 15:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=tp2 r_realised=2.148 r_if_exit_tp1=2.927 r_if_exit_tp2=3.195 pnl_usd=537.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] killzone_drop pair=NZDUSD alert_ts=2026-02-11 03:00:00+00:00 utc_hour=3 utc_minute=0 windows=03:30-07:00 UTC, 07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-11 03:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-11 03:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] killzone_drop pair=NZDUSD alert_ts=2026-02-11 11:00:00+00:00 utc_hour=11 utc_minute=0 windows=03:30-07:00 UTC, 07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-11 11:00:00+00:00 entry_zone=proximal score=2.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-11 11:00:00+00:00 entry_zone=50pct score=2.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=NZDUSD alert_ts=2026-02-11 14:00:00+00:00 ob_ts=2026-02-09T10:00:00+00:00 direction=bullish alert_seq=2
+[INFO] ob_dedup_skip pair=NZDUSD alert_ts=2026-02-11 14:00:00+00:00 ob_ts=2026-02-09T08:00:00+00:00 direction=bullish alert_seq=2
+[INFO] ob_dedup_skip pair=NZDUSD alert_ts=2026-02-11 16:00:00+00:00 ob_ts=2026-02-09T10:00:00+00:00 direction=bullish alert_seq=3
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-11 16:00:00+00:00 entry_zone=proximal score=5.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-11 16:00:00+00:00 entry_zone=50pct score=5.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] killzone_drop pair=NZDUSD alert_ts=2026-02-12 10:00:00+00:00 utc_hour=10 utc_minute=0 windows=03:30-07:00 UTC, 07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-12 10:00:00+00:00 entry_zone=proximal score=7.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NZDUSD alert_ts=2026-02-12 10:00:00+00:00 entry_zone=50pct score=7.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=NZDUSD alert_ts=2026-02-12 17:00:00+00:00 ob_ts=2026-02-09T10:00:00+00:00 direction=bullish alert_seq=4
+[INFO] ob_dedup_skip pair=NZDUSD alert_ts=2026-02-12 17:00:00+00:00 ob_ts=2026-02-09T08:00:00+00:00 direction=bullish alert_seq=3
+[INFO] pair_trades_simulated pair=NZDUSD trades=22 news_blocked=0 ist_blocked=6 killzone_dropped_alerts=5
+  NZDUSD: 22 simulated trade rows (2 per qualified OB-touch; 0 news-blocked, 6 IST-blocked, 5 killzone-dropped alerts)
+
+=== USDCHF (CHF=X) ===
+[INFO] pair_data_loaded pair=USDCHF h1_rows=692 h1_first=2026-01-05 00:00:00+00:00 h1_last=2026-02-13 00:00:00+00:00
+[INFO] pair_funnel pair=USDCHF bars_walked=97 warmup_skipped=0 dr_errors=0 radar_errors=0 bars_with_events=97 bars_with_obs=81 new_obs=9 prox_checks=302 closest_dist_atr=0.0 atr_multiplier_cap=2.5 alerts=12 alerts_resuppressed=0 alerts_rearmed=6 obs_aged_out=0
+  [DIAG USDCHF] walked=97 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=97 bars_with_obs=81 new_obs=9 prox_checks=302 closest=0.00×ATR (cap=2.5×ATR) alerts=12 resuppressed=0 rearmed=6 aged_out=0
+[INFO] pair_alerts_collected pair=USDCHF alerts=12 mode=h1_only
+  USDCHF: 12 OB-touch alerts
+[INFO] killzone_drop pair=USDCHF alert_ts=2026-02-09 00:00:00+00:00 utc_hour=0 utc_minute=0 windows=07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-09 00:00:00+00:00 entry_zone=proximal score=7.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-09 00:00:00+00:00 entry_zone=50pct score=7.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] killzone_drop pair=USDCHF alert_ts=2026-02-09 00:00:00+00:00 utc_hour=0 utc_minute=0 windows=07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-09 00:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-09 00:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] killzone_drop pair=USDCHF alert_ts=2026-02-09 05:00:00+00:00 utc_hour=5 utc_minute=0 windows=07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-09 05:00:00+00:00 entry_zone=proximal score=5.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-09 05:00:00+00:00 entry_zone=50pct score=5.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-09 07:00:00+00:00 entry_zone=proximal score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-09 07:00:00+00:00 entry_zone=50pct score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] killzone_drop pair=USDCHF alert_ts=2026-02-09 10:00:00+00:00 utc_hour=10 utc_minute=0 windows=07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-09 10:00:00+00:00 entry_zone=proximal score=7.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-09 10:00:00+00:00 entry_zone=50pct score=7.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-09 14:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-09 14:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-10 14:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-10 14:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=USDCHF alert_ts=2026-02-11 14:00:00+00:00 ob_ts=2026-02-09T02:00:00+00:00 direction=bearish alert_seq=2
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-11 14:00:00+00:00 entry_zone=proximal score=7.0 model=h1_only exit_reason=tp2 r_realised=1.589 r_if_exit_tp1=1.77 r_if_exit_tp2=1.78 pnl_usd=397.25 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-11 14:00:00+00:00 entry_zone=50pct score=7.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=USDCHF alert_ts=2026-02-11 16:00:00+00:00 ob_ts=2026-02-05T09:00:00+00:00 direction=bearish alert_seq=2
+[INFO] ob_dedup_skip pair=USDCHF alert_ts=2026-02-12 09:00:00+00:00 ob_ts=2026-02-11T09:00:00+00:00 direction=bullish alert_seq=2
+[INFO] killzone_drop pair=USDCHF alert_ts=2026-02-12 10:00:00+00:00 utc_hour=10 utc_minute=0 windows=07:00-10:00 UTC, 12:00-17:00 UTC
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-12 10:00:00+00:00 entry_zone=proximal score=7.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=USDCHF alert_ts=2026-02-12 10:00:00+00:00 entry_zone=50pct score=7.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] pair_trades_simulated pair=USDCHF trades=18 news_blocked=0 ist_blocked=4 killzone_dropped_alerts=5
+  USDCHF: 18 simulated trade rows (2 per qualified OB-touch; 0 news-blocked, 4 IST-blocked, 5 killzone-dropped alerts)
+
+=== NAS100 (NQ=F) ===
+[INFO] pair_data_loaded pair=NAS100 h1_rows=636 h1_first=2026-01-05 05:00:00+00:00 h1_last=2026-02-13 00:00:00+00:00
+[INFO] pair_funnel pair=NAS100 bars_walked=93 warmup_skipped=0 dr_errors=0 radar_errors=0 bars_with_events=93 bars_with_obs=92 new_obs=8 prox_checks=191 closest_dist_atr=0.0 atr_multiplier_cap=3.0 alerts=11 alerts_resuppressed=0 alerts_rearmed=5 obs_aged_out=0
+  [DIAG NAS100] walked=93 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=93 bars_with_obs=92 new_obs=8 prox_checks=191 closest=0.00×ATR (cap=3.0×ATR) alerts=11 resuppressed=0 rearmed=5 aged_out=0
+[INFO] pair_alerts_collected pair=NAS100 alerts=11 mode=h1_only
+  NAS100: 11 OB-touch alerts
+[INFO] killzone_drop pair=NAS100 alert_ts=2026-02-09 00:00:00+00:00 utc_hour=0 utc_minute=0 windows=13:00-21:00 UTC
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-09 00:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-09 00:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] killzone_drop pair=NAS100 alert_ts=2026-02-09 00:00:00+00:00 utc_hour=0 utc_minute=0 windows=13:00-21:00 UTC
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-09 00:00:00+00:00 entry_zone=proximal score=6.0 model=h1_only exit_reason=tp2 r_realised=3.245 r_if_exit_tp1=1.69 r_if_exit_tp2=3.25 pnl_usd=811.25 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-09 00:00:00+00:00 entry_zone=50pct score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=NAS100 alert_ts=2026-02-09 15:00:00+00:00 ob_ts=2026-02-04T11:00:00+00:00 direction=bearish alert_seq=2
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-09 17:00:00+00:00 entry_zone=proximal score=6.0 model=h1_only exit_reason=tp2 r_realised=2.284 r_if_exit_tp1=2.27 r_if_exit_tp2=2.28 pnl_usd=571.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-09 17:00:00+00:00 entry_zone=50pct score=6.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] killzone_drop pair=NAS100 alert_ts=2026-02-11 07:00:00+00:00 utc_hour=7 utc_minute=0 windows=13:00-21:00 UTC
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-11 07:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-11 07:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] killzone_drop pair=NAS100 alert_ts=2026-02-11 12:00:00+00:00 utc_hour=12 utc_minute=0 windows=13:00-21:00 UTC
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-11 12:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-11 12:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=NAS100 alert_ts=2026-02-11 14:00:00+00:00 ob_ts=2026-02-04T11:00:00+00:00 direction=bearish alert_seq=3
+[INFO] h1only_sim_skip pair=NAS100 entry_zone=proximal alert_ts=2026-02-11 16:00:00+00:00 reason=Entry 25279.0 is above current price 25244.0 -- LONG limit would chase price.
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-11 17:00:00+00:00 entry_zone=proximal score=7.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-11 17:00:00+00:00 entry_zone=50pct score=7.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=NAS100 alert_ts=2026-02-12 15:00:00+00:00 ob_ts=2026-02-09T13:00:00+00:00 direction=bullish alert_seq=2
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-12 16:00:00+00:00 entry_zone=proximal score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=NAS100 alert_ts=2026-02-12 16:00:00+00:00 entry_zone=50pct score=6.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] pair_trades_simulated pair=NAS100 trades=14 news_blocked=0 ist_blocked=8 killzone_dropped_alerts=4
+  NAS100: 14 simulated trade rows (2 per qualified OB-touch; 0 news-blocked, 8 IST-blocked, 4 killzone-dropped alerts)
+
+=== GOLD (GC=F) ===
+[INFO] pair_data_loaded pair=GOLD h1_rows=635 h1_first=2026-01-05 05:00:00+00:00 h1_last=2026-02-13 00:00:00+00:00
+[INFO] pair_funnel pair=GOLD bars_walked=93 warmup_skipped=0 dr_errors=0 radar_errors=0 bars_with_events=93 bars_with_obs=93 new_obs=5 prox_checks=257 closest_dist_atr=0.0 atr_multiplier_cap=3.0 alerts=7 alerts_resuppressed=0 alerts_rearmed=3 obs_aged_out=0
+  [DIAG GOLD] walked=93 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=93 bars_with_obs=93 new_obs=5 prox_checks=257 closest=0.00×ATR (cap=3.0×ATR) alerts=7 resuppressed=0 rearmed=3 aged_out=0
+[INFO] pair_alerts_collected pair=GOLD alerts=7 mode=h1_only
+  GOLD: 7 OB-touch alerts
+[INFO] killzone_drop pair=GOLD alert_ts=2026-02-09 00:00:00+00:00 utc_hour=0 utc_minute=0 windows=07:00-10:00 UTC, 12:00-21:00 UTC
+[INFO] trade_simulated pair=GOLD alert_ts=2026-02-09 00:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=GOLD alert_ts=2026-02-09 00:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] killzone_drop pair=GOLD alert_ts=2026-02-09 01:00:00+00:00 utc_hour=1 utc_minute=0 windows=07:00-10:00 UTC, 12:00-21:00 UTC
+[INFO] trade_simulated pair=GOLD alert_ts=2026-02-09 01:00:00+00:00 entry_zone=proximal score=3.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=GOLD alert_ts=2026-02-09 01:00:00+00:00 entry_zone=50pct score=3.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=True news_event_title= news_event_source=
+[INFO] trade_simulated pair=GOLD alert_ts=2026-02-09 16:00:00+00:00 entry_zone=proximal score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=GOLD alert_ts=2026-02-09 16:00:00+00:00 entry_zone=50pct score=4.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] killzone_drop pair=GOLD alert_ts=2026-02-11 11:00:00+00:00 utc_hour=11 utc_minute=0 windows=07:00-10:00 UTC, 12:00-21:00 UTC
+[INFO] trade_simulated pair=GOLD alert_ts=2026-02-11 11:00:00+00:00 entry_zone=proximal score=4.5 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=GOLD alert_ts=2026-02-11 11:00:00+00:00 entry_zone=50pct score=4.5 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] ob_dedup_skip pair=GOLD alert_ts=2026-02-11 14:00:00+00:00 ob_ts=2026-02-06T19:00:00+00:00 direction=bullish alert_seq=2
+[INFO] ob_dedup_skip pair=GOLD alert_ts=2026-02-12 17:00:00+00:00 ob_ts=2026-02-06T19:00:00+00:00 direction=bullish alert_seq=3
+[INFO] trade_simulated pair=GOLD alert_ts=2026-02-12 17:00:00+00:00 entry_zone=proximal score=5.8 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] trade_simulated pair=GOLD alert_ts=2026-02-12 17:00:00+00:00 entry_zone=50pct score=5.8 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] pair_trades_simulated pair=GOLD trades=10 news_blocked=0 ist_blocked=4 killzone_dropped_alerts=3
+  GOLD: 10 simulated trade rows (2 per qualified OB-touch; 0 news-blocked, 4 IST-blocked, 3 killzone-dropped alerts)
+[INFO] report_written path=/home/runner/work/trading-alerts/trading-alerts/backtest/results/h1only_20260209_20260213 total_alerts=73 total_trades=100
+
+H1-only report written to /home/runner/work/trading-alerts/trading-alerts/backtest/results/h1only_20260209_20260213
+================================================================
+SCAN-LOG RUN HEALTH
+================================================================
+GATE  VERDICT DESCRIPTION
+G1    PASS    Sum pnl_usd == Sum r_realised*risk, and equals reporting headline
+G2    PASS    scan records == expected (pair x walk bars); zero HEARTBEAT_GAP
+G3    PASS    ob<=bos<alert<fill and fill>=alert+1h on every filled trade
+G4    PASS    every FAIL-severity condition counter is 0
+G5    PASS    every knob re-read at END equals manifest (no drift)
+G6    PASS    headline recomputed from r_realised only; tp1/tp2 excluded
+G7    PASS    content hash of scan_log + events recorded for re-run compare
+G8    PASS    NAN_ATR_SKIP <= 1% post-warmup per pair (WARN >1%, FAIL >5%)
+G9    PASS    every record validated against SCHEMA.md (ts/tz/outcome)
+----------------------------------------------------------------
+CONDITION COUNTERS (nonzero):
+  INFO  DEDUP_SUPPRESSED           22
+----------------------------------------------------------------
+headline (from r_realised): $-2,248.75
+OVERALL: PASS (exit code 0)
+================================================================
