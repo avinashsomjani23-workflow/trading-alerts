@@ -37,3 +37,9 @@ jobs:
 
       - name: Scan-log self-test (the gates catch planted failures)
         run: python -m backtest.scanlog.test_scanlog_self
+
+      - name: Slate Zone round-trip (no field can die in a hand-copy)
+        # Wave 2 item 2B. Asserts every zone in active_obs.json survives
+        # Zone.from_dict -> to_dict byte-identical, so the typed slate field
+        # list can never silently drop a field.
+        run: python test_zone_roundtrip.py

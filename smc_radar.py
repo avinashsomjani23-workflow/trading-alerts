@@ -11,6 +11,7 @@ import smc_detector
 import dealing_range
 import h4_range  # H4-derived dealing range (built from H1, mapped onto H1)
 import charts  # shared H1 chart style engine (Wave 2 item 2C)
+from zone import Zone  # typed slate zone — single slate field definition (Wave 2 item 2B)
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -3178,60 +3179,14 @@ def assign_new_zone_id(slate_pair_block, pair_name):
 
 
 def fresh_to_slate_zone(fresh_zone, zone_id, ist_now, current_price, dp):
-    """Materialize a fresh-detection dict into a slate zone record."""
-    pip_unit = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
-    dist_pips = round(abs(current_price - fresh_zone['proximal_line']) / pip_unit, 1)
-    label = ist_now.strftime('%H:%M IST')
-    iso = ist_now.isoformat()
-    return {
-        "zone_id": zone_id,
-        "status": "active",
-        "drop_reason": None,
-        "first_seen_iso": iso,
-        "first_seen_label": label,
-        "last_seen_iso": iso,
-        "last_seen_label": label,
-        "is_new_this_scan": True,
-        "ob_timestamp": fresh_zone.get("ob_timestamp"),
-        "direction": fresh_zone["direction"],
-        "bos_tag": fresh_zone["bos_tag"],
-        "bos_tier": fresh_zone.get("bos_tier", "BOS"),
-        "broken_was_wall": fresh_zone.get("broken_was_wall", False),
-        "reversal_pct": fresh_zone.get("reversal_pct"),
-        "bos_timestamp": fresh_zone.get("bos_timestamp"),
-        "proximal_line": fresh_zone["proximal_line"],
-        "distal_line": fresh_zone["distal_line"],
-        "high": fresh_zone["high"],
-        "low": fresh_zone["low"],
-        "ob_body": fresh_zone["ob_body"],
-        "median_leg_body": fresh_zone["median_leg_body"],
-        "bos_idx": fresh_zone["bos_idx"],
-        "ob_idx": fresh_zone["ob_idx"],
-        "impulse_start_idx": fresh_zone["impulse_start_idx"],
-        "impulse_start_price": fresh_zone["impulse_start_price"],
-        "bos_swing_price": fresh_zone["bos_swing_price"],
-        # Per-OB BOS sequence count, stamped by detect_smc_radar at the OB's OWN
-        # event. Persisted so Phase 2 scores OB2 with its own count, not today's
-        # whole-ring total (which mislabelled an early OB2 as "exhausted").
-        "bos_sequence_count": fresh_zone.get("bos_sequence_count", 1),
-        # Frozen break/displacement quality of the event candle (info display).
-        "break_quality": fresh_zone.get("break_quality", {"tier": "marginal"}),
-        "touches": fresh_zone.get("touches", 0),
-        "status_label": fresh_zone.get("status", "Pristine"),
-        "h1_atr": fresh_zone.get("h1_atr", 0.0),
-        "current_price_at_scan": current_price,
-        "distance_to_proximal_pips": dist_pips,
-        "fvg": fresh_zone["fvg"],
-        # Phase 1 sweep snapshot — preserved across scans; never re-evaluated.
-        "sweep_observed": fresh_zone.get("sweep_observed", {"exists": False}),
-        # Phase 1 dealing range snapshot — single source of truth. Phase 2
-        # consumes this directly and does NOT recompute.
-        "dealing_range": fresh_zone.get("dealing_range", {"valid": False}),
-        # Two-OB role classification — refreshed each scan as price moves.
-        # 'primary' = OB1 (closest within 4xATR), 'alternative' = OB2
-        # (best Pristine in 4-8xATR ring). Phase 2/3 only consume primary.
-        "role": fresh_zone.get("role", "primary"),
-    }
+    """Materialize a fresh-detection dict into a slate zone record.
+
+    Field plumbing lives in the Zone dataclass (zone.py) — the SINGLE field
+    definition shared with refresh_slate_zone, so a field can never again die in
+    a hand-copy (the bug class 2B retires). Output is byte-identical to the old
+    hand-built dict (same fields, same order); guarded by test_zone_roundtrip.py.
+    """
+    return Zone.from_fresh(fresh_zone, zone_id, ist_now, current_price, dp).to_dict()
 
 
 def _df_ts_iso(df, idx):
@@ -3344,66 +3299,18 @@ def refresh_slate_zone(slate_zone, fresh_zone, ist_now, current_price, dp):
     Update an existing slate zone with fresh-scan data. Identity (zone_id,
     first_seen) preserved. Mutable state (touches, status, fvg, atr, price)
     refreshed from latest scan.
+
+    Field plumbing lives in the Zone dataclass (zone.py) — the SINGLE field
+    definition shared with fresh_to_slate_zone. The refresh rules (which fields
+    move, the get-with-self-fallback semantics, idx fields refreshed together)
+    are Zone.refresh(). Mutates `slate_zone` IN PLACE (callers hold a reference
+    to the dict already in the slate list) and preserves its original on-disk
+    key order — so a no-op refresh is byte-identical, including legacy zones.
     """
-    pip_unit = 0.0001 if dp == 5 else (0.01 if dp == 3 else 1.0)
-    dist_pips = round(abs(current_price - fresh_zone['proximal_line']) / pip_unit, 1)
-    slate_zone["last_seen_iso"] = ist_now.isoformat()
-    slate_zone["last_seen_label"] = ist_now.strftime('%H:%M IST')
-    slate_zone["is_new_this_scan"] = False
-    # Refresh structural fields (in case proximal drifted within threshold).
-    slate_zone["proximal_line"] = fresh_zone["proximal_line"]
-    slate_zone["distal_line"]   = fresh_zone["distal_line"]
-    slate_zone["high"]          = fresh_zone["high"]
-    slate_zone["low"]           = fresh_zone["low"]
-    slate_zone["ob_body"]       = fresh_zone["ob_body"]
-    slate_zone["median_leg_body"] = fresh_zone["median_leg_body"]
-    # All idx-bearing fields MUST be refreshed together — they belong to the
-    # same df frame, which rolls each scan as yfinance returns a new window.
-    # Bug history: previously only bos_idx + ob_idx were refreshed, leaving
-    # impulse_start_idx stale (pointing past ob_idx after enough scans). This
-    # silently disabled sweep observation since the leg slice became empty.
-    slate_zone["bos_idx"]              = fresh_zone["bos_idx"]
-    slate_zone["ob_idx"]               = fresh_zone["ob_idx"]
-    slate_zone["impulse_start_idx"]    = fresh_zone["impulse_start_idx"]
-    slate_zone["impulse_start_price"]  = fresh_zone["impulse_start_price"]
-    slate_zone["bos_swing_price"]      = fresh_zone["bos_swing_price"]
-    # Per-OB BOS count — refresh from the fresh scan so a re-detected OB keeps an
-    # accurate, current per-event count (and a refreshed zone never loses the
-    # field, which would silently re-introduce the legacy fallback).
-    slate_zone["bos_sequence_count"]   = fresh_zone.get(
-        "bos_sequence_count", slate_zone.get("bos_sequence_count", 1))
-    slate_zone["break_quality"] = fresh_zone.get(
-        "break_quality", slate_zone.get("break_quality", {"tier": "marginal"}))
-    slate_zone["touches"]       = fresh_zone.get("touches", 0)
-    slate_zone["status_label"]  = fresh_zone.get("status", "Pristine")
-    slate_zone["h1_atr"]        = fresh_zone.get("h1_atr", 0.0)
-    slate_zone["current_price_at_scan"] = current_price
-    slate_zone["distance_to_proximal_pips"] = dist_pips
-    slate_zone["fvg"]           = fresh_zone["fvg"]
-    # Sweep observation: refresh with the fresh observation. Original design
-    # was "snapshot, never re-evaluate", but that assumed df-frame stability
-    # which doesn't hold. Sweep observation is deterministic given the leg,
-    # so re-observing each scan yields the same answer in stable conditions
-    # and self-corrects if yfinance revises wicks.
-    slate_zone["sweep_observed"] = fresh_zone.get(
-        "sweep_observed", slate_zone.get("sweep_observed", {"exists": False})
-    )
-    # Dealing range — refresh with the latest snapshot. Recomputed each scan
-    # by Phase 1 against its own H1 frame; Phase 2 consumes whatever this
-    # last write produced.
-    slate_zone["dealing_range"] = fresh_zone.get(
-        "dealing_range", slate_zone.get("dealing_range", {"valid": False})
-    )
-    # Tier / context refresh (BOS vs Range BOS may change if a later
-    # re-emission reclassifies the break against the H4 wall).
-    slate_zone["bos_tier"]      = fresh_zone.get("bos_tier", slate_zone.get("bos_tier", "BOS"))
-    slate_zone["broken_was_wall"] = fresh_zone.get("broken_was_wall",
-                                                    slate_zone.get("broken_was_wall", False))
-    slate_zone["reversal_pct"]  = fresh_zone.get("reversal_pct", slate_zone.get("reversal_pct"))
-    slate_zone["bos_timestamp"] = fresh_zone.get("bos_timestamp", slate_zone.get("bos_timestamp"))
-    # Two-OB role refreshed each scan — depends on current price relative
-    # to the OB's proximal_line. As price moves, OB2 may re-classify to OB1.
-    slate_zone["role"] = fresh_zone.get("role", slate_zone.get("role", "primary"))
+    z = Zone.from_dict(slate_zone)
+    refreshed = z.refresh(fresh_zone, ist_now, current_price, dp).to_dict()
+    slate_zone.clear()
+    slate_zone.update(refreshed)
 
 
 def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_pair, pair_type, pair_name=None):
