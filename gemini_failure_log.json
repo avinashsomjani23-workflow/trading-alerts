@@ -1,20 +1,5 @@
 [
   {
-    "ts": "2026-04-24T18:32:33.974759",
-    "pair": "USDJPY",
-    "reason": "no candidates field, attempt 3"
-  },
-  {
-    "ts": "2026-04-24T19:17:38.219733",
-    "pair": "NAS100",
-    "reason": "no candidates field, attempt 3"
-  },
-  {
-    "ts": "2026-04-24T19:32:36.045740",
-    "pair": "USDJPY",
-    "reason": "no candidates field, attempt 3"
-  },
-  {
     "ts": "2026-04-28T14:47:32.993410",
     "pair": "USDJPY",
     "reason": "no candidates field, attempt 3"
@@ -996,6 +981,21 @@
   },
   {
     "ts": "2026-06-16T23:37:18.875178",
+    "pair": "GOLD",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-17T00:36:19.255363",
+    "pair": "USDJPY",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-17T00:36:49.845776",
+    "pair": "USDCHF",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-17T00:37:20.538452",
     "pair": "GOLD",
     "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
   }
