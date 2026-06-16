@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-12T14:45:58.090120+00:00",
+  "updated_at": "2026-06-16T16:16:18.184024+00:00",
   "runs": [
     {
       "run_id": "h1only_20260301_20260331",
@@ -120,6 +120,68 @@
       },
       "notes": "",
       "recorded_at": "2026-05-25T15:53:22.995507+00:00"
+    },
+    {
+      "run_id": "h1only_20260512_20260522",
+      "start": "2026-05-12",
+      "end": "2026-05-22",
+      "group": 0,
+      "regime": "war",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 12,
+        "filled_trades": 4,
+        "win_rate_pct": 0.0,
+        "expectancy_r": -0.5,
+        "max_dd_r": 5.0,
+        "longest_losing_streak": 3,
+        "fill_rate_proximal_pct": 66.7,
+        "fill_rate_50pct_pct": 66.7,
+        "per_pair": [
+          {
+            "pair": "EURUSD",
+            "trades": 4,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -0.5,
+            "total_pnl_usd": -500.0
+          }
+        ],
+        "by_session": {
+          "Asia": {
+            "trades": 4,
+            "win_rate_pct": 50.0,
+            "expectancy_r": 0.488
+          },
+          "London": {
+            "trades": 3,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -0.333
+          },
+          "NY": {
+            "trades": 2,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
+          }
+        },
+        "score_buckets": [
+          {
+            "score_bucket": "4-5",
+            "trades": 2,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -0.5
+          },
+          {
+            "score_bucket": "7+",
+            "trades": 2,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -0.5
+          }
+        ],
+        "score_verdict": "BROKEN \u2014 score does not predict outcome"
+      },
+      "notes": "",
+      "recorded_at": "2026-06-16T16:16:18.183501+00:00"
     },
     {
       "run_id": "h1only_20260609_20260612",
