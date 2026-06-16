@@ -1,0 +1,39 @@
+name: Tests
+
+# Runs automatically on every push and pull request so a regression is caught
+# without anyone remembering to run anything by hand. These are the offline
+# safety nets — no network, no secrets, no yfinance. Fast (seconds).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        # Only what the offline tests need. The structure golden harness reads
+        # committed JSON fixtures (parquet cache is NOT used at test time), so
+        # pandas + pyarrow + numpy is the whole surface.
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy pyarrow
+
+      - name: Structure golden-file regression (compute_structure)
+        # Wave 2 item 2A. Asserts compute_structure output is byte-identical to
+        # the recorded golden for every committed fixture. This is the gate that
+        # must stay green before any structure-touching change.
+        run: python -m backtest.structure_golden.test_structure_golden
+
+      - name: Scan-log self-test (the gates catch planted failures)
+        run: python -m backtest.scanlog.test_scanlog_self

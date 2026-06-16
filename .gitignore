@@ -9,3 +9,4 @@ backtest/cache/
 backtest/results/
 backtest/logs/
 backtest/state/
+debug/
