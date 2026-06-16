@@ -10,7 +10,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - run: pip install yfinance pandas numpy matplotlib google-generativeai
+      - run: pip install yfinance pandas numpy matplotlib google-genai==2.8.0
       - env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}

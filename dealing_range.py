@@ -51,6 +51,8 @@ import json
 import os
 from typing import Optional, Tuple, List, Dict, Any
 
+import schema as _schema  # schema_version stamp/check for state files (Wave 1 item 1C)
+
 # --- Tunables (locked) -------------------------------------------------------
 
 # Single swing pool. lookback=3 swings drive the H1 trend, BOS, and CHoCH
@@ -130,20 +132,31 @@ def _ensure_state_dir():
 
 
 def load_state() -> Dict[str, Any]:
-    """Load structure_state.json. Returns empty dict on any failure."""
+    """Load structure_state.json. Returns empty dict on any failure.
+
+    Schema check (Wave 1 item 1C): a present-but-mismatched schema_version
+    raises SchemaVersionError (fail-loud) rather than letting a misread file
+    drive detection. A MISSING version is treated as v1 (deploy-safe). The
+    SchemaVersionError is deliberately NOT swallowed by the except below — it
+    must propagate so the scan stops red.
+    """
     try:
         with open(STATE_PATH, "r") as f:
             data = json.load(f)
-        if isinstance(data, dict):
-            return data
-        return {}
     except Exception:
         return {}
+    if not isinstance(data, dict):
+        return {}
+    return _schema.check(data, name="structure_state.json")
 
 
 def save_state(state: Dict[str, Any]) -> None:
-    """Atomic write: temp file then rename. Same pattern used elsewhere."""
+    """Atomic write: temp file then rename. Same pattern used elsewhere.
+
+    Stamps the current schema_version before writing (Wave 1 item 1C).
+    """
     _ensure_state_dir()
+    _schema.stamp(state)
     tmp = STATE_PATH + ".tmp"
     with open(tmp, "w") as f:
         json.dump(state, f, indent=2)

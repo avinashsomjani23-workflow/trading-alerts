@@ -43,3 +43,9 @@ jobs:
         # Zone.from_dict -> to_dict byte-identical, so the typed slate field
         # list can never silently drop a field.
         run: python test_zone_roundtrip.py
+
+      - name: Schema version stamp + fail-loud reader
+        # Wave 1 item 1C. Proves state files get stamped, a missing version is
+        # treated as v1 (deploy-safe), and a MISMATCHED version fails loud
+        # instead of silently mis-parsing.
+        run: python test_schema_version.py

@@ -167,8 +167,12 @@ FVG_NOISE_FLOOR_MULT = {
 # ---------------------------------------------------------------------------
 # PHASE 1 ONLY — H1 FVG window soft cap.
 FVG_WINDOW_H1_CANDLES  = 10
-# PHASE 2 ONLY — M15 FVG window soft cap.
-FVG_WINDOW_M15_CANDLES = 40
+# DEAD in the live H1-only system (Wave 1 item 1E). The M15 FVG window was a
+# Phase-2/M15 knob; the system is H1-only and nothing reads this constant
+# (verified: zero references outside this line). Kept (not deleted) because this
+# is a shared module — a label is zero-risk, a delete is not. Do NOT wire it
+# back without re-introducing an M15 timeframe first.
+FVG_WINDOW_M15_CANDLES = 40  # DEAD-M15 — unused in H1-only path
 
 # PHASE 1 ONLY — OB candidate range cap. Reject candles where (high - low) > N x ATR.
 # Filters volatility spikes (news bars) from being picked as OBs.
@@ -1850,15 +1854,13 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
     # "Premium / Discount" info row renders pd_position for trader judgement.
     # No 'pd' key is added to the breakdown so it never appears as a scored
     # 0-point line in the scorecard / phase2_sent ledger.
-    # Killzone — RE-ADDED to scoring 2026-06. There is NO hard killzone filter in
-    # the live path: alerts fire at all hours, so OB-in-killzone is a real, varying
-    # confluence (the old "the filter drops every off-session alert" comment was
-    # false and has been removed). We score the OB CANDLE's killzone membership —
-    # i.e. was the order block formed during institutional (London/NY) hours, a
-    # zone-quality signal. The entry/approach-time killzone is shown as INFO only
-    # (it flickers per scan and the limit's fill time is unknown), never scored.
-    kz_windows = pair_conf.get("killzones_utc") if pair_conf else None
-    bd["killzone"] = 1.0 if _ts_in_killzone(ob.get("ob_timestamp"), kz_windows) else 0.0
+    # Killzone — REMOVED FROM SCORING 2026-06-16 (was re-added 2026-06, now
+    # reverted). It is binary and easy to satisfy, so as a scored line it
+    # inflated the denominator without adding signal. No 'killzone' key is added
+    # to `bd`, so it never contributes to `total` or the scored ledger. The OB
+    # candle + approach-time killzone status is still shown in the email's
+    # Killzone info section (Phase2._ob_in_killzone_label + approach_label),
+    # computed there from the OB timestamp — single source, not duplicated here.
 
     # Macro removed from scorecard. Still surfaced as email-only context.
 
@@ -2000,61 +2002,35 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
                      f"Tested {touches}x since formation — zone fatigued (legacy)."))
 
     # 5. Premium / Discount — DISPLAY ONLY (no longer contributes points).
-    # Geometry (range, equilibrium, %) is surfaced for trader judgement.
-    # Tentative-range flag rendered when applicable.
-    dr_src = ""
-    dr_tag = ""
-    chop_tag = ""
-    if dealing_range and dealing_range.get("valid"):
-        src_raw = dealing_range.get("source", "structural")
-        if "fallback" in src_raw:
-            src_label = "FALLBACK — no recent BOS/CHoCH"
-        elif "tentative" in src_raw:
-            src_label = "tentative — one wall not yet swing-confirmed"
-        elif "structural" in src_raw:
-            src_label = "structural"
-        elif "legacy" in src_raw:
-            src_label = "legacy window"
-        else:
-            src_label = src_raw
-        dr_src = (f"Range: {dealing_range['range_low']:.{dp}f}"
-                  f"–{dealing_range['range_high']:.{dp}f}, "
-                  f"EQ: {dealing_range['equilibrium']:.{dp}f}, "
-                  f"src: {src_label}.")
-        if dealing_range.get("tentative"):
-            dr_tag = " (tentative range — wall pending swing confirmation)"
-    if dealing_range and dealing_range.get("chop_flag"):
-        chop_tag = (" \u26a0\ufe0f Rapid CHoCH within 5 candles of prior event — "
-                    "possible ranging conditions, low conviction.")
-
+    # ONE LINE ONLY (2026-06-16): %, a nuanced location label, and a buy-cheap /
+    # sell-expensive recommendation. Range/EQ/source and the tentative/chop tags
+    # were dropped from this line (they were noise the trader doesn't read).
     pd_pct_str = f"{pd_position * 100:.0f}%" if pd_position is not None else "n/a"
+    if not dealing_range or not dealing_range.get("valid") or pd_position is None:
+        rows.append(("Premium / Discount", 0.0, 0.0, "info",
+                      "Dealing range not available — location unknown (display only)."))
+    elif bias == "LONG":
+        if   pd_position <= 0.25: _zl, _vd = "very deep discount", "ideal for a long"
+        elif pd_position <= 0.35: _zl, _vd = "deep discount",      "good for a long"
+        elif pd_position <= 0.45: _zl, _vd = "mid discount",       "acceptable for a long"
+        elif pd_position <= 0.55: _zl, _vd = "equilibrium",        "neutral - no edge"
+        elif pd_position <= 0.65: _zl, _vd = "mid premium",        "poor for a long - buying rich"
+        else:                     _zl, _vd = "deep premium",       "avoid - chasing an expensive long"
+        rows.append(("Premium / Discount", 0.0, 0.0, "info",
+                      f"{pd_pct_str} of dealing range - {_zl} ({_vd})."))
+    else:
+        if   pd_position >= 0.75: _zl, _vd = "very deep premium", "ideal for a short"
+        elif pd_position >= 0.65: _zl, _vd = "deep premium",      "good for a short"
+        elif pd_position >= 0.55: _zl, _vd = "mid premium",       "acceptable for a short"
+        elif pd_position >= 0.45: _zl, _vd = "equilibrium",       "neutral - no edge"
+        elif pd_position >= 0.35: _zl, _vd = "mid discount",      "poor for a short - selling cheap"
+        else:                     _zl, _vd = "deep discount",     "avoid - chasing a cheap short"
+        rows.append(("Premium / Discount", 0.0, 0.0, "info",
+                      f"{pd_pct_str} of dealing range - {_zl} ({_vd})."))
 
-    if not dealing_range or not dealing_range.get("valid"):
-        rows.append(("Premium / Discount", 0.0, 0.0, "info",
-                      f"Dealing range not available — skipped (display only).{chop_tag}"))
-    else:
-        if bias == "LONG":
-            zone_label = ("very deep discount" if pd_position is not None and pd_position <= 0.25
-                          else "deep discount"  if pd_position is not None and pd_position <= 0.35
-                          else "mid discount"   if pd_position is not None and pd_position <= 0.45
-                          else "above equilibrium")
-        else:
-            zone_label = ("very deep premium" if pd_position is not None and pd_position >= 0.75
-                          else "deep premium"  if pd_position is not None and pd_position >= 0.65
-                          else "mid premium"   if pd_position is not None and pd_position >= 0.55
-                          else "below equilibrium")
-        rows.append(("Premium / Discount", 0.0, 0.0, "info",
-                      f"H1 OB proximal at {pd_pct_str} of H1 dealing range ({zone_label}). {dr_src}{dr_tag}{chop_tag}"))
-    
-    # 6. Killzone — OB formed during the pair's institutional killzone (max 1).
-    # Re-added to scoring 2026-06 (no hard killzone filter exists, so this varies).
-    kz = breakdown.get("killzone", 0.0)
-    if kz >= 1.0:
-        rows.append(("Killzone", int(kz), 1, "ok",
-                     "OB formed inside a killzone window — institutional hours."))
-    else:
-        rows.append(("Killzone", int(kz), 1, "warn",
-                     "OB formed outside killzone hours."))
+    # Killzone — REMOVED from the scorecard 2026-06-16 (no longer scored). The
+    # OB-candle + approach-time killzone status is shown in the email's Killzone
+    # info section instead, so it is no longer rendered as a scorecard row here.
 
     return rows
 

@@ -6,12 +6,14 @@ import smtplib
 import logging
 import os
 import time
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 import smc_detector
 import dealing_range
 import h4_range  # H4-derived dealing range (built from H1, mapped onto H1)
 import charts  # shared H1 chart style engine (Wave 2 item 2C)
 from zone import Zone  # typed slate zone — single slate field definition (Wave 2 item 2B)
+import schema as _schema  # schema_version stamp/check for state files (Wave 1 item 1C)
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -55,8 +57,7 @@ EMAIL_CONFIG = {
 }
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+_gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 # ---------------------------------------------------------------------------
 # ZONE IDENTITY THRESHOLDS — price-range overlap matching (not string match)
@@ -894,6 +895,19 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         except Exception as _dr_snap_err:
             logging.warning(f"[dealing_range] OB snapshot failed: {_dr_snap_err}")
             dealing_range_snapshot = {'valid': False, 'source': 'snapshot_error'}
+
+        # COUNTER-GATE (Wave 1 item 1E) — the get_dealing_range legacy
+        # fixed-lookback branch (DEALING_RANGE_LOOKBACK_H1) only fires when H4
+        # structure state is missing; it returns source='legacy_window_<N>h'.
+        # We log a hit here (Phase-1-only call site — NOT in the backtest's
+        # scoring path, so this stays side-effect-free for the backtest) so the
+        # 30-day "did the fallback ever fire?" clock can run. If it logs zero
+        # hits over the window, the legacy branch + DEALING_RANGE_LOOKBACK_H1
+        # are safe to delete. Do NOT delete on inspection alone.
+        _dr_src = (dealing_range_snapshot or {}).get('source', '')
+        if isinstance(_dr_src, str) and _dr_src.startswith('legacy_window_'):
+            log_p1_degrade('dealing_range_legacy_fallback',
+                           pair=pair_name, source=_dr_src)
 
         # 'bos_tag' is the legacy field name for the structural event type
         # ('BOS' | 'CHoCH'). Kept for backwards compatibility with chart /
@@ -2846,15 +2860,15 @@ STRICT OUTPUT RULES:
 - Judgment only — never restate the card's metrics"""
 
     try:
-        model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
-            generation_config=genai.types.GenerationConfig(
+        response = _gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
                 temperature=0.3,
                 max_output_tokens=300,
-                thinking_config=genai.types.ThinkingConfig(thinking_budget=0)
+                thinking_config=genai_types.ThinkingConfig(thinking_budget=0)
             )
         )
-        response = model.generate_content(prompt)
         text = response.text.strip()
         if len(text) < 50:
             return _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr)
@@ -3138,14 +3152,21 @@ def get_today_ist_date_str():
 
 
 def load_slate():
-    """Load slate, return empty structure if missing or malformed."""
+    """Load slate, return empty structure if missing or malformed.
+
+    Schema check (Wave 1 item 1C): a present-but-mismatched schema_version on
+    the slate raises SchemaVersionError (fail-loud); a MISSING version is
+    treated as v1 (deploy-safe). The empty-structure fallback below only fires
+    on a truly malformed/absent file, not on a version mismatch.
+    """
     raw = load_json_safe(SLATE_FILE, {})
     if not isinstance(raw, dict) or "pairs" not in raw:
         return {"slate_date": None, "slate_started_iso": None, "pairs": {}}
-    return raw
+    return _schema.check(raw, name="active_obs.json")
 
 
 def save_slate(slate):
+    _schema.stamp(slate)  # stamp schema_version before write (Wave 1 item 1C)
     save_json_atomic(SLATE_FILE, slate)
 
 

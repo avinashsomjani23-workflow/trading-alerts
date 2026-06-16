@@ -23,6 +23,11 @@ import pandas as pd
 
 from backtest.scanlog import conditions as cond
 from backtest.scanlog.emitter import ScanLog
+# Single source of truth for which exit reasons never feed P&L. The reporting
+# layer strips these before building its scoreboards; the gate headline must
+# strip the identical set or G1 compares an all-rows sum against a
+# reason-excluded sum (same apples-to-oranges trap as _is_blocked).
+from backtest.h1_only_reporting import _is_real_filled
 
 
 PASS = "PASS"
@@ -75,13 +80,23 @@ def _is_blocked(t: Dict[str, Any]) -> bool:
                 or t.get("killzone_blocked"))
 
 
+def _is_counted(t: Dict[str, Any]) -> bool:
+    """A trade row that feeds the reporting headline: not blocked (news/IST/
+    killzone) AND a real, resolved fill (excludes never_filled, timeout and
+    window_end -- the reporting layer's _EXCLUDE_REASONS). The gate must use
+    the identical row set as the reporting scoreboards, or G1 reconciles two
+    different sums."""
+    return (not _is_blocked(t)) and _is_real_filled(t)
+
+
 def _sum_r_realised_pnl(trades: List[Dict[str, Any]], risk_usd: float) -> float:
     """Headline from r_realised ONLY (G1/G6). Never reads pnl_usd or the
-    hypothetical tp1/tp2 columns. Blocked rows (news/IST/killzone) are
-    excluded to match the reporting layer's row set. This is the single
-    source of truth the reporting layer must reconcile against."""
+    hypothetical tp1/tp2 columns. Rows are restricted to the SAME set the
+    reporting layer aggregates: not blocked, and a resolved fill (never_filled
+    and timeout excluded). This is the single source of truth the reporting
+    layer must reconcile against."""
     return round(
-        sum(float(t.get("r_realised", 0.0)) for t in trades if not _is_blocked(t))
+        sum(float(t.get("r_realised", 0.0)) for t in trades if _is_counted(t))
         * risk_usd, 6)
 
 
@@ -230,7 +245,7 @@ def evaluate(
     # the recomputed headline does not silently equal the tp2 aggregate when
     # they should differ - i.e. we recompute independently and expose both.
     tp2_headline = round(
-        sum(float(t.get("r_if_exit_tp2", 0.0)) for t in trades if not _is_blocked(t))
+        sum(float(t.get("r_if_exit_tp2", 0.0)) for t in trades if _is_counted(t))
         * risk_usd, 6)
     gates.append(Gate(
         "G6", "headline recomputed from r_realised only; tp1/tp2 excluded",

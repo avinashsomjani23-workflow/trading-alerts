@@ -21,11 +21,23 @@ import pandas as pd
 # Aggregation helpers (used by summary.json + HTML)
 # ---------------------------------------------------------------------------
 
-# Trades to exclude from every aggregate. never_filled = limit never hit.
-# window_end / timeout = walk ran out of bars; trade unresolved, treat as
-# audit-only (RCA #5). These rows remain in CSV/Excel but never feed P&L,
-# win rate, expectancy, or any reported metric.
-_EXCLUDE_REASONS = {"never_filled", "timeout"}
+# Trades to exclude from every aggregate. These are NOT real wins or losses:
+#   never_filled = limit never hit, no position ever opened (r_realised = 0).
+#   timeout      = filled, then force-closed at the 48-bar hold cap with neither
+#                  SL nor TP touched -- a snapshot at an arbitrary clock moment.
+#   window_end   = filled, then force-closed because the BACKTEST DATA RAN OUT
+#                  before SL/TP/timeout -- the exit price is set by where the
+#                  data file ends, not by the market. Shift the data window and
+#                  the same trade gets a different P&L (or resolves for real).
+# Both timeout and window_end are unresolved positions closed at an arbitrary
+# close price: measurement artifacts, not edge. Folding them into the headline
+# would distort expectancy for reasons that have nothing to do with the system.
+# These rows REMAIN in CSV/Excel and in the exit-reason counts (so the trader
+# sees how many trades didn't resolve) but never feed P&L, win rate, expectancy,
+# or any reported metric. Audit-only, not hidden. (RCA #5; veteran SMC call
+# 2026-06-16.) This set is the single source of truth -- every "is this a real
+# resolved trade?" check in this module routes through _is_real_filled.
+_EXCLUDE_REASONS = {"never_filled", "timeout", "window_end"}
 
 
 def _is_real_filled(t: Dict[str, Any]) -> bool:
@@ -422,6 +434,38 @@ def _killzone_alignment_html(trades: List[Dict[str, Any]], r_col: str) -> str:
             f"{r['total_r']:+.1f}R",
         ], color=color)
     return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
+
+
+# FVG-staleness experiment (2026-06-16). Was a setup taken with a stale FVG
+# (gap already discharged on an earlier approach) worse than one with a fresh
+# gap? fvg_state is labelled in the simulator (_fvg_state). no_fvg is reported
+# but excluded from the fresh-vs-stale decision.
+_FVG_STATE_ORDER = ["fresh", "stale", "no_fvg"]
+
+
+def _fvg_state_table(trades: List[Dict[str, Any]], r_col: str
+                     ) -> List[Dict[str, Any]]:
+    """One row per FVG state: trades, win rate, avg R, total R. All from r_col."""
+    filled = [t for t in trades if _is_real_filled(t)]
+    if not filled:
+        return []
+    df = pd.DataFrame(filled)
+    if "fvg_state" not in df.columns or r_col not in df.columns:
+        return []
+    out = []
+    for bucket in _FVG_STATE_ORDER:
+        sub = df[df["fvg_state"] == bucket]
+        if sub.empty:
+            continue
+        wins = sub[sub[r_col] > 0]
+        out.append({
+            "bucket":       bucket,
+            "trades":       int(len(sub)),
+            "win_rate_pct": round(len(wins) / len(sub) * 100, 1) if len(sub) else 0,
+            "expectancy_r": round(float(sub[r_col].mean()), 3),
+            "total_r":      round(float(sub[r_col].sum()), 3),
+        })
+    return out
 
 
 def _killzone_alignment_losses_html(trades: List[Dict[str, Any]]) -> str:
@@ -1204,7 +1248,7 @@ def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
     if "pair" in df.columns and "r_realised" in df.columns:
         for pair, sub in df.groupby("pair"):
             n_alerts = len(sub)
-            filled_sub = sub[~sub["exit_reason"].isin(["never_filled","window_end","timeout"])]
+            filled_sub = sub[~sub["exit_reason"].isin(_EXCLUDE_REASONS)]
             n_filled = len(filled_sub)
             total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
             wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
@@ -1253,7 +1297,7 @@ def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
         hour_data = []
         for hour, sub in grouped:
             n_alerts = len(sub)
-            filled_sub = sub[~sub["exit_reason"].isin(["never_filled","window_end","timeout"])]
+            filled_sub = sub[~sub["exit_reason"].isin(_EXCLUDE_REASONS)]
             n_filled = len(filled_sub)
             total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
             wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
@@ -1337,7 +1381,7 @@ def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
         hour_data = []
         for hour, sub in grouped:
             n_alerts = len(sub)
-            filled_sub = sub[~sub["exit_reason"].isin(["never_filled","window_end","timeout"])]
+            filled_sub = sub[~sub["exit_reason"].isin(_EXCLUDE_REASONS)]
             n_filled = len(filled_sub)
             total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
             wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
@@ -1379,7 +1423,7 @@ def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
     if "pair" in df.columns and "r_realised" in df.columns:
         for pair, sub in df.groupby("pair"):
             n_alerts = len(sub)
-            filled_sub = sub[~sub["exit_reason"].isin(["never_filled","window_end","timeout"])]
+            filled_sub = sub[~sub["exit_reason"].isin(_EXCLUDE_REASONS)]
             n_filled = len(filled_sub)
             total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
             wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0

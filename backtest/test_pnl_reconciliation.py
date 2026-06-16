@@ -77,8 +77,14 @@ def _failed(msg):
 def test_headline_matches_per_trade_sum():
     print("\n== test_headline_matches_per_trade_sum ==")
 
-    # 3 proximal trades: +2R, -1R, +0.5R. Expected P&L = +1.5R * 250 = $375.
-    # 2 50pct trades: +1R, -1R. Expected P&L = 0R * 250 = $0.
+    # Headline = realised P&L of RESOLVED trades only. never_filled, timeout
+    # and window_end are unresolved (force-closed at an arbitrary price) and
+    # are excluded from every aggregate -- audit-only (_EXCLUDE_REASONS).
+    #
+    # Proximal: +2R (tp2), -1R (sl), and a +0.5R window_end that MUST be
+    #   dropped. Resolved headline = +2R -1R = +1R * 250 = $250.
+    #   If window_end were counted (the pre-2026-06-16 bug) it would be $375.
+    # 50pct: +1R (tp1), -1R (sl). Resolved headline = 0R * 250 = $0.
     trades = [
         _mk_trade("EURUSD", "proximal", 2.0,  1.0, 2.0, exit_reason="tp2"),
         _mk_trade("EURUSD", "proximal", -1.0, -1.0, -1.0, exit_reason="sl"),
@@ -101,13 +107,29 @@ def test_headline_matches_per_trade_sum():
         sb_prox = s["scoreboards"]["proximal_realised"]
         sb_mid  = s["scoreboards"]["fifty_pct_realised"]
 
-        if sb_prox["total_pnl_usd"] != 375.0:
-            _failed(f"prox headline expected $375, got ${sb_prox['total_pnl_usd']}")
-        _passed(f"proximal headline = ${sb_prox['total_pnl_usd']}")
+        # $250, not $375 -- the window_end row is excluded from the headline.
+        if sb_prox["total_pnl_usd"] != 250.0:
+            _failed(f"prox headline expected $250 (window_end excluded), "
+                    f"got ${sb_prox['total_pnl_usd']}")
+        _passed(f"proximal headline = ${sb_prox['total_pnl_usd']} (window_end excluded)")
+
+        # window_end must NOT inflate the trade count either: 2 resolved, not 3.
+        if sb_prox["trades"] != 2:
+            _failed(f"prox trade count expected 2 (resolved only), "
+                    f"got {sb_prox['trades']}")
+        _passed(f"proximal trade count = {sb_prox['trades']} (resolved only)")
 
         if sb_mid["total_pnl_usd"] != 0.0:
             _failed(f"50pct headline expected $0, got ${sb_mid['total_pnl_usd']}")
         _passed(f"50pct headline = ${sb_mid['total_pnl_usd']}")
+
+        # window_end stays VISIBLE in the exit-reason counts -- audit-only,
+        # not hidden. The veteran's requirement: trader must see how many
+        # trades didn't resolve before trusting the win rate.
+        ec = s["exit_reason_counts_proximal"]
+        if ec.get("window_end", 0) != 1:
+            _failed(f"window_end must remain counted for audit, got {ec}")
+        _passed(f"window_end still visible in exit-reason counts ({ec.get('window_end')})")
 
 
 # ---------------------------------------------------------------------------

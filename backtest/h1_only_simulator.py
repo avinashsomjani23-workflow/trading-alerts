@@ -190,6 +190,56 @@ def _event_label(bos_tag: Optional[str], bos_tier: Optional[str]) -> str:
     return f"{tier} {tag}"
 
 
+# FVG re-arm distance for fresh-vs-stale classification. Mirrors
+# REARM_EXTRA_ATR in replay_engine.py (=1.0); that one is defined inside a
+# function so it can't be imported cleanly. Same number, anchored to the FVG
+# band here instead of the OB proximal. If the replay constant changes, change
+# this too.
+_FVG_REARM_ATR = 1.0
+
+
+def _fvg_state(ob: Dict[str, Any], df_h1: pd.DataFrame,
+               alert_ts: pd.Timestamp) -> str:
+    """Classify the FVG at trigger time: 'fresh' | 'stale' | 'no_fvg'.
+
+    no_fvg : no FVG ever formed in this zone -> excluded from the headline.
+    fresh  : FVG still live at trigger (incl. partial), OR it was filled during
+             THIS approach to the zone. First-approach pass-through is fresh:
+             price must cross the FVG to reach the OB, so a same-visit fill is
+             healthy, not stale.
+    stale  : FVG was fully filled, price then LEFT the FVG band (cleared it by
+             the re-arm distance) and RETURNED to trigger. The imbalance was
+             already discharged on an earlier trip.
+
+    Anchored to the FVG band (ghost_top/ghost_bottom), NOT the OB proximal, so a
+    fill-then-reverse-before-the-OB-then-return is correctly stale. Uses
+    mitigated_at_iso plumbed from smc_detector. Never raises -> defaults 'fresh'
+    (the non-penalising bucket) on any missing data."""
+    fvg = ob.get("fvg") or {}
+    if not fvg.get("was_detected"):
+        return "no_fvg"
+    if fvg.get("exists"):
+        return "fresh"                      # live at trigger (incl. partial)
+    fill_iso = fvg.get("mitigated_at_iso")
+    top, bot = fvg.get("ghost_top"), fvg.get("ghost_bottom")
+    if not fill_iso or top is None or bot is None:
+        return "fresh"                      # filled but no timing/band -> don't penalise
+    try:
+        fill_ts = pd.Timestamp(fill_iso)
+        if fill_ts.tzinfo is None:
+            fill_ts = fill_ts.tz_localize("UTC")
+        rearm = _FVG_REARM_ATR * float(ob.get("h1_atr") or 0.0)
+        win = df_h1.loc[fill_ts:alert_ts]   # bars from fill up to the trigger
+        if win.empty:
+            return "fresh"
+        # Did price pull clear of the FVG band by the re-arm distance after
+        # filling it? Above the top or below the bottom counts as "left".
+        left = ((win["Low"] > top + rearm) | (win["High"] < bot - rearm)).any()
+        return "stale" if bool(left) else "fresh"
+    except Exception:
+        return "fresh"
+
+
 def _ob_age_h1_bars(ob: Dict[str, Any], df_h1: pd.DataFrame,
                     alert_ts: pd.Timestamp) -> int:
     """How many H1 bars old is this OB at the alert moment?"""
@@ -626,6 +676,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "bos_tag":       bos_tag,
         "bos_tier":      bos_tier,
         "fvg_present":   bool((ob.get("fvg") or {}).get("exists")),
+        # fresh / stale / no_fvg — was the FVG already discharged on an earlier
+        # approach before this trigger? Feeds the FVG-staleness breakdown.
+        "fvg_state":     _fvg_state(ob, df_h1, alert_ts),
         "sweep_present": bool((ob.get("sweep_observed") or {}).get("exists")),
         # Session breakdown — OB formation vs fill, plus killzone alignment.
         # Fill session is the more honest label (when capital was actually

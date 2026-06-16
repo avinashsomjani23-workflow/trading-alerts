@@ -61,14 +61,17 @@ def scorecard_real_max(pair_conf):
 
     Components (mirrors smc_detector.run_scorecard):
       Structure 4 | Sweep 1 (non-JPY forex, presence-only) or 3 (JPY/Gold/NAS,
-      quality-graded) | FVG 2 | Freshness 1 | Killzone 1.
-    So non-JPY forex tops out at 9, JPY/Gold/NAS at 11. (Killzone +1 re-added
-    to scoring 2026-06.) The per-line math in the email body always shows this
-    true max; the headline normalises to /10 for cross-instrument comparison.
+      quality-graded) | FVG 2 | Freshness 1.
+    So non-JPY forex tops out at 8, JPY/Gold/NAS at 10. (Killzone removed from
+    scoring 2026-06-16 — now info-only in the Killzone section, not a scored
+    line. It's binary and easy to satisfy, so it inflated the denominator
+    without adding signal.) The per-line math in the email body always shows
+    this true max; the headline normalises to /10 for cross-instrument
+    comparison.
     """
     name = pair_conf.get('name', '') if pair_conf else ''
     ptype = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
-    return 9 if (ptype == 'forex' and 'JPY' not in name) else 11
+    return 8 if (ptype == 'forex' and 'JPY' not in name) else 10
 
 
 def normalized_score(raw, pair_conf):
@@ -83,11 +86,14 @@ def normalized_score(raw, pair_conf):
     return round(float(raw) / real_max * 10.0, 1)
 
 
-# Hysteresis thresholds for re-emailing the same zone. Asymmetric on purpose:
-# losing a confluence is a stronger reason to re-alert than gaining one.
-# A zone wobbling 6.4 <-> 7.0 doesn't cross either threshold and stays silent.
-SCORE_REEMAIL_UP_THRESHOLD   = 0.7   # current >= prior + 0.7 -> re-email up
-SCORE_REEMAIL_DOWN_THRESHOLD = 0.5   # current <= prior - 0.5 -> re-email down
+# Re-email thresholds for the same zone (2026-06-16): symmetric +-1.0 on the
+# RAW score (the /8, /10 scale, NOT the normalised /10). The old asymmetric
+# 0.7/0.5 band let tiny yfinance-driven wobbles trigger update emails — too much
+# spam. Now a zone must gain a FULL point or lose a FULL point before we re-email
+# it; anything smaller stays silent. Compared on raw score in
+# hysteresis_should_reemail's caller (current_score_raw vs prior_score_raw).
+SCORE_REEMAIL_UP_THRESHOLD   = 1.0   # current >= prior + 1.0 -> re-email up
+SCORE_REEMAIL_DOWN_THRESHOLD = 1.0   # current <= prior - 1.0 -> re-email down
 
 # Re-entry flicker guard. A zone that leaves proximity and returns re-emails
 # (plain TRADE READY — price has come back). But a zone hovering on the
@@ -739,8 +745,10 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
     """H1 zoomed entry chart. Replaces the legacy M15 approach chart.
 
     Visual choices (per trader preference 2026-05-26, window 30 -> 60 on
-    2026-06-04 for more approach context):
-      - 60 H1 candles, focused on the OB and approach to it (long candles).
+    2026-06-04, then -> 45 on 2026-06-16 because 60 candles squeezed into the
+    fixed-width figure made bodies unreadably small, especially on a strong
+    trend like NAS100 where the y-axis also stretches to fit far TP levels):
+      - 45 H1 candles, focused on the OB and approach to it (long candles).
       - Wider figsize relative to candle count -> visibly larger bodies.
       - Same colour palette as the wide H1 context chart for consistency.
       - Renders OB band, entry/SL/TP1/TP2 lines, current price line,
@@ -750,7 +758,11 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
     """
     try:
         dp = pair_conf.get("decimal_places", 5)
-        tail_n = 60
+        # SINGLE window for this chart. Was a 60/30 bug: candles drew from the
+        # 60-tail but window_start was then reset to a 30-tail below, so OB
+        # outline, FVG box and swing/X markers were positioned 30 candles off
+        # their candles. One tail_n now drives candles AND every marker offset.
+        tail_n = 45
         df_plot = df_h1.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(tail_n).copy().reset_index(drop=True)
         n = len(df_plot)
         if n < 5:
@@ -773,10 +785,6 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
             body_w=charts.BODY_W_ZOOM, wick_w=charts.WICK_W_ZOOM,
             body_alpha=charts.BODY_ALPHA_ZOOM, butt_cap=False,
         )
-
-        tail_n = 30
-        full_n = len(df_h1)
-        window_start = max(0, full_n - tail_n)
 
         proximal = float(ob.get('proximal_line', 0))
         distal   = float(ob.get('distal_line', 0))
@@ -875,10 +883,24 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
         _p2_swing_markers(ax, df_h1, window_start, n, pair_conf,
                           float(df_plot['Low'].min()), float(df_plot['High'].max()))
 
-        # Y-axis padded around the most relevant levels.
-        y_min, y_max = float(df_plot['Low'].min()), float(df_plot['High'].max())
-        for val in (zone_lo, zone_hi, entry_p, sl_p, tp1_p, tp2_p):
+        # Y-axis (2026-06-16): anchor on the candles + the ENTRY-relevant levels
+        # (zone, entry, SL). TP1/TP2 are NOT force-included — on a strong trend
+        # they sit far from price and, if included, compress every candle into a
+        # flat line (the NAS100 "tiny candles" complaint). A far TP is allowed to
+        # fall off-chart; its right-edge price label still shows. We only let a
+        # TP stretch the axis if it's within ~50% beyond the candle range, so a
+        # near TP still frames naturally.
+        cl, ch = float(df_plot['Low'].min()), float(df_plot['High'].max())
+        y_min, y_max = cl, ch
+        for val in (zone_lo, zone_hi, entry_p, sl_p):
             if val > 0:
+                y_min = min(y_min, val)
+                y_max = max(y_max, val)
+        candle_span = max(ch - cl, 1e-9)
+        tp_limit_hi = y_max + candle_span * 0.5
+        tp_limit_lo = y_min - candle_span * 0.5
+        for val in (tp1_p, tp2_p):
+            if val > 0 and tp_limit_lo <= val <= tp_limit_hi:
                 y_min = min(y_min, val)
                 y_max = max(y_max, val)
         pad = (y_max - y_min) * 0.10
@@ -1266,7 +1288,6 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     bos_tier = ob.get('bos_tier', 'BOS')
     # H1-only migration (2026-05-26): every pair routes through the limit
     # branch. The legacy ltf_choch (M5 CHoCH) approach block is retired.
-    action_word = "SELL LIMIT" if bias == "SHORT" else "BUY LIMIT"
 
     # Setup badge — the mentor's verdict, rendered FIRST so it frames everything
     # below it. Green star for a high-conviction named pattern; red warning for a
@@ -1289,17 +1310,9 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     else:
         setup_badge_html = ""
 
-    tp2_val = levels.get('tp2')
-    tp2_html = f"TP2: {tp2_val:,.{dp}f} &nbsp;|&nbsp; " if tp2_val is not None else ""
-    action_block = f"""
-        <div style="background:#27ae60;padding:14px 18px;border-radius:10px;margin-bottom:14px;">
-            <p style="color:white;font-size:15px;font-weight:bold;margin:0;">{action_word} at {levels.get('entry'):,.{dp}f}</p>
-            <p style="color:white;margin:4px 0 0;font-size:12px;">
-                SL: {levels.get('sl'):,.{dp}f} &nbsp;|&nbsp;
-                TP1: {levels.get('tp1'):,.{dp}f} &nbsp;|&nbsp;
-                {tp2_html}Risk: {dollar_risk_str}
-            </p>
-        </div>"""
+    # Entry/SL/TP banner removed 2026-06-16 (trader reads levels off the charts
+    # + platform, not this text block; the numbers can differ slightly from the
+    # broker feed). Levels still drive the charts and subject line.
 
     # Body shows the REAL math: total max is 8 for non-JPY forex (sweep is
     # presence-only), 10 elsewhere (sweep quality-graded). Mirrors
@@ -1468,7 +1481,6 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         </div>
         <div style="padding:14px 18px;">
             {setup_badge_html}
-            {action_block}
             {trend_banner_html}
             {distance_html}
             {context_html}
@@ -1476,7 +1488,6 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             {scorecard_html}
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">H1 Context</div>
             {h1_chart_block}
-            {_chart_legend_html(bos_tag, bos_tier)}
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">H1 Zoomed - Entry Zone</div>
             {m15_chart_block}
             {_chart_legend_html(bos_tag, bos_tier)}
@@ -1517,14 +1528,18 @@ def build_sweep_breakdown_html(data, dp):
     hrs_str = f"{hrs_before:.0f}h before OB" if hrs_before is not None else "n/a"
     sweep_price_str = f"{sweep_price:.{dp}f}" if sweep_price is not None else "n/a"
 
+    # Plain-English rejection label (2026-06-16). "wick:body ratio" = how many
+    # times longer the candle's rejection wick is than its body. A long wick vs.
+    # a small body = price was pushed back hard = a clean rejection. We fold the
+    # measured ratio straight into the sentence (no separate jargon bucket).
     if rej_score >= 1.0:
-        rej_label = "textbook rejection (wick:body > 3)"
+        rej_label = f"textbook rejection — wick is {wb_ratio:.1f}x the candle body (3x+ is textbook)"
     elif rej_score >= 0.66:
-        rej_label = "strong rejection (wick:body 2-3)"
+        rej_label = f"strong rejection — wick is {wb_ratio:.1f}x the candle body (want 2x+)"
     elif rej_score >= 0.33:
-        rej_label = "weak rejection (wick:body 1-2)"
+        rej_label = f"weak rejection — wick is only {wb_ratio:.1f}x the candle body (want 2x+ for a clean one)"
     else:
-        rej_label = "no real rejection (wick:body < 1)"
+        rej_label = f"no real rejection — wick is only {wb_ratio:.1f}x the candle body (body dominates)"
 
     if eq_matches >= 2:
         eq_label = f"{eq_matches} equal levels matched"
@@ -1555,7 +1570,7 @@ def build_sweep_breakdown_html(data, dp):
         <div style="color:#eee;font-weight:bold;margin-bottom:6px;letter-spacing:0.5px;">SWEEP QUALITY BREAKDOWN</div>
         <div>{presence_icon} <b style="color:#eee;">Presence:</b> {base:.2f}/1.5 &middot; {sweep_tf} sweep at {sweep_price_str}, {hrs_str}</div>
         <div>{eq_icon} <b style="color:#eee;">Equal Levels:</b> {eq_score:.2f}/0.5 &middot; {eq_label}</div>
-        <div>{rej_icon} <b style="color:#eee;">Rejection Quality:</b> {rej_score:.2f}/1.0 &middot; {rej_label} (ratio {wb_ratio:.1f})</div>
+        <div>{rej_icon} <b style="color:#eee;">Rejection Quality:</b> {rej_score:.2f}/1.0 &middot; {rej_label}</div>
         {location_html}
         <div style="margin-top:4px;color:#eee;"><b>Total: {total:.2f}/3.0</b></div>
     </div>"""

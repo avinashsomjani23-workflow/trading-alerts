@@ -244,6 +244,43 @@ def test_9_schema_conformance():
         sl.close()
 
 
+# ---------------------------------------------------------------------------
+# 10. Reconciliation row-set parity (regression for the Feb 2026 G1 failure).
+# A clean run that contains a timeout row: the reporting layer drops timeout
+# (and never_filled) from its headline, so the gate must drop them too. Before
+# the fix the gate summed the timeout row's r_realised while reporting did not,
+# producing a spurious G1 FAIL (headline != reported). The reported figure
+# here mirrors reporting: tp2 row only, timeout + never_filled excluded.
+# ---------------------------------------------------------------------------
+def test_10_timeout_rowset_parity():
+    print("\n== 10. never_filled/timeout/window_end excluded from headline -> G1 PASS ==")
+    with tempfile.TemporaryDirectory() as td:
+        sl = _begin(td)
+        idx = pd.DatetimeIndex([_utc("2024-09-01T00:00"), _utc("2024-09-01T01:00")])
+        _full_heartbeat(sl, "EURUSD", idx)
+        sl.note_post_warmup_bar("EURUSD", atr_is_nan=False)
+        # tp2 row counts; timeout row has real r_realised but is audit-only;
+        # never_filled is r=0. Reporting headline = tp2 only = 500.0.
+        good = _good_trade()
+        timeout = _good_trade(exit_reason="timeout", r_realised=0.376,
+                              r_if_exit_tp2=0.376,
+                              pnl_usd=round(0.376 * 250.0, 2))
+        window_end = _good_trade(exit_reason="window_end", r_realised=0.5,
+                                 r_if_exit_tp2=0.5,
+                                 pnl_usd=round(0.5 * 250.0, 2))
+        never = _good_trade(exit_reason="never_filled", r_realised=0.0,
+                            r_if_exit_tp2=0.0, fill_ts=None, pnl_usd=0.0)
+        res = G.evaluate(scanlog=sl,
+                         trades=[good, timeout, window_end, never], risk_usd=250.0,
+                         reported_headline_usd=round(2.0 * 250.0, 6),
+                         manifest_recheck_knobs={"EURUSD.atr_multiplier": 3.0})
+        g1 = next(g for g in res.gates if g.id == "G1")
+        (_ok if g1.verdict == "PASS" else _bad)(
+            f"G1 verdict = {g1.verdict} (observed {g1.observed})")
+        (_ok if res.passed else _bad)(f"overall = {res.overall} (exit {res.exit_code})")
+        sl.close()
+
+
 def main() -> int:
     test_1_heartbeat_gap()
     test_2_causality()
@@ -254,6 +291,7 @@ def main() -> int:
     test_7_determinism()
     test_8_clean_pass()
     test_9_schema_conformance()
+    test_10_timeout_rowset_parity()
     print("\n" + "=" * 50)
     if _FAILS:
         print(f"SELF-TEST FAILED: {len(_FAILS)} problem(s)")
