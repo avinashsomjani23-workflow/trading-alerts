@@ -110,8 +110,7 @@ def _regime_label_for(regime: str, start: datetime, end: datetime):
 
 def run(start: datetime, end: datetime, pair_names: list,
         regime: str = "auto", risk_usd: float = 250.0,
-        send_email: bool = False,
-        min_ob_range_atr: float = None) -> Path:
+        send_email: bool = False) -> Path:
     cfg = _load_config()
 
     # Regime: 'auto' (default) consults WAR_REGIME_WEEKS.json. Explicit
@@ -136,8 +135,7 @@ def run(start: datetime, end: datetime, pair_names: list,
 
     try:
         return _run_h1_only(cfg, start, end, pair_names, regime,
-                            risk_usd, send_email, out_dir, run_id,
-                            min_ob_range_atr=min_ob_range_atr)
+                            risk_usd, send_email, out_dir, run_id)
     except Exception as e:
         log_event("run_fatal", level="error", error=f"{type(e).__name__}: {e}")
         raise
@@ -147,7 +145,7 @@ def run(start: datetime, end: datetime, pair_names: list,
 
 
 def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
-                 out_dir, run_id, min_ob_range_atr=None):
+                 out_dir, run_id):
     """H1-only backtest run.
 
       - Skips M15 + M5 data fetches entirely (faster, no yfinance 60d issue).
@@ -252,7 +250,6 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         for event in replay_engine.replay_pair(
             pair_conf, df_h1,
             state=state, walk_start_ts=walk_start_ts, walk_end_ts=walk_end_ts,
-            min_ob_range_atr=min_ob_range_atr,
         ):
             if event["kind"] == "alert":
                 alerts_for_pair.append(event)
@@ -633,17 +630,13 @@ def main():
                     help="auto reads backtest/WAR_REGIME_WEEKS.json; explicit war/bau overrides")
     ap.add_argument("--risk-usd", type=float, default=250.0)
     ap.add_argument("--email", action="store_true", help="Send report email")
-    ap.add_argument("--min-ob-range-atr", type=float, default=None,
-                    help="OB candidate range floor in ATR units. Omit to use the "
-                         "live default (smc_detector.OB_MIN_RANGE_ATR_MULT). Set "
-                         "e.g. 0.3/0.4/0.5 to retune the OB-size gate per run.")
     args = ap.parse_args()
 
     start = _parse_date(args.start)
     end = _parse_date(args.end)
     pairs = [p.strip() for p in args.pairs.split(",") if p.strip()]
     out_dir = run(start, end, pairs, regime=args.regime, risk_usd=args.risk_usd,
-                  send_email=args.email, min_ob_range_atr=args.min_ob_range_atr)
+                  send_email=args.email)
 
     # Registry update + log persistence to GitHub happen INSIDE _run_h1_only,
     # before the email is sent. If we reached this point, both succeeded

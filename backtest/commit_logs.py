@@ -147,16 +147,45 @@ def commit_run_logs(
         last_err = push_proc.stderr.strip()[:300]
         print(f"[commit_logs] push attempt {attempt} failed -- {last_err}")
         _run(["git", "fetch", "origin", "main"], repo_root)
+
+        # A backtest run mutates many tracked files (state JSONs, source,
+        # engine artifacts) beyond the log files we staged. Those leftovers
+        # sit unstaged, and `git rebase` refuses to run with a dirty tree --
+        # "cannot rebase: You have unstaged changes". Hardcoding extra files
+        # into the staged set (the May 2026 fix for registry.json /
+        # BACKTEST_LOG.md) only patched the two files known at the time; any
+        # new unstaged file re-broke the push. Stash EVERYTHING unstaged
+        # before the rebase and restore it after, so the rebase is robust to
+        # any tracked-file churn the run produces. Our commit is already made,
+        # so it is unaffected by the stash.
+        stash = _run(["git", "stash", "push", "--include-untracked",
+                      "-m", "commit_logs-rebase-guard"], repo_root)
+        stashed = (stash.returncode == 0
+                   and "No local changes" not in stash.stdout)
+
         rebase = _run(["git", "rebase", "origin/main"], repo_root)
         if rebase.returncode != 0:
             rebase_err = rebase.stderr.strip()[:300]
             _run(["git", "rebase", "--abort"], repo_root)
+            if stashed:
+                _run(["git", "stash", "pop"], repo_root)
             raise LogCommitError(
                 f"rebase onto origin/main failed during push retry: "
                 f"{rebase_err}. Commit IS local but is not on GitHub. "
                 f"Resolve manually with: git fetch origin && "
                 f"git rebase origin/main && git push origin main"
             )
+
+        if stashed:
+            # Restore the run's working-tree changes. A pop conflict here does
+            # NOT fail the push -- our commit rebased cleanly and will push on
+            # the next loop. The leftover changes are run scratch, not the logs.
+            pop = _run(["git", "stash", "pop"], repo_root)
+            if pop.returncode != 0:
+                print(f"[commit_logs] stash pop conflict (non-fatal, "
+                      f"working-tree scratch only): {pop.stderr.strip()[:200]}")
+                _run(["git", "checkout", "--", "."], repo_root)
+                _run(["git", "stash", "drop"], repo_root)
 
     raise LogCommitError(
         f"push failed after {max_push_attempts} attempts. Last error: "

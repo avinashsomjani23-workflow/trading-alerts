@@ -129,7 +129,6 @@ def replay_pair(
     state: ReplayState,
     walk_start_ts: pd.Timestamp,
     walk_end_ts: pd.Timestamp,
-    min_ob_range_atr: Optional[float] = None,
 ) -> Iterator[Dict[str, Any]]:
     """Walk H1 bars in [walk_start_ts, walk_end_ts] and yield events.
 
@@ -255,7 +254,6 @@ def replay_pair(
                     events=events,
                     walls=walls,
                     pair_name=pair_name,
-                    min_ob_range_atr=min_ob_range_atr,
                 )
         except Exception as e:
             diag["radar_errors"] += 1

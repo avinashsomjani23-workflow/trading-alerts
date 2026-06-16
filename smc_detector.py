@@ -176,22 +176,12 @@ FVG_WINDOW_M15_CANDLES = 40
 # median minimum — that one rejected small candles; this rejects oversized.
 OB_MAX_RANGE_ATR_MULT = 2.0
 
-# PHASE 1 ONLY — OB candidate range FLOOR. Skip candles where (high - low) <
-# N x ATR. A candle smaller than this in the live volatility regime is too
-# small to be an institutional order block — it's a pause inside the leg, not
-# the origin of the displacement. Range-based (not body) so a small-body /
-# long-wick rejection candle still passes — its range is large.
-#
-# Why ATR-relative: a fixed pip floor punishes good OBs in volatile sessions
-# and passes junk in quiet ones. ATR self-scales to the regime, no maintenance.
-# Why range (high-low): gating on body would wrongly kill long-wick rejection
-# OBs (e.g. a 0.4-ATR body with a 1.3-ATR range is a clean OB).
-#
-# Start 0.3 (set 2026-06-12, trader decision). On the live book this removes
-# only the genuinely tiny candles (~0.27 ATR) and keeps every borderline one,
-# the minimal-regret cut. Injectable so the backtest can retune without editing
-# live behaviour. Tune from backtest.
-OB_MIN_RANGE_ATR_MULT = 0.3
+# NOTE: No OB minimum-size floor. A tried-and-removed 0.3x-ATR range floor
+# (2026-06-12) was reverted 2026-06-16 — the OB candle's size is not an SMC
+# quality signal; the displacement LEG it launches is. A small-but-clean
+# origin candle is a valid OB. The only two size filters are the doji floor
+# (is_valid_ob_candle, 20% body — no directional intent) and the oversized
+# cap (OB_MAX_RANGE_ATR_MULT — news/volatility bar). Do not re-add a min floor.
 
 # Touch re-arm distance (ATR units). A proximal touch is counted once per
 # APPROACH: after a touch, price must pull back away from the proximal by this
