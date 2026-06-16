@@ -228,17 +228,62 @@ missing tests, which 2A solves without a rewrite.
 ## 5. Wave 1 status carried in (so you don't re-do it)
 - **1A** (per-alert structured log = `backtest/scanlog/`): SHIPPED. Behaviour-neutral verified
   (`Sum r_realised` identical with/without instrumentation; self-tests pass).
+- **1B** (silent-degrade visibility): SHIPPED. Reused the existing heartbeat log-count pattern
+  (`smc_radar.log_p1_degrade()` → P1-owned `p1_degrade_log.json`; Phase2 `_count_recent_by_kind`
+  + heartbeat Rule 8). Wired at `p1_email_fail` (digest-send except), `walls_h4_error` and
+  `walls_structure_error` (`compute_pair_walls` excepts). Added the log to `run_phase1.yml`
+  commit list. `atr_fallback` + `state_push_fail` deliberately NOT done — see 1E note below.
 - **1D** (truth pass): SHIPPED. `TEMP DIAG`→`OB BUILD LEDGER` rename; `config.json _key_labels`.
-- **1B** (degradation counters): RECOMMENDED but not done. Smart version = REUSE the existing
-  `_count_recent_log_entries(logfile, window, now)` pattern in
-  `collect_heartbeat_diagnostics` (`Phase2_Alert_Engine.py:1741`) — it already counts
-  gemini/yf/chart/smtp. Add `*_failure_log.json` appends at the 4 silent degrade points
-  (`p1_email_fail`; `walls_cold_start` + `atr_fallback` in `compute_pair_walls`
-  `smc_radar.py:1047-1059` and `dealing_range._compute_atr` fallback `dealing_range.py:108`;
-  `state_push_fail` in the workflow push step) + 4 new heartbeat rules. Do NOT build the
-  handoff's separate "counters file" — that's a second mechanism beside the working one.
-- **1C** (schema_version): DEFER. Only worth doing WHOLE (stamp + fail-loud reader), and the
-  fail-loud half is a behaviour change needing sign-off. Stamping alone = a field nothing reads.
-- **1E** (dead-code deletes): DEFER. Needs days of live-log evidence; do not rush.
 - Open trading item: the OB min-range filter (`OB_MIN_RANGE_ATR_MULT=0.3`) was TRIED & REMOVED
   2026-06-16 (backtest showed zero trade change). Do NOT re-add. It is correctly absent.
+
+---
+
+## 6. Wave 1 LEFTOVERS — full actionable briefs (do these too; do NOT lose them)
+
+These two Wave-1 items were deferred, NOT cancelled. Full specs here so a fresh chat can do
+them without re-deriving. Both are independent of Wave 2 ordering.
+
+### 1C — `schema_version` on state files + tolerant reader
+
+**State of the problem:** No state file carries a version. Readers do `json.load` +
+`isinstance(dict)` only (verified: `dealing_range.load_state` `dealing_range.py:132`;
+`smc_radar.load_json_safe` `smc_radar.py:126`, `load_slate` `smc_radar.py:3072`;
+`Phase2.load_json` `Phase2_Alert_Engine.py:162`). If a schema ever changes shape, an old
+reader silently mis-parses instead of failing.
+
+**Two halves — they have DIFFERENT risk levels, do not conflate:**
+1. **Stamp (pure, safe):** writers add `"schema_version": 1` to the dict before save. Writers:
+   `dealing_range.save_state` (`:144`), `smc_radar.save_json_atomic` (`:119`) used by
+   `save_slate` (`:3080`), `Phase2.save_json` (`:170`).
+2. **Tolerant reader (BEHAVIOUR CHANGE → needs owner sign-off):** reader checks the version.
+   **CRITICAL edge: MISSING version must be treated as v1**, or the FIRST run after deploy
+   fails on every existing state file. Only a MISMATCH (present but ≠ expected) fails loud +
+   sends a failure email.
+
+**Decision already made:** the stamp alone is a field nothing reads = dead weight. This item is
+only worth doing as ONE package (stamp + fail-loud reader). So it is a **single sign-off
+conversation** — present both halves, get the owner's yes on the fail-loud behaviour, then land
+together. **Do NOT half-ship the stamp.** Maintenance: LOW (bump only on real schema changes).
+
+### 1E — immediate safe deletes / fences (counter-gated)
+
+**State of the problem:** dead or M5/M15 remnants linger in the shared modules. Verify each is
+truly dead BEFORE deleting; where unsure, fence + label instead of deleting.
+
+**Concrete targets (verified 2026-06-16):**
+- `FVG_WINDOW_M15_CANDLES = 40` (`smc_detector.py:171`) and any sibling M5/M15 constants — DEAD
+  in the H1-only path. **Fence + label** (do not delete — shared module; a label is no-risk).
+- `DEALING_RANGE_LOOKBACK_H1` (`smc_detector.py:137`) + the legacy fixed-lookback branch in
+  `get_dealing_range` (`smc_detector.py:326`, the fallback at `:405`
+  `lookback = DEALING_RANGE_LOOKBACK_H1.get(...)`). This is the legacy path used only when H4
+  state is missing. **Counter-gate then delete:** confirm via live logs (now possible — see the
+  1B `p1_degrade_log` and the scan logs) that the fallback has not fired in 30 days, THEN delete.
+- The Phase-2 `bos_timestamp`-missing fallback in the still-alive gate (legacy zones only).
+  **Counter-gate then delete** after one 15-day slate turnover shows zero use.
+- Any remaining stale `lows[-2]` remnants from the fixed BOS path (the BOS-on-close fix should
+  have removed these — verify none remain).
+
+**Method:** add a one-line degrade-log call (reuse `log_p1_degrade` from 1B) on each legacy
+branch you intend to delete; let it run live; delete only the branches that logged zero hits
+over the window. **Do not bulk-delete on inspection alone.** Maintenance: NONE once removed.
