@@ -536,9 +536,10 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     h1_atr_for_leg = smc_detector.compute_atr(df)
     current_price_now = float(C[-1]) if n > 0 else 0.0
 
-    # TEMP DIAG — remove with OB build verification.
-    # Per-event ledger of how each event was handled (built / dropped + gate).
-    # Surfaced via the result dict and persisted in the Phase 1 scan log.
+    # OB BUILD LEDGER — load-bearing (NOT temporary). Per-event record of how
+    # each event was handled (built / dropped + gate). Surfaced via the result
+    # dict, persisted in the Phase 1 scan log, AND read by
+    # _summarise_last_ob_attempt for the "Last OB attempt" digest line.
     ob_build_diagnostics = []
 
     def _diag_short(payload):
@@ -554,7 +555,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     if not events:
         return {"current_price": current_price_now,
                 "active_zones": [],
-                "ob_build_diagnostics": ob_build_diagnostics}  # TEMP DIAG
+                "ob_build_diagnostics": ob_build_diagnostics}  # OB BUILD LEDGER
 
     def _ts_for_idx(idx_val):
         if idx_val is None:
@@ -625,7 +626,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         if ev_type not in ('BOS', 'CHoCH'):
             continue
 
-        # TEMP DIAG — remove with OB build verification.
+        # OB BUILD LEDGER (load-bearing — not temporary).
         # Seed a diagnostic stub for this event; gates below fill drop_gate
         # and drop_detail when they reject, or flip outcome to 'built' on
         # success (post-build mitigation has its own pass below).
@@ -738,7 +739,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         ob_high = float(H[ob_idx])
         ob_low  = float(L[ob_idx])
         ob_proximal = ob_high if ev_dir == 'bullish' else ob_low
-        # TEMP DIAG — stamp resolved OB candle on the diag now that we have it.
+        # OB BUILD LEDGER — stamp resolved OB candle on the diag now that we have it.
         diag['ob_idx_ts'] = _ts_for_idx(ob_idx)
         diag['ob_proximal'] = ob_proximal
         diag['ob_distal'] = ob_low if ev_dir == 'bullish' else ob_high
@@ -887,11 +888,11 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'fvg':                fvg_dict,
             'sweep_observed':     sweep_obs,
             'dealing_range':      dealing_range_snapshot,
-            # TEMP DIAG — back-reference so post-build mitigation can amend
+            # OB BUILD LEDGER — back-reference so post-build mitigation can amend
             # the right diag entry. Stripped before returning.
             '_diag_ref':          diag,
         })
-        # TEMP DIAG — survived all construction gates; mark built. The
+        # OB BUILD LEDGER — survived all construction gates; mark built. The
         # post-build mitigation pass below may flip this back to 'dropped'
         # with drop_gate='post_build_mitigation'.
         diag['outcome'] = 'built'
@@ -917,7 +918,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             ob['status']  = 'Pristine' if touches == 0 else f'Tested ({touches}x proximal)'
             tracked_obs.append(ob)
         else:
-            # TEMP DIAG — flip the previously-built diag entry to dropped.
+            # OB BUILD LEDGER — flip the previously-built diag entry to dropped.
             _d = ob.get('_diag_ref')
             if _d is not None:
                 _d['outcome'] = 'dropped'
@@ -1021,12 +1022,12 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     # Strip the private dedupe hint before returning.
     for o in filtered:
         o.pop('_dedupe_thresh', None)
-        o.pop('_diag_ref', None)  # TEMP DIAG — internal back-reference
+        o.pop('_diag_ref', None)  # OB BUILD LEDGER — internal back-reference
 
     return {
         "current_price": cur_price,
         "active_zones": filtered,
-        "ob_build_diagnostics": ob_build_diagnostics,  # TEMP DIAG
+        "ob_build_diagnostics": ob_build_diagnostics,  # OB BUILD LEDGER
     }
 
 
@@ -3673,7 +3674,7 @@ def run_radar():
                                           walls=new_walls, pair_name=name)
         current_price = result["current_price"]
         fresh_zones   = result["active_zones"]
-        # TEMP DIAG — remove with OB build verification.
+        # OB BUILD LEDGER (load-bearing — feeds scan log + digest line).
         ob_build_diag = result.get("ob_build_diagnostics", [])
         h1_atr        = smc_detector.compute_atr(df) or 0.0
 
@@ -3743,7 +3744,7 @@ def run_radar():
             name, ist_now, current_price, new_walls,
             slate_zones, fresh_zones, drops_this_pair,
             placeholder_diagnostic=placeholder_diag,
-            ob_build_diagnostics=ob_build_diag,  # TEMP DIAG
+            ob_build_diagnostics=ob_build_diag,  # OB BUILD LEDGER
         ))
 
         # Audit log row per active zone post-reconcile.

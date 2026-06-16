@@ -84,5 +84,12 @@
     "news_blackout_hours_before": 2,
     "news_blackout_hours_after": 1,
     "zone_fatigue_threshold": 5
+  },
+  "_key_labels": {
+    "_comment": "Truth labels for the scoring keys (1D truth pass). Not read by any code; documents what each key actually drives in the LIVE H1 path.",
+    "scoring.hard_gates": "informational — only rr_minimum_1.5 is enforced live, and that gate is hardcoded in compute_phase2_levels, NOT read from this list",
+    "scoring.news_blackout_hours_before": "live-gate (informational banner) — read by Phase2 NEWS_BLACKOUT_BEFORE_H; flags the blackout window, does not suppress the alert",
+    "scoring.news_blackout_hours_after": "live-gate (informational banner) — read by Phase2 NEWS_BLACKOUT_AFTER_H; flags the blackout window, does not suppress the alert",
+    "scoring.zone_fatigue_threshold": "weekly-review-only — read by weekly_review.py FATIGUE_THRESH; NOT consumed in the live alert path"
   }
 }
