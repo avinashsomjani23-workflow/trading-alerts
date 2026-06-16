@@ -1,4 +1,6 @@
-import yfinance as yf
+# yfinance is imported lazily inside fetch_data (the only live-data path) so that
+# importing this module for its JSON/slate helpers does not require the network
+# library. Keeps the offline test suite (no yfinance installed) green.
 import pandas as pd
 import numpy as np
 import json
@@ -411,6 +413,7 @@ ZONE_ID_PREFIX = {
 # ---------------------------------------------------------------------------
 
 def fetch_data(ticker, interval, period, retries=2):
+    import yfinance as yf  # lazy: only the live-data path needs the network lib
     last_error = None
     last_age = None
 
