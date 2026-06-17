@@ -96,10 +96,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-17T11:35:46.882419",
+      "last_seen_ist": "2026-06-17T12:35:46.290127",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
-      "max_exit_distance": 0.2209930419921875,
+      "max_exit_distance": 0.2289886474609375,
       "bias": "SHORT",
       "pair": "USDJPY"
     },
@@ -522,7 +522,7 @@
         "freshness": 0
       },
       "alert_ist": "2026-06-16T09:35:39.932421",
-      "last_seen_ist": "2026-06-17T11:35:46.882419",
+      "last_seen_ist": "2026-06-17T12:35:46.290127",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -640,10 +640,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-16T20:35:42.759375",
-      "last_seen_ist": "2026-06-17T11:35:46.882419",
+      "last_seen_ist": "2026-06-17T12:35:46.290127",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
-      "max_exit_distance": 0.0019299983978271484,
+      "max_exit_distance": 0.0021300315856933594,
       "bias": "SHORT",
       "pair": "USDCHF"
     }
