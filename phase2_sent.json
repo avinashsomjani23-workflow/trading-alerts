@@ -483,7 +483,7 @@
         "killzone": 0.0
       },
       "alert_ist": "2026-06-16T00:35:45.748366",
-      "last_seen_ist": "2026-06-17T16:35:36.944828",
+      "last_seen_ist": "2026-06-17T17:35:41.535100",
       "last_email_day": "2026-06-16",
       "reentry_armed": true,
       "max_exit_distance": 0.004302620887756348,
@@ -640,12 +640,31 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-16T20:35:42.759375",
-      "last_seen_ist": "2026-06-17T16:35:36.944828",
+      "last_seen_ist": "2026-06-17T17:35:41.535100",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
       "bias": "SHORT",
       "pair": "USDCHF"
+    },
+    "USDJPY_SHORT_CHoCH_160.44_2026-06-11T16": {
+      "score_int": 8,
+      "score_raw": 8.8,
+      "score_high_water": 8.8,
+      "score_low_water": 8.8,
+      "breakdown": {
+        "structure": 4,
+        "sweep": 2.75,
+        "fvg": 1,
+        "freshness": 1
+      },
+      "alert_ist": "2026-06-17T17:35:41.535100",
+      "last_seen_ist": "2026-06-17T17:35:41.535100",
+      "last_email_day": "2026-06-17",
+      "reentry_armed": false,
+      "max_exit_distance": 0.0,
+      "bias": "SHORT",
+      "pair": "USDJPY"
     }
   }
 }
