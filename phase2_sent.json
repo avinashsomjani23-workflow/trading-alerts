@@ -637,10 +637,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-16T20:35:42.759375",
-      "last_seen_ist": "2026-06-17T22:35:42.641424",
+      "last_seen_ist": "2026-06-18T00:35:42.416645",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.004689991474151611,
       "bias": "SHORT",
       "pair": "USDCHF"
     },
@@ -675,10 +675,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-17T23:35:48.104285",
+      "last_seen_ist": "2026-06-18T00:35:42.416645",
       "last_email_day": "2026-06-17",
-      "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "reentry_armed": true,
+      "max_exit_distance": 0.0049512386322021484,
       "bias": "SHORT",
       "pair": "EURUSD"
     },
@@ -694,10 +694,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-17T23:35:48.104285",
+      "last_seen_ist": "2026-06-18T00:35:42.416645",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.002828836441040039,
       "bias": "SHORT",
       "pair": "NZDUSD"
     },
@@ -713,7 +713,7 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-17T23:35:48.104285",
+      "last_seen_ist": "2026-06-18T00:35:42.416645",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -732,12 +732,31 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-17T23:35:48.104285",
+      "last_seen_ist": "2026-06-18T00:35:42.416645",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
       "bias": "LONG",
       "pair": "USDCHF"
+    },
+    "EURUSD_LONG_CHoCH_1.1558_2026-06-11T16": {
+      "score_int": 7,
+      "score_raw": 7.0,
+      "score_high_water": 7.0,
+      "score_low_water": 7.0,
+      "breakdown": {
+        "structure": 4,
+        "sweep": 0.0,
+        "fvg": 2,
+        "freshness": 1
+      },
+      "alert_ist": "2026-06-18T00:35:42.416645",
+      "last_seen_ist": "2026-06-18T00:35:42.416645",
+      "last_email_day": "2026-06-17",
+      "reentry_armed": false,
+      "max_exit_distance": 0.0,
+      "bias": "LONG",
+      "pair": "EURUSD"
     }
   }
 }
