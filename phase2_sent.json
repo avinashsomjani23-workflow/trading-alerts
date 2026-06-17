@@ -96,10 +96,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-17T09:35:38.683461",
+      "last_seen_ist": "2026-06-17T10:35:36.302693",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.2209930419921875,
       "bias": "SHORT",
       "pair": "USDJPY"
     },
@@ -511,18 +511,18 @@
       "pair": "EURUSD"
     },
     "USDJPY_LONG_CHoCH_160.21_2026-06-15T13": {
-      "score_int": 3,
-      "score_raw": 3.0,
-      "score_high_water": 3.0,
-      "score_low_water": 3.0,
+      "score_int": 4,
+      "score_raw": 4.0,
+      "score_high_water": 4.0,
+      "score_low_water": 4.0,
       "breakdown": {
-        "structure": 3,
+        "structure": 4,
         "sweep": 0.0,
         "fvg": 0,
         "freshness": 0
       },
       "alert_ist": "2026-06-16T09:35:39.932421",
-      "last_seen_ist": "2026-06-17T09:35:38.683461",
+      "last_seen_ist": "2026-06-17T10:35:36.302693",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -640,10 +640,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-16T20:35:42.759375",
-      "last_seen_ist": "2026-06-17T09:35:38.683461",
+      "last_seen_ist": "2026-06-17T10:35:36.302693",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.0019299983978271484,
       "bias": "SHORT",
       "pair": "USDCHF"
     }
