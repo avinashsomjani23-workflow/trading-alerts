@@ -1,5 +1,5 @@
 {
-  "day_id": "2026-06-16",
+  "day_id": "2026-06-17",
   "zones": {
     "GOLD_SHORT_BOS_4259.9_2026-06-09T16": {
       "score_int": 6,
@@ -96,8 +96,8 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-17T00:35:37.043550",
-      "last_email_day": "2026-06-16",
+      "last_seen_ist": "2026-06-17T09:35:38.683461",
+      "last_email_day": "2026-06-17",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
       "bias": "SHORT",
@@ -522,10 +522,10 @@
         "freshness": 0
       },
       "alert_ist": "2026-06-16T09:35:39.932421",
-      "last_seen_ist": "2026-06-17T00:35:37.043550",
-      "last_email_day": "2026-06-16",
+      "last_seen_ist": "2026-06-17T09:35:38.683461",
+      "last_email_day": "2026-06-17",
       "reentry_armed": false,
-      "max_exit_distance": 0.259002685546875,
+      "max_exit_distance": 0.0,
       "bias": "LONG",
       "pair": "USDJPY"
     },
@@ -637,12 +637,11 @@
         "structure": 1,
         "sweep": 0.0,
         "fvg": 2,
-        "freshness": 1,
-        "killzone": 0.0
+        "freshness": 1
       },
       "alert_ist": "2026-06-16T20:35:42.759375",
-      "last_seen_ist": "2026-06-17T00:35:37.043550",
-      "last_email_day": "2026-06-16",
+      "last_seen_ist": "2026-06-17T09:35:38.683461",
+      "last_email_day": "2026-06-17",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
       "bias": "SHORT",
