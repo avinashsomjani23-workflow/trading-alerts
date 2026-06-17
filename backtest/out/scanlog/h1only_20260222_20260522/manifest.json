@@ -1,0 +1,32 @@
+{
+  "run_id": "h1only_20260222_20260522",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-06-17T04:21:38.005562+00:00",
+  "git_sha": "8b42057",
+  "risk_usd": 250.0,
+  "min_warmup_bars": 50,
+  "fetch_pad_days": 35,
+  "pairs": [
+    {
+      "name": "EURUSD",
+      "symbol": "EURUSD=X",
+      "requested_start": "2026-02-22T00:00:00+00:00",
+      "requested_end": "2026-05-22T00:00:00+00:00",
+      "served_start": "2026-01-19T00:00:00+00:00",
+      "served_end": "2026-05-22T00:00:00+00:00",
+      "n_bars": 2085,
+      "fingerprint": "d9545ec548ef1bcb",
+      "prox_cap_atr": 2.5
+    }
+  ],
+  "knobs": {
+    "EURUSD.atr_multiplier": 2.5,
+    "EURUSD.distal_invalidation_mode": "close",
+    "EURUSD.spread_pips": 2.0
+  },
+  "versions": {
+    "python": "3.14.5",
+    "pandas": "3.0.3",
+    "yfinance": "1.3.0"
+  }
+}
