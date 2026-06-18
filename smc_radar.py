@@ -2502,7 +2502,8 @@ def build_dropped_zone_line(sz, name, dp):
         "structure_supplanted": "replaced by fresher structure (same leg)",
         "aged_out_of_window": f"OB older than {OB_MAX_AGE_DAYS} days — retired",
         "data_unavailable": "pair fetch failed — zone unverifiable",
-        "data_stale": "yfinance data stale — zone unverifiable"
+        "data_stale": "yfinance data stale — zone unverifiable",
+        "gap_open_event": "invalidated — BOS/CHoCH fired on a gap-open candle (weekend/holiday gap, not a real displacement)",
     }
     reason_text = reason_map.get(sz.get("drop_reason", ""), sz.get("drop_reason", "unknown"))
     direction = "Bullish" if sz['direction'] == 'bullish' else "Bearish"
@@ -2558,6 +2559,7 @@ _INVALIDATION_REASON_LONG = {
     "aged_out_of_window":      f"OB older than {OB_MAX_AGE_DAYS} days — auto-retired",
     "data_unavailable":        "pair data feed failed — could not verify the zone",
     "data_stale":              "yfinance data went stale — could not verify the zone",
+    "gap_open_event":          "the BOS/CHoCH candle opened with a gap past the broken swing — weekend or holiday gap, not a real displacement",
 }
 
 
@@ -3099,7 +3101,7 @@ def append_audit_log(zones_this_scan, ist_now):
 #         {
 #           "zone_id": "EUR01",
 #           "status": "active" | "dropped",
-#           "drop_reason": null | "mitigated_distal_break" | "mitigated_three_touches" | "structure_supplanted" | "aged_out_of_window" | "data_unavailable" | "data_stale",
+#           "drop_reason": null | "mitigated_distal_break" | "mitigated_three_touches" | "structure_supplanted" | "aged_out_of_window" | "data_unavailable" | "data_stale" | "gap_open_event",
 #           "first_seen_iso": "...", "first_seen_label": "HH:MM IST",
 #           "last_seen_iso": "...", "last_seen_label": "HH:MM IST",
 #           "is_new_this_scan": bool,
