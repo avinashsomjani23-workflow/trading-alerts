@@ -303,7 +303,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-15T09:35:36.934267",
-      "last_seen_ist": "2026-06-18T12:35:43.649180",
+      "last_seen_ist": "2026-06-18T13:35:45.152567",
       "last_email_day": "2026-06-15",
       "reentry_armed": true,
       "max_exit_distance": 835.25,
@@ -675,10 +675,10 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-18T12:35:43.649180",
+      "last_seen_ist": "2026-06-18T13:35:45.152567",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.003130316734313965,
       "bias": "SHORT",
       "pair": "NZDUSD"
     },
@@ -713,10 +713,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-18T12:35:43.649180",
+      "last_seen_ist": "2026-06-18T13:35:45.152567",
       "last_email_day": "2026-06-17",
-      "reentry_armed": false,
-      "max_exit_distance": 0.005239963531494141,
+      "reentry_armed": true,
+      "max_exit_distance": 0.0062999725341796875,
       "bias": "LONG",
       "pair": "USDCHF"
     },
@@ -751,7 +751,7 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-18T09:35:41.448507",
-      "last_seen_ist": "2026-06-18T12:35:43.649180",
+      "last_seen_ist": "2026-06-18T13:35:45.152567",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
       "max_exit_distance": 0.3610076904296875,
@@ -771,7 +771,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-18T09:35:41.448507",
-      "last_seen_ist": "2026-06-18T12:35:43.649180",
+      "last_seen_ist": "2026-06-18T13:35:45.152567",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -790,7 +790,7 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-18T10:35:37.082049",
-      "last_seen_ist": "2026-06-18T12:35:43.649180",
+      "last_seen_ist": "2026-06-18T13:35:45.152567",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -809,7 +809,7 @@
         "freshness": 0
       },
       "alert_ist": "2026-06-18T10:35:37.082049",
-      "last_seen_ist": "2026-06-18T12:35:43.649180",
+      "last_seen_ist": "2026-06-18T13:35:45.152567",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
