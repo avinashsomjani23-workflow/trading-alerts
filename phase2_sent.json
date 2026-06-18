@@ -303,7 +303,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-15T09:35:36.934267",
-      "last_seen_ist": "2026-06-15T18:35:37.676158",
+      "last_seen_ist": "2026-06-18T10:35:37.082049",
       "last_email_day": "2026-06-15",
       "reentry_armed": true,
       "max_exit_distance": 835.25,
@@ -655,10 +655,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-18T09:35:41.448507",
+      "last_seen_ist": "2026-06-18T10:35:37.082049",
       "last_email_day": "2026-06-17",
       "reentry_armed": true,
-      "max_exit_distance": 0.006415128707885742,
+      "max_exit_distance": 0.006680965423583984,
       "bias": "SHORT",
       "pair": "EURUSD"
     },
@@ -674,7 +674,7 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-18T09:35:41.448507",
+      "last_seen_ist": "2026-06-18T10:35:37.082049",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -712,7 +712,7 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-18T09:35:41.448507",
+      "last_seen_ist": "2026-06-18T10:35:37.082049",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
       "max_exit_distance": 0.004869997501373291,
@@ -750,10 +750,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-18T09:35:41.448507",
-      "last_seen_ist": "2026-06-18T09:35:41.448507",
+      "last_seen_ist": "2026-06-18T10:35:37.082049",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.3430023193359375,
       "bias": "LONG",
       "pair": "USDJPY"
     },
@@ -769,12 +769,50 @@
         "freshness": 0
       },
       "alert_ist": "2026-06-18T09:35:41.448507",
-      "last_seen_ist": "2026-06-18T09:35:41.448507",
+      "last_seen_ist": "2026-06-18T10:35:37.082049",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
       "bias": "SHORT",
       "pair": "USDCHF"
+    },
+    "GOLD_SHORT_CHoCH_4338.7_2026-06-17T17": {
+      "score_int": 6,
+      "score_raw": 6.0,
+      "score_high_water": 6.0,
+      "score_low_water": 6.0,
+      "breakdown": {
+        "structure": 4,
+        "sweep": 0.0,
+        "fvg": 1,
+        "freshness": 1
+      },
+      "alert_ist": "2026-06-18T10:35:37.082049",
+      "last_seen_ist": "2026-06-18T10:35:37.082049",
+      "last_email_day": "2026-06-18",
+      "reentry_armed": false,
+      "max_exit_distance": 0.0,
+      "bias": "SHORT",
+      "pair": "GOLD"
+    },
+    "GOLD_LONG_BOS_4256.8_2026-06-12T19": {
+      "score_int": 4,
+      "score_raw": 4.0,
+      "score_high_water": 4.0,
+      "score_low_water": 4.0,
+      "breakdown": {
+        "structure": 3,
+        "sweep": 0.0,
+        "fvg": 1,
+        "freshness": 0
+      },
+      "alert_ist": "2026-06-18T10:35:37.082049",
+      "last_seen_ist": "2026-06-18T10:35:37.082049",
+      "last_email_day": "2026-06-18",
+      "reentry_armed": false,
+      "max_exit_distance": 0.0,
+      "bias": "LONG",
+      "pair": "GOLD"
     }
   }
 }
