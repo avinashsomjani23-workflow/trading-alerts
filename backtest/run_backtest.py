@@ -440,10 +440,12 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         "ist_blocked_rows":     n_ist_blocked_total,
         "ist_window_forex":     ist_window.window_label("forex"),
         "ist_window_index":     ist_window.window_label("index"),
-        # Killzone hard filter. Alerts outside the pair's configured
-        # killzone never enter the simulator -- they are not in `all_trades`,
-        # not in trades.xlsx, not in any aggregate. These two fields are
-        # the only place the count is preserved.
+        # Killzone gate. Alerts outside the pair's configured killzone ARE
+        # simulated and kept in `all_trades` tagged killzone_blocked=True (so
+        # the audit section can show their would-have R), but are EXCLUDED from
+        # every aggregate metric by the reporting layer -- same pattern as the
+        # news and IST gates. (Earlier comment here wrongly said they never
+        # enter the simulator.)
         "killzone_dropped_alerts":   n_killzone_dropped_total,
         "killzone_drops_by_pair":    killzone_drops_by_pair,
         "killzone_windows_by_pair":  killzone_windows_by_pair,
@@ -473,6 +475,17 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         raise SystemExit(
             f"SCAN-LOG GATE FAILED for {run_id} - see run_health.json. "
             f"Failure email sent. Run NOT trusted (exit 1).")
+
+    # PASS path: finalize the scan log NOW (close + zip) so its audit artifacts
+    # -- run_health.json, manifest.json, and the zipped scan_log/events -- are
+    # on disk and STABLE before commit_run_logs runs. commit_run_logs commits
+    # them alongside the result logs so every emailed run keeps its audit trail.
+    # Previously the scan log was zipped only AFTER commit + email, so it was
+    # never persisted and the next run overwrote it (the reason no emailed run
+    # had a fetchable scan log). Zipping first also leaves the tracked
+    # out/scanlog tree clean for the push rebase.
+    scanlog.close()
+    _zip_scanlog(scanlog.run_dir)
 
     # Update cross-run registry BEFORE commit so registry.json + BACKTEST_LOG.md
     # land in the same commit as the run's log files. If registry update runs
@@ -512,10 +525,8 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
             log_event("email_failed", level="error",
                       error=f"{type(e).__name__}: {e}")
 
-    # PASS path: close + zip the scanlog (fast write during run, small on disk).
-    scanlog.close()
-    _zip_scanlog(scanlog.run_dir)
-
+    # Scan log was already closed + zipped above (before commit) so its audit
+    # artifacts ride in the same commit as the result logs.
     return report_dir
 
 

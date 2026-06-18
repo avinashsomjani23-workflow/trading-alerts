@@ -43,6 +43,18 @@ def _run(cmd: List[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
 
 
+def _restore_stash(repo_root: Path) -> bool:
+    """Pop the rebase-guard stash. Returns True if the working tree was
+    restored cleanly, False if a conflict left the changes IN the stash.
+
+    A False return is NOT a failure to act on by discarding: the changes stay
+    safely in `git stash` for manual recovery. This function NEVER runs
+    `git checkout -- .` or `git stash drop` -- the old code did, and it
+    silently destroyed uncommitted source edits (2026-06 incident)."""
+    pop = _run(["git", "stash", "pop"], repo_root)
+    return pop.returncode == 0
+
+
 def _git_available(repo_root: Path) -> bool:
     r = _run(["git", "rev-parse", "--is-inside-work-tree"], repo_root)
     return r.returncode == 0 and "true" in r.stdout.lower()
@@ -105,6 +117,20 @@ def commit_run_logs(
         if (repo_root / extra).exists():
             targets.append(extra)
 
+    # Audit trail: the scan log (gate verdict + determinism hash + per-bar
+    # heartbeat) is the only proof a run is honest. Persist it WITH the run so
+    # an emailed result is always auditable later -- previously it lived only in
+    # a local out/scanlog dir that the next run overwrote, so the audit trail
+    # for emailed runs was lost. The run zips scan_log/events before this call,
+    # so we commit the small .gz.zip plus run_health.json + manifest.json.
+    scanlog_dir = repo_root / "backtest" / "out" / "scanlog" / run_dir.name
+    if scanlog_dir.is_dir():
+        for f in ("run_health.json", "manifest.json",
+                  "scan_log.jsonl.gz.zip", "events.jsonl.gz.zip"):
+            p = scanlog_dir / f
+            if p.exists():
+                targets.append(str(p.relative_to(repo_root)))
+
     add = _run(["git", "add", "-f", *targets], repo_root)
     if add.returncode != 0:
         raise LogCommitError(f"git add failed: {add.stderr.strip()}")
@@ -151,41 +177,57 @@ def commit_run_logs(
         # A backtest run mutates many tracked files (state JSONs, source,
         # engine artifacts) beyond the log files we staged. Those leftovers
         # sit unstaged, and `git rebase` refuses to run with a dirty tree --
-        # "cannot rebase: You have unstaged changes". Hardcoding extra files
-        # into the staged set (the May 2026 fix for registry.json /
-        # BACKTEST_LOG.md) only patched the two files known at the time; any
-        # new unstaged file re-broke the push. Stash EVERYTHING unstaged
-        # before the rebase and restore it after, so the rebase is robust to
-        # any tracked-file churn the run produces. Our commit is already made,
-        # so it is unaffected by the stash.
+        # "cannot rebase: You have unstaged changes". We stash everything
+        # unstaged before the rebase and restore it after. Our commit is
+        # already made, so it is unaffected by the stash.
+        #
+        # SAFETY (2026-06 rewrite): this path used to `git checkout -- .` and
+        # `git stash drop` on a pop conflict, which silently DESTROYED
+        # uncommitted source edits and trapped work in dangling stashes. It no
+        # longer does. Working changes are stashed, restored, or -- worst case
+        # -- left safely in `git stash` for manual recovery. Nothing is ever
+        # discarded.
         stash = _run(["git", "stash", "push", "--include-untracked",
                       "-m", "commit_logs-rebase-guard"], repo_root)
-        stashed = (stash.returncode == 0
-                   and "No local changes" not in stash.stdout)
+        # A FAILED stash (e.g. a OneDrive/file-lock error) leaves the tree
+        # dirty. Rebasing now would hit "cannot rebase: You have unstaged
+        # changes" and risk a half-applied state. Bail safely instead -- the
+        # commit is local and recoverable; nothing is touched.
+        if stash.returncode != 0:
+            raise LogCommitError(
+                f"could not stash the working tree before rebase: "
+                f"{stash.stderr.strip()[:200]}. The log commit IS local but "
+                f"is not on GitHub, and your working tree is untouched. This "
+                f"is usually a transient file lock (OneDrive sync). Retry with: "
+                f"git stash --include-untracked && git rebase origin/main && "
+                f"git push origin main && git stash pop"
+            )
+        stashed = ("No local changes" not in stash.stdout)
 
         rebase = _run(["git", "rebase", "origin/main"], repo_root)
         if rebase.returncode != 0:
             rebase_err = rebase.stderr.strip()[:300]
             _run(["git", "rebase", "--abort"], repo_root)
-            if stashed:
-                _run(["git", "stash", "pop"], repo_root)
+            restored = _restore_stash(repo_root) if stashed else True
+            stash_note = ("" if restored else
+                          "Your working-tree changes are SAFE in `git stash` "
+                          "(message: commit_logs-rebase-guard) -- recover with "
+                          "`git stash pop` after resolving. ")
             raise LogCommitError(
                 f"rebase onto origin/main failed during push retry: "
                 f"{rebase_err}. Commit IS local but is not on GitHub. "
-                f"Resolve manually with: git fetch origin && "
+                f"{stash_note}Resolve manually with: git fetch origin && "
                 f"git rebase origin/main && git push origin main"
             )
 
-        if stashed:
-            # Restore the run's working-tree changes. A pop conflict here does
-            # NOT fail the push -- our commit rebased cleanly and will push on
-            # the next loop. The leftover changes are run scratch, not the logs.
-            pop = _run(["git", "stash", "pop"], repo_root)
-            if pop.returncode != 0:
-                print(f"[commit_logs] stash pop conflict (non-fatal, "
-                      f"working-tree scratch only): {pop.stderr.strip()[:200]}")
-                _run(["git", "checkout", "--", "."], repo_root)
-                _run(["git", "stash", "drop"], repo_root)
+        # Rebase succeeded -> retry the push on the next loop iteration. Restore
+        # the working tree first. A pop conflict here is NON-fatal and NON-
+        # destructive: the changes stay in the stash, we warn, and continue.
+        if stashed and not _restore_stash(repo_root):
+            print("[commit_logs] stash pop hit a conflict -- your working-tree "
+                  "changes are PRESERVED in `git stash` (commit_logs-rebase-"
+                  "guard). Run `git stash pop` after the backtest. Nothing was "
+                  "discarded.")
 
     raise LogCommitError(
         f"push failed after {max_push_attempts} attempts. Last error: "

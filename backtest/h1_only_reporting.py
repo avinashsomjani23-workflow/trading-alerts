@@ -478,40 +478,53 @@ def _killzone_alignment_losses_html(trades: List[Dict[str, Any]]) -> str:
     df = pd.DataFrame(filled)
     if "killzone_alignment" not in df.columns or "r_realised" not in df.columns:
         return "<p style='color:#888;'>Alignment data unavailable.</p>"
-    losses = df[df["r_realised"] < 0]
-    total_losses = len(losses)
     total_trades = len(df)
-    if total_losses == 0:
+    overall_losses = int((df["r_realised"] < 0).sum())
+    if overall_losses == 0:
         return "<p style='color:#888;'>No losing trades in this run.</p>"
+    overall_loss_rate = overall_losses / total_trades * 100
+
+    # Plain question this table answers: in each bucket, how OFTEN do trades
+    # lose, compared with the run as a whole? Loss rate is far more intuitive
+    # than the old "share of losses minus share of trades" -- you just read the
+    # rate and the gap. A bucket that loses much more often than average is the
+    # weak one; much less often is the strong one. The threshold is wide (15pp)
+    # because per-week samples are tiny and small gaps are pure noise.
     header = _table_row(
-        ["Bucket", "Losses", "% of losses", "% of all trades", "Over/Under-index"],
+        ["Bucket", "Trades", "Lost", "Loss rate", "What it means"],
         header=True,
     )
     body = ""
     for bucket in _ALIGNMENT_ORDER:
-        sub_losses = losses[losses["killzone_alignment"] == bucket]
-        sub_all    = df[df["killzone_alignment"] == bucket]
-        if sub_losses.empty and sub_all.empty:
+        sub_all = df[df["killzone_alignment"] == bucket]
+        n = len(sub_all)
+        if n == 0:
             continue
-        pct_losses = len(sub_losses) / total_losses * 100 if total_losses else 0
-        pct_all    = len(sub_all) / total_trades * 100 if total_trades else 0
-        delta      = pct_losses - pct_all
-        # Positive delta => bucket has MORE losses than its trade share would
-        # predict (a loser-skewed bucket).
-        if delta > 5:
-            indicator = f"<b style='color:#e74c3c;'>+{delta:.0f}pp (loser-skewed)</b>"
+        lost = int((sub_all["r_realised"] < 0).sum())
+        rate = lost / n * 100
+        delta = rate - overall_loss_rate
+        # Plain English, no "pp": just compare this bucket's loss rate to how
+        # often the run loses overall, and say worse / better / same.
+        if delta > 15:
+            indicator = (f"<b style='color:#e74c3c;'>worse than your usual "
+                         f"{overall_loss_rate:.0f}% &mdash; consider avoiding</b>")
             color = "#fdf2f2"
-        elif delta < -5:
-            indicator = f"<b style='color:#27ae60;'>{delta:.0f}pp (winner-skewed)</b>"
+        elif delta < -15:
+            indicator = (f"<b style='color:#27ae60;'>better than your usual "
+                         f"{overall_loss_rate:.0f}% &mdash; a bucket to lean on</b>")
             color = "#eafaf1"
         else:
-            indicator = f"{delta:+.0f}pp (neutral)"
+            indicator = f"about your usual {overall_loss_rate:.0f}% &mdash; no signal"
             color = ""
         body += _table_row([
-            bucket, str(len(sub_losses)),
-            f"{pct_losses:.0f}%", f"{pct_all:.0f}%", indicator,
+            bucket, str(n), str(lost), f"{rate:.0f}%", indicator,
         ], color=color)
-    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
+    note = (f"<p style='font-size:12px;color:#666;margin-top:6px;'>"
+            f"Run average loss rate: <b>{overall_loss_rate:.0f}%</b>. "
+            f"A bucket far above it loses more often than the system as a whole "
+            f"&mdash; a candidate to avoid; far below it is a bucket to lean on. "
+            f"Gaps under 15pp are noise at this sample size.</p>")
+    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>{note}"
 
 
 # ---------------------------------------------------------------------------
@@ -575,24 +588,26 @@ def _counterfactual_html(trades: List[Dict[str, Any]], risk_usd: float) -> str:
     sections: List[Tuple[str, List[Tuple[str, "pd.Series"]]]] = []
 
     # --- TP1 R bucket filters -------------------------------------------------
+    # Simplified 2026-06: dropped the "Skip TP1 R in [a,b)" band rows. They
+    # tested "exclude trades whose target landed in a middle band", which read
+    # as a confusing double-negative and was rarely actionable. The monotonic
+    # "Only TP1 R >= X" ladder answers the real question -- does demanding a
+    # farther, more-liquid target help? -- in plain terms.
     if "tp1_rr" in df.columns:
         tp1 = df["tp1_rr"].astype(float)
-        sections.append(("TP1 R-multiple filters", [
+        sections.append(("TP1 R-multiple filters (minimum target distance)", [
             ("Only TP1 R >= 1.5",               tp1 >= 1.5),
             ("Only TP1 R >= 2.0",               tp1 >= 2.0),
             ("Only TP1 R >= 2.5",               tp1 >= 2.5),
-            ("Skip TP1 R in [1.5, 2.0)",        ~tp1.between(1.5, 2.0, inclusive="left")),
-            ("Skip TP1 R in [2.0, 2.5)",        ~tp1.between(2.0, 2.5, inclusive="left")),
         ]))
 
     # --- TP2 R bucket filters -------------------------------------------------
     if "tp2_rr" in df.columns:
         tp2 = pd.to_numeric(df["tp2_rr"], errors="coerce")
-        sections.append(("TP2 R-multiple filters", [
+        sections.append(("TP2 R-multiple filters (minimum target distance)", [
             ("Only TP2 R >= 2.0",               (tp2 >= 2.0) & tp2.notna()),
             ("Only TP2 R >= 2.5",               (tp2 >= 2.5) & tp2.notna()),
             ("Only TP2 R >= 3.0",               (tp2 >= 3.0) & tp2.notna()),
-            ("Skip TP2 R in [1.5, 2.0)",        ~tp2.between(1.5, 2.0, inclusive="left") | tp2.isna()),
         ]))
 
     # --- Score thresholds -----------------------------------------------------
@@ -642,13 +657,21 @@ def _counterfactual_html(trades: List[Dict[str, Any]], risk_usd: float) -> str:
             ("Only Tue-Thu",   dow.isin(["Tuesday", "Wednesday", "Thursday"])),
         ]))
 
-    # --- PD zone --------------------------------------------------------------
-    if "pd_zone" in df.columns:
+    # --- PD-array alignment (direction-aware) ---------------------------------
+    # Replaces the old direction-blind discount/premium split. Raw zone is
+    # meaningless without direction: a SHORT in discount is counter-PD (bad),
+    # not the same as a SHORT in premium. pd_alignment encodes that.
+    if "pd_alignment" in df.columns:
+        pa = df["pd_alignment"]
+        sections.append(("PD-array alignment (direction-aware)", [
+            ("Only PD-aligned (long+discount / short+premium)", pa == "aligned"),
+            ("Skip PD-counter (long+premium / short+discount)", pa != "counter"),
+        ]))
+    elif "pd_zone" in df.columns:  # legacy runs without pd_alignment
         pdz = df["pd_zone"]
-        sections.append(("PD-array zone of entry", [
+        sections.append(("PD-array zone of entry (legacy, direction-blind)", [
             ("Only Discount", pdz == "discount"),
             ("Only Premium",  pdz == "premium"),
-            ("Skip Equilibrium", pdz != "equilibrium"),
         ]))
 
     # Baseline row at top.
@@ -724,8 +747,6 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
             ("Only TP1 R >= 1.5",        tp1 >= 1.5),
             ("Only TP1 R >= 2.0",        tp1 >= 2.0),
             ("Only TP1 R >= 2.5",        tp1 >= 2.5),
-            ("Skip TP1 R in [1.5,2.0)",  ~tp1.between(1.5, 2.0, inclusive="left")),
-            ("Skip TP1 R in [2.0,2.5)",  ~tp1.between(2.0, 2.5, inclusive="left")),
         ]))
     if "tp2_rr" in df.columns:
         tp2 = pd.to_numeric(df["tp2_rr"], errors="coerce")
@@ -733,7 +754,6 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
             ("Only TP2 R >= 2.0",        (tp2 >= 2.0) & tp2.notna()),
             ("Only TP2 R >= 2.5",        (tp2 >= 2.5) & tp2.notna()),
             ("Only TP2 R >= 3.0",        (tp2 >= 3.0) & tp2.notna()),
-            ("Skip TP2 R in [1.5,2.0)",  ~tp2.between(1.5, 2.0, inclusive="left") | tp2.isna()),
         ]))
     if "score" in df.columns:
         sc = pd.to_numeric(df["score"], errors="coerce")
@@ -772,12 +792,17 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
             ("Skip Friday",  dow != "Friday"),
             ("Only Tue-Thu", dow.isin(["Tuesday", "Wednesday", "Thursday"])),
         ]))
-    if "pd_zone" in df.columns:
+    if "pd_alignment" in df.columns:
+        pa = df["pd_alignment"]
+        sections.append(("PD-array alignment", [
+            ("Only PD-aligned (long+discount / short+premium)", pa == "aligned"),
+            ("Skip PD-counter (long+premium / short+discount)", pa != "counter"),
+        ]))
+    elif "pd_zone" in df.columns:
         pdz = df["pd_zone"]
-        sections.append(("PD zone", [
+        sections.append(("PD zone (legacy)", [
             ("Only Discount",     pdz == "discount"),
             ("Only Premium",      pdz == "premium"),
-            ("Skip Equilibrium",  pdz != "equilibrium"),
         ]))
 
     for sect_label, filters in sections:
@@ -802,6 +827,167 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
 # ---------------------------------------------------------------------------
 # Exit-policy comparison: three policies + per-pair + per-session.
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Confluence uplift — does each confluence actually improve outcomes? (Q2)
+# Per confluence: expectancy WITH it minus expectancy WITHOUT it. A confluence
+# that does not lift expectancy is noise, no matter how often it appears.
+# ---------------------------------------------------------------------------
+
+_CONFLUENCE_DEFS = [
+    ("FVG present",       lambda d: d.get("fvg_present") is True),
+    ("Liquidity sweep",   lambda d: d.get("sweep_present") is True),
+    ("Structure points",  lambda d: float(d.get("structure_pts") or 0) > 0),
+    ("OB freshness",      lambda d: float(d.get("freshness_pts") or 0) > 0),
+    ("PD-aligned entry",  lambda d: d.get("pd_alignment") == "aligned"),
+]
+
+
+def _confluence_uplift_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    """Which confluences earn their weight? Expectancy with vs without each."""
+    filled = [t for t in trades if _is_real_filled(t)]
+    if not filled:
+        return "<p style='color:#888;'>No filled trades to attribute confluences.</p>"
+
+    def _mean(rows):
+        vals = [float(t.get(r_col) or 0) for t in rows]
+        return (sum(vals) / len(vals)) if vals else None
+
+    header = _table_row(
+        ["Confluence", "Trades with", "Avg R with", "Avg R without",
+         "Uplift", "Verdict"], header=True,
+    )
+    body = ""
+    for name, pred in _CONFLUENCE_DEFS:
+        with_c  = [t for t in filled if pred(t)]
+        without = [t for t in filled if not pred(t)]
+        n_w = len(with_c)
+        exp_w, exp_o = _mean(with_c), _mean(without)
+        uplift = (exp_w - exp_o) if (exp_w is not None and exp_o is not None) else None
+
+        if n_w < _LOW_N_THRESHOLD:
+            verdict, vc, row_c = "low n &mdash; directional only", "#888", ""
+        elif uplift is None:
+            verdict, vc, row_c = "no comparison group", "#888", ""
+        elif uplift >= 0.20:
+            verdict, vc, row_c = "earns its weight", "#27ae60", "#eafaf1"
+        elif uplift >= 0.05:
+            verdict, vc, row_c = "marginal", "#f39c12", "#fef9e7"
+        else:
+            verdict, vc, row_c = "noise &mdash; not helping", "#e74c3c", "#fdf2f2"
+
+        body += _table_row([
+            name, str(n_w),
+            _r(exp_w) if exp_w is not None else "&mdash;",
+            _r(exp_o) if exp_o is not None else "&mdash;",
+            (_r(uplift) if uplift is not None else "&mdash;"),
+            f"<span style='color:{vc};font-weight:600;'>{verdict}</span>",
+        ], color=row_c)
+
+    note = ("<p style='font-size:12px;color:#666;margin-top:6px;'>"
+            "Uplift = average R when the confluence is present minus average R "
+            "when it is absent. Positive means it adds edge. A confluence with "
+            "near-zero or negative uplift is decoration, not signal &mdash; "
+            "candidates to drop from the score. Rows with fewer than "
+            f"{_LOW_N_THRESHOLD} present-trades are directional only.</p>")
+    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>{note}"
+
+
+# ---------------------------------------------------------------------------
+# Best-configuration verdict — small grid search over the actionable knobs (Q5)
+# Finds the single filter STACK that would have produced the highest total P&L,
+# subject to keeping a minimum number of trades (overfitting guardrail).
+# ---------------------------------------------------------------------------
+
+def _best_config_html(trades: List[Dict[str, Any]], risk_usd: float) -> str:
+    filled = [t for t in trades if _is_real_filled(t)]
+    if len(filled) < 12:
+        return ("<p style='color:#888;'>Fewer than 12 filled trades &mdash; a "
+                "multi-filter configuration search would just curve-fit a "
+                "handful of trades. No stack recommended. The reliable read is "
+                "the cross-run aggregate, not one week.</p>")
+    df = pd.DataFrame(filled)
+    if "r_realised" not in df.columns:
+        return "<p style='color:#888;'>r_realised missing.</p>"
+
+    baseline_pnl = round(float(df["r_realised"].sum()) * risk_usd, 0)
+    baseline_n   = len(df)
+    # Guardrail: a winning stack must keep a real chunk of the trades, not
+    # cherry-pick. At least 60% of the run, and never fewer than 8 absolute --
+    # below that the "best" stack is 2-3 lucky trades, which is not a finding.
+    min_n = max(8, int(0.6 * baseline_n))
+
+    T = pd.Series(True, index=df.index)
+    score = pd.to_numeric(df.get("score"), errors="coerce") if "score" in df else None
+    tp1   = pd.to_numeric(df.get("tp1_rr"), errors="coerce") if "tp1_rr" in df else None
+    ka    = df.get("killzone_alignment")
+    pa    = df.get("pd_alignment")
+
+    score_opts = [("any score", T)]
+    if score is not None:
+        score_opts += [("score>=3", score >= 3), ("score>=4", score >= 4),
+                       ("score>=5", score >= 5)]
+    tp1_opts = [("any TP1", T)]
+    if tp1 is not None:
+        tp1_opts += [("TP1 R>=2.0", tp1 >= 2.0), ("TP1 R>=2.5", tp1 >= 2.5)]
+    kz_opts = [("any killzone", T)]
+    if ka is not None:
+        kz_opts += [("skip Neither", ka != "Neither"), ("Both only", ka == "Both")]
+    pd_opts = [("any PD", T)]
+    if pa is not None:
+        pd_opts += [("PD-aligned only", pa == "aligned")]
+
+    best = None
+    for sl, sm in score_opts:
+        for tl, tm in tp1_opts:
+            for kl, km in kz_opts:
+                for pl, pm in pd_opts:
+                    mask = (sm & tm & km & pm).fillna(False)
+                    sub = df[mask]
+                    n = len(sub)
+                    if n < min_n:
+                        continue
+                    pnl = float(sub["r_realised"].sum()) * risk_usd
+                    if best is None or pnl > best["pnl"]:
+                        best = {
+                            "pnl": round(pnl, 0), "n": n,
+                            "avg": float(sub["r_realised"].mean()),
+                            "wr": float((sub["r_realised"] > 0).mean() * 100),
+                            "labels": [sl, tl, kl, pl],
+                        }
+
+    if best is None:
+        return (f"<p style='color:#888;'>No filter stack kept the minimum "
+                f"{min_n} trades &mdash; nothing to recommend without "
+                f"curve-fitting.</p>")
+
+    active = [l for l in best["labels"]
+              if not l.startswith("any ")]
+    stack = " + ".join(active) if active else "no filter (baseline is already best)"
+    delta = best["pnl"] - baseline_pnl
+    dcolor = "#27ae60" if delta >= 0 else "#e74c3c"
+
+    return (
+        f"<table><thead>"
+        f"<tr><th>Configuration</th><th>Trades</th><th>Win rate</th>"
+        f"<th>Avg R</th><th>Total P&amp;L</th><th>vs baseline</th></tr>"
+        f"</thead><tbody>"
+        f"<tr style='background:#f4f4f4;'><td><b>Baseline (no filter)</b></td>"
+        f"<td>{baseline_n}</td><td>&mdash;</td><td>&mdash;</td>"
+        f"<td>{_m(baseline_pnl)}</td><td>&mdash;</td></tr>"
+        f"<tr style='background:#eafaf1;'><td><b>Best stack:</b> {stack}</td>"
+        f"<td>{best['n']}</td><td>{best['wr']:.0f}%</td>"
+        f"<td>{_r(best['avg'])}</td><td><b>{_m(best['pnl'])}</b></td>"
+        f"<td style='color:{dcolor};font-weight:600;'>{_m(delta)}</td></tr>"
+        f"</tbody></table>"
+        f"<p style='font-size:12px;color:#666;margin-top:6px;'>"
+        f"Best single stack of score / target-distance / killzone / PD filters "
+        f"that maximised total P&amp;L while keeping at least {min_n} of "
+        f"{baseline_n} trades. <b>This is in-sample &mdash; the winning stack is "
+        f"fitted to THIS run and will not repeat blindly.</b> Treat it as a lead "
+        f"to confirm across runs, never a rule to deploy from one week.</p>"
+    )
+
 
 def _exit_policy_html(trades: List[Dict[str, Any]], risk_usd: float) -> str:
     rows_data = _exit_policy_table(trades, risk_usd)
@@ -1210,11 +1396,12 @@ def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
 
     header = (
         "<p style='font-size:12px;color:#666;margin-bottom:8px;'>"
-        "Alerts whose timestamp fell outside the pair's killzone window. "
-        "These rows are <b>excluded from every aggregate metric above</b>; "
-        "they are simulated only so we can show what would have happened "
-        "if the filter were off. Positive would-have R = filter is costing "
-        "you trades; negative = filter is saving you R."
+        "Trades whose alert fell outside the pair's killzone window. The "
+        "killzone is <b>no longer a hard filter</b> &mdash; these trades ARE "
+        "included in every aggregate above. This section is informational: it "
+        "shows how off-killzone trades behaved so you can judge whether being "
+        "outside the killzone is a real quality signal. Positive R = "
+        "off-killzone trades made money; negative = they lost."
         "</p>"
     )
 
@@ -1257,11 +1444,13 @@ def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
             wr_str = f"{wr:.0f}%" if wr is not None else "&mdash;"
             r_color = "#27ae60" if total_r > 0 else ("#e74c3c" if total_r < 0 else "#888")
             w = windows.get(pair, "&mdash;")
-            verdict = ("filter cost R" if total_r > 0.5
-                       else "filter saved R" if total_r < -0.5
+            # Informational now (killzone is not a filter). Did off-killzone
+            # trades for this pair make or lose money?
+            verdict = ("off-KZ profitable" if total_r > 0.5
+                       else "off-KZ lost" if total_r < -0.5
                        else "neutral")
-            verdict_color = ("#e74c3c" if total_r > 0.5
-                             else "#27ae60" if total_r < -0.5
+            verdict_color = ("#27ae60" if total_r > 0.5
+                             else "#e74c3c" if total_r < -0.5
                              else "#888")
             by_pair_rows += (
                 f"<tr><td><b>{pair}</b></td>"
@@ -1326,12 +1515,21 @@ def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
             f"</thead><tbody>{by_hour_rows}</tbody></table>"
         )
 
+    # total_drops counts every alert the killzone gate rejected. `n` counts the
+    # subset that produced a simulatable proximal trade (some rejected alerts
+    # had no valid entry/target, so they have no row to break down). Leading
+    # with total_drops and naming the gap removes the old "8 alert(s) ... records
+    # 9" confusion, which read like an off-by-one bug but was just this subset.
+    no_row = max(0, total_drops - n)
+    gap_note = (f" {no_row} more were rejected but produced no valid entry/target,"
+                f" so they are counted but not broken down below."
+                if no_row else "")
     return (
         header
         + f"<p style='font-size:13px;margin-bottom:8px;'>"
-          f"<b>{n} alert(s)</b> outside the configured killzone "
-          f"(proximal rows; each alert may have a paired 50% row too). "
-          f"meta-counter records {total_drops} dropped.</p>"
+          f"<b>{total_drops} alert(s)</b> fell outside the configured killzone. "
+          f"{n} produced a simulatable proximal trade (shown below; each may "
+          f"have a paired 50% row too).{gap_note}</p>"
         + by_pair_table + by_hour_table
     )
 
@@ -1549,14 +1747,14 @@ def _news_blackout_html(blocked_trades: List[Dict[str, Any]],
     header = (
         f"<p style='font-size:12px;color:#666;margin-bottom:8px;'>"
         f"Trades whose alert timestamp fell within &plusmn;{window} min of a "
-        f"High-impact news event for any currency in the pair. These rows "
-        f"are <b>excluded from every aggregate metric above</b> (P&amp;L, WR, "
-        f"RR, expectancy, by-pair, by-session, killzone, structure, score). "
-        f"They appear in <code>trades.xlsx</code> with column <code>news_blocked=True</code> "
-        f"for audit only."
+        f"High-impact news event. News is <b>no longer a hard filter</b> "
+        f"(the ForexFactory feed proved unreliable &mdash; it fails to fetch "
+        f"and catches nothing), so these trades <b>ARE included</b> in the "
+        f"aggregates above. This section is informational only."
         f"</p>"
         f"<p style='font-size:11px;color:#888;margin-bottom:10px;'>"
-        f"Feed coverage: {coverage_str}. Events fetched: {n_events}."
+        f"Feed coverage: {coverage_str}. Events fetched: {n_events}. "
+        f"<b>Feed unreliable &mdash; treat any news flags as best-effort.</b>"
         f"</p>"
     )
 
@@ -2516,6 +2714,7 @@ def _zone_block_html(
     <li><b>OB only</b> / <b>Fill only</b>: one side in killzone &mdash; B-grade.</li>
     <li><b>Neither</b>: both off-hours &mdash; weakest setup.</li>
   </ul>
+  <p style="font-size:12px;color:#666;">Why this is not redundant with the killzone filter: the <b>filter</b> gates on the <b>alert</b> timestamp, but these buckets are scored on two <i>different</i> moments &mdash; the <b>OB-candle</b> session and the <b>fill</b> session. A trade can alert inside the killzone yet have formed its OB, or filled, outside it &mdash; so "Neither" rows can still appear after filtering. This table answers: given we only alert in-killzone, does it <i>also</i> matter when the OB formed and when the order filled?</p>
   {_killzone_alignment_html(zone_trades, "r_realised")}
   <h4 style="margin-top:16px;">Losing trades by alignment bucket</h4>
   {_killzone_alignment_losses_html(zone_trades)}
@@ -2526,6 +2725,8 @@ def _zone_block_html(
   <h2>"What if" &mdash; counterfactual filter analysis</h2>
   <p>For each filter dimension below, the table shows what would have happened if we had only taken trades meeting the filter. <b>vs baseline</b> compares each subset's R-per-trade and total P&amp;L to the unfiltered baseline. Buckets with fewer than 10 trades are marked <i>(low n)</i> &mdash; treat as directional, not significant.</p>
   {_counterfactual_html(zone_trades, risk_usd)}
+  <h4 style="margin-top:16px;">Best configuration this run &mdash; combined filter stack</h4>
+  {_best_config_html(zone_trades, risk_usd)}
 </div>
 
 <!-- EXIT POLICY COMPARISON -->
@@ -2547,7 +2748,10 @@ def _zone_block_html(
 
 <!-- CONFLUENCES -->
 <div class="section">
-  <h2>Confluences by pair</h2>
+  <h2>Confluences &mdash; does each one earn its weight?</h2>
+  <p style="font-size:12px;color:#666;">Expectancy with the confluence present vs absent. This is the direct answer to "which confluences actually work" &mdash; a confluence that does not lift average R is decoration, not signal.</p>
+  {_confluence_uplift_html(zone_trades, "r_realised")}
+  <h4 style="margin-top:16px;">Confluences by pair</h4>
   {_confluence_per_pair_html(zone_trades, "r_realised")}
 </div>
 
@@ -2613,10 +2817,14 @@ def _build_group_html(
     Returns the group's summary dict so the caller can fold it into the
     combined summary.json under `by_group`.
     """
+    # Only the IST can't-trade window (a pure clock check, always reliable)
+    # excludes a trade. Killzone and news are NO LONGER hard filters
+    # (trader decision 2026-06): killzone is a quality signal, not a gate; and
+    # the news feed (ForexFactory scrape) failed on every run -- 0 events
+    # fetched -- so it filtered nothing and could not be relied on. Both labels
+    # are kept on the rows for the informational breakdowns only.
     trades = [t for t in group_trades_all
-              if not t.get("news_blocked")
-              and not t.get("ist_blocked")
-              and not t.get("killzone_blocked")]
+              if not t.get("ist_blocked")]
     blocked_trades = [t for t in group_trades_all if t.get("news_blocked")]
     ist_blocked_trades = [t for t in group_trades_all if t.get("ist_blocked")]
     kz_blocked_trades = [t for t in group_trades_all if t.get("killzone_blocked")]
@@ -2759,7 +2967,7 @@ def _build_group_html(
 </div>
 
 <div class="section">
-  <h2>Killzone filter &mdash; alerts dropped</h2>
+  <h2>Killzone window &mdash; off-killzone trade behaviour (no longer filtered)</h2>
   {_killzone_audit_html(kz_blocked_trades, group_meta)}
 </div>
 
@@ -2846,10 +3054,13 @@ def write_h1_only_report(
     # News blackout = +/-30 min around high-impact economic event.
     # IST blackout  = outside user's IST trading window (live mirror).
     trades_all = list(trades)
+    # Only the IST can't-trade window (a pure clock check, always reliable)
+    # excludes a trade from the aggregates. Killzone and news are NO LONGER
+    # hard filters (trader decision 2026-06): killzone is a quality signal, and
+    # the ForexFactory news feed failed every run (0 events fetched) so it could
+    # not be relied on. Both labels stay on the rows for informational sections.
     trades         = [t for t in trades_all
-                      if not t.get("news_blocked")
-                      and not t.get("ist_blocked")
-                      and not t.get("killzone_blocked")]
+                      if not t.get("ist_blocked")]
     blocked_trades = [t for t in trades_all if t.get("news_blocked")]
     ist_blocked_trades = [t for t in trades_all if t.get("ist_blocked")]
     kz_blocked_trades = [t for t in trades_all if t.get("killzone_blocked")]
@@ -3123,7 +3334,7 @@ def write_h1_only_report(
 <!-- SECTION D0: KILLZONE FILTER AUDIT -->
 <!-- ============================================================ -->
 <div class="section">
-  <h2>Killzone filter &mdash; alerts dropped</h2>
+  <h2>Killzone window &mdash; off-killzone trade behaviour (no longer filtered)</h2>
   {_killzone_audit_html(kz_blocked_trades, meta)}
 </div>
 

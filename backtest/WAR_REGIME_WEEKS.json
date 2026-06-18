@@ -1,43 +1,613 @@
 {
   "_meta": {
-    "purpose": "Date ranges classified as WAR regime (USD-affecting geopolitical conflict). Outside any range = BAU.",
-    "classification_rule": "Only conflicts that materially move USD via safe-haven flows, sanctions, oil shock, or central bank reaction. Regional flare-ups without USD impact stay BAU.",
-    "format": "Each range has 'start' and 'end' in YYYY-MM-DD (inclusive). 'open_ended' = true means the end date is provisional and the conflict is still ongoing; treat as WAR up to today.",
-    "source": "Curated by hand from widely-reported events. NOT auto-generated. Review and edit before each new backtest period if your run window touches a range boundary.",
-    "last_reviewed": "2026-05-23"
+    "purpose": "Week-by-week regime map (WAR vs BAU) for backtest email subjects. Each Monday-Sunday week carries the dominant USD-affecting geopolitical regime for that week.",
+    "classification_rule": "WAR only for conflicts that materially move USD via safe-haven flows, oil shock, or central-bank reaction during that week. Ongoing-but-priced-in background wars (Russia-Ukraine, Israel-Hamas) are BAU once the initial shock has passed.",
+    "format": "Non-overlapping Mon-Sun weeks, YYYY-MM-DD inclusive. A scan date lands in exactly one week. Multi-week runs take the label of the week containing the run start date.",
+    "sources": [
+      "Iran-Israel Apr/Oct 2024: en.wikipedia.org/wiki/April_2024_Iranian_strikes_on_Israel ; October_2024_Iranian_strikes_on_Israel",
+      "Twelve-Day War Jun 2025: britannica.com/event/12-Day-War",
+      "2026 Iran war (US strikes 2026-02-28, naval blockade 2026-04-13, ceasefire faltering 2026-06-07): britannica.com/event/2026-Iran-war ; cnn.com 2026-06-07 live"
+    ],
+    "last_reviewed": "2026-06-17",
+    "review_note": "Hand-curated from widely-reported events. Extend the episodes list and regenerate when the run window passes 2026-07-06."
   },
-  "war_ranges": [
+  "weeks": [
     {
-      "label": "Russia-Ukraine full-scale invasion",
-      "start": "2022-02-21",
-      "end":   "2099-12-31",
-      "open_ended": true,
-      "usd_impact": "Safe-haven USD bid; energy shock via EUR; sustained sanctions cycle.",
-      "notes": "Invasion confirmed 2022-02-24. Pre-invasion troop massing and recognition of Donetsk/Luhansk on 2022-02-21 already moved DXY; start one week early."
+      "start": "2024-05-06",
+      "end": "2024-05-12",
+      "regime": "bau"
     },
     {
-      "label": "Israel-Hamas war (post Oct 7)",
-      "start": "2023-10-07",
-      "end":   "2099-12-31",
-      "open_ended": true,
-      "usd_impact": "Initial safe-haven USD bid; oil risk premium; spillover into JPY and CHF.",
-      "notes": "Begins on Oct 7 2023 attack. Includes the spillovers below as embedded sub-events but the regime tag does not lift."
+      "start": "2024-05-13",
+      "end": "2024-05-19",
+      "regime": "bau"
     },
     {
-      "label": "Iran-Israel direct strikes (Apr 2024)",
-      "start": "2024-04-13",
-      "end":   "2024-04-26",
-      "open_ended": false,
-      "usd_impact": "Sharp safe-haven USD spike; oil futures; intraday FX vol on USDCHF and USDJPY.",
-      "notes": "Iran direct missile/drone strike on Israel 2024-04-13; Israeli response 2024-04-19. Tail of two weeks captures DXY mean-reversion. Embedded inside the Israel-Hamas range above so this entry is redundant in classification but kept for audit."
+      "start": "2024-05-20",
+      "end": "2024-05-26",
+      "regime": "bau"
     },
     {
-      "label": "Iran-Israel direct strikes (Oct 2024)",
-      "start": "2024-10-01",
-      "end":   "2024-10-14",
-      "open_ended": false,
-      "usd_impact": "Safe-haven USD bid; oil; risk-off in equities / NAS100.",
-      "notes": "Iran ballistic-missile attack on Israel 2024-10-01. Two-week tail captures volatility decay. Embedded inside Israel-Hamas range above."
+      "start": "2024-05-27",
+      "end": "2024-06-02",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-06-03",
+      "end": "2024-06-09",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-06-10",
+      "end": "2024-06-16",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-06-17",
+      "end": "2024-06-23",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-06-24",
+      "end": "2024-06-30",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-07-01",
+      "end": "2024-07-07",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-07-08",
+      "end": "2024-07-14",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-07-15",
+      "end": "2024-07-21",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-07-22",
+      "end": "2024-07-28",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-07-29",
+      "end": "2024-08-04",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-08-05",
+      "end": "2024-08-11",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-08-12",
+      "end": "2024-08-18",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-08-19",
+      "end": "2024-08-25",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-08-26",
+      "end": "2024-09-01",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-09-02",
+      "end": "2024-09-08",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-09-09",
+      "end": "2024-09-15",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-09-16",
+      "end": "2024-09-22",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-09-23",
+      "end": "2024-09-29",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-09-30",
+      "end": "2024-10-06",
+      "regime": "war",
+      "label": "Iran-Israel direct strikes (Oct 2024)"
+    },
+    {
+      "start": "2024-10-07",
+      "end": "2024-10-13",
+      "regime": "war",
+      "label": "Iran-Israel direct strikes (Oct 2024)"
+    },
+    {
+      "start": "2024-10-14",
+      "end": "2024-10-20",
+      "regime": "war",
+      "label": "Iran-Israel direct strikes (Oct 2024)"
+    },
+    {
+      "start": "2024-10-21",
+      "end": "2024-10-27",
+      "regime": "war",
+      "label": "Iran-Israel direct strikes (Oct 2024)"
+    },
+    {
+      "start": "2024-10-28",
+      "end": "2024-11-03",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-11-04",
+      "end": "2024-11-10",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-11-11",
+      "end": "2024-11-17",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-11-18",
+      "end": "2024-11-24",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-11-25",
+      "end": "2024-12-01",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-12-02",
+      "end": "2024-12-08",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-12-09",
+      "end": "2024-12-15",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-12-16",
+      "end": "2024-12-22",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-12-23",
+      "end": "2024-12-29",
+      "regime": "bau"
+    },
+    {
+      "start": "2024-12-30",
+      "end": "2025-01-05",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-01-06",
+      "end": "2025-01-12",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-01-13",
+      "end": "2025-01-19",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-01-20",
+      "end": "2025-01-26",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-01-27",
+      "end": "2025-02-02",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-02-03",
+      "end": "2025-02-09",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-02-10",
+      "end": "2025-02-16",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-02-17",
+      "end": "2025-02-23",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-02-24",
+      "end": "2025-03-02",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-03-03",
+      "end": "2025-03-09",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-03-10",
+      "end": "2025-03-16",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-03-17",
+      "end": "2025-03-23",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-03-24",
+      "end": "2025-03-30",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-03-31",
+      "end": "2025-04-06",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-04-07",
+      "end": "2025-04-13",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-04-14",
+      "end": "2025-04-20",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-04-21",
+      "end": "2025-04-27",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-04-28",
+      "end": "2025-05-04",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-05-05",
+      "end": "2025-05-11",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-05-12",
+      "end": "2025-05-18",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-05-19",
+      "end": "2025-05-25",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-05-26",
+      "end": "2025-06-01",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-06-02",
+      "end": "2025-06-08",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-06-09",
+      "end": "2025-06-15",
+      "regime": "war",
+      "label": "Twelve-Day War (Israel-Iran, Jun 2025)"
+    },
+    {
+      "start": "2025-06-16",
+      "end": "2025-06-22",
+      "regime": "war",
+      "label": "Twelve-Day War (Israel-Iran, Jun 2025)"
+    },
+    {
+      "start": "2025-06-23",
+      "end": "2025-06-29",
+      "regime": "war",
+      "label": "Twelve-Day War (Israel-Iran, Jun 2025)"
+    },
+    {
+      "start": "2025-06-30",
+      "end": "2025-07-06",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-07-07",
+      "end": "2025-07-13",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-07-14",
+      "end": "2025-07-20",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-07-21",
+      "end": "2025-07-27",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-07-28",
+      "end": "2025-08-03",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-08-04",
+      "end": "2025-08-10",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-08-11",
+      "end": "2025-08-17",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-08-18",
+      "end": "2025-08-24",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-08-25",
+      "end": "2025-08-31",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-09-01",
+      "end": "2025-09-07",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-09-08",
+      "end": "2025-09-14",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-09-15",
+      "end": "2025-09-21",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-09-22",
+      "end": "2025-09-28",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-09-29",
+      "end": "2025-10-05",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-10-06",
+      "end": "2025-10-12",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-10-13",
+      "end": "2025-10-19",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-10-20",
+      "end": "2025-10-26",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-10-27",
+      "end": "2025-11-02",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-11-03",
+      "end": "2025-11-09",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-11-10",
+      "end": "2025-11-16",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-11-17",
+      "end": "2025-11-23",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-11-24",
+      "end": "2025-11-30",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-12-01",
+      "end": "2025-12-07",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-12-08",
+      "end": "2025-12-14",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-12-15",
+      "end": "2025-12-21",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-12-22",
+      "end": "2025-12-28",
+      "regime": "bau"
+    },
+    {
+      "start": "2025-12-29",
+      "end": "2026-01-04",
+      "regime": "bau"
+    },
+    {
+      "start": "2026-01-05",
+      "end": "2026-01-11",
+      "regime": "bau"
+    },
+    {
+      "start": "2026-01-12",
+      "end": "2026-01-18",
+      "regime": "bau"
+    },
+    {
+      "start": "2026-01-19",
+      "end": "2026-01-25",
+      "regime": "bau"
+    },
+    {
+      "start": "2026-01-26",
+      "end": "2026-02-01",
+      "regime": "bau"
+    },
+    {
+      "start": "2026-02-02",
+      "end": "2026-02-08",
+      "regime": "bau"
+    },
+    {
+      "start": "2026-02-09",
+      "end": "2026-02-15",
+      "regime": "bau"
+    },
+    {
+      "start": "2026-02-16",
+      "end": "2026-02-22",
+      "regime": "bau"
+    },
+    {
+      "start": "2026-02-23",
+      "end": "2026-03-01",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-03-02",
+      "end": "2026-03-08",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-03-09",
+      "end": "2026-03-15",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-03-16",
+      "end": "2026-03-22",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-03-23",
+      "end": "2026-03-29",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-03-30",
+      "end": "2026-04-05",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-04-06",
+      "end": "2026-04-12",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-04-13",
+      "end": "2026-04-19",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-04-20",
+      "end": "2026-04-26",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-04-27",
+      "end": "2026-05-03",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-05-04",
+      "end": "2026-05-10",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-05-11",
+      "end": "2026-05-17",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-05-18",
+      "end": "2026-05-24",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-05-25",
+      "end": "2026-05-31",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-06-01",
+      "end": "2026-06-07",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-06-08",
+      "end": "2026-06-14",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-06-15",
+      "end": "2026-06-21",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-06-22",
+      "end": "2026-06-28",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-06-29",
+      "end": "2026-07-05",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
+    },
+    {
+      "start": "2026-07-06",
+      "end": "2026-07-12",
+      "regime": "war",
+      "label": "US-Iran war (2026)"
     }
   ]
 }

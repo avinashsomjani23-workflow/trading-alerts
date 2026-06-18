@@ -238,7 +238,13 @@ def _confluence_mask(df: pd.DataFrame, name: str) -> pd.Series:
         "killzone":     ("killzone_pts",    lambda s: s > 0),
         "freshness":    ("freshness_pts",   lambda s: s > 0),
         "structure":    ("structure_pts",   lambda s: s > 0),
-        "pd_alignment": ("pd_zone",         lambda s: s.isin(["discount", "premium"])),
+        # Direction-aware: a trade only earns PD credit when it is on the right
+        # side of the range for its direction (long in discount / short in
+        # premium). The old mask counted any discount/premium regardless of
+        # direction, so a short in discount (counter-PD, a red flag) scored the
+        # same as a short in premium. Falls back to pd_zone for older runs that
+        # predate the pd_alignment column.
+        "pd_alignment": ("pd_alignment",    lambda s: s == "aligned"),
     }
     col, fn = mapping.get(name, (None, None))
     if col is None or col not in df.columns:

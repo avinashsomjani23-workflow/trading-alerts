@@ -168,6 +168,26 @@ def _pd_zone_from_dr(price: float, dr: Optional[Dict[str, Any]]) -> str:
     return "equilibrium"
 
 
+def _pd_alignment(bias: str, pd_zone: str) -> str:
+    """Direction-aware PD-array read. Raw discount/premium is meaningless
+    without the trade direction: SMC wants LONGS in discount and SHORTS in
+    premium. The opposite (long in premium / short in discount) is a red flag,
+    not a confluence -- the old pd_zone column could not tell them apart.
+
+       aligned  = with the draw on liquidity (long+discount / short+premium)
+       counter  = against it (long+premium / short+discount)
+       neutral  = equilibrium (middle of the range)
+       unknown  = no valid dealing range
+    """
+    if pd_zone in (None, "unknown"):
+        return "unknown"
+    if pd_zone == "equilibrium":
+        return "neutral"
+    if bias == "LONG":
+        return "aligned" if pd_zone == "discount" else "counter"
+    return "aligned" if pd_zone == "premium" else "counter"
+
+
 def _confluences_present(breakdown: Dict[str, float]) -> str:
     """Comma-separated list of confluences that scored > 0 on this OB.
     Killzone removed 2026-05-25 (no longer a scoring input)."""
@@ -325,9 +345,23 @@ def _simulate_single_entry(
     # carries straight into the zone.
     current_price = alert["current_price"]
 
+    # Lookahead guard (2026-06): TP/SL levels must be computed from ONLY the
+    # bars a live trader could see at the alert -- bars that had already CLOSED.
+    # The alert fires at alert_ts (the bar opening then is still forming), so
+    # closed bars are those indexed strictly before alert_ts. Passing the full
+    # df_h1 let compute_phase2_levels.get_swing_points pick opposing swings that
+    # formed AFTER the alert (future liquidity), biasing both TP selection and
+    # the 1.5R validity gate optimistically. This mirrors the slice the scoring
+    # path already uses (_score_h1_only) and live behaviour. The forward
+    # fill-walk below intentionally keeps the FULL df_h1 -- it must see the
+    # future to simulate how the trade plays out.
+    df_h1_at_alert = df_h1.loc[df_h1.index < alert_ts]
+    if df_h1_at_alert.empty:
+        df_h1_at_alert = df_h1.loc[:alert_ts]  # degenerate guard, never empty
+
     try:
         levels = smc_detector.compute_phase2_levels(
-            pair_conf, bias, ob, current_price, df_h1,
+            pair_conf, bias, ob, current_price, df_h1_at_alert,
             entry_zone=entry_zone,
         )
     except Exception as e:
@@ -627,6 +661,8 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     bos_tier = ob.get("bos_tier", "Major")
     dr = ob.get("dealing_range")
     pd_zone = _pd_zone_from_dr(entry, dr)
+    pd_alignment = _pd_alignment("LONG" if direction == "bullish" else "SHORT",
+                                 pd_zone)
     pnl_usd = round(r_realised * risk_usd, 2)
     return {
         "pair":          alert["pair"],
@@ -664,6 +700,7 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "ob_age_h1_bars": _ob_age_h1_bars(ob, df_h1, alert_ts),
         "ob_timestamp":  ob.get("ob_timestamp"),
         "pd_zone":       pd_zone,
+        "pd_alignment":  pd_alignment,
         "score":         round(float(score), 2),
         "structure_pts": round(float(breakdown.get("structure", 0.0)), 2),
         "sweep_pts":     round(float(breakdown.get("sweep", 0.0)), 2),
