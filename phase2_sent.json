@@ -1,27 +1,6 @@
 {
   "day_id": "2026-06-18",
   "zones": {
-    "EURUSD_LONG_CHoCH_1.1538_2026-06-08T09": {
-      "score_int": 5,
-      "score_raw": 5.0,
-      "score_high_water": 5.0,
-      "score_low_water": 5.0,
-      "breakdown": {
-        "structure": 4,
-        "sweep": 0.0,
-        "fvg": 1,
-        "freshness": 0,
-        "pd": 0.0,
-        "killzone": 0.0
-      },
-      "alert_ist": "2026-06-11T14:35:34.751017",
-      "last_seen_ist": "2026-06-11T19:35:36.260776",
-      "last_email_day": "2026-06-11",
-      "reentry_armed": false,
-      "max_exit_distance": 0.0,
-      "bias": "LONG",
-      "pair": "EURUSD"
-    },
     "EURUSD_SHORT_CHoCH_1.1537_2026-06-11T11": {
       "score_int": 5,
       "score_raw": 5.0,
@@ -751,7 +730,7 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-18T09:35:41.448507",
-      "last_seen_ist": "2026-06-18T18:35:47.583893",
+      "last_seen_ist": "2026-06-18T19:35:50.069036",
       "last_email_day": "2026-06-18",
       "reentry_armed": true,
       "max_exit_distance": 0.6829986572265625,
@@ -790,7 +769,7 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-18T10:35:37.082049",
-      "last_seen_ist": "2026-06-18T18:35:47.583893",
+      "last_seen_ist": "2026-06-18T19:35:50.069036",
       "last_email_day": "2026-06-18",
       "reentry_armed": true,
       "max_exit_distance": 101.5,
@@ -809,7 +788,7 @@
         "freshness": 0
       },
       "alert_ist": "2026-06-18T10:35:37.082049",
-      "last_seen_ist": "2026-06-18T18:35:47.583893",
+      "last_seen_ist": "2026-06-18T19:35:50.069036",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -829,7 +808,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-18T14:35:49.036693",
-      "last_seen_ist": "2026-06-18T18:35:47.583893",
+      "last_seen_ist": "2026-06-18T19:35:50.069036",
       "last_email_day": "2026-06-18",
       "reentry_armed": true,
       "max_exit_distance": 0.004960000514984131,
