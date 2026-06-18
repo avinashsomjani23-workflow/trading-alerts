@@ -1672,8 +1672,10 @@ def _get_active_obs_mtime_hours(ist_now):
 
 def _is_weekday_market_hours(ist_now):
     """Rough check: weekday and not deep weekend. FX runs Mon-Fri IST."""
-    # Monday=0 ... Sunday=6. Forex is closed Sat 03:30 IST through Mon 03:30 IST roughly.
+    # Monday=0 ... Sunday=6. Forex is closed Sat 03:30 IST through Mon 09:00 IST.
     wd = ist_now.weekday()
+    if wd == 0 and ist_now.hour < 9:  # Monday before 09:00 IST — market not yet open
+        return False
     if wd < 5:  # Mon-Fri
         return True
     if wd == 6 and ist_now.hour >= 4:  # Sunday after ~04:00 IST markets reopen
