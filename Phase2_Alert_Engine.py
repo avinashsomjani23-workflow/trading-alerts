@@ -2326,11 +2326,20 @@ if __name__ == "__main__":
             # Fallback to current_price for the other side. This catches a
             # wick that pierced toward the OB and reversed within the same
             # bar — an event the close alone would hide.
+            # Clamp proximity (uniform with the backtest replay engine,
+            # 2026-06-18). distance is 0 once price has REACHED or PASSED the
+            # proximal -- exactly when a limit resting there would fill. The
+            # old abs() inflated distance on a deep wick THROUGH the zone and
+            # could suppress an alert that should fire. For a LONG the closest
+            # point is the bar low (price comes down to the OB); for a SHORT it
+            # is the bar high. current_price is irrelevant: it is always above
+            # the low (LONG) / below the high (SHORT), so it never sets the min.
             if bias == "LONG":
-                closest_to_ob = min(current_price, h1_bar_low)
+                closest_to_ob = h1_bar_low
+                distance = max(0.0, h1_bar_low - proximal)
             else:
-                closest_to_ob = max(current_price, h1_bar_high)
-            distance = abs(closest_to_ob - proximal)
+                closest_to_ob = h1_bar_high
+                distance = max(0.0, proximal - h1_bar_high)
             prox_cap = pair_conf["atr_multiplier"] * h1_atr
 
             # Structural dedup key built HERE (before the proximity gate) so the
@@ -2621,8 +2630,30 @@ if __name__ == "__main__":
                     # Price genuinely left the zone and came back — fresh approach.
                     email_kind = "reentry"
                 elif prior.get("last_email_day") != today_id:
-                    # New trading day, zone still in proximity & valid.
-                    email_kind = "still_valid"
+                    # New trading day. Compute how many days have elapsed since
+                    # the last email. Gap of exactly 1 day = still_valid reminder.
+                    # Gap of 2+ days = treat as fresh (wipe prior context so the
+                    # zone re-emails with no score band / watermark history).
+                    try:
+                        last_day_dt = datetime.strptime(prior["last_email_day"], "%Y-%m-%d")
+                        today_dt    = datetime.strptime(today_id, "%Y-%m-%d")
+                        day_gap = (today_dt - last_day_dt).days
+                    except Exception:
+                        day_gap = 1  # parse failure → treat as 1-day gap (safe default)
+
+                    if day_gap >= 2:
+                        # Zone went quiet for 2+ days — treat as a brand-new sighting.
+                        # Wipe prior context: score band, watermarks, first-seen time.
+                        prior = None
+                        prior_score_raw = None
+                        prior_breakdown = None
+                        prior_alert_ist = None
+                        hi_water = current_score_raw
+                        lo_water = current_score_raw
+                        email_kind = "fresh"
+                    else:
+                        # Exactly 1 new trading day — still valid reminder.
+                        email_kind = "still_valid"
                 else:
                     # Same trading day, continuously in proximity → hysteresis.
                     direction = hysteresis_should_reemail(current_score_raw, prior_score_raw)

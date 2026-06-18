@@ -59,6 +59,22 @@ trusting any number it produces.
 - **Time stop:** trades not closed within `MAX_HOLD_H1_BARS` (default 48
   H1 bars = 2 trading days) are time-stopped at the last bar's close.
 
+## Forming bar vs closed bar (alert timing)
+
+- **Live evaluates proximity + scoring on the in-progress H1 bar** (it reads
+  the current bar's running high/low/close mid-hour). The H1-only backtest only
+  has COMPLETED bars, so it evaluates on the just-closed bar instead.
+- Net effect: the backtest catches the SAME wick touches (the just-closed bar
+  already contains that hour's full wick) but timestamps the alert up to ~1h
+  later. Trade economics are identical — same OB, same entry/SL/TP, same fill
+  walk — so P&L is unchanged; only the alert *time* shifts.
+- Accepted as inherent (2026-06-18). The only "fix" is re-adding M15 data to
+  reconstruct the live forming bar, which reintroduces the data-quality
+  problems H1-only was built to avoid. Not worth it.
+- Proximity formula IS uniform across both: `distance = max(0, low−proximal)`
+  (LONG) / `max(0, proximal−high)` (SHORT) — fires when price reaches/passes
+  the proximal. Live was migrated off `abs(...)` to this clamp on 2026-06-18.
+
 ## What this CAN'T tell you
 
 - **Whether a vet would have taken the trade.** Mechanical grading only.

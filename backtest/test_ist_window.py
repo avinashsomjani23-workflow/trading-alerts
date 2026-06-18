@@ -4,9 +4,11 @@ The gate exists because the live system suppresses everything outside
 the user's IST trading window -- the backtest must mirror this. Anything
 that lets blocked rows leak into aggregate metrics is a critical bug.
 
-Window definitions (single source of truth = backtest/ist_window.py):
-  forex / commodity : UTC 03:30 .. 18:30  (=  IST 09:00 .. 24:00)
-  index             : UTC 13:00 .. 20:00  (=  IST 18:30 .. 01:30)
+Window definition (single source of truth = backtest/ist_window.py):
+  all instruments : UTC 03:30 .. 18:30  (=  IST 09:00 .. 24:00)
+
+Live blocks every pair before 09:00 IST (one blackout, no separate index
+window), so the backtest uses one window for all instruments too.
 """
 
 from __future__ import annotations
@@ -67,19 +69,21 @@ def test_commodity_window_same_as_forex():
     return ok
 
 
-def test_index_window():
-    print("\n== test_index_window ==")
+def test_index_window_same_as_forex():
+    print("\n== test_index_window_same_as_forex ==")
     ok = True
+    # Index uses the SAME 09:00-24:00 IST window as everything else now
+    # (live has no separate index window).
+    ok &= check(ist_window.in_user_trading_window(_ts(3, 30), "index"),
+                "03:30 UTC index inside (= 09:00 IST, open)")
     ok &= check(ist_window.in_user_trading_window(_ts(13, 0), "index"),
-                "13:00 UTC is inside (= 18:30 IST, open)")
-    ok &= check(ist_window.in_user_trading_window(_ts(19, 59), "index"),
-                "19:59 UTC is inside (just before close)")
+                "13:00 UTC index inside (mid-day)")
+    ok &= check(not ist_window.in_user_trading_window(_ts(18, 30), "index"),
+                "18:30 UTC index outside (= 24:00 IST, closed)")
     ok &= check(not ist_window.in_user_trading_window(_ts(20, 0), "index"),
-                "20:00 UTC is outside (= 01:30 IST, closed)")
-    ok &= check(not ist_window.in_user_trading_window(_ts(12, 0), "index"),
-                "12:00 UTC is outside (= 17:30 IST, too early)")
-    ok &= check(not ist_window.in_user_trading_window(_ts(8, 0), "index"),
-                "08:00 UTC is outside (Asia-time, no trading)")
+                "20:00 UTC index outside")
+    ok &= check(not ist_window.in_user_trading_window(_ts(2, 0), "index"),
+                "02:00 UTC index outside (too early)")
     return ok
 
 
@@ -165,7 +169,7 @@ def main():
     tests = [
         ("test_forex_window",                          test_forex_window),
         ("test_commodity_window_same_as_forex",        test_commodity_window_same_as_forex),
-        ("test_index_window",                          test_index_window),
+        ("test_index_window_same_as_forex",            test_index_window_same_as_forex),
         ("test_unknown_pair_type_defaults_to_forex",   test_unknown_pair_type_defaults_to_forex),
         ("test_naive_timestamp_rejected",              test_naive_timestamp_rejected),
         ("test_report_excludes_ist_blocked_from_aggregates",

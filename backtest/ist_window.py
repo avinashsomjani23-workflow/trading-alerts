@@ -5,8 +5,13 @@ live suppresses everything (no scans, no alerts, no trades). The backtest
 must do the same -- otherwise WR/PnL include hours the user never trades.
 
 Window (single source of truth, expressed in UTC):
-  forex / commodity : 03:30 .. 18:30 UTC  (=  09:00 .. 24:00 IST)
-  index             : 13:00 .. 20:00 UTC  (=  18:30 .. 01:30 IST)
+  all instruments : 03:30 .. 18:30 UTC  (=  09:00 .. 24:00 IST)
+
+Live blocks the WHOLE scan before 09:00 IST (smc_radar.py: "do nothing before
+09:00 IST"), for every pair. The trading window is 09:00 -> 24:00 (midnight)
+IST; its complement is 00:00 .. 09:00 IST, which is exactly what live's
+`hour < 9` gate suppresses. There is NO separate index window in live, so we
+use one window for all instruments here too.
 
 The IST gate is a *hard filter*: alerts that fall fully outside the
 trading window above are dropped.
@@ -25,21 +30,18 @@ def _utc_minute(ts: pd.Timestamp) -> int:
 
 
 def in_user_trading_window(ts: pd.Timestamp, pair_type: str) -> bool:
-    """True iff alert timestamp falls inside the user's IST trading window
-    for this pair_type. ts MUST be tz-aware UTC."""
+    """True iff alert timestamp falls inside the user's IST trading window.
+    ts MUST be tz-aware UTC. `pair_type` is accepted for signature stability
+    but ignored: live blocks all instruments before 09:00 IST with no separate
+    index window, so one window (09:00-24:00 IST = 03:30-18:30 UTC) covers all."""
     if ts.tzinfo is None:
         raise ValueError("in_user_trading_window requires tz-aware ts")
     m = _utc_minute(ts)
-    if pair_type == "index":
-        # 13:00 .. 20:00 UTC inclusive on the open, exclusive on the close.
-        return 13 * 60 <= m < 20 * 60
-    # forex / commodity / default.
     # 03:30 .. 18:30 UTC inclusive on the open, exclusive on the close.
     return 3 * 60 + 30 <= m < 18 * 60 + 30
 
 
 def window_label(pair_type: str) -> str:
-    """Human-readable window string for the report copy."""
-    if pair_type == "index":
-        return "UTC 13:00-20:00 (IST 18:30-01:30)"
+    """Human-readable window string for the report copy. One window for all
+    instruments (live has no separate index window)."""
     return "UTC 03:30-18:30 (IST 09:00-24:00)"

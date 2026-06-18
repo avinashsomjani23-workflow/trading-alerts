@@ -272,53 +272,77 @@ def _extract_metrics(summary):
 
 
 def test_metric_exclusion_invariant():
-    """The killer test: adding news-blocked trades must not change any metric."""
+    """Live-parity contract (2026-06-18): the ONLY thing excluded from the
+    headline is a BELOW-SCORE-FLOOR row. News / IST / killzone are
+    informational in live -- they never gate -- so they MUST be counted.
+
+    1. Adding resolved below-floor trades does NOT move any aggregate metric
+       (they are the excluded set) but DOES bump below_score_floor_trade_rows.
+    2. Adding a resolved news-blocked trade that clears the floor DOES move the
+       headline (it is counted, exactly as live would email it)."""
     print("\n== test_metric_exclusion_invariant ==")
 
     baseline = _baseline_trades()
     summary_a = _build_summary(baseline)
     metrics_a = _extract_metrics(summary_a)
 
-    # Add extreme-outcome blocked trades that WOULD wildly distort metrics
-    # if they leaked in: a +10R win and a -5R loss.
-    poison = [
-        _synth_trade("EURUSD", "2026-05-07 13:30:00+00:00", "proximal", "tp2",
-                     +10.0, news_blocked=True,
-                     news_event_title="NFP +10R poison"),
-        _synth_trade("EURUSD", "2026-05-07 13:30:00+00:00", "50pct",    "tp2",
-                     +10.0, news_blocked=True,
-                     news_event_title="NFP +10R poison"),
-        _synth_trade("USDJPY", "2026-05-07 14:30:00+00:00", "proximal", "sl",
-                     -5.0, news_blocked=True,
-                     news_event_title="FOMC -5R poison"),
-        _synth_trade("USDJPY", "2026-05-07 14:30:00+00:00", "50pct",    "sl",
-                     -5.0, news_blocked=True,
-                     news_event_title="FOMC -5R poison"),
+    # --- 1. Below-floor rows: extreme outcomes that WOULD distort metrics if
+    # they leaked in. score below config floor (4) -> must be excluded.
+    win = baseline[0]   # EURUSD proximal tp2 template
+    loss = baseline[2]  # EURUSD proximal sl template
+    below_floor = [
+        {**win,  "score": 2.0, "r_realised": +10.0, "pnl_usd": 2500.0,
+         "entry_zone": "proximal"},
+        {**win,  "score": 2.0, "r_realised": +10.0, "pnl_usd": 2500.0,
+         "entry_zone": "50pct"},
+        {**loss, "score": 3.5, "r_realised": -5.0,  "pnl_usd": -1250.0,
+         "entry_zone": "proximal"},
+        {**loss, "score": 3.5, "r_realised": -5.0,  "pnl_usd": -1250.0,
+         "entry_zone": "50pct"},
     ]
-    poisoned = baseline + poison
-    summary_b = _build_summary(poisoned)
+    summary_b = _build_summary(baseline + below_floor)
     metrics_b = _extract_metrics(summary_b)
-
-    ok = True
-    # Every metric must match exactly.
+    # Headline aggregates must be untouched. Excluded from this check:
+    #   - total_trade_rows: a raw row count, includes audit rows by design.
+    #   - score_buckets_*: the DISCOVERY view, which intentionally spans all
+    #     scores (incl. below floor) so the threshold can be tuned.
+    _discovery_keys = {"total_trade_rows",
+                       "score_buckets_proximal_realised",
+                       "score_buckets_50pct_realised"}
     for k in metrics_a:
-        ok &= check(metrics_a[k] == metrics_b[k],
-                    f"{k} unchanged after adding {len(poison)} blocked trades")
+        if k in _discovery_keys:
+            continue
+        assert metrics_a[k] == metrics_b[k], (
+            f"{k} changed after adding below-floor trades "
+            f"(should be excluded): {metrics_a[k]} -> {metrics_b[k]}")
+    assert summary_b["below_score_floor_trade_rows"] == 4, (
+        f"below_score_floor_trade_rows should be 4, "
+        f"got {summary_b['below_score_floor_trade_rows']}")
+    assert summary_a["below_score_floor_trade_rows"] == 0
+    # Discovery buckets MUST capture the sub-floor rows (that is their job).
+    b_labels = {b["score_bucket"]
+                for b in summary_b["score_buckets_proximal_realised"]}
+    assert "2-3" in b_labels and "3-4" in b_labels, (
+        f"discovery buckets must include sub-floor scores, got {b_labels}")
 
-    # Audit fields MUST differ -- the blocked trades should be visible.
-    ok &= check(summary_b["news_blocked_trade_rows"] == 4,
-                "news_blocked_trade_rows = 4 (= 2 alerts x 2 zones)")
-    ok &= check(summary_a["news_blocked_trade_rows"] == 0,
-                "baseline news_blocked_trade_rows = 0")
-    ok &= check(len(summary_b["news_blocked_audit"]) == 4,
-                "news_blocked_audit lists all 4 blocked rows")
-    ok &= check(
-        any("NFP +10R poison" in e["event_title"]
-            for e in summary_b["news_blocked_audit"]),
-        "audit list mentions the +10R poison event"
-    )
-
-    return ok
+    # --- 2. News-blocked but scoring rows ARE counted (live parity). A +10R
+    # news-blocked winner must MOVE the proximal headline upward.
+    news = [
+        {**win, "score": 5.0, "r_realised": +10.0, "pnl_usd": 2500.0,
+         "entry_zone": "proximal", "news_blocked": True,
+         "news_event_title": "NFP counted"},
+        {**win, "score": 5.0, "r_realised": +10.0, "pnl_usd": 2500.0,
+         "entry_zone": "50pct", "news_blocked": True,
+         "news_event_title": "NFP counted"},
+    ]
+    summary_c = _build_summary(baseline + news)
+    base_pnl = summary_a["scoreboards"]["proximal_realised"]["total_pnl_usd"]
+    news_pnl = summary_c["scoreboards"]["proximal_realised"]["total_pnl_usd"]
+    assert news_pnl == base_pnl + 2500.0, (
+        f"news-blocked winner must be counted (live parity): "
+        f"{base_pnl} -> {news_pnl}")
+    assert summary_c["news_blocked_trade_rows"] == 2
+    return True
 
 
 def test_tz_pad_helper_accepts_both():

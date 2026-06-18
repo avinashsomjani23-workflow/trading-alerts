@@ -27,7 +27,7 @@ from backtest.scanlog.emitter import ScanLog
 # layer strips these before building its scoreboards; the gate headline must
 # strip the identical set or G1 compares an all-rows sum against a
 # reason-excluded sum (same apples-to-oranges trap as _is_blocked).
-from backtest.h1_only_reporting import _is_real_filled
+from backtest.h1_only_reporting import _is_eligible
 
 
 PASS = "PASS"
@@ -69,24 +69,13 @@ class HealthResult:
         return self.overall == PASS
 
 
-def _is_blocked(t: Dict[str, Any]) -> bool:
-    """A trade row excluded from every reporting aggregate: news / IST /
-    killzone blackout. The reporting layer strips these before summing
-    (h1_only_reporting: 'no aggregate calculation should ever see a blocked
-    row'), so the gate headline must exclude them too or G1 compares an
-    all-rows sum against a blocked-excluded sum — apples to oranges."""
-    return bool(t.get("news_blocked")
-                or t.get("ist_blocked")
-                or t.get("killzone_blocked"))
-
-
 def _is_counted(t: Dict[str, Any]) -> bool:
-    """A trade row that feeds the reporting headline: not blocked (news/IST/
-    killzone) AND a real, resolved fill (excludes never_filled, timeout and
-    window_end -- the reporting layer's _EXCLUDE_REASONS). The gate must use
-    the identical row set as the reporting scoreboards, or G1 reconciles two
-    different sums."""
-    return (not _is_blocked(t)) and _is_real_filled(t)
+    """A trade row that feeds the reporting headline. Delegates to the reporting
+    layer's _is_eligible (resolved fill AND clears the live score floor) so the
+    gate sums the IDENTICAL row set the scoreboards do -- otherwise G1
+    reconciles two different sums. Live parity: news / IST / killzone NEVER gate
+    (they don't suppress an alert in live), so they are not consulted here."""
+    return _is_eligible(t)
 
 
 def _sum_r_realised_pnl(trades: List[Dict[str, Any]], risk_usd: float) -> float:
