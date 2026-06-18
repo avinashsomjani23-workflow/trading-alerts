@@ -89,38 +89,30 @@ def _fill_session(fill_ts, alert_ts) -> str:
     return _session_from_utc_hour(h) if h is not None else "unknown"
 
 
-def _hour_in_pair_killzone(utc_hour: Optional[int], pair_conf: Dict[str, Any]) -> bool:
-    """True if utc_hour falls inside any of this pair's configured killzone
-    windows. Uses minute-precision: hour H counts as 'in' if any minute of
-    H:00-H:59 sits inside a window."""
-    if utc_hour is None:
+def _ts_in_killzone(ts_val, pair_conf: Dict[str, Any]) -> bool:
+    """DST-aware killzone membership for a full timestamp. Routes through the
+    shared smc_detector engine so the backtest resolves the SAME UTC windows
+    the live engine does, per candle date. The full date matters: the same UTC
+    hour can be in/out of a killzone depending on the EDT/EST season."""
+    if ts_val is None or ts_val == "":
         return False
-    windows = pair_conf.get("killzones_utc") or []
-    for w in windows:
-        if not isinstance(w, (list, tuple)) or len(w) != 2:
-            continue
-        try:
-            sh, sm = (int(x) for x in str(w[0]).split(":"))
-            eh, em = (int(x) for x in str(w[1]).split(":"))
-        except (ValueError, AttributeError):
-            continue
-        start_min = sh * 60 + sm
-        end_min   = eh * 60 + em
-        hour_start = utc_hour * 60
-        hour_end   = hour_start + 60
-        if hour_start < end_min and hour_end > start_min:
-            return True
-    return False
+    killzones = pair_conf.get("killzones")
+    if not killzones:
+        return False
+    try:
+        ts = pd.Timestamp(ts_val)
+        ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
+        return smc_detector.ts_in_killzone(ts.isoformat(), killzones)
+    except Exception:
+        return False
 
 
 def _ob_in_killzone(ob: Dict[str, Any], pair_conf: Dict[str, Any]) -> bool:
-    return _hour_in_pair_killzone(_ts_hour_utc(ob.get("ob_timestamp")), pair_conf)
+    return _ts_in_killzone(ob.get("ob_timestamp"), pair_conf)
 
 
 def _fill_in_killzone(fill_ts, pair_conf: Dict[str, Any]) -> bool:
-    if fill_ts is None:
-        return False
-    return _hour_in_pair_killzone(_ts_hour_utc(fill_ts), pair_conf)
+    return _ts_in_killzone(fill_ts, pair_conf)
 
 
 def _killzone_alignment(ob: Dict[str, Any], fill_ts, alert_ts,
@@ -302,10 +294,9 @@ def _score_h1_only(alert: Dict[str, Any], pair_conf: Dict[str, Any],
                   error=f"{type(e).__name__}: {e}")
         return 0.0, {}
     breakdown = dict(score_res.get("breakdown", {}))
-    # Killzone removed from scoring 2026-05-25 -- hard filter already
-    # ensures every alert is in-killzone, so the bonus was redundant.
-    # Zero out defensively in case live scorer ever emits non-zero.
-    breakdown["killzone"] = 0.0
+    # Killzone IS scored (2026-06-18) on the OB-FORMATION candle. The hard
+    # filter gates the entry/alert time, NOT the OB candle, so this score is
+    # independent of the filter and must flow through to the backtest total.
     total = round(sum(float(v) for v in breakdown.values()), 1)
     return total, breakdown
 

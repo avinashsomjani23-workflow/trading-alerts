@@ -5,76 +5,48 @@ structure actually carries weight. Outside it, price drifts and OB tests
 are noise. We drop those alerts entirely -- they never enter the
 simulator, never appear in aggregates, never appear in the Excel.
 
-Windows come from config.json (pair_conf['killzones_utc']), expressed as a
-list of [start_hhmm, end_hhmm] pairs in UTC. Multiple windows per pair are
-supported so split-session pairs (USDJPY, NZDUSD) work.
+Windows live in config.json (pair_conf['killzones']) as SESSION-LOCAL time +
+an IANA timezone, e.g. {"tz": "America/New_York", "start": "07:00", "end":
+"10:00"}. The shared smc_detector engine resolves them to UTC per candle DATE
+so DST is handled automatically -- the same window the live engine uses. This
+module never parses windows itself; it delegates to keep one source of truth.
 
-A 30-minute buffer is already baked into the configured windows -- the
-config values are the *effective* killzone, not the raw exchange session.
-
-Half-open at the close: a window of ["07:00", "16:30"] means 07:00:00
-inclusive, 16:30:00 exclusive.
+Half-open at the close: 07:00 inclusive, 10:00 exclusive.
 """
 
 from __future__ import annotations
 
-from typing import List, Sequence, Tuple
+import os
+import sys
 
 import pandas as pd
 
-
-def _parse_hhmm(s: str) -> int:
-    """Convert 'HH:MM' to minutes-since-midnight. Raises on malformed input."""
-    h_str, m_str = s.split(":")
-    return int(h_str) * 60 + int(m_str)
-
-
-def _normalise_windows(raw: Sequence) -> List[Tuple[int, int]]:
-    """Convert config list to a list of (start_min, end_min) integer tuples.
-    Returns an empty list if the config entry is missing or malformed --
-    caller decides whether that means 'no filter' or 'block all'."""
-    out: List[Tuple[int, int]] = []
-    if not raw:
-        return out
-    for window in raw:
-        if not isinstance(window, (list, tuple)) or len(window) != 2:
-            continue
-        try:
-            start = _parse_hhmm(str(window[0]))
-            end   = _parse_hhmm(str(window[1]))
-        except (ValueError, TypeError):
-            continue
-        if not (0 <= start < 24 * 60) or not (0 < end <= 24 * 60):
-            continue
-        out.append((start, end))
-    return out
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import smc_detector
 
 
 def in_pair_killzone(ts: pd.Timestamp, pair_conf: dict) -> bool:
     """True iff `ts` falls inside any configured killzone window for this pair.
 
-    Behaviour:
-      - ts must be tz-aware UTC (raises otherwise -- silent tz bugs are worse
-        than a loud failure).
-      - If pair_conf has no `killzones_utc` or it's empty/malformed, return
-        True (i.e. no filter applied). This is the safe default: a missing
-        config never blocks live data; it just means no killzone gate.
+    - ts must be tz-aware UTC (raises otherwise -- silent tz bugs are worse
+      than a loud failure).
+    - If pair_conf has no `killzones`, return True (no filter). A missing
+      config never blocks data; it just means no killzone gate.
     """
     if ts.tzinfo is None:
         raise ValueError("in_pair_killzone requires tz-aware ts")
-    windows = _normalise_windows(pair_conf.get("killzones_utc") or [])
-    if not windows:
-        return True  # no killzone configured -> no filter
-    m = ts.hour * 60 + ts.minute
-    return any(start <= m < end for start, end in windows)
+    killzones = pair_conf.get("killzones")
+    if not killzones:
+        return True
+    return smc_detector.ts_in_killzone(ts.isoformat(), killzones)
 
 
 def windows_label(pair_conf: dict) -> str:
-    """Human-readable label of configured windows, for report copy."""
-    windows = _normalise_windows(pair_conf.get("killzones_utc") or [])
-    if not windows:
+    """Human-readable label of configured session-local windows, for report copy."""
+    killzones = pair_conf.get("killzones") or []
+    if not killzones:
         return "no killzone configured"
     return ", ".join(
-        f"{s // 60:02d}:{s % 60:02d}-{e // 60:02d}:{e % 60:02d} UTC"
-        for s, e in windows
+        f"{w.get('start')}-{w.get('end')} {w.get('tz')}"
+        for w in killzones if isinstance(w, dict)
     )

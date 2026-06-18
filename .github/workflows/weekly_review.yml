@@ -31,7 +31,7 @@ jobs:
           restore-keys: pip-${{ runner.os }}-
 
       - name: Install dependencies
-        run: pip install yfinance requests numpy pandas openpyxl
+        run: pip install -r requirements.txt
 
       - name: Run weekly review
         env:

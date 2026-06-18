@@ -531,6 +531,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         return empty
 
     closes = df["Close"].to_numpy(dtype=float)
+    opens  = df["Open"].to_numpy(dtype=float)
     n = len(df)
 
     price_now = float(closes[-1])
@@ -704,7 +705,9 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
 
         # ---- 2. CHoCH (flip) ---------------------------------------------------
         if state == _UP and defended is not None and rearm_block_dir != _DOWN:
-            if c < defended - choch_disp:
+            # Gap-open guard: open must be above defended — if price gapped
+            # below the swing at open, no candle traded through it (not SMC).
+            if c < defended - choch_disp and opens[ci] >= defended:
                 rev_idx = recent_high["idx"] if recent_high else leg_start
                 choch = True
                 ts_now = _ts_iso(df, ci)
@@ -733,7 +736,9 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             old_impulse, choch_from_zone, "bearish",
                             broken_swing_ts_arg=broken_defended_ts)
         elif state == _DOWN and defended is not None and rearm_block_dir != _UP:
-            if c > defended + choch_disp:
+            # Gap-open guard: open must be below defended — if price gapped
+            # above the swing at open, no candle traded through it (not SMC).
+            if c > defended + choch_disp and opens[ci] <= defended:
                 rev_idx = recent_low["idx"] if recent_low else leg_start
                 choch = True
                 ts_now = _ts_iso(df, ci)
@@ -773,7 +778,9 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         # swing cannot re-fire; it re-seeds on the next confirmed swing (sec. 4).
         if state == _DOWN and bos_break_low is not None and rearm_block_dir != _UP:
             broken_price = bos_break_low["price"]
-            if c < broken_price - bos_disp:
+            # Gap-open guard: open must be at or above the broken swing — if
+            # price gapped below it at open, no candle traded through it.
+            if c < broken_price - bos_disp and opens[ci] >= broken_price:
                 ts_now = _ts_iso(df, ci)
                 bos_tier = ("Range" if h4_floor is not None
                             and abs(broken_price - h4_floor) <= bos_disp
@@ -787,7 +794,9 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 bos_break_low = None  # spent — re-seeds on next confirmed low
         elif state == _UP and bos_break_high is not None and rearm_block_dir != _DOWN:
             broken_price = bos_break_high["price"]
-            if c > broken_price + bos_disp:
+            # Gap-open guard: open must be at or below the broken swing — if
+            # price gapped above it at open, no candle traded through it.
+            if c > broken_price + bos_disp and opens[ci] <= broken_price:
                 ts_now = _ts_iso(df, ci)
                 bos_tier = ("Range" if h4_ceiling is not None
                             and abs(broken_price - h4_ceiling) <= bos_disp

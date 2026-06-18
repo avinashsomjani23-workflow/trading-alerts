@@ -16,7 +16,10 @@
       "distal_invalidation_mode": "close",
       "decimal_places": 5,
       "spread_pips": 2.0,
-      "killzones_utc": [["07:00", "10:00"], ["12:00", "17:00"]]
+      "killzones": [
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00"}
+      ]
     },
     {
       "symbol": "JPY=X",
@@ -28,7 +31,11 @@
       "distal_invalidation_mode": "close",
       "decimal_places": 3,
       "spread_pips": 2.0,
-      "killzones_utc": [["03:30", "07:00"], ["07:00", "10:00"], ["12:00", "17:00"]]
+      "killzones": [
+        {"tz": "Asia/Tokyo", "start": "09:00", "end": "13:00"},
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00"}
+      ]
     },
     {
       "symbol": "NZDUSD=X",
@@ -40,7 +47,11 @@
       "distal_invalidation_mode": "close",
       "decimal_places": 5,
       "spread_pips": 4.0,
-      "killzones_utc": [["03:30", "07:00"], ["07:00", "10:00"], ["12:00", "17:00"]]
+      "killzones": [
+        {"tz": "Asia/Tokyo", "start": "09:00", "end": "13:00"},
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00"}
+      ]
     },
     {
       "symbol": "CHF=X",
@@ -52,7 +63,10 @@
       "distal_invalidation_mode": "close",
       "decimal_places": 5,
       "spread_pips": 2.0,
-      "killzones_utc": [["07:00", "10:00"], ["12:00", "17:00"]]
+      "killzones": [
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00"}
+      ]
     },
     {
       "symbol": "NQ=F",
@@ -64,7 +78,10 @@
       "distal_invalidation_mode": "close",
       "decimal_places": 2,
       "spread_pips": 2.0,
-      "killzones_utc": [["13:00", "21:00"]]
+      "killzones": [
+        {"tz": "America/New_York", "start": "08:30", "end": "11:00"},
+        {"tz": "America/New_York", "start": "11:00", "end": "13:00"}
+      ]
     },
     {
       "symbol": "GC=F",
@@ -76,7 +93,10 @@
       "distal_invalidation_mode": "close",
       "decimal_places": 2,
       "spread_pips": 0.50,
-      "killzones_utc": [["07:00", "10:00"], ["12:00", "21:00"]]
+      "killzones": [
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00"},
+        {"tz": "America/New_York", "start": "07:00", "end": "11:00"}
+      ]
     }
   ],
   "scoring": {

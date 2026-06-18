@@ -57,28 +57,21 @@ def score_to_int(score):
 
 
 def scorecard_real_max(pair_conf):
-    """Real (internal) maximum for a pair's confluence scorecard.
+    """Real (internal) maximum for a pair's confluence scorecard. Both pair
+    classes total 10 (2026-06-18 rebalance), so the max is a flat 10.
 
     Components (mirrors smc_detector.run_scorecard):
-      Structure 4 | Sweep 1 (non-JPY forex, presence-only) or 3 (JPY/Gold/NAS,
-      quality-graded) | FVG 2 | Freshness 1.
-    So non-JPY forex tops out at 8, JPY/Gold/NAS at 10. (Killzone removed from
-    scoring 2026-06-16 — now info-only in the Killzone section, not a scored
-    line. It's binary and easy to satisfy, so it inflated the denominator
-    without adding signal.) The per-line math in the email body always shows
-    this true max; the headline normalises to /10 for cross-instrument
-    comparison.
+      Non-JPY forex: Structure 4 | Sweep 1 | FVG 2 | Freshness 2 | Killzone 1.
+      JPY/Gold/NAS:  Structure 4 | Sweep 2 | FVG 2 | Freshness 1 | Killzone 1.
+    The freshness/sweep split keeps both at 10 (see run_scorecard for why).
     """
-    name = pair_conf.get('name', '') if pair_conf else ''
-    ptype = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
-    return 8 if (ptype == 'forex' and 'JPY' not in name) else 10
+    return 10
 
 
 def normalized_score(raw, pair_conf):
-    """Forex caps at 8, others at 10 — different ceilings make a 7/8 and a
-    7/10 look equal at a glance when they are not. Rescale to a common /10
-    so a EURUSD alert is directly comparable to a XAUUSD alert. Used for the
-    email banner header and the subject line ONLY; the body keeps real math.
+    """Both pair classes now top out at 10, so the raw score is already on the
+    /10 scale. Kept as a thin pass-through (rounded) so callers and the subject
+    line don't need to change, and a future max change has one place to edit.
     """
     real_max = scorecard_real_max(pair_conf)
     if real_max <= 0:
@@ -87,7 +80,7 @@ def normalized_score(raw, pair_conf):
 
 
 # Re-email thresholds for the same zone (2026-06-16): symmetric +-1.0 on the
-# RAW score (the /8, /10 scale, NOT the normalised /10). The old asymmetric
+# RAW score (now the /10 scale for both pair classes). The old asymmetric
 # 0.7/0.5 band let tiny yfinance-driven wobbles trigger update emails — too much
 # spam. Now a zone must gain a FULL point or lose a FULL point before we re-email
 # it; anything smaller stays silent. Compared on raw score in
@@ -105,47 +98,62 @@ REENTRY_EXIT_MULT = 1.5
 
 
 def _ob_in_killzone_label(ob, pair_conf):
-    """Render a human-readable label for whether the OB candle landed in a
-    configured killzone window. Used in the live alert email so the trader
-    can eyeball the SMC alignment hypothesis as data accumulates.
+    """Label for whether the OB candle landed in a killzone window. DST-aware
+    via the shared smc_detector engine (single source of truth for windows).
 
     Returns:
-      - "in killzone" (green) if ob_timestamp hour overlaps any killzones_utc window
+      - "in killzone" (green) if the OB candle overlaps any window for its date
       - "outside killzone" (amber) if it doesn't
       - "unknown" if either input is missing
     """
     try:
         ob_ts_iso = (ob or {}).get("ob_timestamp")
-        if not ob_ts_iso:
+        killzones = (pair_conf or {}).get("killzones")
+        if not ob_ts_iso or not killzones:
             return "<span style='color:#888;'>unknown</span>"
-        import pandas as pd
-        ts = pd.Timestamp(ob_ts_iso)
-        if ts.tzinfo is None:
-            ts = ts.tz_localize("UTC")
-        else:
-            ts = ts.tz_convert("UTC")
-        hour_start = ts.hour * 60
-        hour_end   = hour_start + 60
-        windows = (pair_conf or {}).get("killzones_utc") or []
-        in_kz = False
-        for w in windows:
-            if not isinstance(w, (list, tuple)) or len(w) != 2:
-                continue
-            try:
-                sh, sm = (int(x) for x in str(w[0]).split(":"))
-                eh, em = (int(x) for x in str(w[1]).split(":"))
-            except (ValueError, AttributeError):
-                continue
-            start_min = sh * 60 + sm
-            end_min   = eh * 60 + em
-            if hour_start < end_min and hour_end > start_min:
-                in_kz = True
-                break
-        if in_kz:
+        if smc_detector.ts_in_killzone(ob_ts_iso, killzones):
             return "<b style='color:#27ae60;'>in killzone</b>"
         return "<b style='color:#e67e22;'>outside killzone</b>"
     except Exception:
         return "<span style='color:#888;'>unknown</span>"
+
+
+def _entry_killzone_forecast_label(data, pair_conf):
+    """Lean one-phrase forecast of whether the limit will FILL inside a killzone,
+    plus the IST cut-off. Info only — never gates. ETA = distance / ATR (an
+    estimate); the cut-off is exact clock math on the DST-resolved windows,
+    shown in IST. Returns '' if inputs are missing (renders nothing rather than
+    a misleading guess)."""
+    killzones = (pair_conf or {}).get("killzones")
+    if not killzones:
+        return "<span style='color:#888;'>n/a</span>"
+    distance = data.get("distance_to_proximal")
+    atr = data.get("h1_atr")
+    now_utc = get_ist_now() - timedelta(hours=5, minutes=30)
+    if now_utc.tzinfo is None:
+        now_utc = now_utc.replace(tzinfo=timezone.utc)
+    fc = smc_detector.killzone_entry_forecast(now_utc, distance, atr, killzones)
+
+    def _to_ist(dt_utc):
+        return (dt_utc.astimezone(timezone.utc) + timedelta(hours=5, minutes=30)).strftime("%H:%M IST")
+
+    deadline = fc.get("deadline_utc")
+    deadline_str = _to_ist(deadline) if deadline else None
+
+    if fc.get("eta_hours") is None:
+        # No usable ETA — still show the cut-off if a window is upcoming.
+        if deadline_str:
+            return f"<b style='color:#aaa;'>in killzone until {deadline_str}</b> <i>(info)</i>"
+        return "<span style='color:#888;'>n/a</span>"
+
+    if fc.get("eta_in_kz"):
+        tail = f" &middot; enter by {deadline_str}" if deadline_str else ""
+        return f"<b style='color:#27ae60;'>likely in killzone</b>{tail} <i>(est.)</i>"
+
+    if deadline_str:
+        return (f"<b style='color:#e67e22;'>likely outside</b> "
+                f"&middot; in killzone until {deadline_str} <i>(est.)</i>")
+    return "<b style='color:#e67e22;'>likely outside killzone</b> <i>(est.)</i>"
 
 
 def hysteresis_should_reemail(current_score, prior_score):
@@ -1314,11 +1322,9 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     # + platform, not this text block; the numbers can differ slightly from the
     # broker feed). Levels still drive the charts and subject line.
 
-    # Body shows the REAL math: total max is 8 for non-JPY forex (sweep is
-    # presence-only), 10 elsewhere (sweep quality-graded). Mirrors
-    # smc_detector.run_scorecard: Structure 4 | Sweep 1 or 3 | FVG 2 | Freshness 1.
-    # The headline is additionally normalized to /10 so forex and gold/NAS/JPY
-    # alerts compare on one scale (real math kept beside it).
+    # Body shows the REAL math. Both pair classes total 10 (2026-06-18 rebalance):
+    # non-JPY forex = Structure 4 | Sweep 1 | FVG 2 | Freshness 2 | Killzone 1;
+    # JPY/Gold/NAS = Structure 4 | Sweep 2 | FVG 2 | Freshness 1 | Killzone 1.
     total_max_for_card = scorecard_real_max(pair_conf)
     display_total = normalized_score(total_score, pair_conf)
     scorecard_html = build_scorecard_html(
@@ -1331,16 +1337,12 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     </div>"""
 
     # Killzone annotation. OB-side is SCORED (zone formed in institutional
-    # hours). The approach side is INFO ONLY — whether price is approaching the
-    # zone right now during a killzone. It is not scored (it flickers per scan
-    # and the limit fill time is unknown), but it helps the trader judge timing.
+    # hours). The entry side is INFO ONLY — an ETA-based forecast of whether the
+    # limit will FILL inside a killzone, plus the IST cut-off time to still be in
+    # one. ETA = distance / ATR (estimate); the cut-off is exact clock math on
+    # the DST-resolved windows.
     ob_in_kz_label = _ob_in_killzone_label(ob, pair_conf)
-    _now_utc_iso = (get_ist_now() - timedelta(hours=5, minutes=30)).isoformat()
-    _approach_in_kz = smc_detector._ts_in_killzone(
-        _now_utc_iso, (pair_conf or {}).get("killzones_utc")
-    )
-    approach_label = ("<b style='color:#27ae60;'>in killzone</b>" if _approach_in_kz
-                      else "<b style='color:#e67e22;'>outside killzone</b>")
+    entry_kz_label = _entry_killzone_forecast_label(data, pair_conf)
 
     context_html = f"""
     <div style="margin-bottom:12px;font-size:11px;color:#888;">
@@ -1348,7 +1350,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         &nbsp;&middot;&nbsp; Proximal {ob.get('proximal_line', 0):.{dp}f}
         / Distal {ob.get('distal_line', 0):.{dp}f}
         &nbsp;&middot;&nbsp; <b style="color:#aaa;">OB candle:</b> {ob_in_kz_label}
-        &nbsp;&middot;&nbsp; <b style="color:#aaa;">Approaching now:</b> {approach_label} <i>(info)</i>
+        &nbsp;&middot;&nbsp; <b style="color:#aaa;">Entry:</b> {entry_kz_label}
     </div>"""
 
     # Break quality — how far PAST its required minimum the structural break
@@ -2424,6 +2426,9 @@ if __name__ == "__main__":
                                 if setup_name else None),
                 "levels": levels,
                 "ob": ob,
+                "current_price": current_price,
+                "distance_to_proximal": distance,
+                "h1_atr": h1_atr,
                 "alert_ist": ist_now.isoformat(),
                 "scorecard_version": "v2",
                 "trend_alignment": trend_alignment,

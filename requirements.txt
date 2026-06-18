@@ -1,0 +1,26 @@
+# Single source of truth for runtime dependencies.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# Every GitHub Actions workflow used to hand-type its own `pip install ...`
+# line. Those lists drifted: when the code's import chain grew (e.g. smc_radar
+# started importing charts -> matplotlib), a workflow that hadn't been updated
+# crashed with ModuleNotFoundError on the next push. The Tests job hitting
+# "No module named 'matplotlib'" was exactly this.
+#
+# Fix: ONE list, every workflow installs `-r requirements.txt`. The import
+# chain can grow freely; there is now a single place to update, and all jobs
+# stay in lock-step. This is a SUPERSET of what each job needs — pure addition,
+# so no job ever loses a package.
+#
+# Only google-genai is pinned (it was the one existing pin). Everything else is
+# left unpinned exactly as it was, so no version can shift unexpectedly.
+
+yfinance
+pandas
+numpy
+matplotlib
+requests
+openpyxl
+pyarrow
+google-genai==2.8.0

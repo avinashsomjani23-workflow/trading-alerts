@@ -1665,38 +1665,167 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     return out
 
 
-# SHARED — killzone membership test. Single source of truth for killzone
-# scoring (used by run_scorecard on the OB candle) AND the live "approaching
-# during killzone" info line. Mirrors Phase2._ob_in_killzone_label's window
-# math, but returns a plain bool and lives in the lower layer so the scorer
-# (and the backtest) can call it without importing Phase 2.
-def _ts_in_killzone(ts_iso, killzones_utc):
-    """True if the H1 candle at ts_iso (UTC ISO) overlaps any killzone window.
-    killzones_utc = [["07:00","10:00"], ...] in UTC. Treats the candle as a
-    1-hour block. Returns False on any missing/bad input (never raises)."""
-    if not ts_iso or not killzones_utc:
+# SHARED P1+P2 — DST-aware killzone engine. SINGLE SOURCE OF TRUTH for every
+# killzone test in the system (live scoring, OB-formation label, approach
+# label, backtest hard filter, backtest scoring). All callers route through
+# resolve_killzone_windows_utc / ts_in_killzone — no caller parses windows on
+# its own. Duplicate window math is a bug, not design.
+#
+# Windows are defined in config as SESSION-LOCAL time + an IANA timezone, e.g.
+#   {"tz": "America/New_York", "start": "07:00", "end": "10:00"}
+# At test time we convert that local window to UTC FOR THE CANDLE'S OWN DATE.
+# zoneinfo knows the EDT/EST and BST/GMT switch dates, so the UTC window shifts
+# by an hour automatically across the March/November DST flips. Nothing is ever
+# edited by hand in October. India/Tokyo have no DST so those anchors are stable.
+from zoneinfo import ZoneInfo
+
+_UTC = timezone.utc
+
+
+def _parse_local_windows(killzones):
+    """Normalise the config 'killzones' list to (ZoneInfo, start_min, end_min).
+    Accepts the session-local dict shape only. Bad/missing entries are skipped
+    silently (a malformed window must never block live data)."""
+    out = []
+    for w in killzones or []:
+        if not isinstance(w, dict):
+            continue
+        tz_name, start, end = w.get("tz"), w.get("start"), w.get("end")
+        if not tz_name or not start or not end:
+            continue
+        try:
+            tz = ZoneInfo(str(tz_name))
+            sh, sm = (int(x) for x in str(start).split(":"))
+            eh, em = (int(x) for x in str(end).split(":"))
+        except Exception:
+            continue
+        out.append((tz, sh * 60 + sm, eh * 60 + em))
+    return out
+
+
+def resolve_killzone_windows_utc(killzones, on_date):
+    """Resolve session-local killzone windows to UTC minute-ranges for the
+    calendar date `on_date` (a date or datetime). Returns a list of
+    (start_min_utc, end_min_utc) tuples, already DST-correct for that date.
+    A window can wrap past midnight UTC (start > end); callers handle wrap."""
+    on_date = getattr(on_date, "date", lambda: on_date)()
+    resolved = []
+    for tz, start_min, end_min in _parse_local_windows(killzones):
+        s_local = datetime(on_date.year, on_date.month, on_date.day,
+                           start_min // 60, start_min % 60, tzinfo=tz)
+        e_local = datetime(on_date.year, on_date.month, on_date.day,
+                           end_min // 60, end_min % 60, tzinfo=tz)
+        s_utc = s_local.astimezone(_UTC)
+        e_utc = e_local.astimezone(_UTC)
+        resolved.append((s_utc.hour * 60 + s_utc.minute,
+                         e_utc.hour * 60 + e_utc.minute))
+    return resolved
+
+
+def ts_in_killzone(ts_iso, killzones):
+    """True if the H1 candle at `ts_iso` (UTC ISO) overlaps any killzone window,
+    DST-resolved for that candle's date. Candle is treated as a 1-hour block.
+    Returns False on any missing/bad input (never raises)."""
+    if not ts_iso or not killzones:
         return False
     try:
         dt = datetime.fromisoformat(str(ts_iso).replace("Z", "+00:00"))
-        if dt.tzinfo is not None:
-            dt = dt.astimezone(timezone.utc)
-        hour_start = dt.hour * 60 + dt.minute
-        hour_end = hour_start + 60
-        for w in killzones_utc:
-            if not isinstance(w, (list, tuple)) or len(w) != 2:
-                continue
-            try:
-                sh, sm = (int(x) for x in str(w[0]).split(":"))
-                eh, em = (int(x) for x in str(w[1]).split(":"))
-            except (ValueError, AttributeError):
-                continue
-            start_min = sh * 60 + sm
-            end_min = eh * 60 + em
-            if hour_start < end_min and hour_end > start_min:
-                return True
+        dt = dt.astimezone(_UTC) if dt.tzinfo is not None else dt.replace(tzinfo=_UTC)
+        cs = dt.hour * 60 + dt.minute
+        ce = cs + 60
+        for start_min, end_min in resolve_killzone_windows_utc(killzones, dt):
+            if start_min <= end_min:
+                if cs < end_min and ce > start_min:
+                    return True
+            else:
+                # window wraps past midnight UTC (e.g. London open in winter
+                # near 00:00, or any pre-midnight-UTC session): split in two.
+                if cs < end_min or ce > start_min:
+                    return True
         return False
     except Exception:
         return False
+
+
+# Back-compat shim: old name kept so any un-migrated caller still resolves to
+# the DST-aware path instead of silently using stale UTC literals.
+def _ts_in_killzone(ts_iso, killzones):
+    return ts_in_killzone(ts_iso, killzones)
+
+
+def predict_fill_eta_hours(distance, atr):
+    """Estimate H1 bars until price reaches the zone: distance / ATR-per-H1-bar.
+    ATR is the average H1 candle range, so distance/ATR ~= candles to cover it.
+    Returns a non-negative float, or None if inputs are unusable. This is an
+    ESTIMATE — price can accelerate, stall, or never arrive."""
+    try:
+        d = float(distance)
+        a = float(atr)
+        if a <= 0 or d < 0:
+            return None
+        return d / a
+    except (TypeError, ValueError):
+        return None
+
+
+def killzone_entry_forecast(now_utc, distance, atr, killzones, horizon_h=48):
+    """Forecast whether the limit is likely to FILL inside a killzone, and by
+    what UTC clock time the fill must happen to still land in one.
+
+    Inputs:
+      now_utc   : tz-aware UTC datetime (scan time).
+      distance  : price distance from current price to the OB proximal line.
+      atr       : H1 ATR (avg bar range), same price units as distance.
+      killzones : pair_conf['killzones'] (session-local windows).
+      horizon_h : how many hours ahead to look for the next killzone edge.
+
+    Returns dict:
+      eta_hours      : estimated hours to fill (float) or None.
+      eta_utc        : predicted fill datetime UTC or None.
+      eta_in_kz      : True if the predicted fill lands inside a killzone.
+      deadline_utc   : latest UTC datetime the fill can occur AND still be in a
+                       killzone, searching forward from now within horizon_h.
+                       None if no killzone window overlaps the horizon.
+    The deadline is exact clock math on the (DST-resolved) windows. eta is the
+    estimate. Caller renders both as 'likely' / 'est.', never as certainty."""
+    eta_hours = predict_fill_eta_hours(distance, atr)
+    eta_utc = None
+    eta_in_kz = False
+    if eta_hours is not None:
+        eta_utc = now_utc + timedelta(hours=eta_hours)
+        eta_in_kz = ts_in_killzone(eta_utc.isoformat(), killzones)
+
+    # Deadline = the SOONEST upcoming killzone window-END. That is the cutoff:
+    # fill before it and the entry is in-killzone; miss it and (until the next
+    # window opens) the entry is not. We resolve each day's window ends in the
+    # horizon to absolute UTC and keep the earliest end still in the future.
+    # If the trader is already inside a window, this returns that window's end.
+    deadline_utc = None
+    if killzones:
+        horizon_end = now_utc + timedelta(hours=horizon_h)
+        day = now_utc
+        seen_days = set()
+        while day <= horizon_end:
+            d = day.date()
+            if d in seen_days:
+                day += timedelta(hours=24)
+                continue
+            seen_days.add(d)
+            for tz, start_min, end_min in _parse_local_windows(killzones):
+                e_local = datetime(d.year, d.month, d.day,
+                                   (end_min // 60) % 24, end_min % 60, tzinfo=tz)
+                e_utc = e_local.astimezone(_UTC)
+                if now_utc <= e_utc <= horizon_end:
+                    if deadline_utc is None or e_utc < deadline_utc:
+                        deadline_utc = e_utc
+            day += timedelta(hours=24)
+
+    return {
+        "eta_hours": eta_hours,
+        "eta_utc": eta_utc,
+        "eta_in_kz": eta_in_kz,
+        "deadline_utc": deadline_utc,
+    }
 
 
 # PHASE 2 ONLY — sweep quality scorecard. Called only by Phase2_Alert_Engine.py.
@@ -1783,14 +1912,17 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
     # are detected and rendered but do NOT add points on these pairs.
     # Rationale: spot forex has no centralized stop pool, so a qualifying
     # sweep's *fact* carries some signal but its quality grading is noise.
-    # JPY keeps full 3.0 (BoJ levels, carry-flow stops are real). Gold/NAS
-    # keep full 3.0 (indices/commodities behave like the original SMC model).
+    # JPY / Gold / NAS keep the QUALITY grade but on a 2-point budget (2026-06-18:
+    # cut 3->2 so killzone +1 keeps these pairs at 10). The raw grade is a 0-3
+    # score; we scale it to 0-2 so the quality gradient survives -- a clean clip
+    # at 2 would flatten every mid/high sweep to the same number and discard the
+    # resolution we keep these pairs graded for.
     pair_name_for_sweep_scoring = pair_conf.get('name', '') if pair_conf else ''
     is_non_jpy_forex = (pair_type == 'forex' and 'JPY' not in pair_name_for_sweep_scoring)
     if is_non_jpy_forex:
         bd["sweep"] = 1.0 if chosen_sweep['tier'] != 'none' else 0.0
     else:
-        bd["sweep"] = chosen_sweep['score']
+        bd["sweep"] = round(chosen_sweep['score'] * (2.0 / 3.0), 2)
     sweep_price  = chosen_sweep['price']
     sweep_tf     = chosen_sweep['tf']
 
@@ -1822,14 +1954,19 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
         fvg_h1 = fvg
 
     bd["fvg"] = _grade_single(fvg_h1, 2, 1)
-    # Freshness — binary (2026-05-26 scoring rewrite — max 1):
-    # Phase 1 invalidates OBs at 3 touches; we only ever see touches=0,1,2.
-    #   0 touches  -> 1 (pristine; institutional order untouched)
-    #   1+ touches -> 0 (used; smart money interest diminishes after first tap)
-    # The previous half-credit at 1 touch muddied the signal. A zone is either
-    # untouched or it isn't.
+    # Freshness — pair-aware (2026-06-18). Phase 1 invalidates OBs at 3 touches,
+    # so touches is only ever 0, 1 or 2. The point budget differs by pair so
+    # both pair classes total 10:
+    #   Non-JPY forex (max 2): 0 -> 2, 1 -> 1, 2 -> 0  (linear decay; sweep is
+    #     only presence-worth-1 here, so freshness carries the extra point).
+    #   Gold / NAS / JPY (max 1): 0 -> 1, 1 -> 0.5, 2 -> 0  (sweep keeps its full
+    #     3-point quality grade, so freshness stays a 1-point line).
+    # Each tap discharges the resting order, so the score decays with touches.
     touches = int(ob.get('touches', 0))
-    bd["freshness"] = 1 if touches == 0 else 0
+    if is_non_jpy_forex:
+        bd["freshness"] = {0: 2, 1: 1}.get(touches, 0)
+    else:
+        bd["freshness"] = {0: 1.0, 1: 0.5}.get(touches, 0.0)
 
     # Premium / Discount — REMOVED FROM SCORING (May 2026 overhaul).
     # Geometry is consumed from Phase 1's snapshot on the zone — Phase 1 is
@@ -1852,15 +1989,15 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
             pd_position = (proximal - dr["range_low"]) / rng_width
     # PD is NOT scored (removed May 2026 overhaul). It is display-only — the
     # "Premium / Discount" info row renders pd_position for trader judgement.
-    # No 'pd' key is added to the breakdown so it never appears as a scored
-    # 0-point line in the scorecard / phase2_sent ledger.
-    # Killzone — REMOVED FROM SCORING 2026-06-16 (was re-added 2026-06, now
-    # reverted). It is binary and easy to satisfy, so as a scored line it
-    # inflated the denominator without adding signal. No 'killzone' key is added
-    # to `bd`, so it never contributes to `total` or the scored ledger. The OB
-    # candle + approach-time killzone status is still shown in the email's
-    # Killzone info section (Phase2._ob_in_killzone_label + approach_label),
-    # computed there from the OB timestamp — single source, not duplicated here.
+
+    # Killzone — SCORED on the OB-FORMATION candle (2026-06-18, max 1). This is
+    # the one killzone signal the hard filter does NOT already guarantee: the
+    # filter gates the ALERT/entry time, but an OB can form off-session and still
+    # be entered in-session. An OB built during institutional hours is higher
+    # quality, so we score the OB candle, not the entry. DST-resolved per the OB
+    # date via the shared ts_in_killzone (single source of truth).
+    killzones = pair_conf.get('killzones') if pair_conf else None
+    bd["killzone"] = 1 if ts_in_killzone(ob_ts_iso, killzones) else 0
 
     # Macro removed from scorecard. Still surfaced as email-only context.
 
@@ -1889,16 +2026,21 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     """
     Return list of (label, score, max_score, status, explanation) for email rendering.
 
-    Scorecard maxima (killzone +1 re-added 2026-06):
+    Scorecard maxima (2026-06-18 — both classes total 10):
       Non-JPY forex (EURUSD, NZDUSD, USDCHF):
-        Structure 4 | Sweep 1 (presence-only) | FVG 2 | Freshness 1 | Killzone 1
-        Total = 9.
+        Structure 4 | Sweep 1 (presence-only) | FVG 2 | Freshness 2 | Killzone 1
+        Total = 10.
       JPY / Gold / NAS:
-        Structure 4 | Sweep 3 (quality-graded) | FVG 2 | Freshness 1 | Killzone 1
-        Total = 11.
+        Structure 4 | Sweep 2 (quality-graded, scaled 0-3 -> 0-2) | FVG 2 |
+        Freshness 1 | Killzone 1
+        Total = 10.
     The forex/non-forex sweep asymmetry is intentional: forex pairs lack
     centralized stop pools so sweep quality is noise; presence alone signals.
-    Gold/NAS/JPY have real institutional stop levels so quality matters.
+    Gold/NAS/JPY have real institutional stop levels so quality matters — sweep
+    keeps its quality grade but on a 2-point budget (cut from 3 on 2026-06-18 so
+    killzone +1 keeps these pairs at 10). Non-JPY forex instead carries the
+    extra point on freshness. Killzone is scored on the OB-FORMATION candle (not
+    entry — the hard filter already gates entry).
     No confidence gate — every zone passing proximity + still-valid alerts.
     PD is rendered as a display-only row (max_score = 0) showing range
     geometry and PD% so the trader can use it for judgement, but it
@@ -1944,13 +2086,14 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
 
     # 2. Liquidity Sweep — scorecard shows PRESENCE only.
     # Quality breakdown rendered separately above Macro Context in email.
-    # Max is 1 (presence-only) for non-JPY forex, 3 (quality-graded) elsewhere.
+    # Max is 1 (presence-only) for non-JPY forex, 2 (quality-graded, scaled from
+    # the raw 0-3 grade) for JPY/Gold/NAS.
     s = breakdown.get("sweep", 0)
     comps = sweep_components or {}
     presence = comps.get('base', 0.0)
     pair_name_for_row = pair_conf.get('name', '') if pair_conf else ''
     pair_type_for_row = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
-    sweep_max = 1 if (pair_type_for_row == 'forex' and 'JPY' not in pair_name_for_row) else 3
+    sweep_max = 1 if (pair_type_for_row == 'forex' and 'JPY' not in pair_name_for_row) else 2
     if presence > 0 and sweep_price is not None:
         rows.append(("Liquidity Sweep", s, sweep_max, "ok",
                      f"{sweep_tf} sweep confirmed at {sweep_price:.{dp}f}. See breakdown below charts."))
@@ -1985,20 +2128,26 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     else:
         rows.append(("FVG", s, 2, "fail",
                      f"{desc} No qualifying displacement (absent or fully filled)."))
-    # 4. Freshness — binary (max 1). Phase 1 invalidates at 3 touches.
+    # 4. Freshness — pair-aware. Phase 1 invalidates at 3 touches (touches=0/1/2).
+    #    Non-JPY forex max 2 (0->2, 1->1, 2->0); Gold/NAS/JPY max 1 (0->1,
+    #    1->0.5, 2->0). A 1-touch zone now keeps partial credit, so it warns, not
+    #    fails. Mirrors the score split in run_scorecard.
     s = breakdown.get("freshness", 0)
+    pair_name_fresh = pair_conf.get('name', '') if pair_conf else ''
+    pair_type_fresh = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
+    fresh_max = 2 if (pair_type_fresh == 'forex' and 'JPY' not in pair_name_fresh) else 1
     touches = int(ob.get('touches', 0))
     if touches == 0:
-        rows.append(("Freshness", s, 1, "ok",
+        rows.append(("Freshness", s, fresh_max, "ok",
                      "Pristine — zone untouched since it was formed."))
     elif touches == 1:
-        rows.append(("Freshness", s, 1, "fail",
+        rows.append(("Freshness", s, fresh_max, "warn",
                      "Tested 1x since formation — institutional order partly filled."))
     elif touches == 2:
-        rows.append(("Freshness", s, 1, "fail",
+        rows.append(("Freshness", s, fresh_max, "fail",
                      "Tested 2x since formation — one more touch invalidates."))
     else:
-        rows.append(("Freshness", s, 1, "fail",
+        rows.append(("Freshness", s, fresh_max, "fail",
                      f"Tested {touches}x since formation — zone fatigued (legacy)."))
 
     # 5. Premium / Discount — DISPLAY ONLY (no longer contributes points).
@@ -2028,9 +2177,16 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
         rows.append(("Premium / Discount", 0.0, 0.0, "info",
                       f"{pd_pct_str} of dealing range - {_zl} ({_vd})."))
 
-    # Killzone — REMOVED from the scorecard 2026-06-16 (no longer scored). The
-    # OB-candle + approach-time killzone status is shown in the email's Killzone
-    # info section instead, so it is no longer rendered as a scorecard row here.
+    # 6. Killzone — scored on the OB-FORMATION candle (max 1). Scores whether the
+    #    zone was BUILT during institutional hours, which the entry-time hard
+    #    filter does not guarantee.
+    s = breakdown.get("killzone", 0)
+    if s >= 1:
+        rows.append(("Killzone", s, 1, "ok",
+                     "OB formed during a killzone — built in institutional hours."))
+    else:
+        rows.append(("Killzone", s, 1, "fail",
+                     "OB formed outside killzones — built in a low-liquidity window."))
 
     return rows
 
