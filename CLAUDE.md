@@ -76,6 +76,10 @@ FVG, liquidity sweep, kill zone, macro news, PD array alignment, OB and FVG fres
 - SMC terminology must be 100% correct. Errors cascade into bad alerts and lost money.
 - Verify against codebase before stating. Say "I haven't verified" rather than imply you did.
 
+**Reading vs changing**
+- Reading is never gated. If solving a request needs reading existing code, data, logs, config, or state — do it immediately, without asking. Never wait for approval to READ.
+- Approval gates only apply to WRITING (edits, commits, pushes).
+
 **Code changes**
 - Never touch code without explicit approval.
 - Trading logic changes always need confirmation. No exceptions.
