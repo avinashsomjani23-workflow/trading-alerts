@@ -8,13 +8,13 @@
     "n_bars": 60
   },
   "coverage": {
-    "state": "down",
+    "state": "up",
     "flip_unconfirmed": false,
     "ranging": false,
-    "n_events": 3,
-    "n_choch": 1,
+    "n_events": 1,
+    "n_choch": 0,
     "n_range_bos": 0,
-    "n_plain_bos": 2
+    "n_plain_bos": 1
   },
   "decimals": 3,
   "input_rows": [
@@ -500,7 +500,7 @@
     }
   ],
   "golden_output": {
-    "state": "down",
+    "state": "up",
     "ranging": false,
     "prior_trend": null,
     "flip_unconfirmed": false,
@@ -508,16 +508,15 @@
     "choch_ts": null,
     "choch_level": null,
     "choch_from_zone": false,
-    "choch_flip_count": 1,
-    "defended": 157.475,
+    "choch_flip_count": 0,
+    "defended": 155.947,
     "broken_swing_ts": null,
     "last_bos": {
-      "kind": "BOS",
-      "direction": "down",
-      "ts": "2024-06-04T17:00:00+00:00",
-      "tier": "BOS"
+      "kind": "BOS_BIRTH",
+      "direction": "up",
+      "ts": "2024-06-04T00:00:00+00:00"
     },
-    "label": "H1 trend DOWN",
+    "label": "H1 trend UP",
     "events": [
       {
         "type": "BOS",
@@ -531,35 +530,9 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false
-      },
-      {
-        "type": "CHoCH",
-        "tier": "CHoCH",
-        "direction": "bearish",
-        "candle_ts": "2024-06-04T07:00:00+00:00",
-        "impulse_start_ts": "2024-06-03T15:00:00+00:00",
-        "broken_swing_price": 155.947,
-        "broken_swing_ts": "2024-06-03T15:00:00+00:00",
-        "broken_was_wall": false,
-        "reversal_pct": 0.0,
-        "trend_after": "bearish",
-        "chop": false
-      },
-      {
-        "type": "BOS",
-        "tier": "BOS",
-        "direction": "bearish",
-        "candle_ts": "2024-06-04T17:00:00+00:00",
-        "impulse_start_ts": "2024-06-04T07:00:00+00:00",
-        "broken_swing_price": 154.7,
-        "broken_swing_ts": "2024-06-04T10:00:00+00:00",
-        "broken_was_wall": false,
-        "reversal_pct": 0.0,
-        "trend_after": "bearish",
-        "chop": false
       }
     ],
-    "trend": "bearish",
+    "trend": "bullish",
     "swings": [
       {
         "type": "high",
@@ -589,8 +562,7 @@
         "type": "low",
         "idx": 35,
         "price": 154.7,
-        "ts": "2024-06-04T10:00:00+00:00",
-        "is_setup_break": true
+        "ts": "2024-06-04T10:00:00+00:00"
       }
     ]
   }

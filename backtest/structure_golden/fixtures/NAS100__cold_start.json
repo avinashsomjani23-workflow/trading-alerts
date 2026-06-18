@@ -11,10 +11,10 @@
     "state": "up",
     "flip_unconfirmed": false,
     "ranging": false,
-    "n_events": 4,
+    "n_events": 3,
     "n_choch": 1,
     "n_range_bos": 0,
-    "n_plain_bos": 3
+    "n_plain_bos": 2
   },
   "decimals": 2,
   "input_rows": [
@@ -536,21 +536,8 @@
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bullish",
-        "candle_ts": "2024-06-04T00:00:00+00:00",
-        "impulse_start_ts": "2024-06-03T07:00:00+00:00",
-        "broken_swing_price": 18622.75,
-        "broken_swing_ts": "2024-06-03T07:00:00+00:00",
-        "broken_was_wall": false,
-        "reversal_pct": 0.0,
-        "trend_after": "bullish",
-        "chop": false
-      },
-      {
-        "type": "BOS",
-        "tier": "BOS",
-        "direction": "bullish",
         "candle_ts": "2024-06-04T18:00:00+00:00",
-        "impulse_start_ts": "2024-06-04T09:00:00+00:00",
+        "impulse_start_ts": "2024-06-04T14:00:00+00:00",
         "broken_swing_price": 18663.75,
         "broken_swing_ts": "2024-06-04T14:00:00+00:00",
         "broken_was_wall": false,
@@ -563,7 +550,7 @@
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2024-06-05T09:00:00+00:00",
-        "impulse_start_ts": "2024-06-04T09:00:00+00:00",
+        "impulse_start_ts": "2024-06-04T18:00:00+00:00",
         "broken_swing_price": 18766.0,
         "broken_swing_ts": "2024-06-05T02:00:00+00:00",
         "broken_was_wall": false,
@@ -620,8 +607,7 @@
         "type": "high",
         "idx": 44,
         "price": 18766.0,
-        "ts": "2024-06-05T02:00:00+00:00",
-        "is_setup_break": true
+        "ts": "2024-06-05T02:00:00+00:00"
       },
       {
         "type": "low",
