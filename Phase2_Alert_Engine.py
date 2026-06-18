@@ -736,7 +736,7 @@ def _draw_candles(ax, df_plot):
     )
 
 
-def _p2_swing_markers(ax, df_h1, h1_pos_to_local, n, pair_conf, y_min, y_max):
+def _p2_swing_markers(ax, df_h1, h1_pos_to_local, n, pair_conf, y_min, y_max, ob=None):
     """Render swing triangles + current-setup broken-swing X on a Phase 2 chart.
 
     SINGLE SOURCE: reads the persisted lb-3+ATR swing pool from dealing_range
@@ -747,8 +747,8 @@ def _p2_swing_markers(ax, df_h1, h1_pos_to_local, n, pair_conf, y_min, y_max):
     Using index arithmetic (abs_i - window_start) is wrong when dropna removes
     any rows in the tail window — the map is the correct approach. Any failure
     is swallowed so a chart never breaks on marker rendering. The X marks ONLY
-    the swing whose break defined the current setup (last_event's broken_swing_ts).
-    Every other swing renders as its plain gold triangle."""
+    the swing broken by THIS OB's defining event — resolved per-OB via
+    ob_broken_swing_ts() so the X is always co-located with the OB."""
     try:
         import dealing_range as _dr
         pair_name = (pair_conf or {}).get('name')
@@ -759,12 +759,10 @@ def _p2_swing_markers(ax, df_h1, h1_pos_to_local, n, pair_conf, y_min, y_max):
         swings = smc_detector.swings_for_chart(walls)
         if not swings:
             return
-        # Which break matters is decided in dealing_range (the `is_setup_break`
-        # flag on the swing). Phase 2 does not re-derive it — it just reads it,
-        # exactly like the Phase 1 radar. One source, one decision.
         SWING_COLOR = '#d4a017'
         SETUP_BREAK_COLOR = '#ffffff'  # max contrast on dark bg + red/green candles; bold X marker, distinct from the thin white price line
         offset = (y_max - y_min) * 0.012
+        ob_bst = smc_detector.ob_broken_swing_ts(ob, walls) if ob else None
         for s in swings:
             ts = s.get('ts')
             if not ts:
@@ -785,7 +783,7 @@ def _p2_swing_markers(ax, df_h1, h1_pos_to_local, n, pair_conf, y_min, y_max):
                     else float(df_h1['Low'].iloc[abs_i])
             except Exception:
                 continue
-            if s.get('is_setup_break'):
+            if ob_bst and ts == ob_bst:
                 ax.scatter([xi], [candle_price], marker='x', s=70,
                            color=SETUP_BREAK_COLOR, linewidths=2.0, zorder=8)
             elif is_high:
@@ -953,7 +951,7 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
 
         # Swing triangles + broken-swing X (single source: dealing_range state).
         _p2_swing_markers(ax, df_h1, h1_pos_to_local, n, pair_conf,
-                          float(df_plot['Low'].min()), float(df_plot['High'].max()))
+                          float(df_plot['Low'].min()), float(df_plot['High'].max()), ob=ob)
 
         # Y-axis (2026-06-16): anchor on the candles + the ENTRY-relevant levels
         # (zone, entry, SL). TP1/TP2 are NOT force-included — on a strong trend
@@ -1178,18 +1176,24 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                 ))
             ax.axhline(y=dr_eq, color='#5dade2', linewidth=0.9, linestyle='-.', alpha=0.6, zorder=2)
 
-        # --- Entry / SL horizontal lines ---
+        # --- Entry / SL / TP horizontal lines ---
         entry_p = 0
         sl_p = 0
         tp1_p = 0
+        tp2_p = 0
         if levels and levels.get('valid', True):
             entry_p = float(levels.get('entry', 0))
-            sl_p = float(levels.get('sl', 0))
-            tp1_p = float(levels.get('tp1', 0))
+            sl_p    = float(levels.get('sl', 0))
+            tp1_p   = float(levels.get('tp1', 0))
+            tp2_p   = float(levels.get('tp2', 0))
             if entry_p > 0:
                 ax.axhline(y=entry_p, color='#e67e22', linewidth=1.0, linestyle='--', alpha=0.8, zorder=3)
             if sl_p > 0:
                 ax.axhline(y=sl_p, color='#e74c3c', linewidth=1.0, linestyle='--', alpha=0.8, zorder=3)
+            if tp1_p > 0:
+                ax.axhline(y=tp1_p, color='#27ae60', linewidth=1.0, linestyle=':', alpha=0.85, zorder=3)
+            if tp2_p > 0:
+                ax.axhline(y=tp2_p, color='#1e8449', linewidth=1.0, linestyle=':', alpha=0.85, zorder=3)
 
         # --- Current price line ---
         current = float(df_plot['Close'].iloc[-1])
@@ -1225,7 +1229,6 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                     ))
 
         # --- Right-edge tags: ENTRY, SL, TP1, TP2 (numbers only, colour-matched) ---
-        tp2_p = float(levels.get('tp2', 0)) if isinstance(levels, dict) else 0
         right_labels = []
         if entry_p > 0:
             right_labels.append((entry_p, f" {entry_p:.{dp}f}", '#e67e22'))
@@ -1268,10 +1271,13 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         # --- Swing markers (triangles + broken-swing X) -----------------------
         # SINGLE SOURCE: same persisted lb-3+ATR swing pool from dealing_range
         # state that Phase 1 renders. Phase 2 does NOT detect swings itself.
-        # Positioned by ts via locate_ob_candle_idx (the same df_h1 index frame
-        # used for the sweep / FVG markers). broken -> X, else triangle.
-        _p2_swing_markers(ax, df_h1, window_start, n, pair_conf,
-                          float(df_plot['Low'].min()), float(df_plot['High'].max()))
+        h1_pos_to_local_ctx = {}
+        for local_i, idx in enumerate(df_h1.dropna(subset=['Open','High','Low','Close']).tail(tail_n).index):
+            loc = df_h1.index.get_loc(idx)
+            if isinstance(loc, int):
+                h1_pos_to_local_ctx[loc] = local_i
+        _p2_swing_markers(ax, df_h1, h1_pos_to_local_ctx, n, pair_conf,
+                          float(df_plot['Low'].min()), float(df_plot['High'].max()), ob=ob)
 
         # --- Y-axis range ---
         y_min, y_max = float(df_plot['Low'].min()), float(df_plot['High'].max())

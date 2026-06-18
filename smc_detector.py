@@ -474,6 +474,25 @@ def swings_for_chart(walls):
     return sw if isinstance(sw, list) else []
 
 
+def ob_broken_swing_ts(ob, walls):
+    """Return the broken_swing_ts for the specific OB's defining event.
+
+    Looks up the event whose candle_ts matches ob['bos_timestamp'] in the
+    events ring, then returns that event's broken_swing_ts. This is the swing
+    the X marker should point to for THIS OB — not the most-recent global event.
+    Returns None when no match is found (no X drawn)."""
+    if not isinstance(ob, dict) or not isinstance(walls, dict):
+        return None
+    bos_ts = ob.get('bos_timestamp')
+    if not bos_ts:
+        return None
+    events = walls.get('events') or []
+    for ev in events:
+        if ev.get('candle_ts') == bos_ts:
+            return ev.get('broken_swing_ts')
+    return None
+
+
 def ts_to_utc_instant(raw):
     """Normalize any timestamp form to a UTC-aware pandas Timestamp, or None.
 
@@ -1574,24 +1593,26 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         return {"valid": False, "reason": "Zero risk -- entry == SL."}
 
     # TP swings from H1 at lookback=3. Opposing swings only, past entry.
+    # Full swing objects kept (not just prices) so TP2 can check for an
+    # intervening opposite-type swing — the structural separator between pools.
     h1_swings = get_swing_points(df_h1, lookback=3)
     if bias == "LONG":
-        opposing = [s['price'] for s in h1_swings
+        opposing = [s for s in h1_swings
                     if s['type'] == 'high' and s['price'] > entry]
-        opposing.sort()  # ascending -- nearest first
+        opposing.sort(key=lambda s: s['price'])  # ascending -- nearest first
     else:
-        opposing = [s['price'] for s in h1_swings
+        opposing = [s for s in h1_swings
                     if s['type'] == 'low' and s['price'] < entry]
-        opposing.sort(reverse=True)  # descending -- nearest first
+        opposing.sort(key=lambda s: s['price'], reverse=True)  # descending -- nearest first
 
     # TP1: nearest opposing swing past entry clearing 1.5R.
     tp1 = None
     tp1_rr = 0.0
     tp1_idx_in_opposing = None
-    for i, target in enumerate(opposing):
-        rr = abs(target - entry) / risk
+    for i, sw in enumerate(opposing):
+        rr = abs(sw['price'] - entry) / risk
         if rr >= 1.5:
-            tp1 = target
+            tp1 = sw['price']
             tp1_rr = rr
             tp1_idx_in_opposing = i
             break
@@ -1632,14 +1653,26 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
             "sl": round(sl, dp),
         }
 
-    # TP2: next opposing swing past TP1. No RR gate, no fallback.
-    # Textbook SMC: TP2 is the next real liquidity pool past TP1. If none
-    # exists in the swing series, the trade rides TP1 -> BE-stop (handled
-    # by the simulator). When TP1 is the H4 wall (no swing index), there is no
-    # swing-based TP2 -- the wall is the final target.
+    # TP2: next opposing swing past TP1, only if it is a DIFFERENT liquidity pool.
+    # Two opposing swings are the same pool when no intervening swing of the
+    # continuation type separates them — e.g. for SHORT, two lows with no swing
+    # high between them are the same cluster (double-bottom / tight consolidation).
+    # The structural separator is an intervening opposite-type swing in h1_swings
+    # between TP1's idx and TP2's idx. No new parameters: this is purely geometric.
     tp2 = None
     if tp1_idx_in_opposing is not None and tp1_idx_in_opposing + 1 < len(opposing):
-        tp2 = opposing[tp1_idx_in_opposing + 1]
+        tp1_sw = opposing[tp1_idx_in_opposing]
+        tp2_sw = opposing[tp1_idx_in_opposing + 1]
+        # continuation_type: the swing type that separates two opposing pools.
+        # SHORT targets lows -> separated by a high. LONG targets highs -> separated by a low.
+        continuation_type = 'high' if bias == 'SHORT' else 'low'
+        has_separator = any(
+            s['type'] == continuation_type
+            and tp1_sw['idx'] < s['idx'] < tp2_sw['idx']
+            for s in h1_swings
+        )
+        if has_separator:
+            tp2 = tp2_sw['price']
 
     out = {
         "valid": True,

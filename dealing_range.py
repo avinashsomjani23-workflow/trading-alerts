@@ -921,31 +921,12 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     _trend_map = {_UP: "bullish", _DOWN: "bearish"}
     trend_out = _trend_map.get(state)
 
-    # --- Tag the current-setup broken swing (`is_setup_break`) -----------------
-    # The chart renderers (smc_radar + Phase 2) draw a white X on the swing the
-    # CURRENT setup broke, falling back to a plain triangle otherwise. That flag
-    # was read in both renderers but never written here — so the X never drew.
-    #
-    # We tag exactly ONE swing: the broken swing of the MOST RECENT event,
-    # matched by its EXACT ts (`broken_swing_ts`, captured at detection time
-    # from the real swing object). This is the only sound handle:
-    #   - price-matching is ambiguous — equal highs/lows are common, so a price
-    #     can map to several swings (verified: 17 of 43 live events).
-    #   - "bullish→high / bearish→low" is wrong — a CHoCH can break either a
-    #     high or a low depending on how `defended` was set (verified on GOLD).
-    # When broken_swing_ts is None (event broke a raw leg extreme, not a
-    # confirmed swing) we tag nothing — there is no swing to mark, which is
-    # the honest outcome. Recomputed every scan; never stale; no flag ring.
+    # `is_setup_break` was previously tagged here on the most-recent event — wrong
+    # when multiple OBs are shown (each OB has its own defining event). Tagging is
+    # now done per-OB at render time via smc_detector.ob_broken_swing_ts().
     for s in swings:
         if "is_setup_break" in s:
             del s["is_setup_break"]
-    if events_ring:
-        _bts = events_ring[-1].get("broken_swing_ts")
-        if _bts:
-            for s in swings:
-                if s.get("ts") == _bts:
-                    s["is_setup_break"] = True
-                    break
 
     return {
         "state":            state,

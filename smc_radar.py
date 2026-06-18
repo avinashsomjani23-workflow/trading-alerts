@@ -1759,15 +1759,13 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
 
         # --- Swing markers (triangles + current-setup broken-swing X) ---
         # SINGLE SOURCE: consume the persisted swing pool from dealing_range
-        # state (walls['swings']) — the SAME lb-3+ATR swings that drove trend /
-        # CHoCH / BOS / walls. The chart does NOT detect swings itself and does
-        # NOT decide which break matters — dealing_range flags the one
-        # current-setup break as `is_setup_break`. The X is drawn on exactly
-        # that swing; every other swing (including older broken ones) renders as
-        # its plain triangle. Positioned by ts.
+        # state (walls['swings']). The X is drawn on the swing broken by THIS
+        # OB's defining event — resolved per-OB via ob_broken_swing_ts() so
+        # the X is always co-located with the OB, never on a later event's swing.
         SWING_COLOR = '#d4a017'
         SETUP_BREAK_COLOR = '#ffffff'  # max contrast on dark bg + red/green candles; the X is a bold marker, never confused with the thin white price line
         marker_offset = (y_max - y_min) * 0.012
+        _ob_bst = smc_detector.ob_broken_swing_ts(ob, walls) if has_ob else None
         swings_persisted = smc_detector.swings_for_chart(walls)
         if swings_persisted:
             # ts -> absolute idx over full_df, then shift to local plot x.
@@ -1788,7 +1786,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                 # from the timestamp; the price must come from the same bar.
                 is_high = (s['type'] == 'high')
                 candle_price = float(H[xi]) if is_high else float(L[xi])
-                if s.get('is_setup_break'):
+                if _ob_bst and s.get('ts') == _ob_bst:
                     ax.scatter([xi], [candle_price], marker='x',
                                s=70, color=SETUP_BREAK_COLOR, linewidths=2.0, zorder=8)
                 elif is_high:
