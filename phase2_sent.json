@@ -303,7 +303,7 @@
         "killzone": 1.0
       },
       "alert_ist": "2026-06-15T09:35:36.934267",
-      "last_seen_ist": "2026-06-18T10:35:37.082049",
+      "last_seen_ist": "2026-06-18T11:35:38.713844",
       "last_email_day": "2026-06-15",
       "reentry_armed": true,
       "max_exit_distance": 835.25,
@@ -655,10 +655,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-18T10:35:37.082049",
+      "last_seen_ist": "2026-06-18T11:35:38.713844",
       "last_email_day": "2026-06-17",
       "reentry_armed": true,
-      "max_exit_distance": 0.006680965423583984,
+      "max_exit_distance": 0.007344722747802734,
       "bias": "SHORT",
       "pair": "EURUSD"
     },
@@ -674,7 +674,7 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-18T10:35:37.082049",
+      "last_seen_ist": "2026-06-18T11:35:38.713844",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -712,10 +712,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-18T10:35:37.082049",
+      "last_seen_ist": "2026-06-18T11:35:38.713844",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
-      "max_exit_distance": 0.004869997501373291,
+      "max_exit_distance": 0.005239963531494141,
       "bias": "LONG",
       "pair": "USDCHF"
     },
@@ -750,10 +750,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-18T09:35:41.448507",
-      "last_seen_ist": "2026-06-18T10:35:37.082049",
+      "last_seen_ist": "2026-06-18T11:35:38.713844",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
-      "max_exit_distance": 0.3430023193359375,
+      "max_exit_distance": 0.3560028076171875,
       "bias": "LONG",
       "pair": "USDJPY"
     },
@@ -769,7 +769,7 @@
         "freshness": 0
       },
       "alert_ist": "2026-06-18T09:35:41.448507",
-      "last_seen_ist": "2026-06-18T10:35:37.082049",
+      "last_seen_ist": "2026-06-18T11:35:38.713844",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -788,7 +788,7 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-18T10:35:37.082049",
-      "last_seen_ist": "2026-06-18T10:35:37.082049",
+      "last_seen_ist": "2026-06-18T11:35:38.713844",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -807,7 +807,7 @@
         "freshness": 0
       },
       "alert_ist": "2026-06-18T10:35:37.082049",
-      "last_seen_ist": "2026-06-18T10:35:37.082049",
+      "last_seen_ist": "2026-06-18T11:35:38.713844",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
