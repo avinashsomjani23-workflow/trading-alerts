@@ -2086,6 +2086,7 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # fell outside the user's IST trading window and was excluded
         # from aggregates (live system would have suppressed it).
         "ist_blocked", "alert_utc_hour",
+        "h1_trend", "trend_alignment",
     ]
     df = pd.DataFrame(trades)
     cols_present = [c for c in front_cols if c in df.columns]

@@ -806,6 +806,8 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "ob_in_killzone":      _ob_in_killzone(ob, pair_conf),
         "fill_in_killzone":    _fill_in_killzone(fill_ts, pair_conf),
         "killzone_alignment":  _killzone_alignment(ob, fill_ts, alert_ts, pair_conf),
+        "h1_trend":            alert.get("h1_trend"),
+        "trend_alignment":     alert.get("trend_alignment"),
     }
 
 

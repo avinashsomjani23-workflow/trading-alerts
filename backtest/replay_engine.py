@@ -525,6 +525,8 @@ def replay_pair(
                 "walls": walls,
                 "alert_seq": ob_state["fire_count"],
                 "zone_id": zone_id,
+                "h1_trend": _bt_trend,
+                "trend_alignment": _bt_align,
                 # Just-closed bar's high/low — simulator uses these to do the
                 # SAME-BAR fill check (alert and limit order are
                 # instantaneous; if the bar that triggered the alert already
