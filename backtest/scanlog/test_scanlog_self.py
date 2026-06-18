@@ -50,7 +50,13 @@ def _mini_manifest(run_id="selftest"):
 
 
 def _good_trade(**over):
-    """A causally-clean, reconciled filled trade row."""
+    """A causally-clean, reconciled filled trade row.
+
+    CONTRACT: every field that _is_eligible() tests must be present here
+    and must pass. If _is_eligible gains a new condition (score floor, IST
+    window, etc.), add the corresponding field to this dict — or every gate
+    reconciliation test silently breaks.
+    """
     t = {
         "pair": "EURUSD",
         "ob_timestamp": "2024-09-01T08:00:00+00:00",
@@ -63,6 +69,8 @@ def _good_trade(**over):
         "r_if_exit_tp1": 1.0,
         "r_if_exit_tp2": 2.0,
         "pnl_usd": round(2.0 * 250.0, 2),
+        "score": 10.0,       # must clear SCORE_FLOOR (config min_score_to_email)
+        "ist_blocked": False, # must not be IST-blocked
     }
     t.update(over)
     return t
