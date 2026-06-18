@@ -3325,6 +3325,7 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
       'out_of_proximity'
       'data_unavailable'
       'data_stale'
+      'gap_open_event'
       None  -> zone should NOT be dropped; caller keeps it alive and logs.
     """
     # --- data_unavailable handled by caller before this is called ---
@@ -3426,6 +3427,46 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
             continue
         if fz.get("bos_idx", -1) > slate_bos_idx:
             return "structure_supplanted"
+
+    # --- gap_open_event ---
+    # The BOS or CHoCH that created this OB fired on a candle whose open had
+    # already crossed the broken swing — a weekend or holiday gap open, not a
+    # real displacement candle. The gap-open guard in dealing_range now blocks
+    # these at detection time; this gate retroactively evicts OBs that were
+    # created before that fix was deployed (or on the rare scan where state was
+    # stale). Applies to both BOS and CHoCH (bos_tag covers both).
+    #
+    # Gap test (mirrors dealing_range exactly):
+    #   Bullish BOS/CHoCH: candle closed above swing → valid only if open <= swing.
+    #     A gap-up open means open > swing → reject.
+    #   Bearish BOS/CHoCH: candle closed below swing → valid only if open >= swing.
+    #     A gap-down open means open < swing → reject.
+    #
+    # Only fires when all three are resolvable: bos_timestamp in df, bos_swing_price
+    # present, direction known. Skipped silently on any missing data so a lookup
+    # failure never drops a real zone.
+    if df is not None and len(df) > 0:
+        try:
+            bos_ts_str  = slate_zone.get("bos_timestamp")
+            swing_price = slate_zone.get("bos_swing_price")
+            direction   = slate_zone.get("direction")
+            if bos_ts_str and swing_price is not None and direction:
+                bos_ts_str = str(bos_ts_str)
+                ts_col = df['Datetime'] if 'Datetime' in df.columns else pd.Series(df.index)
+                bos_candle_open = None
+                for k, t in enumerate(ts_col):
+                    t_iso = t.isoformat() if hasattr(t, 'isoformat') else str(t)
+                    if t_iso == bos_ts_str:
+                        bos_candle_open = float(df['Open'].iloc[k])
+                        break
+                if bos_candle_open is not None:
+                    swing_price = float(swing_price)
+                    if direction == 'bullish' and bos_candle_open > swing_price:
+                        return 'gap_open_event'
+                    elif direction == 'bearish' and bos_candle_open < swing_price:
+                        return 'gap_open_event'
+        except Exception:
+            pass  # never drop on a lookup failure
 
     # --- No concrete reason matched ---
     # Do NOT drop. Log diagnostic so we can investigate.
