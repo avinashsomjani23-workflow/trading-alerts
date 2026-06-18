@@ -751,10 +751,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-18T09:35:41.448507",
-      "last_seen_ist": "2026-06-18T14:35:49.036693",
+      "last_seen_ist": "2026-06-18T15:35:42.359231",
       "last_email_day": "2026-06-18",
-      "reentry_armed": false,
-      "max_exit_distance": 0.3610076904296875,
+      "reentry_armed": true,
+      "max_exit_distance": 0.5449981689453125,
       "bias": "LONG",
       "pair": "USDJPY"
     },
@@ -790,10 +790,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-18T10:35:37.082049",
-      "last_seen_ist": "2026-06-18T14:35:49.036693",
+      "last_seen_ist": "2026-06-18T15:35:42.359231",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 83.10009765625,
       "bias": "SHORT",
       "pair": "GOLD"
     },
@@ -809,7 +809,7 @@
         "freshness": 0
       },
       "alert_ist": "2026-06-18T10:35:37.082049",
-      "last_seen_ist": "2026-06-18T14:35:49.036693",
+      "last_seen_ist": "2026-06-18T15:35:42.359231",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -829,10 +829,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-18T14:35:49.036693",
-      "last_seen_ist": "2026-06-18T14:35:49.036693",
+      "last_seen_ist": "2026-06-18T15:35:42.359231",
       "last_email_day": "2026-06-18",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.003009974956512451,
       "bias": "LONG",
       "pair": "USDCHF",
       "ob_snapshot": {
