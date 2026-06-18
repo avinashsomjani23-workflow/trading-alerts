@@ -17,8 +17,9 @@
       "decimal_places": 5,
       "spread_pips": 2.0,
       "killzones": [
-        {"tz": "America/New_York", "start": "02:00", "end": "05:00"},
-        {"tz": "America/New_York", "start": "07:00", "end": "10:00"}
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00", "label": "London Open"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00", "label": "New York (forex)"},
+        {"tz": "America/New_York", "start": "10:00", "end": "12:00", "label": "London Close"}
       ]
     },
     {
@@ -32,9 +33,9 @@
       "decimal_places": 3,
       "spread_pips": 2.0,
       "killzones": [
-        {"tz": "Asia/Tokyo", "start": "09:00", "end": "13:00"},
-        {"tz": "America/New_York", "start": "02:00", "end": "05:00"},
-        {"tz": "America/New_York", "start": "07:00", "end": "10:00"}
+        {"tz": "America/New_York", "start": "20:00", "end": "00:00", "label": "Asian Range"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00", "label": "New York (forex)"},
+        {"tz": "America/New_York", "start": "10:00", "end": "12:00", "label": "London Close"}
       ]
     },
     {
@@ -48,9 +49,9 @@
       "decimal_places": 5,
       "spread_pips": 4.0,
       "killzones": [
-        {"tz": "Asia/Tokyo", "start": "09:00", "end": "13:00"},
-        {"tz": "America/New_York", "start": "02:00", "end": "05:00"},
-        {"tz": "America/New_York", "start": "07:00", "end": "10:00"}
+        {"tz": "America/New_York", "start": "20:00", "end": "00:00", "label": "Asian Range"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00", "label": "New York (forex)"},
+        {"tz": "America/New_York", "start": "10:00", "end": "12:00", "label": "London Close"}
       ]
     },
     {
@@ -64,8 +65,9 @@
       "decimal_places": 5,
       "spread_pips": 2.0,
       "killzones": [
-        {"tz": "America/New_York", "start": "02:00", "end": "05:00"},
-        {"tz": "America/New_York", "start": "07:00", "end": "10:00"}
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00", "label": "London Open"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00", "label": "New York (forex)"},
+        {"tz": "America/New_York", "start": "10:00", "end": "12:00", "label": "London Close"}
       ]
     },
     {
@@ -79,8 +81,8 @@
       "decimal_places": 2,
       "spread_pips": 2.0,
       "killzones": [
-        {"tz": "America/New_York", "start": "08:30", "end": "11:00"},
-        {"tz": "America/New_York", "start": "11:00", "end": "13:00"}
+        {"tz": "America/New_York", "start": "08:30", "end": "11:00", "label": "New York (indices)"},
+        {"tz": "America/New_York", "start": "10:00", "end": "12:00", "label": "London Close"}
       ]
     },
     {
@@ -94,8 +96,9 @@
       "decimal_places": 2,
       "spread_pips": 0.50,
       "killzones": [
-        {"tz": "America/New_York", "start": "02:00", "end": "05:00"},
-        {"tz": "America/New_York", "start": "07:00", "end": "11:00"}
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00", "label": "London Open"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00", "label": "New York (forex)"},
+        {"tz": "America/New_York", "start": "10:00", "end": "12:00", "label": "London Close"}
       ]
     }
   ],
