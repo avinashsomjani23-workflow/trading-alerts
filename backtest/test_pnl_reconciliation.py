@@ -208,8 +208,95 @@ def test_excel_dollar_pnl_formula():
     _passed(f"50% Dollar P&L = ${mid_actual}")
 
 
+# ---------------------------------------------------------------------------
+# Test 4: the EXPORTED trades.csv reconciles to the headline via its own
+# eligible_for_headline column. This is the gap that let a reader sum the raw
+# r_realised column and get a number that contradicted the email ($2,455 vs
+# $883.5 on the Mar-2026 run): the file carried audit-only rows with nothing
+# marking which feed the headline. Tests 1-3 reconcile the in-memory path and
+# the Excel formula; this one pins the file itself.
+# ---------------------------------------------------------------------------
+def test_exported_csv_reconciles_to_headline():
+    print("\n== test_exported_csv_reconciles_to_headline ==")
+    import csv as _csv
+
+    # The single eligibility rule routes through _headline_exclusion. Pin its
+    # branches directly first, so the column's meaning is contract-locked:
+    he = h1_only_reporting._headline_exclusion
+    cases = {
+        "unresolved:timeout":   _mk_trade("X", "proximal", 2.0, 2.0, 2.0, exit_reason="timeout"),
+        "unresolved:window_end":_mk_trade("X", "proximal", 0.5, 0.5, 0.5, exit_reason="window_end"),
+        "never_filled":         _mk_trade("X", "proximal", 0.0, 0.0, 0.0, exit_reason="never_filled"),
+        "below_score_floor":    {**_mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"), "score": 2},
+        "ist_blocked":          {**_mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"), "ist_blocked": True},
+        "":                     _mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"),
+    }
+    for expected, row in cases.items():
+        got = he(row)
+        if got != expected:
+            _failed(f"_headline_exclusion expected {expected!r}, got {got!r}")
+    _passed("_headline_exclusion branches (timeout/window_end/never_filled/floor/ist/eligible) correct")
+
+    # A timeout winner (+2R) MUST be excluded from the headline but MUST stay
+    # present in trades.csv flagged ineligible (audit, not hidden). Below-floor
+    # and ist_blocked rows are pulled from the run UPSTREAM (audit list, never
+    # the CSV), so the only ineligible rows reaching the file are unresolved.
+    trades = [
+        _mk_trade("EURUSD", "proximal",  2.0,  1.0, 2.0, exit_reason="tp2"),   # eligible
+        _mk_trade("EURUSD", "proximal", -1.0, -1.0, -1.0, exit_reason="sl"),   # eligible
+        _mk_trade("EURUSD", "proximal",  2.0,  2.0, 2.0, exit_reason="timeout"),  # in file, excluded
+        _mk_trade("NAS100", "50pct",     1.0,  1.0, 1.0, exit_reason="tp1"),   # eligible
+    ]
+    # Resolved+eligible headline = (+2R -1R) prox + (+1R) 50pct = +2R * 250 = $500.
+
+    with tempfile.TemporaryDirectory() as td:
+        meta = {"start": "2024-08-19", "end": "2024-08-23", "regime": "bau",
+                "pairs": ["EURUSD", "NAS100"]}
+        h1_only_reporting.write_h1_only_report(
+            "test_run", trades, [], meta, risk_usd=250.0, out_root=Path(td),
+        )
+        run_dir = Path(td) / "test_run"
+        rows = list(_csv.DictReader((run_dir / "trades.csv").open()))
+        s = json.loads((run_dir / "summary.json").read_text())
+
+        # The column exists and is the single arbiter.
+        if "eligible_for_headline" not in rows[0]:
+            _failed("trades.csv missing eligible_for_headline column")
+        _passed("trades.csv carries eligible_for_headline column")
+
+        def _truthy(v): return str(v).strip().lower() in ("true", "1")
+        elig_sum = round(sum(float(r["pnl_usd"]) for r in rows
+                             if _truthy(r["eligible_for_headline"])), 2)
+
+        headline = round(sum(
+            s["scoreboards"][k].get("total_pnl_usd", 0.0)
+            for k in ("proximal_realised", "fifty_pct_realised")), 2)
+
+        if elig_sum != headline:
+            _failed(f"CSV eligible sum ${elig_sum} != summary headline ${headline}")
+        _passed(f"CSV eligible-sum ${elig_sum} == headline ${headline}")
+
+        if elig_sum != 500.0:
+            _failed(f"expected $500 eligible (timeout excluded), got ${elig_sum}")
+        _passed(f"eligible sum = ${elig_sum} (timeout row correctly excluded)")
+
+        # The timeout row stays in the file, flagged with its reason -- audit,
+        # not hidden. Summing the raw column (the bug) would have over-counted it.
+        excl = [r for r in rows if not _truthy(r["eligible_for_headline"])]
+        reasons = {r["headline_exclusion"] for r in excl}
+        if reasons != {"unresolved:timeout"}:
+            _failed(f"expected only unresolved:timeout in file, got {reasons}")
+        _passed(f"unresolved row retained and labelled: {sorted(reasons)}")
+
+        raw_sum = round(sum(float(r["pnl_usd"]) for r in rows), 2)
+        if raw_sum == headline:
+            _failed("raw-column sum equals headline -- test no longer exercises the bug")
+        _passed(f"raw-column sum ${raw_sum} != headline ${headline} (the trap; flag prevents it)")
+
+
 if __name__ == "__main__":
     test_headline_matches_per_trade_sum()
     test_registry_uses_realised_not_tp2()
     test_excel_dollar_pnl_formula()
+    test_exported_csv_reconciles_to_headline()
     print("\n=== All P&L reconciliation tests passed ===")

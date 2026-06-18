@@ -180,12 +180,18 @@ FVG_WINDOW_M15_CANDLES = 40  # DEAD-M15 — unused in H1-only path
 # median minimum — that one rejected small candles; this rejects oversized.
 OB_MAX_RANGE_ATR_MULT = 2.0
 
-# NOTE: No OB minimum-size floor. A tried-and-removed 0.3x-ATR range floor
-# (2026-06-12) was reverted 2026-06-16 — the OB candle's size is not an SMC
-# quality signal; the displacement LEG it launches is. A small-but-clean
-# origin candle is a valid OB. The only two size filters are the doji floor
-# (is_valid_ob_candle, 20% body — no directional intent) and the oversized
-# cap (OB_MAX_RANGE_ATR_MULT — news/volatility bar). Do not re-add a min floor.
+# OB minimum-size floor — DEFAULT-OFF (0.0). When > 0, reject an OB candidate
+# whose range (high - low) < MIN_OB_RANGE_ATR_MULT * ATR, i.e. too small relative
+# to volatility. A tried-and-removed 0.3x-ATR floor (2026-06-12) was reverted
+# 2026-06-16 on the principle that OB candle size is not an SMC quality signal —
+# the displacement LEG it launches is. This knob is kept at 0.0 so live behaviour
+# is byte-identical to that decision; it exists ONLY so the backtest knob-sweep
+# can empirically test whether a floor helps (trader observation 2026-06-19 that
+# small OBs often fail). DO NOT raise this above 0.0 in live without sweep
+# evidence — the default-off contract is what keeps live unchanged.
+# The other two size filters remain: doji floor (is_valid_ob_candle, 20% body —
+# no directional intent) and the oversized cap (OB_MAX_RANGE_ATR_MULT — news bar).
+MIN_OB_RANGE_ATR_MULT = 0.0
 
 # Touch re-arm distance (ATR units). A proximal touch is counted once per
 # APPROACH: after a touch, price must pull back away from the proximal by this

@@ -49,8 +49,13 @@ from backtest.diagnostics import h3_verifier
 CATEGORY_ORDER = ["LOOKAHEAD", "BEHAVIOUR_DIVERGENCE", "CONFIG_DIVERGENCE",
                   "PESSIMISTIC_BIAS", "HARNESS_TRAP", "DATA_LIMIT", "INFO"]
 
-# Live config proximity caps and the backtest override (FABLE_REFERENCE Â§3 #10/#11).
-BACKTEST_ATR_MULT = {"forex": 3.0, "index": 3.5, "commodity": 3.5}
+# Backtest proximity cap. RESOLVED 2026-06-12: run_backtest no longer overrides
+# the config value (it reads pair_conf["atr_multiplier"] untouched), so the
+# backtest cap now EQUALS the live config cap. This map is therefore empty; the
+# C19 finding falls back to live_cap per pair-type and should report zero
+# divergence. The old override was {forex 3.0, index 3.5, commodity 3.5}; kept
+# in this comment only as the historical record of what was removed.
+BACKTEST_ATR_MULT: dict = {}
 
 
 @dataclass

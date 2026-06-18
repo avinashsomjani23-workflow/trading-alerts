@@ -749,11 +749,14 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         #     keep walking to the next opposing candle.
         # Neither changes the detection METHOD (still the first qualifying
         # opposing candle from the break) — they only skip news bars and dojis.
-        # NOTE: there is intentionally no minimum-size floor — OB candle size is
-        # not an SMC quality signal (the displacement leg is). See smc_detector.
+        # A third guard (undersized) is DEFAULT-OFF: smc_detector.MIN_OB_RANGE_ATR_MULT
+        # is 0.0 in live, so the `> 0` guard below is never entered and behaviour
+        # is identical to "no minimum-size floor". The backtest knob-sweep can set
+        # it > 0 to test whether small OBs underperform (trader obs 2026-06-19).
         ob_idx = -1
         opposing_count = 0
         oversized_count = 0
+        undersized_count = 0
         doji_count = 0
         for j in range(bos_idx - 1, impulse_start_idx - 1, -1):
             if (ev_dir == 'bullish' and C[j] < O[j]) or \
@@ -762,6 +765,12 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                 if h1_atr_for_leg and h1_atr_for_leg > 0:
                     if (H[j] - L[j]) > smc_detector.OB_MAX_RANGE_ATR_MULT * h1_atr_for_leg:
                         oversized_count += 1
+                        continue
+                    # Undersized floor — only active when the knob is set > 0.
+                    min_ob_mult = smc_detector.MIN_OB_RANGE_ATR_MULT
+                    if min_ob_mult > 0 and \
+                       (H[j] - L[j]) < min_ob_mult * h1_atr_for_leg:
+                        undersized_count += 1
                         continue
                 if is_valid_ob_candle(O[j], C[j], H[j], L[j]):
                     ob_idx = j
@@ -774,6 +783,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                 'leg_len': int(bos_idx - impulse_start_idx),
                 'opposing_candles_in_leg': opposing_count,
                 'oversized_rejected': oversized_count,
+                'undersized_rejected': undersized_count,
                 'doji_rejected': doji_count,
                 'h1_atr': float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
             }

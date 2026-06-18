@@ -48,6 +48,8 @@ KNOB_SCOPE: Dict[str, Dict[str, Any]] = {
                                     invariant=["n_swings"]),
     "OB_MAX_RANGE_ATR_MULT": dict(kw="ob_max_range_atr_mult", is_dict=False,
                                   invariant=["n_swings", "n_choch", "n_bos"]),
+    "MIN_OB_RANGE_ATR_MULT": dict(kw="min_ob_range_atr_mult", is_dict=False,
+                                  invariant=["n_swings", "n_choch", "n_bos"]),
     "FVG_NOISE_FLOOR_MULT": dict(kw="fvg_noise_floor_mult", is_dict=True,
                                  invariant=["n_swings", "n_obs", "n_choch", "n_bos",
                                             "n_alerts_total", "n_trades_filled",
@@ -69,6 +71,7 @@ LIVE_DEFAULT: Dict[str, Any] = {
     "MIN_LEG_ATR_MULT": 1.5, "BOS_ATR_MULT": 0.4,
     "STRUCTURE_CHOCH_ATR_MULT": 1.0, "STRUCTURE_LOCK_ATR_MULT": 1.5,
     "OB_MAX_RANGE_ATR_MULT": 2.0,
+    "MIN_OB_RANGE_ATR_MULT": 0.0,
     "FVG_NOISE_FLOOR_MULT": {"forex": 0.08, "index": 0.15, "commodity": 0.12},
     "SWEEP_EQUAL_LEVEL_TOLERANCE_ATR": {"forex": 0.30, "index": 0.40, "commodity": 0.40},
     "SWEEP_WICK_PIERCE_MIN_ATR": {"forex": 0.05, "index": 0.08, "commodity": 0.08},
@@ -254,9 +257,11 @@ def _write(knob, grid, rows, violations, invariant, scope, out_dir, meta):
                      f"{', '.join(scope['soft'])}.")
     if knob in ("FVG_NOISE_FLOOR_MULT", "SWEEP_EQUAL_LEVEL_TOLERANCE_ATR",
                 "SWEEP_WICK_PIERCE_MIN_ATR"):
-        lines.append("> Score knobs are **P&L-neutral** in the current no-gate "
-                     "H1-only backtest â only `avg_logged_score` may move. They "
-                     "would bite only if a score gate were enabled.")
+        lines.append("> Score knobs move `avg_logged_score`. A score gate is now "
+                     "LIVE (MIN_SCORE_TO_EMAIL=4, mirrored in the backtest), so "
+                     "shifting the score can push a trade across the 4-point floor "
+                     "and change which trades count -- these knobs are NO LONGER "
+                     "P&L-neutral. Read alerts/filled/P&L columns, not just score.")
     lines.append("")
     if violations:
         lines.append("## âš ï¸ SCOPE / RECON VIOLATIONS")

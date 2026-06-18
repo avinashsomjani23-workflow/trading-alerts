@@ -197,6 +197,7 @@ _PATCHABLE_GLOBAL = {
     "structure_choch_atr_mult":   (dealing_range, "STRUCTURE_CHOCH_ATR_MULT"),
     "structure_lock_atr_mult":    (dealing_range, "STRUCTURE_LOCK_ATR_MULT"),
     "ob_max_range_atr_mult":      (smc_detector, "OB_MAX_RANGE_ATR_MULT"),
+    "min_ob_range_atr_mult":      (smc_detector, "MIN_OB_RANGE_ATR_MULT"),
 }
 _PATCHABLE_DICT = {
     # name -> (module, attribute)  (mutated in place, restored in place)
@@ -284,6 +285,7 @@ class KnobOverrides:
                  structure_choch_atr_mult: Optional[float] = None,
                  structure_lock_atr_mult: Optional[float] = None,
                  ob_max_range_atr_mult: Optional[float] = None,
+                 min_ob_range_atr_mult: Optional[float] = None,
                  fvg_noise_floor_mult: Optional[dict] = None,
                  sweep_equal_level_tolerance_atr: Optional[dict] = None,
                  sweep_wick_pierce_min_atr: Optional[dict] = None,
@@ -302,6 +304,7 @@ class KnobOverrides:
             structure_choch_atr_mult=structure_choch_atr_mult,
             structure_lock_atr_mult=structure_lock_atr_mult,
             ob_max_range_atr_mult=ob_max_range_atr_mult,
+            min_ob_range_atr_mult=min_ob_range_atr_mult,
             fvg_noise_floor_mult=fvg_noise_floor_mult,
             sweep_equal_level_tolerance_atr=sweep_equal_level_tolerance_atr,
             sweep_wick_pierce_min_atr=sweep_wick_pierce_min_atr,
