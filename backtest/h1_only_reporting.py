@@ -1594,6 +1594,55 @@ def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
     )
 
 
+def _below_floor_html(below_floor_trades: List[Dict[str, Any]]) -> str:
+    """Small audit list for trades dropped below the live score floor.
+
+    These rows are excluded from EVERYTHING else in the run (no table, metric,
+    score bucket, Excel/CSV row). This is the only place they appear, so the
+    user can see what was skipped and what R it would have produced. One row
+    per alert (proximal is canonical); columns: pair / time / score /
+    would-be R. Never raises -- a render failure must not break the report."""
+    floor = SCORE_FLOOR
+    rows = [t for t in below_floor_trades if t.get("entry_zone") == "proximal"]
+    header = (
+        f"<p style='font-size:12px;color:#666;margin-bottom:8px;'>"
+        f"Setups that scored below the live email floor ({floor:g}). Live would "
+        f"never have emailed these, so they are <b>excluded from every metric, "
+        f"table, score bucket and the Excel/CSV above</b>. Listed here only so "
+        f"you can see what was skipped and its hypothetical R.</p>"
+    )
+    if not rows:
+        return header + ("<p style='color:#27ae60;'>"
+                         "No setups scored below the floor this run.</p>")
+    try:
+        body = ""
+        total_r = 0.0
+        for t in sorted(rows, key=lambda r: r.get("score", 0.0)):
+            real = t.get("exit_reason") not in _EXCLUDE_REASONS
+            r = float(t.get("r_realised", 0.0)) if real else 0.0
+            total_r += r
+            r_str = (f"{'+' if r >= 0 else ''}{r:.2f}R" if real
+                     else f"<span style='color:#888;'>{t.get('exit_reason','')}</span>")
+            r_color = "#27ae60" if r > 0 else ("#e74c3c" if r < 0 else "#888")
+            body += (
+                f"<tr><td>{t.get('pair','')}</td>"
+                f"<td style='color:#888;'>{t.get('alert_ts','')}</td>"
+                f"<td>{float(t.get('score',0.0)):.1f}</td>"
+                f"<td style='color:{r_color};'>{r_str}</td></tr>"
+            )
+        sign = "+" if total_r >= 0 else ""
+        return header + (
+            f"<table><thead><tr><th>Pair</th><th>Alert time (UTC)</th>"
+            f"<th>Score</th><th>Would-have R</th></tr></thead>"
+            f"<tbody>{body}</tbody></table>"
+            f"<p style='font-size:12px;color:#666;margin-top:6px;'>"
+            f"{len(rows)} below-floor setups &middot; total would-have "
+            f"R = {sign}{total_r:.2f}R (informational only).</p>"
+        )
+    except Exception as e:
+        return header + f"<p style='color:#888;'>[audit render error: {e}]</p>"
+
+
 def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
                        meta: Dict[str, Any]) -> str:
     """Audit section for alerts filtered by the IST trading-window gate.
@@ -2692,7 +2741,6 @@ def _zone_block_html(
     sb_tp2: Dict[str, Any],
     risk_usd: float,
     band_color: str,
-    bucket_trades: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """One self-contained section per entry zone. New layout:
       findings panel -> compact header -> by-pair -> by-session ->
@@ -2718,14 +2766,9 @@ def _zone_block_html(
     findings = _findings_panel(zone_trades, sb_realised, risk_usd)
     findings_block = _findings_panel_html(findings)
 
-    # Score buckets + verdict. DISCOVERY view: built from `bucket_trades`
-    # (all resolved fills, every score) when supplied, NOT the floored
-    # zone_trades. The headline above is live-parity (score >= floor), but the
-    # score-vs-winrate table must still show the sub-floor buckets so the user
-    # can judge whether the floor is set right. Every OTHER aggregate in this
-    # block stays on zone_trades and reconciles to the headline.
-    bucket_src = bucket_trades if bucket_trades is not None else zone_trades
-    score_buckets = _score_buckets(bucket_src, "r_realised")
+    # Score buckets + verdict (this zone's data only). Below-floor trades are
+    # excluded from the run entirely, so buckets only span scores >= floor.
+    score_buckets = _score_buckets(zone_trades, "r_realised")
     score_verdict = _score_verdict_text(score_buckets)
 
     return f"""
@@ -2813,10 +2856,6 @@ def _zone_block_html(
 <div class="section">
   <h2>Confidence score &mdash; did it predict outcomes?</h2>
   <p><b>{score_verdict}</b></p>
-  <p style="font-size:11px;color:#888;margin:-4px 0 8px;">
-    Discovery view &mdash; spans <b>all</b> scores incl. below the live floor
-    ({SCORE_FLOOR:g}). Buckets under the floor are setups live would not have
-    emailed; shown so you can judge where to set the floor.</p>
   {_score_table_html(score_buckets)}
 </div>
 
@@ -2891,26 +2930,17 @@ def _build_group_html(
     Returns the group's summary dict so the caller can fold it into the
     combined summary.json under `by_group`.
     """
-    # LIVE-PARITY headline (2026-06-18): a row is excluded only if it is below
-    # the live score floor (config.min_score_to_email) OR outside the IST
-    # trading window. Live gates on proximity + mitigation + 1.5R + score floor
-    # and physically does not scan before 09:00 IST, so out-of-window alerts
-    # never exist live. Killzone is a scoring signal and news is an information
-    # banner -- neither suppresses an alert in live -- so both stay on the rows
-    # as audit labels only. Resolved-fill filtering happens in the aggregation
-    # helpers; full eligibility lives in _is_eligible.
+    # `group_trades_all` is ALREADY the core set: below-floor and out-of-IST
+    # rows were removed by write_h1_only_report before the split, so they
+    # never reach a group report at all. The filter below is therefore a
+    # no-op kept only for defensive symmetry with the combined path.
     trades = [t for t in group_trades_all
               if not _below_score_floor(t) and not t.get("ist_blocked")]
-    below_floor_trades = [t for t in group_trades_all if _below_score_floor(t)]
     blocked_trades = [t for t in group_trades_all if t.get("news_blocked")]
-    ist_blocked_trades = [t for t in group_trades_all if t.get("ist_blocked")]
     kz_blocked_trades = [t for t in group_trades_all if t.get("killzone_blocked")]
 
     prox_trades = [t for t in trades if t.get("entry_zone") == "proximal"]
     mid_trades  = [t for t in trades if t.get("entry_zone") == "50pct"]
-    # All-scores (pre-floor) sets — discovery score-bucket table only.
-    prox_all = [t for t in group_trades_all if t.get("entry_zone") == "proximal"]
-    mid_all  = [t for t in group_trades_all if t.get("entry_zone") == "50pct"]
 
     sb_prox     = _aggregate_for_exit(prox_trades, "r_realised",     risk_usd)
     sb_mid      = _aggregate_for_exit(mid_trades,  "r_realised",     risk_usd)
@@ -3031,13 +3061,13 @@ def _build_group_html(
 {_zone_block_html(
     "Section A &mdash; Proximal entry",
     prox_trades, sb_prox, sb_prox_tp1, sb_prox_tp2, risk_usd,
-    "#2c3e50", bucket_trades=prox_all,
+    "#2c3e50",
 )}
 
 {_zone_block_html(
     "Section B &mdash; 50% mean entry",
     mid_trades, sb_mid, sb_mid_tp1, sb_mid_tp2, risk_usd,
-    "#34495e", bucket_trades=mid_all,
+    "#34495e",
 )}
 
 <div class="section">
@@ -3051,10 +3081,8 @@ def _build_group_html(
   {_killzone_audit_html(kz_blocked_trades, group_meta)}
 </div>
 
-<div class="section">
-  <h2>IST trading-window gate &mdash; alerts dropped</h2>
-  {_ist_blackout_html(ist_blocked_trades, group_meta)}
-</div>
+<!-- Below-floor + IST-blocked rows are excluded from the whole run upstream;
+     their audit lists live in the combined report only, so no section here. -->
 
 <div class="section">
   <h2>News blackout &mdash; trades filtered</h2>
@@ -3102,12 +3130,12 @@ def _build_group_html(
         "fill_rate_proximal": fill_prox,
         "fill_rate_50pct":    fill_mid,
         "news_blocked_trade_rows": len(blocked_trades),
-        "ist_blocked_trade_rows":  len(ist_blocked_trades),
+        # Group reports see the CORE set only; below-floor + out-of-IST rows
+        # were removed run-wide upstream, so these are always 0 here.
+        "ist_blocked_trade_rows":  0,
         "killzone_dropped_alerts": int(group_meta.get("killzone_dropped_alerts") or 0),
-        # Score floor = the ONLY live-parity gate. Rows below it are dropped
-        # from the headline (live would not email them) but kept in CSV/Excel.
         "score_floor":                  SCORE_FLOOR,
-        "below_score_floor_trade_rows": len(below_floor_trades),
+        "below_score_floor_trade_rows": 0,
         "html_file":  html_filename,
         "excel_file": excel_filename,
     }
@@ -3129,31 +3157,29 @@ def write_h1_only_report(
     out_dir = Path(base) / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # `trades_all` keeps EVERY row (news / IST / killzone / below-floor) for
-    # Excel/CSV audit. The single live-parity exclusion below strips only
-    # below-floor rows from `trades` -- the variable every metric path uses.
-    # News / IST / killzone are informational in live and never gate, so they
-    # stay counted in the headline here too.
-    trades_all = list(trades)
-    # LIVE-PARITY headline (2026-06-18): a row is excluded only if it is below
-    # the live score floor (config.min_score_to_email) OR outside the IST
-    # trading window (live does not scan before 09:00 IST, so out-of-window
-    # alerts never exist live). Killzone / news never suppress an alert in
-    # live, so they stay on the rows as audit labels only. Resolved-fill
-    # filtering happens in the aggregation helpers; full eligibility is
-    # _is_eligible.
-    trades         = [t for t in trades_all
-                      if not _below_score_floor(t) and not t.get("ist_blocked")]
-    below_floor_trades = [t for t in trades_all if _below_score_floor(t)]
+    # TWO HARD EXCLUSIONS (2026-06-18, trader decision). A trade is pulled out
+    # of the run ENTIRELY -- no table, metric, score bucket, Excel/CSV row, or
+    # per-group report -- if it is either:
+    #   (1) below the live score floor (config.min_score_to_email), or
+    #   (2) outside the IST trading window (live never scans before 09:00 IST,
+    #       so such an alert could never have happened live).
+    # Each excluded row shows up in EXACTLY ONE place: a small audit list (pair
+    # / time / score / would-be R) so the user can see what was skipped and its
+    # hypothetical R -- and nowhere else. Score floor is checked first so a
+    # below-floor row is never also double-listed under IST.
+    raw_trades = list(trades)
+    audit_below_floor = [t for t in raw_trades if _below_score_floor(t)]
+    audit_ist = [t for t in raw_trades
+                 if not _below_score_floor(t) and t.get("ist_blocked")]
+    # CORE set: survives both gates. THE set every downstream path sees.
+    trades_all = [t for t in raw_trades
+                  if not _below_score_floor(t) and not t.get("ist_blocked")]
+    trades = list(trades_all)
     blocked_trades = [t for t in trades_all if t.get("news_blocked")]
-    ist_blocked_trades = [t for t in trades_all if t.get("ist_blocked")]
     kz_blocked_trades = [t for t in trades_all if t.get("killzone_blocked")]
 
     prox_trades = [t for t in trades if t.get("entry_zone") == "proximal"]
     mid_trades  = [t for t in trades if t.get("entry_zone") == "50pct"]
-    # All-scores (pre-floor) sets — discovery score-bucket table only.
-    prox_all = [t for t in trades_all if t.get("entry_zone") == "proximal"]
-    mid_all  = [t for t in trades_all if t.get("entry_zone") == "50pct"]
 
     # Primary view: r_realised under the default policy (ride to TP2 with
     # SL-to-BE after TP1 hit). Every per-pair / per-session / score / killzone
@@ -3176,10 +3202,11 @@ def write_h1_only_report(
     fill_prox = _fill_rate(trades, "proximal")
     fill_mid  = _fill_rate(trades, "50pct")
 
-    # Discovery score buckets span ALL scores (pre-floor) so summary.json keeps
-    # the full score-vs-winrate curve for threshold tuning.
-    score_buckets      = _score_buckets(prox_all, "r_realised")
-    score_buckets_mid  = _score_buckets(mid_all,  "r_realised")
+    # Score buckets over the CORE set only. Below-floor trades are excluded
+    # from the run entirely (trader decision), so there are no sub-floor
+    # buckets by design.
+    score_buckets      = _score_buckets(prox_trades, "r_realised")
+    score_buckets_mid  = _score_buckets(mid_trades,  "r_realised")
     # Exit counts must be scoped per entry-zone — the headline counts proximal
     # trades only, so mixing zones here makes the "How trades closed" line
     # contradict the headline (e.g. 21 filled but 29 SL hits across both zones).
@@ -3202,6 +3229,27 @@ def write_h1_only_report(
         }
         for t in blocked_trades
     ]
+
+    # Small audit lists for the two HARD exclusions. These rows appear nowhere
+    # else in the run; this is their only home in summary.json. We carry the
+    # would-have R so the user can see the cost/benefit of each gate.
+    def _excl_audit(rows):
+        out = []
+        for t in rows:
+            if t.get("entry_zone") != "proximal":
+                continue  # one row per alert (proximal is canonical)
+            real = t.get("exit_reason") not in _EXCLUDE_REASONS
+            out.append({
+                "pair":         t.get("pair"),
+                "alert_ts":     t.get("alert_ts"),
+                "score":        t.get("score"),
+                "exit_reason":  t.get("exit_reason"),
+                "would_have_r": (round(float(t.get("r_realised", 0.0)), 3)
+                                 if real else None),
+            })
+        return out
+    below_floor_audit = _excl_audit(audit_below_floor)
+    ist_audit         = _excl_audit(audit_ist)
 
     summary = {
         "run_id":              run_id,
@@ -3231,23 +3279,25 @@ def write_h1_only_report(
         "per_session_50pct_realised":    ss_mid,
         "score_buckets_proximal_realised": score_buckets,
         "score_buckets_50pct_realised":    score_buckets_mid,
-        # Blackout exclusion counters. Each is the count of trade rows
-        # (proximal + 50pct, up to 2x distinct alerts) dropped from every
-        # aggregate metric calculation above.
+        # News blackout is INFORMATIONAL ONLY (live never suppresses on news);
+        # these rows ARE counted in the metrics above. Listed for reference.
         "news_blocked_trade_rows": len(blocked_trades),
         "news_blocked_audit":      blocked_audit,
-        "ist_blocked_trade_rows":  len(ist_blocked_trades),
-        # Killzone hard filter: alerts dropped before simulation. Counts
-        # come from run_backtest meta -- the dropped alerts never produced
-        # trade rows, so we have to pass the totals through, not derive
-        # them from `trades`.
+        # Killzone is a scoring signal, not a gate. Counts come from run_backtest
+        # meta -- the dropped alerts never produced trade rows.
         "killzone_dropped_alerts":  int(meta.get("killzone_dropped_alerts") or 0),
         "killzone_drops_by_pair":   dict(meta.get("killzone_drops_by_pair") or {}),
         "killzone_windows_by_pair": dict(meta.get("killzone_windows_by_pair") or {}),
-        # Score floor = the ONLY live-parity gate. Rows below it are dropped
-        # from the headline (live would not email them) but kept in CSV/Excel.
+        # TWO HARD EXCLUSIONS — these rows appear NOWHERE else in the run, only
+        # in their own audit list here (with would-have R). Below score floor,
+        # and outside the IST trading window.
         "score_floor":                  SCORE_FLOOR,
-        "below_score_floor_trade_rows": len(below_floor_trades),
+        # *_trade_rows = all rows (proximal + 50pct); *_audit = one row per
+        # alert (proximal canonical) with would-have R, for human reading.
+        "below_score_floor_trade_rows": len(audit_below_floor),
+        "below_score_floor_audit":      below_floor_audit,
+        "ist_blocked_trade_rows":       len(audit_ist),
+        "ist_blocked_audit":            ist_audit,
     }
 
     # Reconciliation invariant. The headline P&L (sb_prox / sb_mid) MUST
@@ -3402,7 +3452,7 @@ def write_h1_only_report(
 {_zone_block_html(
     "Section A &mdash; Proximal entry",
     prox_trades, sb_prox, sb_prox_tp1, sb_prox_tp2, risk_usd,
-    "#2c3e50", bucket_trades=prox_all,
+    "#2c3e50",
 )}
 
 <!-- ============================================================ -->
@@ -3411,7 +3461,7 @@ def write_h1_only_report(
 {_zone_block_html(
     "Section B &mdash; 50% mean entry",
     mid_trades, sb_mid, sb_mid_tp1, sb_mid_tp2, risk_usd,
-    "#34495e", bucket_trades=mid_all,
+    "#34495e",
 )}
 
 <!-- ============================================================ -->
@@ -3432,11 +3482,19 @@ def write_h1_only_report(
 </div>
 
 <!-- ============================================================ -->
-<!-- SECTION D: IST BLACKOUT AUDIT -->
+<!-- SECTION C2: BELOW-SCORE-FLOOR AUDIT (excluded from the whole run) -->
+<!-- ============================================================ -->
+<div class="section">
+  <h2>Below the score floor &mdash; setups skipped entirely</h2>
+  {_below_floor_html(audit_below_floor)}
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION D: IST BLACKOUT AUDIT (excluded from the whole run) -->
 <!-- ============================================================ -->
 <div class="section">
   <h2>IST trading-window gate &mdash; alerts dropped</h2>
-  {_ist_blackout_html(ist_blocked_trades, meta)}
+  {_ist_blackout_html(audit_ist, meta)}
 </div>
 
 <!-- ============================================================ -->

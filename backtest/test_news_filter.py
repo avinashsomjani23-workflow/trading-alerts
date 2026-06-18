@@ -302,28 +302,25 @@ def test_metric_exclusion_invariant():
     ]
     summary_b = _build_summary(baseline + below_floor)
     metrics_b = _extract_metrics(summary_b)
-    # Headline aggregates must be untouched. Excluded from this check:
-    #   - total_trade_rows: a raw row count, includes audit rows by design.
-    #   - score_buckets_*: the DISCOVERY view, which intentionally spans all
-    #     scores (incl. below floor) so the threshold can be tuned.
-    _discovery_keys = {"total_trade_rows",
-                       "score_buckets_proximal_realised",
-                       "score_buckets_50pct_realised"}
+    # Below-floor rows are excluded from EVERYTHING -- every metric, including
+    # score buckets and the total row count -- so nothing may move.
     for k in metrics_a:
-        if k in _discovery_keys:
-            continue
         assert metrics_a[k] == metrics_b[k], (
             f"{k} changed after adding below-floor trades "
-            f"(should be excluded): {metrics_a[k]} -> {metrics_b[k]}")
+            f"(must be excluded everywhere): {metrics_a[k]} -> {metrics_b[k]}")
     assert summary_b["below_score_floor_trade_rows"] == 4, (
         f"below_score_floor_trade_rows should be 4, "
         f"got {summary_b['below_score_floor_trade_rows']}")
     assert summary_a["below_score_floor_trade_rows"] == 0
-    # Discovery buckets MUST capture the sub-floor rows (that is their job).
+    # They DO appear in their own audit list (one row per alert = 2).
+    assert len(summary_b["below_score_floor_audit"]) == 2, (
+        f"below_score_floor_audit should list 2 alerts, "
+        f"got {len(summary_b['below_score_floor_audit'])}")
+    # Score buckets must NOT contain any sub-floor bucket.
     b_labels = {b["score_bucket"]
                 for b in summary_b["score_buckets_proximal_realised"]}
-    assert "2-3" in b_labels and "3-4" in b_labels, (
-        f"discovery buckets must include sub-floor scores, got {b_labels}")
+    assert "2-3" not in b_labels and "3-4" not in b_labels, (
+        f"sub-floor buckets must be absent, got {b_labels}")
 
     # --- 2. News-blocked but scoring rows ARE counted (live parity). A +10R
     # news-blocked winner must MOVE the proximal headline upward.
