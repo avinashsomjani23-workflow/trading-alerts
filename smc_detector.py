@@ -1780,6 +1780,43 @@ def ts_in_killzone(ts_iso, killzones):
         return False
 
 
+def killzone_label_for_ts(ts_iso, killzones):
+    """Return the LABEL of the killzone window the candle at `ts_iso` falls in
+    (e.g. 'London Open', 'New York (forex)', 'London Close'), or None if the
+    candle is in no window. Uses the SAME DST-resolved overlap test as
+    ts_in_killzone — never diverges. The label is read from the window dict's
+    optional 'label' key; a window without one yields a generic 'killzone'.
+    On overlap of multiple windows, the FIRST configured match wins. Returns
+    None on any missing/bad input (never raises)."""
+    if not ts_iso or not killzones:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(ts_iso).replace("Z", "+00:00"))
+        dt = dt.astimezone(_UTC) if dt.tzinfo is not None else dt.replace(tzinfo=_UTC)
+        cs = dt.hour * 60 + dt.minute
+        ce = cs + 60
+        # Resolve EACH window on its own (as a 1-element list) so a malformed
+        # sibling window can't shift the label-to-range alignment. The shared
+        # resolver silently drops bad entries; resolving per-window keeps each
+        # label bound to its own resolved range. First configured match wins.
+        for w in killzones:
+            if not isinstance(w, dict):
+                continue
+            ranges = resolve_killzone_windows_utc([w], dt)
+            if not ranges:  # this window was malformed / skipped
+                continue
+            start_min, end_min = ranges[0]
+            if start_min <= end_min:
+                hit = (cs < end_min and ce > start_min)
+            else:
+                hit = (cs < end_min or ce > start_min)
+            if hit:
+                return w.get("label") or "killzone"
+        return None
+    except Exception:
+        return None
+
+
 # Back-compat shim: old name kept so any un-migrated caller still resolves to
 # the DST-aware path instead of silently using stale UTC literals.
 def _ts_in_killzone(ts_iso, killzones):
@@ -1834,6 +1871,7 @@ def killzone_entry_forecast(now_utc, distance, atr, killzones, horizon_h=48):
     # horizon to absolute UTC and keep the earliest end still in the future.
     # If the trader is already inside a window, this returns that window's end.
     deadline_utc = None
+    deadline_label = None
     if killzones:
         horizon_end = now_utc + timedelta(hours=horizon_h)
         day = now_utc
@@ -1844,13 +1882,22 @@ def killzone_entry_forecast(now_utc, distance, atr, killzones, horizon_h=48):
                 day += timedelta(hours=24)
                 continue
             seen_days.add(d)
-            for tz, start_min, end_min in _parse_local_windows(killzones):
+            # Iterate the raw window dicts (not the label-stripped parse) so the
+            # window that produces the deadline can carry its label through.
+            for w in killzones:
+                if not isinstance(w, dict):
+                    continue
+                parsed = _parse_local_windows([w])
+                if not parsed:
+                    continue
+                tz, start_min, end_min = parsed[0]
                 e_local = datetime(d.year, d.month, d.day,
                                    (end_min // 60) % 24, end_min % 60, tzinfo=tz)
                 e_utc = e_local.astimezone(_UTC)
                 if now_utc <= e_utc <= horizon_end:
                     if deadline_utc is None or e_utc < deadline_utc:
                         deadline_utc = e_utc
+                        deadline_label = w.get("label") or "killzone"
             day += timedelta(hours=24)
 
     return {
@@ -1858,6 +1905,7 @@ def killzone_entry_forecast(now_utc, distance, atr, killzones, horizon_h=48):
         "eta_utc": eta_utc,
         "eta_in_kz": eta_in_kz,
         "deadline_utc": deadline_utc,
+        "deadline_label": deadline_label,
     }
 
 

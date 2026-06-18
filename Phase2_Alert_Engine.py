@@ -107,7 +107,8 @@ def _ob_in_killzone_label(ob, pair_conf):
     via the shared smc_detector engine (single source of truth for windows).
 
     Returns:
-      - "in killzone" (green) if the OB candle overlaps any window for its date
+      - "in killzone (<window>)" (green) naming the window the OB candle landed
+        in (e.g. "London Open") if it overlaps any window for its date
       - "outside killzone" (amber) if it doesn't
       - "unknown" if either input is missing
     """
@@ -116,8 +117,9 @@ def _ob_in_killzone_label(ob, pair_conf):
         killzones = (pair_conf or {}).get("killzones")
         if not ob_ts_iso or not killzones:
             return "<span style='color:#888;'>unknown</span>"
-        if smc_detector.ts_in_killzone(ob_ts_iso, killzones):
-            return "<b style='color:#27ae60;'>in killzone</b>"
+        label = smc_detector.killzone_label_for_ts(ob_ts_iso, killzones)
+        if label:
+            return f"<b style='color:#27ae60;'>in killzone ({label})</b>"
         return "<b style='color:#e67e22;'>outside killzone</b>"
     except Exception:
         return "<span style='color:#888;'>unknown</span>"
@@ -144,20 +146,25 @@ def _entry_killzone_forecast_label(data, pair_conf):
 
     deadline = fc.get("deadline_utc")
     deadline_str = _to_ist(deadline) if deadline else None
+    deadline_label = fc.get("deadline_label")
+    # Name the window the deadline belongs to, e.g. "London Open until 14:30 IST".
+    window_phrase = f"{deadline_label} until {deadline_str}" if (deadline_label and deadline_str) \
+        else (f"in killzone until {deadline_str}" if deadline_str else None)
 
     if fc.get("eta_hours") is None:
         # No usable ETA — still show the cut-off if a window is upcoming.
-        if deadline_str:
-            return f"<b style='color:#aaa;'>in killzone until {deadline_str}</b> <i>(info)</i>"
+        if window_phrase:
+            return f"<b style='color:#aaa;'>{window_phrase}</b> <i>(info)</i>"
         return "<span style='color:#888;'>n/a</span>"
 
     if fc.get("eta_in_kz"):
         tail = f" &middot; enter by {deadline_str}" if deadline_str else ""
-        return f"<b style='color:#27ae60;'>likely in killzone</b>{tail} <i>(est.)</i>"
+        in_kz = f"likely in killzone ({deadline_label})" if deadline_label else "likely in killzone"
+        return f"<b style='color:#27ae60;'>{in_kz}</b>{tail} <i>(est.)</i>"
 
-    if deadline_str:
+    if window_phrase:
         return (f"<b style='color:#e67e22;'>likely outside</b> "
-                f"&middot; in killzone until {deadline_str} <i>(est.)</i>")
+                f"&middot; {window_phrase} <i>(est.)</i>")
     return "<b style='color:#e67e22;'>likely outside killzone</b> <i>(est.)</i>"
 
 
