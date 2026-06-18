@@ -192,21 +192,23 @@ MIN_N_FOR_VERDICT = 5
 
 
 def _runner_r(t: Dict[str, Any]) -> float:
-    """R under TP1+runner policy: 50% of position closes at TP1 when TP1 hit,
-    50% rides to whatever r_realised did (SL is moved to entry after TP1,
-    so the runner can BE-stop, win to TP2, or end at window close).
+    """R under TP1+runner reference policy: 50% closes at TP1 when TP1 hit,
+    50% rides to whatever the TP2-ride reference did (r_if_exit_tp2 — original
+    SL, BE after TP1). When TP1 never hits, the full position is the reference
+    outcome.
 
-    When TP1 never hits, the full position is treated under default policy
-    (so the runner branch == r_realised).
+    NOTE (2026-06-18): rides against `r_if_exit_tp2`, the TP2-ride REFERENCE —
+    NOT `r_realised`, which is now the live TP1+BE@1R policy. Using r_realised
+    here would collapse the runner to plain TP1.
     """
     if t.get("exit_reason") == "never_filled":
         return 0.0
-    r_realised = float(t.get("r_realised") or 0.0)
+    ref_tp2 = float(t.get("r_if_exit_tp2") or 0.0)
     bars_to_tp1 = t.get("bars_to_tp1")
     tp1_rr = float(t.get("tp1_rr") or 0.0)
     if bars_to_tp1 is not None and bars_to_tp1 >= 0:
-        return 0.5 * tp1_rr + 0.5 * r_realised
-    return r_realised
+        return 0.5 * tp1_rr + 0.5 * ref_tp2
+    return ref_tp2
 
 
 def _attach_runner_r(trades: List[Dict[str, Any]]) -> None:
@@ -225,9 +227,10 @@ def _exit_policy_table(trades: List[Dict[str, Any]],
     _attach_runner_r(trades)
     out = []
     for label, col in [
-        ("TP1-only",     "r_if_exit_tp1"),
-        ("TP1 + runner", "r_if_runner"),
-        ("TP2-ride (current)", "r_realised"),
+        ("TP1 + BE@1R (LIVE)", "r_realised"),
+        ("TP1-only (ref)",      "r_if_exit_tp1"),
+        ("TP1 + runner (ref)",  "r_if_runner"),
+        ("TP2-ride (ref)",      "r_if_exit_tp2"),
     ]:
         sb = _aggregate_for_exit(trades, col, risk_usd)
         out.append({"policy": label, "col": col, **sb})
@@ -251,19 +254,23 @@ def _best_policy_by_dim(trades: List[Dict[str, Any]],
     for val, sub in df.groupby(dim):
         n = int(len(sub))
         totals = {
+            "TP1 + BE@1R (LIVE)":  float(sub["r_realised"].sum()),
             "TP1-only":            float(sub["r_if_exit_tp1"].sum()),
             "TP1 + runner":        float(sub["r_if_runner"].sum()),
-            "TP2-ride (current)":  float(sub["r_realised"].sum()),
+            "TP2-ride":            float(sub["r_if_exit_tp2"].sum()),
         }
         best_label = max(totals, key=totals.get)
+        # edge_r = how much the best alternative beats the LIVE policy by.
+        live_total = totals["TP1 + BE@1R (LIVE)"]
         out.append({
             dim:        val,
             "trades":   n,
+            "live_r":   round(live_total, 2),
             "tp1_r":    round(totals["TP1-only"], 2),
             "runner_r": round(totals["TP1 + runner"], 2),
-            "tp2_r":    round(totals["TP2-ride (current)"], 2),
+            "tp2_r":    round(totals["TP2-ride"], 2),
             "best":     best_label,
-            "edge_r":   round(totals[best_label] - totals["TP2-ride (current)"], 2),
+            "edge_r":   round(totals[best_label] - live_total, 2),
         })
     out.sort(key=lambda r: r["trades"], reverse=True)
     return out
@@ -299,25 +306,28 @@ def _findings_panel(trades: List[Dict[str, Any]],
         findings.append(("bad", f"Net <b>{_m(pnl)}</b> across {n} trades "
                                 f"(avg {_r(exp)}, {wr:.0f}% WR). Edge missing this period."))
 
-    # 2. Best exit policy.
+    # 2. Best exit policy. LIVE = r_realised (TP1 + BE@1R). The others are
+    # study references — we report whether any beats the live policy.
     _attach_runner_r(trades)
+    live_total = float(df["r_realised"].sum())
     pol = {
+        "TP1 + BE@1R (LIVE)": live_total,
         "TP1-only":           float(df["r_if_exit_tp1"].sum()),
         "TP1 + runner":       float(df["r_if_runner"].sum()),
-        "TP2-ride (current)": float(df["r_realised"].sum()),
+        "TP2-ride":           float(df["r_if_exit_tp2"].sum()),
     }
     best_pol = max(pol, key=pol.get)
-    delta = pol[best_pol] - pol["TP2-ride (current)"]
-    if best_pol != "TP2-ride (current)" and delta >= 1.0:
+    delta = pol[best_pol] - live_total
+    if best_pol != "TP1 + BE@1R (LIVE)" and delta >= 1.0:
         findings.append(("warn",
-            f"Best exit policy was <b>{best_pol}</b> "
-            f"({pol[best_pol]:+.1f}R vs current TP2-ride {pol['TP2-ride (current)']:+.1f}R, "
-            f"delta {delta:+.1f}R). Worth simulating live."))
+            f"A reference policy <b>{best_pol}</b> would have beaten the live "
+            f"TP1+BE@1R ({pol[best_pol]:+.1f}R vs {live_total:+.1f}R, "
+            f"delta {delta:+.1f}R). Study before changing."))
     else:
         findings.append(("info",
-            f"Current TP2-ride policy is best of the three "
-            f"(TP1-only {pol['TP1-only']:+.1f}R · runner {pol['TP1 + runner']:+.1f}R · "
-            f"TP2 {pol['TP2-ride (current)']:+.1f}R)."))
+            f"Live TP1+BE@1R is best of the set "
+            f"(LIVE {live_total:+.1f}R · TP1-only {pol['TP1-only']:+.1f}R · "
+            f"runner {pol['TP1 + runner']:+.1f}R · TP2 {pol['TP2-ride']:+.1f}R)."))
 
     # 3. Best and worst (pair, session) — only show with n >= 3 in the cell.
     if "pair" in df.columns and "session" in df.columns:
@@ -1028,7 +1038,8 @@ def _exit_policy_by_dim_html(trades: List[Dict[str, Any]],
     if not rows_data:
         return ""
     header = _table_row(
-        [dim_label, "Trades", "TP1-only", "TP1+runner", "TP2-ride", "Best", "Edge vs TP2"],
+        [dim_label, "Trades", "LIVE (TP1+BE)", "TP1-only", "TP1+runner", "TP2-ride",
+         "Best", "Edge vs LIVE"],
         header=True,
     )
     body = ""
@@ -1037,6 +1048,7 @@ def _exit_policy_by_dim_html(trades: List[Dict[str, Any]],
         body += _table_row([
             f"<b>{r[dim]}</b>",
             str(r["trades"]),
+            f"{r['live_r']:+.1f}R",
             f"{r['tp1_r']:+.1f}R",
             f"{r['runner_r']:+.1f}R",
             f"{r['tp2_r']:+.1f}R",
@@ -2543,59 +2555,61 @@ def _entry_comparison_html(sb_prox: Dict, sb_mid: Dict,
         _row("Orders filled",
              f"{fill_prox['filled']} ({fill_prox['fill_rate_pct']:.0f}%)",
              f"{fill_mid['filled']} ({fill_mid['fill_rate_pct']:.0f}%)"),
-        _row("Win rate (TP2-ride)",
+        _row("Win rate (LIVE: TP1+BE@1R)",
              f"{sb_prox.get('win_rate_pct', 0):.0f}%",
              f"{sb_mid.get('win_rate_pct', 0):.0f}%"),
-        _row("Avg R (TP2-ride, current)",
+        _row("Avg R (LIVE: TP1+BE@1R)",
              _r(sb_prox.get("expectancy_r", 0)),
              _r(sb_mid.get("expectancy_r", 0))),
-        _row("Avg $/trade (TP2-ride, current)",
+        _row("Avg $/trade (LIVE: TP1+BE@1R)",
              _m(sb_prox.get("expectancy_usd", 0)),
              _m(sb_mid.get("expectancy_usd", 0))),
-        _row("Avg R (TP1-only)",
+        _row("Avg R (TP1-only ref)",
              _r(sb_prox_tp1.get("expectancy_r", 0)),
              _r(sb_mid_tp1.get("expectancy_r", 0))),
-        _row("Avg $/trade (TP1-only)",
+        _row("Avg $/trade (TP1-only ref)",
              _m(sb_prox_tp1.get("expectancy_usd", 0)),
              _m(sb_mid_tp1.get("expectancy_usd", 0))),
-        _row("Total P&L &mdash; TP1-only",
+        _row("Total P&L &mdash; TP1-only (ref)",
              _m(sb_prox_tp1.get("total_pnl_usd", 0)),
              _m(sb_mid_tp1.get("total_pnl_usd", 0))),
-        _row("Total P&L &mdash; TP1 + runner",
+        _row("Total P&L &mdash; TP1 + runner (ref)",
              _m(sb_prox_run.get("total_pnl_usd", 0)),
              _m(sb_mid_run.get("total_pnl_usd", 0))),
-        _row("Total P&L &mdash; TP2-ride (current)",
+        _row("Total P&L &mdash; LIVE (TP1+BE@1R)",
              f"<b>{_m(sb_prox.get('total_pnl_usd', 0))}</b>",
              f"<b>{_m(sb_mid.get('total_pnl_usd', 0))}</b>"),
     ])
 
-    # Best (entry, policy) call-out.
+    # Best (entry, policy) call-out. LIVE = TP1+BE@1R (from sb_prox/sb_mid,
+    # which aggregate r_realised). The rest are study references.
     grid = {
-        ("Proximal", "TP1-only"):           sb_prox_tp1.get("total_pnl_usd", 0),
-        ("Proximal", "TP1+runner"):         sb_prox_run.get("total_pnl_usd", 0),
-        ("Proximal", "TP2-ride (current)"): sb_prox.get("total_pnl_usd", 0),
-        ("50% entry", "TP1-only"):           sb_mid_tp1.get("total_pnl_usd", 0),
-        ("50% entry", "TP1+runner"):         sb_mid_run.get("total_pnl_usd", 0),
-        ("50% entry", "TP2-ride (current)"): sb_mid.get("total_pnl_usd", 0),
+        ("Proximal", "TP1-only"):          sb_prox_tp1.get("total_pnl_usd", 0),
+        ("Proximal", "TP1+runner"):        sb_prox_run.get("total_pnl_usd", 0),
+        ("Proximal", "LIVE (TP1+BE@1R)"):  sb_prox.get("total_pnl_usd", 0),
+        ("50% entry", "TP1-only"):          sb_mid_tp1.get("total_pnl_usd", 0),
+        ("50% entry", "TP1+runner"):        sb_mid_run.get("total_pnl_usd", 0),
+        ("50% entry", "LIVE (TP1+BE@1R)"):  sb_mid.get("total_pnl_usd", 0),
     }
     best_combo = max(grid, key=grid.get)
-    current = grid[("Proximal", "TP2-ride (current)")] + grid[("50% entry", "TP2-ride (current)")]
+    live = grid[("Proximal", "LIVE (TP1+BE@1R)")] + grid[("50% entry", "LIVE (TP1+BE@1R)")]
     best_pnl = grid[best_combo]
 
-    if best_combo == ("Proximal", "TP2-ride (current)") or best_combo == ("50% entry", "TP2-ride (current)"):
+    if best_combo[1] == "LIVE (TP1+BE@1R)":
         verdict = ("<p style='font-size:13px;color:#27ae60;margin-top:10px;'>"
-                   f"<b>Current policy is best on the single dominant entry/exit pair.</b> "
+                   f"<b>Live policy is best on the single dominant entry/exit pair.</b> "
                    f"Best single combo: {best_combo[0]} + {best_combo[1]} ({_m(best_pnl)}).</p>")
     else:
         verdict = ("<p style='font-size:13px;color:#f39c12;margin-top:10px;'>"
                    f"<b>Best single combo this period: {best_combo[0]} + {best_combo[1]} "
                    f"({_m(best_pnl)})</b> &mdash; "
-                   f"vs current TP2-ride total {_m(current)}. Worth simulating live.</p>")
+                   f"vs live TP1+BE@1R total {_m(live)}. Study before changing.</p>")
 
     note = ("<p style='font-size:12px;color:#666;margin-top:4px;'>"
-            "All policies target the same TP1/TP2 levels. TP1-only closes at TP1; "
-            "TP1+runner takes half at TP1 and rides the rest under a BE stop; "
-            "TP2-ride is the current default (full position rides to TP2).</p>")
+            "LIVE = TP1 close with SL moved to entry at +1R (the traded policy). "
+            "References (never traded): TP1-only closes at TP1; TP1+runner takes "
+            "half at TP1 and rides the rest to TP2 on a BE stop; TP2-ride rides the "
+            "full position to TP2.</p>")
     return f"<table>{rows}</table>{verdict}{note}"
 
 

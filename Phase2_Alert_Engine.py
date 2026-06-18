@@ -273,6 +273,34 @@ def append_scan_log(entry):
         print(f"  [SCANLOG ERR] {e}")
 
 
+# Permanent archive for zones that were ALERTED in Phase 2 and have since died.
+# A Phase-2 dedup entry exists iff that zone was emailed to the user; when it is
+# GC-evicted (Phase 1 dropped the zone => stop hit / invalidated), we keep the
+# full record forever for study + the weekly review. Append-only, monthly jsonl
+# (mirrors the Phase 1 scan-log convention). One line per zone per lifetime.
+# Path is fixed and predictable: state/phase2_history/<YYYY-MM>.jsonl
+PHASE2_HISTORY_DIR = os.path.join("state", "phase2_history")
+
+
+def archive_phase2_zone(zone_id, entry, ist_now):
+    """Append one dead Phase-2-alerted zone's full record to the monthly archive.
+
+    `entry` is the phase2_sent dedup entry, which carries the full `ob_snapshot`
+    captured at alert time (geometry + FVG band + sweep + dealing range). Never
+    raises — archival must never block a scan or the GC it runs inside.
+    """
+    try:
+        os.makedirs(PHASE2_HISTORY_DIR, exist_ok=True)
+        path = os.path.join(PHASE2_HISTORY_DIR, f"{ist_now.strftime('%Y-%m')}.jsonl")
+        record = dict(entry)
+        record["zone_id"] = zone_id
+        record["archived_iso"] = ist_now.isoformat()
+        with open(path, "a") as f:
+            f.write(json.dumps(record, default=str) + "\n")
+    except Exception as e:
+        print(f"  [P2 ARCHIVE ERR] {zone_id}: {e}")
+
+
 SCAN_LOG_RETENTION_DAYS = 14
 
 
@@ -708,17 +736,19 @@ def _draw_candles(ax, df_plot):
     )
 
 
-def _p2_swing_markers(ax, df_h1, window_start, n, pair_conf, y_min, y_max):
+def _p2_swing_markers(ax, df_h1, h1_pos_to_local, n, pair_conf, y_min, y_max):
     """Render swing triangles + current-setup broken-swing X on a Phase 2 chart.
 
     SINGLE SOURCE: reads the persisted lb-3+ATR swing pool from dealing_range
     state (walls['swings']) — the exact swings Phase 1 renders. Phase 2 detects
     nothing itself. Each swing is positioned by ts using locate_ob_candle_idx
-    (same df_h1 index frame as the sweep / FVG markers), then shifted to local
-    plot x via window_start. Any failure is swallowed so a chart never breaks on
-    marker rendering. The X marks ONLY the swing whose break defined the current
-    setup — the one broken by the most recent BOS/CHoCH (last_event's
-    broken_swing_ts). Every other swing renders as its plain gold triangle."""
+    (same df_h1 index frame), then mapped to its local plot position via
+    h1_pos_to_local (a dict built from the actual df_plot rows after dropna+tail).
+    Using index arithmetic (abs_i - window_start) is wrong when dropna removes
+    any rows in the tail window — the map is the correct approach. Any failure
+    is swallowed so a chart never breaks on marker rendering. The X marks ONLY
+    the swing whose break defined the current setup (last_event's broken_swing_ts).
+    Every other swing renders as its plain gold triangle."""
     try:
         import dealing_range as _dr
         pair_name = (pair_conf or {}).get('name')
@@ -742,7 +772,7 @@ def _p2_swing_markers(ax, df_h1, window_start, n, pair_conf, y_min, y_max):
             abs_i, found = smc_detector.locate_ob_candle_idx(df_h1, ts)
             if not found:
                 continue
-            xi = abs_i - window_start
+            xi = h1_pos_to_local.get(abs_i, -1)
             if not (0 <= xi < n):
                 continue
             # Anchor to the candle's ACTUAL extreme at abs_i (high -> High,
@@ -792,17 +822,25 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
     """
     try:
         dp = pair_conf.get("decimal_places", 5)
-        # SINGLE window for this chart. Was a 60/30 bug: candles drew from the
-        # 60-tail but window_start was then reset to a 30-tail below, so OB
-        # outline, FVG box and swing/X markers were positioned 30 candles off
-        # their candles. One tail_n now drives candles AND every marker offset.
         tail_n = 45
-        df_plot = df_h1.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(tail_n).copy().reset_index(drop=True)
+        df_clean = df_h1.dropna(subset=['Open', 'High', 'Low', 'Close'])
+        df_plot_raw = df_clean.tail(tail_n)
+        # Build a map: df_h1 integer position -> df_plot local position.
+        # Using index arithmetic (abs_i - window_start) is wrong whenever dropna
+        # removes any rows inside the tail window — every marker shifts by the
+        # number of dropped rows before it. The map is the only correct approach.
+        # Guard: get_loc returns a non-int (slice/array) on duplicate index values
+        # (yfinance occasionally emits duplicate timestamps). Skip those rows so
+        # the map only holds clean int -> int entries.
+        h1_pos_to_local = {}
+        for local_i, idx in enumerate(df_plot_raw.index):
+            loc = df_h1.index.get_loc(idx)
+            if isinstance(loc, int):
+                h1_pos_to_local[loc] = local_i
+        df_plot = df_plot_raw.copy().reset_index(drop=True)
         n = len(df_plot)
         if n < 5:
             return None
-        # window_start in the raw df_h1 index frame (matches locate_ob_candle_idx)
-        window_start = max(0, len(df_h1) - tail_n)
 
         fig, ax = charts.base_canvas(fig_height=charts.FIG_HEIGHT_ZOOM,
                                      fig_width=charts.FIG_WIDTH_ZOOM)
@@ -845,8 +883,8 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
                 if found_c1:
                     c1_resolved = idx_c1
             if ft > 0 and fb > 0 and c1_resolved is not None:
-                mid_abs = c1_resolved + 1
-                mid_local = mid_abs - window_start
+                # FVG box sits on C2 (one candle after C1). Resolve via map.
+                mid_local = h1_pos_to_local.get(c1_resolved + 1, -1)
                 if 0 <= mid_local < n:
                     mit = fvg.get('mitigation', 'pristine')
                     face_col, edge_col = ('#f4d03f', '#f1c40f') if mit == 'partial' else ('#27ae60', '#2ecc71')
@@ -880,8 +918,8 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
         ob_ts_iso = ob.get('ob_timestamp')
         if ob_ts_iso:
             abs_idx, found = smc_detector.locate_ob_candle_idx(df_h1, ob_ts_iso)
-            if found and abs_idx >= window_start:
-                local_idx = abs_idx - window_start
+            if found:
+                local_idx = h1_pos_to_local.get(abs_idx, -1)
                 if 0 <= local_idx < n:
                     ob_c_h = float(df_plot['High'].iloc[local_idx])
                     ob_c_l = float(df_plot['Low'].iloc[local_idx])
@@ -914,7 +952,7 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
                     bbox=dict(facecolor='#131722', edgecolor='none', pad=1.5, alpha=0.75))
 
         # Swing triangles + broken-swing X (single source: dealing_range state).
-        _p2_swing_markers(ax, df_h1, window_start, n, pair_conf,
+        _p2_swing_markers(ax, df_h1, h1_pos_to_local, n, pair_conf,
                           float(df_plot['Low'].min()), float(df_plot['High'].max()))
 
         # Y-axis (2026-06-16): anchor on the candles + the ENTRY-relevant levels
@@ -1034,6 +1072,49 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                             fill=False, edgecolor='#00e5ff', linestyle=':',
                             linewidth=1.5, zorder=5
                         ))
+
+        # --- Sweep star on the swept swing point ---
+        sw = ob.get('sweep_observed') or {}
+        if sw.get('exists'):
+            sw_tier = sw.get('tier', 'weak')
+            SWEEP_COLOR_MAP = {'textbook': '#00e5ff', 'decent': '#26c6da', 'weak': '#80deea'}
+            sw_color = SWEEP_COLOR_MAP.get(sw_tier, '#80deea')
+            swept_ts = sw.get('swept_swing_ts')
+            sweep_candle_ts = sw.get('timestamp')
+            sw_level = sw.get('price')
+            ob_dir = ob.get('direction')
+            # Resolve swept swing position via timestamp (idx not portable cross-phase).
+            star_local = None
+            swing_tip = None
+            if swept_ts:
+                swept_abs, swept_found = smc_detector.locate_ob_candle_idx(df_h1, swept_ts)
+                if swept_found and swept_abs >= window_start:
+                    star_local = swept_abs - window_start
+                    if 0 <= star_local < n:
+                        swing_tip = float(df_plot['Low'].iloc[star_local]) if ob_dir == 'bullish' \
+                                    else float(df_plot['High'].iloc[star_local])
+                    else:
+                        star_local = None
+            # Dotted level line from swept swing forward to sweep candle.
+            if sw_level is not None and sweep_candle_ts:
+                sc_abs, sc_found = smc_detector.locate_ob_candle_idx(df_h1, sweep_candle_ts)
+                if sc_found and sc_abs >= window_start:
+                    sc_local = sc_abs - window_start
+                    x_lo = star_local if star_local is not None else max(0, sc_local - 6)
+                    if 0 <= sc_local < n and x_lo < sc_local:
+                        ax.plot([x_lo, sc_local], [sw_level, sw_level],
+                                color=sw_color, linewidth=1.0,
+                                linestyle=(0, (3, 2)), alpha=0.8, zorder=4)
+            if star_local is not None and swing_tip is not None:
+                ax.scatter([star_local], [swing_tip], marker='*', s=140,
+                           color=sw_color, edgecolors='#001f24',
+                           linewidths=0.8, zorder=8)
+                label_dy = -14 if ob_dir == 'bullish' else 14
+                label_va = 'top' if ob_dir == 'bullish' else 'bottom'
+                ax.annotate('Sweep', xy=(star_local, swing_tip),
+                            xytext=(0, label_dy), textcoords='offset points',
+                            color=sw_color, fontsize=8, fontweight='bold',
+                            ha='center', va=label_va, zorder=8)
 
         # --- FVG: outline middle (displacement) candle only, slightly wider for mitigation visibility ---
         # Cross-phase safety: resolve c1 candle position via timestamp (c1_idx
@@ -1563,11 +1644,7 @@ def build_sweep_breakdown_html(data, dp):
     wb_ratio    = comps.get('wick_body_ratio', 0.0)
 
     if base <= 0:
-        return f"""
-    <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #e74c3c;border-radius:4px;font-size:12px;color:#bbb;line-height:1.6;">
-        <div style="color:#eee;font-weight:bold;margin-bottom:6px;letter-spacing:0.5px;">SWEEP QUALITY BREAKDOWN</div>
-        <div>No qualifying sweep detected within the recency window before the OB.</div>
-    </div>"""
+        return ""
 
     presence_icon = "&#10003;" if base > 0 else "&#10007;"      # ✓ / ✗
     eq_icon       = "&#10003;" if eq_score > 0 else "&#10007;"
@@ -2153,6 +2230,9 @@ if __name__ == "__main__":
             zones_kept[zid] = entry
             continue
         if anchor_dt < stale_cutoff:
+            # Zone died (Phase 1 dropped it; P2 stopped seeing it 7d ago).
+            # Archive the full record before discarding the dedup entry.
+            archive_phase2_zone(zid, entry, ist_now)
             evicted += 1
             continue
         zones_kept[zid] = entry
@@ -2579,7 +2659,12 @@ if __name__ == "__main__":
                 "reentry_armed": False,
                 "max_exit_distance": 0.0,
                 "bias": bias,
-                "pair": name
+                "pair": name,
+                # Full OB snapshot captured AT ALERT TIME (geometry + FVG band +
+                # sweep + dealing range). Phase 1 deletes dropped zones same-day,
+                # so this is the only place the full record survives long enough
+                # to be archived when the zone later dies (see GC eviction).
+                "ob_snapshot": ob,
             }
             # H1 wide context + H1 zoomed entry. The "m15_chart" variable name
             # is preserved through the email plumbing for now (CID = chart_m15,

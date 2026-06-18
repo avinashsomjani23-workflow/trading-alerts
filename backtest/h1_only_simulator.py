@@ -301,6 +301,58 @@ def _score_h1_only(alert: Dict[str, Any], pair_conf: Dict[str, Any],
     return total, breakdown
 
 
+def _reference_touch_indices(future, bias, entry, sl, tp1, tp2, fill_bar_idx):
+    """Replay the legacy 'ride to TP2 on original SL' policy over `future`
+    (post-fill bars) purely to populate the REFERENCE columns r_if_exit_tp1 /
+    r_if_exit_tp2. Independent of the live TP1+BE@1R walk so those study
+    columns keep meaning exactly what they meant before the 2026-06-18 change:
+    "did price touch TP1 / TP2 before the ORIGINAL stop would have hit."
+
+    Returns (tp1_hit_bar_idx, tp2_hit_bar_idx, ref_exit_r_unscaled_price).
+    The third value is the exit price under the legacy default policy (TP1->BE
+    ->TP2), used as the fallback R when neither TP was touched.
+    """
+    sl_after_tp1 = sl
+    tp1_idx = -1
+    tp2_idx = -1
+    ref_exit_price = None
+    for i, (ts, bar) in enumerate(future.iterrows()):
+        if i < fill_bar_idx:
+            continue
+        is_fill_bar = (i == fill_bar_idx)
+        bar_hi = float(bar["High"]); bar_lo = float(bar["Low"])
+        bars_post = i - fill_bar_idx
+        if bars_post > MAX_HOLD_H1_BARS and ref_exit_price is None:
+            ref_exit_price = float(bar["Close"])
+            break
+        if bias == "LONG":
+            sl_hit = bar_lo <= sl_after_tp1
+            tp1_hit = bar_hi >= tp1
+            tp2_hit = (tp2 is not None) and (bar_hi >= tp2)
+        else:
+            sl_hit = bar_hi >= sl_after_tp1
+            tp1_hit = bar_lo <= tp1
+            tp2_hit = (tp2 is not None) and (bar_lo <= tp2)
+        if is_fill_bar:
+            tp1_hit = False; tp2_hit = False
+        if tp1_hit and tp1_idx == -1:
+            tp1_idx = bars_post
+        if tp2_hit and tp2_idx == -1:
+            tp2_idx = bars_post
+        if sl_hit and (tp1_hit or tp2_hit):
+            ref_exit_price = sl_after_tp1; break
+        if sl_hit:
+            ref_exit_price = sl_after_tp1; break
+        if tp2_hit:
+            ref_exit_price = tp2; break
+        if tp1_hit and sl_after_tp1 != entry:
+            sl_after_tp1 = entry
+    if ref_exit_price is None:
+        # Window exhausted with position open under legacy policy.
+        ref_exit_price = float(future.iloc[-1]["Close"]) if len(future) else entry
+    return tp1_idx, tp2_idx, ref_exit_price
+
+
 def _simulate_single_entry(
     alert: Dict[str, Any],
     pair_conf: Dict[str, Any],
@@ -476,7 +528,21 @@ def _simulate_single_entry(
     bars_walked_post_fill = 0
     bars_to_tp1 = -1
     bars_to_tp2 = -1
-    sl_after_tp1 = sl  # snapshot for the "default policy" walk (TP1 -> BE)
+
+    # ── LIVE policy state (2026-06-18): TP1 + break-even at +1R ──────────────
+    # The realised policy is now: fill -> if price reaches +1R move SL to entry
+    # -> exit at TP1. TP2 is never traded; it survives only as a reference
+    # column (r_if_exit_tp2) for the MFE/TP2 study. `r_realised` and `pnl_usd`
+    # follow THIS policy and nothing else.
+    #
+    # `cur_sl` is the live stop: starts at the initial SL, jumps to entry once
+    # the +1R break-even arms. The walk does NOT break on the realised exit —
+    # it records the exit once, then keeps scanning bars so the diagnostic
+    # touch indices (tp1/tp2) and MFE still reflect the full window for the
+    # reference columns.
+    cur_sl = sl
+    be_armed = False
+    be_trigger = (entry + r_distance) if bias == "LONG" else (entry - r_distance)
 
     for i, (ts, bar) in enumerate(future.iterrows()):
         bar_hi = float(bar["High"])
@@ -513,15 +579,17 @@ def _simulate_single_entry(
         if bias == "LONG":
             mfe_price = max(mfe_price, bar_hi)
             mae_price = min(mae_price, bar_lo)
-            sl_hit_in_bar = bar_lo <= sl_after_tp1
+            sl_hit_in_bar = bar_lo <= cur_sl
             tp1_hit_in_bar = bar_hi >= tp1
             tp2_hit_in_bar = (tp2 is not None) and (bar_hi >= tp2)
+            be_reached_in_bar = bar_hi >= be_trigger
         else:
             mfe_price = min(mfe_price, bar_lo)
             mae_price = max(mae_price, bar_hi)
-            sl_hit_in_bar = bar_hi >= sl_after_tp1
+            sl_hit_in_bar = bar_hi >= cur_sl
             tp1_hit_in_bar = bar_lo <= tp1
             tp2_hit_in_bar = (tp2 is not None) and (bar_lo <= tp2)
+            be_reached_in_bar = bar_lo <= be_trigger
 
         # Fill-bar rule (2026-05-25):
         # On the bar where the limit just filled, we cannot infer intra-bar
@@ -530,10 +598,11 @@ def _simulate_single_entry(
         # so SL is the honest outcome. TP-side: bar high reaching TP could
         # mean (a) price ticked up to TP before pulling down to fill, OR (b)
         # filled then rallied to TP. Can't tell. Conservative call: do NOT
-        # credit TP on the fill bar. Walk forward.
+        # credit TP (or arm break-even) on the fill bar. Walk forward.
         if is_fill_bar_this_iter:
             tp1_hit_in_bar = False
             tp2_hit_in_bar = False
+            be_reached_in_bar = False
 
         # Record first-touch bar indices for diagnostic columns.
         if tp1_hit_in_bar and tp1_hit_bar_idx == -1:
@@ -541,29 +610,35 @@ def _simulate_single_entry(
         if tp2_hit_in_bar and tp2_hit_bar_idx == -1:
             tp2_hit_bar_idx = bars_walked_post_fill
 
-        # Worst-case same-bar resolution: SL wins. Small OBs may trigger this;
-        # user decision is to take the loss rather than tag inconclusive, so
-        # there's no special exit_reason -- it's a plain SL.
-        if sl_hit_in_bar and (tp1_hit_in_bar or tp2_hit_in_bar):
+        # ── Realised exit: TP1 + break-even at +1R ──────────────────────────
+        # Priority within a bar:
+        #   1. SL+TP1 collision -> SL wins (conservative, matches legacy).
+        #   2. SL hit (at cur_sl: initial SL, or entry once BE armed).
+        #   3. TP1 hit -> win, terminal (no TP2 ride).
+        #   4. Else arm break-even if +1R reached this bar.
+        # +1R-and-SL in the same bar (pre-arm) falls into case 1/2: SL wins,
+        # because we cannot prove +1R printed before the stop.
+        if sl_hit_in_bar and tp1_hit_in_bar:
             sl_collision = True
             exit_ts = ts
             exit_reason = "sl"
-            exit_price = sl_after_tp1
+            exit_price = cur_sl
             break
         if sl_hit_in_bar:
             exit_ts = ts
             exit_reason = "sl"
-            exit_price = sl_after_tp1
+            exit_price = cur_sl
             break
-        if tp2_hit_in_bar:
+        if tp1_hit_in_bar:
             exit_ts = ts
-            exit_reason = "tp2"
-            exit_price = tp2
+            exit_reason = "tp1"
+            exit_price = tp1
             break
-        if tp1_hit_in_bar and sl_after_tp1 != entry:
-            # First TP1 hit — default policy moves SL to breakeven and keeps
-            # tracking for TP2. We do NOT exit here for the default-policy walk.
-            sl_after_tp1 = entry
+        if be_reached_in_bar and not be_armed:
+            # Price reached +1R without hitting SL/TP1 this bar -> move the
+            # stop to entry. A later pullback to entry now books 0R.
+            be_armed = True
+            cur_sl = entry
 
     if not filled:
         # 50pct entry that never filled. Emit a row with exit_reason="never_filled"
@@ -590,10 +665,8 @@ def _simulate_single_entry(
         exit_reason = "window_end"
         exit_price = float(last["Close"])
 
-    # R outcomes — note we compute three:
-    #   r_realised: under DEFAULT policy (TP2 unless SL/timeout/collision)
-    #   r_if_exit_tp1: hypothetical TP1-only exit
-    #   r_if_exit_tp2: hypothetical TP2-only exit (== r_realised when no early hit)
+    # ── r_realised: the LIVE policy (TP1 + break-even at +1R). This is the
+    # one true outcome — pnl_usd and every report headline derive from it.
     if bias == "LONG":
         r_realised = (exit_price - entry) / r_distance
         mfe_r = (mfe_price - entry) / r_distance
@@ -603,21 +676,35 @@ def _simulate_single_entry(
         mfe_r = (entry - mfe_price) / r_distance
         mae_r = -(mae_price - entry) / r_distance
 
-    # r_if_exit_tp1: if TP1 was ever touched, this trade closes at TP1 (=tp1_rr).
-    # If never touched, it's whatever r_realised ended at (SL/timeout/window_end).
-    if tp1_hit_bar_idx >= 0:
+    # ── Reference columns (study only — never traded). Computed from an
+    # independent legacy walk (original SL, TP1->BE->TP2 ride) so they answer
+    # "what would TP1-only / TP2-ride have produced" regardless of where the
+    # live TP1+BE walk exited.
+    ref_tp1_idx, ref_tp2_idx, ref_exit_price = _reference_touch_indices(
+        future, bias, entry, sl, tp1, tp2, fill_bar_idx
+    )
+    if bias == "LONG":
+        ref_realised = (ref_exit_price - entry) / r_distance
+    else:
+        ref_realised = (entry - ref_exit_price) / r_distance
+
+    # Overwrite the diagnostic touch indices with the reference-walk values so
+    # bars_to_tp1 / bars_to_tp2 describe the full-window touches (the live walk
+    # breaks early at TP1 and would under-report them).
+    tp1_hit_bar_idx = ref_tp1_idx
+    tp2_hit_bar_idx = ref_tp2_idx
+
+    # r_if_exit_tp1: TP1 touched (on original stop) -> book TP1, else legacy R.
+    if ref_tp1_idx >= 0:
         r_if_exit_tp1 = round(tp1_rr, 3)
     else:
-        r_if_exit_tp1 = round(r_realised, 3)
+        r_if_exit_tp1 = round(ref_realised, 3)
 
-    # r_if_exit_tp2: if TP2 was ever touched, closes at TP2 (=tp2_rr).
-    # Else if TP1 was touched then SL/timeout, the default-policy SL was moved
-    # to breakeven after TP1, so we either book 0R or the actual r_realised.
-    # This branch already matches r_realised in those cases.
-    if tp2_hit_bar_idx >= 0:
-        r_if_exit_tp2 = round(tp2_rr, 3) if tp2 is not None else round(r_realised, 3)
+    # r_if_exit_tp2: TP2 touched -> book TP2, else the legacy ride outcome.
+    if ref_tp2_idx >= 0:
+        r_if_exit_tp2 = round(tp2_rr, 3) if tp2 is not None else round(ref_realised, 3)
     else:
-        r_if_exit_tp2 = round(r_realised, 3)
+        r_if_exit_tp2 = round(ref_realised, 3)
 
     bars_to_exit = max(0, bars_walked_post_fill)
 

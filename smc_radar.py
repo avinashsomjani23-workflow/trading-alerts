@@ -302,6 +302,13 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
             'distal': sz.get('distal_line'),
             'distance_to_proximal_pips': sz.get('distance_to_proximal_pips'),
             'fvg_mitigation': (sz.get('fvg') or {}).get('mitigation', 'none'),
+            # FVG band edges — persisted so FVG placement (e.g. FVG-vs-OB-proximal)
+            # is auditable from the scan log after the zone leaves the slate.
+            # Falls back to ghost edges when the live FVG has been filled.
+            'fvg_top': (sz.get('fvg') or {}).get('fvg_top')
+                       or (sz.get('fvg') or {}).get('ghost_top'),
+            'fvg_bottom': (sz.get('fvg') or {}).get('fvg_bottom')
+                          or (sz.get('fvg') or {}).get('ghost_bottom'),
             'sweep_observed': {
                 'exists': bool(sw.get('exists')),
                 'tier': sw.get('tier'),
@@ -852,6 +859,35 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             # decide fresh-vs-stale by comparing fill time to the approach leg.
             'mitigated_at_iso': fvg_result.get('mitigated_at_iso')
         }
+
+        # FVG–OB alignment gate. A genuine displacement FVG must sit on the
+        # CORRECT side of the OB: its proximal (near) edge cannot be past the
+        # OB's proximal edge, or the imbalance has drifted away from where price
+        # first meets the block and the two no longer stack as one setup.
+        #   Bullish: OB proximal = ob_high (top). FVG proximal = fvg_top.
+        #            Invalidate when fvg_top < ob_high.
+        #   Bearish: OB proximal = ob_low (bottom). FVG proximal = fvg_bottom.
+        #            Invalidate when fvg_bottom > ob_low.
+        # Gate applies ONLY to a LIVE FVG (exists). Ghost/no-FVG OBs carry no
+        # live proximal to test and are governed by existing mitigation logic.
+        if fvg_dict.get('exists'):
+            if ev_dir == 'bullish':
+                _fvg_prox = fvg_dict.get('fvg_top')
+                _misaligned = _fvg_prox is not None and _fvg_prox < ob_proximal
+            else:
+                _fvg_prox = fvg_dict.get('fvg_bottom')
+                _misaligned = _fvg_prox is not None and _fvg_prox > ob_proximal
+            if _misaligned:
+                diag['drop_gate'] = 'fvg_ob_misaligned'
+                diag['drop_detail'] = {
+                    'direction': ev_dir,
+                    'ob_proximal': ob_proximal,
+                    'fvg_proximal': _fvg_prox,
+                }
+                diag['outcome'] = 'dropped'
+                ob_build_diagnostics.append(diag)
+                print(_diag_short(diag))
+                continue
 
         # Phase 1 sweep observation — snapshot semantics. Window is the OB's
         # OWN impulse leg [impulse_start_idx, ob_idx] (LOCKED 2026-06): the
@@ -1784,31 +1820,40 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
             SWEEP_COLOR = SWEEP_COLOR_MAP.get(sw_tier, '#80deea')
             if sw_abs_idx is not None and sw_level is not None:
                 sw_local = sw_abs_idx - window_start
-                if 0 <= sw_local < n_plot:
-                    sw_h = float(H[sw_local])
-                    sw_l = float(L[sw_local])
-                    # Star at the wick tip — every sweep tier.
-                    wick_tip = sw_l if ob['direction'] == 'bullish' else sw_h
-                    ax.scatter([sw_local], [wick_tip], marker='*', s=140,
+                # Dotted line at the swept price level — extends from
+                # the swept swing's idx forward to the sweep candle.
+                # Falls back to a 6-candle stub when swept_swing_idx
+                # isn't on the snapshot (legacy zones).
+                if sw_swept_idx is not None:
+                    lvl_x_start = max(0, int(sw_swept_idx) - window_start)
+                else:
+                    lvl_x_start = max(0, sw_local - 6) if 0 <= sw_local < n_plot else None
+                if lvl_x_start is not None and 0 <= sw_local < n_plot and lvl_x_start < sw_local:
+                    ax.plot([lvl_x_start, sw_local], [sw_level, sw_level],
+                            color=SWEEP_COLOR, linewidth=1.0,
+                            linestyle=(0, (3, 2)), alpha=0.8, zorder=4)
+                # Star on the SWEPT SWING point (the level that was taken out).
+                # Falls back to the sweep candle wick tip on legacy zones where
+                # swept_swing_idx is absent.
+                if sw_swept_idx is not None:
+                    star_local = int(sw_swept_idx) - window_start
+                    if 0 <= star_local < n_plot:
+                        swing_tip = float(L[star_local]) if ob['direction'] == 'bullish' else float(H[star_local])
+                    else:
+                        star_local = None
+                else:
+                    star_local = sw_local if 0 <= sw_local < n_plot else None
+                    if star_local is not None:
+                        sw_h = float(H[star_local])
+                        sw_l = float(L[star_local])
+                        swing_tip = sw_l if ob['direction'] == 'bullish' else sw_h
+                if star_local is not None:
+                    ax.scatter([star_local], [swing_tip], marker='*', s=140,
                                color=SWEEP_COLOR, edgecolors='#001f24',
                                linewidths=0.8, zorder=8)
-                    # Dotted line at the swept price level — extends from
-                    # the sweep candle BACK to the swept swing's idx so
-                    # the vet can see exactly which swing was taken.
-                    # Falls back to a 6-candle stub when swept_swing_idx
-                    # isn't on the snapshot (legacy zones).
-                    if sw_swept_idx is not None:
-                        lvl_x_start = max(0, int(sw_swept_idx) - window_start)
-                    else:
-                        lvl_x_start = max(0, sw_local - 6)
-                    if lvl_x_start < sw_local:
-                        ax.plot([lvl_x_start, sw_local], [sw_level, sw_level],
-                                color=SWEEP_COLOR, linewidth=1.0,
-                                linestyle=(0, (3, 2)), alpha=0.8, zorder=4)
-                    # Compact label near the wick tip.
                     label_dy = -14 if ob['direction'] == 'bullish' else 14
                     label_va = 'top' if ob['direction'] == 'bullish' else 'bottom'
-                    ax.annotate('Sweep', xy=(sw_local, wick_tip),
+                    ax.annotate('Sweep', xy=(star_local, swing_tip),
                                 xytext=(0, label_dy), textcoords='offset points',
                                 color=SWEEP_COLOR, fontsize=8, fontweight='bold',
                                 ha='center', va=label_va, zorder=8)

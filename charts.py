@@ -95,7 +95,7 @@ SAVE_DPI        = 150
 
 
 FIG_WIDTH_ZOOM  = 11     # zoomed entry chart is slightly narrower
-FIG_HEIGHT_ZOOM = 5.2
+FIG_HEIGHT_ZOOM = 8.0
 
 
 def base_canvas(fig_height: float = FIG_HEIGHT_BASE, fig_width: float = FIG_WIDTH):
