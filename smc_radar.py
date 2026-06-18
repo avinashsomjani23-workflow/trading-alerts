@@ -2767,20 +2767,35 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
 
 
 def build_zone_changed_notice_html(prev_zone_id, new_zone_id, prev_zone_status, name):
-    """One-line notice when the displayed zone for a pair changes between scans.
+    """Single-pair notice for invalidation zone changes only.
 
-    Triggered when select_relevant_zone_for_pair picks a different zone than
-    last scan (e.g. price moved closer to OB2 than OB1, or OB1 was invalidated).
+    Use build_price_moved_banner_html for batching 'price moved' notices.
     """
-    if prev_zone_status == 'invalidated':
-        msg = f"{prev_zone_id} was invalidated. Now showing {new_zone_id}."
-    else:
-        msg = (f"{prev_zone_id} is no longer the closest zone — price moved. "
-               f"Showing {new_zone_id}. {prev_zone_id} stays alive in the slate "
-               f"until it's touched or invalidated.")
+    msg = f"{prev_zone_id} was invalidated. Now showing {new_zone_id}."
     return (f'<div style="margin:6px 0 8px;padding:6px 10px;background:#2a2a1a;'
             f'border-left:3px solid #e67e22;border-radius:3px;font-size:11px;'
             f'color:#e67e22;"><b>{name}:</b> {msg}</div>')
+
+
+def build_price_moved_banner_html(pairs_info):
+    """One consolidated banner for all pairs where the closest zone changed.
+
+    pairs_info: list of (pair_name, prev_zone_id, new_zone_id)
+    Zone stays alive — Phase 2 fires if price enters proximity.
+    """
+    rows = "".join(
+        f'<tr><td style="padding:2px 8px 2px 0;color:#e67e22;font-weight:bold;">{name}</td>'
+        f'<td style="padding:2px 0;color:#ccc;">{prev} → {nxt}</td></tr>'
+        for name, prev, nxt in pairs_info
+    )
+    return (
+        f'<div style="margin:6px 0 8px;padding:8px 12px;background:#2a2a1a;'
+        f'border-left:3px solid #e67e22;border-radius:3px;font-size:11px;color:#e67e22;">'
+        f'<b>Closest zone changed</b> — price moved. Each prior zone stays active; '
+        f'you\'ll get a Phase 2 alert if price enters proximity.'
+        f'<table style="margin-top:6px;border-collapse:collapse;">{rows}</table>'
+        f'</div>'
+    )
 
 
 def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
@@ -3824,6 +3839,7 @@ def run_radar():
         invalidation_cards   = []
         inactive_pair_cards  = []
         zone_change_notices  = []
+        price_moved_pairs    = []   # (pair_name, prev_zone_id, new_zone_id) — consolidated into one banner
         dropped_lines        = []   # bookkeeping reasons only (supplanted/aged/data_*)
         all_zones_for_table  = []
         attachments          = []
@@ -4152,11 +4168,12 @@ def run_radar():
                     and prev_zone_obj.get("drop_reason") in INVALIDATION_REASONS
                 )
                 if displayed_status == "active":
-                    zone_change_notices.append(build_zone_changed_notice_html(
-                        prev_displayed_id, new_displayed_id,
-                        'invalidated' if prev_was_invalidated else 'still_active',
-                        pair_name
-                    ))
+                    if prev_was_invalidated:
+                        zone_change_notices.append(build_zone_changed_notice_html(
+                            prev_displayed_id, new_displayed_id, 'invalidated', pair_name
+                        ))
+                    else:
+                        price_moved_pairs.append((pair_name, prev_displayed_id, new_displayed_id))
                 elif displayed_status == "invalidated" and prev_was_invalidated:
                     zone_change_notices.append(build_zone_changed_notice_html(
                         prev_displayed_id, "—", 'invalidated', pair_name
@@ -4164,6 +4181,9 @@ def run_radar():
 
             # Persist for next scan's comparison.
             pblock["last_displayed_zone_id"] = new_displayed_id
+
+        if price_moved_pairs:
+            zone_change_notices.insert(0, build_price_moved_banner_html(price_moved_pairs))
 
         if (all_zones_for_table or dropped_lines or
                 invalidation_cards or inactive_pair_cards):
