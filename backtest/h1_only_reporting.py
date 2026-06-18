@@ -23,6 +23,10 @@ import pandas as pd
 
 # Trades to exclude from every aggregate. These are NOT real wins or losses:
 #   never_filled = limit never hit, no position ever opened (r_realised = 0).
+#   distal_killed = before the limit could fill, a wick touched the OB distal
+#                  line. In live the OB zone is dead at that wick (the SL price
+#                  was traded), so the limit is cancelled and no trade is taken.
+#                  Audit-only: it records a setup we correctly skipped.
 #   timeout      = filled, then force-closed at the 48-bar hold cap with neither
 #                  SL nor TP touched -- a snapshot at an arbitrary clock moment.
 #   window_end   = filled, then force-closed because the BACKTEST DATA RAN OUT
@@ -37,7 +41,7 @@ import pandas as pd
 # or any reported metric. Audit-only, not hidden. (RCA #5; veteran SMC call
 # 2026-06-16.) This set is the single source of truth -- every "is this a real
 # resolved trade?" check in this module routes through _is_real_filled.
-_EXCLUDE_REASONS = {"never_filled", "timeout", "window_end"}
+_EXCLUDE_REASONS = {"never_filled", "timeout", "window_end", "distal_killed"}
 
 
 def _is_real_filled(t: Dict[str, Any]) -> bool:
@@ -2078,6 +2082,7 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
         "sl": "Stop Loss Hit", "tp1": "TP1 Hit", "tp2": "TP2 Hit",
         "timeout": "Time Limit (48h)", "window_end": "End of Window",
         "sl_collision": "SL+TP Same Bar", "never_filled": "Never Filled",
+        "distal_killed": "Distal Wicked Pre-Fill",
     }
 
     rows = []
@@ -2163,7 +2168,13 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
     if not trades:
         pd.DataFrame([{"info": "no trades this run"}]).to_csv(path, index=False)
         return
+    # Stable global serial per row, assigned in run order. Lets a human reference
+    # a single setup ("T0007") without re-deriving it from pair+timestamp.
+    # CSV-only (not propagated into the OB/alert dicts) -- purely a readout aid.
+    for _i, _t in enumerate(trades, start=1):
+        _t["setup_id"] = f"T{_i:04d}"
     front_cols = [
+        "setup_id",
         "pair", "alert_ts", "fill_ts", "exit_ts", "session",
         "direction", "event", "entry_zone",
         "entry", "sl_initial", "tp1", "tp2", "tp1_rr", "tp2_rr",
@@ -2253,6 +2264,7 @@ _EXIT_LABELS = {
     "window_end":   "End of Test Window",
     "sl_collision": "SL and TP Same Bar — SL Taken",
     "never_filled": "Order Never Filled",
+    "distal_killed": "Distal Wicked Before Fill — Zone Dead",
 }
 
 _ENTRY_LABELS = {

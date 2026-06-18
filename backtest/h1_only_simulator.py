@@ -505,6 +505,38 @@ def _simulate_single_entry(
     if future.empty:
         return None
 
+    # ── Pre-fill distal guard (2026-06-18) ──────────────────────────────────
+    # An OB zone is a pending limit. Its SL sits at the distal. If, after the OB
+    # forms and BEFORE our limit fills, price WICKS the distal, the zone is dead
+    # in live: the SL price was traded, the OB is mitigated, the limit is
+    # cancelled. A later retrace back into the zone is a stale chase we must not
+    # take. We therefore reject any fill whose path crossed the distal first.
+    #
+    # Distal = the OB candle's far edge, NO spread pad (the zone line itself,
+    # not the spread-widened SL):  SHORT -> ob high ; LONG -> ob low.
+    # Touch is WICK-based here regardless of the per-instrument close/wick mode,
+    # because a wick to the distal already takes the stop intraday.
+    ob_high = ob.get("high")
+    ob_low = ob.get("low")
+    distal_line = None
+    if ob_high is not None and ob_low is not None:
+        distal_line = float(ob_high) if bias == "SHORT" else float(ob_low)
+    # First inspectable bar = the one AFTER the OB candle. The OB candle forms
+    # the zone; it cannot invalidate itself. ob_ts may be absent on schema drift
+    # -> fall back to the start of the fill walk (still conservative).
+    ob_ts = ob.get("ob_timestamp")
+    distal_scan_start_ts = None
+    if ob_ts is not None:
+        try:
+            _obt = pd.Timestamp(ob_ts)
+            if _obt.tzinfo is None:
+                _obt = _obt.tz_localize("UTC")
+            distal_scan_start_ts = _obt + pd.Timedelta(hours=1)
+        except Exception:
+            distal_scan_start_ts = None
+    if distal_scan_start_ts is None:
+        distal_scan_start_ts = fill_walk_start
+
     filled = False
     fill_ts: Optional[pd.Timestamp] = None
     fill_bar_idx = -1
@@ -555,6 +587,31 @@ def _simulate_single_entry(
             # and 50pct entries (pre-placed limit semantics).
             if (bias == "LONG" and bar_lo <= entry) or \
                (bias == "SHORT" and bar_hi >= entry):
+                # Pre-fill distal guard: did a wick touch the distal between OB
+                # formation and this fill bar (inclusive)? If so the zone was
+                # already dead (SL price traded) before we could fill -> reject
+                # the trade as an audit row, never a real position.
+                if distal_line is not None:
+                    scan = df_h1.loc[distal_scan_start_ts:ts]
+                    if not scan.empty:
+                        if bias == "SHORT":
+                            wicked = bool((scan["High"].values >= distal_line).any())
+                        else:
+                            wicked = bool((scan["Low"].values <= distal_line).any())
+                        if wicked:
+                            return _build_row(
+                                alert=alert, pair_conf=pair_conf, ob=ob,
+                                entry_zone=entry_zone, entry=entry, sl=sl,
+                                tp1=tp1, tp2=tp2, tp1_rr=tp1_rr, tp2_rr=tp2_rr,
+                                score=score, breakdown=breakdown,
+                                df_h1=df_h1, alert_ts=alert_ts,
+                                fill_ts=None, exit_ts=None,
+                                exit_reason="distal_killed", exit_price=None,
+                                r_realised=0.0, r_if_exit_tp1=0.0,
+                                r_if_exit_tp2=0.0, mfe_r=0.0, mae_r=0.0,
+                                bars_to_exit=0, bars_to_tp1=-1, bars_to_tp2=-1,
+                                sl_collision=False, risk_usd=risk_usd,
+                            )
                 filled = True
                 fill_ts = ts
                 fill_bar_idx = i

@@ -291,12 +291,73 @@ def test_tp2_ordering_invariant():
     return ok
 
 
+def test_prefill_distal_guard():
+    """A wick to the OB distal BEFORE the limit fills kills the trade
+    (exit_reason='distal_killed', no fill). No such wick -> normal fill.
+    Covers both directions. Drives the inner _simulate_single_entry with a
+    forced TP so the levels gate can't pre-empt the guard."""
+    print("\n== test_prefill_distal_guard ==")
+    pc = _synth_pair_conf()
+    ok = True
+
+    def _run(df, ob, current_price):
+        alert = {"pair": "TESTPAIR", "ts": df.index[1],
+                 "current_price": current_price, "ob": ob}
+        # Forced TP keeps levels valid; we only assert fill vs distal_killed.
+        return h1_only_simulator._simulate_single_entry(
+            alert, pc, df, "proximal", 5.0, {}, 250.0,
+            forced_tp1=(current_price - 0.0100 if ob["direction"] == "bearish"
+                        else current_price + 0.0100),
+        )
+
+    base = pd.Timestamp("2026-04-01 10:00", tz="UTC")
+    idx = pd.date_range(base, periods=8, freq="h")
+
+    # SHORT OB: distal = high (1.2000). Bar 2 wicks 1.2002 >= distal BEFORE the
+    # fill (entry = low 1.1980, reached on bar 4 retrace) -> distal_killed.
+    ob_s = {"direction": "bearish", "bos_tag": "BOS", "bos_tier": "BOS",
+            "high": 1.2000, "low": 1.1980, "ob_timestamp": base.isoformat()}
+    df_s = pd.DataFrame({
+        "Open":  [1.1990, 1.1970, 1.1995, 1.1970, 1.1982, 1.1960, 1.1945, 1.1930],
+        "High":  [1.2000, 1.1975, 1.2002, 1.1975, 1.1985, 1.1965, 1.1950, 1.1935],
+        "Low":   [1.1980, 1.1955, 1.1960, 1.1958, 1.1965, 1.1948, 1.1933, 1.1920],
+        "Close": [1.1972, 1.1962, 1.1968, 1.1972, 1.1962, 1.1950, 1.1935, 1.1925],
+        "Volume": [0] * 8}, index=idx)
+    r = _run(df_s, ob_s, 1.1968)
+    ok &= check(r and r["exit_reason"] == "distal_killed",
+                f"SHORT distal wick pre-fill -> distal_killed (got {r and r['exit_reason']})")
+    ok &= check(r and r["fill_ts"] is None, "SHORT killed row has no fill")
+
+    # SHORT control: identical but bar 2 high stays 1.1996 < distal -> fills.
+    df_ok = df_s.copy()
+    df_ok.loc[idx[2], "High"] = 1.1996
+    r2 = _run(df_ok, ob_s, 1.1968)
+    ok &= check(r2 and r2["exit_reason"] != "distal_killed",
+                f"SHORT no distal wick -> normal fill (got {r2 and r2['exit_reason']})")
+
+    # LONG OB: distal = low (1.2000). Bar 2 wicks 1.1998 <= distal pre-fill
+    # (entry = high 1.2020) -> distal_killed.
+    ob_l = {"direction": "bullish", "bos_tag": "BOS", "bos_tier": "BOS",
+            "high": 1.2020, "low": 1.2000, "ob_timestamp": base.isoformat()}
+    df_l = pd.DataFrame({
+        "Open":  [1.2010, 1.2030, 1.2005, 1.2030, 1.2018, 1.2040, 1.2055, 1.2070],
+        "High":  [1.2020, 1.2035, 1.2025, 1.2035, 1.2022, 1.2050, 1.2065, 1.2080],
+        "Low":   [1.2000, 1.2025, 1.1998, 1.2025, 1.2015, 1.2035, 1.2050, 1.2065],
+        "Close": [1.2028, 1.2030, 1.2030, 1.2020, 1.2040, 1.2050, 1.2065, 1.2075],
+        "Volume": [0] * 8}, index=idx)
+    r3 = _run(df_l, ob_l, 1.2030)
+    ok &= check(r3 and r3["exit_reason"] == "distal_killed",
+                f"LONG distal wick pre-fill -> distal_killed (got {r3 and r3['exit_reason']})")
+    return ok
+
+
 def main():
     results = [
         ("test_signature_h1_only",      test_signature_h1_only()),
         ("test_levels_dual_entry",      test_levels_dual_entry()),
         ("test_dual_simulator_columns", test_dual_simulator_columns()),
         ("test_tp2_ordering_invariant", test_tp2_ordering_invariant()),
+        ("test_prefill_distal_guard",   test_prefill_distal_guard()),
     ]
     print("\n=== SUMMARY ===")
     fail = 0
