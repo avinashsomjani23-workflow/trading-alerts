@@ -31,6 +31,12 @@ jobs:
           for f in $ALL_FILES; do
             if [ -f "$f" ]; then FILES="$FILES $f"; fi
           done
+          # FF calendar cache (directory of weekly XML). Persisted so the next
+          # run has a last-good copy when ForexFactory rate-limits or drops a
+          # week file — otherwise the fresh checkout starts with an empty cache.
+          if [ -d "state/ff_calendar_cache" ]; then
+            FILES="$FILES state/ff_calendar_cache"
+          fi
           echo "Files to commit: $FILES"
 
           if [ -z "$FILES" ]; then

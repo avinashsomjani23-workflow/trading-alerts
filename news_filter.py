@@ -76,6 +76,41 @@ def currencies_for_pair(pair: str) -> frozenset:
 _FF_THISWEEK_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.xml"
 _FF_WEEK_URL = "https://nfs.faireconomy.media/ff_calendar_{date}.xml"
 
+# Per-week XML cache. FF rate-limits (429) and drops older weekly files, so a
+# live fetch can fail even when the data existed minutes ago. We persist each
+# week's raw XML on success and serve it when a later fetch fails. Past weeks
+# are immutable history; only the current week changes intraday, so a slightly
+# stale current-week copy is still far better than an empty calendar.
+_FF_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "state", "ff_calendar_cache")
+
+
+def _ff_cache_path(monday: str) -> str:
+    return os.path.join(_FF_CACHE_DIR, f"ff_calendar_{monday}.xml")
+
+
+def _ff_cache_write(monday: str, body: bytes) -> None:
+    """Persist a week's raw XML. Best-effort: a cache write must never break
+    the fetch path."""
+    try:
+        os.makedirs(_FF_CACHE_DIR, exist_ok=True)
+        path = _ff_cache_path(monday)
+        tmp = path + ".tmp"
+        with open(tmp, "wb") as f:
+            f.write(body)
+        os.replace(tmp, path)  # atomic — no half-written cache on crash
+    except OSError as e:
+        logger.warning("ff_cache_write_failed monday=%s err=%s", monday, e)
+
+
+def _ff_cache_read(monday: str) -> Optional[bytes]:
+    """Return cached week XML, or None if absent/unreadable."""
+    try:
+        with open(_ff_cache_path(monday), "rb") as f:
+            return f.read()
+    except OSError:
+        return None
+
 
 def _ff_monday_for(d: datetime) -> str:
     """The Monday of d's ISO week, formatted YYYY-MM-DD."""
@@ -134,17 +169,31 @@ def _parse_ff_xml(xml_bytes: bytes) -> List[Dict[str, Any]]:
     return out
 
 
-def _http_get(url: str, timeout: float = 20.0) -> Optional[bytes]:
-    """Single GET. Returns bytes on success, None on any failure.
-    The None vs bytes distinction lets the caller log the gap explicitly."""
-    try:
-        req = urllib.request.Request(
-            url, headers={"User-Agent": "trading-alerts/news_filter"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read()
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
-        logger.warning("http_get_failed url=%s err=%s", url, e)
-        return None
+def _http_get(url: str, timeout: float = 20.0, retries: int = 2) -> Optional[bytes]:
+    """GET with a short retry on transient failures (429 / 5xx / network).
+    Returns bytes on success, None after all attempts fail. The None vs bytes
+    distinction lets the caller fall back to cache and log the gap explicitly."""
+    import time
+    for attempt in range(retries + 1):
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "trading-alerts/news_filter"})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
+            # Retry only transient conditions. A 404 (week file removed) is
+            # permanent for this URL — don't waste attempts, let the caller
+            # fall back to the thisweek alias / cache.
+            code = getattr(e, "code", None)
+            transient = code in (429, 500, 502, 503, 504) or code is None
+            if transient and attempt < retries:
+                wait = 2 * (attempt + 1)  # 2s, then 4s
+                logger.warning("http_get_retry url=%s err=%s wait=%ss", url, e, wait)
+                time.sleep(wait)
+                continue
+            logger.warning("http_get_failed url=%s err=%s", url, e)
+            return None
+    return None
 
 
 def fetch_ff_events(start_utc: datetime, end_utc: datetime) -> Tuple[List[Dict[str, Any]], bool]:
@@ -165,20 +214,33 @@ def fetch_ff_events(start_utc: datetime, end_utc: datetime) -> Tuple[List[Dict[s
     current = start_utc - timedelta(days=start_utc.weekday())
     while current.date() <= end_utc.date():
         weeks_attempted += 1
-        url = _FF_WEEK_URL.format(date=_ff_monday_for(current))
+        monday = _ff_monday_for(current)
+        url = _FF_WEEK_URL.format(date=monday)
         body = _http_get(url)
         if body is None:
             # Try the thisweek alias as a fallback only if the date is
-            # the current ISO week. Otherwise mark as gap.
+            # the current ISO week. Otherwise the per-week URL is the only
+            # live source.
             now_utc = datetime.now(timezone.utc)
-            if _ff_monday_for(current) == _ff_monday_for(now_utc):
+            if monday == _ff_monday_for(now_utc):
                 body = _http_get(_FF_THISWEEK_URL)
-        if body is None:
-            logger.warning("ff_week_missing date=%s",
-                           _ff_monday_for(current))
-            current += timedelta(days=7)
-            continue
-        weeks_succeeded += 1
+
+        if body is not None:
+            # Live fetch worked — refresh the cache and count full coverage.
+            _ff_cache_write(monday, body)
+            weeks_succeeded += 1
+        else:
+            # Live fetch failed (429 / removed file / network). Serve the last
+            # good copy of THIS week so the calendar is never silently empty.
+            body = _ff_cache_read(monday)
+            if body is not None:
+                logger.warning("ff_week_from_cache date=%s", monday)
+                weeks_succeeded += 1  # we still have the data, just not live
+            else:
+                logger.warning("ff_week_missing date=%s (no cache)", monday)
+                current += timedelta(days=7)
+                continue
+
         events.extend(_parse_ff_xml(body))
         current += timedelta(days=7)
 

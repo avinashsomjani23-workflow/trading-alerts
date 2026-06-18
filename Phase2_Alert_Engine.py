@@ -28,6 +28,11 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "dummy")
 GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "avinash.somjani23@gmail.com")
 GMAIL_PASS = os.environ.get("GMAIL_APP_PASSWORD", "dummy")
 
+# Minimum raw score (out of 10) a zone must reach to email a TRADE READY alert.
+# Set to 4 on 2026-06-18 — the only quality gate in Phase 2. Below this, the
+# zone is logged as below_score_floor and silently skipped.
+MIN_SCORE_TO_EMAIL = float(config.get("scoring", {}).get("min_score_to_email", 4))
+
 
 # ---------------------------------------------------------------------------
 # Utilities
@@ -508,11 +513,17 @@ def fetch_scheduled_news(now_utc=None):
     """
     if now_utc is None:
         now_utc = datetime.now(timezone.utc)
-    # Fetch only enough to evaluate the flag window: from `after` hours behind
-    # (so a just-passed event still blacks out) to `before` hours ahead (so we
-    # see an event we are about to enter the window of). No 24h lookahead.
-    start = now_utc - timedelta(hours=NEWS_BLACKOUT_AFTER_H + 0.5)
-    end   = now_utc + timedelta(hours=NEWS_BLACKOUT_BEFORE_H + 0.5)
+    # Fetch the FULL IST trading day so the email can show a whole-day calendar
+    # (e.g. "FOMC tonight 03:30 IST" on the morning scan), not just events near
+    # `now`. The trading day starts 09:00 IST = 03:30 UTC (mirrors trading_day()).
+    # The active 2h-before / 1h-after marker is still computed from this same set
+    # in get_pair_news_context — wider fetch, identical marker logic.
+    ist_now = now_utc + timedelta(hours=5, minutes=30)
+    day_start_ist = ist_now.replace(hour=9, minute=0, second=0, microsecond=0)
+    if ist_now.hour < 9:  # pre-09:00 IST belongs to the previous trading day
+        day_start_ist -= timedelta(days=1)
+    start = day_start_ist - timedelta(hours=5, minutes=30)  # back to UTC
+    end   = start + timedelta(days=1)
     try:
         res = news_filter.fetch_events(start, end, sources=("ff",))
         cov = res.get("coverage", {})
@@ -526,55 +537,62 @@ def fetch_scheduled_news(now_utc=None):
 def get_pair_news_context(pair_name, events, coverage_ok, now_utc=None):
     """Build the per-pair scheduled-news context from the shared calendar.
 
-    Deterministic — no LLM. Only the avoidance window is relevant: a pair is
-    flagged ONLY while now sits inside [event - before, event + after]. Events
-    outside that window are not surfaced (no "event in 7h" noise).
+    INFORMATION ONLY. Nothing here gates, filters or suppresses a trade setup.
+    The caller renders two display pieces:
+      1. A whole-day list of the pair's HIGH-impact events (in IST).
+      2. An "active now" marker when now sits inside [event-2h, event+1h] —
+         this is the heads-up window the user asked for (alert from 2h before a
+         release until 1h after). It is a label, not a filter.
 
     Returns a dict the email renders directly:
-      blackout:        bool   (now is inside [event-before, event+after])
-      blackout_event:  dict|None
-      relevant:        list   (pair-relevant events in the fetched window)
+      active_event:    dict|None  (event whose 2h-before/1h-after window is live)
+      active_now:      bool       (now is inside an event's window)
+      day_events:      list       (all pair-relevant events in the IST day)
       coverage_ok:     bool
-      headlines_text:  str    (fed to Gemini so its summary is about real events)
+      headlines_text:  str        (fed to Gemini so its summary is about real events)
+      # legacy aliases (kept so existing renderer keys don't break):
+      blackout / blackout_event -> active_now / active_event
     """
     if now_utc is None:
         now_utc = datetime.now(timezone.utc)
     ccys = news_filter.currencies_for_pair(pair_name)
-    relevant = sorted(
+    day_events = sorted(
         (e for e in events if e.get("currency") in ccys),
         key=lambda e: e["ts_utc"],
     )
 
-    # Asymmetric blackout (config: before=2h, after=1h). This is the ONLY flag.
+    # Heads-up window (config: before=2h, after=1h). Pure label — never a gate.
     before = timedelta(hours=NEWS_BLACKOUT_BEFORE_H)
     after  = timedelta(hours=NEWS_BLACKOUT_AFTER_H)
-    blackout = False
-    blackout_event = None
-    for e in relevant:
+    active_now = False
+    active_event = None
+    for e in day_events:
         if (e["ts_utc"] - before) <= now_utc <= (e["ts_utc"] + after):
-            blackout = True
-            blackout_event = e
+            active_now = True
+            active_event = e
             break
 
-    if relevant:
+    if day_events:
         headlines_text = "\n".join(
-            f"- {e['ts_utc'].strftime('%a %H:%M UTC')} {e['currency']} "
-            f"HIGH: {e.get('title', '')}"
-            for e in relevant
+            f"- {(e['ts_utc'] + timedelta(hours=5, minutes=30)).strftime('%a %H:%M IST')} "
+            f"{e['currency']} HIGH: {e.get('title', '')}"
+            for e in day_events
         )
     else:
         headlines_text = (
-            f"No scheduled HIGH-impact events for {sorted(ccys)} inside the "
-            f"news window ({NEWS_BLACKOUT_BEFORE_H:g}h before / "
-            f"{NEWS_BLACKOUT_AFTER_H:g}h after)."
+            f"No scheduled HIGH-impact events for {sorted(ccys)} today."
         )
 
     return {
-        "blackout":       blackout,
-        "blackout_event": blackout_event,
-        "relevant":       relevant,
+        "active_now":     active_now,
+        "active_event":   active_event,
+        "day_events":     day_events,
         "coverage_ok":    coverage_ok,
         "headlines_text": headlines_text,
+        # Legacy aliases — keep old renderer/Gemini keys working.
+        "blackout":       active_now,
+        "blackout_event": active_event,
+        "relevant":       day_events,
     }
 
 
@@ -631,11 +649,19 @@ def call_gemini_flash(pair, bias, news_headlines):
                 code = r["error"].get("code", resp.status_code)
                 msg  = str(r["error"].get("message", ""))[:120]
                 last_err = f"API error {code}: {msg}"
-                # 429 (rate limit / quota) and 503 (overloaded) are transient.
-                # Back off so the per-minute window can reset — instant retries
-                # just keep us over the limit and burn quota. Anything else
-                # (bad key, bad request) is deterministic; retrying won't help.
-                if code in (429, 503) and attempt < 2:
+                # Distinguish the two kinds of 429:
+                #   - quota / credits exhausted  -> NOT transient. Retrying 3x
+                #     just floods the failure log and burns nothing useful (the
+                #     account is out). Fail once.
+                #   - bare per-minute rate limit -> transient. One short back-off
+                #     can clear it.
+                # 503 (overloaded) is transient too.
+                quota_dead = code == 429 and any(
+                    k in msg.lower()
+                    for k in ("quota", "credit", "billing", "plan")
+                )
+                transient = (code == 503) or (code == 429 and not quota_dead)
+                if transient and attempt < 2:
                     wait = 10 * (attempt + 1)  # 10s, then 20s
                     print(f"  [GEMINI] {pair}: {code}, backing off {wait}s "
                           f"(attempt {attempt + 1}/3)")
@@ -1413,45 +1439,65 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
 
     sweep_breakdown_html = build_sweep_breakdown_html(data, dp)
 
-    # Scheduled-news banner (DETERMINISTIC — ForexFactory high-impact calendar
-    # mapped to the pair's currencies). This is the primary, relevant news
-    # signal; the Gemini line below is secondary freeform colour. Red when we
-    # are inside a blackout window, amber when a high-impact event is upcoming,
-    # grey when the calendar is clear, and a distinct note if the fetch was
-    # incomplete (so "clear" is never confused with "couldn't check").
+    # Scheduled-news block — INFORMATION ONLY. Never gates, filters or suppresses
+    # a setup. Two pieces:
+    #   (4B) whole-day list of the pair's HIGH-impact events, in IST.
+    #   (4A) a neutral "active now" marker when now is inside an event's
+    #        2h-before / 1h-after heads-up window.
+    # A distinct note covers a failed fetch (so "no events" is never confused
+    # with "couldn't check"). No red, no "avoid entries" — purely a heads-up.
     news_ctx = data.get('news_ctx') or {}
+
+    def _ist(ev):
+        return (ev['ts_utc'] + timedelta(hours=5, minutes=30)).strftime('%a %H:%M IST')
 
     if not news_ctx:
         news_banner_html = ""
-    elif news_ctx.get('blackout') and news_ctx.get('blackout_event'):
-        ev = news_ctx['blackout_event']
-        news_banner_html = (
-            '<div style="margin-top:12px;padding:10px 12px;background:#2d1a1a;'
-            'border-left:3px solid #e74c3c;border-radius:4px;font-size:12px;'
-            'color:#ffb3b3;line-height:1.5;">'
-            '<b style="color:#e74c3c;">&#9888; NEWS BLACKOUT:</b> '
-            f"{ev['currency']} HIGH-impact — {ev.get('title','')} "
-            f"at {ev['ts_utc'].strftime('%a %H:%M UTC')}. "
-            f"Inside the news window ({NEWS_BLACKOUT_BEFORE_H:g}h before / "
-            f"{NEWS_BLACKOUT_AFTER_H:g}h after) — avoid fresh entries.</div>"
-        )
     elif not news_ctx.get('coverage_ok'):
         news_banner_html = (
-            '<div style="margin-top:12px;padding:10px 12px;background:#2d1a1a;'
-            'border-left:3px solid #e74c3c;border-radius:4px;font-size:12px;'
-            'color:#ffb3b3;line-height:1.5;">'
-            '<b style="color:#e74c3c;">&#9888; News calendar incomplete:</b> '
-            'the ForexFactory fetch failed — check the economic calendar '
-            'manually before entering.</div>'
+            '<div style="margin-top:12px;padding:10px 12px;background:#1a1a2e;'
+            'border-left:3px solid #888;border-radius:4px;font-size:12px;'
+            'color:#bbb;line-height:1.5;">'
+            '<b style="color:#eee;">News calendar:</b> the ForexFactory fetch '
+            'failed for this scan — could not load today\'s events. '
+            '(Information only; does not affect the setup.)</div>'
         )
     else:
+        day_events = news_ctx.get('day_events') or []
+        # Active heads-up marker (neutral — never "avoid").
+        if news_ctx.get('active_now') and news_ctx.get('active_event'):
+            ev = news_ctx['active_event']
+            marker = (
+                '<div style="margin-bottom:8px;color:#f1c40f;">'
+                f"&#9201; Heads-up: {ev['currency']} HIGH-impact — "
+                f"{ev.get('title','')} at {_ist(ev)} "
+                f"(within {NEWS_BLACKOUT_BEFORE_H:g}h before / "
+                f"{NEWS_BLACKOUT_AFTER_H:g}h after the release).</div>"
+            )
+        else:
+            marker = ""
+        # Whole-day calendar list.
+        if day_events:
+            rows = "".join(
+                f"<div style=\"color:#bbb;\">&#8226; {_ist(e)} &middot; "
+                f"{e['currency']} &middot; {e.get('title','')}</div>"
+                for e in day_events
+            )
+            day_block = (
+                '<div style="color:#9ad29a;margin-bottom:4px;">Today\'s '
+                'HIGH-impact (IST):</div>' + rows
+            )
+        else:
+            day_block = (
+                '<div style="color:#bbb;">No scheduled HIGH-impact events for '
+                'this pair today.</div>'
+            )
         news_banner_html = (
             '<div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;'
-            'border-left:3px solid #27ae60;border-radius:4px;font-size:12px;'
-            'color:#bbb;line-height:1.5;">'
-            '<b style="color:#9ad29a;">&#9989; News:</b> clear — no high-impact '
-            f'event within the news window ({NEWS_BLACKOUT_BEFORE_H:g}h before / '
-            f'{NEWS_BLACKOUT_AFTER_H:g}h after).</div>'
+            'border-left:3px solid #888;border-radius:4px;font-size:12px;'
+            'line-height:1.5;">'
+            '<b style="color:#eee;">News (info only):</b>'
+            f'<div style="margin-top:6px;">{marker}{day_block}</div></div>'
         )
 
     # Macro context block (SECONDARY — freeform AI colour on the real events
@@ -2455,6 +2501,19 @@ if __name__ == "__main__":
             #   - silent       — same day, in proximity, score in dead band
             current_score_raw = float(score_res['total'])
             current_breakdown = score_res.get('breakdown', {})
+
+            # Score floor (2026-06-18). Zones scoring below MIN_SCORE_TO_EMAIL
+            # never email in ANY path (fresh, still_valid, reentry, updated).
+            # This is the only quality gate in Phase 2; raw 3.8 floors to "3"
+            # in the UI so it must be blocked — gate on raw < floor.
+            if current_score_raw < MIN_SCORE_TO_EMAIL:
+                scan_record["final_action"] = (
+                    f"below_score_floor "
+                    f"({current_score_raw:.1f} < {MIN_SCORE_TO_EMAIL:.1f})"
+                )
+                append_scan_log(scan_record)
+                continue
+
             prior = phase2_zones.get(zone_id)
             today_id = get_day_id_ist(ist_now)
             email_kind = "fresh"            # fresh | reentry | still_valid | updated

@@ -993,12 +993,12 @@ def run_phase3():
             "entry_source": "LIMIT @ M5 CHoCH level"
         }
 
-        # Fetch fresh macro at trigger time — the P2 watch entry's macro_summary
-        # may be hours old. Red banner rendered in email if Gemini fails.
-        print(f"  [MACRO] Fetching fresh macro context for {pair_name}...")
-        gemini_risk = call_gemini_flash(pair_name, bias, fetch_macro_news(pair_name))
-        live_macro_summary = gemini_risk.get("macro_summary")
-        live_macro_unavailable = bool(gemini_risk.get("macro_unavailable", False))
+        # Phase 3 pulls NO external API. Macro context belongs to Phase 2 only.
+        # (Phase 3 is dormant — workflow disabled — but this guarantees it can
+        # never hit Gemini even if re-enabled.) Email renders the unavailable
+        # banner, same as a Gemini failure on Phase 2.
+        live_macro_summary = None
+        live_macro_unavailable = True
 
         chart_b64 = generate_m5_chart(
             df_m5, f"{pair_name} M5 - Sniper Trigger",

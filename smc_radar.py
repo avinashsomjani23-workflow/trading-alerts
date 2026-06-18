@@ -2800,101 +2800,16 @@ def build_price_moved_banner_html(pairs_info):
 
 def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
     """
-    Generates the LLM zone narrative with H1 ATR injected into the prompt.
-    Calls Gemini with the ATR-aware prompt; falls back to the local
-    narrative on failure.
+    Builds the zone briefing (structural read -> conviction -> what to watch).
+
+    Phase 1 is deterministic and uses NO external API. The local builder
+    (_fallback_narrative_with_atr) produces the full three-part briefing from
+    real zone data (FVG state, tested/pristine, CHoCH vs BOS, in-zone vs
+    approaching). Gemini was removed here: it fired up to 6 calls per scan for
+    decorative prose that feeds no decision, which blew the API quota. Macro
+    context via Gemini lives on Phase 2 only.
     """
-    if not GEMINI_API_KEY:
-        return _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr)
-
-    from google import genai as _genai
-    from google.genai import types as genai_types
-    _gemini_client = _genai.Client(api_key=GEMINI_API_KEY)
-
-    direction    = "bullish demand" if ob['direction'] == 'bullish' else "bearish supply"
-    proximal     = ob['proximal_line']
-    distal       = ob['distal_line']
-    pip_unit     = _pip_unit(dp)
-    zone_pips    = round(abs(proximal - distal) / pip_unit, 1)
-    dist_pips    = round(abs(current_price - proximal) / pip_unit, 1)
-    atr_pips     = round(h1_atr / pip_unit, 1) if h1_atr > 0 else None
-    atr_display  = f"{atr_pips} pips" if atr_pips is not None else "n/a"
-
-    z_lo = min(proximal, distal)
-    z_hi = max(proximal, distal)
-    in_zone = z_lo <= current_price <= z_hi
-
-    if ob['fvg'].get('exists'):
-        mit = ob['fvg'].get('mitigation', 'pristine')
-        fvg_top_pips = round(ob['fvg']['fvg_top'] / pip_unit, 1)
-        fvg_bot_pips = round(ob['fvg']['fvg_bottom'] / pip_unit, 1)
-        if mit == 'partial':
-            fvg_status = (
-                f"partially mitigated FVG ({fvg_bot_pips}–{fvg_top_pips} pips zone) "
-                f"— price tagged proximal, distal intact"
-            )
-        else:
-            fvg_status = (
-                f"pristine FVG ({fvg_bot_pips}–{fvg_top_pips} pips zone)"
-            )
-    elif ob['fvg'].get('was_detected'):
-        fvg_status = "FVG fully mitigated — zone relies on OB alone"
-    else:
-        fvg_status = "no FVG present"
-    ratio = round(ob['ob_body'] / ob['median_leg_body'], 2) if ob['median_leg_body'] > 0 else 0
-
-    event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'BOS'))
-    # Qualitative proximity band only — the prompt forbids quoting numbers, so
-    # feed the model a word, not a pip figure it might parrot back.
-    if in_zone:
-        distance_brief = "price is INSIDE the zone (mitigation in progress)"
-    elif atr_pips and dist_pips <= 1.5 * atr_pips:
-        distance_brief = "price is arriving at the zone"
-    elif atr_pips and dist_pips <= 3 * atr_pips:
-        distance_brief = "price is nearing the zone"
-    else:
-        distance_brief = "price is still distant from the zone"
-    logging.info(f"[OB_BODY_RATIO] {name} zone {ob.get('zone_id','?')}: ob_body={ob['ob_body']:.{dp}f} median_leg={ob['median_leg_body']:.{dp}f} ratio={ratio}x")
-    prompt = f"""You are a veteran SMC (Smart Money Concepts) prop trader writing a zone briefing for another experienced SMC trader.
-Be direct. No fluff. No pleasantries. Three sentences only. One paragraph.
-
-The reader already sees the numbers (zone width, distance, H1 ATR, FVG state, OB status) on the card above your text. DO NOT restate them. Give judgment the numbers cannot — the structural read and what would confirm or kill the setup.
-
-ZONE CONTEXT (for your reasoning only — do not quote these figures back):
-- Pair: {name}
-- Bias: {direction} | Structure event: {event_label}
-- FVG: {fvg_status}
-- Zone status: {ob.get('status', 'Pristine')}
-- {distance_brief}
-
-WRITE EXACTLY THREE SENTENCES IN THIS ORDER:
-1. The structural read: what the {event_label} tells you about where this zone sits (with trend / counter-trend, premium/discount) and why smart money may defend it.
-2. Conviction: weigh OB freshness and FVG displacement together — is this a clean setup or one to distrust, and why.
-3. What to watch: the single condition that would confirm the trade, and the one that would invalidate the zone.
-
-STRICT OUTPUT RULES:
-- Plain text only
-- No bullet points, no headers, no markdown, no bold, no numbers, no pip figures, no distances
-- Three sentences, one paragraph
-- Judgment only — never restate the card's metrics"""
-
-    try:
-        response = _gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=genai_types.GenerateContentConfig(
-                temperature=0.3,
-                max_output_tokens=300,
-                thinking_config=genai_types.ThinkingConfig(thinking_budget=0)
-            )
-        )
-        text = response.text.strip()
-        if len(text) < 50:
-            return _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr)
-        return text
-    except Exception as e:
-        logging.error(f"Gemini narrative error for {name}: {e}")
-        return _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr)
+    return _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr)
 
 
 def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr):

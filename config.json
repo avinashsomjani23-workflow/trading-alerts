@@ -101,6 +101,7 @@
   ],
   "scoring": {
     "hard_gates": ["rr_minimum_1.5"],
+    "min_score_to_email": 4,
     "news_blackout_hours_before": 2,
     "news_blackout_hours_after": 1,
     "zone_fatigue_threshold": 5
