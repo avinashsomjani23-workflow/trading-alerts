@@ -1,26 +1,6 @@
 {
-  "day_id": "2026-06-17",
+  "day_id": "2026-06-18",
   "zones": {
-    "GOLD_SHORT_BOS_4259.9_2026-06-09T16": {
-      "score_int": 6,
-      "score_raw": 6.1,
-      "score_high_water": 6.1,
-      "score_low_water": 6.1,
-      "breakdown": {
-        "structure": 1,
-        "sweep": 2.08,
-        "fvg": 2,
-        "freshness": 1,
-        "pd": 0.0,
-        "killzone": 0.0
-      },
-      "alert_ist": "2026-06-10T09:35:34.799782",
-      "last_seen_ist": "2026-06-11T09:35:31.427329",
-      "bias": "SHORT",
-      "pair": "GOLD",
-      "max_exit_distance": 185.199951171875,
-      "reentry_armed": true
-    },
     "EURUSD_LONG_CHoCH_1.1538_2026-06-08T09": {
       "score_int": 5,
       "score_raw": 5.0,
@@ -675,29 +655,29 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-18T00:35:42.416645",
+      "last_seen_ist": "2026-06-18T09:35:41.448507",
       "last_email_day": "2026-06-17",
       "reentry_armed": true,
-      "max_exit_distance": 0.0049512386322021484,
+      "max_exit_distance": 0.006415128707885742,
       "bias": "SHORT",
       "pair": "EURUSD"
     },
     "NZDUSD_SHORT_BOS_0.581_2026-06-17T17": {
-      "score_int": 4,
-      "score_raw": 4.0,
-      "score_high_water": 4.0,
-      "score_low_water": 4.0,
+      "score_int": 5,
+      "score_raw": 5.0,
+      "score_high_water": 5.0,
+      "score_low_water": 5.0,
       "breakdown": {
         "structure": 3,
         "sweep": 0.0,
-        "fvg": 0,
+        "fvg": 1,
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-18T00:35:42.416645",
-      "last_email_day": "2026-06-17",
+      "last_seen_ist": "2026-06-18T09:35:41.448507",
+      "last_email_day": "2026-06-18",
       "reentry_armed": false,
-      "max_exit_distance": 0.002828836441040039,
+      "max_exit_distance": 0.0,
       "bias": "SHORT",
       "pair": "NZDUSD"
     },
@@ -732,10 +712,10 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-17T23:35:48.104285",
-      "last_seen_ist": "2026-06-18T00:35:42.416645",
+      "last_seen_ist": "2026-06-18T09:35:41.448507",
       "last_email_day": "2026-06-17",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.004869997501373291,
       "bias": "LONG",
       "pair": "USDCHF"
     },
@@ -757,6 +737,44 @@
       "max_exit_distance": 0.0,
       "bias": "LONG",
       "pair": "EURUSD"
+    },
+    "USDJPY_LONG_BOS_160.35_2026-06-17T17": {
+      "score_int": 6,
+      "score_raw": 6.0,
+      "score_high_water": 6.0,
+      "score_low_water": 6.0,
+      "breakdown": {
+        "structure": 3,
+        "sweep": 0.0,
+        "fvg": 2,
+        "freshness": 1
+      },
+      "alert_ist": "2026-06-18T09:35:41.448507",
+      "last_seen_ist": "2026-06-18T09:35:41.448507",
+      "last_email_day": "2026-06-18",
+      "reentry_armed": false,
+      "max_exit_distance": 0.0,
+      "bias": "LONG",
+      "pair": "USDJPY"
+    },
+    "USDCHF_SHORT_BOS_0.798_2026-06-11T16": {
+      "score_int": 3,
+      "score_raw": 3.0,
+      "score_high_water": 3.0,
+      "score_low_water": 3.0,
+      "breakdown": {
+        "structure": 3,
+        "sweep": 0.0,
+        "fvg": 0,
+        "freshness": 0
+      },
+      "alert_ist": "2026-06-18T09:35:41.448507",
+      "last_seen_ist": "2026-06-18T09:35:41.448507",
+      "last_email_day": "2026-06-18",
+      "reentry_armed": false,
+      "max_exit_distance": 0.0,
+      "bias": "SHORT",
+      "pair": "USDCHF"
     }
   }
 }
