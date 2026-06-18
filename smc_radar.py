@@ -8,8 +8,6 @@ import smtplib
 import logging
 import os
 import time
-from google import genai
-from google.genai import types as genai_types
 import smc_detector
 import dealing_range
 import h4_range  # H4-derived dealing range (built from H1, mapped onto H1)
@@ -59,7 +57,6 @@ EMAIL_CONFIG = {
 }
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-_gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 # ---------------------------------------------------------------------------
 # ZONE IDENTITY THRESHOLDS — price-range overlap matching (not string match)
@@ -2794,6 +2791,10 @@ def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
     """
     if not GEMINI_API_KEY:
         return _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr)
+
+    from google import genai as _genai
+    from google.genai import types as genai_types
+    _gemini_client = _genai.Client(api_key=GEMINI_API_KEY)
 
     direction    = "bullish demand" if ob['direction'] == 'bullish' else "bearish supply"
     proximal     = ob['proximal_line']
