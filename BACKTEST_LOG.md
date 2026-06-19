@@ -1,14 +1,14 @@
 # Backtest Registry
 
-*Last updated: 2026-06-19 03:50 UTC*
+*Last updated: 2026-06-19 05:39 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
 - Runs completed: **7** of 7
-- Total filled trades across all runs: **102**
-- Average expectancy across runs: **-0.32R**
+- Total filled trades across all runs: **123**
+- Average expectancy across runs: **-0.30R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
 - **Group 3 (Live-era):** 1 runs, 9 trades, avg expectancy -0.20R
@@ -23,38 +23,42 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 | Metric | Value |
 |--------|-------|
-| Filled trades | 5 (of 76 rows) |
-| Win rate | 0.0% |
-| Expectancy | -0.40R |
-| Max drawdown | +2.00R |
-| Longest losing streak | 1 trades |
-| Proximal fill rate | 13.2% |
-| 50% fill rate | 7.9% |
-| Score verdict | WORKS — higher score leads to better trades |
+| Filled trades | 26 (of 78 rows) |
+| Win rate | 15.4% |
+| Expectancy | -0.28R |
+| Max drawdown | +12.00R |
+| Longest losing streak | 9 trades |
+| Proximal fill rate | 66.7% |
+| 50% fill rate | 61.5% |
+| Score verdict | WEAK — partial relationship |
 
 **By pair (proximal entry, TP2 exit):**
 
 | Pair | Trades | Win rate | Expectancy |
 |------|--------|----------|------------|
-| NAS100 | 1 | 0.0% | +0.00R |
-| NZDUSD | 2 | 0.0% | -0.50R |
-| USDCHF | 2 | 0.0% | -0.50R |
+| GOLD | 6 | 50.0% | +0.81R |
+| NAS100 | 3 | 0.0% | -0.33R |
+| NZDUSD | 3 | 0.0% | -0.67R |
+| USDCHF | 7 | 14.3% | -0.29R |
+| USDJPY | 3 | 0.0% | -1.00R |
+| EURUSD | 4 | 0.0% | -1.00R |
 
 **By session:**
 
 | Session | Trades | Win rate | Expectancy |
 |---------|--------|----------|------------|
-| Asia | 2 | 0.0% | +0.00R |
-| London | 10 | 0.0% | -0.10R |
-| NY | 13 | 0.0% | -0.08R |
+| Asia | 3 | 33.3% | -0.12R |
+| London | 10 | 0.0% | -0.60R |
+| NY | 13 | 23.1% | -0.06R |
 
 **Score vs outcome:**
 
 | Score bucket | Trades | Win rate | Expectancy |
 |-------------|--------|----------|------------|
-| 4-5 | 1 | 0.0% | -1.00R |
-| 5-6 | 3 | 0.0% | -0.33R |
-| 7+ | 1 | 0.0% | +0.00R |
+| 4-5 | 8 | 0.0% | -0.75R |
+| 5-6 | 7 | 14.3% | -0.34R |
+| 6-7 | 6 | 33.3% | +0.16R |
+| 7+ | 5 | 20.0% | +0.05R |
 
 ---
 
