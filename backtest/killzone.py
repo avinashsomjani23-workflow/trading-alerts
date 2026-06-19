@@ -42,11 +42,21 @@ def in_pair_killzone(ts: pd.Timestamp, pair_conf: dict) -> bool:
 
 
 def windows_label(pair_conf: dict) -> str:
-    """Human-readable label of configured session-local windows, for report copy."""
+    """Human-readable label of configured session-local windows, for report copy.
+
+    Each window carries a session name (config `label`, e.g. "New York
+    (forex)", "Asian Range"). We surface it so the report shows WHICH session a
+    window is, not just raw times -- different pairs run different sessions
+    (USDJPY uses Asian Range; USDCHF uses London Open), and a bare time range
+    can't tell them apart.
+    """
     killzones = pair_conf.get("killzones") or []
     if not killzones:
         return "no killzone configured"
-    return ", ".join(
-        f"{w.get('start')}-{w.get('end')} {w.get('tz')}"
-        for w in killzones if isinstance(w, dict)
-    )
+
+    def _one(w: dict) -> str:
+        times = f"{w.get('start')}-{w.get('end')} {w.get('tz')}"
+        name = w.get("label")
+        return f"{name}: {times}" if name else times
+
+    return ", ".join(_one(w) for w in killzones if isinstance(w, dict))

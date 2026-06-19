@@ -522,6 +522,77 @@ def _killzone_alignment_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
 
 
+# ---------------------------------------------------------------------------
+# Trend alignment — did the zone trade WITH or AGAINST the H1 trend?
+# The backtest fires counter-trend by design, so this answers the user's
+# question directly: are against-trend setups losing consistently enough to
+# filter out? trend_alignment is stamped per trade (h1_only_simulator) from the
+# alert's h1_trend vs zone direction.
+#
+# Two label dialects exist for the same concept:
+#   backtest path (replay_engine): with_trend / against_trend / no_trend
+#   live path     (Phase2):        with_trend / counter_trend / ambiguous
+# We normalise both so a report built from either source fills the same buckets.
+# ---------------------------------------------------------------------------
+
+_TREND_ORDER = ["With trend", "Against trend", "No trend"]
+
+_TREND_LABEL_MAP = {
+    "with_trend":    "With trend",
+    "against_trend": "Against trend",
+    "counter_trend": "Against trend",
+    "no_trend":      "No trend",
+    "ambiguous":     "No trend",
+}
+
+
+def _trend_alignment_table(trades: List[Dict[str, Any]], r_col: str
+                           ) -> List[Dict[str, Any]]:
+    """One row per trend bucket: trades, win rate, avg R, total R."""
+    filled = [t for t in trades if _is_real_filled(t)]
+    if not filled:
+        return []
+    df = pd.DataFrame(filled)
+    if "trend_alignment" not in df.columns or r_col not in df.columns:
+        return []
+    df = df.copy()
+    df["_trend_bucket"] = df["trend_alignment"].map(_TREND_LABEL_MAP)
+    out = []
+    for bucket in _TREND_ORDER:
+        sub = df[df["_trend_bucket"] == bucket]
+        if sub.empty:
+            continue
+        wins = sub[sub[r_col] > 0]
+        out.append({
+            "bucket":       bucket,
+            "trades":       int(len(sub)),
+            "win_rate_pct": round(len(wins) / len(sub) * 100, 1) if len(sub) else 0,
+            "expectancy_r": round(float(sub[r_col].mean()), 3),
+            "total_r":      round(float(sub[r_col].sum()), 3),
+        })
+    return out
+
+
+def _trend_alignment_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    rows = _trend_alignment_table(trades, r_col)
+    if not rows:
+        return ("<p style='color:#888;'>No filled trades with trend data to "
+                "break down by trend alignment.</p>")
+    header = _table_row(
+        ["Bucket", "Trades", "Win rate", "Avg R", "Total R"], header=True,
+    )
+    body = ""
+    for r in rows:
+        color = "#eafaf1" if r["expectancy_r"] >= 0 else "#fdf2f2"
+        body += _table_row([
+            r["bucket"], str(r["trades"]),
+            f"{r['win_rate_pct']:.0f}%",
+            _r(r["expectancy_r"]),
+            f"{r['total_r']:+.1f}R",
+        ], color=color)
+    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
+
+
 # FVG-staleness experiment (2026-06-16). Was a setup taken with a stale FVG
 # (gap already discharged on an earlier approach) worse than one with a fresh
 # gap? fvg_state is labelled in the simulator (_fvg_state). no_fvg is reported
@@ -2197,6 +2268,8 @@ _EXCEL_COL_NAMES = {
     "fill_session":      "Fill Session",
     "ob_session":        "OB Session",
     "killzone_alignment": "Killzone Alignment",
+    "h1_trend":          "H1 Trend",
+    "trend_alignment":   "Trend Alignment",
     "entry_zone":        "Entry Type",
     "entry":             "Entry Price",
     "sl_initial":        "Stop Loss",
@@ -2373,6 +2446,7 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
         col_widths = {
             "Currency Pair": 14, "Direction": 10,
             "Fill Session": 13, "OB Session": 13, "Killzone Alignment": 18,
+            "H1 Trend": 12, "Trend Alignment": 16,
             "Day of Week": 11,
             "Entry Type": 18, "Entry Price": 12, "Stop Loss": 12,
             "Take Profit 1": 13, "Take Profit 2": 13,
@@ -2922,6 +2996,18 @@ def _zone_block_html(
 <div class="section">
   <h2>Pair &times; session</h2>
   {_pair_session_matrix_html(zone_trades, "r_realised")}
+</div>
+
+<!-- TREND ALIGNMENT (with vs against H1 trend) -->
+<div class="section">
+  <h2>Trend alignment &mdash; with vs against the H1 trend</h2>
+  <p>The backtest fires counter-trend setups by design. This table shows whether trading <b>against</b> the H1 trend wins less often than trading <b>with</b> it &mdash; the signal you need to decide whether to filter against-trend zones out.</p>
+  <ul>
+    <li><b>With trend</b>: zone direction matches the H1 trend (BOS continuation).</li>
+    <li><b>Against trend</b>: zone direction opposes the H1 trend (CHoCH / counter setup).</li>
+    <li><b>No trend</b>: H1 trend ambiguous &mdash; no clear BOS sequence.</li>
+  </ul>
+  {_trend_alignment_html(zone_trades, "r_realised")}
 </div>
 
 <!-- KILLZONE ALIGNMENT (OB vs Fill in killzone) -->

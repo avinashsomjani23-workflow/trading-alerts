@@ -139,8 +139,10 @@ def _killzone_alignment(ob: Dict[str, Any], fill_ts, alert_ts,
 
 def _pd_zone_from_dr(price: float, dr: Optional[Dict[str, Any]]) -> str:
     """Where in the dealing range is `price`?
-       discount = lower 40%, premium = upper 40%, equilibrium = middle 20%.
-       Returns 'unknown' if dealing range data is missing/invalid.
+       discount = lower half, premium = upper half. Plain 0.5 split to match
+       the scorecard (smc_detector.classify_setup) -- one PD threshold across
+       the whole system, no dead-band. Returns 'unknown' if dealing range data
+       is missing/invalid.
     """
     if not isinstance(dr, dict) or not dr.get("valid"):
         return "unknown"
@@ -153,11 +155,7 @@ def _pd_zone_from_dr(price: float, dr: Optional[Dict[str, Any]]) -> str:
     if width <= 0:
         return "unknown"
     pos = (price - rng_low) / width  # 0.0 at low, 1.0 at high
-    if pos < 0.40:
-        return "discount"
-    if pos > 0.60:
-        return "premium"
-    return "equilibrium"
+    return "discount" if pos <= 0.5 else "premium"
 
 
 def _pd_alignment(bias: str, pd_zone: str) -> str:
@@ -168,13 +166,13 @@ def _pd_alignment(bias: str, pd_zone: str) -> str:
 
        aligned  = with the draw on liquidity (long+discount / short+premium)
        counter  = against it (long+premium / short+discount)
-       neutral  = equilibrium (middle of the range)
        unknown  = no valid dealing range
+
+    No equilibrium/neutral bucket: the PD split is a plain 0.5 line
+    (_pd_zone_from_dr), so every valid zone is either discount or premium.
     """
     if pd_zone in (None, "unknown"):
         return "unknown"
-    if pd_zone == "equilibrium":
-        return "neutral"
     if bias == "LONG":
         return "aligned" if pd_zone == "discount" else "counter"
     return "aligned" if pd_zone == "premium" else "counter"
