@@ -11,10 +11,10 @@
     "state": "down",
     "flip_unconfirmed": true,
     "ranging": false,
-    "n_events": 19,
+    "n_events": 17,
     "n_choch": 7,
     "n_range_bos": 1,
-    "n_plain_bos": 11
+    "n_plain_bos": 9
   },
   "decimals": 2,
   "input_rows": [
@@ -4866,19 +4866,6 @@
         "chop": false
       },
       {
-        "type": "BOS",
-        "tier": "BOS",
-        "direction": "bullish",
-        "candle_ts": "2024-10-14T10:00:00+00:00",
-        "impulse_start_ts": "2024-10-11T20:00:00+00:00",
-        "broken_swing_price": 20494.25,
-        "broken_swing_ts": "2024-10-11T19:00:00+00:00",
-        "broken_was_wall": false,
-        "reversal_pct": 0.0,
-        "trend_after": "bullish",
-        "chop": false
-      },
-      {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
@@ -5042,19 +5029,6 @@
         "impulse_start_ts": "2024-11-06T11:00:00+00:00",
         "broken_swing_price": 20731.25,
         "broken_swing_ts": "2024-11-06T08:00:00+00:00",
-        "broken_was_wall": false,
-        "reversal_pct": 0.0,
-        "trend_after": "bullish",
-        "chop": false
-      },
-      {
-        "type": "BOS",
-        "tier": "BOS",
-        "direction": "bullish",
-        "candle_ts": "2024-11-07T05:00:00+00:00",
-        "impulse_start_ts": "2024-11-07T00:00:00+00:00",
-        "broken_swing_price": 20935.25,
-        "broken_swing_ts": "2024-11-06T21:00:00+00:00",
         "broken_was_wall": false,
         "reversal_pct": 0.0,
         "trend_after": "bullish",

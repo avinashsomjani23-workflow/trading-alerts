@@ -11,10 +11,10 @@
     "state": "down",
     "flip_unconfirmed": false,
     "ranging": true,
-    "n_events": 12,
+    "n_events": 10,
     "n_choch": 4,
     "n_range_bos": 0,
-    "n_plain_bos": 8
+    "n_plain_bos": 6
   },
   "decimals": 2,
   "input_rows": [
@@ -4921,19 +4921,6 @@
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
-        "candle_ts": "2024-06-20T04:00:00+00:00",
-        "impulse_start_ts": "2024-06-17T06:00:00+00:00",
-        "broken_swing_price": 2348.2,
-        "broken_swing_ts": "2024-06-18T17:00:00+00:00",
-        "broken_was_wall": false,
-        "reversal_pct": 0.0,
-        "trend_after": "bullish",
-        "chop": false
-      },
-      {
-        "type": "BOS",
-        "tier": "BOS",
-        "direction": "bullish",
         "candle_ts": "2024-06-20T13:00:00+00:00",
         "impulse_start_ts": "2024-06-20T09:00:00+00:00",
         "broken_swing_price": 2359.2,
@@ -4951,19 +4938,6 @@
         "impulse_start_ts": "2024-06-21T07:00:00+00:00",
         "broken_swing_price": 2368.6,
         "broken_swing_ts": "2024-06-21T07:00:00+00:00",
-        "broken_was_wall": false,
-        "reversal_pct": 0.0,
-        "trend_after": "bearish",
-        "chop": false
-      },
-      {
-        "type": "BOS",
-        "tier": "BOS",
-        "direction": "bearish",
-        "candle_ts": "2024-06-25T16:00:00+00:00",
-        "impulse_start_ts": "2024-06-24T08:00:00+00:00",
-        "broken_swing_price": 2335.1,
-        "broken_swing_ts": "2024-06-25T08:00:00+00:00",
         "broken_was_wall": false,
         "reversal_pct": 0.0,
         "trend_after": "bearish",

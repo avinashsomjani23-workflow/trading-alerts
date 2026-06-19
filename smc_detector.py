@@ -2548,32 +2548,28 @@ def resolve_distal_mode(pair_conf):
 
 
 def compute_break_quality(df, bos_idx, broken_price, direction, atr, event_type='BOS'):
-    """EVENT-AWARE, pair-aware displacement quality of the break candle.
+    """EVENT-AWARE, pair-aware BODY (displacement) quality of the break.
 
-    Quality is judged RELATIVE TO THE EVENT'S OWN minimum displacement, because a
-    BOS and a CHoCH require very different displacement to fire in the first place:
-      - CHoCH min = STRUCTURE_CHOCH_ATR_MULT (1.0 ATR)
-      - BOS / Range BOS min = BOS_ATR_MULT   (0.4 ATR)
-    These are read from dealing_range (the single source — no duplicated numbers),
-    so if those engine thresholds ever change, break quality re-anchors itself
-    automatically (no maintenance). Judging both against a fixed bar would mark
-    every CHoCH "strong" by construction — the bug this fixes.
+    Quality is judged on the BREAK CANDLE BODY — the conviction of the move —
+    relative to the event's own body floor, the same gate that fires the break:
+      - CHoCH body min = STRUCTURE_CHOCH_BODY_ATR_MULT (1.5 ATR)
+      - BOS   body min = BOS_BODY_ATR_MULT             (1.0 ATR)
+    Read from dealing_range (single source — no duplicated numbers), so if the
+    engine thresholds change, grading re-anchors automatically (no maintenance).
 
-    The event minimum is the QUALIFYING FLOOR — a break cannot exist below it,
-    so `excess` (= displacement / floor) is always >= 1.0. We grade HOW FAR PAST
-    THE FLOOR the break cleared, never against the floor itself (grading against
-    the floor would call a bare-minimum break "good", which is meaningless).
+    Body is window-aware (option B): the break candle OR the candle right after
+    it (whichever body is larger), matching dealing_range._body_gate_ok exactly.
+    A break cannot exist below the floor, so `excess` (= body / floor) is >= 1.0.
 
     Measures (all in ATR units, so pair-aware):
-      - close_beyond_atr : how far PAST the broken level the candle CLOSED.
-      - body_atr         : candle body size — momentum / conviction (gate only).
-      - excess           : close_beyond_atr / event_min  (times over the floor).
+      - close_beyond_atr : how far PAST the broken level the candle CLOSED (ref only).
+      - body_atr         : window body size — the conviction the tier is graded on.
+      - excess           : body_atr / event_body_min  (times over the body floor).
 
-    Buckets (how many times the break cleared its own required minimum):
-      strong   = excess >= 2.5 AND body >= 1.0 ATR  (exceptional force; can NEVER
-                                                      be the bare minimum)
-      solid    = 1.5 <= excess < 2.5                (decisive — the typical good break)
-      marginal = excess < 1.5                       (barely over the floor — caution)
+    Buckets:
+      strong   = excess >= 2.5   (exceptional force)
+      solid    = 1.5 <= excess < 2.5  (decisive — the typical good break)
+      marginal = excess < 1.5    (barely over the floor — caution)
 
     Returns {'tier','close_beyond_atr','body_atr','excess'}; marginal/zeros on bad input.
     """
@@ -2584,20 +2580,27 @@ def compute_break_quality(df, bos_idx, broken_price, direction, atr, event_type=
         i = int(bos_idx)
         if i < 0 or i >= len(df):
             return out
-        # Event-specific minimum displacement, read from the engine constants.
-        event_min = (_dr_const.STRUCTURE_CHOCH_ATR_MULT if event_type == 'CHoCH'
-                     else _dr_const.BOS_ATR_MULT)
+        # Event-specific BODY floor — the gate that actually fires the break,
+        # read from the engine constants (single source, no duplicated numbers).
+        # Grading is now anchored to BODY (displacement/conviction), matching the
+        # fire gate. Window-aware (option B): the break candle OR the candle right
+        # after it (whichever body is larger), exactly as dealing_range gates.
+        event_min = (_dr_const.STRUCTURE_CHOCH_BODY_ATR_MULT if event_type == 'CHoCH'
+                     else _dr_const.BOS_BODY_ATR_MULT)
         if not event_min or event_min <= 0:
-            event_min = 0.4
+            event_min = 1.0
         o = float(df['Open'].iloc[i]); c = float(df['Close'].iloc[i])
-        body_atr = abs(c - o) / atr
+        body_break = abs(c - o) / atr
+        body_next = (abs(float(df['Close'].iloc[i + 1]) - float(df['Open'].iloc[i + 1])) / atr
+                     if i + 1 < len(df) else 0.0)
+        body_atr = max(body_break, body_next)  # window [break, break+1]
         if direction == 'bullish':
             close_beyond = c - float(broken_price)
         else:
             close_beyond = float(broken_price) - c
         close_beyond_atr = max(close_beyond, 0.0) / atr
-        excess = close_beyond_atr / event_min
-        if excess >= 2.5 and body_atr >= 1.0:
+        excess = body_atr / event_min  # times over the required body floor
+        if excess >= 2.5:
             tier = 'strong'
         elif excess >= 1.5:
             tier = 'solid'

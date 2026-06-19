@@ -11,10 +11,10 @@
     "state": "down",
     "flip_unconfirmed": false,
     "ranging": false,
-    "n_events": 4,
+    "n_events": 3,
     "n_choch": 1,
     "n_range_bos": 0,
-    "n_plain_bos": 3
+    "n_plain_bos": 2
   },
   "decimals": 3,
   "input_rows": [
@@ -4834,7 +4834,7 @@
     "last_bos": {
       "kind": "BOS",
       "direction": "down",
-      "ts": "2024-07-30T16:00:00+00:00",
+      "ts": "2024-07-31T04:00:00+00:00",
       "tier": "BOS"
     },
     "label": "H1 trend DOWN",
@@ -4869,20 +4869,7 @@
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
-        "candle_ts": "2024-07-17T23:00:00+00:00",
-        "impulse_start_ts": "2024-07-17T01:00:00+00:00",
-        "broken_swing_price": 156.147,
-        "broken_swing_ts": "2024-07-17T13:00:00+00:00",
-        "broken_was_wall": false,
-        "reversal_pct": 0.0,
-        "trend_after": "bearish",
-        "chop": false
-      },
-      {
-        "type": "BOS",
-        "tier": "BOS",
-        "direction": "bearish",
-        "candle_ts": "2024-07-30T16:00:00+00:00",
+        "candle_ts": "2024-07-31T04:00:00+00:00",
         "impulse_start_ts": "2024-07-30T12:00:00+00:00",
         "broken_swing_price": 153.612,
         "broken_swing_ts": "2024-07-30T00:00:00+00:00",

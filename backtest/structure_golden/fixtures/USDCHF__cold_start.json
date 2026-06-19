@@ -11,8 +11,8 @@
     "state": "down",
     "flip_unconfirmed": false,
     "ranging": false,
-    "n_events": 3,
-    "n_choch": 1,
+    "n_events": 2,
+    "n_choch": 0,
     "n_range_bos": 0,
     "n_plain_bos": 2
   },
@@ -508,7 +508,7 @@
     "choch_ts": null,
     "choch_level": null,
     "choch_from_zone": false,
-    "choch_flip_count": 1,
+    "choch_flip_count": 0,
     "defended": 0.89314,
     "broken_swing_ts": null,
     "last_bos": {
@@ -530,19 +530,6 @@
         "broken_was_wall": false,
         "reversal_pct": 0.0,
         "trend_after": "bearish",
-        "chop": false
-      },
-      {
-        "type": "CHoCH",
-        "tier": "CHoCH",
-        "direction": "bullish",
-        "candle_ts": "2024-06-03T11:00:00+00:00",
-        "impulse_start_ts": "2024-06-03T06:00:00+00:00",
-        "broken_swing_price": 0.90093,
-        "broken_swing_ts": "2024-06-03T06:00:00+00:00",
-        "broken_was_wall": false,
-        "reversal_pct": 0.0,
-        "trend_after": "bullish",
         "chop": false
       },
       {

@@ -76,6 +76,16 @@ MIN_LEG_ATR_MULT = 1.5
 # STRUCTURE_CHOCH_ATR_MULT, defined with the v2 engine below.)
 BOS_ATR_MULT = 0.4
 
+# BODY GATE (replaces distance as the strength test). A break only fires if the
+# CANDLE BODY (|close-open|) of the break candle OR the candle right after it
+# (whichever is larger) is >= the event's body multiple * H1 ATR. Body measures
+# displacement/conviction; distance-past-the-level does not. The close-beyond
+# check (BOS_ATR_MULT / STRUCTURE_CHOCH_ATR_MULT) is RETAINED as the validity
+# trigger (did a body close past the swing at all); the body gate is the added
+# strength filter. Window = [break, break+1]; at the live edge (no break+1 bar
+# yet) the gate uses the break candle alone. See STRUCTURE_CHOCH_BODY_ATR_MULT.
+BOS_BODY_ATR_MULT = 1.0
+
 # Premium / discount thresholds for the CHoCH zone gate. A CHoCH is valid
 # only if the reversal high (down CHoCH) sits in the top 25% of the dealing
 # range, or the reversal low (up CHoCH) sits in the bottom 25%.
@@ -445,6 +455,10 @@ def compute_pd_position(price: float, walls: Dict[str, Any]) -> Dict[str, Any]:
 # by >= this to count as a CHoCH. 1.0 ATR chosen on replay.
 STRUCTURE_CHOCH_ATR_MULT  = 1.0
 
+# CHoCH body gate (see BOS_BODY_ATR_MULT). A CHoCH flips the whole bias, so it
+# demands more force than a continuation BOS — 1.5 ATR (ICT displacement default).
+STRUCTURE_CHOCH_BODY_ATR_MULT = 1.5
+
 # Failure-window lock distance (H1 ATR units). Window closes permanently
 # once price runs this far past the broken level (away from origin).
 # = MIN_LEG_ATR_MULT: one full structural leg, the distance at which price
@@ -533,6 +547,22 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     closes = df["Close"].to_numpy(dtype=float)
     opens  = df["Open"].to_numpy(dtype=float)
     n = len(df)
+
+    def _body_gate_ok(break_idx: int, body_mult: float) -> bool:
+        """Body gate (option B): the break candle OR the candle right after it
+        must have a body (|close-open|) >= body_mult * atr. At the live edge
+        (no break+1 bar) the gate uses the break candle alone. Fails open if
+        atr is missing/non-positive (never silently drop a structural break)."""
+        if atr is None or atr <= 0:
+            return True
+        floor = body_mult * atr
+        b0 = abs(closes[break_idx] - opens[break_idx])
+        if b0 >= floor:
+            return True
+        nxt = break_idx + 1
+        if nxt < n and abs(closes[nxt] - opens[nxt]) >= floor:
+            return True
+        return False
 
     price_now = float(closes[-1])
     pdc = compute_pd_confirmed(price_now, {"h4_range": h4_range or {}})
@@ -707,7 +737,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         if state == _UP and defended is not None and rearm_block_dir != _DOWN:
             # Gap-open guard: open must be above defended — if price gapped
             # below the swing at open, no candle traded through it (not SMC).
-            if c < defended - choch_disp and opens[ci] >= defended:
+            if c < defended - choch_disp and opens[ci] >= defended \
+                    and _body_gate_ok(ci, STRUCTURE_CHOCH_BODY_ATR_MULT):
                 rev_idx = recent_high["idx"] if recent_high else leg_start
                 choch = True
                 ts_now = _ts_iso(df, ci)
@@ -738,7 +769,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         elif state == _DOWN and defended is not None and rearm_block_dir != _UP:
             # Gap-open guard: open must be below defended — if price gapped
             # above the swing at open, no candle traded through it (not SMC).
-            if c > defended + choch_disp and opens[ci] <= defended:
+            if c > defended + choch_disp and opens[ci] <= defended \
+                    and _body_gate_ok(ci, STRUCTURE_CHOCH_BODY_ATR_MULT):
                 rev_idx = recent_low["idx"] if recent_low else leg_start
                 choch = True
                 ts_now = _ts_iso(df, ci)
@@ -780,7 +812,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             broken_price = bos_break_low["price"]
             # Gap-open guard: open must be at or above the broken swing — if
             # price gapped below it at open, no candle traded through it.
-            if c < broken_price - bos_disp and opens[ci] >= broken_price:
+            if c < broken_price - bos_disp and opens[ci] >= broken_price \
+                    and _body_gate_ok(ci, BOS_BODY_ATR_MULT):
                 ts_now = _ts_iso(df, ci)
                 bos_tier = ("Range" if h4_floor is not None
                             and abs(broken_price - h4_floor) <= bos_disp
@@ -796,7 +829,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             broken_price = bos_break_high["price"]
             # Gap-open guard: open must be at or below the broken swing — if
             # price gapped above it at open, no candle traded through it.
-            if c > broken_price + bos_disp and opens[ci] <= broken_price:
+            if c > broken_price + bos_disp and opens[ci] <= broken_price \
+                    and _body_gate_ok(ci, BOS_BODY_ATR_MULT):
                 ts_now = _ts_iso(df, ci)
                 bos_tier = ("Range" if h4_ceiling is not None
                             and abs(broken_price - h4_ceiling) <= bos_disp
