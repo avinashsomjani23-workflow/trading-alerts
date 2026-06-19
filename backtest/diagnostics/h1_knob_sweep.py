@@ -136,11 +136,11 @@ def _alert_pnl(pair_conf, df, start, end, risk_usd, overrides) -> Dict[str, Any]
                  if r.get("entry_zone") == "proximal"
                  and float(r.get("score") or 0) >= SCORE_FLOOR]
     # "Filled" = a real position was held to a real exit. Exclude the SAME set the
-    # live reporting layer excludes (never_filled/distal_killed = no position ever
-    # opened; timeout/window_end = force-closed at an arbitrary price). Imported
-    # so there is ONE source of truth, not a hand-rolled list (the prior version
-    # only dropped never_filled, which inflated filled-count with distal_killed
-    # rows and dragged every metric toward zero).
+    # live reporting layer excludes (never_filled = no position ever opened;
+    # timeout/window_end = force-closed at an arbitrary price). Imported so there
+    # is ONE source of truth, not a hand-rolled list (the prior version only
+    # dropped never_filled, which inflated filled-count and dragged every metric
+    # toward zero).
     from backtest.h1_only_reporting import _EXCLUDE_REASONS
     filled = [r for r in prox_rows
               if r.get("exit_reason") not in _EXCLUDE_REASONS
