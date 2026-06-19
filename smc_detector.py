@@ -1660,11 +1660,16 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         }
 
     # TP2: next opposing swing past TP1, only if it is a DIFFERENT liquidity pool.
-    # Two opposing swings are the same pool when no intervening swing of the
-    # continuation type separates them — e.g. for SHORT, two lows with no swing
-    # high between them are the same cluster (double-bottom / tight consolidation).
-    # The structural separator is an intervening opposite-type swing in h1_swings
-    # between TP1's idx and TP2's idx. No new parameters: this is purely geometric.
+    # Two opposing swings are the same pool when EITHER:
+    #   (a) no intervening continuation-type swing separates them in h1_swings
+    #       — e.g. for SHORT, two lows with no swing high between them are one
+    #       cluster (double-bottom / tight consolidation), OR
+    #   (b) they sit within one equal-level tolerance band of each other — two
+    #       equal highs/lows are the same pool of resting liquidity even when a
+    #       tiny opposite blip technically separates them. This is the same band
+    #       the sweep engine uses to call two levels "equal" (no new parameter).
+    # TP2 is still the real next swing's PRICE — the band only DISQUALIFIES a
+    # candidate too close to TP1; it never becomes the target itself.
     tp2 = None
     if tp1_idx_in_opposing is not None and tp1_idx_in_opposing + 1 < len(opposing):
         tp1_sw = opposing[tp1_idx_in_opposing]
@@ -1677,7 +1682,15 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
             and tp1_sw['idx'] < s['idx'] < tp2_sw['idx']
             for s in h1_swings
         )
-        if has_separator:
+        # Equal-level band: TP2 must clear TP1 by more than the pair's
+        # equal-level tolerance. ATR-scaled, same constant as the sweep engine.
+        # Fail open: if ATR is unavailable, the band gate is skipped (a missing
+        # ATR must never silently drop a structurally valid TP2).
+        pair_type = pair_conf.get("pair_type", "forex")
+        h1_atr = compute_atr(df_h1)
+        tol = SWEEP_EQUAL_LEVEL_TOLERANCE_ATR.get(pair_type, 0.30) * h1_atr if h1_atr else None
+        beyond_band = tol is None or abs(tp2_sw['price'] - tp1) > tol
+        if has_separator and beyond_band:
             tp2 = tp2_sw['price']
 
     out = {
