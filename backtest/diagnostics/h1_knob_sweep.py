@@ -119,21 +119,42 @@ def _structure_counts(pair_conf, df, start, end, *, stride: int) -> Dict[str, in
             "n_choch": n_choch, "n_obs": len(obs)}
 
 
+# Live score gate. MIN_SCORE_TO_EMAIL=4 is live + mirrored in the backtest, so a
+# trade scoring < this would never have emailed and must not count in P&L.
+SCORE_FLOOR = 4.0
+
+
 def _alert_pnl(pair_conf, df, start, end, risk_usd, overrides) -> Dict[str, Any]:
     res = driver.walk_alerts(pair_conf, df, start, end, risk_usd=risk_usd,
                              overrides=overrides)
-    filled = [r for r in res.trade_rows
-              if r.get("exit_reason") not in (None, "never_filled")]
+    # PROXIMAL-ONLY: the 50% mean leg is excluded from every metric (trader
+    # decision 2026-06-19 — proximal is the live entry; the 50% A/B is not what
+    # we are tuning). The simulator still produces both rows; we just ignore the
+    # 50% rows here. Also apply the live score floor so P&L reflects only trades
+    # that would actually have emailed.
+    prox_rows = [r for r in res.trade_rows
+                 if r.get("entry_zone") == "proximal"
+                 and float(r.get("score") or 0) >= SCORE_FLOOR]
+    # "Filled" = a real position was held to a real exit. Exclude the SAME set the
+    # live reporting layer excludes (never_filled/distal_killed = no position ever
+    # opened; timeout/window_end = force-closed at an arbitrary price). Imported
+    # so there is ONE source of truth, not a hand-rolled list (the prior version
+    # only dropped never_filled, which inflated filled-count with distal_killed
+    # rows and dragged every metric toward zero).
+    from backtest.h1_only_reporting import _EXCLUDE_REASONS
+    filled = [r for r in prox_rows
+              if r.get("exit_reason") not in _EXCLUDE_REASONS
+              and r.get("exit_reason") is not None]
     sum_r = round(sum(float(r.get("r_realised") or 0) for r in filled), 4)
     sum_pnl = round(sum(float(r.get("pnl_usd") or 0) for r in filled), 2)
     wins = sum(1 for r in filled if (r.get("r_realised") or 0) > 0)
     wr = round(wins / len(filled), 4) if filled else 0.0
     exp = round(sum_r / len(filled), 4) if filled else 0.0
-    scores = [float(r.get("score") or 0) for r in res.trade_rows]
+    scores = [float(r.get("score") or 0) for r in prox_rows]
     avg_score = round(sum(scores) / len(scores), 3) if scores else 0.0
     # trade-set identity (for score-knob invariance assertion)
     tset = frozenset((r.get("pair"), r.get("ob_timestamp"), r.get("direction"),
-                      r.get("alert_ts")) for r in res.trade_rows)
+                      r.get("alert_ts")) for r in prox_rows)
     return {"n_alerts_total": res.counters["alerts_total"],
             "n_alerts_simulated": res.counters["alerts_simulated"],
             "n_trades_filled": len(filled),
@@ -290,10 +311,47 @@ def _write(knob, grid, rows, violations, invariant, scope, out_dir, meta):
                  "In-sample; diagnostic, not tuning truth.")
     lines.append("- `n_swings` is a window-end census of survivors, not a per-bar experience.")
     md_path.write_text("\n".join(lines), encoding="utf-8")
+    _append_findings(knob, rows, violations, meta)
     print(f"\n[h1] csv -> {csv_path}\n[h1] md  -> {md_path}", flush=True)
     if violations:
-        print(f"[h1] {len(violations)} SCOPE/RECON VIOLATION(S) â see report", flush=True)
+        print(f"[h1] {len(violations)} SCOPE/RECON VIOLATION(S) — see report", flush=True)
     return md_path
+
+
+# Persistent, cross-chat findings ledger. APPENDED after every sweep so the full
+# tuning exercise survives across conversations (one chat is not enough). One
+# block per sweep; one row per pair per grid value. Metrics are PROXIMAL-ONLY and
+# score-gated (>=4), matching _alert_pnl. Never overwritten — only appended.
+_FINDINGS_PATH = Path(__file__).parent / "SWEEP_FINDINGS.md"
+
+
+def _append_findings(knob, rows, violations, meta):
+    if not _FINDINGS_PATH.exists():
+        _FINDINGS_PATH.write_text(
+            "# Knob-Sweep Findings (persistent ledger)\n\n"
+            "Auto-appended after every sweep. Metrics are PROXIMAL-ONLY, "
+            "score-gated (>=4). Each block = one sweep run.\n",
+            encoding="utf-8")
+    stamp = pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    out = ["", "---", f"## {knob} — {meta['start']}..{meta['end']} "
+           f"(grid_mode {meta['grid_mode']}, risk ${meta['risk_usd']:.0f})",
+           f"_run {stamp}; pairs {meta['pairs']}_", ""]
+    if violations:
+        out.append(f"> ⚠️ {len(violations)} scope/recon violation(s) this run — "
+                   "see the per-run .md before trusting these numbers.")
+        out.append("")
+    out.append("| pair | value | base | filled | sumR | WR | exp_R | "
+               "avg_score | OBs | recon |")
+    out.append("|---|---|---|---|---|---|---|---|---|---|")
+    for r in rows:
+        out.append(f"| {r['pair']} | {r['grid_value']} | "
+                   f"{'✓' if r['baseline'] else ''} | {r['n_trades_filled']} | "
+                   f"{r['sum_r_realised']} | {r['win_rate']} | {r['expectancy_r']} | "
+                   f"{r['avg_logged_score']} | {r['n_obs']} | "
+                   f"{'ok' if r['recon_ok'] else 'FAIL'} |")
+    with open(_FINDINGS_PATH, "a", encoding="utf-8") as f:
+        f.write("\n".join(out) + "\n")
+    print(f"[h1] findings appended -> {_FINDINGS_PATH}", flush=True)
 
 
 def self_check() -> bool:
