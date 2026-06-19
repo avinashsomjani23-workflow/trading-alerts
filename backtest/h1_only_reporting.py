@@ -2148,6 +2148,9 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
         prox_fill_ts = _v(prox, "fill_ts") or _v(mid, "fill_ts")
         zr_dow = _day_of_week(prox_fill_ts or alert_ts)
         rows.append({
+            # Both zone serials so this row maps to both Trade tabs / the CSV.
+            "Proximal ID":             _v(prox, "setup_id"),
+            "50% ID":                  _v(mid,  "setup_id"),
             "Pair":                    pair,
             "OB Candle (IST)":         _to_ist_str(_v(prox, "ob_timestamp")),
             "Scan / Alert Time (IST)": _to_ist_str(alert_ts),
@@ -2207,11 +2210,10 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
     if not trades:
         pd.DataFrame([{"info": "no trades this run"}]).to_csv(path, index=False)
         return
-    # Stable global serial per row, assigned in run order. Lets a human reference
-    # a single setup ("T0007") without re-deriving it from pair+timestamp.
-    # CSV-only (not propagated into the OB/alert dicts) -- purely a readout aid.
-    for _i, _t in enumerate(trades, start=1):
-        _t["setup_id"] = f"T{_i:04d}"
+    # setup_id is stamped upstream in write_h1_only_report (on trades_all)
+    # BEFORE any consumer runs, so the same T#### appears in trades.csv, both
+    # Excel Trade tabs, the Zone Register, and the email vet-review table.
+    for _t in trades:
         # Self-describing headline membership. Stamped from the ONE eligibility
         # rule (_headline_exclusion) so any consumer of this file can reproduce
         # the email headline directly: sum(pnl_usd where eligible_for_headline)
@@ -2258,7 +2260,8 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 _EXCEL_COL_NAMES = {
-    # A: identifier
+    # A: identifiers
+    "setup_id":          "Setup ID",
     "pair":              "Currency Pair",
     # B–F: all timestamps, grouped for easy chart cross-reference
     "ob_time_ist":       "OB Candle (IST)",
@@ -2433,7 +2436,10 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
         # fill_session, ob_session, killzone_alignment = first 10 keys).
         _col_names_with_dow = dict(_EXCEL_COL_NAMES)
         _col_names_with_dow["day_of_week"] = "Day of Week"
-        _split_at = 10
+        # +1 vs the pre-setup_id layout: setup_id is now the first key, so the
+        # session/alignment block ends at index 11 (was 10). Keeps Day of Week
+        # in the same logical slot after killzone_alignment.
+        _split_at = 11
         desired = [c for c in list(_EXCEL_COL_NAMES.keys())[:_split_at]
                    + ["day_of_week"]
                    + list(_EXCEL_COL_NAMES.keys())[_split_at:]
@@ -2448,6 +2454,7 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
         mid_df  = out_df[out_df["Entry Type"] == _ENTRY_LABELS["50pct"]]   if "Entry Type" in out_df.columns else pd.DataFrame()
 
         col_widths = {
+            "Setup ID": 10,
             "Currency Pair": 14, "Direction": 10,
             "Fill Session": 13, "OB Session": 13, "Killzone Alignment": 18,
             "H1 Trend": 12, "Trend Alignment": 16,
@@ -2851,10 +2858,11 @@ def _vet_review_html(trades: List[Dict]) -> str:
     if not flagged:
         return "<p>Nothing flagged this week. All wins and losses behaved as expected.</p>"
 
-    rows = _table_row(["Pair", "Direction", "Session", "R Achieved", "What to look at"], header=True)
+    rows = _table_row(["Setup ID", "Pair", "Direction", "Session", "R Achieved", "What to look at"], header=True)
     for t, _, reason in flagged:
         direction = "Long" if t.get("direction") == "bullish" else "Short"
         rows += _table_row([
+            t.get("setup_id", "?"),
             t.get("pair", "?"), direction,
             t.get("session", "?"), _r(t.get("r_realised", 0)),
             reason,
@@ -3338,6 +3346,14 @@ def write_h1_only_report(
     trades_all = [t for t in raw_trades
                   if not _below_score_floor(t) and not t.get("ist_blocked")]
     trades = list(trades_all)
+    # Stable global serial per row, assigned in run order. ONE id per trade
+    # dict, stamped before any consumer reads it. trades_all, trades, prox/mid
+    # lists, the Excel frames, the zone register, and the email vet-review all
+    # filter these SAME dict objects, so the T#### maps identically everywhere.
+    # CSV-only would be useless to a human reading the Excel or email -- this is
+    # the single source of the identifier across every output.
+    for _i, _t in enumerate(trades_all, start=1):
+        _t["setup_id"] = f"T{_i:04d}"
     blocked_trades = [t for t in trades_all if t.get("news_blocked")]
     kz_blocked_trades = [t for t in trades_all if t.get("killzone_blocked")]
 
