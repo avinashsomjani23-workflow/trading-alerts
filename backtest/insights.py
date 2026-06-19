@@ -40,6 +40,30 @@ def _fmt_r(v: float) -> str:
     return f"{'+' if v >= 0 else ''}{v:.2f}R"
 
 
+def win_rate_pct(sub: pd.DataFrame, r_col: str = "r_realised") -> Optional[float]:
+    """Directional hit rate on RESOLVED trades: wins / (wins + losses).
+
+    Breakevens (r == 0) are scratches — risk removed, nothing won or lost — so
+    they are excluded from BOTH the numerator and the denominator. They are not
+    losses and must never drag win rate down. Counting them as the denominator
+    understates the strategy's real accuracy; counting them as losses is plain
+    wrong. (Expectancy keeps every trade — see compute_overall — so the BE
+    slots are never hidden from the bottom line.)
+
+    Returns None when there are no resolved trades (all BE or empty). Callers
+    render None as an em-dash, never as 0%. Matches weekly_review.py's
+    wins/(wins+losses) convention so backtest and live reports agree.
+    """
+    if sub.empty or r_col not in sub.columns:
+        return None
+    wins = int((sub[r_col] > 0).sum())
+    losses = int((sub[r_col] < 0).sum())
+    resolved = wins + losses
+    if resolved == 0:
+        return None
+    return round(wins / resolved * 100, 1)
+
+
 # ---------------------------------------------------------------------------
 # Core statistics
 # ---------------------------------------------------------------------------
@@ -116,7 +140,7 @@ def compute_overall(df: pd.DataFrame, r_col: str = "r_realised") -> Dict[str, An
         "wins":                  len(wins),
         "losses":                len(losses),
         "breakevens":            len(f) - len(wins) - len(losses),
-        "win_rate_pct":          round(len(wins) / len(f) * 100, 1),
+        "win_rate_pct":          win_rate_pct(f, r_col),
         "expectancy_r":          round(float(f[r_col].mean()), 3),
         "ci_lo_95":              ci_lo,
         "ci_hi_95":              ci_hi,
@@ -144,7 +168,6 @@ def pair_session_matrix(df: pd.DataFrame, r_col: str = "r_realised") -> List[Dic
     rows = []
     for (pair, session), grp in f.groupby(["pair", "session"]):
         n = len(grp)
-        wins = (grp[r_col] > 0).sum()
         exp = float(grp[r_col].mean())
         ci_lo, ci_hi = bootstrap_ci(grp[r_col].tolist())
 
@@ -160,7 +183,7 @@ def pair_session_matrix(df: pd.DataFrame, r_col: str = "r_realised") -> List[Dic
             "pair":          pair,
             "session":       session,
             "n":             n,
-            "win_rate_pct":  round(wins / n * 100, 1),
+            "win_rate_pct":  win_rate_pct(grp, r_col),
             "expectancy_r":  round(exp, 3),
             "ci_lo_95":      ci_lo,
             "ci_hi_95":      ci_hi,
@@ -204,12 +227,17 @@ def instrument_verdicts(df: pd.DataFrame, r_col: str = "r_realised") -> Dict[str
         m = compute_overall(sub, r_col)
         t = THRESHOLDS[group_name]
 
+        # win_rate_pct is None when no trade resolved (all breakevens). A group
+        # with no resolved trades cannot clear a WR gate -> treat as 0 for the
+        # comparison, which lands it in RED.
+        wr = m["win_rate_pct"] if m["win_rate_pct"] is not None else 0.0
+
         if (m["expectancy_r"] >= t["green"]["expectancy_r"] and
-                m["win_rate_pct"] >= t["green"]["win_rate_pct"] and
+                wr >= t["green"]["win_rate_pct"] and
                 m.get("ci_excludes_zero", False)):
             verdict = "GREEN"
         elif (m["expectancy_r"] >= t["yellow"]["expectancy_r"] and
-              m["win_rate_pct"] >= t["yellow"]["win_rate_pct"]):
+              wr >= t["yellow"]["win_rate_pct"]):
             verdict = "YELLOW"
         else:
             verdict = "RED"
@@ -321,11 +349,10 @@ def score_validation(df: pd.DataFrame, r_col: str = "r_realised") -> Dict[str, A
         sub = f[(f["score"] >= lo) & (f["score"] < hi)]
         if sub.empty:
             continue
-        wins = (sub[r_col] > 0).sum()
         buckets.append({
             "bucket":       label,
             "n":            len(sub),
-            "win_rate_pct": round(wins / len(sub) * 100, 1),
+            "win_rate_pct": win_rate_pct(sub, r_col),
             "expectancy_r": round(float(sub[r_col].mean()), 3),
         })
 
@@ -367,11 +394,10 @@ def group_comparison(df: pd.DataFrame, r_col: str = "r_realised") -> Dict[int, D
             continue
         vals = sub[r_col].tolist()
         ci_lo, ci_hi = bootstrap_ci(vals)
-        wins = (sub[r_col] > 0).sum()
         results[int(g)] = {
             "n":            len(sub),
             "expectancy_r": round(float(sub[r_col].mean()), 3),
-            "win_rate_pct": round(wins / len(sub) * 100, 1),
+            "win_rate_pct": win_rate_pct(sub, r_col),
             "ci_lo_95":     ci_lo,
             "ci_hi_95":     ci_hi,
             "max_dd_r":     max_drawdown_r(vals),
@@ -392,7 +418,6 @@ def entry_zone_comparison(df: pd.DataFrame, r_col: str = "r_realised") -> Dict[s
     for zone, sub in f.groupby("entry_zone"):
         vals = sub[r_col].tolist()
         ci_lo, ci_hi = bootstrap_ci(vals)
-        wins = (sub[r_col] > 0).sum()
 
         # Fill rate: how many alerts for this zone actually filled?
         if "exit_reason" in df.columns:
@@ -405,12 +430,55 @@ def entry_zone_comparison(df: pd.DataFrame, r_col: str = "r_realised") -> Dict[s
         results[str(zone)] = {
             "n":            len(sub),
             "fill_rate_pct": fill_rate,
-            "win_rate_pct": round(wins / len(sub) * 100, 1) if len(sub) else 0,
+            "win_rate_pct": win_rate_pct(sub, r_col),
             "expectancy_r": round(float(sub[r_col].mean()), 3) if len(sub) else 0,
             "ci_lo_95":     ci_lo,
             "ci_hi_95":     ci_hi,
         }
     return results
+
+
+# ---------------------------------------------------------------------------
+# OB freshness by touch count
+# ---------------------------------------------------------------------------
+
+# alert_seq is the OB's touch number at fire time (excursion-based, same re-arm
+# rule as live mitigation): 1 = fresh OB, 2 = touched once before, 3 = touched
+# twice before. The engine kills a zone on the 3rd proximal touch, so 3 is the
+# deepest a trade can fire on.
+_FRESHNESS_BUCKETS = [
+    (1, "Fresh (1st touch)"),
+    (2, "Touched once (2nd)"),
+    (3, "Touched twice (3rd)"),
+]
+
+
+def ob_freshness_comparison(df: pd.DataFrame, r_col: str = "r_realised") -> List[Dict[str, Any]]:
+    """Win/loss by OB touch count at fire time.
+
+    One row per touch bucket (fresh / touched-once / touched-twice), ALWAYS all
+    three — an empty bucket reports zeros, which is itself the finding: the
+    system almost never trades a re-touched OB. Filled+resolved trades only
+    (win_rate convention: wins/(wins+losses), breakevens excluded).
+    """
+    f = _filled(df)
+    rows: List[Dict[str, Any]] = []
+    for seq, label in _FRESHNESS_BUCKETS:
+        sub = f[f["alert_seq"] == seq] if ("alert_seq" in f.columns and not f.empty) else f.iloc[0:0]
+        wins = int((sub[r_col] > 0).sum()) if not sub.empty else 0
+        losses = int((sub[r_col] < 0).sum()) if not sub.empty else 0
+        be = int((sub[r_col] == 0).sum()) if not sub.empty else 0
+        rows.append({
+            "touch":        seq,
+            "label":        label,
+            "n":            len(sub),
+            "wins":         wins,
+            "losses":       losses,
+            "breakevens":   be,
+            "win_rate_pct": win_rate_pct(sub, r_col),
+            "expectancy_r": round(float(sub[r_col].mean()), 3) if len(sub) else None,
+        })
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -489,8 +557,11 @@ def generate_verdict(
     if overall.get("expectancy_r", 0) < 0.3:
         issues.append(f"Expectancy {overall.get('expectancy_r')}R below Forex threshold of +0.3R.")
 
-    if overall.get("win_rate_pct", 0) < 45:
-        issues.append(f"Win rate {overall.get('win_rate_pct')}% below 45% threshold.")
+    wr_overall = overall.get("win_rate_pct")
+    if wr_overall is None:
+        issues.append("No trade resolved (all breakevens) — win rate undefined.")
+    elif wr_overall < 45:
+        issues.append(f"Win rate {wr_overall}% below 45% threshold.")
 
     # 2. Instrument-specific verdicts
     for instr, iv in instrument_v.items():

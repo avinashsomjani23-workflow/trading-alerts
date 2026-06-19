@@ -24,6 +24,8 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
+from backtest.insights import win_rate_pct as _win_rate
+
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parent
 RESULTS_DIR = _HERE / "results"
@@ -92,10 +94,9 @@ def _session_breakdown(df: pd.DataFrame, r_col: str = "r_realised") -> Dict[str,
         return {}
     out = {}
     for sess, grp in filled.groupby("session"):
-        wins = grp[grp[r_col] > 0]
         out[sess] = {
             "trades": int(len(grp)),
-            "win_rate_pct": round(len(wins) / len(grp) * 100, 1) if len(grp) else 0,
+            "win_rate_pct": _win_rate(grp, r_col),  # wins/(wins+losses); None if all BE
             "expectancy_r": round(float(grp[r_col].mean()), 3) if len(grp) else 0,
         }
     return out
@@ -242,6 +243,9 @@ def _build_entry(run_dir: Path) -> Optional[Dict[str, Any]]:
 
 
 def _fmt_pct(v, suffix="%") -> str:
+    # None = win rate undefined (no resolved trade, all breakevens). Em-dash.
+    if v is None:
+        return "—"
     return f"{v:.1f}{suffix}"
 
 

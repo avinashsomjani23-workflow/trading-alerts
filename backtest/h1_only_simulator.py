@@ -512,6 +512,37 @@ def _simulate_single_entry(
     # distal kill: doing so (it previously anchored on the OB candle with a raw
     # wick) double-counted the impulse leg and diverged from live. One concept,
     # one implementation -- the engine owns mitigation.
+
+    # ── Alert-candle distal-touch gate (2026-06-19) ─────────────────────────
+    # Live, the alert email is sent only AFTER the alert bar closes. A trader
+    # reading that email re-checks the setup against the just-closed candle: if
+    # that candle traded into the OB's DISTAL (far) line, the zone is spent /
+    # violated and no email goes out. The backtest must mirror this -- otherwise
+    # it sends an alert and fills next bar into a setup a live trader would never
+    # have received (e.g. EURUSD 2024-07-03 06:00: alert candle high 1.07515
+    # tagged distal 1.07492, then SL'd next bar -> -2R that never happens live).
+    #
+    # Rule (alert candle ONLY): drop the setup if the alert candle's wick TOUCHES
+    # the distal line. Touch, not close -- a wick into the far edge is enough.
+    #   SHORT (bearish OB, distal above): drop if alert_bar.high >= distal
+    #   LONG  (bullish OB, distal below): drop if alert_bar.low  <= distal
+    # Only the alert candle is checked here; later bars are handled by the
+    # normal fill/SL walk below.
+    distal_line = ob.get("distal_line")
+    if distal_line is not None and alert_ts in df_h1.index:
+        alert_bar = df_h1.loc[alert_ts]
+        distal_line = float(distal_line)
+        distal_touched = (
+            float(alert_bar["High"]) >= distal_line if bias == "SHORT"
+            else float(alert_bar["Low"]) <= distal_line
+        )
+        if distal_touched:
+            log_event("h1only_sim_skip", level="info", pair=pair,
+                      entry_zone=entry_zone, alert_ts=str(alert_ts),
+                      reason="alert_candle_touched_distal",
+                      distal=distal_line, bias=bias)
+            return None
+
     filled = False
     fill_ts: Optional[pd.Timestamp] = None
     fill_bar_idx = -1

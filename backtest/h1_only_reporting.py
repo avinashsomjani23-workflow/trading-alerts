@@ -16,6 +16,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
+from backtest.insights import win_rate_pct as _win_rate
+
 
 # ---------------------------------------------------------------------------
 # Aggregation helpers (used by summary.json + HTML)
@@ -132,7 +134,7 @@ def _aggregate_for_exit(trades: List[Dict[str, Any]], r_col: str,
         "wins":           int(len(wins)),
         "losses":         int(len(losses)),
         "breakevens":     int(len(bes)),
-        "win_rate_pct":   round(len(wins) / len(df) * 100, 1) if len(df) else 0,
+        "win_rate_pct":   _win_rate(df, r_col),
         "expectancy_r":   round(exp, 3),
         "expectancy_usd": round(exp * risk_usd, 2),
         "total_r":        round(float(df[r_col].sum()), 3),
@@ -155,11 +157,10 @@ def _per_pair_breakdown(trades: List[Dict[str, Any]], r_col: str,
     df = pd.DataFrame(filled)
     out = []
     for pair, sub in df.groupby("pair"):
-        wins = sub[sub[r_col] > 0]
         out.append({
             "pair":          pair,
             "trades":        int(len(sub)),
-            "win_rate_pct":  round(len(wins) / len(sub) * 100, 1) if len(sub) else 0,
+            "win_rate_pct":  _win_rate(sub, r_col),
             "expectancy_r":  round(float(sub[r_col].mean()), 3),
             "total_pnl_usd": round(float(sub[r_col].sum()) * risk_usd, 2),
         })
@@ -177,11 +178,10 @@ def _per_session_breakdown(trades: List[Dict[str, Any]], r_col: str,
         return []
     out = []
     for sess, sub in df.groupby("session"):
-        wins = sub[sub[r_col] > 0]
         out.append({
             "session":       sess,
             "trades":        int(len(sub)),
-            "win_rate_pct":  round(len(wins) / len(sub) * 100, 1) if len(sub) else 0,
+            "win_rate_pct":  _win_rate(sub, r_col),
             "expectancy_r":  round(float(sub[r_col].mean()), 3),
             "total_pnl_usd": round(float(sub[r_col].sum()) * risk_usd, 2),
         })
@@ -218,11 +218,10 @@ def _score_buckets(trades: List[Dict[str, Any]], r_col: str) -> List[Dict[str, A
         sub = df[df["bucket"] == label]
         if sub.empty:
             continue
-        wins = sub[sub[r_col] > 0]
         out.append({
             "score_bucket":   label,
             "trades":         int(len(sub)),
-            "win_rate_pct":   round(len(wins) / len(sub) * 100, 1) if len(sub) else 0,
+            "win_rate_pct":   _win_rate(sub, r_col),
             "expectancy_r":   round(float(sub[r_col].mean()), 3),
         })
     return out
@@ -363,16 +362,16 @@ def _findings_panel(trades: List[Dict[str, Any]],
     # 1. Headline result.
     pnl = sb.get("total_pnl_usd", 0)
     exp = sb.get("expectancy_r", 0)
-    wr  = sb.get("win_rate_pct", 0)
+    wr  = _wr_str(sb.get("win_rate_pct"))
     if pnl >= 0 and exp >= 0.3:
         findings.append(("good", f"Net <b>{_m(pnl)}</b> across {n} trades "
-                                 f"(avg {_r(exp)}, {wr:.0f}% WR). Edge present."))
+                                 f"(avg {_r(exp)}, {wr} WR). Edge present."))
     elif pnl >= 0:
         findings.append(("info", f"Net <b>{_m(pnl)}</b> across {n} trades "
-                                 f"(avg {_r(exp)}, {wr:.0f}% WR). Marginal — verify before sizing up."))
+                                 f"(avg {_r(exp)}, {wr} WR). Marginal — verify before sizing up."))
     else:
         findings.append(("bad", f"Net <b>{_m(pnl)}</b> across {n} trades "
-                                f"(avg {_r(exp)}, {wr:.0f}% WR). Edge missing this period."))
+                                f"(avg {_r(exp)}, {wr} WR). Edge missing this period."))
 
     # 2. Best exit policy. LIVE = r_realised (TP1 + BE@1R). The others are
     # study references — we report whether any beats the live policy.
@@ -403,19 +402,21 @@ def _findings_panel(trades: List[Dict[str, Any]],
         for (p, s), sub in df.groupby(["pair", "session"]):
             if len(sub) >= 3:
                 cells.append((p, s, len(sub), float(sub["r_realised"].mean()),
-                              (sub["r_realised"] > 0).sum() / len(sub) * 100))
+                              _win_rate(sub, "r_realised")))
         if cells:
             cells.sort(key=lambda x: x[3], reverse=True)
             p, s, nn, e, w = cells[0]
             if e > 0.3:
+                wr_txt = "—" if w is None else f"{w:.0f}%"
                 findings.append(("good",
                     f"Best edge: <b>{p} / {s}</b> ({nn} trades, "
-                    f"{w:.0f}% WR, avg {_r(e)})."))
+                    f"{wr_txt} WR, avg {_r(e)})."))
             p, s, nn, e, w = cells[-1]
             if e < -0.3 and len(cells) > 1:
+                wr_txt = "—" if w is None else f"{w:.0f}%"
                 findings.append(("bad",
                     f"Weakest cell: <b>{p} / {s}</b> ({nn} trades, "
-                    f"{w:.0f}% WR, avg {_r(e)}). Consider gating off."))
+                    f"{wr_txt} WR, avg {_r(e)}). Consider gating off."))
 
     # 4. Same-bar resolution among losers (H1-resolution artifact, NOT a leak).
     # A -1R loss that peaked >=+1R is necessarily intrabar: had +1R printed on an
@@ -488,11 +489,10 @@ def _killzone_alignment_table(trades: List[Dict[str, Any]], r_col: str
         sub = df[df["killzone_alignment"] == bucket]
         if sub.empty:
             continue
-        wins = sub[sub[r_col] > 0]
         out.append({
             "bucket":       bucket,
             "trades":       int(len(sub)),
-            "win_rate_pct": round(len(wins) / len(sub) * 100, 1) if len(sub) else 0,
+            "win_rate_pct": _win_rate(sub, r_col),
             "expectancy_r": round(float(sub[r_col].mean()), 3),
             "total_r":      round(float(sub[r_col].sum()), 3),
         })
@@ -511,7 +511,7 @@ def _killzone_alignment_html(trades: List[Dict[str, Any]], r_col: str) -> str:
         color = "#eafaf1" if r["expectancy_r"] >= 0 else "#fdf2f2"
         body += _table_row([
             r["bucket"], str(r["trades"]),
-            f"{r['win_rate_pct']:.0f}%",
+            _wr_str(r['win_rate_pct']),
             _r(r["expectancy_r"]),
             f"{r['total_r']:+.1f}R",
         ], color=color)
@@ -558,11 +558,10 @@ def _trend_alignment_table(trades: List[Dict[str, Any]], r_col: str
         sub = df[df["_trend_bucket"] == bucket]
         if sub.empty:
             continue
-        wins = sub[sub[r_col] > 0]
         out.append({
             "bucket":       bucket,
             "trades":       int(len(sub)),
-            "win_rate_pct": round(len(wins) / len(sub) * 100, 1) if len(sub) else 0,
+            "win_rate_pct": _win_rate(sub, r_col),
             "expectancy_r": round(float(sub[r_col].mean()), 3),
             "total_r":      round(float(sub[r_col].sum()), 3),
         })
@@ -582,7 +581,7 @@ def _trend_alignment_html(trades: List[Dict[str, Any]], r_col: str) -> str:
         color = "#eafaf1" if r["expectancy_r"] >= 0 else "#fdf2f2"
         body += _table_row([
             r["bucket"], str(r["trades"]),
-            f"{r['win_rate_pct']:.0f}%",
+            _wr_str(r['win_rate_pct']),
             _r(r["expectancy_r"]),
             f"{r['total_r']:+.1f}R",
         ], color=color)
@@ -610,11 +609,10 @@ def _fvg_state_table(trades: List[Dict[str, Any]], r_col: str
         sub = df[df["fvg_state"] == bucket]
         if sub.empty:
             continue
-        wins = sub[sub[r_col] > 0]
         out.append({
             "bucket":       bucket,
             "trades":       int(len(sub)),
-            "win_rate_pct": round(len(wins) / len(sub) * 100, 1) if len(sub) else 0,
+            "win_rate_pct": _win_rate(sub, r_col),
             "expectancy_r": round(float(sub[r_col].mean()), 3),
             "total_r":      round(float(sub[r_col].sum()), 3),
         })
@@ -692,11 +690,10 @@ _LOW_N_THRESHOLD = 10
 
 def _cf_aggregate(sub: "pd.DataFrame", risk_usd: float) -> Dict[str, Any]:
     if sub.empty:
-        return {"n": 0, "win_rate": 0.0, "avg_r": 0.0, "total_pnl": 0.0}
-    wins = sub[sub["r_realised"] > 0]
+        return {"n": 0, "win_rate": None, "avg_r": 0.0, "total_pnl": 0.0}
     return {
         "n":         int(len(sub)),
-        "win_rate":  len(wins) / len(sub) * 100,
+        "win_rate":  _win_rate(sub, "r_realised"),  # wins/(wins+losses); None if all BE
         "avg_r":     float(sub["r_realised"].mean()),
         "total_pnl": float(sub["r_realised"].sum()) * risk_usd,
     }
@@ -709,14 +706,23 @@ def _cf_row(label: str, sub_agg: Dict[str, Any], baseline: Dict[str, Any]
     if n == 0:
         return _table_row([label, "0", "—", "—", "—", "—"])
     low_n = " <i>(low n)</i>" if n < _LOW_N_THRESHOLD else ""
-    wr_delta = sub_agg["win_rate"] - baseline["win_rate"]
+    wr = sub_agg["win_rate"]
+    base_wr = baseline["win_rate"]
+    # WR is None when no trade resolved (all breakevens). Show em-dash; a delta
+    # needs both sides defined.
+    if wr is None:
+        wr_cell = "—"
+    elif base_wr is None:
+        wr_cell = f"{wr:.0f}%"
+    else:
+        wr_cell = f"{wr:.0f}% ({wr - base_wr:+.0f}pp)"
     pnl_delta = sub_agg["total_pnl"] - baseline["total_pnl"]
     pnl_color = "#27ae60" if pnl_delta >= 0 else "#e74c3c"
     row_color = "#eafaf1" if sub_agg["avg_r"] >= 0 else "#fdf2f2"
     return _table_row([
         label + low_n,
         str(n),
-        f"{sub_agg['win_rate']:.0f}% ({wr_delta:+.0f}pp)",
+        wr_cell,
         _r(sub_agg["avg_r"]),
         _m(sub_agg["total_pnl"]),
         f"<span style='color:{pnl_color};'>{_m(pnl_delta)}</span>",
@@ -830,7 +836,7 @@ def _counterfactual_html(trades: List[Dict[str, Any]], risk_usd: float) -> str:
     # Baseline row at top.
     baseline_row = _table_row([
         "<b>Baseline (no filter)</b>", str(baseline["n"]),
-        f"{baseline['win_rate']:.0f}%",
+        "—" if baseline["win_rate"] is None else f"{baseline['win_rate']:.0f}%",
         _r(baseline["avg_r"]),
         _m(baseline["total_pnl"]),
         "—",
@@ -884,7 +890,7 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
         "Section":      "Baseline",
         "Filter":       "All filled trades (no filter)",
         "Trades":       baseline["n"],
-        "Win Rate %":   round(baseline["win_rate"], 1),
+        "Win Rate %":   round(baseline["win_rate"], 1) if baseline["win_rate"] is not None else None,
         "Win Rate Delta (pp)": 0.0,
         "Avg R":        round(baseline["avg_r"], 3),
         "Total P&L":    round(baseline["total_pnl"], 2),
@@ -966,8 +972,10 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
                 "Section":      sect_label,
                 "Filter":       label,
                 "Trades":       agg["n"],
-                "Win Rate %":   round(agg["win_rate"], 1) if agg["n"] else None,
-                "Win Rate Delta (pp)": round(agg["win_rate"] - baseline["win_rate"], 1) if agg["n"] else None,
+                "Win Rate %":   round(agg["win_rate"], 1) if agg["win_rate"] is not None else None,
+                "Win Rate Delta (pp)": (round(agg["win_rate"] - baseline["win_rate"], 1)
+                                        if agg["win_rate"] is not None
+                                        and baseline["win_rate"] is not None else None),
                 "Avg R":        round(agg["avg_r"], 3) if agg["n"] else None,
                 "Total P&L":    round(agg["total_pnl"], 2) if agg["n"] else None,
                 "P&L Delta":    round(agg["total_pnl"] - baseline["total_pnl"], 2) if agg["n"] else None,
@@ -1145,7 +1153,7 @@ def _exit_policy_html(trades: List[Dict[str, Any]], risk_usd: float) -> str:
         label = f"<b>{r['policy']}</b>"
         body += _table_row([
             label,
-            f"{r.get('win_rate_pct', 0):.0f}%",
+            _wr_str(r.get('win_rate_pct')),
             _r(r.get("expectancy_r", 0)),
             f"{r.get('total_r', 0):+.1f}R",
             f"<b style='color:{'#27ae60' if pnl >= 0 else '#e74c3c'};'>{_m(pnl)}</b>",
@@ -1341,20 +1349,20 @@ def _flat_breakdown_row(label: str, sub: pd.DataFrame, r_col: str) -> str:
     if n == 0:
         return (f"<tr style='color:#bbb;'>"
                 f"<td><b>{label}</b></td><td>0</td><td>—</td><td>—</td></tr>")
-    wins = (sub[r_col] > 0).sum()
-    wr   = wins / n * 100
+    wr = _win_rate(sub, r_col)  # wins/(wins+losses); None if all breakevens
     exp  = sub[r_col].mean()
-    if wr >= 50:
-        bg = "#eafaf1"
-    elif wr >= 40:
-        bg = "#fef9e7"
+    # Color on WR when defined; neutral when undefined (no resolved trade).
+    if wr is None:
+        bg = "#f4f4f4"
+        wr_str = "—"
     else:
-        bg = "#fdf2f2"
+        bg = "#eafaf1" if wr >= 50 else "#fef9e7" if wr >= 40 else "#fdf2f2"
+        wr_str = f"{wr:.0f}%"
     sign = "+" if exp >= 0 else ""
     return (f"<tr style='background:{bg};'>"
             f"<td><b>{label}</b></td>"
             f"<td>{n}</td>"
-            f"<td>{wr:.0f}%</td>"
+            f"<td>{wr_str}</td>"
             f"<td>{sign}{exp:.2f}R</td></tr>")
 
 
@@ -1416,19 +1424,18 @@ def _pair_session_matrix_html(trades: List[Dict[str, Any]], r_col: str) -> str:
         if n == 0:
             return ("<td style='text-align:center;color:#ccc;font-size:11px;'>"
                     "&mdash;</td>")
-        wins = (sub[r_col] > 0).sum()
-        wr = wins / n * 100
+        wr = _win_rate(sub, r_col)  # wins/(wins+losses); None if all breakevens
         exp = sub[r_col].mean()
-        if wr >= 50:
-            bg = "#eafaf1"
-        elif wr >= 40:
-            bg = "#fef9e7"
+        if wr is None:
+            bg = "#f4f4f4"
+            wr_str = "&mdash;"
         else:
-            bg = "#fdf2f2"
+            bg = "#eafaf1" if wr >= 50 else "#fef9e7" if wr >= 40 else "#fdf2f2"
+            wr_str = f"{wr:.0f}%"
         sign = "+" if exp >= 0 else ""
         return (f"<td style='background:{bg};text-align:center;'>"
                 f"<div style='font-size:11px;color:#888;'>{n}t</div>"
-                f"<div style='font-weight:600;'>{wr:.0f}%</div>"
+                f"<div style='font-weight:600;'>{wr_str}</div>"
                 f"<div style='font-size:11px;'>{sign}{exp:.2f}R</div>"
                 f"</td>")
 
@@ -1543,7 +1550,7 @@ def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
             n_filled = len(filled_sub)
             total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
             wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
-            wr = (wins / n_filled * 100) if n_filled else None
+            wr = _win_rate(filled_sub, "r_realised") if n_filled else None
             sign = "+" if total_r >= 0 else ""
             wr_str = f"{wr:.0f}%" if wr is not None else "&mdash;"
             r_color = "#27ae60" if total_r > 0 else ("#e74c3c" if total_r < 0 else "#888")
@@ -1594,7 +1601,7 @@ def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
             n_filled = len(filled_sub)
             total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
             wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
-            wr = (wins / n_filled * 100) if n_filled else None
+            wr = _win_rate(filled_sub, "r_realised") if n_filled else None
             hour_data.append((int(hour), n_alerts, n_filled, wins, wr, total_r))
         hour_data.sort()
         for hour, n_alerts, n_filled, wins, wr, total_r in hour_data:
@@ -1736,7 +1743,7 @@ def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
             n_filled = len(filled_sub)
             total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
             wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
-            wr = (wins / n_filled * 100) if n_filled else None
+            wr = _win_rate(filled_sub, "r_realised") if n_filled else None
             hour_data.append((int(hour), n_alerts, n_filled, wins, wr, total_r))
         hour_data.sort()
         for hour, n_alerts, n_filled, wins, wr, total_r in hour_data:
@@ -1778,7 +1785,7 @@ def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
             n_filled = len(filled_sub)
             total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
             wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
-            wr = (wins / n_filled * 100) if n_filled else None
+            wr = _win_rate(filled_sub, "r_realised") if n_filled else None
             sign = "+" if total_r >= 0 else ""
             wr_str = f"{wr:.0f}%" if wr is not None else "&mdash;"
             r_color = "#27ae60" if total_r > 0 else ("#e74c3c" if total_r < 0 else "#888")
@@ -1976,16 +1983,16 @@ def _structure_event_breakdown_html(trades: List[Dict[str, Any]], r_col: str) ->
     seen = []
     for (tier, tag), sub in df.groupby(["bos_tier", "bos_tag"]):
         n = len(sub)
-        wins = (sub[r_col] > 0).sum()
-        wr = wins / n * 100 if n else 0
+        wr = _win_rate(sub, r_col)  # wins/(wins+losses); None if all breakevens
         exp = float(sub[r_col].mean()) if n else 0
         total = float(sub[r_col].sum()) * 250  # default 1R = $250 for display
         bg = "#eafaf1" if exp >= 0 else "#fdf2f2"
         seen.append((tier, tag, n, wr, exp))
+        wr_str = "—" if wr is None else f"{wr:.0f}%"
         rows += (f"<tr style='background:{bg};'>"
                  f"<td><b>{tier} {tag}</b></td>"
                  f"<td>{n}</td>"
-                 f"<td>{wr:.0f}%</td>"
+                 f"<td>{wr_str}</td>"
                  f"<td>{_r(exp)}</td>"
                  f"<td>{_m(total)}</td></tr>")
 
@@ -2611,6 +2618,12 @@ def _r(v: float) -> str:
     return f"{sign}{v:.2f}R"
 
 
+def _wr_str(v: Optional[float]) -> str:
+    """Render a win-rate value. None (no resolved trade — all breakevens) shows
+    as an em-dash, never 0%."""
+    return "—" if v is None else f"{v:.0f}%"
+
+
 def _table_row(cells: List[str], header: bool = False, color: str = "") -> str:
     tag = "th" if header else "td"
     style = f" style='background:{color};'" if color else ""
@@ -2647,7 +2660,7 @@ def _score_table_html(buckets: List[Dict]) -> str:
         color = "#eafaf1" if b["expectancy_r"] >= 0 else "#fdf2f2"
         rows += _table_row([
             b["score_bucket"], str(b["trades"]),
-            f"{b['win_rate_pct']:.0f}%", _r(b["expectancy_r"]),
+            _wr_str(b['win_rate_pct']), _r(b["expectancy_r"]),
         ], color=color)
     return f"<table><thead>{rows}</thead></table>"  # already has header in rows
 
@@ -2794,8 +2807,8 @@ def _entry_comparison_html(sb_prox: Dict, sb_mid: Dict,
              f"{fill_prox['filled']} ({fill_prox['fill_rate_pct']:.0f}%)",
              f"{fill_mid['filled']} ({fill_mid['fill_rate_pct']:.0f}%)"),
         _row("Win rate (LIVE: TP1+BE@1R)",
-             f"{sb_prox.get('win_rate_pct', 0):.0f}%",
-             f"{sb_mid.get('win_rate_pct', 0):.0f}%"),
+             _wr_str(sb_prox.get('win_rate_pct')),
+             _wr_str(sb_mid.get('win_rate_pct'))),
         _row("Avg R (LIVE: TP1+BE@1R)",
              _r(sb_prox.get("expectancy_r", 0)),
              _r(sb_mid.get("expectancy_r", 0))),
@@ -2900,7 +2913,7 @@ def _zone_block_html(
     n         = sb_realised.get("trades", 0)
     total_pnl = sb_realised.get("total_pnl_usd", 0)
     exp_r     = sb_realised.get("expectancy_r", 0)
-    wr        = sb_realised.get("win_rate_pct", 0)
+    wr        = _wr_str(sb_realised.get("win_rate_pct"))
     wins      = sb_realised.get("wins", 0)
     losses    = sb_realised.get("losses", 0)
     bes       = sb_realised.get("breakevens", 0)
@@ -2931,7 +2944,7 @@ def _zone_block_html(
       {_m(total_pnl)}
     </div>
     <div style="font-size:13px;color:#666;">
-      <b>{n}</b> filled &middot; <b>{wr:.0f}%</b> WR &middot; <b>{_r(exp_r)}</b> avg &middot;
+      <b>{n}</b> filled &middot; <b>{wr}</b> WR &middot; <b>{_r(exp_r)}</b> avg &middot;
       {wins}W / {losses}L / {bes}BE
     </div>
   </div>
@@ -3209,14 +3222,14 @@ def _build_group_html(
       <div class="label">Proximal entry</div>
       <div class="val" style="color:{pnl_color_prox};">{_m(total_pnl_prox)}</div>
       <div class="meta">{n_prox_filled} filled &middot;
-        {sb_prox.get('win_rate_pct', 0):.0f}% won &middot;
+        {_wr_str(sb_prox.get('win_rate_pct'))} won &middot;
         avg {_r(sb_prox.get('expectancy_r', 0))} ({_m(sb_prox.get('expectancy_usd', 0))}/trade)</div>
     </div>
     <div class="summary-card" style="border-left:4px solid #34495e;">
       <div class="label">50% mean entry</div>
       <div class="val" style="color:{pnl_color_mid};">{_m(total_pnl_mid)}</div>
       <div class="meta">{n_mid_filled} filled &middot;
-        {sb_mid.get('win_rate_pct', 0):.0f}% won &middot;
+        {_wr_str(sb_mid.get('win_rate_pct'))} won &middot;
         avg {_r(sb_mid.get('expectancy_r', 0))} ({_m(sb_mid.get('expectancy_usd', 0))}/trade)</div>
     </div>
   </div>
@@ -3609,14 +3622,14 @@ def write_h1_only_report(
       <div class="label">Proximal entry</div>
       <div class="val" style="color:{pnl_color_prox};">{_m(total_pnl_prox)}</div>
       <div class="meta">{n_prox_filled} filled &middot;
-        {sb_prox.get('win_rate_pct', 0):.0f}% won &middot;
+        {_wr_str(sb_prox.get('win_rate_pct'))} won &middot;
         avg {_r(sb_prox.get('expectancy_r', 0))} ({_m(sb_prox.get('expectancy_usd', 0))}/trade)</div>
     </div>
     <div class="summary-card" style="border-left:4px solid #34495e;">
       <div class="label">50% mean entry</div>
       <div class="val" style="color:{pnl_color_mid};">{_m(total_pnl_mid)}</div>
       <div class="meta">{n_mid_filled} filled &middot;
-        {sb_mid.get('win_rate_pct', 0):.0f}% won &middot;
+        {_wr_str(sb_mid.get('win_rate_pct'))} won &middot;
         avg {_r(sb_mid.get('expectancy_r', 0))} ({_m(sb_mid.get('expectancy_usd', 0))}/trade)</div>
     </div>
   </div>

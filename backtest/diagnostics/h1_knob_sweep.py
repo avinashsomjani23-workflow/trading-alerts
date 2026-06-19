@@ -148,7 +148,11 @@ def _alert_pnl(pair_conf, df, start, end, risk_usd, overrides) -> Dict[str, Any]
     sum_r = round(sum(float(r.get("r_realised") or 0) for r in filled), 4)
     sum_pnl = round(sum(float(r.get("pnl_usd") or 0) for r in filled), 2)
     wins = sum(1 for r in filled if (r.get("r_realised") or 0) > 0)
-    wr = round(wins / len(filled), 4) if filled else 0.0
+    losses = sum(1 for r in filled if (r.get("r_realised") or 0) < 0)
+    # Win rate on RESOLVED trades only: breakevens (r == 0) are scratches, not
+    # losses, so they leave both numerator and denominator. None if all BE.
+    resolved = wins + losses
+    wr = round(wins / resolved, 4) if resolved else None
     exp = round(sum_r / len(filled), 4) if filled else 0.0
     scores = [float(r.get("score") or 0) for r in prox_rows]
     avg_score = round(sum(scores) / len(scores), 3) if scores else 0.0

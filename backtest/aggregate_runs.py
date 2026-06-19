@@ -81,6 +81,7 @@ def _build_verdict_md(
     score_v: Dict,
     group_comp: Dict,
     entry_comp: Dict,
+    freshness: List,
     confluence: Dict,
     regime_v: Dict,
     n_runs: int,
@@ -93,6 +94,11 @@ def _build_verdict_md(
             return "n/a"
         sign = "+" if v >= 0 else ""
         return f"{sign}{v:.2f}{unit}"
+
+    def _wr(v):
+        # Win rate is None when no trade resolved (all breakevens). Show an
+        # em-dash, never 0% — a breakeven-only group has no accuracy to report.
+        return "—" if v is None else f"{v:.1f}%"
 
     lines = [
         "# Backtest Verdict",
@@ -138,7 +144,7 @@ def _build_verdict_md(
         f"| Metric | Value | Threshold (Forex) |",
         f"|--------|-------|------------------|",
         f"| Filled trades | {n} | Target: 200+ |",
-        f"| Win rate | {overall.get('win_rate_pct', 0):.1f}% | ≥ 45% |",
+        f"| Win rate | {_wr(overall.get('win_rate_pct'))} | ≥ 45% |",
         f"| Expectancy | {_fmt(overall.get('expectancy_r'))} | ≥ +0.3R |",
         f"| 95% CI on expectancy | {ci_str} | Lower bound > 0 |",
         f"| CI excludes zero? | {'Yes' if overall.get('ci_excludes_zero') else 'No'} | Must be Yes |",
@@ -162,7 +168,7 @@ def _build_verdict_md(
                 f"| Metric | Value | Threshold |",
                 f"|--------|-------|-----------|",
                 f"| Trades | {iv.get('n', 0)} | — |",
-                f"| Win rate | {iv.get('win_rate_pct', 0):.1f}% | ≥ {t['green']['win_rate_pct']}% |",
+                f"| Win rate | {_wr(iv.get('win_rate_pct'))} | ≥ {t['green']['win_rate_pct']}% |",
                 f"| Expectancy | {_fmt(iv.get('expectancy_r'))} | ≥ {_fmt(t['green']['expectancy_r'])} |",
                 f"| CI excludes zero? | {'Yes' if iv.get('ci_excludes_zero') else 'No'} | Must be Yes |",
                 "",
@@ -181,7 +187,7 @@ def _build_verdict_md(
             ci = f"[{_fmt(s.get('ci_lo_95'))}, {_fmt(s.get('ci_hi_95'))}]" if s.get("ci_lo_95") is not None else "n/a"
             label = group_labels.get(g, f"Group {g}")
             lines.append(
-                f"| {label} | {s['n']} | {s['win_rate_pct']:.1f}% "
+                f"| {label} | {s['n']} | {_wr(s['win_rate_pct'])} "
                 f"| {_fmt(s['expectancy_r'])} | {ci} | {_fmt(s['max_dd_r'])} |"
             )
         lines += ["", "*All three groups should be positive. Decline Group 1 → 3 means era-dependency.*", ""]
@@ -202,7 +208,7 @@ def _build_verdict_md(
             eligible = "✅ Yes" if row.get("live_eligible") else "No"
             lines.append(
                 f"| {row['pair']} | {row['session']} | {badge} {row['n']} "
-                f"| {row['win_rate_pct']:.1f}% | {_fmt(row['expectancy_r'])} | {ci} | {eligible} |"
+                f"| {_wr(row['win_rate_pct'])} | {_fmt(row['expectancy_r'])} | {ci} | {eligible} |"
             )
         lines.append("")
 
@@ -224,7 +230,7 @@ def _build_verdict_md(
         ]
         for b in sv["buckets"]:
             lines.append(
-                f"| {b['bucket']} | {b['n']} | {b['win_rate_pct']:.1f}% | {_fmt(b['expectancy_r'])} |"
+                f"| {b['bucket']} | {b['n']} | {_wr(b['win_rate_pct'])} | {_fmt(b['expectancy_r'])} |"
             )
         lines.append("")
 
@@ -259,7 +265,27 @@ def _build_verdict_md(
             fill = f"{ez.get('fill_rate_pct', 0):.1f}%" if ez.get("fill_rate_pct") is not None else "n/a"
             lines.append(
                 f"| {zone} | {ez['n']} | {fill} "
-                f"| {ez['win_rate_pct']:.1f}% | {_fmt(ez['expectancy_r'])} | {ci} |"
+                f"| {_wr(ez['win_rate_pct'])} | {_fmt(ez['expectancy_r'])} | {ci} |"
+            )
+        lines.append("")
+
+    # --- OB freshness by touch count ---
+    if freshness:
+        lines += [
+            "## OB freshness (win/loss by touch count)",
+            "",
+            "Touch number of the OB at fire time. Fresh = 1st approach. The engine "
+            "kills a zone on the 3rd touch, so 3 is the deepest a trade can fire on. "
+            "Empty buckets mean the system does not trade re-touched OBs.",
+            "",
+            "| Touch | Trades | Wins | Losses | BE | Win rate | Expectancy |",
+            "|-------|--------|------|--------|----|----------|------------|",
+        ]
+        for fr in freshness:
+            lines.append(
+                f"| {fr['label']} | {fr['n']} | {fr['wins']} | {fr['losses']} "
+                f"| {fr['breakevens']} | {_wr(fr['win_rate_pct'])} "
+                f"| {_fmt(fr['expectancy_r'])} |"
             )
         lines.append("")
 
@@ -354,6 +380,7 @@ def run(
     score_v     = ins.score_validation(filled, r_col)
     group_comp  = ins.group_comparison(filled, r_col)
     entry_comp  = ins.entry_zone_comparison(primary, r_col)  # uses full primary (incl never_filled for fill rate)
+    freshness   = ins.ob_freshness_comparison(filled, r_col)
     confluence  = ins.confluence_attribution(filled, r_col)
     regime_v    = ins.regime_verification(filled)
     verdict     = ins.generate_verdict(overall, instr_v, score_v, pair_sess, group_comp)
@@ -372,6 +399,7 @@ def run(
         "score":             score_v,
         "groups":            group_comp,
         "entry_zones":       entry_comp,
+        "ob_freshness":      freshness,
         "confluence":        confluence,
         "regime_checks":     regime_v,
     }
@@ -381,7 +409,7 @@ def run(
     # Write human-readable verdict.
     verdict_md = _build_verdict_md(
         verdict, overall, instr_v, pair_sess, score_v,
-        group_comp, entry_comp, confluence, regime_v,
+        group_comp, entry_comp, freshness, confluence, regime_v,
         included_runs, groups_included, r_col,
     )
     (COMBINED_DIR / "VERDICT.md").write_text(verdict_md, encoding="utf-8")
