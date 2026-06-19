@@ -1,0 +1,102 @@
+{
+  "run_id": "h1only_20240701_20240930",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-06-19T11:37:34.505894+00:00",
+  "git_sha": "8ea6c56",
+  "risk_usd": 250.0,
+  "min_warmup_bars": 50,
+  "fetch_pad_days": 35,
+  "pairs": [
+    {
+      "name": "EURUSD",
+      "symbol": "EURUSD=X",
+      "requested_start": "2024-07-01T00:00:00+00:00",
+      "requested_end": "2024-09-30T00:00:00+00:00",
+      "served_start": "2024-06-30T23:00:00+00:00",
+      "served_end": "2024-09-30T00:00:00+00:00",
+      "n_bars": 1549,
+      "fingerprint": "3778e53e3c7e35a8",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "USDJPY",
+      "symbol": "JPY=X",
+      "requested_start": "2024-07-01T00:00:00+00:00",
+      "requested_end": "2024-09-30T00:00:00+00:00",
+      "served_start": "2024-06-30T23:00:00+00:00",
+      "served_end": "2024-09-30T00:00:00+00:00",
+      "n_bars": 1538,
+      "fingerprint": "e7bd292915a19b7e",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "NZDUSD",
+      "symbol": "NZDUSD=X",
+      "requested_start": "2024-07-01T00:00:00+00:00",
+      "requested_end": "2024-09-30T00:00:00+00:00",
+      "served_start": "2024-06-30T23:00:00+00:00",
+      "served_end": "2024-09-30T00:00:00+00:00",
+      "n_bars": 1548,
+      "fingerprint": "106659c9205646c7",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "USDCHF",
+      "symbol": "CHF=X",
+      "requested_start": "2024-07-01T00:00:00+00:00",
+      "requested_end": "2024-09-30T00:00:00+00:00",
+      "served_start": "2024-06-30T23:00:00+00:00",
+      "served_end": "2024-09-30T00:00:00+00:00",
+      "n_bars": 1548,
+      "fingerprint": "89f28b5fb72f487b",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "NAS100",
+      "symbol": "NQ=F",
+      "requested_start": "2024-07-01T00:00:00+00:00",
+      "requested_end": "2024-09-30T00:00:00+00:00",
+      "served_start": "2024-06-30T22:00:00+00:00",
+      "served_end": "2024-09-30T00:00:00+00:00",
+      "n_bars": 1428,
+      "fingerprint": "475e302e05358939",
+      "prox_cap_atr": 3.0
+    },
+    {
+      "name": "GOLD",
+      "symbol": "GC=F",
+      "requested_start": "2024-07-01T00:00:00+00:00",
+      "requested_end": "2024-09-30T00:00:00+00:00",
+      "served_start": "2024-06-30T22:00:00+00:00",
+      "served_end": "2024-09-30T00:00:00+00:00",
+      "n_bars": 1433,
+      "fingerprint": "127c99eb80e7e7c7",
+      "prox_cap_atr": 3.0
+    }
+  ],
+  "knobs": {
+    "EURUSD.atr_multiplier": 2.5,
+    "EURUSD.distal_invalidation_mode": "close",
+    "EURUSD.spread_pips": 2.0,
+    "USDJPY.atr_multiplier": 2.5,
+    "USDJPY.distal_invalidation_mode": "close",
+    "USDJPY.spread_pips": 2.0,
+    "NZDUSD.atr_multiplier": 2.5,
+    "NZDUSD.distal_invalidation_mode": "close",
+    "NZDUSD.spread_pips": 4.0,
+    "USDCHF.atr_multiplier": 2.5,
+    "USDCHF.distal_invalidation_mode": "close",
+    "USDCHF.spread_pips": 2.0,
+    "NAS100.atr_multiplier": 3.0,
+    "NAS100.distal_invalidation_mode": "close",
+    "NAS100.spread_pips": 2.0,
+    "GOLD.atr_multiplier": 3.0,
+    "GOLD.distal_invalidation_mode": "close",
+    "GOLD.spread_pips": 0.5
+  },
+  "versions": {
+    "python": "3.11.15",
+    "pandas": "3.0.3",
+    "yfinance": "1.4.1"
+  }
+}
