@@ -1,0 +1,162 @@
+name: Knob Sweep
+
+# Tune the knobs — SEPARATE from the Backtest workflow. You pick a knob (up to
+# two), a month, and a year. No dates: the runner converts month+year to REAL
+# calendar bounds (July=31, leap-Feb=29). Each knob runs as its OWN parallel
+# job, writes its OWN immutable run directory, and sends its OWN email. The grid
+# per knob is FROZEN in run_knob_sweep.KNOB_GRID so two years of monthly runs
+# pool cleanly in the aggregator.
+
+on:
+  workflow_dispatch:
+    inputs:
+      knob_1:
+        description: "Knob to tune"
+        required: true
+        type: choice
+        options:
+          - MIN_LEG_ATR_MULT
+          - BOS_ATR_MULT
+          - STRUCTURE_CHOCH_ATR_MULT
+          - STRUCTURE_LOCK_ATR_MULT
+          - OB_MAX_RANGE_ATR_MULT
+          - MIN_OB_RANGE_ATR_MULT
+          - FVG_NOISE_FLOOR_MULT
+          - SWEEP_EQUAL_LEVEL_TOLERANCE_ATR
+          - SWEEP_WICK_PIERCE_MIN_ATR
+      knob_2:
+        description: "Second knob (optional — runs in parallel, separate email)"
+        required: false
+        default: "none"
+        type: choice
+        options:
+          - none
+          - MIN_LEG_ATR_MULT
+          - BOS_ATR_MULT
+          - STRUCTURE_CHOCH_ATR_MULT
+          - STRUCTURE_LOCK_ATR_MULT
+          - OB_MAX_RANGE_ATR_MULT
+          - MIN_OB_RANGE_ATR_MULT
+          - FVG_NOISE_FLOOR_MULT
+          - SWEEP_EQUAL_LEVEL_TOLERANCE_ATR
+          - SWEEP_WICK_PIERCE_MIN_ATR
+      month:
+        description: "Month"
+        required: true
+        type: choice
+        options:
+          ["1","2","3","4","5","6","7","8","9","10","11","12"]
+      year:
+        description: "Year (YYYY)"
+        required: true
+        type: choice
+        options: ["2023","2024","2025","2026"]
+      pairs:
+        description: "Comma-separated pairs"
+        required: false
+        default: "EURUSD,USDJPY,NAS100,GOLD"
+      risk_usd:
+        description: "Risk per trade in USD (1R)"
+        required: false
+        default: "250"
+      send_email:
+        description: "Email the per-knob result"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+jobs:
+  # Build the matrix of selected knobs (1 or 2). De-dupes if the same knob is
+  # picked twice; drops the "none" sentinel.
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      knobs: ${{ steps.build.outputs.knobs }}
+    steps:
+      - id: build
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          picks = ["${{ inputs.knob_1 }}", "${{ inputs.knob_2 }}"]
+          seen, out = set(), []
+          for k in picks:
+              if k and k != "none" and k not in seen:
+                  seen.add(k); out.append(k)
+          print("knobs=" + json.dumps(out))
+          PY
+
+  sweep:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write   # commit the immutable run dir back to main
+    strategy:
+      fail-fast: false   # one knob failing must not cancel the other
+      matrix:
+        knob: ${{ fromJson(needs.prepare.outputs.knobs) }}
+    concurrency:
+      # Serialize commits per knob so two parallel jobs never race the push.
+      group: knob-sweep-commit-${{ matrix.knob }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Knob-site golden gate (use-live-never-copy guard)
+        # Fails red if a live function gained a MIN_LEG default the sweep does
+        # not override — the blind spot that would silently corrupt the corpus.
+        run: python -m backtest.diagnostics.test_knob_sites_golden
+
+      - name: Driver self-check (override round-trip + def-time-trap)
+        run: python -c "from backtest.diagnostics import driver; driver.self_check()"
+
+      - name: Run knob sweep
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          BACKTEST_EMAIL: ${{ secrets.BACKTEST_EMAIL }}
+        run: |
+          ARGS="--knob ${{ matrix.knob }} --year ${{ inputs.year }} --month ${{ inputs.month }} --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_usd }}"
+          if [ "${{ inputs.send_email }}" = "true" ]; then
+            ARGS="$ARGS --email"
+          fi
+          python -m backtest.diagnostics.run_knob_sweep $ARGS
+
+      - name: Commit run directory to main
+        # The two-year corpus lives in the repo on purpose (artifacts expire).
+        # We commit ONLY this knob's new run dir. `git pull --rebase` before push
+        # so two parallel knob jobs don't reject each other.
+        if: always()
+        run: |
+          git add backtest/diagnostics/sweeps/ || true
+          if git diff --cached --quiet; then
+            echo "No sweep output to commit."
+            exit 0
+          fi
+          git commit -m "Knob sweep: ${{ matrix.knob }} ${{ inputs.year }}-${{ inputs.month }} [skip ci]"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin HEAD:main && break
+            echo "push retry $i ..."; sleep $((RANDOM % 5 + 2))
+          done
+
+      - name: Upload run artifacts (belt & braces)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: knob-sweep-${{ matrix.knob }}-${{ inputs.year }}-${{ inputs.month }}
+          path: backtest/diagnostics/sweeps/
+          retention-days: 30

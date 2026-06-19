@@ -124,9 +124,45 @@ def _structure_counts(pair_conf, df, start, end, *, stride: int) -> Dict[str, in
 SCORE_FLOOR = 4.0
 
 
-def _alert_pnl(pair_conf, df, start, end, risk_usd, overrides) -> Dict[str, Any]:
+def _alert_pnl(pair_conf, df, start, end, risk_usd, overrides,
+               *, walk_out: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     res = driver.walk_alerts(pair_conf, df, start, end, risk_usd=risk_usd,
                              overrides=overrides)
+    # Walk capture (no extra compute): the causal story already produced by the
+    # walk we just ran — OBs seen, alerts fired, and each simulated trade's exit.
+    # This is what lets us later answer "why did value X kill that trade" WITHOUT
+    # re-running the bar-by-bar walk. Written to the gzipped walk log by the
+    # caller. Proximal rows only, to match the metric set.
+    if walk_out is not None:
+        def _ts_or_none(x):
+            return str(x) if x is not None else None
+        # ob_seen / alert events nest the OB under event["ob"] and carry the
+        # wall-clock bar at event["ts"] (see replay_engine.replay_pair).
+        for ev in res.ob_seen:
+            ob = ev.get("ob") or {}
+            walk_out.append({"rec": "ob_seen", "pair": ev.get("pair"),
+                             "ts": _ts_or_none(ev.get("ts")),
+                             "ob_timestamp": _ts_or_none(ob.get("ob_timestamp")),
+                             "direction": ob.get("direction")})
+        for al in res.alerts:
+            ob = al.get("ob") or {}
+            walk_out.append({"rec": "alert", "pair": al.get("pair"),
+                             "ts": _ts_or_none(al.get("ts")),
+                             "ob_timestamp": _ts_or_none(ob.get("ob_timestamp")),
+                             "direction": ob.get("direction"),
+                             "score": al.get("score")})
+        for r in res.trade_rows:
+            if r.get("entry_zone") != "proximal":
+                continue
+            walk_out.append({"rec": "trade", "pair": r.get("pair"),
+                             "alert_ts": str(r.get("alert_ts")),
+                             "ob_timestamp": str(r.get("ob_timestamp")),
+                             "direction": r.get("direction"),
+                             "score": r.get("score"),
+                             "exit_reason": r.get("exit_reason"),
+                             "r_realised": r.get("r_realised"),
+                             "fill_ts": str(r.get("fill_ts")) if r.get("fill_ts") else None,
+                             "exit_ts": str(r.get("exit_ts")) if r.get("exit_ts") else None})
     # PROXIMAL-ONLY: the 50% mean leg is excluded from every metric (trader
     # decision 2026-06-19 — proximal is the live entry; the 50% A/B is not what
     # we are tuning). The simulator still produces both rows; we just ignore the
@@ -169,7 +205,12 @@ def _alert_pnl(pair_conf, df, start, end, risk_usd, overrides) -> Dict[str, Any]
 
 def sweep(knob: str, grid: List[Any], pairs: List[str], start, end, out_dir: Path,
           *, risk_usd: float = 250.0, grid_mode: str = "multiplier",
-          stride: int = 6) -> Path:
+          stride: int = 6, walk_sink=None, return_rows: bool = False):
+    """Sweep one knob over a grid. Writes CSV+MD (back-compat) and, when
+    `walk_sink` is given, calls walk_sink(pair, grid_value, [records]) once per
+    (pair x grid_value) with the causal walk story (no extra compute). When
+    `return_rows` is True returns (md_path, rows, scope_violations) for the
+    orchestrator; otherwise returns md_path as before."""
     if knob in REFUSED:
         raise SystemExit(
             f"{knob} (knob #9) cannot be overridden without editing live code. "
@@ -206,9 +247,13 @@ def sweep(knob: str, grid: List[Any], pairs: List[str], start, end, out_dir: Pat
             ov_val = _resolve_value(knob, gv, pt, is_dict, grid_mode)
             kwargs = {scope["kw"]: ov_val}
             print(f"  value={gv} ...", flush=True)
+            walk_out: List[Dict[str, Any]] = [] if walk_sink is not None else None
             with driver.KnobOverrides(**kwargs) as ovr:
                 sc = _structure_counts(pc, df, start, end, stride=stride)
-                ap = _alert_pnl(pc, df, start, end, risk_usd, ovr)
+                ap = _alert_pnl(pc, df, start, end, risk_usd, ovr,
+                                walk_out=walk_out)
+            if walk_sink is not None:
+                walk_sink(name, gv, walk_out)
             is_base = (not is_dict and baseline_val is not None
                        and abs(float(gv) - float(baseline_val)) < 1e-12)
             rec = {"knob": knob, "grid_value": gv, "baseline": is_base,
@@ -235,11 +280,14 @@ def sweep(knob: str, grid: List[Any], pairs: List[str], start, end, out_dir: Pat
                     scope_violations.append(
                         f"SCOPE VIOLATION: {name} trade-set changed under score knob {knob}")
 
-    return _write(knob, grid, rows, scope_violations, invariant, scope, out_dir,
-                  meta={"pairs": ",".join(p["name"] for p in confs),
-                        "start": str(pd.Timestamp(start).date()),
-                        "end": str(pd.Timestamp(end).date()),
-                        "grid_mode": grid_mode, "risk_usd": risk_usd})
+    md_path = _write(knob, grid, rows, scope_violations, invariant, scope, out_dir,
+                     meta={"pairs": ",".join(p["name"] for p in confs),
+                           "start": str(pd.Timestamp(start).date()),
+                           "end": str(pd.Timestamp(end).date()),
+                           "grid_mode": grid_mode, "risk_usd": risk_usd})
+    if return_rows:
+        return md_path, rows, scope_violations
+    return md_path
 
 
 def _resolve_value(knob, gv, pair_type, is_dict, grid_mode):
@@ -315,47 +363,14 @@ def _write(knob, grid, rows, violations, invariant, scope, out_dir, meta):
                  "In-sample; diagnostic, not tuning truth.")
     lines.append("- `n_swings` is a window-end census of survivors, not a per-bar experience.")
     md_path.write_text("\n".join(lines), encoding="utf-8")
-    _append_findings(knob, rows, violations, meta)
+    # NOTE: the old SWEEP_FINDINGS.md ledger is retired. The durable, machine-
+    # written sweep scan-log (backtest/diagnostics/sweeps/<run_id>/) is now the
+    # single source of truth for the two-year tuning corpus. A hand-appended
+    # markdown ledger drifts and was the kind of thing that "failed" before.
     print(f"\n[h1] csv -> {csv_path}\n[h1] md  -> {md_path}", flush=True)
     if violations:
         print(f"[h1] {len(violations)} SCOPE/RECON VIOLATION(S) — see report", flush=True)
     return md_path
-
-
-# Persistent, cross-chat findings ledger. APPENDED after every sweep so the full
-# tuning exercise survives across conversations (one chat is not enough). One
-# block per sweep; one row per pair per grid value. Metrics are PROXIMAL-ONLY and
-# score-gated (>=4), matching _alert_pnl. Never overwritten — only appended.
-_FINDINGS_PATH = Path(__file__).parent / "SWEEP_FINDINGS.md"
-
-
-def _append_findings(knob, rows, violations, meta):
-    if not _FINDINGS_PATH.exists():
-        _FINDINGS_PATH.write_text(
-            "# Knob-Sweep Findings (persistent ledger)\n\n"
-            "Auto-appended after every sweep. Metrics are PROXIMAL-ONLY, "
-            "score-gated (>=4). Each block = one sweep run.\n",
-            encoding="utf-8")
-    stamp = pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-    out = ["", "---", f"## {knob} — {meta['start']}..{meta['end']} "
-           f"(grid_mode {meta['grid_mode']}, risk ${meta['risk_usd']:.0f})",
-           f"_run {stamp}; pairs {meta['pairs']}_", ""]
-    if violations:
-        out.append(f"> ⚠️ {len(violations)} scope/recon violation(s) this run — "
-                   "see the per-run .md before trusting these numbers.")
-        out.append("")
-    out.append("| pair | value | base | filled | sumR | WR | exp_R | "
-               "avg_score | OBs | recon |")
-    out.append("|---|---|---|---|---|---|---|---|---|---|")
-    for r in rows:
-        out.append(f"| {r['pair']} | {r['grid_value']} | "
-                   f"{'✓' if r['baseline'] else ''} | {r['n_trades_filled']} | "
-                   f"{r['sum_r_realised']} | {r['win_rate']} | {r['expectancy_r']} | "
-                   f"{r['avg_logged_score']} | {r['n_obs']} | "
-                   f"{'ok' if r['recon_ok'] else 'FAIL'} |")
-    with open(_FINDINGS_PATH, "a", encoding="utf-8") as f:
-        f.write("\n".join(out) + "\n")
-    print(f"[h1] findings appended -> {_FINDINGS_PATH}", flush=True)
 
 
 def self_check() -> bool:
