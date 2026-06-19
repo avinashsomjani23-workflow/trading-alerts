@@ -1,0 +1,115 @@
+{
+  "run_id": "h1only_20240701_20240731",
+  "overall": "PASS",
+  "exit_code": 0,
+  "warnings_present": false,
+  "headline_pnl_usd": -1250.0,
+  "content_hash": "70c5c0a15244a7e3ca134d7c33463d63bd2eb6bd14d0990f6a016d157dea1062",
+  "condition_counts": {
+    "WARMUP_SKIP": 292,
+    "DEDUP_SUPPRESSED": 27
+  },
+  "event_counts": {
+    "ob_seen": 79,
+    "alert": 99,
+    "ob_mitigated": 56,
+    "re_arm": 46,
+    "ob_aged_out": 4,
+    "trade_exit": 116,
+    "trade_fill": 11,
+    "alert_suppressed_dedup": 27
+  },
+  "outcome_counts": {
+    "WARMUP_SKIP": 292,
+    "NO_ZONE": 1151,
+    "ALERT": 96,
+    "RE_ARM_WAIT": 929,
+    "OUT_OF_RANGE": 559
+  },
+  "gates": [
+    {
+      "id": "G1",
+      "description": "Sum pnl_usd == Sum r_realised*risk, and equals reporting headline",
+      "threshold": "rel_tol 1e-09",
+      "observed": {
+        "headline_usd": -1250.0,
+        "reported": -1250.0,
+        "row_mismatches": 0
+      },
+      "verdict": "PASS"
+    },
+    {
+      "id": "G2",
+      "description": "scan records == expected (pair x walk bars); zero HEARTBEAT_GAP",
+      "threshold": "exact",
+      "observed": {
+        "expected": 3027,
+        "actual": 3027,
+        "missing_by_pair": {}
+      },
+      "verdict": "PASS"
+    },
+    {
+      "id": "G3",
+      "description": "ob<=bos<alert<fill and fill>=alert+1h on every filled trade",
+      "threshold": "strict inequalities",
+      "observed": {
+        "violations": 0,
+        "sample": []
+      },
+      "verdict": "PASS"
+    },
+    {
+      "id": "G4",
+      "description": "every FAIL-severity condition counter is 0",
+      "threshold": "== 0",
+      "observed": "none",
+      "verdict": "PASS"
+    },
+    {
+      "id": "G5",
+      "description": "every knob re-read at END equals manifest (no drift)",
+      "threshold": "exact",
+      "observed": "none",
+      "verdict": "PASS"
+    },
+    {
+      "id": "G6",
+      "description": "headline recomputed from r_realised only; tp1/tp2 excluded",
+      "threshold": "independent recompute",
+      "observed": {
+        "realised_headline": -1250.0,
+        "tp2_headline_for_contrast": -2000.0
+      },
+      "verdict": "PASS"
+    },
+    {
+      "id": "G7",
+      "description": "content hash of scan_log + events recorded for re-run compare",
+      "threshold": "recorded",
+      "observed": "70c5c0a15244a7e3ca134d7c33463d63bd2eb6bd14d0990f6a016d157dea1062",
+      "verdict": "PASS"
+    },
+    {
+      "id": "G8",
+      "description": "NAN_ATR_SKIP <= 1% post-warmup per pair (WARN >1%, FAIL >5%)",
+      "threshold": "<=1% warn, >5% fail",
+      "observed": {
+        "EURUSD": 0.0,
+        "USDJPY": 0.0,
+        "NZDUSD": 0.0,
+        "USDCHF": 0.0,
+        "NAS100": 0.0,
+        "GOLD": 0.0
+      },
+      "verdict": "PASS"
+    },
+    {
+      "id": "G9",
+      "description": "every record validated against SCHEMA.md (ts/tz/outcome)",
+      "threshold": "0 schema FAILs",
+      "observed": 0,
+      "verdict": "PASS"
+    }
+  ]
+}

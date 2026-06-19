@@ -1,14 +1,14 @@
 # Backtest Registry
 
-*Last updated: 2026-06-18 15:20 UTC*
+*Last updated: 2026-06-19 03:50 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **5** of 5
-- Total filled trades across all runs: **87**
-- Average expectancy across runs: **-0.28R**
+- Runs completed: **7** of 7
+- Total filled trades across all runs: **102**
+- Average expectancy across runs: **-0.32R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
 - **Group 3 (Live-era):** 1 runs, 9 trades, avg expectancy -0.20R
@@ -16,6 +16,91 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 ---
 
 ## Individual run log
+
+### h1only_20240701_20240731
+
+**Unclassified** | 2024-07-01 to 2024-07-31 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 5 (of 76 rows) |
+| Win rate | 0.0% |
+| Expectancy | -0.40R |
+| Max drawdown | +2.00R |
+| Longest losing streak | 1 trades |
+| Proximal fill rate | 13.2% |
+| 50% fill rate | 7.9% |
+| Score verdict | WORKS — higher score leads to better trades |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| NAS100 | 1 | 0.0% | +0.00R |
+| NZDUSD | 2 | 0.0% | -0.50R |
+| USDCHF | 2 | 0.0% | -0.50R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 2 | 0.0% | +0.00R |
+| London | 10 | 0.0% | -0.10R |
+| NY | 13 | 0.0% | -0.08R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 4-5 | 1 | 0.0% | -1.00R |
+| 5-6 | 3 | 0.0% | -0.33R |
+| 7+ | 1 | 0.0% | +0.00R |
+
+---
+
+### h1only_20250201_20250228
+
+**Unclassified** | 2025-02-01 to 2025-02-28 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 10 (of 106 rows) |
+| Win rate | 10.0% |
+| Expectancy | -0.40R |
+| Max drawdown | +3.03R |
+| Longest losing streak | 2 trades |
+| Proximal fill rate | 18.9% |
+| 50% fill rate | 9.4% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| NAS100 | 1 | 0.0% | +0.00R |
+| USDJPY | 3 | 33.3% | -0.01R |
+| GOLD | 2 | 0.0% | -0.50R |
+| USDCHF | 2 | 0.0% | -0.50R |
+| EURUSD | 2 | 0.0% | -1.00R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 4 | 0.0% | -0.25R |
+| London | 12 | 0.0% | -0.17R |
+| NY | 24 | 4.2% | -0.04R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 4-5 | 2 | 0.0% | -1.00R |
+| 5-6 | 2 | 50.0% | +0.48R |
+| 6-7 | 3 | 0.0% | -0.33R |
+| 7+ | 3 | 0.0% | -0.67R |
+
+---
 
 ### h1only_20260209_20260213
 
