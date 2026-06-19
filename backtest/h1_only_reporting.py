@@ -2258,7 +2258,15 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 _EXCEL_COL_NAMES = {
+    # A: identifier
     "pair":              "Currency Pair",
+    # B–F: all timestamps, grouped for easy chart cross-reference
+    "ob_time_ist":       "OB Candle (IST)",
+    "alert_time_ist":    "Scan / Alert Time (IST)",
+    "fill_time_ist":     "Entry Fill (IST)",
+    "sl_hit_time_ist":   "SL Hit (IST)",
+    "tp_fill_time_ist":  "TP Fill (IST)",
+    # trade context
     "direction":         "Direction",
     "fill_session":      "Fill Session",
     "ob_session":        "OB Session",
@@ -2266,12 +2274,18 @@ _EXCEL_COL_NAMES = {
     "h1_trend":          "H1 Trend",
     "trend_alignment":   "Trend Alignment",
     "entry_zone":        "Entry Type",
+    # levels
     "entry":             "Entry Price",
     "sl_initial":        "Stop Loss",
     "tp1":               "Take Profit 1",
     "tp2":               "Take Profit 2",
     "tp1_rr":            "TP1 Reward:Risk",
     "tp2_rr":            "TP2 Reward:Risk",
+    # PD array
+    "pd_zone":           "PD Zone",
+    "pd_alignment":      "PD Alignment",
+    "pd_pct":            "PD Array % (entry)",
+    # outcome
     "exit_reason":       "How Trade Closed",
     "exit_price":        "Exit Price",
     "r_realised":        "R Achieved (LIVE: TP1+BE@1R)",
@@ -2284,6 +2298,7 @@ _EXCEL_COL_NAMES = {
     "mae_r":             "Worst Price Reached (R)",
     "bars_to_exit":      "Hours Held",
     "bars_to_tp1":       "Hours to TP1 (-1 if never)",
+    # setup quality
     "score":             "Setup Score (0–8)",
     "confluences_present": "Confluences Active",
     "fvg_present":       "FVG Present",
@@ -2292,12 +2307,7 @@ _EXCEL_COL_NAMES = {
     "bos_tier":          "Structure Tier (Major / Minor)",
     "vet_review":        "Worth Reviewing",
     "vet_review_reason": "Why Worth Reviewing",
-    # Hour-only IST columns for chart cross-reference. UTC columns dropped.
-    "ob_time_ist":       "OB Candle (IST)",
-    "alert_time_ist":    "Scan / Alert Time (IST)",
-    "fill_time_ist":     "Entry Fill (IST)",
-    "sl_hit_time_ist":   "SL Hit (IST)",
-    "tp_fill_time_ist":  "TP Fill (IST)",
+    # news / session audit
     "news_blocked":         "News Blocked",
     "news_event_title":     "News Event",
     "news_event_currency":  "News Currency",
@@ -2419,11 +2429,11 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
             df["sweep_present"] = df["sweep_present"].map({True: "Yes", False: "No"}).fillna("")
 
         # Select and rename columns — insert day_of_week right after the
-        # session/alignment block (pair, direction, fill_session, ob_session,
-        # killzone_alignment = first 5 keys in _EXCEL_COL_NAMES).
+        # session/alignment block (pair, 5× IST timestamps, direction,
+        # fill_session, ob_session, killzone_alignment = first 10 keys).
         _col_names_with_dow = dict(_EXCEL_COL_NAMES)
         _col_names_with_dow["day_of_week"] = "Day of Week"
-        _split_at = 5
+        _split_at = 10
         desired = [c for c in list(_EXCEL_COL_NAMES.keys())[:_split_at]
                    + ["day_of_week"]
                    + list(_EXCEL_COL_NAMES.keys())[_split_at:]
@@ -2462,6 +2472,7 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
             "OB Candle (IST)": 18, "Scan / Alert Time (IST)": 22,
             "Entry Fill (IST)": 18,
             "SL Hit (IST)": 18, "TP Fill (IST)": 18,
+            "PD Zone": 12, "PD Alignment": 14, "PD Array % (entry)": 18,
         }
 
         def _style_trades_sheet(ws, from_openpyxl):

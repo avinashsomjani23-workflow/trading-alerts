@@ -748,6 +748,18 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     pd_zone = _pd_zone_from_dr(entry, dr)
     pd_alignment = _pd_alignment("LONG" if direction == "bullish" else "SHORT",
                                  pd_zone)
+    # % position within the dealing range: 0% = range low, 100% = range high.
+    # Gives an exact read on where the entry sits in the PD array.
+    if isinstance(dr, dict) and dr.get("valid"):
+        try:
+            _rng_low = float(dr["range_low"])
+            _rng_high = float(dr["range_high"])
+            _width = _rng_high - _rng_low
+            pd_pct = round((entry - _rng_low) / _width * 100, 1) if _width > 0 else None
+        except (KeyError, TypeError, ValueError):
+            pd_pct = None
+    else:
+        pd_pct = None
     pnl_usd = round(r_realised * risk_usd, 2)
     return {
         "pair":          alert["pair"],
@@ -786,6 +798,7 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "ob_timestamp":  ob.get("ob_timestamp"),
         "pd_zone":       pd_zone,
         "pd_alignment":  pd_alignment,
+        "pd_pct":        pd_pct,
         "score":         round(float(score), 2),
         "structure_pts": round(float(breakdown.get("structure", 0.0)), 2),
         "sweep_pts":     round(float(breakdown.get("sweep", 0.0)), 2),
