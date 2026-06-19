@@ -1,8 +1,8 @@
 {
   "run_id": "h1only_20240701_20240731",
   "schema_version": "1.0.0",
-  "generated_utc": "2026-06-19T03:35:02.435848+00:00",
-  "git_sha": "838a2b4",
+  "generated_utc": "2026-06-19T04:47:00.108944+00:00",
+  "git_sha": "fd5b42b",
   "risk_usd": 250.0,
   "min_warmup_bars": 50,
   "fetch_pad_days": 35,
@@ -12,10 +12,10 @@
       "symbol": "EURUSD=X",
       "requested_start": "2024-07-01T00:00:00+00:00",
       "requested_end": "2024-07-31T00:00:00+00:00",
-      "served_start": "2024-06-30T23:00:00+00:00",
+      "served_start": "2024-06-02T23:00:00+00:00",
       "served_end": "2024-07-31T00:00:00+00:00",
-      "n_bars": 526,
-      "fingerprint": "a8b3c5aeacc3b0a4",
+      "n_bars": 1002,
+      "fingerprint": "cf0a767785d76b5e",
       "prox_cap_atr": 2.5
     },
     {
@@ -23,10 +23,10 @@
       "symbol": "JPY=X",
       "requested_start": "2024-07-01T00:00:00+00:00",
       "requested_end": "2024-07-31T00:00:00+00:00",
-      "served_start": "2024-06-30T23:00:00+00:00",
+      "served_start": "2024-06-02T23:00:00+00:00",
       "served_end": "2024-07-31T00:00:00+00:00",
-      "n_bars": 522,
-      "fingerprint": "fe778310dd7106ac",
+      "n_bars": 996,
+      "fingerprint": "40af2fea967fdcf5",
       "prox_cap_atr": 2.5
     },
     {
@@ -34,10 +34,10 @@
       "symbol": "NZDUSD=X",
       "requested_start": "2024-07-01T00:00:00+00:00",
       "requested_end": "2024-07-31T00:00:00+00:00",
-      "served_start": "2024-06-30T23:00:00+00:00",
+      "served_start": "2024-06-02T23:00:00+00:00",
       "served_end": "2024-07-31T00:00:00+00:00",
-      "n_bars": 526,
-      "fingerprint": "99703e49c56a3af8",
+      "n_bars": 1003,
+      "fingerprint": "ea04f80e48e9dba7",
       "prox_cap_atr": 2.5
     },
     {
@@ -45,10 +45,10 @@
       "symbol": "CHF=X",
       "requested_start": "2024-07-01T00:00:00+00:00",
       "requested_end": "2024-07-31T00:00:00+00:00",
-      "served_start": "2024-06-30T23:00:00+00:00",
+      "served_start": "2024-06-02T23:00:00+00:00",
       "served_end": "2024-07-31T00:00:00+00:00",
-      "n_bars": 526,
-      "fingerprint": "7c1878da6b6dda2f",
+      "n_bars": 1000,
+      "fingerprint": "d0fc05457b18aae3",
       "prox_cap_atr": 2.5
     },
     {
@@ -56,10 +56,10 @@
       "symbol": "NQ=F",
       "requested_start": "2024-07-01T00:00:00+00:00",
       "requested_end": "2024-07-31T00:00:00+00:00",
-      "served_start": "2024-06-30T22:00:00+00:00",
+      "served_start": "2024-06-03T04:00:00+00:00",
       "served_end": "2024-07-31T00:00:00+00:00",
-      "n_bars": 468,
-      "fingerprint": "c6186db1d411c508",
+      "n_bars": 892,
+      "fingerprint": "b2a385fdcf901faf",
       "prox_cap_atr": 3.0
     },
     {
@@ -67,10 +67,10 @@
       "symbol": "GC=F",
       "requested_start": "2024-07-01T00:00:00+00:00",
       "requested_end": "2024-07-31T00:00:00+00:00",
-      "served_start": "2024-06-30T22:00:00+00:00",
+      "served_start": "2024-06-03T04:00:00+00:00",
       "served_end": "2024-07-31T00:00:00+00:00",
-      "n_bars": 467,
-      "fingerprint": "154b4b54e5d70a06",
+      "n_bars": 898,
+      "fingerprint": "b5f37ee78dac66f5",
       "prox_cap_atr": 3.0
     }
   ],
@@ -95,8 +95,8 @@
     "GOLD.spread_pips": 0.5
   },
   "versions": {
-    "python": "3.11.15",
+    "python": "3.14.5",
     "pandas": "3.0.3",
-    "yfinance": "1.4.1"
+    "yfinance": "1.3.0"
   }
 }
