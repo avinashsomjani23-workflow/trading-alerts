@@ -3,28 +3,28 @@
   "overall": "PASS",
   "exit_code": 0,
   "warnings_present": false,
-  "headline_pnl_usd": -13143.5,
-  "content_hash": "7ffe05bac58fc9c02fa6c73568ced8cbac7171bc1eb64a7c8dea76ed9b3d3828",
+  "headline_pnl_usd": -7813.25,
+  "content_hash": "0bd89ecb285ba55109eeaf52e8a0d44641c868241459c92ab4c58a3a41895a11",
   "condition_counts": {
     "WARMUP_SKIP": 292,
-    "DEDUP_SUPPRESSED": 433
+    "DEDUP_SUPPRESSED": 357
   },
   "event_counts": {
-    "ob_seen": 709,
-    "alert": 701,
-    "ob_mitigated": 287,
-    "re_arm": 221,
-    "ob_aged_out": 408,
-    "trade_exit": 452,
-    "trade_fill": 306,
-    "alert_suppressed_dedup": 433
+    "ob_seen": 592,
+    "alert": 572,
+    "ob_mitigated": 244,
+    "re_arm": 186,
+    "ob_aged_out": 336,
+    "trade_fill": 260,
+    "trade_exit": 382,
+    "alert_suppressed_dedup": 357
   },
   "outcome_counts": {
     "WARMUP_SKIP": 292,
-    "NO_ZONE": 3261,
-    "ALERT": 643,
-    "RE_ARM_WAIT": 3348,
-    "OUT_OF_RANGE": 1492
+    "NO_ZONE": 3634,
+    "OUT_OF_RANGE": 1765,
+    "ALERT": 529,
+    "RE_ARM_WAIT": 2816
   },
   "gates": [
     {
@@ -32,8 +32,8 @@
       "description": "Sum pnl_usd == Sum r_realised*risk, and equals reporting headline",
       "threshold": "rel_tol 1e-09",
       "observed": {
-        "headline_usd": -13143.5,
-        "reported": -13143.5,
+        "headline_usd": -7813.25,
+        "reported": -7813.25,
         "row_mismatches": 0
       },
       "verdict": "PASS"
@@ -78,8 +78,8 @@
       "description": "headline recomputed from r_realised only; tp1/tp2 excluded",
       "threshold": "independent recompute",
       "observed": {
-        "realised_headline": -13143.5,
-        "tp2_headline_for_contrast": -11834.5
+        "realised_headline": -7813.25,
+        "tp2_headline_for_contrast": 173.0
       },
       "verdict": "PASS"
     },
@@ -87,7 +87,7 @@
       "id": "G7",
       "description": "content hash of scan_log + events recorded for re-run compare",
       "threshold": "recorded",
-      "observed": "7ffe05bac58fc9c02fa6c73568ced8cbac7171bc1eb64a7c8dea76ed9b3d3828",
+      "observed": "0bd89ecb285ba55109eeaf52e8a0d44641c868241459c92ab4c58a3a41895a11",
       "verdict": "PASS"
     },
     {

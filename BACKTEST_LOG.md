@@ -1,14 +1,14 @@
 # Backtest Registry
 
-*Last updated: 2026-06-19 12:14 UTC*
+*Last updated: 2026-06-19 14:08 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
 - Runs completed: **8** of 8
-- Total filled trades across all runs: **242**
-- Average expectancy across runs: **-0.25R**
+- Total filled trades across all runs: **225**
+- Average expectancy across runs: **-0.24R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
 - **Group 3 (Live-era):** 1 runs, 9 trades, avg expectancy -0.20R
@@ -68,42 +68,42 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 | Metric | Value |
 |--------|-------|
-| Filled trades | 91 (of 286 rows) |
-| Win rate | 25.3% |
-| Expectancy | -0.20R |
-| Max drawdown | +16.68R |
-| Longest losing streak | 7 trades |
-| Proximal fill rate | 63.6% |
-| 50% fill rate | 59.4% |
+| Filled trades | 74 (of 232 rows) |
+| Win rate | 27.0% |
+| Expectancy | -0.17R |
+| Max drawdown | +9.00R |
+| Longest losing streak | 4 trades |
+| Proximal fill rate | 63.8% |
+| 50% fill rate | 59.5% |
 | Score verdict | WEAK — partial relationship |
 
 **By pair (proximal entry, TP2 exit):**
 
 | Pair | Trades | Win rate | Expectancy |
 |------|--------|----------|------------|
-| GOLD | 22 | 33.3% | +0.04R |
-| USDCHF | 19 | 25.0% | -0.12R |
-| NAS100 | 17 | 21.4% | -0.18R |
-| NZDUSD | 14 | 30.8% | -0.24R |
-| USDJPY | 4 | 0.0% | -1.00R |
-| EURUSD | 15 | 18.2% | -0.42R |
+| NZDUSD | 9 | 57.1% | +0.24R |
+| USDCHF | 17 | 33.3% | +0.06R |
+| GOLD | 16 | 33.3% | +0.00R |
+| USDJPY | 5 | 20.0% | -0.12R |
+| EURUSD | 12 | 12.5% | -0.47R |
+| NAS100 | 15 | 7.7% | -0.63R |
 
 **By session:**
 
 | Session | Trades | Win rate | Expectancy |
 |---------|--------|----------|------------|
-| Asia | 11 | 40.0% | -0.00R |
-| London | 37 | 31.0% | +0.04R |
-| NY | 46 | 23.3% | -0.28R |
+| Asia | 9 | 42.9% | +0.08R |
+| London | 30 | 29.2% | -0.01R |
+| NY | 38 | 28.6% | -0.15R |
 
 **Score vs outcome:**
 
 | Score bucket | Trades | Win rate | Expectancy |
 |-------------|--------|----------|------------|
-| 4-5 | 24 | 23.8% | -0.25R |
-| 5-6 | 24 | 20.0% | -0.30R |
-| 6-7 | 26 | 29.2% | -0.15R |
-| 7+ | 17 | 28.6% | -0.07R |
+| 4-5 | 19 | 25.0% | -0.20R |
+| 5-6 | 22 | 21.1% | -0.28R |
+| 6-7 | 20 | 31.6% | -0.10R |
+| 7+ | 13 | 33.3% | -0.04R |
 
 ---
 
