@@ -516,5 +516,12 @@
     "interval": "1h",
     "reason": "stale data (age 8.06h, limit 2.0h)",
     "age_hours": 8.06
+  },
+  {
+    "ts": "2026-06-19T16:35:48.562486",
+    "symbol": "GC=F",
+    "interval": "1h",
+    "reason": "stale data (age 8.10h, limit 2.0h)",
+    "age_hours": 8.1
   }
 ]
