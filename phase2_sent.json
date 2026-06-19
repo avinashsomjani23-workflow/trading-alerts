@@ -41,27 +41,6 @@
       "bias": "SHORT",
       "pair": "NZDUSD"
     },
-    "NAS100_SHORT_CHoCH_29566.0_2026-06-09T12": {
-      "score_int": 4,
-      "score_raw": 4.0,
-      "score_high_water": 4.0,
-      "score_low_water": 4.0,
-      "breakdown": {
-        "structure": 4,
-        "sweep": 0.0,
-        "fvg": 0,
-        "freshness": 0,
-        "pd": 0.0,
-        "killzone": 0.0
-      },
-      "alert_ist": "2026-06-11T23:35:41.047669",
-      "last_seen_ist": "2026-06-12T22:35:34.642907",
-      "last_email_day": "2026-06-12",
-      "reentry_armed": false,
-      "max_exit_distance": 0.0,
-      "bias": "SHORT",
-      "pair": "NAS100"
-    },
     "NAS100_LONG_CHoCH_28936.0_2026-06-11T16": {
       "score_int": 8,
       "score_raw": 8.0,
@@ -839,7 +818,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-18T21:35:55.283886",
-      "last_seen_ist": "2026-06-19T21:35:47.356334",
+      "last_seen_ist": "2026-06-19T22:35:53.462769",
       "last_email_day": "2026-06-18",
       "reentry_armed": true,
       "max_exit_distance": 0.7540130615234375,
@@ -954,7 +933,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-19T09:35:43.287373",
-      "last_seen_ist": "2026-06-19T21:35:47.356334",
+      "last_seen_ist": "2026-06-19T22:35:53.462769",
       "last_email_day": "2026-06-19",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -1184,7 +1163,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-19T12:35:40.721473",
-      "last_seen_ist": "2026-06-19T21:35:47.356334",
+      "last_seen_ist": "2026-06-19T22:35:53.462769",
       "last_email_day": "2026-06-19",
       "reentry_armed": false,
       "max_exit_distance": 0.0021470189094543457,
