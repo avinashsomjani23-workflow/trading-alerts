@@ -481,5 +481,26 @@
     "interval": "1h",
     "reason": "stale data (age 6.10h, limit 2.0h)",
     "age_hours": 6.1
+  },
+  {
+    "ts": "2026-06-19T15:33:37.952671",
+    "symbol": "NQ=F",
+    "interval": "1h",
+    "reason": "stale data (age 7.06h, limit 2.0h)",
+    "age_hours": 7.06
+  },
+  {
+    "ts": "2026-06-19T15:33:41.233465",
+    "symbol": "GC=F",
+    "interval": "1h",
+    "reason": "stale data (age 7.06h, limit 2.0h)",
+    "age_hours": 7.06
+  },
+  {
+    "ts": "2026-06-19T15:36:35.633833",
+    "symbol": "GC=F",
+    "interval": "1h",
+    "reason": "stale data (age 7.11h, limit 2.0h)",
+    "age_hours": 7.11
   }
 ]
