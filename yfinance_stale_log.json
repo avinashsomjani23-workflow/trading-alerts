@@ -523,5 +523,47 @@
     "interval": "1h",
     "reason": "stale data (age 8.10h, limit 2.0h)",
     "age_hours": 8.1
+  },
+  {
+    "ts": "2026-06-19T17:33:42.161919",
+    "symbol": "NQ=F",
+    "interval": "1h",
+    "reason": "stale data (age 9.06h, limit 2.0h)",
+    "age_hours": 9.06
+  },
+  {
+    "ts": "2026-06-19T17:33:45.473699",
+    "symbol": "GC=F",
+    "interval": "1h",
+    "reason": "stale data (age 9.06h, limit 2.0h)",
+    "age_hours": 9.06
+  },
+  {
+    "ts": "2026-06-19T17:35:47.871800",
+    "symbol": "GC=F",
+    "interval": "1h",
+    "reason": "stale data (age 9.10h, limit 2.0h)",
+    "age_hours": 9.1
+  },
+  {
+    "ts": "2026-06-19T18:33:40.638326",
+    "symbol": "NQ=F",
+    "interval": "1h",
+    "reason": "stale data (age 10.06h, limit 2.0h)",
+    "age_hours": 10.06
+  },
+  {
+    "ts": "2026-06-19T18:33:44.140957",
+    "symbol": "GC=F",
+    "interval": "1h",
+    "reason": "stale data (age 10.06h, limit 2.0h)",
+    "age_hours": 10.06
+  },
+  {
+    "ts": "2026-06-19T18:35:45.665535",
+    "symbol": "GC=F",
+    "interval": "1h",
+    "reason": "stale data (age 10.10h, limit 2.0h)",
+    "age_hours": 10.1
   }
 ]
