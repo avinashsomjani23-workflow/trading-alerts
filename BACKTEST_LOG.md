@@ -1,13 +1,13 @@
 # Backtest Registry
 
-*Last updated: 2026-06-19 20:11 UTC*
+*Last updated: 2026-06-19 21:44 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **9** of 9
-- Total filled trades across all runs: **305**
+- Runs completed: **10** of 10
+- Total filled trades across all runs: **404**
 - Average expectancy across runs: **-0.21R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
@@ -149,6 +149,51 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | 5-6 | 23 | 36.4% | -0.08R |
 | 6-7 | 19 | 21.4% | -0.28R |
 | 7+ | 15 | 50.0% | +0.28R |
+
+---
+
+### h1only_20250101_20250331
+
+**Unclassified** | 2025-01-01 to 2025-03-31 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 99 (of 298 rows) |
+| Win rate | 33.3% |
+| Expectancy | -0.12R |
+| Max drawdown | +18.41R |
+| Longest losing streak | 4 trades |
+| Proximal fill rate | 66.4% |
+| 50% fill rate | 59.1% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| GOLD | 12 | 44.4% | +0.20R |
+| USDJPY | 16 | 38.5% | +0.01R |
+| NZDUSD | 19 | 41.2% | -0.08R |
+| USDCHF | 13 | 30.0% | -0.20R |
+| NAS100 | 14 | 25.0% | -0.24R |
+| EURUSD | 25 | 23.5% | -0.26R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 14 | 33.3% | -0.19R |
+| London | 51 | 26.8% | -0.24R |
+| NY | 34 | 44.0% | +0.10R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 4-5 | 17 | 33.3% | -0.07R |
+| 5-6 | 31 | 16.7% | -0.42R |
+| 6-7 | 27 | 50.0% | +0.23R |
+| 7+ | 24 | 35.0% | -0.15R |
 
 ---
 
