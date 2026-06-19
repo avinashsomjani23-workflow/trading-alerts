@@ -40,17 +40,10 @@ on:
           - FVG_NOISE_FLOOR_MULT
           - SWEEP_EQUAL_LEVEL_TOLERANCE_ATR
           - SWEEP_WICK_PIERCE_MIN_ATR
-      month:
-        description: "Month"
+      periods:
+        description: "Months — comma list of YYYY-MM across any years (e.g. 2024-07,2025-01,2026-03)"
         required: true
-        type: choice
-        options:
-          ["1","2","3","4","5","6","7","8","9","10","11","12"]
-      year:
-        description: "Year (YYYY)"
-        required: true
-        type: choice
-        options: ["2023","2024","2025","2026"]
+        default: "2024-07"
       pairs:
         description: "Comma-separated pairs"
         required: false
@@ -73,17 +66,38 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       knobs: ${{ steps.build.outputs.knobs }}
+      periods: ${{ steps.build.outputs.periods }}
     steps:
       - id: build
+        env:
+          PERIODS_RAW: ${{ inputs.periods }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
+          import json, os, re
           picks = ["${{ inputs.knob_1 }}", "${{ inputs.knob_2 }}"]
-          seen, out = set(), []
+          seen, knobs = set(), []
           for k in picks:
               if k and k != "none" and k not in seen:
-                  seen.add(k); out.append(k)
-          print("knobs=" + json.dumps(out))
+                  seen.add(k); knobs.append(k)
+          print("knobs=" + json.dumps(knobs))
+
+          # Parse the free-text months. Validate strictly so a typo fails the run
+          # loudly here, not silently inside the matrix. One month = one run.
+          seen_p, periods = set(), []
+          for tok in os.environ["PERIODS_RAW"].split(","):
+              tok = tok.strip()
+              if not tok:
+                  continue
+              if not re.fullmatch(r"\d{4}-\d{2}", tok):
+                  raise SystemExit(f"bad period {tok!r}; want YYYY-MM (e.g. 2024-07)")
+              y, m = tok.split("-")
+              if not (1 <= int(m) <= 12):
+                  raise SystemExit(f"bad month in {tok!r}; month must be 01..12")
+              if tok not in seen_p:
+                  seen_p.add(tok); periods.append(tok)
+          if not periods:
+              raise SystemExit("no valid periods parsed from input")
+          print("periods=" + json.dumps(periods))
           PY
 
   sweep:
@@ -93,14 +107,23 @@ jobs:
     permissions:
       contents: write   # commit the immutable run dir back to main
     strategy:
-      fail-fast: false   # one knob failing must not cancel the other
+      fail-fast: false   # one (knob, month) failing must not cancel the others
       matrix:
+        # Cross product: every selected knob is tested on every selected month.
+        # Each (knob, month) cell is its OWN run dir + email + corpus row.
         knob: ${{ fromJson(needs.prepare.outputs.knobs) }}
+        period: ${{ fromJson(needs.prepare.outputs.periods) }}
     concurrency:
-      # Serialize commits per knob so two parallel jobs never race the push.
-      group: knob-sweep-commit-${{ matrix.knob }}
+      # One commit at a time per (knob, month) cell. Different cells still race
+      # the push to main — the rebase+retry loop below resolves that.
+      group: knob-sweep-commit-${{ matrix.knob }}-${{ matrix.period }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: the commit-back step does `git pull --rebase origin
+          # main`, which fails on a shallow (depth-1) clone — the silent reason
+          # earlier runs emailed but never landed in the repo.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -130,7 +153,10 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           BACKTEST_EMAIL: ${{ secrets.BACKTEST_EMAIL }}
         run: |
-          ARGS="--knob ${{ matrix.knob }} --year ${{ inputs.year }} --month ${{ inputs.month }} --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_usd }}"
+          PERIOD="${{ matrix.period }}"
+          YEAR="${PERIOD%%-*}"
+          MONTH="${PERIOD##*-}"
+          ARGS="--knob ${{ matrix.knob }} --year ${YEAR} --month ${MONTH} --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_usd }}"
           if [ "${{ inputs.send_email }}" = "true" ]; then
             ARGS="$ARGS --email"
           fi
@@ -138,8 +164,8 @@ jobs:
 
       - name: Commit run directory to main
         # The two-year corpus lives in the repo on purpose (artifacts expire).
-        # We commit ONLY this knob's new run dir. `git pull --rebase` before push
-        # so two parallel knob jobs don't reject each other.
+        # We commit ONLY this cell's new run dir. `git pull --rebase` before push
+        # so parallel cells don't reject each other.
         if: always()
         run: |
           git add backtest/diagnostics/sweeps/ || true
@@ -147,16 +173,25 @@ jobs:
             echo "No sweep output to commit."
             exit 0
           fi
-          git commit -m "Knob sweep: ${{ matrix.knob }} ${{ inputs.year }}-${{ inputs.month }} [skip ci]"
+          git commit -m "Knob sweep: ${{ matrix.knob }} ${{ matrix.period }} [skip ci]"
+          pushed=0
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin HEAD:main && break
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              pushed=1; break
+            fi
             echo "push retry $i ..."; sleep $((RANDOM % 5 + 2))
           done
+          if [ "$pushed" != "1" ]; then
+            # LOUD failure: a run that emailed but could not be committed must turn
+            # the job red, not vanish. (The artifact below is still the fallback.)
+            echo "::error::sweep run committed locally but PUSH TO main FAILED after 5 tries — corpus row not saved. Check branch protection / token perms."
+            exit 1
+          fi
 
       - name: Upload run artifacts (belt & braces)
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: knob-sweep-${{ matrix.knob }}-${{ inputs.year }}-${{ inputs.month }}
+          name: knob-sweep-${{ matrix.knob }}-${{ matrix.period }}
           path: backtest/diagnostics/sweeps/
           retention-days: 30

@@ -161,21 +161,62 @@ def run(knob: str, year: int, month: int, pairs: List[str],
     return health
 
 
+def _parse_periods(spec: str) -> List[tuple[int, int]]:
+    """Parse a comma list of 'YYYY-MM' into [(year, month), ...].
+
+    One knob run is always ONE calendar month (so months pool cleanly in the
+    aggregator). Selecting several months across years just means several runs,
+    each its own immutable dir + email. Order preserved, exact dupes dropped."""
+    out: List[tuple[int, int]] = []
+    seen = set()
+    for tok in spec.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            y_s, m_s = tok.split("-")
+            y, m = int(y_s), int(m_s)
+        except ValueError:
+            raise SystemExit(f"bad period {tok!r}; want 'YYYY-MM' (e.g. 2024-07)")
+        if not (1 <= m <= 12):
+            raise SystemExit(f"bad month in period {tok!r}; month must be 1..12")
+        if (y, m) not in seen:
+            seen.add((y, m))
+            out.append((y, m))
+    if not out:
+        raise SystemExit("no valid periods parsed")
+    return out
+
+
 def main():
     warnings.filterwarnings("ignore")
     ap = argparse.ArgumentParser()
     ap.add_argument("--knob", required=True)
-    ap.add_argument("--year", type=int, required=True)
-    ap.add_argument("--month", type=int, required=True)
+    ap.add_argument("--year", type=int)
+    ap.add_argument("--month", type=int)
+    ap.add_argument("--periods", help="comma list of YYYY-MM (e.g. 2024-07,2025-01); "
+                                      "runs one sweep per month. Overrides --year/--month.")
     ap.add_argument("--pairs", default=",".join(DEFAULT_PAIRS))
     ap.add_argument("--risk-usd", type=float, default=250.0)
     ap.add_argument("--email", action="store_true")
     args = ap.parse_args()
     pairs = [p.strip() for p in args.pairs.split(",") if p.strip()]
-    health = run(args.knob, args.year, args.month, pairs,
-                 risk_usd=args.risk_usd, send_email=args.email)
-    # Non-zero exit on FAIL so the workflow surfaces a broken run loudly.
-    sys.exit(0 if health.get("overall") == "PASS" else 1)
+
+    if args.periods:
+        periods = _parse_periods(args.periods)
+    elif args.year and args.month:
+        periods = [(args.year, args.month)]
+    else:
+        raise SystemExit("give either --periods 'YYYY-MM,...' or both --year and --month")
+
+    # Each month is an independent run. One FAIL must not abort the rest, but the
+    # process exits non-zero if ANY month failed so the caller surfaces it loudly.
+    all_pass = True
+    for (y, m) in periods:
+        health = run(args.knob, y, m, pairs,
+                     risk_usd=args.risk_usd, send_email=args.email)
+        all_pass = all_pass and (health.get("overall") == "PASS")
+    sys.exit(0 if all_pass else 1)
 
 
 if __name__ == "__main__":

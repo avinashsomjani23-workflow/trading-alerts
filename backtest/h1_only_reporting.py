@@ -1397,6 +1397,69 @@ def _by_session_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>"
 
 
+# Raw break-strength buckets, in ATR units (how far past the broken level the
+# break candle CLOSED). These read out the benchmark directly: the bucket where
+# win rate / avg R lifts is the ATR multiple worth gating on. Same edges for BOS
+# and CHoCH so the two event types are compared on the SAME physical scale (the
+# floor differs — BOS 0.4 / CHoCH 1.0 ATR — which is exactly what we want to see).
+_BREAK_BUCKETS = [
+    ("< 0.5 ATR",   0.0,  0.5),
+    ("0.5–1.0 ATR", 0.5,  1.0),
+    ("1.0–2.0 ATR", 1.0,  2.0),
+    ("2.0–3.0 ATR", 2.0,  3.0),
+    ("3.0+ ATR",    3.0,  float("inf")),
+]
+
+
+def _break_event_type(tag: Optional[str]) -> Optional[str]:
+    """Normalise bos_tag (BOS / BOS_BIRTH / CHoCH / ...) to 'BOS' | 'CHoCH'."""
+    if not tag:
+        return None
+    return "CHoCH" if "CHoCH" in str(tag) else "BOS"
+
+
+def _break_benchmark_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    """Win rate / avg R by raw break ATR multiple, split BOS vs CHoCH.
+
+    Answers: at what break strength does the edge appear? The bucket where win
+    rate and avg R lift is the benchmark for the BOS / CHoCH ATR multiplier knob.
+    """
+    filled = [t for t in trades if _is_real_filled(t)]
+    if not filled:
+        return "<p style='color:#888;'>No filled trades.</p>"
+    df = pd.DataFrame(filled)
+    if "break_close_atr" not in df.columns or r_col not in df.columns:
+        return ("<p style='color:#888;'>Break-quality data missing "
+                "(re-run the backtest to populate it).</p>")
+    df = df.copy()
+    df["_evt"] = df["bos_tag"].apply(_break_event_type) if "bos_tag" in df.columns else None
+    df["_bk"]  = pd.to_numeric(df["break_close_atr"], errors="coerce")
+
+    out = []
+    for evt in ("BOS", "CHoCH"):
+        sub = df[(df["_evt"] == evt) & df["_bk"].notna()]
+        if sub.empty:
+            continue
+        floor = "0.4" if evt == "BOS" else "1.0"
+        header = (f"<tr><th>{evt} &mdash; break strength "
+                  f"(required floor {floor} ATR)</th>"
+                  f"<th>Trades</th><th>Win rate</th><th>Avg R</th></tr>")
+        body = ""
+        for label, lo, hi in _BREAK_BUCKETS:
+            bkt = sub[(sub["_bk"] >= lo) & (sub["_bk"] < hi)]
+            body += _flat_breakdown_row(label, bkt, r_col)
+        avg = sub["_bk"].mean()
+        note = (f"<p style='font-size:12px;color:#666;margin:6px 0 18px;'>"
+                f"{evt}: {len(sub)} trades, mean break {avg:.2f} ATR past the "
+                f"broken level. Floor is the minimum the engine requires to fire "
+                f"this event ({floor} ATR).</p>")
+        out.append(f"<table><thead>{header}</thead><tbody>{body}</tbody></table>{note}")
+
+    if not out:
+        return "<p style='color:#888;'>No BOS/CHoCH break data on filled trades.</p>"
+    return "".join(out)
+
+
 def _pair_session_matrix_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     """Pair x Session cross-tab. Pairs are rows, sessions are columns.
     Each cell shows trade count on top, WR and avg R below.
@@ -2272,6 +2335,7 @@ _EXCEL_COL_NAMES = {
     "pair":              "Currency Pair",
     # B–F: all timestamps, grouped for easy chart cross-reference
     "ob_time_ist":       "OB Candle (IST)",
+    "event_time_ist":    "Event Candle (IST)",
     "alert_time_ist":    "Scan / Alert Time (IST)",
     "fill_time_ist":     "Entry Fill (IST)",
     "sl_hit_time_ist":   "SL Hit (IST)",
@@ -2315,6 +2379,10 @@ _EXCEL_COL_NAMES = {
     "sweep_present":     "Liquidity Sweep Present",
     "bos_tag":           "Structure Event (BOS / CHoCH)",
     "bos_tier":          "Structure Tier (Major / Minor)",
+    "break_close_atr":   "Break ATR Multiple",
+    "break_excess":      "Break × Over Floor",
+    "break_body_atr":    "Break Body (ATR)",
+    "break_tier":        "Break Quality",
     "vet_review":        "Worth Reviewing",
     "vet_review_reason": "Why Worth Reviewing",
     # news / session audit
@@ -2408,9 +2476,10 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
         # are UTC ISO strings. SL/TP IST cells split exit_ts by exit_reason so
         # a row only carries the IST timestamp for the outcome that actually
         # happened — empty otherwise.
-        df["ob_time_ist"]    = df["ob_timestamp"].apply(_to_ist_str) if "ob_timestamp" in df.columns else ""
-        df["alert_time_ist"] = df["alert_ts"].apply(_to_ist_str)     if "alert_ts"     in df.columns else ""
-        df["fill_time_ist"]  = df["fill_ts"].apply(_to_ist_str)      if "fill_ts"      in df.columns else ""
+        df["ob_time_ist"]    = df["ob_timestamp"].apply(_to_ist_str)    if "ob_timestamp"  in df.columns else ""
+        df["event_time_ist"] = df["bos_timestamp"].apply(_to_ist_str) if "bos_timestamp" in df.columns else ""
+        df["alert_time_ist"] = df["alert_ts"].apply(_to_ist_str)      if "alert_ts"      in df.columns else ""
+        df["fill_time_ist"]  = df["fill_ts"].apply(_to_ist_str)       if "fill_ts"       in df.columns else ""
 
         def _sl_ist(row):
             return _to_ist_str(row.get("exit_ts")) if row.get("exit_reason") in ("sl", "sl_collision") else ""
@@ -2444,9 +2513,9 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
         _col_names_with_dow = dict(_EXCEL_COL_NAMES)
         _col_names_with_dow["day_of_week"] = "Day of Week"
         # +1 vs the pre-setup_id layout: setup_id is now the first key, so the
-        # session/alignment block ends at index 11 (was 10). Keeps Day of Week
-        # in the same logical slot after killzone_alignment.
-        _split_at = 11
+        # session/alignment block ends at index 12 (was 11, +1 for Event Candle).
+        # Keeps Day of Week in the same logical slot after killzone_alignment.
+        _split_at = 12
         desired = [c for c in list(_EXCEL_COL_NAMES.keys())[:_split_at]
                    + ["day_of_week"]
                    + list(_EXCEL_COL_NAMES.keys())[_split_at:]
@@ -2482,8 +2551,10 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
             "FVG Present": 12, "Liquidity Sweep Present": 22,
             "Structure Event (BOS / CHoCH)": 24,
             "Structure Tier (Major / Minor)": 24,
+            "Break ATR Multiple": 16, "Break × Over Floor": 16,
+            "Break Body (ATR)": 14, "Break Quality": 14,
             "Worth Reviewing": 15, "Why Worth Reviewing": 40,
-            "OB Candle (IST)": 18, "Scan / Alert Time (IST)": 22,
+            "OB Candle (IST)": 18, "Event Candle (IST)": 18, "Scan / Alert Time (IST)": 22,
             "Entry Fill (IST)": 18,
             "SL Hit (IST)": 18, "TP Fill (IST)": 18,
             "PD Zone": 12, "PD Alignment": 14, "PD Array % (entry)": 18,
@@ -3242,6 +3313,18 @@ def _build_group_html(
   </p>
 </div>
 
+<!-- BREAK QUALITY — BOS vs CHoCH benchmark for the ATR multiplier knob -->
+<div class="section">
+  <h2>Break quality &mdash; BOS vs CHoCH ATR-multiple benchmark</h2>
+  <p style="font-size:13px;color:#555;margin-bottom:10px;">
+    How far past the broken level the break candle <b>closed</b>, in ATR units,
+    on the live (proximal) book. The bucket where win rate and avg R lift is the
+    benchmark for the BOS / CHoCH ATR-multiplier knob. Exact per-trade numbers
+    are in the Excel (columns Break ATR Multiple / Break &times; Over Floor).
+  </p>
+  {_break_benchmark_html(prox_trades, "r_realised")}
+</div>
+
 {_zone_block_html(
     "Section A &mdash; Proximal entry",
     prox_trades, sb_prox, sb_prox_tp1, sb_prox_tp2, risk_usd,
@@ -3646,6 +3729,18 @@ def write_h1_only_report(
 <div class="section">
   <h2>What predicted outcomes &mdash; signal vs noise</h2>
   {_signal_vs_noise_html(prox_trades, "r_realised")}
+</div>
+
+<!-- BREAK QUALITY — BOS vs CHoCH benchmark for the ATR multiplier knob -->
+<div class="section">
+  <h2>Break quality &mdash; BOS vs CHoCH ATR-multiple benchmark</h2>
+  <p style="font-size:13px;color:#555;margin-bottom:10px;">
+    How far past the broken level the break candle <b>closed</b>, in ATR units,
+    on the live (proximal) book. The bucket where win rate and avg R lift is the
+    benchmark for the BOS / CHoCH ATR-multiplier knob. Exact per-trade numbers
+    are in the Excel (columns Break ATR Multiple / Break &times; Over Floor).
+  </p>
+  {_break_benchmark_html(prox_trades, "r_realised")}
 </div>
 
 <!-- ============================================================ -->

@@ -775,6 +775,13 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     direction = ob.get("direction", "?")
     bos_tag = ob.get("bos_tag", "BOS")
     bos_tier = ob.get("bos_tier", "Major")
+    # Break quality of the BOS/CHoCH candle — computed ONCE by smc_radar at
+    # detection (smc_detector.compute_break_quality) and carried on the OB. Never
+    # recomputed here; we only surface the frozen numbers so the backtest can
+    # benchmark what break ATR multiple actually wins, per event type.
+    #   break_close_atr = raw ATR multiple the close cleared the broken level by
+    #   break_excess    = times over that event's required ATR floor (BOS 0.4 / CHoCH 1.0)
+    _bq = ob.get("break_quality") or {}
     dr = ob.get("dealing_range")
     pd_zone = _pd_zone_from_dr(entry, dr)
     pd_alignment = _pd_alignment("LONG" if direction == "bullish" else "SHORT",
@@ -841,6 +848,10 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "sl_collision":  sl_collision,
         "bos_tag":       bos_tag,
         "bos_tier":      bos_tier,
+        "break_tier":        _bq.get("tier"),
+        "break_close_atr":   _bq.get("close_beyond_atr"),
+        "break_excess":      _bq.get("excess"),
+        "break_body_atr":    _bq.get("body_atr"),
         "fvg_present":   bool((ob.get("fvg") or {}).get("exists")),
         # fresh / stale / no_fvg — was the FVG already discharged on an earlier
         # approach before this trigger? Feeds the FVG-staleness breakdown.

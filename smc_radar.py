@@ -937,6 +937,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                 ob_for_dr, df, h1_atr_for_leg,
                 pair_conf={'pair_type': pair_type, 'name': pair_name},
                 current_price=ob_proximal_for_dr,
+                walls_override=walls,
             )
         except Exception as _dr_snap_err:
             logging.warning(f"[dealing_range] OB snapshot failed: {_dr_snap_err}")

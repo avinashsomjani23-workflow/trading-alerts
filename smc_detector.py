@@ -333,7 +333,7 @@ def trading_hours_between(ts_earlier, ts_later):
 
 # PHASE 1 ONLY — fetches dealing range walls (structural state primary,
 # legacy lookback fallback). Called only by smc_radar.py.
-def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
+def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None, walls_override=None):
     """
     Wrapper over dealing_range.py — the new single-source-of-truth module.
 
@@ -348,17 +348,25 @@ def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None):
     The `ob`, `h1_atr`, `current_price` params are kept for signature
     compatibility with every existing call site. Only `pair_conf['name']`
     is consumed by the new logic.
+
+    `walls_override`: if provided, use these walls directly instead of reading
+    structure_state.json from disk. Used by the backtest replay engine so each
+    bar gets the historically correct walls rather than today's live file.
     """
     pair_name = (pair_conf or {}).get("name")
     pair_type = (pair_conf or {}).get("pair_type", "forex")
 
-    # 1. Try structure_state.json
-    try:
-        import dealing_range as _DR
-        state = _DR.load_state()
-        walls = state.get(pair_name) if pair_name else None
-    except Exception:
-        walls = None
+    import dealing_range as _DR
+
+    # Use caller-supplied walls when available (backtest); otherwise read disk (live).
+    if walls_override is not None:
+        walls = walls_override
+    else:
+        try:
+            state = _DR.load_state()
+            walls = state.get(pair_name) if pair_name else None
+        except Exception:
+            walls = None
 
     proximal = float(ob.get("proximal_line", 0.0)) if ob else 0.0
     # Enter the structural-PD branch when EITHER a valid H4 dealing range exists

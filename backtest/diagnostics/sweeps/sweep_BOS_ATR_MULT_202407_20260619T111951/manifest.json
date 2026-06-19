@@ -1,0 +1,104 @@
+{
+  "run_id": "sweep_BOS_ATR_MULT_202407_20260619T111951",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-06-19T11:19:51.614094+00:00",
+  "git_sha": "4f63066",
+  "knob": "BOS_ATR_MULT",
+  "grid": [
+    0.2,
+    0.3,
+    0.4,
+    0.5,
+    0.7
+  ],
+  "grid_mode": "absolute",
+  "year": 2024,
+  "month": 7,
+  "resolved_start": "2024-07-01",
+  "resolved_end": "2024-07-31",
+  "pairs_requested": [
+    "EURUSD",
+    "USDJPY",
+    "NAS100",
+    "GOLD"
+  ],
+  "risk_usd": 250.0,
+  "live_knob_snapshot": {
+    "MIN_LEG_ATR_MULT": 1.5,
+    "BOS_ATR_MULT": 0.4,
+    "STRUCTURE_CHOCH_ATR_MULT": 1.0,
+    "STRUCTURE_LOCK_ATR_MULT": 1.5,
+    "OB_MAX_RANGE_ATR_MULT": 2.0,
+    "MIN_OB_RANGE_ATR_MULT": 0.0,
+    "FVG_NOISE_FLOOR_MULT": {
+      "forex": 0.08,
+      "index": 0.15,
+      "commodity": 0.12
+    },
+    "SWEEP_EQUAL_LEVEL_TOLERANCE_ATR": {
+      "forex": 0.3,
+      "index": 0.4,
+      "commodity": 0.4
+    },
+    "SWEEP_WICK_PIERCE_MIN_ATR": {
+      "forex": 0.05,
+      "index": 0.08,
+      "commodity": 0.08
+    }
+  },
+  "pairs_served": [
+    {
+      "name": "EURUSD",
+      "symbol": "EURUSD=X",
+      "requested_start": "2024-07-01",
+      "requested_end": "2024-07-31",
+      "served": true,
+      "served_start": "2024-07-01 00:00:00+00:00",
+      "served_end": "2024-07-31 00:00:00+00:00",
+      "n_bars": 525,
+      "fingerprint": "cf0a767785d76b5e",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "USDJPY",
+      "symbol": "JPY=X",
+      "requested_start": "2024-07-01",
+      "requested_end": "2024-07-31",
+      "served": true,
+      "served_start": "2024-07-01 00:00:00+00:00",
+      "served_end": "2024-07-31 00:00:00+00:00",
+      "n_bars": 521,
+      "fingerprint": "40af2fea967fdcf5",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "NAS100",
+      "symbol": "NQ=F",
+      "requested_start": "2024-07-01",
+      "requested_end": "2024-07-31",
+      "served": true,
+      "served_start": "2024-07-01 00:00:00+00:00",
+      "served_end": "2024-07-31 00:00:00+00:00",
+      "n_bars": 466,
+      "fingerprint": "b2a385fdcf901faf",
+      "prox_cap_atr": 3.0
+    },
+    {
+      "name": "GOLD",
+      "symbol": "GC=F",
+      "requested_start": "2024-07-01",
+      "requested_end": "2024-07-31",
+      "served": true,
+      "served_start": "2024-07-01 00:00:00+00:00",
+      "served_end": "2024-07-31 00:00:00+00:00",
+      "n_bars": 465,
+      "fingerprint": "b5f37ee78dac66f5",
+      "prox_cap_atr": 3.0
+    }
+  ],
+  "versions": {
+    "python": "3.14.5",
+    "pandas": "3.0.3",
+    "yfinance": "1.3.0"
+  }
+}
