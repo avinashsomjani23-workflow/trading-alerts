@@ -646,7 +646,7 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-18T09:35:41.448507",
-      "last_seen_ist": "2026-06-19T09:35:43.287373",
+      "last_seen_ist": "2026-06-19T10:35:42.662623",
       "last_email_day": "2026-06-18",
       "reentry_armed": true,
       "max_exit_distance": 1.102996826171875,
@@ -954,10 +954,10 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-19T09:35:43.287373",
-      "last_seen_ist": "2026-06-19T09:35:43.287373",
+      "last_seen_ist": "2026-06-19T10:35:42.662623",
       "last_email_day": "2026-06-19",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.0033600330352783203,
       "bias": "LONG",
       "pair": "USDCHF",
       "ob_snapshot": {
