@@ -3,8 +3,8 @@
   "overall": "PASS",
   "exit_code": 0,
   "warnings_present": false,
-  "headline_pnl_usd": -6308.75,
-  "content_hash": "a5026f8042b8ce2d99e2a1b98b6a9dbe947dd8577fc7bf99306aa6c99fda54c3",
+  "headline_pnl_usd": -5808.75,
+  "content_hash": "3c3963a1693cc263bc797ad56b5f37f4999fff69418a0115cf2a883af1303c89",
   "condition_counts": {
     "WARMUP_SKIP": 292,
     "DEDUP_SUPPRESSED": 27
@@ -15,8 +15,8 @@
     "ob_mitigated": 56,
     "re_arm": 46,
     "ob_aged_out": 4,
-    "trade_fill": 81,
-    "trade_exit": 118,
+    "trade_exit": 116,
+    "trade_fill": 79,
     "alert_suppressed_dedup": 27
   },
   "outcome_counts": {
@@ -32,8 +32,8 @@
       "description": "Sum pnl_usd == Sum r_realised*risk, and equals reporting headline",
       "threshold": "rel_tol 1e-09",
       "observed": {
-        "headline_usd": -6308.75,
-        "reported": -6308.75,
+        "headline_usd": -5808.75,
+        "reported": -5808.75,
         "row_mismatches": 0
       },
       "verdict": "PASS"
@@ -78,8 +78,8 @@
       "description": "headline recomputed from r_realised only; tp1/tp2 excluded",
       "threshold": "independent recompute",
       "observed": {
-        "realised_headline": -6308.75,
-        "tp2_headline_for_contrast": 409.25
+        "realised_headline": -5808.75,
+        "tp2_headline_for_contrast": 909.25
       },
       "verdict": "PASS"
     },
@@ -87,7 +87,7 @@
       "id": "G7",
       "description": "content hash of scan_log + events recorded for re-run compare",
       "threshold": "recorded",
-      "observed": "a5026f8042b8ce2d99e2a1b98b6a9dbe947dd8577fc7bf99306aa6c99fda54c3",
+      "observed": "3c3963a1693cc263bc797ad56b5f37f4999fff69418a0115cf2a883af1303c89",
       "verdict": "PASS"
     },
     {

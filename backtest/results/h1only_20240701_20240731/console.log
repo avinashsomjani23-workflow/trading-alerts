@@ -30,8 +30,7 @@
   [DIAG EURUSD] walked=525 warmup_skip=49 dr_err=0 radar_err=0 bars_with_events=476 bars_with_obs=244 new_obs=10 prox_checks=534 closest=0.00×ATR (cap=2.5×ATR) alerts=10 resuppressed=0 rearmed=4 aged_out=1
 [INFO] pair_alerts_collected pair=EURUSD alerts=10 mode=h1_only
   EURUSD: 10 OB-touch alerts
-[INFO] trade_simulated pair=EURUSD alert_ts=2024-07-03 06:00:00+00:00 entry_zone=proximal score=7.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
-[INFO] trade_simulated pair=EURUSD alert_ts=2024-07-03 06:00:00+00:00 entry_zone=50pct score=7.0 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] h1only_sim_skip pair=EURUSD entry_zone=proximal alert_ts=2024-07-03 06:00:00+00:00 reason=alert_candle_touched_distal distal=1.0749220848083496 bias=SHORT
 [INFO] killzone_drop pair=EURUSD alert_ts=2024-07-04 09:00:00+00:00 utc_hour=9 utc_minute=0 windows=London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York
 [INFO] trade_simulated pair=EURUSD alert_ts=2024-07-04 09:00:00+00:00 entry_zone=proximal score=7.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
 [INFO] trade_simulated pair=EURUSD alert_ts=2024-07-04 09:00:00+00:00 entry_zone=50pct score=7.0 model=h1_only exit_reason=never_filled r_realised=0.0 r_if_exit_tp1=0.0 r_if_exit_tp2=0.0 pnl_usd=0.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
@@ -52,8 +51,8 @@
 [INFO] ob_dedup_skip pair=EURUSD alert_ts=2024-07-25 16:00:00+00:00 ob_ts=2024-07-23T03:00:00+00:00 direction=bearish alert_seq=2
 [INFO] killzone_drop pair=EURUSD alert_ts=2024-07-29 00:00:00+00:00 utc_hour=0 utc_minute=0 windows=London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York
 [INFO] h1only_sim_skip pair=EURUSD entry_zone=proximal alert_ts=2024-07-29 00:00:00+00:00 reason=Entry 1.08578 is above current price 1.08554 -- LONG limit would chase price.
-[INFO] pair_trades_simulated pair=EURUSD trades=16 news_blocked=0 ist_blocked=0 killzone_dropped_alerts=4
-  EURUSD: 16 simulated trade rows (2 per qualified OB-touch; 0 news-blocked, 0 IST-blocked, 4 killzone-dropped alerts)
+[INFO] pair_trades_simulated pair=EURUSD trades=14 news_blocked=0 ist_blocked=0 killzone_dropped_alerts=4
+  EURUSD: 14 simulated trade rows (2 per qualified OB-touch; 0 news-blocked, 0 IST-blocked, 4 killzone-dropped alerts)
 
 === USDJPY (JPY=X) ===
 [INFO] pair_data_loaded pair=USDJPY h1_rows=522 h1_first=2024-06-30 23:00:00+00:00 h1_last=2024-07-31 00:00:00+00:00
@@ -255,3 +254,5 @@
 [INFO] killzone_drop pair=GOLD alert_ts=2024-07-10 09:00:00+00:00 utc_hour=9 utc_minute=0 windows=London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York
 [INFO] trade_simulated pair=GOLD alert_ts=2024-07-10 09:00:00+00:00 entry_zone=proximal score=6.5 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
 [INFO] trade_simulated pair=GOLD alert_ts=2024-07-10 09:00:00+00:00 entry_zone=50pct score=6.5 model=h1_only exit_reason=sl r_realised=-1.0 r_if_exit_tp1=-1.0 r_if_exit_tp2=-1.0 pnl_usd=-250.0 news_blocked=False ist_blocked=False news_event_title= news_event_source=
+[INFO] killzone_drop pair=GOLD alert_ts=2024-07-17 17:00:00+00:00 utc_hour=17 utc_minute=0 windows=London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York
+[INFO] trade_simulated pair=GOLD alert_ts=2024-07-17 17:00:00+00:00 entry_zone=proximal score=7.0 model=h1_only exit_reason=tp1 r_realised=3.255 r_if_exit_tp1=3.26 r_if_exit_tp2=5.223 pnl_usd=813.75 news_blocked=False ist_blocked=False news_event_title= news_event_source=
