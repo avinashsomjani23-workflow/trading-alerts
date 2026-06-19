@@ -397,5 +397,19 @@
     "interval": "1h",
     "reason": "stale data (age 2.10h, limit 2.0h)",
     "age_hours": 2.1
+  },
+  {
+    "ts": "2026-06-19T11:33:37.827087",
+    "symbol": "NQ=F",
+    "interval": "1h",
+    "reason": "stale data (age 3.06h, limit 2.0h)",
+    "age_hours": 3.06
+  },
+  {
+    "ts": "2026-06-19T11:33:41.094921",
+    "symbol": "GC=F",
+    "interval": "1h",
+    "reason": "stale data (age 3.06h, limit 2.0h)",
+    "age_hours": 3.06
   }
 ]
