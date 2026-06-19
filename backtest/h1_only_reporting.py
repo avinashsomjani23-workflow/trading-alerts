@@ -823,8 +823,8 @@ def _counterfactual_html(trades: List[Dict[str, Any]], risk_usd: float) -> str:
     if "pd_alignment" in df.columns:
         pa = df["pd_alignment"]
         sections.append(("PD-array alignment (direction-aware)", [
-            ("Only PD-aligned (long+discount / short+premium)", pa == "aligned"),
-            ("Skip PD-counter (long+premium / short+discount)", pa != "counter"),
+            ("PD-aligned (long+discount / short+premium)", pa == "aligned"),
+            ("PD-counter (long+premium / short+discount)", pa == "counter"),
         ]))
     elif "pd_zone" in df.columns:  # legacy runs without pd_alignment
         pdz = df["pd_zone"]
@@ -954,8 +954,8 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
     if "pd_alignment" in df.columns:
         pa = df["pd_alignment"]
         sections.append(("PD-array alignment", [
-            ("Only PD-aligned (long+discount / short+premium)", pa == "aligned"),
-            ("Skip PD-counter (long+premium / short+discount)", pa != "counter"),
+            ("PD-aligned (long+discount / short+premium)", pa == "aligned"),
+            ("PD-counter (long+premium / short+discount)", pa == "counter"),
         ]))
     elif "pd_zone" in df.columns:
         pdz = df["pd_zone"]
