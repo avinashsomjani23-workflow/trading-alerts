@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-20T07:34:58.040421+00:00",
+  "updated_at": "2026-06-21T17:32:16.763975+00:00",
   "runs": [
     {
       "run_id": "h1only_20240701_20240731",
@@ -766,6 +766,115 @@
       },
       "notes": "",
       "recorded_at": "2026-06-20T07:34:58.040182+00:00"
+    },
+    {
+      "run_id": "h1only_20250701_20251231",
+      "start": "2025-07-01",
+      "end": "2025-12-31",
+      "group": 0,
+      "regime": "bau",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 478,
+        "filled_trades": 145,
+        "win_rate_pct": 33.1,
+        "expectancy_r": -0.13,
+        "max_dd_r": 22.342,
+        "longest_losing_streak": 12,
+        "fill_rate_proximal_pct": 60.7,
+        "fill_rate_50pct_pct": 56.5,
+        "per_pair": [
+          {
+            "pair": "USDJPY",
+            "trades": 18,
+            "win_rate_pct": 50.0,
+            "expectancy_r": 0.304,
+            "total_pnl_usd": 1366.25
+          },
+          {
+            "pair": "NZDUSD",
+            "trades": 21,
+            "win_rate_pct": 52.9,
+            "expectancy_r": 0.203,
+            "total_pnl_usd": 1064.75
+          },
+          {
+            "pair": "GOLD",
+            "trades": 17,
+            "win_rate_pct": 35.7,
+            "expectancy_r": -0.062,
+            "total_pnl_usd": -263.5
+          },
+          {
+            "pair": "USDCHF",
+            "trades": 22,
+            "win_rate_pct": 36.8,
+            "expectancy_r": -0.118,
+            "total_pnl_usd": -648.5
+          },
+          {
+            "pair": "EURUSD",
+            "trades": 37,
+            "win_rate_pct": 25.0,
+            "expectancy_r": -0.324,
+            "total_pnl_usd": -2999.0
+          },
+          {
+            "pair": "NAS100",
+            "trades": 30,
+            "win_rate_pct": 13.6,
+            "expectancy_r": -0.429,
+            "total_pnl_usd": -3219.0
+          }
+        ],
+        "by_session": {
+          "Asia": {
+            "trades": 22,
+            "win_rate_pct": 33.3,
+            "expectancy_r": -0.067
+          },
+          "London": {
+            "trades": 50,
+            "win_rate_pct": 33.3,
+            "expectancy_r": -0.129
+          },
+          "NY": {
+            "trades": 73,
+            "win_rate_pct": 32.7,
+            "expectancy_r": -0.149
+          }
+        },
+        "score_buckets": [
+          {
+            "score_bucket": "4-5",
+            "trades": 35,
+            "win_rate_pct": 29.6,
+            "expectancy_r": -0.162
+          },
+          {
+            "score_bucket": "5-6",
+            "trades": 35,
+            "win_rate_pct": 20.0,
+            "expectancy_r": -0.45
+          },
+          {
+            "score_bucket": "6-7",
+            "trades": 35,
+            "win_rate_pct": 51.9,
+            "expectancy_r": 0.223
+          },
+          {
+            "score_bucket": "7+",
+            "trades": 40,
+            "win_rate_pct": 32.4,
+            "expectancy_r": -0.129
+          }
+        ],
+        "score_verdict": "BROKEN \u2014 score does not predict outcome"
+      },
+      "notes": "",
+      "recorded_at": "2026-06-21T17:32:16.763616+00:00"
     },
     {
       "run_id": "h1only_20260209_20260213",
