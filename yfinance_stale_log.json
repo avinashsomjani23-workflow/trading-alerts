@@ -670,5 +670,33 @@
     "interval": "1h",
     "reason": "stale data (age 15.10h, limit 2.0h)",
     "age_hours": 15.1
+  },
+  {
+    "ts": "2026-06-22T00:35:45.884659",
+    "symbol": "JPY=X",
+    "interval": "1h",
+    "reason": "stale data (age 46.10h, limit 2.0h)",
+    "age_hours": 46.1
+  },
+  {
+    "ts": "2026-06-22T00:35:49.256465",
+    "symbol": "NZDUSD=X",
+    "interval": "1h",
+    "reason": "stale data (age 46.10h, limit 2.0h)",
+    "age_hours": 46.1
+  },
+  {
+    "ts": "2026-06-22T00:35:52.646239",
+    "symbol": "CHF=X",
+    "interval": "1h",
+    "reason": "stale data (age 46.10h, limit 2.0h)",
+    "age_hours": 46.1
+  },
+  {
+    "ts": "2026-06-22T00:35:55.906527",
+    "symbol": "GC=F",
+    "interval": "1h",
+    "reason": "stale data (age 64.10h, limit 2.0h)",
+    "age_hours": 64.1
   }
 ]
