@@ -131,6 +131,16 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/832-ez-ecb-president-lagarde-speaks]]></url>
 	</event>
 	<event>
+		<title>FOMC Member Goolsbee Speaks</title>
+		<country>USD</country>
+		<date><![CDATA[06-22-2026]]></date>
+		<time><![CDATA[9:30pm]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast />
+		<previous />
+		<url><![CDATA[https://www.forexfactory.com/calendar/889-us-fomc-member-goolsbee-speaks]]></url>
+	</event>
+	<event>
 		<title>Flash Manufacturing PMI</title>
 		<country>AUD</country>
 		<date><![CDATA[06-22-2026]]></date>
@@ -496,7 +506,7 @@
 		<date><![CDATA[06-24-2026]]></date>
 		<time><![CDATA[12:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-219B]]></forecast>
+		<forecast><![CDATA[-206B]]></forecast>
 		<previous><![CDATA[-191B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/195-us-current-account]]></url>
 	</event>
@@ -586,7 +596,7 @@
 		<date><![CDATA[06-25-2026]]></date>
 		<time><![CDATA[1:30am]]></time>
 		<impact><![CDATA[High]]></impact>
-		<forecast><![CDATA[30.3K]]></forecast>
+		<forecast><![CDATA[31.4K]]></forecast>
 		<previous><![CDATA[-18.6K]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/73-au-employment-change]]></url>
 	</event>
@@ -626,7 +636,7 @@
 		<date><![CDATA[06-25-2026]]></date>
 		<time><![CDATA[6:00am]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-27.6]]></forecast>
+		<forecast><![CDATA[-27.9]]></forecast>
 		<previous><![CDATA[-29.8]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/335-ge-gfk-consumer-climate]]></url>
 	</event>
@@ -806,7 +816,7 @@
 		<date><![CDATA[06-26-2026]]></date>
 		<time><![CDATA[12:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-85.4B]]></forecast>
+		<forecast><![CDATA[-84.9B]]></forecast>
 		<previous><![CDATA[-82.4B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/625-us-goods-trade-balance]]></url>
 	</event>
