@@ -98,6 +98,12 @@ STALENESS_HOURS = {
     "5m": 0.30
 }
 
+# Futures close Friday ~21:00 UTC and reopen Sunday ~22:00 UTC — a 49-hour gap.
+# 72h covers the full weekend without triggering false staleness on Saturday/Sunday
+# scans. This only applies to futures tickers; FX pairs keep the 2h limit.
+FUTURES_TICKERS = {"GC=F", "NQ=F"}
+FUTURES_STALENESS_HOURS = {"1h": 72.0, "15m": 2.0, "5m": 0.30}
+
 # ---------------------------------------------------------------------------
 # EMAIL GATE CONFIG (B6) — state-based timer
 # ---------------------------------------------------------------------------
@@ -377,7 +383,7 @@ def _log_stale_skip(symbol, interval, reason, age_hours):
         logging.error(f"Stale log write failed: {e}")
 
 
-def _check_staleness(df, interval):
+def _check_staleness(df, interval, max_age_override=None):
     if df is None or df.empty:
         return True, None
     try:
@@ -392,10 +398,12 @@ def _check_staleness(df, interval):
             last_utc = last_ts
 
         age_hours = (datetime.utcnow() - last_utc).total_seconds() / 3600
-        max_age = STALENESS_HOURS.get(interval, 2.0)
+        max_age = max_age_override if max_age_override is not None else STALENESS_HOURS.get(interval, 2.0)
         return age_hours > max_age, age_hours
-    except Exception:
-        return False, None
+    except Exception as e:
+        # Fail-safe: unknown timestamp = treat as stale, never silently pass stale data.
+        logging.warning(f"_check_staleness error ({interval}): {e} — treating as stale")
+        return True, None
 
 # ---------------------------------------------------------------------------
 # ZONE STATE PERSISTENCE
@@ -421,6 +429,9 @@ def fetch_data(ticker, interval, period, retries=2):
     last_error = None
     last_age = None
 
+    _staleness_table = FUTURES_STALENESS_HOURS if ticker in FUTURES_TICKERS else STALENESS_HOURS
+    _max_age = _staleness_table.get(interval, 2.0)
+
     for attempt in range(retries + 1):
         try:
             df = yf.download(ticker, period=period, interval=interval, progress=False, timeout=20)
@@ -440,11 +451,11 @@ def fetch_data(ticker, interval, period, retries=2):
                 if _dt_col is not None:
                     _s = pd.to_datetime(tailed[_dt_col], utc=True)
                     tailed[_dt_col] = _s
-                is_stale, age_hours = _check_staleness(tailed, interval)
+                is_stale, age_hours = _check_staleness(tailed, interval, max_age_override=_max_age)
                 if not is_stale:
                     return tailed
                 last_age = age_hours
-                last_error = f"stale data (age {age_hours:.2f}h, limit {STALENESS_HOURS.get(interval, 2.0)}h)"
+                last_error = f"stale data (age {age_hours:.2f}h, limit {_max_age}h)"
         except Exception as e:
             last_error = str(e)
 
@@ -1621,7 +1632,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
 
         # --- BOS / CHoCH line + break-candle outline ---
         bos_price = None
-        bos_color = '#00bcd4'  # default; reassigned below from ob or last_event
+        bos_color = '#e91e63'  # default; reassigned below from ob or last_event
         if has_ob:
             bos_price = float(ob['bos_swing_price'])
             _btag = ob.get('bos_tag', 'BOS')
@@ -1631,7 +1642,7 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
             elif _btier == 'Range':
                 bos_color = '#00897b'  # teal = Range BOS (H4 wall break)
             else:
-                bos_color = '#00bcd4'  # cyan = plain BOS
+                bos_color = '#e91e63'  # magenta = plain BOS
             # Greyed for invalidated zones (the structure is historical now).
             line_alpha = 0.3 if is_invalidated else 0.7
             edge_color = '#888888' if is_invalidated else bos_color
@@ -1668,10 +1679,12 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
             le_bws  = last_event.get('broken_swing_price')
             if le_type == 'CHoCH':
                 ev_color = '#ff9800'
+            elif le_type == 'CHoCH_FAILED':
+                ev_color = '#00bcd4'   # cyan — flip reverted, trend resumed
             elif le_tier == 'Range':
                 ev_color = '#00897b'
             else:
-                ev_color = '#00bcd4'
+                ev_color = '#e91e63'
             le_idx = None
             if le_ts:
                 # Match against full_df since window_start may chop history.
@@ -2220,7 +2233,7 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
             if _tier == 'Range':
                 ev_color, ev_text = '#00897b', 'RangeBOS'
             else:
-                ev_color, ev_text = '#00bcd4', 'BOS'
+                ev_color, ev_text = '#e91e63', 'BOS'
         else:
             ev_color, ev_text = '#ff9800', 'CHoCH'
         event_chip = (f"<span style='background:{ev_color};color:#000;font-size:9px;"
@@ -2314,7 +2327,7 @@ def _phase1_chart_legend_html(bos_tag="BOS", bos_tier=None):
     The v2 engine has ONE structural tier — there is no Major/Minor. The only
     event types are BOS (internal swing break), Range BOS (H4 dealing-range wall
     break) and CHoCH (trend flip). Colours below match the chart exactly:
-    plain BOS #00bcd4, Range BOS #00897b, CHoCH #ff9800.
+    plain BOS #e91e63, Range BOS #00897b, CHoCH #ff9800, failed CHoCH #00bcd4.
     """
     items = [
         ('#bb8fce', 'Primary zone band (OB1 — closest to price) / greyed when invalidated'),
@@ -2323,9 +2336,10 @@ def _phase1_chart_legend_html(bos_tag="BOS", bos_tier=None):
         ('#2ecc71', 'FVG pristine (displacement)'),
         ('#f1c40f', 'FVG partial (proximal touched)'),
         ('#888888', 'FVG mitigated (ghost) / Invalidated zone'),
-        ('#00bcd4', 'BOS break candle / level (internal swing break)'),
+        ('#e91e63', 'BOS break candle / level (internal swing break)'),
         ('#00897b', 'Range BOS break candle / level (H4 dealing-range wall break)'),
         ('#ff9800', 'CHoCH break candle / level (trend flip)'),
+        ('#00bcd4', 'CHoCH failed (trend resumed) — the flip reverted'),
         ('#5dade2', 'Dealing range walls (dotted=anchored, dashed=placeholder; far walls render as edge labels)'),
         ('#85c1e9', 'Equilibrium (50%)'),
         ('#d4a017', 'Swing: ▲▼ lookback-3 (structural swings — walls / BOS / CHoCH)'),
