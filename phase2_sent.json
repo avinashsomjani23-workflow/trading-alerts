@@ -560,7 +560,7 @@
         "freshness": 1
       },
       "alert_ist": "2026-06-18T10:35:37.082049",
-      "last_seen_ist": "2026-06-22T11:35:45.716010",
+      "last_seen_ist": "2026-06-22T12:35:39.935110",
       "last_email_day": "2026-06-18",
       "reentry_armed": true,
       "max_exit_distance": 182.2001953125,
@@ -714,7 +714,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-18T21:35:55.283886",
-      "last_seen_ist": "2026-06-22T11:35:45.716010",
+      "last_seen_ist": "2026-06-22T12:35:39.935110",
       "last_email_day": "2026-06-18",
       "reentry_armed": true,
       "max_exit_distance": 0.7620086669921875,
@@ -829,7 +829,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-19T09:35:43.287373",
-      "last_seen_ist": "2026-06-22T11:35:45.716010",
+      "last_seen_ist": "2026-06-22T12:35:39.935110",
       "last_email_day": "2026-06-19",
       "reentry_armed": true,
       "max_exit_distance": 0.0034900307655334473,
@@ -944,7 +944,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-22T10:35:46.888112",
-      "last_seen_ist": "2026-06-22T11:35:45.716010",
+      "last_seen_ist": "2026-06-22T12:35:39.935110",
       "last_email_day": "2026-06-22",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -1060,7 +1060,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-19T12:35:40.721473",
-      "last_seen_ist": "2026-06-22T11:35:45.716010",
+      "last_seen_ist": "2026-06-22T12:35:39.935110",
       "last_email_day": "2026-06-19",
       "reentry_armed": true,
       "max_exit_distance": 0.0029685497283935547,
