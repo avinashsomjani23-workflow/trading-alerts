@@ -694,21 +694,26 @@ def call_gemini_flash(pair, bias, news_headlines):
         return cached
 
     prompt = f"""
-    You are a Macro Context Writer. DO NOT analyze the chart. DO NOT score the trade.
-    Your only job is to summarize macro risk for the trader to read.
-    TRADE DETAILS: Pair: {pair} | Direction: {bias}
-    RECENT NEWS: {news_headlines}
+    You are a macro risk briefer for a forex/commodities trader. Be direct and specific.
+    PAIR: {pair} | DIRECTION: {bias}
+    TODAY'S SCHEDULED HIGH-IMPACT EVENTS:
+    {news_headlines}
 
-    TASK:
-    Identify any Tier-1 economic events (e.g., CPI, NFP) affecting {pair} and
-    summarize them in plain language. The trader will decide what to do with this.
+    Write a macro briefing the trader reads before deciding whether to take this setup.
+    Rules:
+    - Name each event explicitly (e.g. "US CPI at 18:30 IST").
+    - For each event, say in one plain sentence what outcome would HELP this trade and what would HURT it.
+    - If the event is already past, say so and state what the actual result was if it is in the data.
+    - If there are no high-impact events today for {pair}, say so clearly in one sentence.
+    - Do NOT use filler like "traders should monitor" or "volatility may increase". Be specific.
+    - Total length: 2-4 sentences maximum.
 
     OUTPUT FORMAT (Strict JSON):
     {{
-        "macro_summary": "Exactly 2 concise sentences summarizing the macro risk specific to {pair}. If no Tier-1 events, say so explicitly."
+        "macro_summary": "Your 2-4 sentence briefing here."
     }}
     """
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_KEY}"
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
