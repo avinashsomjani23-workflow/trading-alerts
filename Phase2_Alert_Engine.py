@@ -2518,6 +2518,13 @@ if __name__ == "__main__":
             if ob.get('bos_sequence_count') is None:
                 ob['bos_sequence_count'] = bos_counter['count']  # legacy fallback
             ob['bos_count_maxed'] = bool(bos_counter.get('count_maxed', False))
+            # Continuation-drive verdict ('holding' | 'fading') describes the
+            # CURRENT trend leg's displacement decay — a property of live
+            # structure, not of the OB's own (possibly older) event. It applies to
+            # every surviving OB: when price returns to OB2, what matters is
+            # whether the trend is still driving NOW. Drives the structure quality
+            # score (count does not). Defaults 'holding' for legacy slate zones.
+            ob['bos_verdict'] = bos_counter.get('verdict', 'holding')
 
             zone_dir = ob.get('direction')
             if current_trend is None:

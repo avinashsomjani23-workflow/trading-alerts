@@ -561,60 +561,115 @@ def build_ts_to_local_x(df_plot):
 
 # PHASE 2 ONLY — counts BOS events since the last CHoCH. Reads dealing_range
 # event state. Called only by Phase2_Alert_Engine.py.
+# Continuation-drive decay threshold. A leg is 'fading' when the mean break-body
+# (ATR) of its last 2 plain BOS drops below this fraction of the mean of its
+# first 2. 0.60 = recent drive running under ~two-thirds of opening drive — a
+# veteran's "this is limping" line. Anchored on the EARLY mean (not the single
+# strongest break) so one mid-leg spike can't poison the read. One number, no
+# per-pair tuning: momentum decay reads the same on EURUSD as on Gold.
+_BOS_DECAY_RATIO = 0.60
+
+
 def compute_bos_sequence_count(pair_name):
-    """Count BOS events since the most recent CHoCH for the given pair.
+    """Continuation-leg read for the given pair: depth + drive verdict.
 
     Reads from dealing_range's structure_state.json — single source of truth.
     Detection lives in dealing_range.py; this function does NOT walk-forward.
 
-    Counter rules (matches dealing_range event semantics):
-      - BOS  (plain or Range) -> increments counter
-      - CHoCH                 -> resets counter (trend flipped)
+    Clock-reset rules (a fresh continuation leg starts on any of these):
+      - CHoCH            -> bias flipped.
+      - Confirmation BOS -> first leg of the freshly-confirmed trend.
+      - Range BOS        -> wall break re-confirms drive.
+    Only a PLAIN BOS ages the leg (count += 1). A strong break never ages it.
 
     Returns:
       {
-        'count':       int   (1 if no events / no BOS yet),
+        'count':       int   (depth of the current leg; 1 if no plain BOS yet),
         'trend':       'bullish' | 'bearish' | None,
         'count_maxed': bool  (True if event ring is full — count may be capped),
+        'verdict':     'holding' | 'fading'  (displacement-decay read),
       }
 
-    `count` reports the position of the LATEST BOS (i.e. how many BOS events
-    have printed since the last CHoCH, including the latest). If the most
-    recent event is a CHoCH, count is reported as 1 (the CHoCH "is" the
-    structure event of interest at that moment; downstream scoring uses tier).
+    `count` is LABEL CONTEXT only ("BOS #N"). It does NOT set the structure
+    quality score — `verdict` does (see compute_score_breakdown). 'fading' means
+    recent break displacement is materially weaker than how the leg started
+    (the genuine "late continuation" signal); 'holding' means drive is intact or
+    not yet measurable.
     """
     try:
         import dealing_range as _dr
         state_all = _dr.load_state()
         pair_state = state_all.get(pair_name) or {}
     except Exception:
-        return {'count': 1, 'trend': None, 'count_maxed': False}
+        return {'count': 1, 'trend': None, 'count_maxed': False,
+                'verdict': 'holding'}
 
     events = pair_state.get('events', []) or []
     trend = pair_state.get('trend')
     if not events:
-        return {'count': 1, 'trend': trend, 'count_maxed': False}
+        return {'count': 1, 'trend': trend, 'count_maxed': False,
+                'verdict': 'holding'}
 
-    # Walk events forward.
-    # CHoCH resets the counter. Both BOS and Range BOS increment it.
-    # Range BOS is the more significant break (at the dealing range wall)
-    # but both count — the caution threshold applies to the full sequence.
+    # Walk events forward and rebuild the CURRENT continuation leg.
+    #
+    # The leg is the run of PLAIN internal BOS since the last "clock reset". What
+    # resets the clock:
+    #   - CHoCH                 -> new bias, leg restarts.
+    #   - Confirmation BOS      -> first leg of the freshly-confirmed trend.
+    #   - Range BOS (wall break)-> the market re-committed through the H4 wall;
+    #                              drive is re-confirmed, so the continuation clock
+    #                              restarts rather than ageing.
+    # Only a PLAIN BOS (tier 'BOS') ages the leg. Counting strong breaks as
+    # "ageing" was the old bug — a wall break does not exhaust a trend.
+    #
+    # `leg_bodies` collects each PLAIN-BOS break-candle body in ATR (the same
+    # displacement measure the body gate fires on). The decay verdict reads it.
     count = 0
+    leg_bodies = []  # body_atr of each plain BOS in the current leg, in order
     for ev in events:
         kind = ev.get('type')
         tier = ev.get('tier')
         if kind == 'CHoCH':
             count = 0
-        elif kind == 'BOS' and tier in ('BOS', 'Range', 'Major'):
+            leg_bodies = []
+        elif kind == 'BOS' and tier in ('Range', 'Confirm', 'Major'):
+            # Strong break — re-confirms drive. Restart the continuation clock at 1.
+            count = 1
+            leg_bodies = []
+        elif kind == 'BOS' and tier == 'BOS':
             count += 1
+            leg_bodies.append(ev.get('break_body_atr'))
 
-    # If no BOS has fired since the last CHoCH, report count=1 so callers
-    # treating the latest event as "the structural anchor" don't divide-by-zero.
+    # If no BOS has fired since the last reset, report count=1 so callers treating
+    # the latest event as "the structural anchor" don't divide-by-zero.
     if count == 0:
         count = 1
 
+    # --- Continuation-drive verdict (displacement decay) ---------------------
+    # 'fading'  = the trend's recent pushes are materially weaker than how the
+    #             leg started -> momentum is leaving. The genuine "late" signal,
+    #             and what drives the structure score (NOT the raw count).
+    # 'holding' = drive intact, OR not enough plain BOS yet to judge (we never
+    #             claim exhaustion we cannot measure), OR a break body is missing
+    #             (graceful: legacy state without break_body_atr reads as holding).
+    #
+    # Rule (lean, no pair tuning): with >= 3 plain BOS in the leg, compare the
+    # mean body of the last 2 breaks against the mean body of the first 2. If the
+    # recent mean is below DECAY_RATIO of the early mean, the leg is fading.
+    # Anchoring on the EARLY mean (not the single strongest break) avoids one
+    # mid-leg spike poisoning the read; requiring 2 recent breaks below the line
+    # avoids a single noisy soft candle tripping it.
+    verdict = 'holding'
+    usable = [b for b in leg_bodies if isinstance(b, (int, float))]
+    if len(leg_bodies) >= 3 and len(usable) == len(leg_bodies):
+        early = sum(leg_bodies[:2]) / 2.0
+        late = sum(leg_bodies[-2:]) / 2.0
+        if early > 0 and late < _BOS_DECAY_RATIO * early:
+            verdict = 'fading'
+
     count_maxed = (len(events) >= _dr.EVENT_RING_MAX)
-    return {'count': count, 'trend': trend, 'count_maxed': count_maxed}
+    return {'count': count, 'trend': trend, 'count_maxed': count_maxed,
+            'verdict': verdict}
 
 # SHARED P1+P2+P3 — chart label stacking utility. Used by every chart-rendering
 # path across all three phases. Cosmetic only — chart label overlap if broken,
@@ -1941,18 +1996,21 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
     bos_tag = ob.get('bos_tag', 'BOS')
     pair_type = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
 
-    # Structure score grid (max 4). The v2 engine emits exactly THREE
-    # structural event types — CHoCH, BOS, Range BOS — with NO Major/Minor
-    # tier (see smc_radar._event_label). The grid maps directly onto them:
-    #   CHoCH                       -> 4  (trend reversal confirmed)
-    #   Range BOS                   -> 4  (clean break-off through the H4
-    #                                      dealing-range wall — reversal-grade)
-    #   plain BOS #1-2 since CHoCH  -> 3  (early continuation, smart money still loading)
-    #   plain BOS #3 .. caution-1   -> 2  (mid-trend)
-    #   plain BOS >= caution        -> 1  (exhausted)
-    # Caution thresholds reflect typical pair behaviour: forex mean-reverts
-    # faster, indices sustain trends longer.
+    # Structure score grid (max 4). The v2 engine emits these structural event
+    # types — CHoCH, Range BOS, Confirmation BOS, plain BOS (see
+    # smc_radar._event_label). Quality is driven by EVENT TIER + the continuation
+    # DRIVE VERDICT, never by the raw BOS count (counting was the old bug — a
+    # trend ages when displacement fades, not at the Nth break):
+    #   CHoCH from zone             -> 4  (textbook reversal at the extreme)
+    #   CHoCH mid-range             -> 3  (confirmed reversal, no extreme)
+    #   Range BOS                   -> 4  (clean break through the H4 wall)
+    #   Confirmation BOS            -> 4  (first leg of a freshly-confirmed trend)
+    #   plain BOS, drive holding    -> 3  (continuation, smart money still loading)
+    #   plain BOS, drive fading     -> 1  (displacement decaying — late/exhausted)
+    # The 'fading' verdict is computed in compute_bos_sequence_count from
+    # break-body (displacement) decay across the current leg.
     bos_tier = ob.get('bos_tier', 'BOS')
+    bos_verdict = ob.get('bos_verdict', 'holding')
     if bos_tag == 'CHoCH':
         # CHoCH tiering (2026-06): a CHoCH that reversed FROM the premium/discount
         # extreme of the H4 range is the textbook reversal -> 4. A mid-range CHoCH
@@ -1961,20 +2019,16 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
         # reversal_pct == 1.0 is the from-zone flag carried on the OB by Phase 1.
         choch_from_zone = float(ob.get('reversal_pct') or 0.0) >= 1.0
         bd = {"structure": 4 if choch_from_zone else 3}
-    elif bos_tier == 'Range':
-        # Range BOS: broke through the H4 dealing range wall. Higher-conviction
-        # than a plain BOS — score same as CHoCH entry (4).
+    elif bos_tier in ('Range', 'Confirm'):
+        # Strong break — Range BOS broke through the H4 dealing-range wall;
+        # Confirmation BOS is the first leg of a freshly-confirmed trend. Both
+        # re-confirm drive, so they score reversal-grade (4) regardless of how
+        # many plain BOS preceded them.
         bd = {"structure": 4}
     else:
-        bos_seq = ob.get('bos_sequence_count', 1)
-        caution_threshold = {'forex': 3, 'index': 5, 'commodity': 4}.get(pair_type, 3)
-        if bos_seq >= caution_threshold:
-            structure_score = 1
-        elif bos_seq <= 2:
-            structure_score = 3
-        else:
-            structure_score = 2
-        bd = {"structure": structure_score}
+        # Plain internal BOS — continuation. Score on whether drive is still
+        # there: holding -> 3, fading (displacement decayed across the leg) -> 1.
+        bd = {"structure": 1 if bos_verdict == 'fading' else 3}
 
     # ------------------------------------------------------------------
     # Sweep — H1-only (M15 removed 2026-05-26 in H1-only migration).
@@ -2161,12 +2215,15 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     dp = _dp(pair_conf)
     rows = []
 
-    # 1. Structure — pair-aware BOS sequence + event type (CHoCH / BOS /
-    #    Range BOS; v2 has no Major/Minor tier).
+    # 1. Structure — event tier + continuation DRIVE verdict. The "#N" count is
+    #    LABEL CONTEXT only; the score (and the holding/fading wording) is driven
+    #    by displacement decay, not by how many breaks have printed. The per-break
+    #    "Break: Strong/Solid/Marginal" line is rendered separately (Phase 2).
     s = breakdown.get("structure", 0)
     bos_seq = ob.get('bos_sequence_count', 1)
     bos_tag_local = ob.get('bos_tag', 'BOS')
     bos_tier_local = ob.get('bos_tier', 'BOS')
+    bos_verdict_local = ob.get('bos_verdict', 'holding')
     bos_count_maxed = bool(ob.get('bos_count_maxed', False))
     seq_str = f"#{bos_seq}+" if bos_count_maxed else f"#{bos_seq}"
     if bos_tag_local == 'CHoCH':
@@ -2180,15 +2237,15 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     elif bos_tag_local == 'BOS' and bos_tier_local == 'Range':
         rows.append(("Structure", s, 4, "ok",
                      f"Range BOS {seq_str} — broke through H4 dealing range wall with displacement."))
-    elif s >= 3:
+    elif bos_tag_local == 'BOS' and bos_tier_local == 'Confirm':
         rows.append(("Structure", s, 4, "ok",
-                      f"Early continuation (BOS {seq_str} since last CHoCH) — smart money still loading."))
-    elif s >= 2:
-        rows.append(("Structure", s, 4, "warn",
-                      f"Mid-trend continuation (BOS {seq_str} since last CHoCH)."))
-    elif s >= 1:
+                     "Confirmation BOS — first leg of a freshly-confirmed trend."))
+    elif bos_verdict_local == 'fading':
         rows.append(("Structure", s, 4, "fail",
-                      f"Late continuation (BOS {seq_str} since last CHoCH) — trend may be exhausted."))
+                      f"Continuation (BOS {seq_str}) — displacement fading, trend may be exhausted."))
+    elif bos_tag_local == 'BOS':
+        rows.append(("Structure", s, 4, "ok",
+                      f"Continuation (BOS {seq_str}) — drive holding, smart money still loading."))
     else:
         rows.append(("Structure", s, 4, "fail", "No confirmed BOS or CHoCH."))
 

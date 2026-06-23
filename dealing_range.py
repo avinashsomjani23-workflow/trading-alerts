@@ -735,11 +735,34 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     # Event ring — accumulated during the walk, trimmed to EVENT_RING_MAX.
     events_ring: List[Dict[str, Any]] = []
 
+    def _break_body_atr(break_idx: Optional[int]) -> Optional[float]:
+        """Window-aware break-candle body in ATR units — the SAME displacement
+        measure the body gate fires on (`_body_gate_ok`) and that
+        smc_detector.compute_break_quality grades. Window = max body of the break
+        candle and the candle right after it (option B), exactly as both. Returns
+        None when ATR or the index is unavailable (callers store None, and the
+        continuation-decay read in compute_bos_sequence_count treats a missing
+        body as 'cannot measure' rather than 'fading'). One body definition,
+        three readers — no duplicated numbers."""
+        if break_idx is None or atr is None or atr <= 0:
+            return None
+        i = int(break_idx)
+        if i < 0 or i >= n:
+            return None
+        b0 = abs(closes[i] - opens[i])
+        nxt = i + 1
+        b1 = abs(closes[nxt] - opens[nxt]) if nxt < n else 0.0
+        # Cast to plain float (closes/opens are numpy) — match the float() casts
+        # on the other event fields; keeps persisted JSON clean and consumer math
+        # numpy-free.
+        return round(float(max(b0, b1)) / float(atr), 2)
+
     def _push_event(ev_type: str, direction: str, candle_ts: Optional[str],
                     broken_price: Optional[float], imp_start_ts: Optional[str],
                     from_zone: bool, trend_after: Optional[str],
                     tier: str = "BOS",
-                    broken_swing_ts_arg: Optional[str] = None) -> None:
+                    broken_swing_ts_arg: Optional[str] = None,
+                    break_idx: Optional[int] = None) -> None:
         # Tier is a BOS sub-type only: 'BOS' (internal swing break) or 'Range'
         # (H4 dealing-range wall break). A CHoCH has NO BOS sub-tier — its tier
         # mirrors its type ('CHoCH'). The dead legacy value 'Major'/'Minor' must
@@ -773,6 +796,11 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             "reversal_pct":       1.0 if from_zone else 0.0,
             "trend_after":        trend_after,
             "chop":               False,
+            # Displacement (break-candle body in ATR) — same window-aware measure
+            # as the body gate and compute_break_quality. Consumed by
+            # compute_bos_sequence_count to judge continuation drive decay. None
+            # when ATR/idx unavailable (treated as 'cannot measure', never 'fading').
+            "break_body_atr":     _break_body_atr(break_idx),
         }
         events_ring.append(ev)
         while len(events_ring) > EVENT_RING_MAX:
@@ -832,7 +860,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                                 "ts": _ts_iso(df, ci)}
                     # Resumed trend = DOWN. Chart: 'CHoCH failed (trend resumed)'.
                     _push_event("CHoCH_FAILED", "bearish", _ts_iso(df, ci),
-                                _failed_level, impulse_start_ts, False, "bearish")
+                                _failed_level, impulse_start_ts, False, "bearish",
+                                break_idx=ci)
                     if _trace is not None:
                         _trace.append(state)
                     continue
@@ -862,7 +891,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                                 "ts": ts_now, "tier": "Confirm"}
                     _push_event("BOS", "bullish", ts_now, broken_price,
                                 impulse_start_ts, False, "bullish", "Confirm",
-                                broken_swing_ts_arg=broken_ts)
+                                broken_swing_ts_arg=broken_ts, break_idx=ci)
                     if _trace is not None:
                         _trace.append(state)
                     continue
@@ -880,7 +909,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                                 "ts": _ts_iso(df, ci)}
                     # Resumed trend = UP. Chart: 'CHoCH failed (trend resumed)'.
                     _push_event("CHoCH_FAILED", "bullish", _ts_iso(df, ci),
-                                _failed_level, impulse_start_ts, False, "bullish")
+                                _failed_level, impulse_start_ts, False, "bullish",
+                                break_idx=ci)
                     if _trace is not None:
                         _trace.append(state)
                     continue
@@ -909,7 +939,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                                 "ts": ts_now, "tier": "Confirm"}
                     _push_event("BOS", "bearish", ts_now, broken_price,
                                 impulse_start_ts, False, "bearish", "Confirm",
-                                broken_swing_ts_arg=broken_ts)
+                                broken_swing_ts_arg=broken_ts, break_idx=ci)
                     if _trace is not None:
                         _trace.append(state)
                     continue
@@ -952,7 +982,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             "ts": ts_now, "from_zone": choch_from_zone}
                 _push_event("CHoCH", "bearish", ts_now, choch_level,
                             impulse_start_ts, choch_from_zone, "bearish",
-                            broken_swing_ts_arg=broken_defended_ts)
+                            broken_swing_ts_arg=broken_defended_ts, break_idx=ci)
         elif state == _DOWN and defended is not None and rearm_block_dir != _UP \
                 and choch_pending_dir is None:
             # Gap guard via _traded_through: an up-break of defended only counts
@@ -983,7 +1013,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             "ts": ts_now, "from_zone": choch_from_zone}
                 _push_event("CHoCH", "bullish", ts_now, choch_level,
                             impulse_start_ts, choch_from_zone, "bullish",
-                            broken_swing_ts_arg=broken_defended_ts)
+                            broken_swing_ts_arg=broken_defended_ts, break_idx=ci)
 
         # ---- 2b. BOS (continuation, fire ON-CLOSE) -----------------------------
         # Symmetric to the CHoCH check above: fire the instant a close clears the
@@ -1010,7 +1040,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             "ts": ts_now, "tier": bos_tier}
                 _push_event("BOS", "bearish", ts_now, broken_price,
                             impulse_start_ts, False, "bearish", bos_tier,
-                            broken_swing_ts_arg=bos_break_low["ts"])
+                            broken_swing_ts_arg=bos_break_low["ts"], break_idx=ci)
                 trend_dir_swings_since_extend = 0
                 bos_break_low = None  # spent — re-seeds on next confirmed low
                 # A continuation BOS DOWN = the down-trend extended = any pending
@@ -1037,7 +1067,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             "ts": ts_now, "tier": bos_tier}
                 _push_event("BOS", "bullish", ts_now, broken_price,
                             impulse_start_ts, False, "bullish", bos_tier,
-                            broken_swing_ts_arg=bos_break_high["ts"])
+                            broken_swing_ts_arg=bos_break_high["ts"], break_idx=ci)
                 trend_dir_swings_since_extend = 0
                 # A continuation BOS UP = the up-trend extended = any pending
                 # CHoCH-DOWN failed (price resumed up instead of confirming down).
@@ -1065,7 +1095,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 # Birth BOS breaks recent_high (the high price just exceeded).
                 _push_event("BOS", "bullish", ts_now, recent_high["price"],
                             impulse_start_ts, False, "bullish", "BOS",
-                            broken_swing_ts_arg=recent_high["ts"])
+                            broken_swing_ts_arg=recent_high["ts"], break_idx=ci)
                 # recent_high is now spent (just broken). Next BOS-up target is
                 # the next confirmed swing high; cleared until it forms.
                 bos_break_high = None; bos_break_low = None
@@ -1082,7 +1112,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 # Birth BOS breaks recent_low (the low price just broken).
                 _push_event("BOS", "bearish", ts_now, recent_low["price"],
                             impulse_start_ts, False, "bearish", "BOS",
-                            broken_swing_ts_arg=recent_low["ts"])
+                            broken_swing_ts_arg=recent_low["ts"], break_idx=ci)
                 # recent_low is now spent (just broken). Next BOS-down target is
                 # the next confirmed swing low; cleared until it forms.
                 bos_break_low = None; bos_break_high = None

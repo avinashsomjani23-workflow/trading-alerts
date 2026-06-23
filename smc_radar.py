@@ -706,10 +706,16 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'ob_distal':   None,
         }
 
-        # BOS chain count: CHoCH resets, any BOS (plain or Range) increments.
+        # BOS chain count — MUST match smc_detector.compute_bos_sequence_count
+        # (the canonical reader Phase 2 scores on). Clock resets on CHoCH and on
+        # any STRONG break (Range / Confirmation BOS) — those re-confirm drive and
+        # restart the continuation leg at 1. Only a plain internal BOS ages it.
+        # One concept, one rule, two places.
         if ev_type == 'CHoCH':
             bos_seq_counter = 0
-        elif ev_type == 'BOS' and ev_tier in ('BOS', 'Range', 'Major', 'Confirm'):
+        elif ev_type == 'BOS' and ev_tier in ('Range', 'Confirm', 'Major'):
+            bos_seq_counter = 1
+        elif ev_type == 'BOS' and ev_tier == 'BOS':
             bos_seq_counter += 1
 
         # Locate the break candle and impulse-leg start in CURRENT df.

@@ -50,6 +50,55 @@ system positive — you can only lose less by trading less. Fix the edge (entry 
 exit), not the points. The score's only job is to estimate expected-R per setup and let you
 trade/size the top slice — validated out-of-sample, net of spread.
 
+**ACTION when scoring is rebuilt (decided 2026-06-24, user):** **drop the sweep detector from
+the score** as part of the scoring rework. It currently inverts SMC (sweep_present = True →
+16.7% WR, −0.440R) and is hard to manage. No change now — the removal happens inside the
+scoring rebuild so live/backtest parity moves in one step. Confirm exactly where sweep points
+enter `run_scorecard` (smc_detector.py) before pulling them, so the email/chart visual (if any)
+is kept and only the scoring contribution is removed. See the sweep bullet under the
+2026-06-23 audit for the detector-redesign option if it is ever wanted back.
+
+---
+
+## SCORING — Structure / BOS continuation (2026-06-24)
+
+**The structure quality score is driven by event TIER + a continuation DRIVE
+verdict. It is NOT driven by the raw BOS count.** Counting was the old design and
+the wrong question: a trend does not age at the Nth break — it ages when
+**displacement fades**. A clean wall break or a fresh confirmation re-commits
+drive and should not be penalised for being "the 4th break."
+
+**How it works now** (`smc_detector.compute_bos_sequence_count` → `run_scorecard`):
+
+- **Clock resets** (new continuation leg starts) on: CHoCH, Confirmation BOS,
+  Range BOS. Only a PLAIN internal BOS ages the leg.
+- **Score by tier + verdict:**
+  - CHoCH from zone / Range BOS / Confirmation BOS → 4 (strong).
+  - CHoCH mid-range → 3.
+  - plain BOS, drive **holding** → 3.
+  - plain BOS, drive **fading** → 1 (the genuine "late continuation").
+- **Verdict = displacement decay.** With ≥ 3 plain BOS in the leg, `fading` when
+  `mean(last-2 break bodies) < 0.60 × mean(first-2 break bodies)`, where the body
+  is the break-candle body in ATR (`break_body_atr`, the SAME window-aware measure
+  the body gate fires on and `compute_break_quality` grades — one definition,
+  three readers). < 3 breaks → `holding` (never claim exhaustion we can't measure).
+- **`bos_sequence_count` ("#N") is LABEL CONTEXT only** — it appears in the email
+  Structure row for the trader's eye; it has NO score weight on its own.
+
+**Why 0.60, anchored on the EARLY mean:** live data showed single-bar / single-
+strongest anchors are noise-jumpy (a mid-leg spike or one soft candle flips them).
+Early-mean asks the vet's real question — "is recent drive weaker than how the leg
+started?" 0.60 = recent push under ~two-thirds of the opening push. One number, no
+per-pair tuning (momentum decay reads the same on EURUSD as on Gold).
+
+**STILL OPEN (validate before trusting the magnitude):** the 0.60 ratio and the
+1-vs-3 score split are SMC-reasoned, not CI-tested. `bos_sequence_count` is already
+in the trade CSV; the next step is to tabulate WR/expR by verdict (holding vs
+fading) and bootstrap-CI it — then decide whether the split should be wider/narrower.
+This SUPERSEDES the old "exhaustion penalty may be inverted" note below: the penalty
+is no longer count-based, so that proxy finding no longer maps cleanly — re-test on
+the verdict, not on the raw count.
+
 ---
 
 ## RULE — Win rate is meaningless without R:R
@@ -177,16 +226,17 @@ trades**. Re-confirm on MT5 before betting. Every claim below shows its data.
     `break_excess` — the ratio is `body / floor`, so tuning the floor silently re-maps the
     score bands; raw is identical for BOS (floor 1.0) and only differs for CHoCH (floor 1.5).
 
-- **BOS-sequence exhaustion penalty may be INVERTED — instrumented, not yet tested.**
-  - Data (proxy): the structure score already penalises late continuation BOS (`bos_seq >=
-    caution -> score 1`). Forex plain BOS proxy: "late" BOS (#>=3, structure=1) = 70 trades,
-    39.7% WR, +0.042 expR, +$743 — the ONLY positive group; "early" BOS (#1-2, structure=3) =
-    83 trades, 37.1% WR, -0.057, -$1,184. This hints the penalty is backwards.
-  - Why not concluded: `structure_pts` is a PROXY — it bins #3/#4/#5 together and mixes event
-    type; it is in-sample and not CI-tested.
-  - **Loop closed:** `bos_sequence_count` is now exported to the trade CSV
-    (`h1_only_simulator.py`). Re-run -> tabulate WR/expR by exact BOS # -> bootstrap CI ->
-    then decide whether to remove or invert the penalty.
+- **BOS-sequence exhaustion penalty — REWORKED 2026-06-24, no longer count-based.**
+  - SUPERSEDED by the `## SCORING — Structure / BOS continuation` section above.
+    The penalty is no longer "BOS #>= caution -> score 1"; it is now a displacement-
+    DECAY verdict (holding/fading). The old proxy finding below stands as the
+    motivation but no longer maps to the live code.
+  - Old data (proxy, for the record): "late" BOS (#>=3, structure=1) = 70 trades,
+    39.7% WR, +0.042 expR, +$743 — the ONLY positive group; "early" BOS (#1-2,
+    structure=3) = 83 trades, 37.1% WR, -0.057, -$1,184. This is what hinted a raw
+    COUNT penalty was backwards — and is part of why count was dropped as the driver.
+  - **Re-test the NEW design:** tabulate WR/expR by verdict (holding vs fading),
+    bootstrap CI, then decide whether the 1-vs-3 split / 0.60 ratio should move.
 
 - **Sweep: data contradicts SMC — detector suspect, kept out of the algorithm.**
   - Data: sweep_present = True is 40 proximal trades, 16.7% WR, expR -0.440; the fractional
