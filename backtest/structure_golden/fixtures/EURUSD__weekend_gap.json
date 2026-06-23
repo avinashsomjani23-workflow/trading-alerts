@@ -11,7 +11,7 @@
     "state": "down",
     "flip_unconfirmed": false,
     "ranging": false,
-    "n_events": 14,
+    "n_events": 15,
     "n_choch": 5,
     "n_range_bos": 0,
     "n_plain_bos": 9
@@ -4941,6 +4941,19 @@
         "broken_was_wall": false,
         "reversal_pct": 0.0,
         "trend_after": "bearish",
+        "chop": false
+      },
+      {
+        "type": "CHoCH_FAILED",
+        "tier": "CHoCH_FAILED",
+        "direction": "bullish",
+        "candle_ts": "2024-07-02T19:00:00+00:00",
+        "impulse_start_ts": "2024-07-02T19:00:00+00:00",
+        "broken_swing_price": 1.07239,
+        "broken_swing_ts": null,
+        "broken_was_wall": false,
+        "reversal_pct": 0.0,
+        "trend_after": "bullish",
         "chop": false
       },
       {

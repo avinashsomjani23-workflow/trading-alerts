@@ -14,7 +14,7 @@
     "n_events": 20,
     "n_choch": 8,
     "n_range_bos": 1,
-    "n_plain_bos": 11
+    "n_plain_bos": 10
   },
   "decimals": 5,
   "input_rows": [
@@ -4843,19 +4843,6 @@
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
-        "candle_ts": "2024-11-06T00:00:00+00:00",
-        "impulse_start_ts": "2024-11-01T10:00:00+00:00",
-        "broken_swing_price": 1.08932,
-        "broken_swing_ts": "2024-11-05T13:00:00+00:00",
-        "broken_was_wall": false,
-        "reversal_pct": 0.0,
-        "trend_after": "bearish",
-        "chop": false
-      },
-      {
-        "type": "BOS",
-        "tier": "BOS",
-        "direction": "bearish",
         "candle_ts": "2024-11-06T12:00:00+00:00",
         "impulse_start_ts": "2024-11-01T10:00:00+00:00",
         "broken_swing_price": 1.07078,
@@ -4941,6 +4928,19 @@
         "broken_was_wall": false,
         "reversal_pct": 0.0,
         "trend_after": "bullish",
+        "chop": false
+      },
+      {
+        "type": "CHoCH_FAILED",
+        "tier": "CHoCH_FAILED",
+        "direction": "bearish",
+        "candle_ts": "2024-11-13T14:00:00+00:00",
+        "impulse_start_ts": "2024-11-13T14:00:00+00:00",
+        "broken_swing_price": 1.06293,
+        "broken_swing_ts": null,
+        "broken_was_wall": false,
+        "reversal_pct": 0.0,
+        "trend_after": "bearish",
         "chop": false
       },
       {
