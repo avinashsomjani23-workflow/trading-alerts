@@ -1,15 +1,5 @@
 [
   {
-    "ts": "2026-06-08T17:36:03.779678",
-    "pair": "USDJPY",
-    "reason": "API error 429: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and bi"
-  },
-  {
-    "ts": "2026-06-08T18:36:07.206872",
-    "pair": "USDJPY",
-    "reason": "API error 429: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and bi"
-  },
-  {
     "ts": "2026-06-08T19:36:09.168168",
     "pair": "USDJPY",
     "reason": "API error 429: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and bi"
@@ -996,6 +986,16 @@
   },
   {
     "ts": "2026-06-23T22:35:50.523683",
+    "pair": "GOLD",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-23T23:35:53.426943",
+    "pair": "GOLD",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-23T23:35:53.595349",
     "pair": "GOLD",
     "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
   }
