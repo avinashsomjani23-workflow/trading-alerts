@@ -60,7 +60,7 @@ FVG_PARTIAL_EDGE  = "#f1c40f"
 
 # Structural-event line palette (v2 has only BOS / Range BOS / CHoCH —
 # no Major/Minor). Matches the email legend in both phases.
-BOS_COLOR       = "#00bcd4"   # cyan  — internal swing break
+BOS_COLOR       = "#e91e63"   # magenta — internal swing break
 RANGE_BOS_COLOR = "#00897b"   # teal  — H4 dealing-range wall break
 CHOCH_COLOR     = "#ff9800"   # orange — trend flip
 

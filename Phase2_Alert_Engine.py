@@ -1034,7 +1034,7 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         # --- BOS / CHoCH horizontal line ---
         # Palette (matches smc_radar chart + _chart_legend_html; v2 has no
         # Major/Minor — only BOS / Range BOS / CHoCH):
-        #   BOS        -> cyan  #00bcd4  (internal swing break)
+        #   BOS        -> magenta #e91e63 (internal swing break)
         #   Range BOS  -> teal  #00897b  (H4 dealing-range wall break)
         #   CHoCH      -> orange #ff9800 (trend flip)
         bos_price = float(ob.get('bos_swing_price', 0))
@@ -1045,7 +1045,7 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         elif bos_tier == 'Range':
             bos_color = '#00897b'
         else:
-            bos_color = '#00bcd4'
+            bos_color = '#e91e63'
         if bos_price > 0:
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
 
@@ -1373,14 +1373,14 @@ def _chart_legend_html(bos_tag="BOS", bos_tier="BOS"):
     The v2 engine has ONE structural tier — there is no Major/Minor. The only
     event types are BOS (internal swing break), Range BOS (H4 dealing-range
     wall break) and CHoCH (trend flip). Colours below match the chart exactly
-    (see smc_radar chart rendering): BOS #00bcd4, Range BOS #00897b,
+    (see smc_radar chart rendering): BOS #e91e63, Range BOS #00897b,
     CHoCH #ff9800.
     """
     items = [
         ('#bb8fce', 'Zone band (proximal/distal)'),
         ('#2ecc71', 'FVG pristine (displacement)'),
         ('#f1c40f', 'FVG partial (proximal touched)'),
-        ('#00bcd4', 'BOS break candle / level (internal swing break)'),
+        ('#e91e63', 'BOS break candle / level (internal swing break)'),
         ('#00897b', 'Range BOS break candle / level (H4 dealing-range wall break)'),
         ('#ff9800', 'CHoCH break candle / level (trend flip)'),
         ('#ffffff', 'OB candle / current price'),

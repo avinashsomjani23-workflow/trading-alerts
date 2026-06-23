@@ -623,6 +623,24 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     bos_break_low:  Optional[Dict[str, Any]] = None
     bos_break_high: Optional[Dict[str, Any]] = None
 
+    # Post-CHoCH invalidation target (Option A — "structure invalidates
+    # structure"). While a CHoCH flip is unconfirmed (in the failure window), the
+    # FIRST confirmed swing that forms AGAINST the new direction, after the flip
+    # candle, is recorded here:
+    #   - after an UP-CHoCH  -> post_choch_swing_low  (first confirmed swing LOW)
+    #   - after a DOWN-CHoCH -> post_choch_swing_high (first confirmed swing HIGH)
+    # If a close then breaks that swing by >= bos_disp (with the gap-open guard),
+    # fresh opposite structure has formed (a lower-low under an UP-flip / a
+    # higher-high over a DOWN-flip) and the CHoCH is INVALIDATED — the flip
+    # reverts to the prior trend. This is the SMC read a vet uses: the up-flip
+    # failed not because price reclaimed the origin, but because new down-
+    # structure printed. Distinct from `choch_origin` (the full prior leg
+    # extreme) which only catches a deep reclaim. None whenever no flip is in
+    # flight, or before the first opposite swing confirms post-flip — so a single
+    # pullback candle can never trigger a revert.
+    post_choch_swing_low:  Optional[Dict[str, Any]] = None
+    post_choch_swing_high: Optional[Dict[str, Any]] = None
+
     # impulse_start_ts: the timestamp of the swing that anchors the start of
     # the current impulse leg (last swing in the trend direction before current
     # move). This is what detect_smc_radar uses to walk back and find the OB.
@@ -645,6 +663,11 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         # impossible regardless of what any caller passes.
         if ev_type == "CHoCH":
             tier = "CHoCH"
+        elif ev_type == "CHoCH_FAILED":
+            # A failed CHoCH is NOT a BOS sub-type — never let it carry tier='BOS'
+            # (the default), which would make last_event_tier / the scan log read
+            # it as a continuation break. Tier mirrors the type, same rule as CHoCH.
+            tier = "CHoCH_FAILED"
         ev = {
             "type":               ev_type,
             "tier":               tier,
@@ -700,17 +723,59 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 if c <= choch_level - lock_dist:
                     prior_trend = None; choch = False
                     choch_origin = None; choch_level = None
+                    post_choch_swing_high = None
                 elif c > choch_origin:
+                    failed_level = choch_level  # capture before nulling for the event
                     state = _UP; prior_trend = None; choch = False
                     choch_origin = None; choch_level = None; choch_from_zone = False
+                    post_choch_swing_high = None
                     defended = leg_extreme_low if leg_extreme_low is not None else defended
                     defended_swing = None  # raw leg extreme, not a confirmed swing
                     leg_extreme_high = hi_i; leg_extreme_low = lo_i
                     leg_start = ci
                     impulse_start_ts = _ts_iso(df, ci)
                     rearm_block_dir = _DOWN
+                    _ts_failed = _ts_iso(df, ci)
                     last_bos = {"kind": "CHoCH_FAILED", "direction": _UP,
-                                "ts": _ts_iso(df, ci)}
+                                "ts": _ts_failed}
+                    # Push the failure to the ring so last_event_* (and the chart)
+                    # report the CHoCH as FAILED, not as a live reversal. Direction
+                    # = the resumed trend (UP). _event_label renders it as
+                    # 'CHoCH failed (trend resumed)'.
+                    _push_event("CHoCH_FAILED", "bullish", _ts_failed, failed_level,
+                                impulse_start_ts, False, "bullish")
+                    if _trace is not None:
+                        _trace.append(state)
+                    continue
+                elif (post_choch_swing_high is not None
+                      and c > post_choch_swing_high["price"] + bos_disp
+                      and opens[ci] <= post_choch_swing_high["price"]):
+                    # Option A: fresh UP structure invalidated the DOWN-CHoCH. A
+                    # close broke the first post-flip confirmed swing HIGH (a
+                    # higher-high) — the down-flip failed via new structure, not a
+                    # deep reclaim. Revert to the prior UP trend. Mirror of the
+                    # reclaim branch above: clear the window, reset leg/defended to
+                    # the new direction, re-arm guard, and seed the up-BOS target
+                    # so continuation can fire next break. No event is pushed here
+                    # (matches CHoCH_FAILED) — the resumed trend's next BOS will.
+                    failed_level = choch_level  # capture before nulling for the event
+                    state = _UP; prior_trend = None; choch = False
+                    choch_origin = None; choch_level = None; choch_from_zone = False
+                    post_choch_swing_high = None
+                    defended = leg_extreme_low if leg_extreme_low is not None else defended
+                    defended_swing = None
+                    leg_extreme_high = hi_i; leg_extreme_low = lo_i
+                    leg_start = ci
+                    impulse_start_ts = _ts_iso(df, ci)
+                    rearm_block_dir = _DOWN
+                    bos_break_high = None  # re-seeds on next confirmed high
+                    _ts_failed = _ts_iso(df, ci)
+                    last_bos = {"kind": "CHoCH_FAILED", "direction": _UP,
+                                "ts": _ts_failed}
+                    # Failed via fresh UP structure — same ring push as the reclaim
+                    # branch so the chart labels it 'CHoCH failed (trend resumed)'.
+                    _push_event("CHoCH_FAILED", "bullish", _ts_failed, failed_level,
+                                impulse_start_ts, False, "bullish")
                     if _trace is not None:
                         _trace.append(state)
                     continue
@@ -718,17 +783,56 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 if c >= choch_level + lock_dist:
                     prior_trend = None; choch = False
                     choch_origin = None; choch_level = None
+                    post_choch_swing_low = None
                 elif c < choch_origin:
+                    failed_level = choch_level  # capture before nulling for the event
                     state = _DOWN; prior_trend = None; choch = False
                     choch_origin = None; choch_level = None; choch_from_zone = False
+                    post_choch_swing_low = None
                     defended = leg_extreme_high if leg_extreme_high is not None else defended
                     defended_swing = None  # raw leg extreme, not a confirmed swing
                     leg_extreme_high = hi_i; leg_extreme_low = lo_i
                     leg_start = ci
                     impulse_start_ts = _ts_iso(df, ci)
                     rearm_block_dir = _UP
+                    _ts_failed = _ts_iso(df, ci)
                     last_bos = {"kind": "CHoCH_FAILED", "direction": _DOWN,
-                                "ts": _ts_iso(df, ci)}
+                                "ts": _ts_failed}
+                    # Push the failure to the ring (resumed trend = DOWN) so the
+                    # chart labels it 'CHoCH failed (trend resumed)', not a live flip.
+                    _push_event("CHoCH_FAILED", "bearish", _ts_failed, failed_level,
+                                impulse_start_ts, False, "bearish")
+                    if _trace is not None:
+                        _trace.append(state)
+                    continue
+                elif (post_choch_swing_low is not None
+                      and c < post_choch_swing_low["price"] - bos_disp
+                      and opens[ci] >= post_choch_swing_low["price"]):
+                    # Option A: fresh DOWN structure invalidated the UP-CHoCH. A
+                    # close broke the first post-flip confirmed swing LOW (a
+                    # lower-low) — the up-flip failed via new structure, not a
+                    # deep reclaim of the prior leg's origin. Revert to the prior
+                    # DOWN trend. Mirror of the reclaim branch above. No event is
+                    # pushed here; the resumed down-trend's next BOS will fire and
+                    # the broken swing high becomes a valid OB.
+                    failed_level = choch_level  # capture before nulling for the event
+                    state = _DOWN; prior_trend = None; choch = False
+                    choch_origin = None; choch_level = None; choch_from_zone = False
+                    post_choch_swing_low = None
+                    defended = leg_extreme_high if leg_extreme_high is not None else defended
+                    defended_swing = None
+                    leg_extreme_high = hi_i; leg_extreme_low = lo_i
+                    leg_start = ci
+                    impulse_start_ts = _ts_iso(df, ci)
+                    rearm_block_dir = _DOWN
+                    bos_break_low = None  # re-seeds on next confirmed low
+                    _ts_failed = _ts_iso(df, ci)
+                    last_bos = {"kind": "CHoCH_FAILED", "direction": _DOWN,
+                                "ts": _ts_failed}
+                    # Failed via fresh DOWN structure — same ring push as the reclaim
+                    # branch so the chart labels it 'CHoCH failed (trend resumed)'.
+                    _push_event("CHoCH_FAILED", "bearish", _ts_failed, failed_level,
+                                impulse_start_ts, False, "bearish")
                     if _trace is not None:
                         _trace.append(state)
                     continue
@@ -751,6 +855,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 broken_swing_ts = broken_defended_ts
                 choch_level  = defended
                 choch_origin = leg_extreme_high
+                post_choch_swing_low = None   # new DOWN-flip window opens
+                post_choch_swing_high = None
                 choch_from_zone = _reversed_from_premium(rev_idx, ci)
                 prior_trend  = _UP
                 state        = _DOWN
@@ -781,6 +887,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 broken_swing_ts = broken_defended_ts
                 choch_level  = defended
                 choch_origin = leg_extreme_low
+                post_choch_swing_high = None  # new UP-flip window opens
+                post_choch_swing_low = None
                 choch_from_zone = _reversed_from_discount(rev_idx, ci)
                 prior_trend  = _DOWN
                 state        = _UP
@@ -889,6 +997,21 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             else:
                 lows.append(s)
                 recent_low = s
+
+            # Option A: while a CHoCH flip is in flight (failure window open),
+            # track the most-recent confirmed swing that prints AGAINST the new
+            # direction and AFTER the flip candle (s["idx"] > leg_start, the
+            # pivot's actual bar, not its lagged confirm bar). A close that later
+            # breaks this swing by >= bos_disp means fresh opposite structure
+            # invalidated the flip (handled in the failure-window block). Updated
+            # to the most-recent such swing each time so a continuing grind keeps
+            # the trigger on the live swing; reset to None when the window closes.
+            if prior_trend is not None and choch_level is not None \
+                    and s["idx"] > leg_start:
+                if state == _UP and s["type"] == "low":
+                    post_choch_swing_low = s
+                elif state == _DOWN and s["type"] == "high":
+                    post_choch_swing_high = s
 
             # Maintain the BOS break target + the protected (defended) swing.
             # The BOS itself no longer fires here — it fires ON-CLOSE in sec. 2b.
