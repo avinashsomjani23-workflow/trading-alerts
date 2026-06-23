@@ -1,0 +1,13 @@
+# FALLBACK LOGIN — only needed if the pull says "Authorization failed".
+# 1. Copy this file and rename the copy to:  mt5_login.txt
+# 2. Fill in the 4 values below from your Funding Pips account.
+# 3. Use the read-only INVESTOR password (NOT the master/trading password).
+# 4. Save, then double-click get_mt5_data.bat again.
+#
+# mt5_login.txt is git-ignored, so it is never uploaded. Still, keep it private.
+
+login    = 12345678
+password = your-INVESTOR-password-here
+server   = FundingPips-Server-Name
+# path = full path to terminal64.exe, only if you have more than one MT5 installed
+# path = C:\Program Files\FundingPips MT5\terminal64.exe

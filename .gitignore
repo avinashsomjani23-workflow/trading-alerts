@@ -7,6 +7,11 @@ phase2_scan_log.jsonl
 .claude/settings.local.json
 backtest/cache/
 backtest/results/
+backtest/mt5_data/
+backtest/mt5_login.txt*
+dr_old_tmp.py
+state/archives/
+.claude/scheduled_tasks.lock
 backtest/logs/
 backtest/state/
 debug/

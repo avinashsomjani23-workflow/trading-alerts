@@ -76,6 +76,12 @@ FVG, liquidity sweep, kill zone, macro news, PD array alignment, OB and FVG fres
 - SMC terminology must be 100% correct. Errors cascade into bad alerts and lost money.
 - Verify against codebase before stating. Say "I haven't verified" rather than imply you did.
 
+**Data vs SMC methodology — never conclude on data alone**
+- Every data finding must be mapped against verified SMC methodology before it becomes a conclusion or an action.
+- If data AND SMC agree → conclude and act.
+- If data AND SMC disagree → it is a DISCUSSION POINT, not a conclusion. Surface it, name the likely cause (often a detector bug, thin sample, or timeframe mismatch), and brainstorm — do NOT score/filter on it yet.
+- A small or thin sample never overrides established SMC logic. Sample size cuts both ways: weak data does not disprove a sound SMC signal (e.g. fill-in-killzone, liquidity sweep).
+
 **Reading vs changing**
 - Reading is never gated. If solving a request needs reading existing code, data, logs, config, or state — do it immediately, without asking. Never wait for approval to READ.
 - Approval gates only apply to WRITING (edits, commits, pushes).
