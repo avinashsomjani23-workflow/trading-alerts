@@ -644,7 +644,55 @@ def fetch_macro_news(pair_name, news_ctx=None):
     return news_ctx.get("headlines_text", "Could not fetch latest news.")
 
 
+_GEMINI_CACHE_PATH = os.path.join("state", "gemini_cache.json")
+
+
+def _gemini_cache_key(pair, bias, date_ist):
+    return f"{pair}|{bias}|{date_ist}"
+
+
+def _gemini_cache_load():
+    return load_json(_GEMINI_CACHE_PATH, {})
+
+
+def _gemini_cache_save(cache, today_date_ist):
+    # GC: drop any key not from today before writing.
+    clean = {k: v for k, v in cache.items() if k.endswith(f"|{today_date_ist}")}
+    try:
+        os.makedirs("state", exist_ok=True)
+        save_json(_GEMINI_CACHE_PATH, clean)
+    except Exception as e:
+        print(f"  [GEMINI CACHE] write failed: {e}")
+
+
+def _gemini_cache_get(pair, bias, date_ist):
+    cache = _gemini_cache_load()
+    key = _gemini_cache_key(pair, bias, date_ist)
+    entry = cache.get(key)
+    if entry and entry.get("macro_summary"):
+        print(f"  [GEMINI] {pair} {bias}: cache hit for {date_ist}")
+        return entry
+    return None
+
+
+def _gemini_cache_set(pair, bias, date_ist, result):
+    # Never cache failures — only store a real macro_summary.
+    if not result or not result.get("macro_summary"):
+        return
+    cache = _gemini_cache_load()
+    key = _gemini_cache_key(pair, bias, date_ist)
+    cache[key] = result
+    _gemini_cache_save(cache, date_ist)
+
+
 def call_gemini_flash(pair, bias, news_headlines):
+    date_ist = get_day_id_ist()
+
+    # Cache hit: same pair+bias+day already summarised — skip API call.
+    cached = _gemini_cache_get(pair, bias, date_ist)
+    if cached is not None:
+        return cached
+
     prompt = f"""
     You are a Macro Context Writer. DO NOT analyze the chart. DO NOT score the trade.
     Your only job is to summarize macro risk for the trader to read.
@@ -675,7 +723,9 @@ def call_gemini_flash(pair, bias, news_headlines):
             resp = requests.post(url, json=body, timeout=20)
             r = resp.json()
             if "candidates" in r:
-                return json.loads(r["candidates"][0]["content"]["parts"][0]["text"].strip())
+                result = json.loads(r["candidates"][0]["content"]["parts"][0]["text"].strip())
+                _gemini_cache_set(pair, bias, date_ist, result)
+                return result
 
             # No candidates -> the body always says why. Capture the real reason
             # instead of discarding it (a blind "no candidates field" string is
