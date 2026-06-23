@@ -157,26 +157,6 @@
       "bias": "SHORT",
       "pair": "NZDUSD"
     },
-    "EURUSD_SHORT_BOS_1.1587_2026-06-16T02": {
-      "score_int": 6,
-      "score_raw": 6.0,
-      "score_high_water": 6.0,
-      "score_low_water": 6.0,
-      "breakdown": {
-        "structure": 3,
-        "sweep": 0.0,
-        "fvg": 2,
-        "freshness": 1,
-        "killzone": 0.0
-      },
-      "alert_ist": "2026-06-16T10:35:39.410976",
-      "last_seen_ist": "2026-06-16T11:35:37.129945",
-      "last_email_day": "2026-06-16",
-      "reentry_armed": false,
-      "max_exit_distance": 0.0,
-      "bias": "SHORT",
-      "pair": "EURUSD"
-    },
     "NAS100_LONG_BOS_30860.0_2026-06-16T05": {
       "score_int": 6,
       "score_raw": 6.8,
@@ -901,7 +881,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-22T10:35:46.888112",
-      "last_seen_ist": "2026-06-23T10:35:42.981785",
+      "last_seen_ist": "2026-06-23T11:35:50.747233",
       "last_email_day": "2026-06-23",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -1247,7 +1227,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-22T19:35:47.105229",
-      "last_seen_ist": "2026-06-23T10:35:42.981785",
+      "last_seen_ist": "2026-06-23T11:35:50.747233",
       "last_email_day": "2026-06-23",
       "reentry_armed": true,
       "max_exit_distance": 0.0026170015335083008,
