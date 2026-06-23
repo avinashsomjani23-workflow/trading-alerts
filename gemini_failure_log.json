@@ -1,15 +1,5 @@
 [
   {
-    "ts": "2026-06-05T11:35:37.258330",
-    "pair": "GOLD",
-    "reason": "no candidates field, attempt 3"
-  },
-  {
-    "ts": "2026-06-05T12:35:35.784623",
-    "pair": "NAS100",
-    "reason": "no candidates field, attempt 3"
-  },
-  {
     "ts": "2026-06-05T12:35:41.668160",
     "pair": "GOLD",
     "reason": "no candidates field, attempt 3"
@@ -998,5 +988,15 @@
     "ts": "2026-06-23T16:36:37.497791",
     "pair": "GOLD",
     "reason": "API error 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+  },
+  {
+    "ts": "2026-06-23T17:36:18.931464",
+    "pair": "NAS100",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-23T17:36:19.409012",
+    "pair": "GOLD",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
   }
 ]

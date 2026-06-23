@@ -117,26 +117,6 @@
       "bias": "LONG",
       "pair": "USDJPY"
     },
-    "NAS100_LONG_BOS_30860.0_2026-06-16T05": {
-      "score_int": 6,
-      "score_raw": 6.8,
-      "score_high_water": 6.8,
-      "score_low_water": 6.8,
-      "breakdown": {
-        "structure": 2,
-        "sweep": 1.83,
-        "fvg": 2,
-        "freshness": 1,
-        "killzone": 0.0
-      },
-      "alert_ist": "2026-06-16T14:35:37.294318",
-      "last_seen_ist": "2026-06-16T17:35:42.309682",
-      "last_email_day": "2026-06-16",
-      "reentry_armed": false,
-      "max_exit_distance": 0.0,
-      "bias": "LONG",
-      "pair": "NAS100"
-    },
     "GOLD_LONG_BOS_4354.1_2026-06-16T05": {
       "score_int": 2,
       "score_raw": 2.0,
@@ -841,7 +821,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-22T10:35:46.888112",
-      "last_seen_ist": "2026-06-23T16:35:53.381100",
+      "last_seen_ist": "2026-06-23T17:35:45.144880",
       "last_email_day": "2026-06-23",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -1417,10 +1397,10 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-23T14:35:48.872772",
-      "last_seen_ist": "2026-06-23T16:35:53.381100",
+      "last_seen_ist": "2026-06-23T17:35:45.144880",
       "last_email_day": "2026-06-23",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.002863645553588867,
       "bias": "SHORT",
       "pair": "EURUSD",
       "ob_snapshot": {
@@ -1532,7 +1512,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-23T14:35:48.872772",
-      "last_seen_ist": "2026-06-23T16:35:53.381100",
+      "last_seen_ist": "2026-06-23T17:35:45.144880",
       "last_email_day": "2026-06-23",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -1647,7 +1627,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-23T15:35:44.064222",
-      "last_seen_ist": "2026-06-23T16:35:53.381100",
+      "last_seen_ist": "2026-06-23T17:35:45.144880",
       "last_email_day": "2026-06-23",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
