@@ -62,6 +62,12 @@ class HealthResult:
     warnings_present: bool
     gates: List[Gate] = field(default_factory=list)
     headline_pnl_usd: float = 0.0
+    # Live trades ONLY the proximal limit (Phase2 compute_phase2_levels defaults
+    # entry_zone="proximal"). The 50% mean entry is a backtest A/B study, never
+    # placed live. So `headline_pnl_usd` (both zones summed) is ~2x the live book.
+    # These split fields make the LIVE number (proximal) unambiguous.
+    proximal_headline_usd: float = 0.0
+    fifty_pct_headline_usd: float = 0.0
     content_hash: str = ""
 
     @property
@@ -290,6 +296,10 @@ def evaluate(
         warnings_present=bool(any_warn),
         gates=gates,
         headline_pnl_usd=headline,
+        proximal_headline_usd=_sum_r_realised_pnl(
+            [t for t in trades if t.get("entry_zone") == "proximal"], risk_usd),
+        fifty_pct_headline_usd=_sum_r_realised_pnl(
+            [t for t in trades if t.get("entry_zone") == "50pct"], risk_usd),
         content_hash=chash,
     )
 
@@ -304,6 +314,8 @@ def _write_health(scanlog: ScanLog, result: HealthResult) -> None:
         "exit_code": result.exit_code,
         "warnings_present": result.warnings_present,
         "headline_pnl_usd": result.headline_pnl_usd,
+        "live_proximal_headline_usd": result.proximal_headline_usd,
+        "study_fifty_pct_headline_usd": result.fifty_pct_headline_usd,
         "content_hash": result.content_hash,
         "condition_counts": dict(scanlog.condition_counts),
         "event_counts": dict(scanlog.event_counts),

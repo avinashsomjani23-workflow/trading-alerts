@@ -46,6 +46,17 @@ from backtest.run_logger import log_event
 MAX_HOLD_H1_BARS = 48
 DEFAULT_RISK_USD = 250.0
 
+# Weekend-flat (user rule, 2026-06-21): never hold a position into the FX
+# weekend. Any OPEN trade is force-closed at the first Friday bar at/after
+# WEEKEND_FLAT_HOUR_UTC, at that bar's open. Set WEEKEND_FLAT=False to disable.
+# NOTE: this is RISK management, not a P&L improver -- a 4-quarter re-sim showed
+# it costs ~3R/yr vs letting trades run (weekend-spanning trades were ~neutral).
+# Cutoff = end of the user's Friday IST trading session: IST midnight (24:00 IST)
+# = 18:30 UTC. On the hourly grid we flatten at the first Friday bar with
+# hour >= 18 UTC (opens 18:00 UTC = 23:30 IST), i.e. before the weekend.
+WEEKEND_FLAT = True
+WEEKEND_FLAT_HOUR_UTC = 18
+
 
 def _session_from_utc_hour(h: int) -> str:
     """Map UTC hour -> trading session label. Matches reporting._classify_session_utc."""
@@ -194,9 +205,17 @@ def _confluences_present(breakdown: Dict[str, float]) -> str:
 
 
 def _event_label(bos_tag: Optional[str], bos_tier: Optional[str]) -> str:
-    """One-column event label: 'Major BOS' / 'Minor BOS' / 'Major CHoCH' / 'Minor CHoCH'."""
+    """One-column event label for the trade row.
+
+    tier 'Confirm' = a Confirmation BOS (the first BOS in a CHoCH's direction
+    that confirms the reversal — see dealing_range.py CONFIRMATION-BOS model).
+    Labelled distinctly so it is tracked separately from a plain/Range BOS and
+    from the CHoCH itself.
+    """
     tag = bos_tag or "BOS"
     tier = bos_tier or "Major"
+    if tag == "BOS" and tier == "Confirm":
+        return "Confirmation BOS"
     return f"{tier} {tag}"
 
 
@@ -239,7 +258,11 @@ def _fvg_state(ob: Dict[str, Any], df_h1: pd.DataFrame,
         if fill_ts.tzinfo is None:
             fill_ts = fill_ts.tz_localize("UTC")
         rearm = _FVG_REARM_ATR * float(ob.get("h1_atr") or 0.0)
-        win = df_h1.loc[fill_ts:alert_ts]   # bars from fill up to the trigger
+        # Bars from the FVG-fill up to (but excluding) the still-forming alert
+        # bar. Excluding alert_ts keeps this consistent with the closed-only
+        # slice the score + levels use (no forming-bar lookahead).
+        win = df_h1.loc[fill_ts:alert_ts]
+        win = win[win.index < alert_ts]
         if win.empty:
             return "fresh"
         # Did price pull clear of the FVG band by the re-arm distance after
@@ -277,7 +300,16 @@ def _score_h1_only(alert: Dict[str, Any], pair_conf: Dict[str, Any],
     """
     ob = alert["ob"]
     bias = "LONG" if ob.get("direction") == "bullish" else "SHORT"
-    h1_slice = df_h1.loc[:alert_ts]
+    # Lookahead guard (2026-06-21): score from ONLY the bars a live trader could
+    # see at the alert -- bars that had already CLOSED. The alert fires at
+    # alert_ts (the bar opening then is still forming), so closed bars are those
+    # indexed strictly before alert_ts. The previous `df_h1.loc[:alert_ts]`
+    # INCLUDED the forming bar, feeding run_scorecard one bar of future the live
+    # path never has. This mirrors the slice the levels path already uses
+    # (df_h1_at_alert in _simulate_single_entry) and live behaviour.
+    h1_slice = df_h1.loc[df_h1.index < alert_ts]
+    if h1_slice.empty:
+        h1_slice = df_h1.loc[:alert_ts]  # degenerate guard, never empty in practice
     fvg_h1 = ob.get("fvg", {"exists": False, "was_detected": False,
                             "mitigation": "none"})
     fvg_data = {"h1": fvg_h1}
@@ -614,6 +646,15 @@ def _simulate_single_entry(
             exit_price = float(bar["Close"])
             break
 
+        # Weekend-flat: force-close an OPEN position before the FX weekend.
+        # Realised walk only -- the reference TP1/TP2 study columns ignore it.
+        if (WEEKEND_FLAT and not is_fill_bar_this_iter and exit_reason is None
+                and ts.dayofweek == 4 and ts.hour >= WEEKEND_FLAT_HOUR_UTC):
+            exit_ts = ts
+            exit_reason = "friday_flat"
+            exit_price = float(bar["Open"])
+            break
+
         if bias == "LONG":
             mfe_price = max(mfe_price, bar_hi)
             mae_price = min(mae_price, bar_lo)
@@ -848,6 +889,12 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "sl_collision":  sl_collision,
         "bos_tag":       bos_tag,
         "bos_tier":      bos_tier,
+        # Continuation depth: # of BOS since the last CHoCH (CHoCH resets to 0,
+        # each continuation BOS +1). Stamped on the OB by detect_smc_radar
+        # (smc_radar.py). Surfaced here so the backtest can benchmark whether
+        # the structure-score exhaustion penalty (late BOS -> low score) is
+        # justified. CHoCH/Range rows carry the count at their event too.
+        "bos_sequence_count": ob.get("bos_sequence_count"),
         "break_tier":        _bq.get("tier"),
         "break_close_atr":   _bq.get("close_beyond_atr"),
         "break_excess":      _bq.get("excess"),

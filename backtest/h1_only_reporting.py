@@ -2052,8 +2052,11 @@ def _structure_event_breakdown_html(trades: List[Dict[str, Any]], r_col: str) ->
         bg = "#eafaf1" if exp >= 0 else "#fdf2f2"
         seen.append((tier, tag, n, wr, exp))
         wr_str = "—" if wr is None else f"{wr:.0f}%"
+        # tier 'Confirm' + tag 'BOS' = Confirmation BOS (post-CHoCH reversal
+        # confirmation). Labelled in full so it reads clearly in the breakdown.
+        _ev_lbl = "Confirmation BOS" if (tag == "BOS" and tier == "Confirm") else f"{tier} {tag}"
         rows += (f"<tr style='background:{bg};'>"
-                 f"<td><b>{tier} {tag}</b></td>"
+                 f"<td><b>{_ev_lbl}</b></td>"
                  f"<td>{n}</td>"
                  f"<td>{wr_str}</td>"
                  f"<td>{_r(exp)}</td>"
@@ -2192,6 +2195,7 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
         "sl": "Stop Loss Hit", "tp1": "TP1 Hit", "tp2": "TP2 Hit",
         "timeout": "Time Limit (48h)", "window_end": "End of Window",
         "sl_collision": "SL+TP Same Bar", "never_filled": "Never Filled",
+        "friday_flat": "Weekend Flat (Fri)",
     }
 
     rows = []
@@ -2405,6 +2409,7 @@ _EXIT_LABELS = {
     "window_end":   "End of Test Window",
     "sl_collision": "SL and TP Same Bar — SL Taken",
     "never_filled": "Order Never Filled",
+    "friday_flat":  "Closed Before Weekend (Fri)",
 }
 
 _ENTRY_LABELS = {
