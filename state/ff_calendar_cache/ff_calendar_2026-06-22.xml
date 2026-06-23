@@ -361,6 +361,16 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/875-uk-mpc-member-dhingra-speaks]]></url>
 	</event>
 	<event>
+		<title>President Trump Speaks</title>
+		<country>USD</country>
+		<date><![CDATA[06-23-2026]]></date>
+		<time><![CDATA[6:05pm]]></time>
+		<impact><![CDATA[Medium]]></impact>
+		<forecast />
+		<previous />
+		<url><![CDATA[https://www.forexfactory.com/calendar/645-us-president-trump-speaks]]></url>
+	</event>
+	<event>
 		<title>API Weekly Statistical Bulletin</title>
 		<country>USD</country>
 		<date><![CDATA[06-23-2026]]></date>
@@ -506,7 +516,7 @@
 		<date><![CDATA[06-24-2026]]></date>
 		<time><![CDATA[12:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-206B]]></forecast>
+		<forecast><![CDATA[-212B]]></forecast>
 		<previous><![CDATA[-191B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/195-us-current-account]]></url>
 	</event>
@@ -546,7 +556,7 @@
 		<date><![CDATA[06-24-2026]]></date>
 		<time><![CDATA[2:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-5.1M]]></forecast>
+		<forecast><![CDATA[-3.9M]]></forecast>
 		<previous><![CDATA[-8.3M]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/10-us-crude-oil-inventories]]></url>
 	</event>
@@ -584,7 +594,7 @@
 		<title>Bank Stress Test Results</title>
 		<country>USD</country>
 		<date><![CDATA[06-24-2026]]></date>
-		<time><![CDATA[8:30pm]]></time>
+		<time><![CDATA[8:00pm]]></time>
 		<impact><![CDATA[Low]]></impact>
 		<forecast />
 		<previous />
