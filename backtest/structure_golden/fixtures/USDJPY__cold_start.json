@@ -9,12 +9,13 @@
   },
   "coverage": {
     "state": "up",
-    "flip_unconfirmed": false,
+    "flip_unconfirmed": true,
     "ranging": false,
-    "n_events": 1,
-    "n_choch": 0,
+    "n_events": 2,
+    "n_choch": 1,
     "n_range_bos": 0,
-    "n_plain_bos": 1
+    "n_plain_bos": 1,
+    "n_confirm_bos": 0
   },
   "decimals": 3,
   "input_rows": [
@@ -502,21 +503,23 @@
   "golden_output": {
     "state": "up",
     "ranging": false,
-    "prior_trend": null,
-    "flip_unconfirmed": false,
-    "choch": false,
-    "choch_ts": null,
-    "choch_level": null,
+    "prior_trend": "up",
+    "choch_pending_dir": "down",
+    "flip_unconfirmed": true,
+    "choch": true,
+    "choch_ts": "2024-06-04T07:00:00+00:00",
+    "choch_level": 155.947,
     "choch_from_zone": false,
-    "choch_flip_count": 0,
+    "choch_flip_count": 1,
     "defended": 155.947,
-    "broken_swing_ts": null,
+    "broken_swing_ts": "2024-06-03T15:00:00+00:00",
     "last_bos": {
-      "kind": "BOS_BIRTH",
-      "direction": "up",
-      "ts": "2024-06-04T00:00:00+00:00"
+      "kind": "CHoCH",
+      "direction": "down",
+      "ts": "2024-06-04T07:00:00+00:00",
+      "from_zone": false
     },
-    "label": "H1 trend UP",
+    "label": "H1 trend UP (CHoCH DOWN pending \u2014 needs Confirmation BOS)",
     "events": [
       {
         "type": "BOS",
@@ -529,6 +532,19 @@
         "broken_was_wall": false,
         "reversal_pct": 0.0,
         "trend_after": "bullish",
+        "chop": false
+      },
+      {
+        "type": "CHoCH",
+        "tier": "CHoCH",
+        "direction": "bearish",
+        "candle_ts": "2024-06-04T07:00:00+00:00",
+        "impulse_start_ts": "2024-06-03T15:00:00+00:00",
+        "broken_swing_price": 155.947,
+        "broken_swing_ts": "2024-06-03T15:00:00+00:00",
+        "broken_was_wall": false,
+        "reversal_pct": 0.0,
+        "trend_after": "bearish",
         "chop": false
       }
     ],

@@ -332,6 +332,7 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
         'structure': {
             'state':            sv2.get('state'),
             'flip_unconfirmed': sv2.get('flip_unconfirmed'),
+            'choch_pending_dir': sv2.get('choch_pending_dir'),
             'ranging':          sv2.get('ranging'),
             'defended':         sv2.get('defended'),
             'choch_flip_count': sv2.get('choch_flip_count'),
@@ -511,6 +512,12 @@ def _event_label(bos_tag, bos_tier):
     # CHoCH — a veteran would read either as a reversal that never happened.
     # Match every known tag explicitly so the label is always the honest event.
     if bos_tag in ('BOS', 'BOS_BIRTH'):
+        # 'Confirm' tier = a Confirmation BOS: the first BOS in a CHoCH's
+        # direction that confirms the reversal (the CHoCH itself no longer flips
+        # the trend — see dealing_range.py CONFIRMATION-BOS model). Named
+        # distinctly so the email/chart shows it is NOT a plain continuation BOS.
+        if bos_tier == 'Confirm':
+            return 'Confirmation BOS'
         return 'Range BOS' if bos_tier == 'Range' else 'BOS'
     if bos_tag == 'CHoCH':
         return 'CHoCH'
@@ -702,7 +709,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         # BOS chain count: CHoCH resets, any BOS (plain or Range) increments.
         if ev_type == 'CHoCH':
             bos_seq_counter = 0
-        elif ev_type == 'BOS' and ev_tier in ('BOS', 'Range', 'Major'):
+        elif ev_type == 'BOS' and ev_tier in ('BOS', 'Range', 'Major', 'Confirm'):
             bos_seq_counter += 1
 
         # Locate the break candle and impulse-leg start in CURRENT df.
@@ -2799,8 +2806,12 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
     if sv2.get('state'):
         state = sv2['state']
         if state in ('up', 'down'):
-            if sv2.get('flip_unconfirmed') and sv2.get('prior_trend'):
-                trend_txt = f"{state.upper()} (CHoCH from {sv2['prior_trend'].upper()}, unconfirmed)"
+            if sv2.get('flip_unconfirmed') and sv2.get('choch_pending_dir'):
+                # Confirmation-BOS model: a CHoCH is ARMED but the trend has NOT
+                # flipped (state is still the confirmed trend). Name the pending
+                # reversal direction and that it needs a Confirmation BOS.
+                _pd = str(sv2['choch_pending_dir']).upper()
+                trend_txt = f"{state.upper()} (CHoCH {_pd} pending — needs Confirmation BOS)"
             else:
                 # Two-component ranging verdict (info only). Falls back to the
                 # bare trend when not ranging or ATR unavailable.

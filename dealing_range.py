@@ -12,8 +12,8 @@ The H1 trend is read directly from swing structure: higher-highs + higher-lows
   - CHoCH (Change of Character)   — the defended swing (last HL in an uptrend /
                                     last LH in a downtrend) is closed through
                                     against the trend by >= the CHoCH
-                                    displacement. Flips the trend on its own
-                                    candle (no transition state).
+                                    displacement. ARMS a pending reversal; the
+                                    trend flips only on a later Confirmation BOS.
 
 Dealing-range WALLS are not computed here. They come from the H4 swing
 high / low (`h4_range.py`). This module only consumes the H4 range to (a) gate
@@ -25,16 +25,18 @@ lookback=3 geometry test (detect_swings) AND the ATR leg-size filter
 (_filter_swings_by_leg_atr). Every consumer — trend, BOS, CHoCH, charts, sweep
 scoring, h4_range — reads this one pool. One definition, one filter.
 
-CHoCH premium / discount gate (LOCKED): a CHoCH is only valid when the reversal
-extreme sits in the top 25% (bearish CHoCH) or bottom 25% (bullish CHoCH) of
-the FROZEN confirmed H4 range — read via compute_pd_confirmed(), never the live
-range, so the gate does not jitter.
+CHoCH premium / discount (LOCKED): the reversal extreme's position in the FROZEN
+confirmed H4 range (top 25% / bottom 25%) is recorded as a QUALITY TAG
+(reversal_pct / choch_from_zone) only — it is NOT a gate. A CHoCH arms regardless
+of zone. Read via compute_pd_confirmed(), never the live range, so the tag does
+not jitter.
 
-CHoCH failure (LOCKED): a CHoCH flip is unconfirmed at first. It FAILS (reverts
-to the prior trend) if price closes back past the origin extreme (reclaim); it
-CONFIRMS once price runs one full structural leg past the broken level (lock).
-A reverted direction cannot re-fire a CHoCH until a fresh confirmed swing forms
-in that direction (re-arm guard).
+CHoCH confirmation (LOCKED): a CHoCH is PENDING when it arms — state stays the
+old trend. It CONFIRMS (flips the trend) only when a Confirmation BOS breaks the
+first post-CHoCH swing in the pending direction by >= bos_disp. It is CANCELLED
+(reverts, no flip) only if price closes back past the origin extreme (reclaim).
+There is NO timeout and NO lock distance. A reverted direction cannot re-arm a
+CHoCH until a fresh confirmed swing forms in that direction (re-arm guard).
 
 Detection engine: compute_structure(). It is PURE and recomputes from the full
 H1 df every scan — there is no incremental wall state to corrupt. It emits an
@@ -443,12 +445,13 @@ def compute_pd_position(price: float, walls: Dict[str, Any]) -> Dict[str, Any]:
 #
 # Locked spec (decided with the trader):
 #   - One trend state: up | down | undefined (undefined only before birth).
-#   - CHoCH flips the trend on its own candle. No transition state.
+#   - CHoCH ARMS a pending reversal; it does NOT flip the trend on its own candle.
+#     The trend flips only on a Confirmation BOS (sec. 2c).
 #   - Premium/discount is a QUALITY TAG only, never a flip gate.
-#   - CHoCH failure = close back past the origin extreme (reclaim) or price
-#     runs one full structural leg past the broken level (lock).
-#   - Re-arm guard: invalidated CHoCH direction cannot re-fire until a fresh
-#     confirmed swing forms in the reverted trend direction.
+#   - Pending CHoCH cancels = close back past the origin extreme (reclaim). There
+#     is NO lock distance and NO timeout (decided with the trader).
+#   - Re-arm guard: a reverted/invalidated CHoCH direction cannot re-arm until a
+#     fresh confirmed swing forms in the reverted trend direction.
 # ---------------------------------------------------------------------------
 
 # CHoCH displacement (H1 ATR units). A close must clear the defended swing
@@ -459,10 +462,10 @@ STRUCTURE_CHOCH_ATR_MULT  = 1.0
 # demands more force than a continuation BOS — 1.5 ATR (ICT displacement default).
 STRUCTURE_CHOCH_BODY_ATR_MULT = 1.5
 
-# Failure-window lock distance (H1 ATR units). Window closes permanently
-# once price runs this far past the broken level (away from origin).
-# = MIN_LEG_ATR_MULT: one full structural leg, the distance at which price
-# has cleared the next structure level.
+# DEAD knob (retained for signature / golden-test compatibility, intentionally
+# unused — see compute_structure: `_ = lock_atr_mult`). The old lock-distance
+# confirmation was replaced by the Confirmation-BOS model: a pending CHoCH now
+# confirms only on a BOS and cancels only on reclaim, with no lock and no timeout.
 STRUCTURE_LOCK_ATR_MULT   = 1.5
 
 # Ranging flag: trend intact but no trend-direction swing extended for at
@@ -548,6 +551,79 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     opens  = df["Open"].to_numpy(dtype=float)
     n = len(df)
 
+    # ---- Session-gap detection (shared, time-based) ------------------------
+    # A break "gap-open guard" must reject ONLY a price teleport across a level
+    # that happened over a SESSION/WEEKEND gap (no candle traded the in-between
+    # prices). It must NOT reject a gradual continuous slide through the level
+    # (price drifted there candle-by-candle — that IS real trading).
+    # The two are distinguished by TIME, not price: a weekend/holiday gap shows
+    # as a multi-hour jump between consecutive H1 bars, while a continuous candle
+    # (even a violent 50-pip news bar) is exactly one bar-interval after the
+    # prior. `is_session_gap[ci]` is True iff bar ci is separated from bar ci-1
+    # by MORE than the bar interval (so no continuous candle traded between them).
+    # Interval is derived from the data (median delta) so it self-adjusts and is
+    # never hardcoded. Index 0 is False (no prior bar). `gaps_known` records
+    # whether we could compute this at all: if timestamps are missing/odd we
+    # CANNOT prove continuity, so `_traded_through` falls back to the original
+    # open-side guard on every candle (conservative — never loosens what worked).
+    is_session_gap = [False] * n
+    gaps_known = False
+    try:
+        import pandas as _pd
+        if 'Datetime' in df.columns:
+            _ts_vals = df['Datetime']
+        elif 'Date' in df.columns:
+            _ts_vals = df['Date']
+        else:
+            _ts_vals = df.index.to_series()
+        # Normalise to int64 nanoseconds (tz-aware safe). NaT -> abort below.
+        # .values -> datetime64[ns] (UTC instants) -> int64 ns; works across
+        # pandas versions (Series.view was removed in pandas 3).
+        _dt = _pd.to_datetime(_ts_vals, utc=True, errors='coerce')
+        _ts_ns = _dt.values.astype('datetime64[ns]').astype('int64')  # ns epoch
+        if len(_ts_ns) == n and n >= 3 and not _pd.isna(_dt).any():
+            _deltas = _ts_ns[1:] - _ts_ns[:-1]
+            _pos = _deltas[_deltas > 0]
+            if len(_pos):
+                import numpy as _np
+                _bar_ns = float(_np.median(_pos))
+                # Tolerance 1.5x the bar interval: a normal bar is exactly 1x;
+                # a weekend gap is >=24x. 1.5x cleanly separates without being
+                # tripped by DST shifts (1h) or minor feed jitter.
+                _gap_thresh = 1.5 * _bar_ns
+                for _i in range(1, n):
+                    if float(_ts_ns[_i] - _ts_ns[_i - 1]) > _gap_thresh:
+                        is_session_gap[_i] = True
+                gaps_known = True
+    except Exception:
+        is_session_gap = [False] * n
+        gaps_known = False
+
+    def _traded_through(break_idx: int, level: float, side: str) -> bool:
+        """Did price TRADE through `level` on candle break_idx (vs teleport over
+        a session gap)? `side`: 'down' = a downward break (close below level),
+        'up' = an upward break (close above level).
+
+        Continuous candle (gaps known, not a session gap): always True — a
+        decisive close beyond the level means price traded through it, whether in
+        one candle or as the last step of a gradual slide. Session-gap candle (or
+        gaps NOT known — conservative fallback): require the OPEN to be on the
+        NEAR side (open >= level for a down-break / open <= level for an up-break)
+        so a pure weekend teleport across the level cannot count; a gap candle
+        that itself opened on the near side and closed through is real intra-
+        candle trading and qualifies. The fallback path reproduces the ORIGINAL
+        open-side guard exactly, so behaviour is never loosened when continuity
+        cannot be proven.
+
+        SINGLE definition of the gap-open guard — every BOS / CHoCH / Confirmation
+        break calls this so the rule can never diverge between event types.
+        """
+        if gaps_known and not is_session_gap[break_idx]:
+            return True
+        if side == 'down':
+            return opens[break_idx] >= level
+        return opens[break_idx] <= level
+
     def _body_gate_ok(break_idx: int, body_mult: float) -> bool:
         """Body gate (option B): the break candle OR the candle right after it
         must have a body (|close-open|) >= body_mult * atr. At the live edge
@@ -623,23 +699,33 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     bos_break_low:  Optional[Dict[str, Any]] = None
     bos_break_high: Optional[Dict[str, Any]] = None
 
-    # Post-CHoCH invalidation target (Option A — "structure invalidates
-    # structure"). While a CHoCH flip is unconfirmed (in the failure window), the
-    # FIRST confirmed swing that forms AGAINST the new direction, after the flip
-    # candle, is recorded here:
-    #   - after an UP-CHoCH  -> post_choch_swing_low  (first confirmed swing LOW)
-    #   - after a DOWN-CHoCH -> post_choch_swing_high (first confirmed swing HIGH)
-    # If a close then breaks that swing by >= bos_disp (with the gap-open guard),
-    # fresh opposite structure has formed (a lower-low under an UP-flip / a
-    # higher-high over a DOWN-flip) and the CHoCH is INVALIDATED — the flip
-    # reverts to the prior trend. This is the SMC read a vet uses: the up-flip
-    # failed not because price reclaimed the origin, but because new down-
-    # structure printed. Distinct from `choch_origin` (the full prior leg
-    # extreme) which only catches a deep reclaim. None whenever no flip is in
-    # flight, or before the first opposite swing confirms post-flip — so a single
-    # pullback candle can never trigger a revert.
-    post_choch_swing_low:  Optional[Dict[str, Any]] = None
-    post_choch_swing_high: Optional[Dict[str, Any]] = None
+    # CONFIRMATION-BOS model (locked with the trader 2026-06-23).
+    # A CHoCH does NOT flip the trend on its own candle. It is PROVISIONAL: the
+    # trend stays the OLD direction and the CHoCH only flips it once a BOS prints
+    # in the CHoCH's direction (a "Confirmation BOS"). This removes the whole
+    # class of "frozen unconfirmed flip" bugs — there is no premature flip to get
+    # stuck in. State stays honest to confirmed structure.
+    #
+    # While a CHoCH is pending, these describe it (state is UNCHANGED — still the
+    # old trend). `choch_pending_dir` is the direction the CHoCH is trying to flip
+    # TO (always the opposite of `state`); kept explicit for readability though it
+    # is derivable. `confirm_break_swing` is the FIRST confirmed swing that prints
+    # AFTER the CHoCH candle in the pending direction (Option B) — the swing whose
+    # break by >= bos_disp confirms the reversal:
+    #   - CHoCH UP  pending (state DOWN) -> confirm on break of a swing HIGH
+    #   - CHoCH DOWN pending (state UP)  -> confirm on break of a swing LOW
+    # The pending CHoCH is CANCELLED (no flip) only if price closes back past
+    # `choch_origin` (reclaim). There is NO timeout — a pending CHoCH persists
+    # until confirmed-by-BOS or cancelled-by-reclaim (decided with the trader).
+    # `prior_trend` / `choch_level` / `choch_origin` (declared above) are the
+    # pending descriptors and gate `flip_unconfirmed` reporting.
+    choch_pending_dir:   Optional[str] = None
+    confirm_break_swing: Optional[Dict[str, Any]] = None
+    choch_arm_idx:       Optional[int] = None   # candle index the CHoCH armed on
+    # The CHoCH's own attributes, stashed at arm-time so the Confirmation BOS /
+    # cancel paths can reference them (impulse start for OB walk-back, etc.).
+    choch_impulse_ts:    Optional[str] = None
+    choch_broken_ts:     Optional[str] = None
 
     # impulse_start_ts: the timestamp of the swing that anchors the start of
     # the current impulse leg (last swing in the trend direction before current
@@ -704,8 +790,11 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
 
     _mult     = choch_atr_mult if choch_atr_mult is not None else STRUCTURE_CHOCH_ATR_MULT
     choch_disp = _mult * atr
-    _lock_mult = lock_atr_mult if lock_atr_mult is not None else STRUCTURE_LOCK_ATR_MULT
-    lock_dist  = _lock_mult * atr
+    # NOTE: lock_atr_mult / STRUCTURE_LOCK_ATR_MULT are RETAINED only for the
+    # diagnostics knob-sweep harness signature. In the Confirmation-BOS model a
+    # pending CHoCH has NO timeout/lock — it resolves only by Confirmation BOS or
+    # reclaim — so this knob is now inert (no lock distance is computed/used).
+    _ = lock_atr_mult  # intentionally unused (see note)
 
     for ci in range(n):
         c    = closes[ci]
@@ -717,192 +806,183 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         if leg_extreme_low is None or lo_i < leg_extreme_low:
             leg_extreme_low = lo_i
 
-        # ---- 1. FAILURE WINDOW -------------------------------------------------
-        if prior_trend is not None and choch_origin is not None and choch_level is not None:
-            if state == _DOWN:
-                if c <= choch_level - lock_dist:
+        # ---- 1. PENDING CHoCH RESOLUTION ---------------------------------------
+        # Only active while a CHoCH is pending (armed in sec. 2, not yet confirmed
+        # or cancelled). `state` is STILL the old trend here. Two exits:
+        #   (1a) RECLAIM cancel — price closes back past choch_origin -> the CHoCH
+        #        failed; no flip (state was never changed). No timeout exists.
+        #   (1b) CONFIRMATION BOS — a close breaks the first post-CHoCH confirmed
+        #        swing in the pending direction by >= bos_disp -> the reversal is
+        #        confirmed; flip state NOW and emit a 'Confirmation BOS' event.
+        # A continuation BOS in the OLD direction (sec. 2b) is the third exit and
+        # is handled there (down/up-trend extended => pending CHoCH failed).
+        if choch_pending_dir is not None and choch_origin is not None \
+                and choch_level is not None:
+            if choch_pending_dir == _UP:
+                # CHoCH UP pending, state is DOWN. Reclaim = close BELOW the
+                # down-leg low (choch_origin). Confirm = close breaks a swing
+                # HIGH upward by bos_disp.
+                if c < choch_origin:
+                    _failed_level = choch_level
                     prior_trend = None; choch = False
-                    choch_origin = None; choch_level = None
-                    post_choch_swing_high = None
-                elif c > choch_origin:
-                    failed_level = choch_level  # capture before nulling for the event
-                    state = _UP; prior_trend = None; choch = False
                     choch_origin = None; choch_level = None; choch_from_zone = False
-                    post_choch_swing_high = None
-                    defended = leg_extreme_low if leg_extreme_low is not None else defended
-                    defended_swing = None  # raw leg extreme, not a confirmed swing
-                    leg_extreme_high = hi_i; leg_extreme_low = lo_i
-                    leg_start = ci
-                    impulse_start_ts = _ts_iso(df, ci)
-                    rearm_block_dir = _DOWN
-                    _ts_failed = _ts_iso(df, ci)
-                    last_bos = {"kind": "CHoCH_FAILED", "direction": _UP,
-                                "ts": _ts_failed}
-                    # Push the failure to the ring so last_event_* (and the chart)
-                    # report the CHoCH as FAILED, not as a live reversal. Direction
-                    # = the resumed trend (UP). _event_label renders it as
-                    # 'CHoCH failed (trend resumed)'.
-                    _push_event("CHoCH_FAILED", "bullish", _ts_failed, failed_level,
-                                impulse_start_ts, False, "bullish")
+                    choch_pending_dir = None; confirm_break_swing = None
+                    choch_arm_idx = None
+                    last_bos = {"kind": "CHoCH_FAILED", "direction": _DOWN,
+                                "ts": _ts_iso(df, ci)}
+                    # Resumed trend = DOWN. Chart: 'CHoCH failed (trend resumed)'.
+                    _push_event("CHoCH_FAILED", "bearish", _ts_iso(df, ci),
+                                _failed_level, impulse_start_ts, False, "bearish")
                     if _trace is not None:
                         _trace.append(state)
                     continue
-                elif (post_choch_swing_high is not None
-                      and c > post_choch_swing_high["price"] + bos_disp
-                      and opens[ci] <= post_choch_swing_high["price"]):
-                    # Option A: fresh UP structure invalidated the DOWN-CHoCH. A
-                    # close broke the first post-flip confirmed swing HIGH (a
-                    # higher-high) — the down-flip failed via new structure, not a
-                    # deep reclaim. Revert to the prior UP trend. Mirror of the
-                    # reclaim branch above: clear the window, reset leg/defended to
-                    # the new direction, re-arm guard, and seed the up-BOS target
-                    # so continuation can fire next break. No event is pushed here
-                    # (matches CHoCH_FAILED) — the resumed trend's next BOS will.
-                    failed_level = choch_level  # capture before nulling for the event
+                elif (confirm_break_swing is not None
+                      and c > confirm_break_swing["price"] + bos_disp
+                      and _traded_through(ci, confirm_break_swing["price"], 'up')
+                      and _body_gate_ok(ci, BOS_BODY_ATR_MULT)):
+                    # CONFIRMATION BOS up — the CHoCH-up is confirmed. Flip to UP
+                    # now and seed the new (up) trend exactly as the old CHoCH flip
+                    # did. Emit a Confirmation BOS (type BOS, tier 'Confirm') that
+                    # breaks the post-CHoCH swing high.
+                    broken_price = confirm_break_swing["price"]
+                    broken_ts    = confirm_break_swing["ts"]
+                    ts_now = _ts_iso(df, ci)
                     state = _UP; prior_trend = None; choch = False
                     choch_origin = None; choch_level = None; choch_from_zone = False
-                    post_choch_swing_high = None
+                    choch_pending_dir = None; confirm_break_swing = None
+                    choch_arm_idx = None
                     defended = leg_extreme_low if leg_extreme_low is not None else defended
-                    defended_swing = None
+                    defended_swing = None  # raw leg extreme until next HL confirms
                     leg_extreme_high = hi_i; leg_extreme_low = lo_i
                     leg_start = ci
-                    impulse_start_ts = _ts_iso(df, ci)
+                    impulse_start_ts = choch_impulse_ts or ts_now
                     rearm_block_dir = _DOWN
-                    bos_break_high = None  # re-seeds on next confirmed high
-                    _ts_failed = _ts_iso(df, ci)
-                    last_bos = {"kind": "CHoCH_FAILED", "direction": _UP,
-                                "ts": _ts_failed}
-                    # Failed via fresh UP structure — same ring push as the reclaim
-                    # branch so the chart labels it 'CHoCH failed (trend resumed)'.
-                    _push_event("CHoCH_FAILED", "bullish", _ts_failed, failed_level,
-                                impulse_start_ts, False, "bullish")
+                    bos_break_high = None; bos_break_low = None
+                    last_bos = {"kind": "BOS", "direction": _UP,
+                                "ts": ts_now, "tier": "Confirm"}
+                    _push_event("BOS", "bullish", ts_now, broken_price,
+                                impulse_start_ts, False, "bullish", "Confirm",
+                                broken_swing_ts_arg=broken_ts)
                     if _trace is not None:
                         _trace.append(state)
                     continue
-            elif state == _UP:
-                if c >= choch_level + lock_dist:
+            elif choch_pending_dir == _DOWN:
+                # CHoCH DOWN pending, state is UP. Reclaim = close ABOVE the
+                # up-leg high (choch_origin). Confirm = close breaks a swing LOW
+                # downward by bos_disp.
+                if c > choch_origin:
+                    _failed_level = choch_level
                     prior_trend = None; choch = False
-                    choch_origin = None; choch_level = None
-                    post_choch_swing_low = None
-                elif c < choch_origin:
-                    failed_level = choch_level  # capture before nulling for the event
+                    choch_origin = None; choch_level = None; choch_from_zone = False
+                    choch_pending_dir = None; confirm_break_swing = None
+                    choch_arm_idx = None
+                    last_bos = {"kind": "CHoCH_FAILED", "direction": _UP,
+                                "ts": _ts_iso(df, ci)}
+                    # Resumed trend = UP. Chart: 'CHoCH failed (trend resumed)'.
+                    _push_event("CHoCH_FAILED", "bullish", _ts_iso(df, ci),
+                                _failed_level, impulse_start_ts, False, "bullish")
+                    if _trace is not None:
+                        _trace.append(state)
+                    continue
+                elif (confirm_break_swing is not None
+                      and c < confirm_break_swing["price"] - bos_disp
+                      and _traded_through(ci, confirm_break_swing["price"], 'down')
+                      and _body_gate_ok(ci, BOS_BODY_ATR_MULT)):
+                    # CONFIRMATION BOS down — the CHoCH-down is confirmed. Flip to
+                    # DOWN now and seed the new (down) trend. Emit a Confirmation
+                    # BOS that breaks the post-CHoCH swing low.
+                    broken_price = confirm_break_swing["price"]
+                    broken_ts    = confirm_break_swing["ts"]
+                    ts_now = _ts_iso(df, ci)
                     state = _DOWN; prior_trend = None; choch = False
                     choch_origin = None; choch_level = None; choch_from_zone = False
-                    post_choch_swing_low = None
+                    choch_pending_dir = None; confirm_break_swing = None
+                    choch_arm_idx = None
                     defended = leg_extreme_high if leg_extreme_high is not None else defended
-                    defended_swing = None  # raw leg extreme, not a confirmed swing
+                    defended_swing = None  # raw leg extreme until next LH confirms
                     leg_extreme_high = hi_i; leg_extreme_low = lo_i
                     leg_start = ci
-                    impulse_start_ts = _ts_iso(df, ci)
+                    impulse_start_ts = choch_impulse_ts or ts_now
                     rearm_block_dir = _UP
-                    _ts_failed = _ts_iso(df, ci)
-                    last_bos = {"kind": "CHoCH_FAILED", "direction": _DOWN,
-                                "ts": _ts_failed}
-                    # Push the failure to the ring (resumed trend = DOWN) so the
-                    # chart labels it 'CHoCH failed (trend resumed)', not a live flip.
-                    _push_event("CHoCH_FAILED", "bearish", _ts_failed, failed_level,
-                                impulse_start_ts, False, "bearish")
-                    if _trace is not None:
-                        _trace.append(state)
-                    continue
-                elif (post_choch_swing_low is not None
-                      and c < post_choch_swing_low["price"] - bos_disp
-                      and opens[ci] >= post_choch_swing_low["price"]):
-                    # Option A: fresh DOWN structure invalidated the UP-CHoCH. A
-                    # close broke the first post-flip confirmed swing LOW (a
-                    # lower-low) — the up-flip failed via new structure, not a
-                    # deep reclaim of the prior leg's origin. Revert to the prior
-                    # DOWN trend. Mirror of the reclaim branch above. No event is
-                    # pushed here; the resumed down-trend's next BOS will fire and
-                    # the broken swing high becomes a valid OB.
-                    failed_level = choch_level  # capture before nulling for the event
-                    state = _DOWN; prior_trend = None; choch = False
-                    choch_origin = None; choch_level = None; choch_from_zone = False
-                    post_choch_swing_low = None
-                    defended = leg_extreme_high if leg_extreme_high is not None else defended
-                    defended_swing = None
-                    leg_extreme_high = hi_i; leg_extreme_low = lo_i
-                    leg_start = ci
-                    impulse_start_ts = _ts_iso(df, ci)
-                    rearm_block_dir = _DOWN
-                    bos_break_low = None  # re-seeds on next confirmed low
-                    _ts_failed = _ts_iso(df, ci)
-                    last_bos = {"kind": "CHoCH_FAILED", "direction": _DOWN,
-                                "ts": _ts_failed}
-                    # Failed via fresh DOWN structure — same ring push as the reclaim
-                    # branch so the chart labels it 'CHoCH failed (trend resumed)'.
-                    _push_event("CHoCH_FAILED", "bearish", _ts_failed, failed_level,
-                                impulse_start_ts, False, "bearish")
+                    bos_break_high = None; bos_break_low = None
+                    last_bos = {"kind": "BOS", "direction": _DOWN,
+                                "ts": ts_now, "tier": "Confirm"}
+                    _push_event("BOS", "bearish", ts_now, broken_price,
+                                impulse_start_ts, False, "bearish", "Confirm",
+                                broken_swing_ts_arg=broken_ts)
                     if _trace is not None:
                         _trace.append(state)
                     continue
 
-        # ---- 2. CHoCH (flip) ---------------------------------------------------
-        if state == _UP and defended is not None and rearm_block_dir != _DOWN:
-            # Gap-open guard: open must be above defended — if price gapped
-            # below the swing at open, no candle traded through it (not SMC).
-            if c < defended - choch_disp and opens[ci] >= defended \
+        # ---- 2. CHoCH (ARM — provisional, does NOT flip the trend) -------------
+        # A CHoCH no longer flips `state`. It ARMS a pending reversal: the CHoCH
+        # event is pushed (so its OB still builds — unchanged), but the trend
+        # stays the OLD direction until a Confirmation BOS prints (section 2c).
+        # `defended` / `leg_extreme_*` / `leg_start` / `impulse_start_ts` are NOT
+        # reset here — they still belong to the live (old) trend. Gated by
+        # `choch_pending_dir is None` so a second CHoCH cannot arm while one is
+        # already pending.
+        if state == _UP and defended is not None and rearm_block_dir != _DOWN \
+                and choch_pending_dir is None:
+            # Gap guard via _traded_through: a down-break of defended only counts
+            # if price actually traded through it (continuous candle), not a
+            # weekend teleport across it.
+            if c < defended - choch_disp and _traded_through(ci, defended, 'down') \
                     and _body_gate_ok(ci, STRUCTURE_CHOCH_BODY_ATR_MULT):
                 rev_idx = recent_high["idx"] if recent_high else leg_start
                 choch = True
                 ts_now = _ts_iso(df, ci)
                 choch_ts = ts_now
-                # The broken swing is the one whose price == `defended` (the
-                # level just taken out) — captured from defended_swing BEFORE
-                # defended is reassigned below. None if `defended` was a raw
-                # leg extreme (no confirmed swing to mark).
                 broken_defended_ts = defended_swing["ts"] if defended_swing else None
                 broken_swing_ts = broken_defended_ts
+                # Pending CHoCH DOWN (state still UP). Confirm on a BOS down
+                # (break of a swing LOW). Reclaim = close back ABOVE choch_origin
+                # (the up-leg high). State, defended, leg extremes UNCHANGED.
                 choch_level  = defended
                 choch_origin = leg_extreme_high
-                post_choch_swing_low = None   # new DOWN-flip window opens
-                post_choch_swing_high = None
+                choch_pending_dir = _DOWN
+                choch_arm_idx = ci
+                confirm_break_swing = None    # first post-CHoCH swing LOW (sec. 4)
                 choch_from_zone = _reversed_from_premium(rev_idx, ci)
                 prior_trend  = _UP
-                state        = _DOWN
-                old_impulse  = impulse_start_ts
-                impulse_start_ts = ts_now
-                defended     = leg_extreme_high
-                defended_swing = None  # raw leg extreme until next LH confirms
-                leg_extreme_high = hi_i; leg_extreme_low = lo_i
-                leg_start    = ci
+                choch_impulse_ts = impulse_start_ts
+                choch_broken_ts  = broken_defended_ts
                 choch_flip_count += 1
                 last_bos = {"kind": "CHoCH", "direction": _DOWN,
                             "ts": ts_now, "from_zone": choch_from_zone}
                 _push_event("CHoCH", "bearish", ts_now, choch_level,
-                            old_impulse, choch_from_zone, "bearish",
+                            impulse_start_ts, choch_from_zone, "bearish",
                             broken_swing_ts_arg=broken_defended_ts)
-        elif state == _DOWN and defended is not None and rearm_block_dir != _UP:
-            # Gap-open guard: open must be below defended — if price gapped
-            # above the swing at open, no candle traded through it (not SMC).
-            if c > defended + choch_disp and opens[ci] <= defended \
+        elif state == _DOWN and defended is not None and rearm_block_dir != _UP \
+                and choch_pending_dir is None:
+            # Gap guard via _traded_through: an up-break of defended only counts
+            # if price actually traded through it (continuous candle), not a
+            # weekend teleport across it.
+            if c > defended + choch_disp and _traded_through(ci, defended, 'up') \
                     and _body_gate_ok(ci, STRUCTURE_CHOCH_BODY_ATR_MULT):
                 rev_idx = recent_low["idx"] if recent_low else leg_start
                 choch = True
                 ts_now = _ts_iso(df, ci)
                 choch_ts = ts_now
-                # Broken swing == the swing whose price == `defended`, captured
-                # before defended is reassigned. None if it was a leg extreme.
                 broken_defended_ts = defended_swing["ts"] if defended_swing else None
                 broken_swing_ts = broken_defended_ts
+                # Pending CHoCH UP (state still DOWN). Confirm on a BOS up (break
+                # of a swing HIGH). Reclaim = close back BELOW choch_origin (the
+                # down-leg low). State, defended, leg extremes UNCHANGED.
                 choch_level  = defended
                 choch_origin = leg_extreme_low
-                post_choch_swing_high = None  # new UP-flip window opens
-                post_choch_swing_low = None
+                choch_pending_dir = _UP
+                choch_arm_idx = ci
+                confirm_break_swing = None    # first post-CHoCH swing HIGH (sec. 4)
                 choch_from_zone = _reversed_from_discount(rev_idx, ci)
                 prior_trend  = _DOWN
-                state        = _UP
-                old_impulse  = impulse_start_ts
-                impulse_start_ts = ts_now
-                defended     = leg_extreme_low
-                defended_swing = None  # raw leg extreme until next HL confirms
-                leg_extreme_high = hi_i; leg_extreme_low = lo_i
-                leg_start    = ci
+                choch_impulse_ts = impulse_start_ts
+                choch_broken_ts  = broken_defended_ts
                 choch_flip_count += 1
                 last_bos = {"kind": "CHoCH", "direction": _UP,
                             "ts": ts_now, "from_zone": choch_from_zone}
                 _push_event("CHoCH", "bullish", ts_now, choch_level,
-                            old_impulse, choch_from_zone, "bullish",
+                            impulse_start_ts, choch_from_zone, "bullish",
                             broken_swing_ts_arg=broken_defended_ts)
 
         # ---- 2b. BOS (continuation, fire ON-CLOSE) -----------------------------
@@ -918,9 +998,9 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         # swing cannot re-fire; it re-seeds on the next confirmed swing (sec. 4).
         if state == _DOWN and bos_break_low is not None and rearm_block_dir != _UP:
             broken_price = bos_break_low["price"]
-            # Gap-open guard: open must be at or above the broken swing — if
-            # price gapped below it at open, no candle traded through it.
-            if c < broken_price - bos_disp and opens[ci] >= broken_price \
+            # Gap guard via _traded_through: a down-break only counts if price
+            # traded through the level (continuous candle), not a weekend gap.
+            if c < broken_price - bos_disp and _traded_through(ci, broken_price, 'down') \
                     and _body_gate_ok(ci, BOS_BODY_ATR_MULT):
                 ts_now = _ts_iso(df, ci)
                 bos_tier = ("Range" if h4_floor is not None
@@ -933,11 +1013,21 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             broken_swing_ts_arg=bos_break_low["ts"])
                 trend_dir_swings_since_extend = 0
                 bos_break_low = None  # spent — re-seeds on next confirmed low
+                # A continuation BOS DOWN = the down-trend extended = any pending
+                # CHoCH-UP failed (price resumed down instead of confirming up).
+                # Silently cancel it — this BOS event already tells the story; a
+                # separate CHoCH_FAILED on the SAME candle would just be noise.
+                # State already DOWN — no flip.
+                if choch_pending_dir == _UP:
+                    prior_trend = None; choch = False
+                    choch_origin = None; choch_level = None; choch_from_zone = False
+                    choch_pending_dir = None; confirm_break_swing = None
+                    choch_arm_idx = None
         elif state == _UP and bos_break_high is not None and rearm_block_dir != _DOWN:
             broken_price = bos_break_high["price"]
-            # Gap-open guard: open must be at or below the broken swing — if
-            # price gapped above it at open, no candle traded through it.
-            if c > broken_price + bos_disp and opens[ci] <= broken_price \
+            # Gap guard via _traded_through: an up-break only counts if price
+            # traded through the level (continuous candle), not a weekend gap.
+            if c > broken_price + bos_disp and _traded_through(ci, broken_price, 'up') \
                     and _body_gate_ok(ci, BOS_BODY_ATR_MULT):
                 ts_now = _ts_iso(df, ci)
                 bos_tier = ("Range" if h4_ceiling is not None
@@ -949,6 +1039,14 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             impulse_start_ts, False, "bullish", bos_tier,
                             broken_swing_ts_arg=bos_break_high["ts"])
                 trend_dir_swings_since_extend = 0
+                # A continuation BOS UP = the up-trend extended = any pending
+                # CHoCH-DOWN failed (price resumed up instead of confirming down).
+                # Silently cancel it — this BOS event already tells the story.
+                if choch_pending_dir == _DOWN:
+                    prior_trend = None; choch = False
+                    choch_origin = None; choch_level = None; choch_from_zone = False
+                    choch_pending_dir = None; confirm_break_swing = None
+                    choch_arm_idx = None
                 bos_break_high = None  # spent — re-seeds on next confirmed high
 
         # ---- 3. BIRTH (cold start) ---------------------------------------------
@@ -998,20 +1096,20 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                 lows.append(s)
                 recent_low = s
 
-            # Option A: while a CHoCH flip is in flight (failure window open),
-            # track the most-recent confirmed swing that prints AGAINST the new
-            # direction and AFTER the flip candle (s["idx"] > leg_start, the
-            # pivot's actual bar, not its lagged confirm bar). A close that later
-            # breaks this swing by >= bos_disp means fresh opposite structure
-            # invalidated the flip (handled in the failure-window block). Updated
-            # to the most-recent such swing each time so a continuing grind keeps
-            # the trigger on the live swing; reset to None when the window closes.
-            if prior_trend is not None and choch_level is not None \
-                    and s["idx"] > leg_start:
-                if state == _UP and s["type"] == "low":
-                    post_choch_swing_low = s
-                elif state == _DOWN and s["type"] == "high":
-                    post_choch_swing_high = s
+            # CONFIRMATION-BOS: while a CHoCH is pending, capture the FIRST
+            # confirmed swing that prints in the PENDING direction AFTER the CHoCH
+            # candle (s["idx"] > choch_arm_idx, the pivot's actual bar). This is
+            # the swing whose break (by >= bos_disp) becomes the Confirmation BOS
+            # (sec. 1b). Option B: the FIRST such swing only (set once, while
+            # None) — a fixed, structurally-meaningful level, not a moving target.
+            #   - CHoCH UP  pending -> first post-CHoCH swing HIGH (break upward)
+            #   - CHoCH DOWN pending -> first post-CHoCH swing LOW (break downward)
+            if choch_pending_dir is not None and confirm_break_swing is None \
+                    and choch_arm_idx is not None and s["idx"] > choch_arm_idx:
+                if choch_pending_dir == _UP and s["type"] == "high":
+                    confirm_break_swing = s
+                elif choch_pending_dir == _DOWN and s["type"] == "low":
+                    confirm_break_swing = s
 
             # Maintain the BOS break target + the protected (defended) swing.
             # The BOS itself no longer fires here — it fires ON-CLOSE in sec. 2b.
@@ -1059,16 +1157,21 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     ranging = (state in (_UP, _DOWN)
                and trend_dir_swings_since_extend >= STRUCTURE_RANGING_STALE)
 
-    flip_unconfirmed = (state in (_UP, _DOWN)
-                        and prior_trend is not None
-                        and choch_level is not None)
+    # CONFIRMATION-BOS model: a pending CHoCH means a reversal is ARMED but NOT
+    # yet confirmed. `state` is the confirmed trend (UNCHANGED by the CHoCH).
+    # `flip_unconfirmed` now means "a CHoCH is pending a Confirmation BOS" — the
+    # field name is kept so downstream consumers (Phase 2 / chart) keep working.
+    choch_pending = (choch_pending_dir is not None and choch_level is not None)
+    flip_unconfirmed = bool(choch_pending and state in (_UP, _DOWN))
+    # Direction the pending CHoCH is trying to flip TO (up/down), for labelling.
+    _pend_to = {_UP: "UP", _DOWN: "DOWN"}.get(choch_pending_dir) if choch_pending else None
 
     if state == _UP:
-        label = ("H1 trend UP" + (" (unconfirmed — CHoCH from DOWN, may reclaim)"
+        label = ("H1 trend UP" + (f" (CHoCH {_pend_to} pending — needs Confirmation BOS)"
                                    if flip_unconfirmed else
                                    (" (ranging)" if ranging else "")))
     elif state == _DOWN:
-        label = ("H1 trend DOWN" + (" (unconfirmed — CHoCH from UP, may reclaim)"
+        label = ("H1 trend DOWN" + (f" (CHoCH {_pend_to} pending — needs Confirmation BOS)"
                                     if flip_unconfirmed else
                                     (" (ranging)" if ranging else "")))
     else:
@@ -1088,7 +1191,12 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     return {
         "state":            state,
         "ranging":          ranging,
-        "prior_trend":      prior_trend if flip_unconfirmed else None,
+        # `prior_trend` = the confirmed trend the pending CHoCH would flip FROM
+        # (i.e. the current `state`). Only meaningful while a CHoCH is pending.
+        "prior_trend":      state if flip_unconfirmed else None,
+        # Direction the pending CHoCH would flip TO ('up'|'down'); None when no
+        # CHoCH is pending. New field — lets consumers name the pending reversal.
+        "choch_pending_dir": choch_pending_dir if flip_unconfirmed else None,
         "flip_unconfirmed": flip_unconfirmed,
         "choch":            choch,
         "choch_ts":         choch_ts if flip_unconfirmed else None,

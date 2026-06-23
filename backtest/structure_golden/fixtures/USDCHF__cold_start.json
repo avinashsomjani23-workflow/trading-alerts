@@ -14,7 +14,8 @@
     "n_events": 2,
     "n_choch": 0,
     "n_range_bos": 0,
-    "n_plain_bos": 2
+    "n_plain_bos": 2,
+    "n_confirm_bos": 0
   },
   "decimals": 5,
   "input_rows": [
@@ -503,6 +504,7 @@
     "state": "down",
     "ranging": false,
     "prior_trend": null,
+    "choch_pending_dir": null,
     "flip_unconfirmed": false,
     "choch": false,
     "choch_ts": null,

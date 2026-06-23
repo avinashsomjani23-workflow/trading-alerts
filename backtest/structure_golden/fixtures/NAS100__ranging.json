@@ -11,10 +11,11 @@
     "state": "down",
     "flip_unconfirmed": false,
     "ranging": true,
-    "n_events": 4,
+    "n_events": 7,
     "n_choch": 0,
     "n_range_bos": 0,
-    "n_plain_bos": 4
+    "n_plain_bos": 7,
+    "n_confirm_bos": 0
   },
   "decimals": 2,
   "input_rows": [
@@ -4823,6 +4824,7 @@
     "state": "down",
     "ranging": true,
     "prior_trend": null,
+    "choch_pending_dir": null,
     "flip_unconfirmed": false,
     "choch": false,
     "choch_ts": null,
@@ -4834,7 +4836,7 @@
     "last_bos": {
       "kind": "BOS",
       "direction": "down",
-      "ts": "2024-08-01T14:00:00+00:00",
+      "ts": "2024-08-05T04:00:00+00:00",
       "tier": "BOS"
     },
     "label": "H1 trend DOWN (ranging)",
@@ -4869,6 +4871,19 @@
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
+        "candle_ts": "2024-07-18T15:00:00+00:00",
+        "impulse_start_ts": "2024-07-18T01:00:00+00:00",
+        "broken_swing_price": 20018.5,
+        "broken_swing_ts": "2024-07-18T10:00:00+00:00",
+        "broken_was_wall": false,
+        "reversal_pct": 0.0,
+        "trend_after": "bearish",
+        "chop": false
+      },
+      {
+        "type": "BOS",
+        "tier": "BOS",
+        "direction": "bearish",
         "candle_ts": "2024-07-30T15:00:00+00:00",
         "impulse_start_ts": "2024-07-26T12:00:00+00:00",
         "broken_swing_price": 19076.0,
@@ -4886,6 +4901,32 @@
         "impulse_start_ts": "2024-08-01T06:00:00+00:00",
         "broken_swing_price": 19504.75,
         "broken_swing_ts": "2024-08-01T08:00:00+00:00",
+        "broken_was_wall": false,
+        "reversal_pct": 0.0,
+        "trend_after": "bearish",
+        "chop": false
+      },
+      {
+        "type": "BOS",
+        "tier": "BOS",
+        "direction": "bearish",
+        "candle_ts": "2024-08-02T13:00:00+00:00",
+        "impulse_start_ts": "2024-08-01T13:00:00+00:00",
+        "broken_swing_price": 18641.75,
+        "broken_swing_ts": "2024-08-02T07:00:00+00:00",
+        "broken_was_wall": false,
+        "reversal_pct": 0.0,
+        "trend_after": "bearish",
+        "chop": false
+      },
+      {
+        "type": "BOS",
+        "tier": "BOS",
+        "direction": "bearish",
+        "candle_ts": "2024-08-05T04:00:00+00:00",
+        "impulse_start_ts": "2024-08-01T13:00:00+00:00",
+        "broken_swing_price": 18386.0,
+        "broken_swing_ts": "2024-08-02T14:00:00+00:00",
         "broken_was_wall": false,
         "reversal_pct": 0.0,
         "trend_after": "bearish",

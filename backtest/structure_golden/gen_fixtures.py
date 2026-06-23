@@ -90,6 +90,10 @@ def _summary(out: Dict[str, Any]) -> Dict[str, Any]:
         "n_range_bos": sum(1 for e in ev if e.get("tier") == "Range"),
         "n_plain_bos": sum(1 for e in ev if e.get("type") == "BOS"
                            and e.get("tier") == "BOS"),
+        # Confirmation BOS (post-CHoCH reversal confirmation) — tracked so the
+        # golden set always includes at least one window exercising the flip path.
+        "n_confirm_bos": sum(1 for e in ev if e.get("type") == "BOS"
+                             and e.get("tier") == "Confirm"),
     }
 
 
@@ -121,7 +125,8 @@ def _select_windows(pair: str, df: "pd.DataFrame") -> List[Dict[str, Any]]:
     specs.append({"case": "cold_start", "start": 0, "size": COLD_START})
 
     # cases to satisfy by scanning, in priority order
-    want = ["choch_in_flight", "range_bos", "ranging", "plain_trend", "weekend_gap"]
+    want = ["choch_in_flight", "confirmation_bos", "range_bos", "ranging",
+            "plain_trend", "weekend_gap"]
     covered: set = set()
 
     n = len(df)
@@ -142,6 +147,8 @@ def _select_windows(pair: str, df: "pd.DataFrame") -> List[Dict[str, Any]]:
 
         if s["flip_unconfirmed"]:
             take("choch_in_flight")
+        elif s["n_confirm_bos"] >= 1:
+            take("confirmation_bos")
         elif s["n_range_bos"] >= 1:
             take("range_bos")
         elif s["ranging"]:
