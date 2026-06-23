@@ -1,15 +1,5 @@
 [
   {
-    "ts": "2026-06-05T15:35:34.506604",
-    "pair": "GOLD",
-    "reason": "no candidates field, attempt 3"
-  },
-  {
-    "ts": "2026-06-05T16:35:35.835252",
-    "pair": "GOLD",
-    "reason": "no candidates field, attempt 3"
-  },
-  {
     "ts": "2026-06-05T17:35:42.120583",
     "pair": "GOLD",
     "reason": "no candidates field, attempt 3"
@@ -996,6 +986,16 @@
   },
   {
     "ts": "2026-06-23T19:35:50.454151",
+    "pair": "GOLD",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-23T20:35:50.214316",
+    "pair": "GOLD",
+    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-23T20:35:50.350078",
     "pair": "GOLD",
     "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
   }
