@@ -1812,8 +1812,11 @@ def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
         for hour, n_alerts, n_filled, wins, wr, total_r in hour_data:
             sign = "+" if total_r >= 0 else ""
             wr_str = f"{wr:.0f}%" if wr is not None else "&mdash;"
-            ist_hour = (hour + 5) % 24  # rough IST (+5:30 truncated to +5)
-            ist_minute = 30
+            # IST = UTC + 5:30 exactly (India has no DST, so this never shifts).
+            # Add 330 minutes to the whole-hour UTC value and split back out, so
+            # the label is correct rather than relying on a hardcoded :30.
+            _ist_total = (hour * 60 + 330) % (24 * 60)
+            ist_hour, ist_minute = divmod(_ist_total, 60)
             r_color = "#27ae60" if total_r > 0 else ("#e74c3c" if total_r < 0 else "#888")
             by_hour_rows += (
                 f"<tr><td>{hour:02d}:00 UTC</td>"
