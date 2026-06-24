@@ -1,25 +1,5 @@
 [
   {
-    "ts": "2026-06-10T09:35:34.799782",
-    "ts_human": "09:35 IST, 10 Jun 2026",
-    "ob_count_total": 5,
-    "ob_count_per_pair": {
-      "EURUSD": 1,
-      "USDJPY": 0,
-      "NZDUSD": 1,
-      "USDCHF": 0,
-      "NAS100": 2,
-      "GOLD": 1
-    },
-    "ob_age_hrs": 0.005232576944444445,
-    "gemini_fails_3h": 1,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 0,
-    "issues": []
-  },
-  {
     "ts": "2026-06-10T12:35:35.835827",
     "ts_human": "12:35 IST, 10 Jun 2026",
     "ob_count_total": 4,
@@ -1121,5 +1101,25 @@
         "action": "Check gemini_failure_log.json \u2014 likely rate limit or key issue."
       }
     ]
+  },
+  {
+    "ts": "2026-06-24T09:35:54.412536",
+    "ts_human": "09:35 IST, 24 Jun 2026",
+    "ob_count_total": 5,
+    "ob_count_per_pair": {
+      "EURUSD": 1,
+      "USDJPY": 0,
+      "NZDUSD": 1,
+      "USDCHF": 1,
+      "NAS100": 1,
+      "GOLD": 1
+    },
+    "ob_age_hrs": 0.009043433055555555,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
   }
 ]
