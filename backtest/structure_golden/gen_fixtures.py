@@ -189,6 +189,20 @@ def build_fixture(pair: str, df: "pd.DataFrame", spec: Dict[str, Any]) -> Dict[s
 def main() -> int:
     out_dir = H.FIXTURE_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
+    # Self-cleaning: wipe every existing fixture before writing the fresh set.
+    # The fixture set is DATA-DERIVED (_select_windows picks the first cache
+    # window matching each case), so when the cache changes the set of cases a
+    # pair yields can change too. Without this wipe, a case that the new cache no
+    # longer produces leaves an ORPHAN fixture on disk that regen never
+    # overwrites — and the test (which loads EVERY *.json) then drifts on it
+    # forever, un-fixable by regen. Wiping first makes the on-disk set always
+    # exactly equal to what regen produced, so orphans are impossible.
+    removed = 0
+    for old in out_dir.glob("*.json"):
+        old.unlink()
+        removed += 1
+    if removed:
+        print(f"  cleaned {removed} existing fixture(s) before regen")
     total = 0
     for pair in PAIR_SYMBOL_STEM:
         print(f"[{pair}]")

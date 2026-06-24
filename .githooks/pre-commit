@@ -1,0 +1,68 @@
+#!/bin/sh
+# ---------------------------------------------------------------------------
+# Zero-friction structure golden guard (version-controlled, IDE-safe).
+#
+# WHY: CI ("Structure golden-file regression" in .github/workflows/tests.yml)
+# compares live compute_structure to a recorded baseline. CI runs with NO
+# parquet cache, so CI can NOT regenerate the baseline itself — it can only
+# fail. That means the baseline MUST be kept in sync on the developer machine,
+# before the commit leaves it. This hook does that automatically.
+#
+# RESULT: you commit and push as normal (CLI or IDE). No red CI for a stale
+# baseline ever reaches GitHub.
+#   - structure unchanged -> nothing happens.
+#   - structure changed    -> baseline regenerated + folded into THIS commit.
+#     gen_fixtures is self-cleaning (wipes orphans), so the committed fixture
+#     set always exactly matches live code.
+#
+# This is version-controlled (.githooks/, wired via core.hooksPath) so it is
+# the same on every machine and survives a fresh clone — unlike a hand-placed
+# .git/hooks/ script. Activate once after clone:  git config core.hooksPath .githooks
+#
+# Safety: NEVER blocks your commit. If the cache is missing or regen fails, the
+# commit still proceeds and CI remains the backstop for a genuine break.
+# ---------------------------------------------------------------------------
+
+repo_root=$(git rev-parse --show-toplevel) || exit 0
+cd "$repo_root" || exit 0
+
+# Resolve a Python interpreter. IDE git environments often differ from the
+# shell, so try the common names rather than assuming bare `python` exists.
+PY=""
+for cand in python python3 py; do
+  if command -v "$cand" >/dev/null 2>&1; then
+    PY="$cand"
+    break
+  fi
+done
+if [ -z "$PY" ]; then
+  echo "  [pre-commit] no python found on PATH; skipping golden refresh (CI is the backstop)"
+  exit 0
+fi
+
+# Only bother when Python is staged (structure can only move via code).
+if ! git diff --cached --name-only | grep -q '\.py$'; then
+  exit 0
+fi
+
+# No data cache -> can't regenerate; don't block the commit.
+if ! ls backtest/cache/*_1h.parquet >/dev/null 2>&1; then
+  echo "  [pre-commit] no parquet cache; skipping golden refresh (CI is the backstop)"
+  exit 0
+fi
+
+# Baseline already matches -> nothing to do.
+if "$PY" -m backtest.structure_golden.test_structure_golden >/dev/null 2>&1; then
+  exit 0
+fi
+
+echo "  [pre-commit] structure output moved -> regenerating golden baseline into this commit"
+if "$PY" -m backtest.structure_golden.gen_fixtures >/dev/null 2>&1; then
+  # gen_fixtures is self-cleaning: it wipes the fixtures dir first, so deletions
+  # (orphaned cases) as well as additions must be staged. Stage the whole dir.
+  git add -A backtest/structure_golden/fixtures/
+  echo "  [pre-commit] baseline refreshed + staged. (review: git diff --cached --stat backtest/structure_golden/fixtures/)"
+else
+  echo "  [pre-commit] WARNING: regen failed; commit proceeds, CI will flag a genuine break."
+fi
+exit 0
