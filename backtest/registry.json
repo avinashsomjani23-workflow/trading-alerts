@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-24T05:21:16.073956+00:00",
+  "updated_at": "2026-06-24T07:25:22.623667+00:00",
   "runs": [
     {
       "run_id": "h1only_20240701_20240731",
@@ -956,6 +956,63 @@
       },
       "notes": "",
       "recorded_at": "2026-06-24T05:21:16.071876+00:00"
+    },
+    {
+      "run_id": "h1only_20251101_20251115",
+      "start": "2025-11-01",
+      "end": "2025-11-15",
+      "group": 0,
+      "regime": "bau",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 22,
+        "filled_trades": 6,
+        "win_rate_pct": 50.0,
+        "expectancy_r": 0.341,
+        "max_dd_r": 3.0,
+        "longest_losing_streak": 3,
+        "fill_rate_proximal_pct": 54.5,
+        "fill_rate_50pct_pct": 36.4,
+        "per_pair": [
+          {
+            "pair": "EURUSD",
+            "trades": 6,
+            "win_rate_pct": 50.0,
+            "expectancy_r": 0.341,
+            "total_pnl_usd": 512.0
+          }
+        ],
+        "by_session": {
+          "London": {
+            "trades": 3,
+            "win_rate_pct": 66.7,
+            "expectancy_r": 0.871
+          },
+          "NY": {
+            "trades": 3,
+            "win_rate_pct": 33.3,
+            "expectancy_r": -0.189
+          }
+        },
+        "score_buckets": [
+          {
+            "score_bucket": "5-6",
+            "trades": 3,
+            "win_rate_pct": 33.3,
+            "expectancy_r": -0.146
+          },
+          {
+            "score_bucket": "6-7",
+            "trades": 3,
+            "win_rate_pct": 66.7,
+            "expectancy_r": 0.828
+          }
+        ],
+        "score_verdict": "WORKS \u2014 higher score leads to better trades"
+      },
+      "notes": "",
+      "recorded_at": "2026-06-24T07:25:22.622725+00:00"
     },
     {
       "run_id": "h1only_20260209_20260213",

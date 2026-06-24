@@ -1,14 +1,14 @@
 # Backtest Registry
 
-*Last updated: 2026-06-24 05:21 UTC*
+*Last updated: 2026-06-24 07:25 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **14** of 14
-- Total filled trades across all runs: **693**
-- Average expectancy across runs: **-0.22R**
+- Runs completed: **15** of 15
+- Total filled trades across all runs: **699**
+- Average expectancy across runs: **-0.18R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
 - **Group 3 (Live-era):** 1 runs, 9 trades, avg expectancy -0.20R
@@ -370,6 +370,43 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | 5-6 | 12 | 80.0% | +0.98R |
 | 6-7 | 8 | 40.0% | -0.10R |
 | 7+ | 8 | 25.0% | -0.28R |
+
+---
+
+### h1only_20251101_20251115
+
+**Unclassified** | 2025-11-01 to 2025-11-15 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 6 (of 22 rows) |
+| Win rate | 50.0% |
+| Expectancy | +0.34R |
+| Max drawdown | +3.00R |
+| Longest losing streak | 3 trades |
+| Proximal fill rate | 54.5% |
+| 50% fill rate | 36.4% |
+| Score verdict | WORKS — higher score leads to better trades |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| EURUSD | 6 | 50.0% | +0.34R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| London | 3 | 66.7% | +0.87R |
+| NY | 3 | 33.3% | -0.19R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 5-6 | 3 | 33.3% | -0.15R |
+| 6-7 | 3 | 66.7% | +0.83R |
 
 ---
 
