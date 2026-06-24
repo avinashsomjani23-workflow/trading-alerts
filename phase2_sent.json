@@ -1742,10 +1742,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-24T09:35:54.412536",
-      "last_seen_ist": "2026-06-24T22:35:43.718469",
+      "last_seen_ist": "2026-06-24T23:35:45.595414",
       "last_email_day": "2026-06-24",
       "reentry_armed": false,
-      "max_exit_distance": 0.0021110177040100098,
+      "max_exit_distance": 0.0025885701179504395,
       "bias": "SHORT",
       "pair": "NZDUSD",
       "ob_snapshot": {
@@ -1974,7 +1974,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-24T18:35:48.248354",
-      "last_seen_ist": "2026-06-24T22:35:43.718469",
+      "last_seen_ist": "2026-06-24T23:35:45.595414",
       "last_email_day": "2026-06-24",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
