@@ -2309,6 +2309,8 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "eligible_for_headline", "headline_exclusion",
         "mfe_r", "mae_r", "bars_to_exit", "bars_to_tp1", "bars_to_tp2",
         "ob_age_h1_bars", "pd_zone",
+        # Reversal book: exact CHoCH-origin-in-extreme flag (raw) + derived bool.
+        "reversal_pct", "reversed_from_extreme",
         "score", "structure_pts", "sweep_pts", "fvg_pts",
         "freshness_pts", "killzone_pts", "confluences_present",
         "sl_collision", "model", "ob_timestamp", "bos_tag", "bos_tier",
@@ -2363,6 +2365,8 @@ _EXCEL_COL_NAMES = {
     "pd_zone":           "PD Zone",
     "pd_alignment":      "PD Alignment",
     "pd_pct":            "PD Array % (entry)",
+    "reversal_pct":          "CHoCH Origin In Extreme (raw)",
+    "reversed_from_extreme": "Reversed From Extreme (CHoCH)",
     # outcome
     "exit_reason":       "How Trade Closed",
     "exit_price":        "Exit Price",
@@ -2511,6 +2515,11 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
             df["fvg_present"] = df["fvg_present"].map({True: "Yes", False: "No"}).fillna("")
         if "sweep_present" in df.columns:
             df["sweep_present"] = df["sweep_present"].map({True: "Yes", False: "No"}).fillna("")
+        if "reversed_from_extreme" in df.columns:
+            # True/False/None -> Yes/No/blank. Blank = not a CHoCH (no reversal
+            # origin) or the flag was never stamped. Matches the fvg/sweep style.
+            df["reversed_from_extreme"] = (
+                df["reversed_from_extreme"].map({True: "Yes", False: "No"}).fillna(""))
 
         # Select and rename columns — insert day_of_week right after the
         # session/alignment block (pair, 5× IST timestamps, direction,

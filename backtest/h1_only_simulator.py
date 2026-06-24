@@ -839,6 +839,28 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
             pd_pct = None
     else:
         pd_pct = None
+    # reversal_pct: the CHoCH-origin-in-extreme flag, computed ONCE in
+    # dealing_range.compute_structure (_reversed_from_premium / _discount) and
+    # carried on the OB by smc_radar. 1.0 = the swing the CHoCH reversed FROM sat
+    # in the frozen confirmed range's extreme (top 25% for a down CHoCH, bottom
+    # 25% for an up CHoCH); 0.0 = it did not; None = not stamped. Surfaced here
+    # raw, NEVER recomputed — this is the exact origin-based field, not the
+    # entry-position proxy (pd_pct). Only a CHoCH carries it meaningfully (a BOS
+    # is always 0.0/None — there is no reversal origin to test).
+    reversal_pct = ob.get("reversal_pct")
+    # reversed_from_extreme: plain-English derived flag for the CHoCH/reversal
+    # book. True only when this is a CHoCH AND its origin sat in the extreme.
+    # None when it is not a CHoCH, or when reversal_pct was never stamped.
+    # CAVEAT (documented, not hidden): reversal_pct is 0.0 both when the origin
+    # was genuinely mid-range AND when the confirmed-range gate was invalid
+    # (no fully-confirmed H4 range yet, so the extreme could not be tested).
+    # Those two cases are not distinguishable from this field alone; treat 0.0
+    # as "not confirmed from the extreme", not as "proven mid-range".
+    _is_choch = "CHoCH" in str(bos_tag)
+    if not _is_choch or reversal_pct is None:
+        reversed_from_extreme = None
+    else:
+        reversed_from_extreme = bool(float(reversal_pct) >= 1.0)
     pnl_usd = round(r_realised * risk_usd, 2)
     return {
         "pair":          alert["pair"],
@@ -878,6 +900,11 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "pd_zone":       pd_zone,
         "pd_alignment":  pd_alignment,
         "pd_pct":        pd_pct,
+        # CHoCH-origin-in-extreme flag (raw 1.0/0.0/None) + plain-English derived
+        # boolean. Exact origin-based field for the reversal book — see the build
+        # comment above. BOS rows carry None/False (no reversal origin).
+        "reversal_pct":          reversal_pct,
+        "reversed_from_extreme": reversed_from_extreme,
         "score":         round(float(score), 2),
         "structure_pts": round(float(breakdown.get("structure", 0.0)), 2),
         "sweep_pts":     round(float(breakdown.get("sweep", 0.0)), 2),
