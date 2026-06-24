@@ -40,5 +40,11 @@
     "kind": "dealing_range_legacy_fallback",
     "pair": "NZDUSD",
     "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-06-24T23:33:43.594385",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "NZDUSD",
+    "source": "legacy_window_120h"
   }
 ]
