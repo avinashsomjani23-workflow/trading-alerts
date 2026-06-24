@@ -504,17 +504,35 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
     # on GitHub, the run is unrecoverable (see March 2026 incident). Order
     # matters: persistence first, notification second. If push fails the
     # backtest exits non-zero and no email is sent -- user re-runs.
+    # Auto-PUSH only in GitHub Actions, where it is the ONLY way a CI run's
+    # results persist. On a local machine we COMMIT but do NOT push: the local
+    # repo lives inside OneDrive, and git's rapid file churn during a push-rebase
+    # collides with OneDrive's sync (a held file lock), which left the repo in a
+    # broken half-rebase state (2026-06 incident). The result logs are still
+    # committed locally every run (audit trail intact); the user pushes when
+    # ready. Set BACKTEST_PUSH=1 to force a push from a local run anyway.
+    import os as _os
+    _in_ci = _os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
+    _force_push = _os.environ.get("BACKTEST_PUSH", "").strip() in ("1", "true", "yes")
+    _do_push = _in_ci or _force_push
+
     from backtest.commit_logs import commit_run_logs, LogCommitError
     try:
-        sha = commit_run_logs(report_dir, _REPO_ROOT, push=True)
-        print(f"  [log commit OK] {report_dir.name} -> {sha}")
-        log_event("logs_pushed_to_github", run_id=report_dir.name, sha=sha)
+        sha = commit_run_logs(report_dir, _REPO_ROOT, push=_do_push)
+        if _do_push:
+            print(f"  [log commit + push OK] {report_dir.name} -> {sha}")
+            log_event("logs_pushed_to_github", run_id=report_dir.name, sha=sha)
+        else:
+            print(f"  [log commit OK — LOCAL ONLY, not pushed] {report_dir.name} -> {sha}")
+            print(f"    To publish to GitHub when ready: git push origin main")
+            log_event("logs_committed_local_only", run_id=report_dir.name, sha=sha)
     except LogCommitError as e:
         log_event("logs_push_failed", level="error",
                   run_id=report_dir.name, error=str(e))
         print(f"\n!!! LOG COMMIT FAILED for {report_dir.name} !!!")
         print(f"    Reason: {e}")
-        print(f"    Email NOT sent. Fix the push problem and re-run.")
+        _what = "push" if _do_push else "local commit"
+        print(f"    Email NOT sent. Fix the {_what} problem and re-run.")
         raise
 
     if send_email:
