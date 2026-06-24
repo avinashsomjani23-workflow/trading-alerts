@@ -521,6 +521,16 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/195-us-current-account]]></url>
 	</event>
 	<event>
+		<title>Belgian NBB Business Climate</title>
+		<country>EUR</country>
+		<date><![CDATA[06-24-2026]]></date>
+		<time><![CDATA[12:38pm]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast><![CDATA[-12.0]]></forecast>
+		<previous><![CDATA[-13.3]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/317-be-nbb-business-climate]]></url>
+	</event>
+	<event>
 		<title>SNB Quarterly Bulletin</title>
 		<country>CHF</country>
 		<date><![CDATA[06-24-2026]]></date>
@@ -529,16 +539,6 @@
 		<forecast />
 		<previous />
 		<url><![CDATA[https://www.forexfactory.com/calendar/417-sz-snb-quarterly-bulletin]]></url>
-	</event>
-	<event>
-		<title>Belgian NBB Business Climate</title>
-		<country>EUR</country>
-		<date><![CDATA[06-24-2026]]></date>
-		<time><![CDATA[1:00pm]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-12.0]]></forecast>
-		<previous><![CDATA[-13.3]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/317-be-nbb-business-climate]]></url>
 	</event>
 	<event>
 		<title>New Home Sales</title>
