@@ -173,25 +173,6 @@
       "bias": "LONG",
       "pair": "EURUSD"
     },
-    "USDJPY_LONG_CHoCH_160.21_2026-06-15T13": {
-      "score_int": 4,
-      "score_raw": 4.0,
-      "score_high_water": 4.0,
-      "score_low_water": 4.0,
-      "breakdown": {
-        "structure": 4,
-        "sweep": 0.0,
-        "fvg": 0,
-        "freshness": 0
-      },
-      "alert_ist": "2026-06-16T09:35:39.932421",
-      "last_seen_ist": "2026-06-17T12:35:46.290127",
-      "last_email_day": "2026-06-17",
-      "reentry_armed": false,
-      "max_exit_distance": 0.0,
-      "bias": "LONG",
-      "pair": "USDJPY"
-    },
     "GOLD_LONG_BOS_4354.1_2026-06-16T05": {
       "score_int": 2,
       "score_raw": 2.0,
@@ -1453,10 +1434,10 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-23T14:35:48.872772",
-      "last_seen_ist": "2026-06-24T11:35:44.935903",
+      "last_seen_ist": "2026-06-24T12:35:46.497560",
       "last_email_day": "2026-06-23",
       "reentry_armed": true,
-      "max_exit_distance": 0.005583763122558594,
+      "max_exit_distance": 0.005971312522888184,
       "bias": "SHORT",
       "pair": "EURUSD",
       "ob_snapshot": {
@@ -1568,7 +1549,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-23T14:35:48.872772",
-      "last_seen_ist": "2026-06-24T11:35:44.935903",
+      "last_seen_ist": "2026-06-24T12:35:46.497560",
       "last_email_day": "2026-06-24",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -1684,10 +1665,10 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-23T15:35:44.064222",
-      "last_seen_ist": "2026-06-24T00:35:45.508413",
+      "last_seen_ist": "2026-06-24T12:35:46.497560",
       "last_email_day": "2026-06-23",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 81.2998046875,
       "bias": "SHORT",
       "pair": "GOLD",
       "ob_snapshot": {
@@ -1799,7 +1780,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-24T09:35:54.412536",
-      "last_seen_ist": "2026-06-24T11:35:44.935903",
+      "last_seen_ist": "2026-06-24T12:35:46.497560",
       "last_email_day": "2026-06-24",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -1915,7 +1896,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-24T09:35:54.412536",
-      "last_seen_ist": "2026-06-24T11:35:44.935903",
+      "last_seen_ist": "2026-06-24T12:35:46.497560",
       "last_email_day": "2026-06-24",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
