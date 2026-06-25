@@ -494,7 +494,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-19T09:35:43.287373",
-      "last_seen_ist": "2026-06-25T20:35:46.254737",
+      "last_seen_ist": "2026-06-25T21:35:42.402666",
       "last_email_day": "2026-06-22",
       "reentry_armed": true,
       "max_exit_distance": 0.004739999771118164,
@@ -1531,7 +1531,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-24T09:35:54.412536",
-      "last_seen_ist": "2026-06-25T20:35:46.254737",
+      "last_seen_ist": "2026-06-25T21:35:42.402666",
       "last_email_day": "2026-06-25",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -1647,7 +1647,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-24T09:35:54.412536",
-      "last_seen_ist": "2026-06-25T20:35:46.254737",
+      "last_seen_ist": "2026-06-25T21:35:42.402666",
       "last_email_day": "2026-06-24",
       "reentry_armed": true,
       "max_exit_distance": 127.400146484375,
@@ -1763,7 +1763,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-24T18:35:48.248354",
-      "last_seen_ist": "2026-06-25T20:35:46.254737",
+      "last_seen_ist": "2026-06-25T21:35:42.402666",
       "last_email_day": "2026-06-25",
       "reentry_armed": false,
       "max_exit_distance": 89.900146484375,
@@ -1995,7 +1995,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-25T09:35:43.111715",
-      "last_seen_ist": "2026-06-25T20:35:46.254737",
+      "last_seen_ist": "2026-06-25T21:35:42.402666",
       "last_email_day": "2026-06-25",
       "reentry_armed": false,
       "max_exit_distance": 0.2740020751953125,
@@ -2575,7 +2575,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-25T19:35:51.164637",
-      "last_seen_ist": "2026-06-25T20:35:46.254737",
+      "last_seen_ist": "2026-06-25T21:35:42.402666",
       "last_email_day": "2026-06-25",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -2692,7 +2692,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-25T19:35:51.164637",
-      "last_seen_ist": "2026-06-25T20:35:46.254737",
+      "last_seen_ist": "2026-06-25T21:35:42.402666",
       "last_email_day": "2026-06-25",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
