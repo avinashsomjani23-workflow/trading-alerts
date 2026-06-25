@@ -1,14 +1,5 @@
 {
-  "NZDUSD|SHORT|2026-06-24": {
-    "macro_summary": "There are no scheduled high-impact events for NZD or USD today. This lack of scheduled news means the pair will likely trade on technicals and broader market sentiment. Any unexpected geopolitical developments or shifts in global risk appetite could influence this trade."
-  },
-  "NAS100|LONG|2026-06-24": {
-    "macro_summary": "There are no scheduled high-impact economic events for the USD today that would directly influence the NAS100. Therefore, this trade setup is free from immediate macroeconomic event risk."
-  },
-  "GOLD|SHORT|2026-06-24": {
-    "macro_summary": "There are no scheduled high-impact events for USD today that would directly impact Gold. Therefore, no scheduled events will help or hurt this short Gold setup."
-  },
-  "USDCHF|LONG|2026-06-24": {
-    "macro_summary": "There are no scheduled high-impact events for USD or CHF today. Therefore, no external macro factors are expected to directly influence the USDCHF pair's direction. Price action will be driven by technicals and intermarket flows."
+  "USDJPY|LONG|2026-06-25": {
+    "macro_summary": "The US Core PCE Price Index and Final GDP q/q are scheduled for 22:00 IST. Higher than expected readings for both would HELP the USDJPY LONG trade, while lower than expected readings would HURT it. There are no other high-impact events for USDJPY today."
   }
 }
