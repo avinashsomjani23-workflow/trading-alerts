@@ -1550,10 +1550,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-24T09:35:54.412536",
-      "last_seen_ist": "2026-06-25T16:35:41.020651",
+      "last_seen_ist": "2026-06-25T17:35:40.176047",
       "last_email_day": "2026-06-24",
       "reentry_armed": true,
-      "max_exit_distance": 0.002620398998260498,
+      "max_exit_distance": 0.00268399715423584,
       "bias": "SHORT",
       "pair": "NZDUSD",
       "ob_snapshot": {
@@ -1782,10 +1782,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-24T18:35:48.248354",
-      "last_seen_ist": "2026-06-25T16:35:41.020651",
+      "last_seen_ist": "2026-06-25T17:35:40.176047",
       "last_email_day": "2026-06-25",
       "reentry_armed": false,
-      "max_exit_distance": 88.5,
+      "max_exit_distance": 89.900146484375,
       "bias": "SHORT",
       "pair": "GOLD",
       "ob_snapshot": {
@@ -1898,10 +1898,10 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-24T19:35:46.495101",
-      "last_seen_ist": "2026-06-24T19:35:46.495101",
+      "last_seen_ist": "2026-06-25T17:35:40.176047",
       "last_email_day": "2026-06-24",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.0026900172233581543,
       "bias": "LONG",
       "pair": "USDCHF",
       "ob_snapshot": {
@@ -2014,7 +2014,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-25T09:35:43.111715",
-      "last_seen_ist": "2026-06-25T16:35:41.020651",
+      "last_seen_ist": "2026-06-25T17:35:40.176047",
       "last_email_day": "2026-06-25",
       "reentry_armed": false,
       "max_exit_distance": 0.2740020751953125,
@@ -2362,10 +2362,10 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-25T15:35:41.116606",
-      "last_seen_ist": "2026-06-25T16:35:41.020651",
+      "last_seen_ist": "2026-06-25T17:35:40.176047",
       "last_email_day": "2026-06-25",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 292.75,
       "bias": "LONG",
       "pair": "NAS100",
       "ob_snapshot": {
@@ -2478,7 +2478,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-25T16:35:41.020651",
-      "last_seen_ist": "2026-06-25T16:35:41.020651",
+      "last_seen_ist": "2026-06-25T17:35:40.176047",
       "last_email_day": "2026-06-25",
       "reentry_armed": false,
       "max_exit_distance": 0.0,

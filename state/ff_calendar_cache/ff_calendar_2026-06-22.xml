@@ -761,6 +761,16 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/356-us-personal-spending-mm]]></url>
 	</event>
 	<event>
+		<title>FOMC Member Bowman Speaks</title>
+		<country>USD</country>
+		<date><![CDATA[06-25-2026]]></date>
+		<time><![CDATA[12:45pm]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast />
+		<previous />
+		<url><![CDATA[https://www.forexfactory.com/calendar/812-us-fomc-member-bowman-speaks]]></url>
+	</event>
+	<event>
 		<title>CB Leading Index m/m</title>
 		<country>CNY</country>
 		<date><![CDATA[06-25-2026]]></date>
