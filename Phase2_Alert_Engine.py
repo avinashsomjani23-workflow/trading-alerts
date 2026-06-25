@@ -2043,9 +2043,15 @@ def collect_heartbeat_diagnostics(ist_now, active_obs):
     # read it the same way Rule 1 reads active_obs.json mtime. Any occurrence
     # matters — an email-send fail means a digest was lost; a walls compute
     # exception means a pair degraded to a placeholder with no structure.
-    p1_degrades = _count_recent_by_kind(
-        "p1_degrade_log.json", HEARTBEAT_WINDOW_HOURS, ist_now
-    )
+    # 'dealing_range_legacy_fallback' is a diagnostic counter (Wave-1 1E), not a
+    # failure — exclude it so it never triggers a false heartbeat issue.
+    _P1_DIAGNOSTIC_KINDS = {"dealing_range_legacy_fallback"}
+    p1_degrades = {
+        k: v for k, v in _count_recent_by_kind(
+            "p1_degrade_log.json", HEARTBEAT_WINDOW_HOURS, ist_now
+        ).items()
+        if k not in _P1_DIAGNOSTIC_KINDS
+    }
     p1_degrade_total = sum(p1_degrades.values())
     if p1_degrade_total >= 1:
         breakdown = ", ".join(f"{k}×{v}" for k, v in sorted(p1_degrades.items()))
