@@ -16,5 +16,8 @@
   },
   "EURUSD|SHORT|2026-06-25": {
     "macro_summary": "The Core PCE Price Index m/m and Final GDP q/q are scheduled for 22:00 IST. Higher than expected readings for these US data points would hurt the EURUSD SHORT trade, while lower than expected readings would help it."
+  },
+  "NAS100|SHORT|2026-06-25": {
+    "macro_summary": "The US Core PCE Price Index m/m and Final GDP q/q at 22:00 IST are the key events. Higher than expected readings for both would hurt this short trade, while lower readings would help. Both are scheduled for today."
   }
 }
