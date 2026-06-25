@@ -13,5 +13,8 @@
   },
   "GOLD|SHORT|2026-06-25": {
     "macro_summary": "The US Core PCE Price Index and Final GDP q/q at 22:00 IST are the key events. Higher than expected readings would hurt the SHORT Gold trade, while lower readings would help. Unexpectedly strong GDP or sticky PCE inflation would be bearish for Gold."
+  },
+  "EURUSD|SHORT|2026-06-25": {
+    "macro_summary": "The Core PCE Price Index m/m and Final GDP q/q are scheduled for 22:00 IST. Higher than expected readings for these US data points would hurt the EURUSD SHORT trade, while lower than expected readings would help it."
   }
 }
