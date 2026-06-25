@@ -1,5 +1,17 @@
 {
   "USDJPY|LONG|2026-06-25": {
     "macro_summary": "The US Core PCE Price Index and Final GDP q/q are scheduled for 22:00 IST. Higher than expected readings for both would HELP the USDJPY LONG trade, while lower than expected readings would HURT it. There are no other high-impact events for USDJPY today."
+  },
+  "NZDUSD|SHORT|2026-06-25": {
+    "macro_summary": "The Core PCE Price Index and Final GDP q/q are scheduled for 22:00 IST. Higher than expected readings for both would hurt the NZDUSD short trade, while lower than expected readings would help. No other high-impact events are scheduled for today."
+  },
+  "USDCHF|LONG|2026-06-25": {
+    "macro_summary": "The US Core PCE Price Index and Final GDP q/q are scheduled for 22:00 IST. Higher than expected readings for both would HELP the USDCHF LONG trade, while lower than expected readings would HURT it. There are no other high-impact events today for USDCHF."
+  },
+  "NAS100|LONG|2026-06-25": {
+    "macro_summary": "The US Core PCE Price Index and Final GDP q/q at 22:00 IST are the key events. A lower-than-expected PCE or a stronger GDP would help this LONG trade, while higher PCE or weaker GDP would hurt it. Both are scheduled for release today."
+  },
+  "GOLD|SHORT|2026-06-25": {
+    "macro_summary": "The US Core PCE Price Index and Final GDP q/q at 22:00 IST are the key events. Higher than expected readings would hurt the SHORT Gold trade, while lower readings would help. Unexpectedly strong GDP or sticky PCE inflation would be bearish for Gold."
   }
 }
