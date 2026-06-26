@@ -125,15 +125,29 @@ jobs:
           ref: main          # must be on main so push origin HEAD:main works
           fetch-depth: 0
 
-      - name: Pre-flight push check
-        # Fail immediately (before the 2-hour sweep) if we can't push to main.
+      - name: Pre-flight remote check
+        # Read-only reachability probe. Fails fast (before the 2-hour sweep)
+        # ONLY on a genuinely broken token/network — NEVER on a concurrent
+        # push.
+        #
+        # The old version pushed an empty "canary" commit with a bare
+        # `git push` (no rebase, no retry). Any push that landed on main in
+        # between — a sibling matrix cell's canary, or a P1/P2 state commit —
+        # rejected it as a non-fast-forward ("fetch first") and turned the job
+        # red with a MISLEADING "branch protection / token perms" error. It
+        # also left the canary on main permanently (`git reset HEAD~1` only
+        # undoes it locally), polluting history.
+        #
+        # ls-remote moves nothing and cannot non-fast-forward-fail. The single
+        # authoritative push to main is the "Commit run directory" step below:
+        # it rebases, retries 5×, and goes loud-red with a 30-day artifact
+        # fallback if it ever truly cannot push.
         run: |
-          git commit --allow-empty -m "pre-flight push check [skip ci]"
-          if ! git push origin HEAD:main; then
-            echo "::error::Cannot push to main — fix branch protection / token perms before running a sweep."
+          if ! git ls-remote --exit-code origin main >/dev/null 2>&1; then
+            echo "::error::Cannot reach origin/main with this token — fix token/network before running a sweep."
             exit 1
           fi
-          git reset HEAD~1  # remove the canary commit; run dir commit comes later
+          echo "origin/main reachable; run-dir commit step handles the push (rebase + retry)."
 
       - uses: actions/setup-python@v5
         with:
