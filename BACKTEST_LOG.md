@@ -1,13 +1,13 @@
 # Backtest Registry
 
-*Last updated: 2026-06-24 07:25 UTC*
+*Last updated: 2026-06-26 09:19 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **15** of 15
-- Total filled trades across all runs: **699**
+- Runs completed: **16** of 16
+- Total filled trades across all runs: **724**
 - Average expectancy across runs: **-0.18R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
@@ -149,6 +149,47 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | 5-6 | 23 | 36.4% | -0.08R |
 | 6-7 | 19 | 21.4% | -0.28R |
 | 7+ | 15 | 50.0% | +0.28R |
+
+---
+
+### h1only_20250101_20250131
+
+**Unclassified** | 2025-01-01 to 2025-01-31 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 25 (of 81 rows) |
+| Win rate | 31.6% |
+| Expectancy | -0.21R |
+| Max drawdown | +5.94R |
+| Longest losing streak | 3 trades |
+| Proximal fill rate | 61.0% |
+| 50% fill rate | 52.5% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| BTCUSD | 15 | 42.9% | -0.01R |
+| GBPUSD | 10 | 0.0% | -0.50R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 1 | — | +0.00R |
+| London | 13 | 44.4% | +0.10R |
+| NY | 11 | 20.0% | -0.58R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 4-5 | 4 | 75.0% | +0.93R |
+| 5-6 | 4 | 0.0% | -0.75R |
+| 6-7 | 7 | 60.0% | +0.16R |
+| 7+ | 10 | 0.0% | -0.70R |
 
 ---
 
