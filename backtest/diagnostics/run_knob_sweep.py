@@ -46,7 +46,7 @@ from backtest.diagnostics import driver
 # matching h1_knob_sweep._resolve_value semantics.
 # ---------------------------------------------------------------------------
 KNOB_GRID: Dict[str, List[float]] = {
-    "MIN_LEG_ATR_MULT":               [1.0, 1.25, 1.5, 1.75, 2.0],
+    "MIN_LEG_ATR_MULT":               [1.0, 1.5, 2.0, 2.5],
     "BOS_ATR_MULT":                   [0.2, 0.3, 0.4, 0.5, 0.7],
     "STRUCTURE_CHOCH_ATR_MULT":       [0.5, 0.75, 1.0, 1.25, 1.5],
     "STRUCTURE_LOCK_ATR_MULT":        [1.0, 1.25, 1.5, 1.75, 2.0],
