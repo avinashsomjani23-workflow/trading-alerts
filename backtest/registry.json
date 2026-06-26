@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-26T09:19:39.310919+00:00",
+  "updated_at": "2026-06-26T12:59:27.789139+00:00",
   "runs": [
     {
       "run_id": "h1only_20240701_20240731",
@@ -530,105 +530,65 @@
       "condition": "",
       "risk_usd": 250.0,
       "metrics": {
-        "total_rows": 298,
-        "filled_trades": 99,
-        "win_rate_pct": 33.3,
-        "expectancy_r": -0.117,
-        "max_dd_r": 18.413,
-        "longest_losing_streak": 4,
-        "fill_rate_proximal_pct": 66.4,
-        "fill_rate_50pct_pct": 59.1,
+        "total_rows": 91,
+        "filled_trades": 26,
+        "win_rate_pct": 47.6,
+        "expectancy_r": 0.182,
+        "max_dd_r": 3.889,
+        "longest_losing_streak": 3,
+        "fill_rate_proximal_pct": 56.5,
+        "fill_rate_50pct_pct": 51.1,
         "per_pair": [
           {
-            "pair": "GOLD",
-            "trades": 12,
-            "win_rate_pct": 44.4,
-            "expectancy_r": 0.201,
-            "total_pnl_usd": 602.75
-          },
-          {
-            "pair": "USDJPY",
-            "trades": 16,
-            "win_rate_pct": 38.5,
-            "expectancy_r": 0.005,
-            "total_pnl_usd": 20.25
-          },
-          {
-            "pair": "NZDUSD",
-            "trades": 19,
-            "win_rate_pct": 41.2,
-            "expectancy_r": -0.084,
-            "total_pnl_usd": -397.0
-          },
-          {
-            "pair": "USDCHF",
-            "trades": 13,
-            "win_rate_pct": 30.0,
-            "expectancy_r": -0.203,
-            "total_pnl_usd": -658.25
-          },
-          {
-            "pair": "NAS100",
-            "trades": 14,
-            "win_rate_pct": 25.0,
-            "expectancy_r": -0.243,
-            "total_pnl_usd": -850.0
-          },
-          {
-            "pair": "EURUSD",
-            "trades": 25,
-            "win_rate_pct": 23.5,
-            "expectancy_r": -0.259,
-            "total_pnl_usd": -1620.5
+            "pair": "BTCUSD",
+            "trades": 26,
+            "win_rate_pct": 47.6,
+            "expectancy_r": 0.182,
+            "total_pnl_usd": 1184.0
           }
         ],
         "by_session": {
-          "Asia": {
-            "trades": 14,
-            "win_rate_pct": 33.3,
-            "expectancy_r": -0.19
-          },
           "London": {
-            "trades": 51,
-            "win_rate_pct": 26.8,
-            "expectancy_r": -0.241
+            "trades": 11,
+            "win_rate_pct": 77.8,
+            "expectancy_r": 1.039
           },
           "NY": {
-            "trades": 34,
-            "win_rate_pct": 44.0,
-            "expectancy_r": 0.099
+            "trades": 15,
+            "win_rate_pct": 25.0,
+            "expectancy_r": -0.446
           }
         },
         "score_buckets": [
           {
             "score_bucket": "4-5",
-            "trades": 17,
-            "win_rate_pct": 33.3,
-            "expectancy_r": -0.073
+            "trades": 7,
+            "win_rate_pct": 80.0,
+            "expectancy_r": 0.782
           },
           {
             "score_bucket": "5-6",
-            "trades": 31,
-            "win_rate_pct": 16.7,
-            "expectancy_r": -0.417
+            "trades": 4,
+            "win_rate_pct": 33.3,
+            "expectancy_r": -0.484
           },
           {
             "score_bucket": "6-7",
-            "trades": 27,
-            "win_rate_pct": 50.0,
-            "expectancy_r": 0.225
+            "trades": 10,
+            "win_rate_pct": 44.4,
+            "expectancy_r": 0.024
           },
           {
             "score_bucket": "7+",
-            "trades": 24,
-            "win_rate_pct": 35.0,
-            "expectancy_r": -0.146
+            "trades": 5,
+            "win_rate_pct": 25.0,
+            "expectancy_r": 0.19
           }
         ],
-        "score_verdict": "BROKEN \u2014 score does not predict outcome"
+        "score_verdict": "WEAK \u2014 partial relationship"
       },
       "notes": "",
-      "recorded_at": "2026-06-19T21:44:52.285283+00:00"
+      "recorded_at": "2026-06-26T12:59:27.786783+00:00"
     },
     {
       "run_id": "h1only_20250201_20250228",
