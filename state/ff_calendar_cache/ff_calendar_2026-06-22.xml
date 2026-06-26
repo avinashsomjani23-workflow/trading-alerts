@@ -837,7 +837,7 @@
 		<time><![CDATA[9:33am]]></time>
 		<impact><![CDATA[Low]]></impact>
 		<forecast />
-		<previous />
+		<previous><![CDATA[3.77|1.6]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/524-it-10-y-bond-auction]]></url>
 	</event>
 	<event>
@@ -879,16 +879,6 @@
 		<forecast />
 		<previous><![CDATA[4.6%]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/238-us-revised-uom-inflation-expectations]]></url>
-	</event>
-	<event>
-		<title>FOMC Member Williams Speaks</title>
-		<country>USD</country>
-		<date><![CDATA[06-26-2026]]></date>
-		<time><![CDATA[2:30pm]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast />
-		<previous />
-		<url><![CDATA[https://www.forexfactory.com/calendar/518-us-fomc-member-williams-speaks]]></url>
 	</event>
 	<event>
 		<title>FOMC Member Kashkari Speaks</title>
