@@ -360,7 +360,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-19T09:35:43.287373",
-      "last_seen_ist": "2026-06-26T15:35:39.746339",
+      "last_seen_ist": "2026-06-26T16:35:47.474395",
       "last_email_day": "2026-06-22",
       "reentry_armed": true,
       "max_exit_distance": 0.004960000514984131,
@@ -821,10 +821,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-22T19:35:47.105229",
-      "last_seen_ist": "2026-06-26T15:35:39.746339",
+      "last_seen_ist": "2026-06-26T16:35:47.474395",
       "last_email_day": "2026-06-23",
       "reentry_armed": true,
-      "max_exit_distance": 0.004051327705383301,
+      "max_exit_distance": 0.004311680793762207,
       "bias": "SHORT",
       "pair": "EURUSD",
       "ob_snapshot": {
@@ -1051,7 +1051,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-06-23T14:35:48.872772",
-      "last_seen_ist": "2026-06-26T15:35:39.746339",
+      "last_seen_ist": "2026-06-26T16:35:47.474395",
       "last_email_day": "2026-06-26",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -1398,7 +1398,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-24T09:35:54.412536",
-      "last_seen_ist": "2026-06-26T15:35:39.746339",
+      "last_seen_ist": "2026-06-26T16:35:47.474395",
       "last_email_day": "2026-06-26",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -1514,7 +1514,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-24T09:35:54.412536",
-      "last_seen_ist": "2026-06-26T15:35:39.746339",
+      "last_seen_ist": "2026-06-26T16:35:47.474395",
       "last_email_day": "2026-06-24",
       "reentry_armed": true,
       "max_exit_distance": 127.400146484375,
@@ -1630,7 +1630,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-24T18:35:48.248354",
-      "last_seen_ist": "2026-06-26T15:35:39.746339",
+      "last_seen_ist": "2026-06-26T16:35:47.474395",
       "last_email_day": "2026-06-26",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -2559,10 +2559,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-25T19:35:51.164637",
-      "last_seen_ist": "2026-06-26T15:35:39.746339",
+      "last_seen_ist": "2026-06-26T16:35:47.474395",
       "last_email_day": "2026-06-26",
       "reentry_armed": false,
-      "max_exit_distance": 672.75,
+      "max_exit_distance": 716.75,
       "bias": "SHORT",
       "pair": "NAS100",
       "ob_snapshot": {
@@ -2792,7 +2792,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-06-26T12:35:47.252901",
-      "last_seen_ist": "2026-06-26T15:35:39.746339",
+      "last_seen_ist": "2026-06-26T16:35:47.474395",
       "last_email_day": "2026-06-26",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
