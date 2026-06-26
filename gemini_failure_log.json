@@ -1,10 +1,5 @@
 [
   {
-    "ts": "2026-06-12T00:37:04.172140",
-    "pair": "GOLD",
-    "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
-  },
-  {
     "ts": "2026-06-12T00:37:34.737509",
     "pair": "GOLD",
     "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
@@ -998,5 +993,10 @@
     "ts": "2026-06-26T15:36:13.199470",
     "pair": "USDJPY",
     "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-26T18:36:32.296732",
+    "pair": "USDCHF",
+    "reason": "API error 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
   }
 ]

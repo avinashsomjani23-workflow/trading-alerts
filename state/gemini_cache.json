@@ -17,5 +17,9 @@
   "USDJPY|SHORT|2026-06-26": {
     "macro_summary": null,
     "macro_unavailable": true
+  },
+  "USDCHF|LONG|2026-06-26": {
+    "macro_summary": null,
+    "macro_unavailable": true
   }
 }

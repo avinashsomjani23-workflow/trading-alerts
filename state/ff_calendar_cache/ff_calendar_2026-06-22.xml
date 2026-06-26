@@ -890,4 +890,14 @@
 		<previous />
 		<url><![CDATA[https://www.forexfactory.com/calendar/651-us-fomc-member-kashkari-speaks]]></url>
 	</event>
+	<event>
+		<title>President Trump Speaks</title>
+		<country>USD</country>
+		<date><![CDATA[06-26-2026]]></date>
+		<time><![CDATA[5:30pm]]></time>
+		<impact><![CDATA[Medium]]></impact>
+		<forecast />
+		<previous />
+		<url><![CDATA[https://www.forexfactory.com/calendar/645-us-president-trump-speaks]]></url>
+	</event>
 </weeklyevents>
