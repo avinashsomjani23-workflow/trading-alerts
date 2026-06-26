@@ -122,10 +122,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history: the commit-back step does `git pull --rebase origin
-          # main`, which fails on a shallow (depth-1) clone — the silent reason
-          # earlier runs emailed but never landed in the repo.
+          ref: main          # must be on main so push origin HEAD:main works
           fetch-depth: 0
+
+      - name: Pre-flight push check
+        # Fail immediately (before the 2-hour sweep) if we can't push to main.
+        run: |
+          git commit --allow-empty -m "pre-flight push check [skip ci]"
+          if ! git push origin HEAD:main; then
+            echo "::error::Cannot push to main — fix branch protection / token perms before running a sweep."
+            exit 1
+          fi
+          git reset HEAD~1  # remove the canary commit; run dir commit comes later
 
       - uses: actions/setup-python@v5
         with:
