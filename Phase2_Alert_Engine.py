@@ -2334,6 +2334,10 @@ if __name__ == "__main__":
           f"(coverage_ok={news_coverage_ok})")
 
     for pair_conf in config["pairs"]:
+        # backtest_only pairs are config-present for the backtest harness but
+        # MUST NOT alert live until they have earned promotion. Skip them here.
+        if pair_conf.get("backtest_only"):
+            continue
         symbol = pair_conf["symbol"]
         name = pair_conf["name"]
         dp = pair_conf.get("decimal_places", 5)

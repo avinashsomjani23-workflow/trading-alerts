@@ -253,13 +253,15 @@ ROUND_NUMBER_GRID = {
     "forex":     0.0050,   # 50 pips on 5-dp pairs
     "forex_jpy": 0.50,     # 50 pips on 3-dp JPY pairs
     "index":     50.0,     # 50 points on NAS100
-    "commodity": 5.0       # $5 on Gold
+    "commodity": 5.0,      # $5 on Gold
+    "crypto":    500.0     # $500 on BTC (psychological levels cluster at 500/1000)
 }
 ROUND_NUMBER_TOLERANCE = {
     "forex":     0.0005,   # 5 pips
     "forex_jpy": 0.05,     # 5 pips (JPY)
     "index":     5.0,      # 5 points
-    "commodity": 0.50      # $0.50
+    "commodity": 0.50,     # $0.50
+    "crypto":    50.0      # $50 on BTC
 }
 
 # INTERNAL — session windows in UTC. Asia wraps midnight (22 prev-day -> 07 same-day).
@@ -1261,6 +1263,8 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
             pip_unit = 0.01 if pair_name == 'USDJPY' else 0.0001
         elif pair_type == 'index':
             pip_unit = 1.0
+        elif pair_type == 'crypto':
+            pip_unit = 1.0   # $1 = 1 "pip" on BTC (display only; ATR drives gates)
         else:  # commodity (Gold)
             pip_unit = 1.0
         if bias_low:
@@ -1421,9 +1425,10 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
         except Exception:
             return None
 
-    # Close-based full mit for index (NAS) and commodity (Gold) — both wick
-    # through levels on news without genuine fills. Forex keeps touch-based.
-    close_based_full_mit = pair_type in ("index", "commodity")
+    # Close-based full mit for index (NAS), commodity (Gold) and crypto (BTC) —
+    # all wick through levels on news/thin liquidity without genuine fills.
+    # Forex keeps touch-based.
+    close_based_full_mit = pair_type in ("index", "commodity", "crypto")
 
     # Session-gap guard. A textbook 3-candle FVG requires candle 2 to be a
     # real traded candle whose body+wicks didn't fill the imbalance between

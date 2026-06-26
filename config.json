@@ -100,6 +100,91 @@
         {"tz": "America/New_York", "start": "07:00", "end": "10:00", "label": "New York (forex)"},
         {"tz": "America/New_York", "start": "10:00", "end": "12:00", "label": "London Close"}
       ]
+    },
+    {
+      "symbol": "GBPUSD=X",
+      "name": "GBPUSD",
+      "pair_type": "forex",
+      "entry_model": "limit",
+      "map_tf": "1h",
+      "atr_multiplier": 2.5,
+      "distal_invalidation_mode": "close",
+      "decimal_places": 5,
+      "spread_pips": 2.0,
+      "backtest_only": true,
+      "killzones": [
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00", "label": "London Open"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00", "label": "New York (forex)"},
+        {"tz": "America/New_York", "start": "10:00", "end": "12:00", "label": "London Close"}
+      ]
+    },
+    {
+      "symbol": "AUDUSD=X",
+      "name": "AUDUSD",
+      "pair_type": "forex",
+      "entry_model": "limit",
+      "map_tf": "1h",
+      "atr_multiplier": 2.5,
+      "distal_invalidation_mode": "close",
+      "decimal_places": 5,
+      "spread_pips": 2.0,
+      "backtest_only": true,
+      "killzones": [
+        {"tz": "America/New_York", "start": "20:00", "end": "00:00", "label": "Asian Range"},
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00", "label": "London Open"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00", "label": "New York (forex)"}
+      ]
+    },
+    {
+      "symbol": "USDCAD=X",
+      "name": "USDCAD",
+      "pair_type": "forex",
+      "entry_model": "limit",
+      "map_tf": "1h",
+      "atr_multiplier": 2.5,
+      "distal_invalidation_mode": "close",
+      "decimal_places": 5,
+      "spread_pips": 2.0,
+      "backtest_only": true,
+      "killzones": [
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00", "label": "London Open"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00", "label": "New York (forex)"},
+        {"tz": "America/New_York", "start": "10:00", "end": "12:00", "label": "London Close"}
+      ]
+    },
+    {
+      "symbol": "EURJPY=X",
+      "name": "EURJPY",
+      "pair_type": "forex",
+      "entry_model": "limit",
+      "map_tf": "1h",
+      "atr_multiplier": 2.5,
+      "distal_invalidation_mode": "close",
+      "decimal_places": 3,
+      "spread_pips": 2.0,
+      "backtest_only": true,
+      "killzones": [
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00", "label": "London Open"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00", "label": "New York (forex)"},
+        {"tz": "America/New_York", "start": "10:00", "end": "12:00", "label": "London Close"}
+      ]
+    },
+    {
+      "symbol": "BTCUSD=X",
+      "name": "BTCUSD",
+      "pair_type": "crypto",
+      "entry_model": "limit",
+      "map_tf": "1h",
+      "atr_multiplier": 3.0,
+      "distal_invalidation_mode": "close",
+      "decimal_places": 2,
+      "spread_pips": 20.0,
+      "backtest_only": true,
+      "weekend_block": {"tz": "Asia/Kolkata", "from": "Sat 00:00", "to": "Mon 09:00"},
+      "killzones": [
+        {"tz": "America/New_York", "start": "02:00", "end": "05:00", "label": "London Open"},
+        {"tz": "America/New_York", "start": "07:00", "end": "10:00", "label": "New York (forex)"}
+      ]
     }
   ],
   "scoring": {

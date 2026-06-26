@@ -88,6 +88,9 @@ def _headline_exclusion(t: Dict[str, Any]) -> str:
       below_score_floor -- score < live MIN_SCORE_TO_EMAIL; live would not email.
       ist_blocked -- alert fell outside the 09:00-24:00 IST trading window;
           live's smc_radar blackout means it could never have alerted.
+      weekend_blocked -- (crypto only) fill fell inside the configured weekend
+          no-trade window (Sat 00:00 -> Mon 09:00 IST for BTC). We do not trade
+          crypto weekends, so these are audit-only and never feed P&L.
 
     This is the ONE place the eligibility rule lives. `_is_eligible` (used by the
     scoreboards and imported by the G1 gate), the CSV/Excel export, and the
@@ -104,6 +107,8 @@ def _headline_exclusion(t: Dict[str, Any]) -> str:
         return "below_score_floor"
     if t.get("ist_blocked"):
         return "ist_blocked"
+    if t.get("weekend_blocked"):
+        return "weekend_blocked"
     return ""
 
 
@@ -3162,8 +3167,11 @@ def _zone_block_html(
 # Pair groups for split per-email reports
 # ---------------------------------------------------------------------------
 
-FOREX_PAIRS = {"EURUSD", "NZDUSD", "USDJPY", "USDCHF"}
-INDEX_COMMODITY_PAIRS = {"NAS100", "GOLD", "XAUUSD"}
+# Email bucket 1 ("original"): the original 4 FX majors + GOLD.
+# Email bucket 2 ("new"): the new evaluation FX + BTC + NAS100.
+# (Var names kept for minimal blast radius; the SETS are what the split reads.)
+FOREX_PAIRS = {"EURUSD", "NZDUSD", "USDJPY", "USDCHF", "GOLD", "XAUUSD"}
+INDEX_COMMODITY_PAIRS = {"GBPUSD", "AUDUSD", "USDCAD", "EURJPY", "BTCUSD", "NAS100"}
 
 
 def _filter_meta_by_pairs(meta: Dict[str, Any], allowed: set) -> Dict[str, Any]:
@@ -3857,11 +3865,13 @@ def write_h1_only_report(
 
     (out_dir / "report.html").write_text(html, encoding="utf-8")
 
-    # ---- Per-group split reports (Forex vs Gold/NAS) ----
+    # ---- Per-group split reports (bucket 1: original FX+Gold | bucket 2: new) ----
     # Same Section A/B layout, same thresholds, but every aggregate and audit
     # section is recomputed against the group's pair subset. The combined
     # report above is unchanged so update_registry.py / aggregate_runs.py keep
-    # reading trades.xlsx + summary.json as today.
+    # reading trades.xlsx + summary.json as today. The by_group KEYS and output
+    # filenames are kept stable (downstream readers depend on them); only the
+    # pair membership (above) and the human LABELS change.
     forex_trades_all = [t for t in trades_all if t.get("pair") in FOREX_PAIRS]
     indcom_trades_all = [t for t in trades_all if t.get("pair") in INDEX_COMMODITY_PAIRS]
 
@@ -3871,12 +3881,12 @@ def write_h1_only_report(
     by_group = {}
     if forex_trades_all:
         by_group["forex"] = _build_group_html(
-            "Forex", forex_trades_all, forex_meta, risk_usd,
+            "Original (FX majors + Gold)", forex_trades_all, forex_meta, risk_usd,
             out_dir, "report_forex.html", "forex_trades.xlsx",
         )
     if indcom_trades_all:
         by_group["gold_nas"] = _build_group_html(
-            "Gold + NAS100", indcom_trades_all, indcom_meta, risk_usd,
+            "New (new FX + BTC + NAS100)", indcom_trades_all, indcom_meta, risk_usd,
             out_dir, "report_gold_nas.html", "nas_xau_trades.xlsx",
         )
 

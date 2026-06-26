@@ -3668,6 +3668,10 @@ def run_radar():
     audit_rows = []
 
     for pair in config_master["pairs"]:
+        # backtest_only pairs never run in the live Phase 1 scan (config-present
+        # for the backtest harness only, until promoted).
+        if pair.get("backtest_only"):
+            continue
         ticker   = pair["symbol"]
         name     = pair["name"]
         dp       = pair.get("decimal_places", 5)

@@ -527,9 +527,17 @@ def _simulate_single_entry(
     # TP levels are NOT widened -- pessimistic, matches what the user gets
     # at the bid/ask after entering. Slippage and swap are NOT modelled
     # (user decision; revisit when needed). RCA #9.
+    #
+    # CRYPTO EXCEPTION: BTC is quoted in dollars and its spread is stated in
+    # dollars (~$20), not in 0.01 "pips". Using pip_size=0.01 would shrink a $20
+    # spread to $0.20 (100x too small) and flatter RR. For crypto, spread_pips is
+    # read as a DOLLAR spread directly (pip_size = 1.0).
     spread_pips = float(pair_conf.get("spread_pips", 0.0))
     decimal_places = int(pair_conf.get("decimal_places", 5))
-    pip_size = 0.01 if decimal_places <= 3 else 0.0001
+    if pair_conf.get("pair_type") == "crypto":
+        pip_size = 1.0
+    else:
+        pip_size = 0.01 if decimal_places <= 3 else 0.0001
     spread_price = spread_pips * pip_size
     if spread_price > 0:
         if bias == "LONG":
