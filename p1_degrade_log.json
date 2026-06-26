@@ -364,5 +364,23 @@
     "kind": "dealing_range_legacy_fallback",
     "pair": "USDCHF",
     "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-06-26T11:33:50.656847",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDCHF",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-06-26T11:33:50.667399",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDCHF",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-06-26T11:33:50.683064",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDCHF",
+    "source": "legacy_window_120h"
   }
 ]
