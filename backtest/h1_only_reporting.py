@@ -118,6 +118,19 @@ def _is_eligible(t: Dict[str, Any]) -> bool:
     return _headline_exclusion(t) == ""
 
 
+# Hard pre-filter conditions: rows that live could NEVER have alerted on (score
+# floor) or that we structurally do not trade (IST window, crypto weekend). These
+# are dropped UPFRONT before any scoreboard is built, unlike the fill-resolution
+# exclusions (timeout / never_filled) which are kept here and filtered later by
+# the aggregator (the never-filled audit section still needs them). Defined ONCE
+# so every pre-filter site stays in lock-step with _headline_exclusion — the G1
+# reconciliation depends on these dropping the exact same rows. A new "could never
+# trade" condition must be added HERE and in _headline_exclusion together.
+def _is_hard_blocked(t: Dict[str, Any]) -> bool:
+    return bool(_below_score_floor(t) or t.get("ist_blocked")
+                or t.get("weekend_blocked"))
+
+
 def _aggregate_for_exit(trades: List[Dict[str, Any]], r_col: str,
                         risk_usd: float) -> Dict[str, Any]:
     """Aggregate filled trades under a hypothetical exit policy."""
@@ -3212,9 +3225,7 @@ def _build_group_html(
     # rows were removed by write_h1_only_report before the split, so they
     # never reach a group report at all. The filter below is therefore a
     # no-op kept only for defensive symmetry with the combined path.
-    trades = [t for t in group_trades_all
-              if not _below_score_floor(t) and not t.get("ist_blocked")
-              and not t.get("weekend_blocked")]
+    trades = [t for t in group_trades_all if not _is_hard_blocked(t)]
     blocked_trades = [t for t in group_trades_all if t.get("news_blocked")]
     kz_blocked_trades = [t for t in group_trades_all if t.get("killzone_blocked")]
 
@@ -3465,9 +3476,7 @@ def write_h1_only_report(
     audit_ist = [t for t in raw_trades
                  if not _below_score_floor(t) and t.get("ist_blocked")]
     # CORE set: survives both gates. THE set every downstream path sees.
-    trades_all = [t for t in raw_trades
-                  if not _below_score_floor(t) and not t.get("ist_blocked")
-                  and not t.get("weekend_blocked")]
+    trades_all = [t for t in raw_trades if not _is_hard_blocked(t)]
     trades = list(trades_all)
     # Stable global serial per row, assigned in run order. ONE id per trade
     # dict, stamped before any consumer reads it. trades_all, trades, prox/mid
