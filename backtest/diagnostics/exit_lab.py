@@ -27,6 +27,7 @@ Run:
         --start 2024-07-01 --end 2025-06-30
 """
 import argparse
+import os
 import shutil
 from datetime import datetime, timezone
 from typing import Any, Dict, List
@@ -100,6 +101,10 @@ def main():
     ap.add_argument("--keep-run", action="store_true",
                     help="keep the throwaway results dir this run creates")
     args = ap.parse_args()
+
+    # News is information-only here and its calendar URL 404s on old weeks — skip it
+    # so long break-quality / exit runs don't waste time fetching nothing.
+    os.environ["BACKTEST_SKIP_NEWS"] = "1"
 
     # Neutralise persistence — this is a diagnostic, it must NOT touch git/registry.
     import backtest.update_registry as _ur
