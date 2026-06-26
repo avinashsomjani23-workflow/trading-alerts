@@ -3213,7 +3213,8 @@ def _build_group_html(
     # never reach a group report at all. The filter below is therefore a
     # no-op kept only for defensive symmetry with the combined path.
     trades = [t for t in group_trades_all
-              if not _below_score_floor(t) and not t.get("ist_blocked")]
+              if not _below_score_floor(t) and not t.get("ist_blocked")
+              and not t.get("weekend_blocked")]
     blocked_trades = [t for t in group_trades_all if t.get("news_blocked")]
     kz_blocked_trades = [t for t in group_trades_all if t.get("killzone_blocked")]
 
@@ -3465,7 +3466,8 @@ def write_h1_only_report(
                  if not _below_score_floor(t) and t.get("ist_blocked")]
     # CORE set: survives both gates. THE set every downstream path sees.
     trades_all = [t for t in raw_trades
-                  if not _below_score_floor(t) and not t.get("ist_blocked")]
+                  if not _below_score_floor(t) and not t.get("ist_blocked")
+                  and not t.get("weekend_blocked")]
     trades = list(trades_all)
     # Stable global serial per row, assigned in run order. ONE id per trade
     # dict, stamped before any consumer reads it. trades_all, trades, prox/mid
