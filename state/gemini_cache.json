@@ -4,5 +4,11 @@
   },
   "GOLD|SHORT|2026-06-26": {
     "macro_summary": "There are no scheduled high-impact events for USD today that directly impact GOLD. Therefore, no scheduled events will help or hurt this SHORT GOLD setup today."
+  },
+  "EURUSD|LONG|2026-06-26": {
+    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no external macroeconomic factors are expected to directly influence this EURUSD setup. The trade will be driven solely by technical factors and market sentiment."
+  },
+  "NZDUSD|SHORT|2026-06-26": {
+    "macro_summary": "There are no scheduled high-impact events for NZD or USD today. Therefore, no external macro factors are expected to directly influence the NZDUSD pair's price action today."
   }
 }
