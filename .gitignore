@@ -5,7 +5,20 @@ smc_radar.log
 logs/
 phase2_scan_log.jsonl
 .claude/settings.local.json
-backtest/cache/
+# Ignore cache CONTENTS (not the dir itself) so the !exceptions below can
+# re-include specific files — a negation cannot un-ignore a file whose parent
+# DIRECTORY is excluded, so we must glob the contents instead.
+backtest/cache/*
+# Exception: the 6 swept pairs' H1 bars ARE committed so the CI knob-sweep
+# runner (a fresh clone with no local MT5 cache) can load data. H1-only, ~17MB
+# total — small, and the ONLY data path the sweep uses. Everything else under
+# backtest/cache/ stays ignored.
+!backtest/cache/EURUSD_X_1h.parquet
+!backtest/cache/JPY_X_1h.parquet
+!backtest/cache/NZDUSD_X_1h.parquet
+!backtest/cache/CHF_X_1h.parquet
+!backtest/cache/NQ_F_1h.parquet
+!backtest/cache/GC_F_1h.parquet
 backtest/results/
 backtest/mt5_data/
 backtest/mt5_login.txt*
