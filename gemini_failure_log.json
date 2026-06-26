@@ -1,15 +1,5 @@
 [
   {
-    "ts": "2026-06-10T17:36:05.429062",
-    "pair": "GOLD",
-    "reason": "API error 429: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and bi"
-  },
-  {
-    "ts": "2026-06-10T18:36:09.513581",
-    "pair": "GOLD",
-    "reason": "API error 429: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and bi"
-  },
-  {
     "ts": "2026-06-10T19:36:12.269055",
     "pair": "GOLD",
     "reason": "API error 429: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and bi"
@@ -998,5 +988,15 @@
     "ts": "2026-06-26T11:35:48.555668",
     "pair": "GOLD",
     "reason": "API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to"
+  },
+  {
+    "ts": "2026-06-26T12:36:18.814387",
+    "pair": "USDJPY",
+    "reason": "API error 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+  },
+  {
+    "ts": "2026-06-26T12:37:00.599762",
+    "pair": "NZDUSD",
+    "reason": "API error 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
   }
 ]
