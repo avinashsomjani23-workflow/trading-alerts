@@ -532,5 +532,47 @@
     "kind": "dealing_range_legacy_fallback",
     "pair": "USDCHF",
     "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-06-26T16:33:44.277204",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-06-26T16:33:44.286033",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-06-26T16:33:44.300384",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-06-26T16:33:44.968099",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDCHF",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-06-26T16:33:44.972747",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDCHF",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-06-26T16:33:44.979342",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDCHF",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-06-26T16:33:44.988446",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDCHF",
+    "source": "legacy_window_120h"
   }
 ]
