@@ -125,16 +125,6 @@ jobs:
           ref: main          # must be on main so push origin HEAD:main works
           fetch-depth: 0
 
-      - name: Pre-flight push check
-        # Fail immediately (before the 2-hour sweep) if we can't push to main.
-        run: |
-          git commit --allow-empty -m "pre-flight push check [skip ci]"
-          if ! git push origin HEAD:main; then
-            echo "::error::Cannot push to main — fix branch protection / token perms before running a sweep."
-            exit 1
-          fi
-          git reset HEAD~1  # remove the canary commit; run dir commit comes later
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -148,6 +138,17 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Pre-flight push check
+        # Uses ls-remote (read) + an empty commit push to fail fast before the
+        # 2-hour sweep if token perms or branch protection block the push.
+        run: |
+          git commit --allow-empty -m "pre-flight push check [skip ci]"
+          if ! git push origin HEAD:main; then
+            echo "::error::Cannot push to main — fix branch protection / token perms before running a sweep."
+            exit 1
+          fi
+          git reset HEAD~1
 
       - name: Knob-site golden gate (use-live-never-copy guard)
         # Fails red if a live function gained a MIN_LEG default the sweep does
