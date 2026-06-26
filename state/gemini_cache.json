@@ -13,5 +13,9 @@
   },
   "EURUSD|SHORT|2026-06-26": {
     "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no external macroeconomic factors are expected to directly influence this EURUSD short setup today."
+  },
+  "USDJPY|SHORT|2026-06-26": {
+    "macro_summary": null,
+    "macro_unavailable": true
   }
 }
