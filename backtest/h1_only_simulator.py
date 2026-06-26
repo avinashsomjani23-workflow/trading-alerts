@@ -57,6 +57,18 @@ DEFAULT_RISK_USD = 250.0
 WEEKEND_FLAT = True
 WEEKEND_FLAT_HOUR_UTC = 18
 
+# ── Exit-lab side-channel (diagnostic only; OFF by default) ──────────────────
+# When EXIT_LAB_SINK is a list AND EXIT_LAB_CONFIGS is a {name: config} dict, the
+# simulator ALSO replays each alternative exit recipe over the SAME in-memory
+# post-fill bars via exit_engine.walk_multileg, and appends per-config R to the
+# sink. This is a PURE side-channel: r_realised, the trade row, and live parity
+# are never touched. It is the only faithful way to study exits (reconstructing
+# bars from the yfinance cache is unreliable — futures are back-adjusted and even
+# spot drifts between runs). Driven by backtest/diagnostics/exit_lab.py. Never set
+# in a normal or live run.
+EXIT_LAB_CONFIGS = None
+EXIT_LAB_SINK = None
+
 
 def _session_from_utc_hour(h: int) -> str:
     """Map UTC hour -> trading session label. Matches reporting._classify_session_utc."""
@@ -114,6 +126,39 @@ def _ts_in_killzone(ts_val, pair_conf: Dict[str, Any]) -> bool:
         ts = pd.Timestamp(ts_val)
         ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
         return smc_detector.ts_in_killzone(ts.isoformat(), killzones)
+    except Exception:
+        return False
+
+
+def _in_weekend_block(fill_ts, pair_conf: Dict[str, Any]) -> bool:
+    """True iff `fill_ts` falls inside the pair's configured weekend no-trade
+    window. Currently used for crypto (BTC): we do not trade Sat 00:00 -> Mon
+    09:00 IST. Defined in config as `weekend_block` (tz Asia/Kolkata). Returns
+    False when the pair has no weekend_block (all non-crypto pairs).
+
+    Rule (BTC): block from Sat 00:00 IST through Mon 09:00 IST. In UTC that is
+    Fri 18:30 -> Mon 03:30 (IST = UTC+5:30). Friday daytime trades are KEPT.
+    We compute in IST directly (robust to any future window change) rather than
+    hardcoding the UTC equivalents."""
+    if fill_ts is None or fill_ts == "":
+        return False
+    wb = pair_conf.get("weekend_block")
+    if not wb:
+        return False
+    try:
+        ts = pd.Timestamp(fill_ts)
+        ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
+        ist = ts.tz_convert("Asia/Kolkata")
+        dow = ist.dayofweek           # Mon=0 .. Sun=6
+        mins = ist.hour * 60 + ist.minute
+        # Saturday (5) and Sunday (6): always blocked.
+        if dow in (5, 6):
+            return True
+        # Monday (0): blocked until 09:00 IST.
+        if dow == 0 and mins < 9 * 60:
+            return True
+        # Friday (4): the window starts Sat 00:00 IST, so Friday is NOT blocked.
+        return False
     except Exception:
         return False
 
@@ -787,6 +832,27 @@ def _simulate_single_entry(
 
     bars_to_exit = max(0, bars_walked_post_fill)
 
+    # ── Exit-lab side-channel (diagnostic; no effect on r_realised / the row) ──
+    if EXIT_LAB_CONFIGS and EXIT_LAB_SINK is not None and fill_bar_idx >= 0:
+        from backtest.exit_engine import walk_multileg
+        _post = future.iloc[fill_bar_idx:]
+        for _name, _cfg in EXIT_LAB_CONFIGS.items():
+            try:
+                _res = walk_multileg(
+                    _post, bias, entry, sl, r_distance, tp1, _cfg,
+                    weekend_flat=WEEKEND_FLAT,
+                    weekend_hour_utc=WEEKEND_FLAT_HOUR_UTC,
+                    max_hold=MAX_HOLD_H1_BARS,
+                )
+                EXIT_LAB_SINK.append({
+                    "pair": pair, "alert_ts": str(alert_ts),
+                    "entry_zone": entry_zone, "committed_r": round(r_realised, 4),
+                    "config": _name, "r": _res["r_realised"],
+                })
+            except Exception as _e:  # never let a diagnostic break a run
+                log_event("exit_lab_error", level="warn", pair=pair,
+                          config=_name, error=f"{type(_e).__name__}: {_e}")
+
     return _build_row(
         alert=alert, pair_conf=pair_conf, ob=ob,
         entry_zone=entry_zone, entry=entry, sl=sl, tp1=tp1, tp2=tp2,
@@ -913,6 +979,11 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "killzone_pts":  round(float(breakdown.get("killzone", 0.0)), 2),
         "confluences_present": _confluences_present(breakdown),
         "session":       _session_from_utc_hour(alert_ts.hour),
+        # Crypto weekend no-trade window (BTC: Sat 00:00 -> Mon 09:00 IST). When
+        # the FILL lands in that window the trade is audit-only — the reporting
+        # layer's _headline_exclusion drops it from P&L. False/absent for every
+        # non-crypto pair (no weekend_block in config).
+        "weekend_blocked": _in_weekend_block(fill_ts, pair_conf),
         "sl_collision":  sl_collision,
         "bos_tag":       bos_tag,
         "bos_tier":      bos_tier,

@@ -37,6 +37,27 @@ Durable lessons + methods from backtest audits. Read before judging any run.
 
 ---
 
+## METHOD — Correlation & prediction toolkit (which stat answers which question)
+
+Pick the tool by the question. All three need **one number per trade** for each side; a group
+stat (a rate, a total) has no per-trade number and cannot be correlated.
+
+- **Spearman (rank correlation):** "When X goes up, does the outcome go up too — in rank order?"
+  Uses ranks, so one freak trade can't distort it. Returns −1..+1; **0 = no link**. Use for
+  *feature vs continuous R* (score→R, fvg_size→R). Direction is free — testing "bigger X" also
+  answers "smaller X", so never run both. **Cannot take a win RATE** (group stat).
+- **Pearson (straight-line correlation):** same idea on the *raw values*, looking for a straight
+  line. Outlier-sensitive (one +8R yanks it). For trade scoring we only trust order, so prefer
+  Spearman. (Low priority here.)
+- **Regression:** draws the best line/curve and gives the **equation to PREDICT** Y from X —
+  and can take **many** features at once. Correlation says *if/how much*; regression *builds the
+  predictor*. **Multiple regression** = several features → expected R. **Logistic regression** =
+  features → win-probability (yes/no outcome). **The EV-score will be a regression.**
+- **For feature vs win/lose (binary):** Spearman is the wrong tool — bucket the feature and
+  compare win rates, or use logistic regression.
+
+---
+
 ## CORE INSIGHT — A score concentrates an edge, it cannot create one
 
 > A score can't create an edge — it can only concentrate one that already exists in the
@@ -161,6 +182,71 @@ Trade-distribution facts driving these (filled trades): reach +0.5R 88%, +1R 69%
 | Trail stop after +1R | +1R-touchers peak at median +1.72R; 37% reach +2R | Capture runners without giving it back | Multi-leg sim: once +1R hit, trail by ATR or last swing |
 | Drop NAS100 | -0.45R, negative every quarter, ~60% of loss | Remove the structural bleeder | Filter the pair list; re-measure with the bootstrap CI |
 
+### REQUIREMENT — TP1 placement, not just TP1 distance (user, 2026-06-24)
+
+The "liquidity TP is too greedy" finding may be a **placement** problem, not only a
+**distance** problem. The current TP1 is parked at the **edge of the opposing swing** — but
+by SMC, price does **not** reverse from the raw swing edge. It reverses from a **structure /
+order block** sitting before that edge. Parking TP at the edge asks price to travel to a level
+it rarely turns from, so the runner gives back gains it could have banked one zone earlier.
+
+- **Requirement:** TP1 should target the **reversal zone** (the opposing OB / structure on the
+  path), **not** the swing edge. Track + build later — this is downstream of the exit-sim work.
+- **Status:** NOT YET MEASURED. No conclusive data that a nearer TP1 wins; the SMC logic
+  ("price turns at the OB, never the edge") is the driver. Verify where TP1 is currently placed
+  (`compute_phase2_levels`, smc_detector.py) when this is picked up.
+- Keep separate from the BE / partial experiments above — those change *distance*; this changes
+  *where the target sits*.
+
+### FINDING — reach-before-stop distribution (computed 2026-06-25, 4 quarters, proximal)
+
+The decision-relevant number is **what fraction touch +X R BEFORE the −1R stop** (not raw MFE
+at any time). `mfe_r` in the trade rows is the realised-path max (the walk breaks at the stop),
+so for losers it IS the pre-stop max → `mfe_r >= X` answers it exactly for levels at/below the
+typical liquidity TP1. (Above ~TP1 the figure is a FLOOR: winners bank at TP1 so higher levels
+are undercounted.)
+
+| Level | reach before −1R (all 6) | reach before −1R (ex-NAS) |
+|---|---|---|
+| +0.5R | 87.5% | 85.2% |
+| +0.7R | 77.3% | 74.5% |
+| +1.0R | 68.9% | 64.2% |
+| +1.5R | 43.9% | 38.7% (floor) |
+| +2.0R | 26.2% | 21.4% (floor) |
+
+**Naive fixed-TP expectancy** (if it reaches +X it wins +X, else −1R; pre-spread, pre-CI,
+ignores BE/timeout so the loss leg is slightly kinder than −1R), **ex-NAS**:
+
+- TP +0.5R → ~**+0.28R**  | TP +1.0R → ~**+0.28R**  | TP +1.5R → ~**−0.03R**  | TP +2.0R → ~**−0.36R**
+
+**Reading:** a fixed TP in the **+0.5R..+1.0R** band looks positive; **≥+1.5R loses** — direct,
+quantified support for "the liquidity target is too greedy" and for the user's "win by volume"
+instinct. **This is an ESTIMATE, not a verdict** — it is the most data-fragile config (tight
+targets are the most wick-sensitive, spread eats a bigger share of a small target). Confirm with
+the actual multi-leg sim + bootstrap CI + per-quarter sign + MT5 data. Drives experiment group C.
+
+### PENDING — wire the winning exit recipe as the live policy (days away)
+
+Once the exit lab picks a recipe (passes bootstrap CI + per-quarter sign on MT5 data, net of
+spread), it becomes the new exit policy — this is the only step that touches live and the
+parity path, and it needs explicit sign-off. To do it:
+- Replace the single-exit walk in `backtest/h1_only_simulator.py` with the chosen recipe
+  (it already lives as `exit_engine.walk_multileg`; flip `EXIT_MODE` from the experiment
+  side-channel to the real path). One implementation — no second copy.
+- Mirror the same exit in the live alert path (`compute_phase2_levels` / Phase2_Alert_Engine)
+  so backtest = live stays true.
+- Re-baseline the structure-golden / parity gates afterwards.
+- **Status: NOT STARTED** — exits are still being measured; expect a few days before a winner
+  is confirmed. Tracked here so it is not forgotten.
+
+### TOOLING — exit lab (built 2026-06-25/26)
+
+- `backtest/exit_engine.py` = the one multi-leg exit walker; `backtest/diagnostics/exit_lab.py`
+  runs it over a fresh backtest via a side-channel in the simulator (OFF by default, never
+  touches `r_realised` or live). Recipes: baseline, BE-sweep, fixed-TP {0.5/1/1.5/2}, partial+runner.
+- **Do not replay exits over committed trades** — those were generated on yfinance; the cache is
+  now MT5, so a reconstruction is unfaithful. Always run fresh so entries + exits share one feed.
+
 ---
 
 ## AUDIT 2026-06-23 — break gates, trend, NAS mechanism, BOS sequence
@@ -180,6 +266,9 @@ trades**. Re-confirm on MT5 before betting. Every claim below shows its data.
     slice) — this is NOT stale walls.
   - **Rule:** drop `trend_alignment` as a scoring input. A feature that is 93% one value
     cannot rank trades. It is not a bug; it is structural.
+  - **Update (2026-06-26, user):** the trend label now **flips only on the next BOS**, not the
+    instant a CHoCH is detected (the old behaviour that made the label degenerate). Still drop
+    it as a scoring input — but the flip timing is now correct for the structure engine.
 
 - **NAS100's loss is a TIMEFRAME mismatch, not a filterable edge problem.**
   - Data: NAS100 proximal = 72 trades, 16.4% WR, expR -0.446, **-$8,022 (~60% of the year's
@@ -208,6 +297,13 @@ trades**. Re-confirm on MT5 before betting. Every claim below shows its data.
   - **Loop closed:** do NOT treat a break-body threshold as a rule. To settle it: (a) more
     data (MT5, multi-year) for a tighter CI, then re-run the bootstrap; (b) if the CI clears
     zero AND per-quarter signs hold, it becomes real. Until then it is a candidate, not a rule.
+  - **PLAN to conclude (2026-06-26, user):** BOTH displacement measures are already logged per
+    trade — `break_close_atr` (distance the close cleared the level) AND `break_body_atr` (body
+    size); `break_excess` is the ratio. Do NOT run this locally / on one year. Run the whole
+    book over the **full ~18 years of MT5 history**, then bucket by `break_close_atr` and by
+    `break_body_atr` and bootstrap each — with that much data the CI is tight enough to decide
+    **which kind of break (distance vs body, and at what level) is actually best**. This is the
+    way the break-quality question gets settled, not a 1-year in-sample slice.
 
 - **The two break gates do different jobs; "body is the lever" is unproven; removing the
   distance gate is untestable here.**
@@ -247,3 +343,19 @@ trades**. Re-confirm on MT5 before betting. Every claim below shows its data.
     rather than a sweep of OPPOSING liquidity before the reversal).
   - **Loop closed:** audit the sweep detector before scoring it. Until then sweep stays OUT of
     the algorithm and is judged by eye. Do not reward or penalise it.
+
+---
+
+## CANDIDATE — Asia-session high/low as a liquidity level (deferred, user 2026-06-26)
+
+Add the **Asian-range high/low** to the liquidity hierarchy (alongside PDH/PDL/PWH/PWL) as a
+draw-on-liquidity target / sweep level. ICT rationale: the Asian range is the canonical
+intraday session pool — London's first move often raids it before the real direction.
+
+- **Status: deferred, not built.** Intraday + DST-sensitive → higher maintenance than the
+  daily/weekly levels, which go first.
+- **When to pick up:** after the new score filters + the daily-bias narrative layer are live
+  and producing numbers, so Asia's marginal value is measured ON TOP of them, not in a vacuum.
+- **Scope note:** of the session levels (Asia/London/NY), **Asia is the most ICT-justified and
+  should be first** (and possibly the only one added). London/NY standalone session highs/lows
+  are emphasised far less. See `DAILY_BIAS_BUILD_HANDOFF.md` §2.7.
