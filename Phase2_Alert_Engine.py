@@ -669,15 +669,14 @@ def _gemini_cache_get(pair, bias, date_ist):
     cache = _gemini_cache_load()
     key = _gemini_cache_key(pair, bias, date_ist)
     entry = cache.get(key)
-    if entry and entry.get("macro_summary"):
+    if entry and (entry.get("macro_summary") or entry.get("macro_unavailable")):
         print(f"  [GEMINI] {pair} {bias}: cache hit for {date_ist}")
         return entry
     return None
 
 
 def _gemini_cache_set(pair, bias, date_ist, result):
-    # Never cache failures — only store a real macro_summary.
-    if not result or not result.get("macro_summary"):
+    if not result or (not result.get("macro_summary") and not result.get("macro_unavailable")):
         return
     cache = _gemini_cache_load()
     key = _gemini_cache_key(pair, bias, date_ist)
@@ -773,7 +772,9 @@ def call_gemini_flash(pair, bias, news_headlines):
     # "no Tier-1 events" — misleading. macro_summary=None + macro_unavailable
     # lets the email render a distinct "unavailable" banner.
     _log_gemini_failure(pair, last_err)
-    return {"macro_summary": None, "macro_unavailable": True}
+    failure = {"macro_summary": None, "macro_unavailable": True}
+    _gemini_cache_set(pair, bias, date_ist, failure)
+    return failure
 
 
 # ---------------------------------------------------------------------------
