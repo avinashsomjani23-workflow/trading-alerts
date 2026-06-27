@@ -1,0 +1,51 @@
+{
+  "run_id": "sweep_MIN_LEG_ATR_MULT_202107_20260627T101353",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-06-27T10:13:53.306768+00:00",
+  "git_sha": "ad59b58",
+  "knob": "MIN_LEG_ATR_MULT",
+  "grid": [
+    1.0,
+    1.5,
+    2.0,
+    2.5
+  ],
+  "grid_mode": "absolute",
+  "year": 2021,
+  "month": 7,
+  "resolved_start": "2021-07-01",
+  "resolved_end": "2021-07-31",
+  "pairs_requested": [
+    "BTCUSD"
+  ],
+  "risk_usd": 250.0,
+  "live_knob_snapshot": {
+    "MIN_LEG_ATR_MULT": 1.5,
+    "BOS_ATR_MULT": 0.4,
+    "STRUCTURE_CHOCH_ATR_MULT": 1.0,
+    "STRUCTURE_LOCK_ATR_MULT": 1.5,
+    "OB_MAX_RANGE_ATR_MULT": 2.0,
+    "MIN_OB_RANGE_ATR_MULT": 0.0,
+    "FVG_NOISE_FLOOR_MULT": {
+      "forex": 0.08,
+      "index": 0.15,
+      "commodity": 0.12
+    },
+    "SWEEP_EQUAL_LEVEL_TOLERANCE_ATR": {
+      "forex": 0.3,
+      "index": 0.4,
+      "commodity": 0.4
+    },
+    "SWEEP_WICK_PIERCE_MIN_ATR": {
+      "forex": 0.05,
+      "index": 0.08,
+      "commodity": 0.08
+    }
+  },
+  "pairs_served": [],
+  "versions": {
+    "python": "3.11.15",
+    "pandas": "3.0.3",
+    "yfinance": "1.4.1"
+  }
+}
