@@ -188,8 +188,7 @@ jobs:
 
       - name: Commit run directory to main
         # The two-year corpus lives in the repo on purpose (artifacts expire).
-        # We commit ONLY this cell's new run dir. `git pull --rebase` before push
-        # so parallel cells don't reject each other.
+        # We commit ONLY this cell's new run dir under backtest/diagnostics/sweeps/.
         if: always()
         run: |
           git add backtest/diagnostics/sweeps/ || true
@@ -198,17 +197,39 @@ jobs:
             exit 0
           fi
           git commit -m "Knob sweep: ${{ matrix.knob }} ${{ matrix.period }} [skip ci]"
+
+          # Driving the live engine writes tracked state JSONs (structure_state,
+          # active_obs, ...) OUTSIDE the run dir via its atomic-write helpers.
+          # Those are backtest BYPRODUCTS, never corpus, and must NOT land on
+          # main (they would corrupt live state). They also left the working
+          # tree dirty, so `git pull --rebase` aborted with "cannot pull with
+          # rebase: You have unstaged changes" — a DETERMINISTIC block that made
+          # every one of the 5 retries fail identically. Stash that dirt aside
+          # ONCE and DROP it (never pop): the only thing we push is the committed
+          # run dir, and the tree stays clean for every rebase retry below.
+          git stash push --include-untracked -m knob-sweep-throwaway || true
+
           pushed=0
           for i in 1 2 3 4 5; do
-            if git pull --rebase origin main && git push origin HEAD:main; then
-              pushed=1; break
+            # Re-rebase on the newest main each attempt so a sibling cell that
+            # pushed in the gap (the only remaining failure mode — a non-fast-
+            # forward push race) is resolved by retrying. Abort a half-finished
+            # rebase so a stuck rebase state cannot poison the next attempt.
+            if git pull --rebase origin main; then
+              if git push origin HEAD:main; then
+                pushed=1; break
+              fi
+              echo "push rejected on attempt $i (sibling cell raced) — retrying ..."
+            else
+              echo "rebase failed on attempt $i — aborting and retrying ..."
+              git rebase --abort || true
             fi
-            echo "push retry $i ..."; sleep $((RANDOM % 5 + 2))
+            sleep $((RANDOM % 5 + 2))
           done
           if [ "$pushed" != "1" ]; then
-            # LOUD failure: a run that emailed but could not be committed must turn
+            # LOUD failure: a run that committed but could not be pushed must turn
             # the job red, not vanish. (The artifact below is still the fallback.)
-            echo "::error::sweep run committed locally but PUSH TO main FAILED after 5 tries — corpus row not saved. Check branch protection / token perms."
+            echo "::error::sweep run committed locally but PUSH TO main FAILED after 5 tries — corpus row not saved. Check token/network."
             exit 1
           fi
 
