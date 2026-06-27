@@ -63,10 +63,15 @@ def _symbol_map() -> Dict[str, str]:
     return {p["name"]: p["symbol"] for p in cfg["pairs"]}
 
 
-def _load_bars(symbols: Dict[str, str], pairs_needed) -> Dict[str, pd.DataFrame]:
-    """Load each needed pair's H1 bars from the frozen MT5 cache, once."""
-    start = datetime(2023, 1, 1, tzinfo=timezone.utc)
-    end = datetime(2026, 12, 31, tzinfo=timezone.utc)
+def _load_bars(symbols: Dict[str, str], pairs_needed,
+               start: datetime, end: datetime) -> Dict[str, pd.DataFrame]:
+    """Load each needed pair's H1 bars from the frozen MT5 cache, once.
+
+    The window is derived from the trades' own fill-time range (not hardcoded) so
+    a multi-year / 18-year run reconstructs every trade — never silently drops the
+    pre-window ones. `end` is padded by the post-fill hold so the last trade's full
+    exit window is present.
+    """
     out = {}
     for pair in pairs_needed:
         sym = symbols.get(pair)
@@ -198,9 +203,14 @@ def main():
     trades = trades.reset_index(drop=True)
     print(f"  {len(trades)} filled proximal trades")
 
+    # Bar window = the trades' own fill-time span (+ pads), so any run length —
+    # including the full 18-year history — reconstructs every trade.
+    fts = pd.to_datetime(trades["fill_ts"], utc=True)
+    bar_start = (fts.min() - pd.Timedelta(days=5)).to_pydatetime()
+    bar_end = (fts.max() + pd.Timedelta(days=sim.MAX_HOLD_H1_BARS // 24 + 5)).to_pydatetime()
     symbols = _symbol_map()
-    bars = _load_bars(symbols, sorted(trades["pair"].unique()))
-    print(f"  bars (MT5 cache): {', '.join(bars.keys())}")
+    bars = _load_bars(symbols, sorted(trades["pair"].unique()), bar_start, bar_end)
+    print(f"  bars (MT5 cache) {bar_start.date()}..{bar_end.date()}: {', '.join(bars.keys())}")
 
     rep = _replay(trades, bars)
     if rep.empty:
