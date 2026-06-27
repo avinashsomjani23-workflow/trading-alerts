@@ -1,0 +1,13 @@
+{
+  "run_id": "sweep_MIN_LEG_ATR_MULT_201508_20260627T073351",
+  "schema_version": "1.0.0",
+  "overall": "PASS",
+  "n_result_rows": 24,
+  "n_walk_records": 3278,
+  "recon_ok": true,
+  "recon_failures": [],
+  "scope_ok": true,
+  "scope_violations": [],
+  "content_hash": "4692abf17519720d71cd3dbd3aad4837f57fdb19c3dfacbecf74aecc22be6f25",
+  "finalized_utc": "2026-06-27T08:36:24.161600+00:00"
+}
