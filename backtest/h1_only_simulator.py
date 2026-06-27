@@ -57,18 +57,6 @@ DEFAULT_RISK_USD = 250.0
 WEEKEND_FLAT = True
 WEEKEND_FLAT_HOUR_UTC = 18
 
-# ── Exit-lab side-channel (diagnostic only; OFF by default) ──────────────────
-# When EXIT_LAB_SINK is a list AND EXIT_LAB_CONFIGS is a {name: config} dict, the
-# simulator ALSO replays each alternative exit recipe over the SAME in-memory
-# post-fill bars via exit_engine.walk_multileg, and appends per-config R to the
-# sink. This is a PURE side-channel: r_realised, the trade row, and live parity
-# are never touched. It is the only faithful way to study exits (reconstructing
-# bars from the yfinance cache is unreliable — futures are back-adjusted and even
-# spot drifts between runs). Driven by backtest/diagnostics/exit_lab.py. Never set
-# in a normal or live run.
-EXIT_LAB_CONFIGS = None
-EXIT_LAB_SINK = None
-
 
 def _session_from_utc_hour(h: int) -> str:
     """Map UTC hour -> trading session label. Matches reporting._classify_session_utc."""
@@ -831,27 +819,6 @@ def _simulate_single_entry(
         r_if_exit_tp2 = round(ref_realised, 3)
 
     bars_to_exit = max(0, bars_walked_post_fill)
-
-    # ── Exit-lab side-channel (diagnostic; no effect on r_realised / the row) ──
-    if EXIT_LAB_CONFIGS and EXIT_LAB_SINK is not None and fill_bar_idx >= 0:
-        from backtest.exit_engine import walk_multileg
-        _post = future.iloc[fill_bar_idx:]
-        for _name, _cfg in EXIT_LAB_CONFIGS.items():
-            try:
-                _res = walk_multileg(
-                    _post, bias, entry, sl, r_distance, tp1, _cfg,
-                    weekend_flat=WEEKEND_FLAT,
-                    weekend_hour_utc=WEEKEND_FLAT_HOUR_UTC,
-                    max_hold=MAX_HOLD_H1_BARS,
-                )
-                EXIT_LAB_SINK.append({
-                    "pair": pair, "alert_ts": str(alert_ts),
-                    "entry_zone": entry_zone, "committed_r": round(r_realised, 4),
-                    "config": _name, "r": _res["r_realised"],
-                })
-            except Exception as _e:  # never let a diagnostic break a run
-                log_event("exit_lab_error", level="warn", pair=pair,
-                          config=_name, error=f"{type(_e).__name__}: {_e}")
 
     return _build_row(
         alert=alert, pair_conf=pair_conf, ob=ob,

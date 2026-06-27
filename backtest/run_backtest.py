@@ -197,14 +197,23 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         return t.tz_localize("UTC") if t.tzinfo is None else t.tz_convert("UTC")
     news_start = _to_utc(start) - timedelta(days=1)
     news_end   = _to_utc(end)   + timedelta(days=1)
-    news_data = news_filter.fetch_events(
-        news_start.to_pydatetime(), news_end.to_pydatetime(),
-        sources=("ff",),
-    )
+    # News is INFORMATION-ONLY here (it never gates an alert), and the FairEconomy
+    # historical calendar URL now 404s on old weeks -- fetching it on a multi-year
+    # run just burns time. Set BACKTEST_SKIP_NEWS=1 to skip the fetch and run with
+    # zero events (used for long break-quality / exit-lab runs).
+    import os as _os
+    if _os.environ.get("BACKTEST_SKIP_NEWS", "").strip().lower() in ("1", "true", "yes"):
+        news_data = {"events": [], "coverage": {"ff": False}}
+        print("  News: SKIPPED (BACKTEST_SKIP_NEWS set)")
+    else:
+        news_data = news_filter.fetch_events(
+            news_start.to_pydatetime(), news_end.to_pydatetime(),
+            sources=("ff",),
+        )
+        print(f"  News: {len(news_data['events'])} High-impact events fetched "
+              f"(coverage: {news_data['coverage']})")
     news_events = news_data["events"]
     news_coverage = news_data["coverage"]
-    print(f"  News: {len(news_events)} High-impact events fetched "
-          f"(coverage: {news_coverage})")
     log_event("news_fetched", level="info",
               events=len(news_events), coverage=news_coverage,
               range=f"{news_start.isoformat()}..{news_end.isoformat()}")

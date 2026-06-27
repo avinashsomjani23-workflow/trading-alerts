@@ -1,152 +1,251 @@
 """
-EXIT LAB — compare exit recipes from ONE fresh, self-consistent backtest pass.
+EXIT LAB — compare exit recipes on a COMPLETED backtest (post-processing step).
 
-Why a fresh run (not a replay over committed trades)
-----------------------------------------------------
-Exit configs only change what happens after a fill, so in principle we could
-replay them over the committed trades. We tried — it FAILS: the yfinance cache has
-drifted from when those trades were generated (GC=F/NQ=F futures are back-adjusted
-on every rollover; even =X spot drifts 1-3 pips). Reconstructed bars are not the
-bars the trades were born from, so a replay is unfaithful (the baseline self-check
-caught this).
+Model (what the user wants): run the backtest first; it writes trades on the frozen
+MT5 cache. THEN run exit-lab — it reads those trades + the SAME frozen cache, replays
+each exit recipe over each trade's post-fill bars, and writes an Excel workbook.
 
-The faithful method: run the backtest ONCE, and at each fill let the simulator's
-side-channel (h1_only_simulator.EXIT_LAB_*) replay every recipe over the SAME
-in-memory post-fill bars. Entry/SL/TP1/exits all come from one consistent dataset.
+Why reading-after is faithful now: the cache is committed MT5 data that never changes,
+so the bars a trade was born from are the exact bars exit-lab re-reads. (This failed
+before only because the old trades were yfinance while the cache had moved to MT5.)
+The SELF-CHECK proves it: the baseline recipe must reproduce each trade's r_realised.
 
-Self-consistency check: the BASELINE recipe (single liquidity-TP + BE@+1R = the
-live policy) must reproduce each trade's committed r_realised within this run.
-
-NOTE: numbers use CURRENT yfinance bars, so they will differ from the committed
-audit (especially GOLD). They are PROVISIONAL until re-run on MT5 data — but the
-RELATIVE ranking of exit recipes (the research question) is valid within the run.
+Recipes (the locked set): baseline (live: liquidity TP + BE@1R), BE-sweep, fixed-TP
+{0.5/1/1.5/2}, partial 50%@1R + runner. One exit implementation: exit_engine.walk_multileg.
 
 Run:
-  python -m backtest.diagnostics.exit_lab
-  python -m backtest.diagnostics.exit_lab --pairs EURUSD,NZDUSD,USDJPY,USDCHF,GOLD \
-        --start 2024-07-01 --end 2025-06-30
+  # 1) run the backtest (writes backtest/results/h1only_<start>_<end>/trades.csv)
+  python backtest/run_backtest.py --start 2024-07-01 --end 2025-06-30 --pairs EURUSD,NZDUSD,USDJPY,USDCHF,GOLD
+  # 2) then exit-lab on it
+  python -m backtest.diagnostics.exit_lab --run-dir backtest/results/h1only_20240701_20250630
+  #    (or: --start 2024-07-01 --end 2025-06-30  -> derives the run dir)
+
+Outputs (next to trades.csv): exit_lab.xlsx + exit_lab_recipes.csv + exit_lab_trades.csv.
 """
 import argparse
-import shutil
+import json
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
 
-import backtest.h1_only_simulator as sim
-from backtest.insights import bootstrap_ci
+from backtest import data_loader, insights
+from backtest.exit_engine import walk_multileg
+from backtest import h1_only_simulator as sim
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+RESULTS = os.path.join(ROOT, "backtest", "results")
 
 # ── The locked experiment set (HANDOFF / RECOMMENDATIONS) ───────────────────
 # target spec: float = R-multiple, "tp1" = liquidity TP. be_trigger_r None = no BE.
 CONFIGS: Dict[str, Dict[str, Any]] = {
     "baseline_liqTP_be1.0":  {"legs": [(1.0, "tp1")], "be_trigger_r": 1.0, "be_to_r": 0.0},
-    # Group B — break-even sweep (no partial, liquidity TP).
     "B_be0.5":               {"legs": [(1.0, "tp1")], "be_trigger_r": 0.5, "be_to_r": 0.0},
     "B_be0.7":               {"legs": [(1.0, "tp1")], "be_trigger_r": 0.7, "be_to_r": 0.0},
-    # Group C — set-and-forget fixed full TP, no partial, no BE.
     "C_fullTP_0.5R":         {"legs": [(1.0, 0.5)], "be_trigger_r": None},
     "C_fullTP_1.0R":         {"legs": [(1.0, 1.0)], "be_trigger_r": None},
     "C_fullTP_1.5R":         {"legs": [(1.0, 1.5)], "be_trigger_r": None},
     "C_fullTP_2.0R":         {"legs": [(1.0, 2.0)], "be_trigger_r": None},
-    # Group D — partial 50% @ +1R, runner to liquidity, BE entry after partial.
     "D_partial50_1R_runLiq": {"legs": [(0.5, 1.0), (0.5, "tp1")], "be_trigger_r": 1.0, "be_to_r": 0.0},
 }
 
 
-def _quarter(ts_str: str) -> str:
-    ts = pd.to_datetime(ts_str, utc=True)
+def _quarter(ts) -> str:
+    ts = pd.to_datetime(ts, utc=True)
     return f"{ts.year}Q{(ts.month - 1) // 3 + 1}"
 
 
-def _summary(sub: pd.DataFrame, r_col: str = "r") -> Dict[str, Any]:
-    vals = sub[r_col].tolist()
-    n = len(vals)
-    wins = int((sub[r_col] > 0).sum())
-    losses = int((sub[r_col] < 0).sum())
-    resolved = wins + losses
-    wr = round(100 * wins / resolved, 1) if resolved else None
-    lo, hi = bootstrap_ci(vals)
-    pq = sub.groupby("quarter")[r_col].mean().round(2).to_dict()
-    return {"n": n, "totR": round(float(np.sum(vals)), 1),
-            "expR": round(float(np.mean(vals)), 3) if n else None,
-            "WR": wr, "CI": (lo, hi), "pq": pq}
+def _symbol_map() -> Dict[str, str]:
+    cfg = json.load(open(os.path.join(ROOT, "config.json")))
+    return {p["name"]: p["symbol"] for p in cfg["pairs"]}
 
 
-def _print_block(rep: pd.DataFrame, label: str) -> None:
-    print(f"\n================  {label}  ================")
-    print(f"{'config':24} {'N':>4} {'totR':>7} {'expR':>7} {'WR%':>5} "
-          f"{'95% CI':>18}  per-quarter expR")
+def _load_bars(symbols: Dict[str, str], pairs_needed) -> Dict[str, pd.DataFrame]:
+    """Load each needed pair's H1 bars from the frozen MT5 cache, once."""
+    start = datetime(2023, 1, 1, tzinfo=timezone.utc)
+    end = datetime(2026, 12, 31, tzinfo=timezone.utc)
+    out = {}
+    for pair in pairs_needed:
+        sym = symbols.get(pair)
+        if not sym:
+            continue
+        df = data_loader.load_bars(sym, "1h", start, end)
+        if df is not None and not df.empty:
+            if df.index.tz is None:
+                df.index = df.index.tz_localize("UTC")
+            out[pair] = df
+    return out
+
+
+def _replay(trades: pd.DataFrame, bars: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """One row per (trade, config). Reconstructs post-fill bars from the cache."""
+    max_hold = sim.MAX_HOLD_H1_BARS
+    wk_flat = sim.WEEKEND_FLAT
+    wk_hour = sim.WEEKEND_FLAT_HOUR_UTC
+    rows: List[Dict[str, Any]] = []
+    skipped = 0
+    for _, t in trades.iterrows():
+        pair = t["pair"]
+        pb = bars.get(pair)
+        if pb is None:
+            skipped += 1
+            continue
+        fill_ts = pd.to_datetime(t["fill_ts"], utc=True)
+        future = pb.loc[pb.index >= fill_ts]
+        if future.empty:
+            skipped += 1
+            continue
+        future = future.iloc[: max_hold + 2]
+        bias = t["bias"] if t.get("bias") in ("LONG", "SHORT") else (
+            "LONG" if t["direction"] == "bullish" else "SHORT")
+        entry = float(t["entry"]); sl = float(t["sl_initial"]); tp1 = float(t["tp1"])
+        r_distance = abs(entry - sl)
+        if r_distance <= 0:
+            skipped += 1
+            continue
+        base = {
+            "pair": pair, "quarter": _quarter(t["alert_ts"]),
+            "alert_ts": t["alert_ts"], "fill_ts": t["fill_ts"],
+            "direction": t.get("direction"), "entry": entry, "sl_initial": sl, "tp1": tp1,
+            "committed_r": float(t["r_realised"]),
+            "committed_mfe_r": float(t.get("mfe_r", np.nan)),
+            "committed_mae_r": float(t.get("mae_r", np.nan)),
+            "break_close_atr": t.get("break_close_atr"),
+            "break_body_atr": t.get("break_body_atr"),
+            "pd_zone": t.get("pd_zone"), "event": t.get("event"),
+        }
+        for name, cfg in CONFIGS.items():
+            res = walk_multileg(future, bias, entry, sl, r_distance, tp1, cfg,
+                                weekend_flat=wk_flat, weekend_hour_utc=wk_hour,
+                                max_hold=max_hold)
+            rows.append({**base, "config": name, "r": res["r_realised"],
+                         "recipe_exit_reason": res["exit_reason"],
+                         "recipe_mfe_r": res["mfe_r"], "recipe_mae_r": res["mae_r"]})
+    if skipped:
+        print(f"  [note] {skipped} trades skipped (no bars / bad slice)")
+    return pd.DataFrame(rows)
+
+
+def _recipe_summary(rep: pd.DataFrame, r_col: str = "r") -> pd.DataFrame:
+    out = []
     for name in CONFIGS:
         sub = rep[rep["config"] == name]
         if sub.empty:
             continue
-        s = _summary(sub)
-        ci = s["CI"]
-        ci_s = f"[{ci[0]}, {ci[1]}]" if ci[0] is not None else "[--]"
-        pq_s = " ".join(f"{v:+.2f}" for _, v in sorted(s["pq"].items()))
-        flag = "  <= CI>0" if (ci[0] is not None and ci[0] > 0) else ""
-        wr = s["WR"] if s["WR"] is not None else "--"
-        print(f"{name:24} {s['n']:>4} {s['totR']:>7} {s['expR']:>7} {wr:>5} "
-              f"{ci_s:>18}  {pq_s}{flag}")
+        vals = sub[r_col].tolist()
+        wins = sub[sub[r_col] > 0][r_col]
+        losses = sub[sub[r_col] < 0][r_col]
+        n_res = len(wins) + len(losses)
+        avg_win = round(float(wins.mean()), 3) if len(wins) else 0.0
+        avg_loss = round(float(losses.mean()), 3) if len(losses) else 0.0
+        be_wr = round(1.0 / (1.0 + avg_win) * 100, 1) if avg_win > 0 else None
+        lo, hi = insights.bootstrap_ci(vals)
+        pq = sub.groupby("quarter")[r_col].mean().round(3).to_dict()
+        pos_q = sum(1 for v in pq.values() if v > 0)
+        out.append({
+            "config": name,
+            "N": len(vals),
+            "totR": round(float(np.sum(vals)), 2),
+            "expR": round(float(np.mean(vals)), 4),
+            "WR_pct": round(100 * len(wins) / n_res, 1) if n_res else None,
+            "avg_win_R": avg_win,
+            "avg_loss_R": avg_loss,
+            "breakeven_WR_pct": be_wr,
+            "ci_lo": lo, "ci_hi": hi,
+            "ci_excludes_0": (lo is not None and (lo > 0 or hi < 0)),
+            "pos_quarters": f"{pos_q}/{len(pq)}",
+            "max_dd_R": insights.max_drawdown_r(vals),
+            "sharpe": insights.sharpe(vals),
+            "per_quarter": " ".join(f"{q}:{v:+.2f}" for q, v in sorted(pq.items())),
+        })
+    return pd.DataFrame(out)
+
+
+def _per_pair(rep: pd.DataFrame) -> pd.DataFrame:
+    piv = rep.pivot_table(index="config", columns="pair", values="r",
+                          aggfunc="mean").round(3)
+    piv = piv.reindex([c for c in CONFIGS if c in piv.index])
+    return piv.reset_index()
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--pairs", default="EURUSD,NZDUSD,USDJPY,USDCHF,GOLD",
-                    help="ex-NAS by default (NAS100 is being dropped)")
-    ap.add_argument("--start", default="2024-07-01")
-    ap.add_argument("--end", default="2025-06-30")
-    ap.add_argument("--keep-run", action="store_true",
-                    help="keep the throwaway results dir this run creates")
+    ap.add_argument("--run-dir", default=None,
+                    help="path to a completed backtest results dir (with trades.csv)")
+    ap.add_argument("--start", default=None)
+    ap.add_argument("--end", default=None)
     args = ap.parse_args()
 
-    # Neutralise persistence — this is a diagnostic, it must NOT touch git/registry.
-    import backtest.update_registry as _ur
-    import backtest.commit_logs as _cl
-    _ur.build_registry = lambda *a, **k: None
-    _cl.commit_run_logs = lambda *a, **k: "diag-nocommit"
+    run_dir = args.run_dir
+    if run_dir is None:
+        if not (args.start and args.end):
+            ap.error("give --run-dir, or --start and --end")
+        rid = f"h1only_{args.start.replace('-','')}_{args.end.replace('-','')}"
+        run_dir = os.path.join(RESULTS, rid)
+    trades_p = os.path.join(run_dir, "trades.csv")
+    if not os.path.exists(trades_p):
+        ap.error(f"no trades.csv at {trades_p} — run the backtest first")
 
-    # Arm the side-channel.
-    sink: List[Dict[str, Any]] = []
-    sim.EXIT_LAB_CONFIGS = CONFIGS
-    sim.EXIT_LAB_SINK = sink
+    print(f"Reading completed backtest: {trades_p}")
+    trades = pd.read_csv(trades_p)
+    trades = trades[trades["exit_reason"] != "never_filled"]
+    trades = trades[trades["fill_ts"].notna()]
+    if "entry_zone" in trades.columns:
+        trades = trades[trades["entry_zone"] == "proximal"]  # the live model
+    trades = trades.reset_index(drop=True)
+    print(f"  {len(trades)} filled proximal trades")
 
-    import backtest.run_backtest as rb
-    start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    pairs = [p.strip() for p in args.pairs.split(",") if p.strip()]
+    symbols = _symbol_map()
+    bars = _load_bars(symbols, sorted(trades["pair"].unique()))
+    print(f"  bars (MT5 cache): {', '.join(bars.keys())}")
 
-    print(f"Fresh backtest {args.start}..{args.end}  pairs={pairs}")
-    print("(persistence disabled; exit-lab side-channel armed)")
-    out_dir = rb.run(start, end, pairs, regime="bau", risk_usd=250.0, send_email=False)
+    rep = _replay(trades, bars)
+    if rep.empty:
+        print("  no replayable trades — abort")
+        return
 
-    sim.EXIT_LAB_CONFIGS = None
-    sim.EXIT_LAB_SINK = None
-
-    rep = pd.DataFrame(sink)
-    rep = rep[rep["entry_zone"] == "proximal"].copy()  # the live model
-    rep["quarter"] = rep["alert_ts"].map(_quarter)
-    n_trades = rep["alert_ts"].nunique()
-    print(f"\nCaptured {n_trades} proximal trades x {len(CONFIGS)} configs")
-
-    # ── Self-check: baseline replay vs committed r_realised (same run) ───────
+    # ── SELF-CHECK: baseline recipe must reproduce committed r_realised ──────
     base = rep[rep["config"] == "baseline_liqTP_be1.0"]
-    c_exp = round(base["committed_r"].mean(), 3)
-    r_exp = round(base["r"].mean(), 3)
+    c_exp = round(base["committed_r"].mean(), 4)
+    r_exp = round(base["r"].mean(), 4)
     diff = round(abs(c_exp - r_exp), 4)
-    print("\n---- ENGINE SELF-CHECK (baseline vs committed, same bars) ----")
-    print(f"  committed expR={c_exp}  baseline-replay expR={r_exp}  |diff|={diff}")
-    print("  PASS" if diff <= 0.01 else "  *** FAIL — investigate before trusting ***")
+    ok = diff <= 0.01
+    print("\n---- SELF-CHECK (baseline recipe vs committed r_realised) ----")
+    print(f"  committed expR={c_exp}  replay expR={r_exp}  |diff|={diff}  "
+          f"{'PASS' if ok else '*** FAIL — numbers NOT trustworthy ***'}")
 
-    _print_block(rep, "EX-NAS book")
+    recipes = _recipe_summary(rep)
+    per_pair = _per_pair(rep)
 
-    if not args.keep_run and out_dir is not None:
-        try:
-            shutil.rmtree(out_dir)
-            print(f"\n[cleaned throwaway run dir {out_dir}]")
-        except Exception as e:
-            print(f"\n[could not remove {out_dir}: {e}]")
+    print("\n================  EXIT RECIPES  ================")
+    with pd.option_context("display.width", 220, "display.max_columns", 30):
+        print(recipes.to_string(index=False))
+
+    # ── Write outputs next to trades.csv ────────────────────────────────────
+    xlsx = os.path.join(run_dir, "exit_lab.xlsx")
+    recipes.to_csv(os.path.join(run_dir, "exit_lab_recipes.csv"), index=False)
+    rep.to_csv(os.path.join(run_dir, "exit_lab_trades.csv"), index=False)
+    with pd.ExcelWriter(xlsx, engine="openpyxl") as xw:
+        pd.DataFrame([
+            {"key": "run_dir", "value": run_dir},
+            {"key": "trades", "value": len(trades)},
+            {"key": "self_check_committed_expR", "value": c_exp},
+            {"key": "self_check_replay_expR", "value": r_exp},
+            {"key": "self_check_diff", "value": diff},
+            {"key": "self_check", "value": "PASS" if ok else "FAIL"},
+            {"key": "generated_utc", "value": datetime.now(timezone.utc).isoformat()},
+        ]).to_excel(xw, sheet_name="meta", index=False)
+        recipes.to_excel(xw, sheet_name="recipes", index=False)
+        per_pair.to_excel(xw, sheet_name="per_pair_expR", index=False)
+        rep.to_excel(xw, sheet_name="per_trade", index=False)
+    print(f"\nWrote: {xlsx}")
+    print(f"       {os.path.join(run_dir, 'exit_lab_recipes.csv')}")
+    print(f"       {os.path.join(run_dir, 'exit_lab_trades.csv')}")
+    if not ok:
+        raise SystemExit("SELF-CHECK FAILED — investigate before trusting the table")
 
 
 if __name__ == "__main__":

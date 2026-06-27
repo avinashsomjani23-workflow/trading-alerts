@@ -71,6 +71,9 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BACKTEST_EMAIL: ${{ secrets.BACKTEST_EMAIL }}
+          # News is information-only and its calendar URL 404s on old weeks; skip
+          # the fetch so it never wastes time on a multi-year run.
+          BACKTEST_SKIP_NEWS: "1"
         run: |
           # Regime auto-detected from backtest/WAR_REGIME_WEEKS.json -- no
           # workflow input. The detector reads the date range and tags the
@@ -80,6 +83,16 @@ jobs:
             ARGS="$ARGS --email"
           fi
           python backtest/run_backtest.py $ARGS
+
+      - name: Exit-lab (exit-recipe comparison -> Excel)
+        # Runs AFTER the backtest completes, on the same frozen MT5 cache: reads
+        # the run's trades.csv, replays each exit recipe (baseline / BE-sweep /
+        # fixed-TP / partial+runner), and writes exit_lab.xlsx + CSVs into the run
+        # dir (picked up by the artifact upload below). A built-in self-check makes
+        # this step FAIL loudly if the replay can't reproduce the backtest's own
+        # r_realised, so a bad number can never pass silently.
+        run: |
+          python -m backtest.diagnostics.exit_lab --start ${{ inputs.start_date }} --end ${{ inputs.end_date }}
 
       - name: Upload report artifacts
         uses: actions/upload-artifact@v4
