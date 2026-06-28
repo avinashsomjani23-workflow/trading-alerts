@@ -156,13 +156,18 @@ def walk_multileg(
             _close_all_open(op, "friday_flat", ts)
             break
 
-        # 3. Excursions.
+        # 3. Stop check first, then excursions only on non-SL bars.
+        # MFE/MAE must not include the SL bar: the wick that touches the stop
+        # also touches the opposite extreme on the same bar, which would inflate
+        # MFE. Only update excursion tracking when SL does not fire this bar.
         if long:
-            mfe_price = max(mfe_price, hi); mae_price = min(mae_price, lo)
             stop_hit = lo <= cur_sl
+            if not stop_hit:
+                mfe_price = max(mfe_price, hi); mae_price = min(mae_price, lo)
         else:
-            mfe_price = min(mfe_price, lo); mae_price = max(mae_price, hi)
             stop_hit = hi >= cur_sl
+            if not stop_hit:
+                mfe_price = min(mfe_price, lo); mae_price = max(mae_price, hi)
 
         # 4. Stop wins any collision (pessimistic), and CAN fire on the fill bar.
         if stop_hit:

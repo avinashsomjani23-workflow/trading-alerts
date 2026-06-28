@@ -709,19 +709,26 @@ def _simulate_single_entry(
             break
 
         if bias == "LONG":
-            mfe_price = max(mfe_price, bar_hi)
-            mae_price = min(mae_price, bar_lo)
             sl_hit_in_bar = bar_lo <= cur_sl
             tp1_hit_in_bar = bar_hi >= tp1
             tp2_hit_in_bar = (tp2 is not None) and (bar_hi >= tp2)
             be_reached_in_bar = bar_hi >= be_trigger
+            # MFE/MAE must not include the SL bar: on the bar that fires the
+            # stop, the wick that touched SL also touched the opposite extreme.
+            # Crediting that extreme inflates MFE (the bar's high can show a
+            # positive excursion on the very bar the trade was stopped out).
+            # Only update excursion tracking on bars where SL does not fire.
+            if not sl_hit_in_bar:
+                mfe_price = max(mfe_price, bar_hi)
+                mae_price = min(mae_price, bar_lo)
         else:
-            mfe_price = min(mfe_price, bar_lo)
-            mae_price = max(mae_price, bar_hi)
             sl_hit_in_bar = bar_hi >= cur_sl
             tp1_hit_in_bar = bar_lo <= tp1
             tp2_hit_in_bar = (tp2 is not None) and (bar_lo <= tp2)
             be_reached_in_bar = bar_lo <= be_trigger
+            if not sl_hit_in_bar:
+                mfe_price = min(mfe_price, bar_lo)
+                mae_price = max(mae_price, bar_hi)
 
         # Fill-bar rule (2026-05-25):
         # On the bar where the limit just filled, we cannot infer intra-bar

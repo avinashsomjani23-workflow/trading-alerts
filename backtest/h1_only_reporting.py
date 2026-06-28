@@ -11,12 +11,67 @@ Produces:
 from __future__ import annotations
 
 import json
+import os
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
 from backtest.insights import win_rate_pct as _win_rate
+
+
+# ---------------------------------------------------------------------------
+# Global trade ID counter  (A0001 … A9999, B0000 … Z9999)
+# ---------------------------------------------------------------------------
+# Persists across runs in backtest/results/.trade_id_counter (one integer).
+# Never resets. Each run claims the next N slots atomically via a lock file
+# so parallel runs cannot collide.  Format: letter prefix (A–Z) + 4-digit
+# zero-padded number.  260 000 total slots; current inventory ~2 400 rows.
+
+_COUNTER_FILE = Path(__file__).resolve().parent / ".trade_id_counter"
+_LOCK_FILE    = Path(__file__).resolve().parent / ".trade_id_counter.lock"
+
+
+def _int_to_trade_id(n: int) -> str:
+    """Convert a 1-based integer to A0001…Z9999 format.
+
+    Mapping: 1→A0001, 2→A0002, …, 9999→A9999, 10000→B0000, 10001→B0001, …
+    Each letter covers 10 000 slots (0000–9999). A0000 is intentionally
+    skipped (counter starts at 1) so every displayed ID reads non-zero.
+    """
+    idx = n - 1                     # 0-based: 0→A0001 after digit adjustment
+    letter = chr(ord("A") + idx // 10000)
+    digits = (idx % 10000) + 1      # shift 0→1 so A-block is A0001..A9999+1
+    if digits > 9999:               # A-block overflow rolls into B0000
+        letter = chr(ord(letter) + 1)
+        digits = 0
+    return f"{letter}{digits:04d}"
+
+
+def _claim_trade_ids(count: int) -> int:
+    """Atomically claim `count` IDs. Returns the first integer to use (1-based).
+    Cross-platform: uses an exclusive lock file (works on Windows and Linux)."""
+    _COUNTER_FILE.parent.mkdir(parents=True, exist_ok=True)
+    # Acquire lock: spin on O_EXCL create (atomic on all OSes).
+    deadline = time.monotonic() + 10.0
+    while True:
+        try:
+            fd = os.open(str(_LOCK_FILE), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+            break
+        except FileExistsError:
+            if time.monotonic() > deadline:
+                raise RuntimeError("trade_id_counter lock timeout — delete .trade_id_counter.lock and retry")
+            time.sleep(0.05)
+    try:
+        raw = _COUNTER_FILE.read_text().strip() if _COUNTER_FILE.exists() else ""
+        current = int(raw) if raw else 0
+        first = current + 1
+        _COUNTER_FILE.write_text(str(current + count))
+        return first
+    finally:
+        _LOCK_FILE.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -3478,14 +3533,14 @@ def write_h1_only_report(
     # CORE set: survives both gates. THE set every downstream path sees.
     trades_all = [t for t in raw_trades if not _is_hard_blocked(t)]
     trades = list(trades_all)
-    # Stable global serial per row, assigned in run order. ONE id per trade
-    # dict, stamped before any consumer reads it. trades_all, trades, prox/mid
-    # lists, the Excel frames, the zone register, and the email vet-review all
-    # filter these SAME dict objects, so the T#### maps identically everywhere.
-    # CSV-only would be useless to a human reading the Excel or email -- this is
-    # the single source of the identifier across every output.
-    for _i, _t in enumerate(trades_all, start=1):
-        _t["setup_id"] = f"T{_i:04d}"
+    # Global non-resetting trade ID. Claimed atomically from the counter file
+    # so IDs are unique across every run forever (A0001…Z9999, 260 000 slots).
+    # Stamped before any consumer reads the dicts; every output (CSV, Excel,
+    # HTML, email vet-review) sees the same ID for the same trade.
+    if trades_all:
+        _first_id = _claim_trade_ids(len(trades_all))
+        for _i, _t in enumerate(trades_all):
+            _t["setup_id"] = _int_to_trade_id(_first_id + _i)
     blocked_trades = [t for t in trades_all if t.get("news_blocked")]
     kz_blocked_trades = [t for t in trades_all if t.get("killzone_blocked")]
 
