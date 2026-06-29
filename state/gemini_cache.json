@@ -20,5 +20,8 @@
   "USDCHF|SHORT|2026-06-29": {
     "macro_summary": null,
     "macro_unavailable": true
+  },
+  "EURUSD|SHORT|2026-06-29": {
+    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no external macroeconomic factors are expected to directly influence the EURUSD pair's direction today."
   }
 }
