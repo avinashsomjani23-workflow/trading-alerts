@@ -346,6 +346,74 @@ trades**. Re-confirm on MT5 before betting. Every claim below shows its data.
 
 ---
 
+## KNOB SWEEP — MIN_LEG_ATR_MULT: lean 1.5 → 2.0 (2026-06-28, NOT yet shipped)
+
+**The knob:** minimum swing-leg size to count a swing, in ATR units (`dealing_range.MIN_LEG_ATR_MULT`,
+re-exported in `smc_detector`). Higher = ignore small wiggles, keep only meaningful legs → cleaner
+OBs/structure, fewer trades. **Live = 1.5.** Grid tested: 1.0 / 1.5 / 2.0 / 2.5.
+
+**Source:** 11 monthly Knob-Sweep runs on `origin/main`
+(`backtest/diagnostics/sweeps/sweep_MIN_LEG_ATR_MULT_*`), all PASS / recon_ok / scope_ok. Months are
+single calendars **scattered across 2008–2024** (varied regimes), NOT a contiguous two years — the
+email's "two-year" label is a stale code header. Numbers below reproduced byte-for-byte from
+`results.jsonl` (filled, proximal, score ≥ 4 — i.e. what live would have traded).
+
+**Context first — the system is ~breakeven over these months, so all deltas are small:**
+
+| value | filled trades | expectancy (R/trade) |
+|---|---|---|
+| 1.0 | 885 | −0.014 |
+| 1.5 (live) | 866 | −0.022 |
+| 2.0 | 802 | −0.012 |
+| 2.5 | 747 | −0.001 |
+
+**Consistency — did each value beat 1.5, month by month (all pairs pooled, Δexp vs 1.5):**
+
+| Month | Market | 1.0 | 2.0 | 2.5 |
+|---|---|---|---|---|
+| 2008-10 | GFC crash | −0.068 | −0.004 | +0.097 |
+| 2009-04 | recovery | +0.033 | +0.067 | −0.019 |
+| 2011-08 | US downgrade | +0.043 | −0.070 | −0.063 |
+| 2013-06 | calm | −0.002 | +0.058 | −0.046 |
+| 2015-08 | China shock | +0.007 | +0.044 | +0.246 |
+| 2016-11 | US election | −0.012 | +0.014 | −0.054 |
+| 2018-12 | Q4 selloff | −0.031 | +0.023 | +0.085 |
+| 2020-03 | COVID crash | +0.036 | +0.044 | +0.194 |
+| 2021-07 | calm | −0.013 | −0.065 | −0.043 |
+| 2023-03 | banking crisis | +0.046 | +0.047 | −0.028 |
+| 2024-07 | calm | +0.022 | −0.051 | −0.098 |
+| **won / 11** | | **6** | **7** | **4** |
+| win_frac / median / mean | | 0.545 / +0.007 / +0.006 | **0.636 / +0.023 / +0.010** | 0.364 / −0.028 / +0.025 |
+
+**By asset class (expectancy R/trade; trade counts show the weight):**
+
+| Class | trades | 1.0 | 1.5 | 2.0 | 2.5 |
+|---|---|---|---|---|---|
+| Forex (bulk) | ~600 | +0.018 | +0.017 | **+0.046** | +0.054 (OOS-negative = luck) |
+| Gold | ~130 | −0.024 | −0.027 | −0.037 | **+0.034** (OOS holds) |
+| Index NAS100 | ~80 | −0.240 | −0.303 | −0.404 | −0.439 |
+
+**Verdict — 2.0 is the best-supported single value, NOT a sure thing:**
+- 2.0 wins the most months (7/11), has **no disaster month**, and is positive on median, mean, and
+  the even-month OOS holdout. Its wins span crash *and* calm regimes → not regime-specific.
+- 1.0 is barely different from 1.5 (weaker filter, near-zero effect).
+- 2.5's high *mean* is a mirage: it won only 4/11; two fat months (2015 +0.246, 2020 +0.194) carry it
+  while its median is negative. Don't be fooled by the average.
+- **SMC agrees with the data** (bigger min leg = more significant structure, fewer junk OBs) → for
+  forex + gold this is a "conclude" alignment, not just a discussion point.
+- Index disagrees (wants the filter lower) but it's a thin (8 months, ~80 trades) **already-losing**
+  book on this system — does not override the global call.
+
+**If the knob is ever split per class:** forex 2.0, gold 2.5, index leave ≤1.5. That's where the edge
+concentrates.
+
+**Honest weaknesses:** edges are hundredths of R on a breakeven system; 3 of 2.0's months genuinely
+lost; 11 months / 6 OOS is a modest jury. Treat 2.0 as **"the supported lean," not "proven."** More
+months (full MT5 history) would tighten it. **Status: NOT shipped** — changing a live trading knob
+needs explicit sign-off; one-line change in `dealing_range`.
+
+---
+
 ## CANDIDATE — Asia-session high/low as a liquidity level (deferred, user 2026-06-26)
 
 Add the **Asian-range high/low** to the liquidity hierarchy (alongside PDH/PDL/PWH/PWL) as a
@@ -359,3 +427,71 @@ intraday session pool — London's first move often raids it before the real dir
 - **Scope note:** of the session levels (Asia/London/NY), **Asia is the most ICT-justified and
   should be first** (and possibly the only one added). London/NY standalone session highs/lows
   are emphasised far less. See `DAILY_BIAS_BUILD_HANDOFF.md` §2.7.
+
+---
+
+## CAVEAT — HTF liquidity pools: cross-source / boundary / feed fidelity (measured 2026-06-28)
+
+Backtest = MT5; live = yfinance. The **bias DIRECTION** is cross-source robust (98.8%) because
+it reads the *sequence* of swings. **Pools (PDH/PDL/PWH/PWL) are NOT** — they are absolute price
+lines, sensitive to the candle boundary and to feed quality. Measured findings:
+
+- **Daily boundary differs by feed.** MT5 rolls the day at **21:00 UTC** (00:00 server, GMT+3,
+  DST-free = ~5pm NY = the forex-standard "New York close"; verified: MT5 H1 reproduces MT5 D1
+  **100%** at server-midnight). yfinance FX (`=X`) rolls at **00:00 UTC** (verified: MT5-resampled
+  best-matches yfinance native daily at the 00:00 anchor, falling off either side). 3-hour gap →
+  different daily high/low on days whose extreme prints in that window.
+- **The forex daily boundary is NOT ambiguous.** It is 5pm NY — the same broker maintenance
+  window seen at **2:30–3:30 AM IST** (the 1-hour spread is US DST moving 5pm NY between 21:00
+  and 22:00 UTC). yfinance simply ignores it.
+- **DST parity trap.** MT5 server is fixed GMT+3, so its boundary is **21:00 UTC year-round** =
+  5pm NY in summer, 4pm NY in winter. To keep backtest = live, any live D1 builder must mirror
+  the **fixed 21:00 UTC**, NOT chase the shifting true-NY-close, or live silently desyncs.
+- **yfinance hourly is low-fidelity — cannot rebuild clean pools.** yfinance `=X` hourly cannot
+  even reproduce yfinance's OWN native daily (agree ≤3p only **31%**; on **41%** of days the
+  hourly misses the true daily high by >3 pips). So resampling yfinance H1 → D1 does NOT give
+  tick-accurate pools (vs MT5: ≤3p **5%**, ≤5p 67%, ≤10p **94%**). Weekly resample from yf hourly
+  fails outright (sparse). Net: exact-tick pool parity with yfinance is **unattainable**.
+- **MT5 feed is not an option for live.** Live runs on GitHub Actions (`ubuntu-latest`). The
+  `MetaTrader5` package is **Windows-only** and needs an open terminal logged into a broker. Free,
+  but not feasible without re-architecting live onto an always-on Windows host. → ruled out.
+- **BTC is worse — venue divergence.** MT5 BTCUSD (broker CFD) vs yfinance BTC-USD (crypto index)
+  differ by **~$40 median** on the daily high — far beyond FX feed noise — because crypto prices
+  diverge across venues. Also MT5 rolls BTC at 21:00 UTC, but the **crypto-canonical day is 00:00
+  UTC** (every crypto chart's default; where retail stops actually sit). So BTC pools must be
+  built at **00:00 UTC** (not MT5's native 21:00), and BTC must be **bucketed separately** in
+  analysis — the geometry is sound, the signal is noisier.
+
+**Consequences for the build (durable):**
+- Treat every pool as a **ZONE with ATR-scaled tolerance, not an exact line** — this is correct
+  SMC anyway, and it absorbs the few-pip cross-feed divergence (≤10p captured 94% of FX days).
+- Build D1/W1 from H1 at a **fixed, instrument-specific boundary** (FX/Gold 21:00 UTC; BTC 00:00
+  UTC), the same construction on both feeds — boundary parity by construction; feed noise residual.
+- **Open decision (parity vs canon):** the backtest must predict live. If live can only reliably
+  deliver yfinance native daily (00:00 UTC), there is a real argument to mirror THAT boundary in
+  the backtest (resample MT5 H1 → 00:00 UTC) so the backtest measures what live will see — at the
+  cost of a non-canonical FX day. Decide before scoring pools. Don't chase tick parity; chase
+  same-boundary + zones.
+
+---
+
+## CAVEAT — Daily "ranging" mode is not a forward predictor; play the bias REACTIVELY (2026-06-28)
+
+The handoff's `STRUCTURE_RANGING_STALE` flag (predict ranging when N trend-swings fail to extend)
+was tested as a forward regime predictor on D1, 5 instruments (EURUSD/XAUUSD/BTCUSD/USDJPY/GBPUSD,
+N≈3,100 each). Ground truth = forward 10-day held-continuation vs containment.
+
+- **Stale-count accuracy 45–50%, BELOW the 51–55% majority base rate.** Width/compression 36–39%.
+  **Predictive ranging is coin-flip or worse — do not gate or score on it as a forecast.**
+- **Reactive classifier (is price already expanding beyond the structural wall) = 73–79%,**
+  consistent across all 5 instruments — far above base rate.
+- **Lesson (veteran + data):** you cannot forecast the daily regime at high accuracy; you CAN
+  read it from confirmed structure. Play the bias reactively: **break of the bias-direction wall
+  that HOLDS → expansion → press toward the next draw; a SWEEP (wick beyond + close back) →
+  exhaustion/range → demote/fade.** This is event-based (closed candle vs level), so the
+  underlying sweep/break classification is near-deterministic — that is where >90% reliability
+  actually exists, NOT in a forward-regime label.
+- `mode=ranging` stays in Part A as **logged observational data**, but its role is an input to
+  correlate, not a robust predictor. The robust play is the reactive sweep/break read.
+- Next: layer the validated confirmations (N=1 held break, displacement body/ATR, sweep-and-
+  reverse) on the reactive classifier to push precision toward mid-80s — test in Part B.
