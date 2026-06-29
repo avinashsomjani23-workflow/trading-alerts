@@ -271,6 +271,14 @@ def _event_label(bos_tag: Optional[str], bos_tier: Optional[str]) -> str:
 # this too.
 _FVG_REARM_ATR = 1.0
 
+# 50pct (OB-midpoint) entry is DORMANT. We trade proximal-only. The 50pct
+# simulation is a full second walk per alert (fill search + SL/TP walk) whose
+# rows we no longer report, so running it is wasted compute. Flag OFF detaches
+# it: no 50pct row is emitted and the second walk never runs. The 50pct code
+# path (_simulate_single_entry "50pct", forced-TP plumbing) is intact -- flip
+# this back to True to re-enable the A/B.
+_ENABLE_50PCT_ENTRY = False
+
 
 def _fvg_state(ob: Dict[str, Any], df_h1: pd.DataFrame,
                alert_ts: pd.Timestamp) -> str:
@@ -1062,15 +1070,19 @@ def simulate_h1_only_dual(
     if prox_row is None:
         return []
 
-    # 50pct entry reuses proximal TP prices — same opposing liquidity target,
-    # only the entry zone differs. This makes the A/B comparison clean.
-    mid_row = _simulate_single_entry(
-        alert, pair_conf, df_h1, "50pct", score, breakdown, risk_usd,
-        forced_tp1=prox_row["tp1"],
-        forced_tp2=prox_row.get("tp2"),
-    )
-
     rows: List[Dict[str, Any]] = [prox_row]
-    if mid_row is not None:
-        rows.append(mid_row)
+
+    # 50pct entry is dormant (proximal-only). When disabled we skip the entire
+    # second simulation walk — no wasted compute, no 50pct row. See
+    # _ENABLE_50PCT_ENTRY. When enabled, 50pct reuses proximal TP prices (same
+    # opposing liquidity target, only the entry zone differs) for a clean A/B.
+    if _ENABLE_50PCT_ENTRY:
+        mid_row = _simulate_single_entry(
+            alert, pair_conf, df_h1, "50pct", score, breakdown, risk_usd,
+            forced_tp1=prox_row["tp1"],
+            forced_tp2=prox_row.get("tp2"),
+        )
+        if mid_row is not None:
+            rows.append(mid_row)
+
     return rows
