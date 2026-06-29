@@ -16,5 +16,9 @@
   },
   "USDCHF|LONG|2026-06-29": {
     "macro_summary": "There are no scheduled high-impact events for USD or CHF today. Therefore, no external macro factors are expected to directly influence the USDCHF pair's direction. Price action will be driven by technicals and intermarket flows."
+  },
+  "USDCHF|SHORT|2026-06-29": {
+    "macro_summary": null,
+    "macro_unavailable": true
   }
 }
