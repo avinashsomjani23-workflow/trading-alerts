@@ -80,6 +80,7 @@
       "distal_invalidation_mode": "close",
       "decimal_places": 2,
       "spread_pips": 2.0,
+      "backtest_only": true,
       "killzones": [
         {"tz": "America/New_York", "start": "08:30", "end": "11:00", "label": "New York (indices)"},
         {"tz": "America/New_York", "start": "10:00", "end": "12:00", "label": "London Close"}

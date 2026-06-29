@@ -1,4 +1,4 @@
-import yfinance as yf
+import feed_adapter
 import pandas as pd
 import numpy as np
 import json
@@ -352,14 +352,6 @@ def rotate_scan_log(ist_now):
     except Exception as e:
         print(f"  [SCANLOG ROT ERR] {e}")
 
-def clean_df(df):
-    if df is None or df.empty:
-        return None
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [col[0] for col in df.columns]
-    return df
-
-
 def pip_size(pair_conf):
     dp = pair_conf.get("decimal_places", 5)
     if dp == 5:
@@ -423,39 +415,26 @@ def _check_staleness(df, interval):
 
 def fetch_with_retry(symbol, period, interval, retries=2):
     """
-    Fetch yfinance data with retry + staleness check.
-    Returns cleaned df on success, None on persistent failure/staleness.
-    Logs staleness skips to yfinance_stale_log.json for weekly review.
+    Fetch H1 from Twelve Data (via feed_adapter) with a staleness check.
+    Returns the df on success, None on persistent failure/staleness.
+    `period` is accepted for call-site compatibility; the adapter fetches a fixed
+    most-recent window (200 H1 bars ≈ 30 days, the live window the engine needs).
+    Logs staleness skips to yfinance_stale_log.json (kept name) for weekly review.
     """
-    last_error = None
-    last_age = None
+    df = feed_adapter.fetch_h1(symbol, outputsize=200, retries=retries)
+    if df is None:
+        # Adapter already retried and logged the cause; record the skip for review.
+        _log_stale_skip(symbol, interval, "feed fetch failed", None)
+        return None
 
-    for attempt in range(retries + 1):
-        try:
-            raw = yf.download(symbol, period=period, interval=interval,
-                              progress=False, timeout=20)
-            df = clean_df(raw)
-            is_stale, age_hours = _check_staleness(df, interval)
+    is_stale, age_hours = _check_staleness(df, interval)
+    if not is_stale:
+        return df
 
-            if df is not None and not is_stale:
-                return df
-
-            last_age = age_hours
-            if is_stale:
-                last_error = f"stale data (age {age_hours:.2f}h, limit {STALENESS_HOURS.get(interval, 2.0)}h)"
-            else:
-                last_error = "empty dataframe"
-        except Exception as e:
-            last_error = str(e)
-
-        if attempt < retries:
-            wait = 2 ** attempt  # 1s, 2s
-            print(f"  [RETRY {attempt + 1}/{retries}] {symbol} {interval}: {last_error}. Waiting {wait}s.")
-            time.sleep(wait)
-
-    # All retries exhausted — log and return None
+    last_error = (f"stale data (age {age_hours:.2f}h, "
+                  f"limit {STALENESS_HOURS.get(interval, 2.0)}h)")
     print(f"  [SKIP] {symbol} {interval}: {last_error}")
-    _log_stale_skip(symbol, interval, last_error, last_age)
+    _log_stale_skip(symbol, interval, last_error, age_hours)
     return None
 
 
@@ -1996,14 +1975,14 @@ def collect_heartbeat_diagnostics(ist_now, active_obs):
             "action": "Check gemini_failure_log.json — likely rate limit or key issue."
         })
 
-    # Rule 3: yfinance stale skips in window
+    # Rule 3: feed stale skips in window (log filename kept for history continuity)
     yf_stale = _count_recent_log_entries(
         "yfinance_stale_log.json", HEARTBEAT_WINDOW_HOURS, ist_now
     )
     if yf_stale >= 3:
         issues.append({
-            "title": f"{yf_stale} yfinance stale/failed fetches in last {HEARTBEAT_WINDOW_HOURS}h",
-            "action": "Check yfinance_stale_log.json. If persistent, yfinance may be rate-limiting."
+            "title": f"{yf_stale} stale/failed data fetches in last {HEARTBEAT_WINDOW_HOURS}h",
+            "action": "Check yfinance_stale_log.json. If persistent, the Twelve Data feed may be rate-limiting or down."
         })
 
     # Rule 5: active_obs empty
