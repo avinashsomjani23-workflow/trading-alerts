@@ -619,13 +619,24 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         except Exception:
             return None
 
+    # ts_iso -> FIRST matching index, built once per detect_smc_radar call.
+    # Replaces an O(len(df)) linear scan that ran on every call (3x per event,
+    # per bar) -> O(n^2) over a backtest. Keys come from _ts_for_idx(k) so the
+    # format is identical to the old scan; first-occurrence wins so duplicate
+    # timestamps resolve exactly as the scan did. Result-identical, just fast.
+    _ts_idx_map: dict = {}
+    _ts_idx_built: list = []
+
     def _idx_from_ts(ts_iso):
         if not ts_iso:
             return None
-        for k in range(len(df)):
-            if _ts_for_idx(k) == ts_iso:
-                return k
-        return None
+        if not _ts_idx_built:
+            for k in range(len(df)):
+                key = _ts_for_idx(k)
+                if key is not None and key not in _ts_idx_map:
+                    _ts_idx_map[key] = k  # first match wins (mirrors the scan)
+            _ts_idx_built.append(True)
+        return _ts_idx_map.get(ts_iso)
 
     # BOS sequence count is recomputed by Phase 2 fresh from state — but we
     # also stamp it on each fresh OB at emit time so downstream slate dedupe /
