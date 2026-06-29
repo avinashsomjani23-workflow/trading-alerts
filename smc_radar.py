@@ -1,6 +1,5 @@
-# yfinance is imported lazily inside fetch_data (the only live-data path) so that
-# importing this module for its JSON/slate helpers does not require the network
-# library. Keeps the offline test suite (no yfinance installed) green.
+# Live H1 data comes from Twelve Data via feed_adapter (the only live-data path).
+import feed_adapter
 import pandas as pd
 import numpy as np
 import json
@@ -97,12 +96,6 @@ STALENESS_HOURS = {
     "15m": 0.75,
     "5m": 0.30
 }
-
-# Futures close Friday ~21:00 UTC and reopen Sunday ~22:00 UTC — a 49-hour gap.
-# 72h covers the full weekend without triggering false staleness on Saturday/Sunday
-# scans. This only applies to futures tickers; FX pairs keep the 2h limit.
-FUTURES_TICKERS = {"GC=F", "NQ=F"}
-FUTURES_STALENESS_HOURS = {"1h": 72.0, "15m": 2.0, "5m": 0.30}
 
 # ---------------------------------------------------------------------------
 # EMAIL GATE CONFIG (B6) — state-based timer
@@ -426,49 +419,36 @@ ZONE_ID_PREFIX = {
 # ---------------------------------------------------------------------------
 
 def fetch_data(ticker, interval, period, retries=2):
-    import yfinance as yf  # lazy: only the live-data path needs the network lib
-    last_error = None
-    last_age = None
+    """Fetch H1 from Twelve Data (via feed_adapter), returned in this engine's shape:
+    a reset-index frame tailed to 150 rows with a UTC `Datetime` column.
 
-    _staleness_table = FUTURES_STALENESS_HOURS if ticker in FUTURES_TICKERS else STALENESS_HOURS
-    _max_age = _staleness_table.get(interval, 2.0)
+    `period` is accepted for call-site compatibility; the adapter fetches a fixed
+    most-recent H1 window. Staleness uses the same FX limits as before.
+    """
+    _max_age = STALENESS_HOURS.get(interval, 2.0)
 
-    for attempt in range(retries + 1):
-        try:
-            df = yf.download(ticker, period=period, interval=interval, progress=False, timeout=20)
-            if df is None or df.empty:
-                last_error = "empty dataframe"
-            else:
-                if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = [col[0] for col in df.columns]
-                tailed = df.tail(150).copy().reset_index()
-                # Normalize the datetime column to UTC at the fetch boundary so
-                # detection, persisted swing ts, and the chart all speak one
-                # timezone. yfinance returns GC=F (gold) in US/Eastern on some
-                # fetches and UTC on others; without this, persisted swings and
-                # freshly fetched candles can disagree on tz and markers misplace.
-                _dt_col = 'Datetime' if 'Datetime' in tailed.columns else (
-                    'Date' if 'Date' in tailed.columns else None)
-                if _dt_col is not None:
-                    _s = pd.to_datetime(tailed[_dt_col], utc=True)
-                    tailed[_dt_col] = _s
-                is_stale, age_hours = _check_staleness(tailed, interval, max_age_override=_max_age)
-                if not is_stale:
-                    return tailed
-                last_age = age_hours
-                last_error = f"stale data (age {age_hours:.2f}h, limit {_max_age}h)"
-        except Exception as e:
-            last_error = str(e)
+    df = feed_adapter.fetch_h1(ticker, outputsize=200, retries=retries)
+    if df is None:
+        last_error = "feed fetch failed"
+        logging.warning(f"Fetch failed after retries: {ticker} {interval}: {last_error}")
+        print(f"  [SKIP] {ticker} {interval}: {last_error}")
+        _log_stale_skip(ticker, interval, last_error, None)
+        return None
 
-        if attempt < retries:
-            wait = 2 ** attempt
-            logging.warning(f"Retry {attempt + 1}/{retries} for {ticker} {interval}: {last_error}. Waiting {wait}s.")
-            print(f"  [RETRY {attempt + 1}/{retries}] {ticker} {interval}: {last_error}")
-            time.sleep(wait)
+    # Adapter returns a UTC DatetimeIndex; this engine expects a reset-index frame
+    # with a `Datetime` column (already UTC), tailed to the last 150 bars.
+    tailed = df.tail(150).copy()
+    tailed.index.name = 'Datetime'
+    tailed = tailed.reset_index()
 
+    is_stale, age_hours = _check_staleness(tailed, interval, max_age_override=_max_age)
+    if not is_stale:
+        return tailed
+
+    last_error = f"stale data (age {age_hours:.2f}h, limit {_max_age}h)"
     logging.warning(f"Fetch failed after retries: {ticker} {interval}: {last_error}")
     print(f"  [SKIP] {ticker} {interval}: {last_error}")
-    _log_stale_skip(ticker, interval, last_error, last_age)
+    _log_stale_skip(ticker, interval, last_error, age_hours)
     return None
 
 # ---------------------------------------------------------------------------
@@ -3498,17 +3478,31 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
                 bos_ts_str = str(bos_ts_str)
                 ts_col = df['Datetime'] if 'Datetime' in df.columns else pd.Series(df.index)
                 bos_candle_open = None
+                bos_candle_idx = None
                 for k, t in enumerate(ts_col):
                     t_iso = t.isoformat() if hasattr(t, 'isoformat') else str(t)
                     if t_iso == bos_ts_str:
                         bos_candle_open = float(df['Open'].iloc[k])
+                        bos_candle_idx = k
                         break
-                if bos_candle_open is not None:
+                if bos_candle_open is not None and bos_candle_idx is not None:
                     swing_price = float(swing_price)
-                    if direction == 'bullish' and bos_candle_open > swing_price:
-                        return 'gap_open_event'
-                    elif direction == 'bearish' and bos_candle_open < swing_price:
-                        return 'gap_open_event'
+                    # A real gap: the prior candle closed on the SAME side as the
+                    # swing (never crossed it). Intraday continuation: prior close
+                    # already crossed, so the open above/below is just where the
+                    # last candle left off — not a gap.
+                    prior_close_already_crossed = False
+                    if bos_candle_idx > 0:
+                        prior_close = float(df['Close'].iloc[bos_candle_idx - 1])
+                        if direction == 'bullish' and prior_close > swing_price:
+                            prior_close_already_crossed = True
+                        elif direction == 'bearish' and prior_close < swing_price:
+                            prior_close_already_crossed = True
+                    if not prior_close_already_crossed:
+                        if direction == 'bullish' and bos_candle_open > swing_price:
+                            return 'gap_open_event'
+                        elif direction == 'bearish' and bos_candle_open < swing_price:
+                            return 'gap_open_event'
         except Exception:
             pass  # never drop on a lookup failure
 
