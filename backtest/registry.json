@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-30T14:30:24.498150+00:00",
+  "updated_at": "2026-06-30T14:31:12.222570+00:00",
   "runs": [
     {
       "run_id": "h1only_20240701_20240731",
@@ -841,6 +841,62 @@
       },
       "notes": "",
       "recorded_at": "2026-06-30T14:21:10.853092+00:00"
+    },
+    {
+      "run_id": "h1only_20250301_20250315",
+      "start": "2025-03-01",
+      "end": "2025-03-15",
+      "group": 0,
+      "regime": "bau",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 5,
+        "filled_trades": 2,
+        "win_rate_pct": null,
+        "expectancy_r": 0.0,
+        "max_dd_r": 0.0,
+        "longest_losing_streak": 0,
+        "fill_rate_proximal_pct": 40.0,
+        "per_pair": [
+          {
+            "pair": "EURUSD",
+            "trades": 2,
+            "win_rate_pct": null,
+            "expectancy_r": 0.0,
+            "total_pnl_usd": 0.0
+          }
+        ],
+        "by_session": {
+          "Asia": {
+            "trades": 1,
+            "win_rate_pct": null,
+            "expectancy_r": 0.0
+          },
+          "London": {
+            "trades": 1,
+            "win_rate_pct": null,
+            "expectancy_r": 0.0
+          }
+        },
+        "score_buckets": [
+          {
+            "score_bucket": "4-5",
+            "trades": 1,
+            "win_rate_pct": null,
+            "expectancy_r": 0.0
+          },
+          {
+            "score_bucket": "7+",
+            "trades": 1,
+            "win_rate_pct": null,
+            "expectancy_r": 0.0
+          }
+        ],
+        "score_verdict": "BROKEN \u2014 score does not predict outcome"
+      },
+      "notes": "",
+      "recorded_at": "2026-06-30T14:31:12.221457+00:00"
     },
     {
       "run_id": "h1only_20250301_20250401",
