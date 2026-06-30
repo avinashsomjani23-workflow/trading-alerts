@@ -80,9 +80,10 @@ def _slice_closed_before(df: pd.DataFrame, wall_clock_ts: pd.Timestamp
                          ) -> pd.DataFrame:
     """Return df rows whose bar OPENED strictly before wall_clock_ts.
 
-    yfinance H1 bars are open-timestamped: a bar indexed `12:00` covers
-    12:00→13:00 and is only KNOWN at 13:00 when it closes. So at wall-clock
-    moment T, the bars that have actually closed are those with index < T.
+    H1 bars (MT5/FundingPips feed) are open-timestamped: a bar indexed `12:00`
+    covers 12:00→13:00 and is only KNOWN at 13:00 when it closes. So at
+    wall-clock moment T, the bars that have actually closed are those with
+    index < T.
 
     Example: wall_clock_ts=13:00 -> includes 12:00 bar (closed at 13:00),
     excludes 13:00 bar (still forming, won't close until 14:00).

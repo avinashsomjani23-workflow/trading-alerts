@@ -225,20 +225,26 @@ def test_exported_csv_reconciles_to_headline():
         "unresolved:timeout":   _mk_trade("X", "proximal", 2.0, 2.0, 2.0, exit_reason="timeout"),
         "unresolved:window_end":_mk_trade("X", "proximal", 0.5, 0.5, 0.5, exit_reason="window_end"),
         "never_filled":         _mk_trade("X", "proximal", 0.0, 0.0, 0.0, exit_reason="never_filled"),
-        "below_score_floor":    {**_mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"), "score": 2},
+        # Score floor RETIRED (2026-06-30): a low-score resolved trade is now
+        # ELIGIBLE — the backtest reports the true P&L of every OB-touch. The
+        # old "below_score_floor" exclusion no longer fires.
+        "":                     {**_mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"), "score": 2},
         "ist_blocked":          {**_mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"), "ist_blocked": True},
-        "":                     _mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"),
     }
     for expected, row in cases.items():
         got = he(row)
         if got != expected:
             _failed(f"_headline_exclusion expected {expected!r}, got {got!r}")
-    _passed("_headline_exclusion branches (timeout/window_end/never_filled/floor/ist/eligible) correct")
+    # Belt-and-braces: a score-2 trade MUST be eligible now (floor retired).
+    if not h1_only_reporting._is_eligible(
+            {**_mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"), "score": 1}):
+        _failed("score floor retired but a score-1 trade is still excluded")
+    _passed("_headline_exclusion branches (timeout/window_end/never_filled/ist/eligible; score NEVER gates) correct")
 
     # A timeout winner (+2R) MUST be excluded from the headline but MUST stay
-    # present in trades.csv flagged ineligible (audit, not hidden). Below-floor
-    # and ist_blocked rows are pulled from the run UPSTREAM (audit list, never
-    # the CSV), so the only ineligible rows reaching the file are unresolved.
+    # present in trades.csv flagged ineligible (audit, not hidden). ist_blocked
+    # rows are pulled from the run UPSTREAM (audit list, never the CSV), so the
+    # only ineligible rows reaching the file are unresolved. Score never gates.
     trades = [
         _mk_trade("EURUSD", "proximal",  2.0,  1.0, 2.0, exit_reason="tp2"),   # eligible
         _mk_trade("EURUSD", "proximal", -1.0, -1.0, -1.0, exit_reason="sl"),   # eligible

@@ -299,11 +299,13 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                  out_dir, run_id, exit_lab_sink_out=None):
     """H1-only backtest run.
 
-      - Skips M15 + M5 data fetches entirely (faster, no yfinance 60d issue).
-      - No scoring gate (every OB-touch fires).
-      - Fires TWO trade rows per OB-touch (proximal + 50% mean) via
-        h1_only_simulator.simulate_h1_only_dual.
-      - Uses h1_only_reporting for the side-by-side TP1/TP2 scoreboard.
+      - H1 data only (MT5/FundingPips parquet cache). No M15/M5 fetches.
+      - No scoring gate at detection (every OB-touch fires); the live score
+        floor is applied later by the reporting/headline layer.
+      - Fires ONE trade row per OB-touch: the proximal entry (the live limit),
+        via h1_only_simulator.simulate_h1_only_dual. The 50% mean leg is dormant
+        (h1_only_simulator._ENABLE_50PCT_ENTRY=False, retired 2026-06-30).
+      - Uses h1_only_reporting for the TP1/TP2 scoreboard.
     """
     fetch_start = start - timedelta(days=35)
     pairs_to_run = [p for p in cfg["pairs"] if p["name"] in pair_names]
@@ -380,8 +382,11 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         run_id, start, end, pairs_to_run, dfs, risk_usd,
         fetch_pad_days=35)
     print(f"  [scanlog] manifest written -> {scanlog.run_dir}")
-    # YF_CLAMP: served history starts later than requested (yfinance 720d cap).
-    # Recorded as a WARN condition so the gate table shows it, never hidden.
+    # YF_CLAMP (legacy condition name): served history starts later than
+    # requested -- now because the MT5/FundingPips cache doesn't reach that far
+    # back, not the old yfinance 720d cap. Recorded as a WARN condition so the
+    # gate table shows it, never hidden. (Identifier kept for scanlog schema
+    # stability; the cause is the cache extent.)
     for pair_conf in pairs_to_run:
         _df = dfs.get(pair_conf["name"])
         if _df is not None and not _df.empty and _df.index.min() > walk_start_ts:

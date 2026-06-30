@@ -126,13 +126,16 @@ SCORE_FLOOR = _config_score_floor()
 
 
 def _below_score_floor(t: Dict[str, Any]) -> bool:
-    """True iff this row's score is below the live email floor. Mirrors live's
-    `current_score_raw < MIN_SCORE_TO_EMAIL`. An unscored row is treated as
-    below floor (live would not have emailed it)."""
-    try:
-        return float(t.get("score", 0.0)) < SCORE_FLOOR
-    except (TypeError, ValueError):
-        return True
+    """RETIRED (2026-06-30, trader decision): the backtest no longer filters on
+    score ANYWHERE. We want the true, unfiltered P&L of every OB-touch the system
+    found — score is recorded per row for analysis but never gates a trade out of
+    the headline or any aggregate. This always returns False so the headline
+    reflects all resolved trades regardless of score.
+
+    Kept as a function (not deleted) so the score-bucket discovery table and the
+    G1 eligibility path keep a single, stable call site; flipping the floor back
+    on would be a one-line change here if ever needed."""
+    return False
 
 
 def _headline_exclusion(t: Dict[str, Any]) -> str:
@@ -144,7 +147,6 @@ def _headline_exclusion(t: Dict[str, Any]) -> str:
       unresolved:timeout / unresolved:window_end -- filled but force-closed at
           an arbitrary price (hold cap / data ran out). Audit-only, never P&L.
       never_filled -- no real position was ever held.
-      below_score_floor -- score < live MIN_SCORE_TO_EMAIL; live would not email.
       ist_blocked -- alert fell outside the 09:00-24:00 IST trading window;
           live's smc_radar blackout means it could never have alerted.
       weekend_blocked -- (crypto only) fill fell inside the configured weekend
@@ -156,14 +158,13 @@ def _headline_exclusion(t: Dict[str, Any]) -> str:
     reconciliation test all route through it, so the exported file is always
     reconcilable to the headline: sum(pnl_usd where eligible) == headline.
 
-    Killzone and news are scoring / display signals in live (they never suppress
-    an alert), so they are audit-only here and must NOT gate.
+    Score does NOT gate (2026-06-30): the backtest reports the true P&L of every
+    OB-touch regardless of score. Killzone and news are display signals in live
+    (they never suppress an alert), so they are audit-only here and must NOT gate.
     """
     er = t.get("exit_reason")
     if er in _EXCLUDE_REASONS:
         return f"unresolved:{er}" if er in ("timeout", "window_end") else str(er)
-    if _below_score_floor(t):
-        return "below_score_floor"
     if t.get("ist_blocked"):
         return "ist_blocked"
     if t.get("weekend_blocked"):
@@ -177,17 +178,17 @@ def _is_eligible(t: Dict[str, Any]) -> bool:
     return _headline_exclusion(t) == ""
 
 
-# Hard pre-filter conditions: rows that live could NEVER have alerted on (score
-# floor) or that we structurally do not trade (IST window, crypto weekend). These
-# are dropped UPFRONT before any scoreboard is built, unlike the fill-resolution
-# exclusions (timeout / never_filled) which are kept here and filtered later by
-# the aggregator (the never-filled audit section still needs them). Defined ONCE
-# so every pre-filter site stays in lock-step with _headline_exclusion — the G1
-# reconciliation depends on these dropping the exact same rows. A new "could never
-# trade" condition must be added HERE and in _headline_exclusion together.
+# Hard pre-filter conditions: rows we structurally do not trade (IST window,
+# crypto weekend). These are dropped UPFRONT before any scoreboard is built,
+# unlike the fill-resolution exclusions (timeout / never_filled) which are kept
+# here and filtered later by the aggregator (the never-filled audit section still
+# needs them). Defined ONCE so every pre-filter site stays in lock-step with
+# _headline_exclusion — the G1 reconciliation depends on these dropping the exact
+# same rows. A new "could never trade" condition must be added HERE and in
+# _headline_exclusion together. NOTE: score does NOT gate (2026-06-30) — the
+# backtest reports the true P&L of every OB-touch regardless of score.
 def _is_hard_blocked(t: Dict[str, Any]) -> bool:
-    return bool(_below_score_floor(t) or t.get("ist_blocked")
-                or t.get("weekend_blocked"))
+    return bool(t.get("ist_blocked") or t.get("weekend_blocked"))
 
 
 def _aggregate_for_exit(trades: List[Dict[str, Any]], r_col: str,
@@ -3330,21 +3331,18 @@ def write_h1_only_report(
     out_dir = Path(base) / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # TWO HARD EXCLUSIONS (2026-06-18, trader decision). A trade is pulled out
-    # of the run ENTIRELY -- no table, metric, score bucket, Excel/CSV row, or
-    # per-group report -- if it is either:
-    #   (1) below the live score floor (config.min_score_to_email), or
-    #   (2) outside the IST trading window (live never scans before 09:00 IST,
-    #       so such an alert could never have happened live).
-    # Each excluded row shows up in EXACTLY ONE place: a small audit list (pair
-    # / time / score / would-be R) so the user can see what was skipped and its
-    # hypothetical R -- and nowhere else. Score floor is checked first so a
-    # below-floor row is never also double-listed under IST.
+    # HARD EXCLUSION (one only, as of 2026-06-30): a trade is pulled out of the
+    # run ENTIRELY -- no table, metric, score bucket, Excel/CSV row, or per-group
+    # report -- if it is outside the IST trading window (live never scans before
+    # 09:00 IST, so such an alert could never have happened live). It shows up in
+    # EXACTLY ONE place: a small audit list (pair / time / score / would-be R).
+    # SCORE NO LONGER EXCLUDES (trader decision 2026-06-30): we want the true,
+    # unfiltered P&L of every OB-touch, so audit_below_floor is always empty now
+    # (the score column is still recorded per row for analysis).
     raw_trades = list(trades)
-    audit_below_floor = [t for t in raw_trades if _below_score_floor(t)]
-    audit_ist = [t for t in raw_trades
-                 if not _below_score_floor(t) and t.get("ist_blocked")]
-    # CORE set: survives both gates. THE set every downstream path sees.
+    audit_below_floor = []  # score floor retired — no row is excluded on score
+    audit_ist = [t for t in raw_trades if t.get("ist_blocked")]
+    # CORE set: survives the IST gate. THE set every downstream path sees.
     trades_all = [t for t in raw_trades if not _is_hard_blocked(t)]
     trades = list(trades_all)
     # Global non-resetting trade ID. Claimed atomically from the counter file

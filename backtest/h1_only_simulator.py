@@ -1,19 +1,15 @@
-"""H1-only dual-entry trade simulator.
+"""H1-only trade simulator (proximal entry — the live model).
 
 Tests the SMC system using ONLY H1 data — H1 finds the OB, entry happens at
 the OB, SL/TP are sized off the H1 OB and H1 swing liquidity. No M15, no M5.
 
-For every H1 OB-touch alert, this simulator fires TWO trade rows:
-  1. Proximal entry  — fills the bar the OB is touched (entry = OB proximal).
-  2. 50% mean entry  — pending limit at OB midpoint; fills only if price
-                       penetrates deep enough.
+For every H1 OB-touch alert, this simulator fires ONE trade row: the proximal
+entry (fills when price touches the OB proximal edge = the live limit). SL is
+the OB distal +/- spread; TP price levels are the liquidity-based opposing H1
+swings, reused from live compute_phase2_levels.
 
-Both share the same SL (OB distal +/- spread) and the same TP price levels
-(liquidity-based opposing H1 swings, reused from live compute_phase2_levels).
-R-distance and RR-multiples differ per entry zone by construction.
-
-No scoring gate — every OB-touch fires regardless of confluence score. Score
-is logged for post-run analysis (discover the optimal threshold empirically).
+No scoring gate — every OB-touch is simulated regardless of confluence score.
+Score is logged for post-run analysis (discover the optimal threshold empirically).
 
 Per-trade outputs cover both exit policies (TP1 vs TP2) so the user can
 see what their real-life TP1-only behaviour would produce vs the system's
@@ -272,12 +268,8 @@ def _event_label(bos_tag: Optional[str], bos_tier: Optional[str]) -> str:
 # this too.
 _FVG_REARM_ATR = 1.0
 
-# 50pct (OB-midpoint) entry is DORMANT. We trade proximal-only. The 50pct
-# simulation is a full second walk per alert (fill search + SL/TP walk) whose
-# rows we no longer report, so running it is wasted compute. Flag OFF detaches
-# it: no 50pct row is emitted and the second walk never runs. The 50pct code
-# path (_simulate_single_entry "50pct", forced-TP plumbing) is intact -- flip
-# this back to True to re-enable the A/B.
+# Retired A/B leg (OB-midpoint entry). OFF = proximal-only (the live model).
+# Kept only so the path can be re-enabled for a one-off study; never on in a run.
 _ENABLE_50PCT_ENTRY = False
 
 
@@ -1095,12 +1087,10 @@ def simulate_h1_only_dual(
     df_h1: pd.DataFrame,
     risk_usd: float = DEFAULT_RISK_USD,
 ) -> List[Dict[str, Any]]:
-    """Public entry point: simulate BOTH entry zones for one OB-touch alert.
+    """Public entry point: simulate the proximal entry for one OB-touch alert.
 
-    Returns a list of 0, 1, or 2 trade row dicts:
-      - 0 rows: both entry zones returned levels-invalid (e.g. no TP1 >= 1.5R).
-      - 1 row : only one entry zone produced valid levels.
-      - 2 rows: standard case, proximal + 50pct rows.
+    Returns [] if proximal levels are invalid (e.g. no TP1 >= 1.5R), else the
+    one proximal trade row. (`_dual` is a historical name; one row out.)
     """
     alert_ts = alert["ts"]
     if not isinstance(alert_ts, pd.Timestamp):
@@ -1120,10 +1110,8 @@ def simulate_h1_only_dual(
 
     rows: List[Dict[str, Any]] = [prox_row]
 
-    # 50pct entry is dormant (proximal-only). When disabled we skip the entire
-    # second simulation walk — no wasted compute, no 50pct row. See
-    # _ENABLE_50PCT_ENTRY. When enabled, 50pct reuses proximal TP prices (same
-    # opposing liquidity target, only the entry zone differs) for a clean A/B.
+    # Dormant A/B leg — off by default (see _ENABLE_50PCT_ENTRY). Reuses the
+    # proximal TP prices so only the entry zone differs.
     if _ENABLE_50PCT_ENTRY:
         mid_row = _simulate_single_entry(
             alert, pair_conf, df_h1, "50pct", score, breakdown, risk_usd,
