@@ -1,0 +1,95 @@
+{
+  "run_id": "h1only_20250301_20250308",
+  "overall": "PASS",
+  "exit_code": 0,
+  "warnings_present": false,
+  "headline_pnl_usd": 0.0,
+  "live_proximal_headline_usd": 0.0,
+  "study_fifty_pct_headline_usd": 0.0,
+  "content_hash": "8e9192541f34483a4495aae6c2003621168f876b2530809c82fe307529f63fa3",
+  "condition_counts": {},
+  "event_counts": {
+    "trade_fill": 2,
+    "trade_exit": 3
+  },
+  "outcome_counts": {},
+  "gates": [
+    {
+      "id": "G1",
+      "description": "Sum pnl_usd == Sum r_realised*risk, and equals reporting headline",
+      "threshold": "rel_tol 1e-09",
+      "observed": {
+        "headline_usd": 0.0,
+        "reported": 0.0,
+        "row_mismatches": 0
+      },
+      "verdict": "PASS"
+    },
+    {
+      "id": "G2",
+      "description": "scan records == expected (pair x walk bars); zero HEARTBEAT_GAP",
+      "threshold": "exact",
+      "observed": {
+        "expected": 0,
+        "actual": 0,
+        "missing_by_pair": {}
+      },
+      "verdict": "PASS"
+    },
+    {
+      "id": "G3",
+      "description": "ob<=bos<alert<fill and fill>=alert+1h on every filled trade",
+      "threshold": "strict inequalities",
+      "observed": {
+        "violations": 0,
+        "sample": []
+      },
+      "verdict": "PASS"
+    },
+    {
+      "id": "G4",
+      "description": "every FAIL-severity condition counter is 0",
+      "threshold": "== 0",
+      "observed": "none",
+      "verdict": "PASS"
+    },
+    {
+      "id": "G5",
+      "description": "every knob re-read at END equals manifest (no drift)",
+      "threshold": "exact",
+      "observed": "none",
+      "verdict": "PASS"
+    },
+    {
+      "id": "G6",
+      "description": "headline recomputed from r_realised only; tp1/tp2 excluded",
+      "threshold": "independent recompute",
+      "observed": {
+        "realised_headline": 0.0,
+        "tp2_headline_for_contrast": -500.0
+      },
+      "verdict": "PASS"
+    },
+    {
+      "id": "G7",
+      "description": "content hash of scan_log + events recorded for re-run compare",
+      "threshold": "recorded",
+      "observed": "8e9192541f34483a4495aae6c2003621168f876b2530809c82fe307529f63fa3",
+      "verdict": "PASS"
+    },
+    {
+      "id": "G8",
+      "description": "NAN_ATR_SKIP <= 1% post-warmup per pair (WARN >1%, FAIL >5%)",
+      "threshold": "<=1% warn, >5% fail",
+      "observed": {},
+      "verdict": "PASS"
+    },
+    {
+      "id": "G9",
+      "description": "every record validated against SCHEMA.md (ts/tz/outcome)",
+      "threshold": "0 schema FAILs",
+      "observed": 0,
+      "verdict": "PASS"
+    }
+  ]
+}
