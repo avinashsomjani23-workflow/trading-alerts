@@ -627,14 +627,40 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     _ts_idx_map: dict = {}
     _ts_idx_built: list = []
 
+    def _build_keys_vectorized():
+        """ISO key for every row, in one pass (PERF). Identical to calling
+        _ts_for_idx(k) for each k: same source precedence (Datetime col -> Date
+        col -> index), same isoformat()/str fallback. Returns a list of length
+        len(df), or None when no datetime source exists (caller falls back to the
+        per-row loop so keys can never diverge)."""
+        try:
+            if 'Datetime' in df.columns:
+                src = pd.DatetimeIndex(pd.to_datetime(df['Datetime']))
+            elif 'Date' in df.columns:
+                src = pd.DatetimeIndex(pd.to_datetime(df['Date']))
+            elif isinstance(df.index, pd.DatetimeIndex):
+                src = df.index
+            else:
+                return None
+            return [t.isoformat() if hasattr(t, 'isoformat') else str(t) for t in src]
+        except Exception:
+            return None
+
     def _idx_from_ts(ts_iso):
         if not ts_iso:
             return None
         if not _ts_idx_built:
-            for k in range(len(df)):
-                key = _ts_for_idx(k)
-                if key is not None and key not in _ts_idx_map:
-                    _ts_idx_map[key] = k  # first match wins (mirrors the scan)
+            keys = _build_keys_vectorized()
+            if keys is not None:
+                for k, key in enumerate(keys):
+                    if key is not None and key not in _ts_idx_map:
+                        _ts_idx_map[key] = k  # first match wins (mirrors the scan)
+            else:
+                # No datetime source — exact per-row fallback (unchanged behaviour).
+                for k in range(len(df)):
+                    key = _ts_for_idx(k)
+                    if key is not None and key not in _ts_idx_map:
+                        _ts_idx_map[key] = k
             _ts_idx_built.append(True)
         return _ts_idx_map.get(ts_iso)
 

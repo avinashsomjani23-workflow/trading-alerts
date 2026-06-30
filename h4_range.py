@@ -126,20 +126,40 @@ def build_h4(df) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     L = df['Low'].to_numpy(dtype=float)
     C = df['Close'].to_numpy(dtype=float)
 
-    epoch0 = pd.Timestamp('1970-01-01', tz='UTC')
-    epoch_h = ((idx - epoch0) // pd.Timedelta(hours=1)).astype('int64').to_numpy()
+    # PERF: drive the fold off integer arrays, not boxed Timestamp scalars.
+    # `i8` is the index's int repr in its OWN resolution (ns or us); `per_hour`
+    # is the matching tick count for one hour, so epoch_h / the gap test are
+    # byte-identical to the old `(idx - epoch0) // Timedelta(hours=1)` and
+    # `(ts - prev_ts) > Timedelta(hours=1)` forms (verified across pairs). The
+    # previous per-bar `idx[k]` Timestamp box dominated this function's cost; we
+    # now box timestamps ONCE at the end via idx.take(positions).
+    i8 = idx.asi8
+    _unit = getattr(idx, 'unit', None) or getattr(idx.dtype, 'unit', 'ns')
+    _per_hour = {'ns': 3_600_000_000_000, 'us': 3_600_000_000,
+                 'ms': 3_600_000, 's': 3600}.get(_unit)
+    if _per_hour is None:
+        # Unknown resolution — fall back to the original Timestamp-based path so
+        # behaviour can never silently diverge on an unexpected dtype.
+        epoch0 = pd.Timestamp('1970-01-01', tz='UTC')
+        epoch_h = ((idx - epoch0) // pd.Timedelta(hours=1)).astype('int64').to_numpy()
+        _ticks = None
+    else:
+        epoch_h = i8 // _per_hour
+        _ticks = i8
     bucket = (epoch_h - H4_ANCHOR_HOUR_UTC) // 4
 
     rows: List[Tuple] = []
     stats = {'gaps_split': 0, 'full4': 0, 'short': 0, 'bars_per_candle': {}}
     cur = None
-    prev_ts = None
+    prev_tick = None            # integer ticks of the previous bar (for the gap test)
     prev_bucket = None
 
     def flush():
         nonlocal cur
         if cur is None:
             return
+        # cur['ts'] holds the POSITIONAL index of the candle's first H1 bar; the
+        # actual Timestamp is resolved in one vectorized take() after the loop.
         rows.append((cur['ts'], cur['o'], cur['h'], cur['l'], cur['c'], cur['n']))
         if cur['n'] == 4:
             stats['full4'] += 1
@@ -148,28 +168,47 @@ def build_h4(df) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         stats['bars_per_candle'][cur['n']] = stats['bars_per_candle'].get(cur['n'], 0) + 1
         cur = None
 
-    for k in range(len(idx)):
-        ts = idx[k]
+    n_rows = len(idx)
+    for k in range(n_rows):
+        tick = _ticks[k] if _ticks is not None else int(epoch_h[k])
         b = int(bucket[k])
-        gap = prev_ts is not None and (ts - prev_ts) > pd.Timedelta(hours=1)
+        # gap = > 1h between consecutive bars. With _ticks this is the raw tick
+        # delta vs _per_hour; in the fallback path epoch_h is per-hour so a gap
+        # is a delta > 1 hour-unit. Both reproduce the original Timedelta test.
+        if _ticks is not None:
+            gap = prev_tick is not None and (tick - prev_tick) > _per_hour
+        else:
+            gap = prev_tick is not None and (tick - prev_tick) > 1
         new_bucket = b != prev_bucket
         if cur is None:
-            cur = {'ts': ts, 'o': O[k], 'h': H[k], 'l': L[k], 'c': C[k], 'n': 1}
+            cur = {'ts': k, 'o': O[k], 'h': H[k], 'l': L[k], 'c': C[k], 'n': 1}
         elif new_bucket or gap:
             if gap and not new_bucket:
                 stats['gaps_split'] += 1
             flush()
-            cur = {'ts': ts, 'o': O[k], 'h': H[k], 'l': L[k], 'c': C[k], 'n': 1}
+            cur = {'ts': k, 'o': O[k], 'h': H[k], 'l': L[k], 'c': C[k], 'n': 1}
         else:
             cur['h'] = max(cur['h'], H[k])
             cur['l'] = min(cur['l'], L[k])
             cur['c'] = C[k]
             cur['n'] += 1
-        prev_ts = ts
+        prev_tick = tick
         prev_bucket = b
     flush()
 
-    h4 = pd.DataFrame(rows, columns=['ts', 'Open', 'High', 'Low', 'Close', '_nbars']).set_index('ts')
+    if rows:
+        positions = [r[0] for r in rows]
+        ts_index = idx.take(positions)     # ONE boxing pass, not one per H1 bar
+        h4 = pd.DataFrame(
+            [(r[1], r[2], r[3], r[4], r[5]) for r in rows],
+            columns=['Open', 'High', 'Low', 'Close', '_nbars'],
+        )
+        h4.index = ts_index
+        h4.index.name = 'ts'
+    else:
+        h4 = pd.DataFrame(
+            columns=['Open', 'High', 'Low', 'Close', '_nbars']
+        ).set_index(pd.Index([], name='ts'))
     return h4, stats
 
 

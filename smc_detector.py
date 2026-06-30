@@ -1465,24 +1465,39 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
     # Detection: infer the dominant timestamp delta from the median pairwise
     # gap of the df index, then reject any 3-candle pattern where ts(k+1)-ts(k)
     # exceeds 1.5x that delta. Applied to BOTH LONG and SHORT branches below.
+    # PERF: precompute the index as an int64 seconds array ONCE (no per-element
+    # Timestamp boxing in the scan below). _idx_secs[k] is the bar's epoch in
+    # seconds; deltas are plain integer subtraction. Falls back to None when the
+    # index is not a DatetimeIndex, in which case the gap guard is a no-op (the
+    # exact same outcome as the old hasattr(..,'to_pydatetime') guards).
+    _idx_secs = None
+    try:
+        import numpy as _np
+        if isinstance(df.index, pd.DatetimeIndex):
+            _i8 = df.index.asi8
+            _unit = getattr(df.index, 'unit', None) or getattr(df.index.dtype, 'unit', 'ns')
+            _per_sec = {'ns': 1_000_000_000, 'us': 1_000_000,
+                        'ms': 1_000, 's': 1}.get(_unit)
+            if _per_sec is not None:
+                _idx_secs = _i8 / float(_per_sec)
+    except Exception:
+        _idx_secs = None
+
     def _session_gap_between(a: int, b: int) -> bool:
+        if _idx_secs is None:
+            return False
         try:
-            ta = df.index[int(a)]
-            tb = df.index[int(b)]
-            if not (hasattr(ta, 'to_pydatetime') and hasattr(tb, 'to_pydatetime')):
-                return False
-            delta_seconds = (tb - ta).total_seconds()
+            delta_seconds = float(_idx_secs[int(b)] - _idx_secs[int(a)])
             return delta_seconds > _bar_seconds * 1.5
         except Exception:
             return False
 
     _bar_seconds = None
     try:
-        idx = df.index
-        if len(idx) >= 5 and hasattr(idx[0], 'to_pydatetime'):
+        if _idx_secs is not None and len(_idx_secs) >= 5:
             diffs = []
-            for k in range(1, min(len(idx), 30)):
-                d = (idx[k] - idx[k - 1]).total_seconds()
+            for k in range(1, min(len(_idx_secs), 30)):
+                d = float(_idx_secs[k] - _idx_secs[k - 1])
                 if d > 0:
                     diffs.append(d)
             if diffs:
