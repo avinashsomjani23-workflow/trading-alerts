@@ -20,5 +20,9 @@
   "NAS100|LONG|2026-06-30": {
     "macro_summary": null,
     "macro_unavailable": true
+  },
+  "NZDUSD|LONG|2026-06-30": {
+    "macro_summary": null,
+    "macro_unavailable": true
   }
 }
