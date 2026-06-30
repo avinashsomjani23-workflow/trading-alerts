@@ -2391,6 +2391,9 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "freshness_pts", "killzone_pts", "confluences_present",
         "sl_collision", "model", "ob_timestamp", "bos_tag", "bos_tier",
         "fvg_present", "sweep_present",
+        # Setup-geometry features (ATR-normalized) — edge-discovery engine inputs.
+        "break_close_atr", "break_body_atr", "break_excess", "break_tier",
+        "ob_range_atr", "fvg_size_atr", "impulse_leg_atr", "atr_at_ob",
         # News blackout audit columns. news_blocked=True means this row
         # was excluded from every aggregate metric in summary.json.
         "news_blocked", "news_event_title", "news_event_currency",
@@ -2467,6 +2470,10 @@ _EXCEL_COL_NAMES = {
     "break_excess":      "Break × Over Floor",
     "break_body_atr":    "Break Body (ATR)",
     "break_tier":        "Break Quality",
+    "ob_range_atr":      "OB Range / Stop (ATR)",
+    "fvg_size_atr":      "FVG Size (ATR)",
+    "impulse_leg_atr":   "Impulse Leg (ATR)",
+    "atr_at_ob":         "ATR at OB (price)",
     "vet_review":        "Worth Reviewing",
     "vet_review_reason": "Why Worth Reviewing",
     # news / session audit

@@ -4,22 +4,19 @@ EXIT LAB — compare exit recipes from ONE fresh, self-consistent backtest pass.
 Why a fresh run (not a replay over committed trades)
 ----------------------------------------------------
 Exit configs only change what happens after a fill, so in principle we could
-replay them over the committed trades. We tried — it FAILS: the yfinance cache has
-drifted from when those trades were generated (GC=F/NQ=F futures are back-adjusted
-on every rollover; even =X spot drifts 1-3 pips). Reconstructed bars are not the
-bars the trades were born from, so a replay is unfaithful (the baseline self-check
-caught this).
-
-The faithful method: run the backtest ONCE, and at each fill let the simulator's
-side-channel (h1_only_simulator.EXIT_LAB_*) replay every recipe over the SAME
-in-memory post-fill bars. Entry/SL/TP1/exits all come from one consistent dataset.
+replay them over the committed trades. The faithful method is still a fresh run:
+at each fill the simulator's side-channel (h1_only_simulator.EXIT_LAB_*) replays
+every recipe over the SAME in-memory post-fill bars, so entry/SL/TP1/exits all
+come from ONE consistent dataset. A replay over separately-reloaded bars risks
+drift between the bars a trade was born from and the bars a recipe is scored on.
 
 Self-consistency check: the BASELINE recipe (single liquidity-TP + BE@+1R = the
 live policy) must reproduce each trade's committed r_realised within this run.
 
-NOTE: numbers use CURRENT yfinance bars, so they will differ from the committed
-audit (especially GOLD). They are PROVISIONAL until re-run on MT5 data — but the
-RELATIVE ranking of exit recipes (the research question) is valid within the run.
+Data source: the MT5 (FundingPips) parquet cache — the sole feed (yfinance was
+removed 2026-06-26, see backtest/data_loader.py). These are broker-grade bars, so
+both the absolute numbers and the RELATIVE ranking of exit recipes are valid
+within the run.
 
 Run:
   python -m backtest.diagnostics.exit_lab

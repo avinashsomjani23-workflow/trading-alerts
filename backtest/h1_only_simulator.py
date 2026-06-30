@@ -62,10 +62,11 @@ WEEKEND_FLAT_HOUR_UTC = 18
 # simulator ALSO replays each alternative exit recipe over the SAME in-memory
 # post-fill bars via exit_engine.walk_multileg, and appends per-config R to the
 # sink. This is a PURE side-channel: r_realised, the trade row, and live parity
-# are never touched. It is the only faithful way to study exits (reconstructing
-# bars from the yfinance cache is unreliable — futures are back-adjusted and even
-# spot drifts between runs). Driven by backtest/diagnostics/exit_lab.py. Never set
-# in a normal or live run.
+# are never touched. It is the only faithful way to study exits: every recipe sees
+# the EXACT in-memory post-fill bars the trade was born from, so entry/SL/TP1/exits
+# all share one consistent dataset (a replay over separately-reloaded bars would
+# drift). Driven by backtest/diagnostics/exit_lab.py. Never set in a normal or
+# live run.
 EXIT_LAB_CONFIGS = None
 EXIT_LAB_SINK = None
 
@@ -950,6 +951,48 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         reversed_from_extreme = None
     else:
         reversed_from_extreme = bool(float(reversal_pct) >= 1.0)
+
+    # ── Setup-geometry features (observe-only; feed the edge-discovery engine) ──
+    # All ATR-normalized against the OB-formation ATR (ob['h1_atr'], frozen at
+    # detection) so a single bucket boundary works across instruments. Every value
+    # here is read from fields the detector already froze on the OB — nothing is
+    # recomputed, so all are point-in-time clean (no look-ahead). None when the
+    # input is missing (legacy zone) or the ATR is unavailable (avoids div-by-zero).
+    _h1_atr = ob.get("h1_atr")
+
+    def _atr_norm(v):
+        return round(v / _h1_atr, 3) if (_h1_atr and v is not None) else None
+
+    # OB candle range in ATR. NOTE: with SL at the distal and entry at the
+    # proximal, this ~= the stop distance — the NAS failure axis (stop < one
+    # candle's range). Same quantity as "zone thickness"; logged once.
+    ob_range_atr = _atr_norm(abs(float(ob.get("high", 0.0)) - float(ob.get("low", 0.0)))) \
+        if ob.get("high") is not None and ob.get("low") is not None else None
+
+    # FVG size in ATR — the displacement gap's magnitude (present/absent throws
+    # this gradient away). FVG-mitigation-agnostic: measures the gap as detected.
+    _fvg = ob.get("fvg") or {}
+    if _fvg.get("exists") and _fvg.get("fvg_top") is not None and _fvg.get("fvg_bottom") is not None:
+        fvg_size_atr = _atr_norm(abs(float(_fvg["fvg_top"]) - float(_fvg["fvg_bottom"])))
+    else:
+        fvg_size_atr = None
+
+    # Impulse-leg size in ATR — the displacement that broke structure and left
+    # the OB behind: origin (impulse_start) -> the swing it broke (bos_swing).
+    # FVG-INDEPENDENT by construction (defined on the swing structure, not the
+    # gap), per the SMC definition. Measures the leg up to the break level; a
+    # full-extreme variant (origin -> leg high/low) is a future refinement but
+    # needs the detection-frame bars, so it can't be done cross-fetch here.
+    _isp = ob.get("impulse_start_price")
+    _bsp = ob.get("bos_swing_price")
+    impulse_leg_atr = _atr_norm(abs(float(_bsp) - float(_isp))) \
+        if (_isp is not None and _bsp is not None) else None
+
+    # Raw OB-formation ATR (price units) — volatility context. NOT cross-instrument
+    # comparable raw; the engine normalizes it within-pair (vs the pair's typical
+    # ATR) for a regime read. Logged because it's free and frozen.
+    atr_at_ob = round(float(_h1_atr), 6) if _h1_atr else None
+
     pnl_usd = round(r_realised * risk_usd, 2)
     return {
         "pair":          alert["pair"],
@@ -1020,6 +1063,11 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "break_close_atr":   _bq.get("close_beyond_atr"),
         "break_excess":      _bq.get("excess"),
         "break_body_atr":    _bq.get("body_atr"),
+        # Setup-geometry features (ATR-normalized; observe-only edge-engine inputs).
+        "ob_range_atr":      ob_range_atr,
+        "fvg_size_atr":      fvg_size_atr,
+        "impulse_leg_atr":   impulse_leg_atr,
+        "atr_at_ob":         atr_at_ob,
         "fvg_present":   bool((ob.get("fvg") or {}).get("exists")),
         # fresh / stale / no_fvg — was the FVG already discharged on an earlier
         # approach before this trigger? Feeds the FVG-staleness breakdown.
