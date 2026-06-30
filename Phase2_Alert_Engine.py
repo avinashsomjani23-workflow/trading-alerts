@@ -517,7 +517,7 @@ NEWS_BLACKOUT_AFTER_H  = float(_NEWS_CFG.get("news_blackout_hours_after", 1))
 
 
 def fetch_scheduled_news(now_utc=None):
-    """Fetch the ForexFactory scheduled HIGH-impact calendar ONCE per scan.
+    """Fetch the ForexFactory scheduled High/Medium-impact calendar ONCE per scan.
 
     Returns (events, coverage_ok). This is the SAME single-source calendar the
     backtest uses (news_filter.py) — wired into live Phase 2 here so the alert
@@ -553,7 +553,7 @@ def get_pair_news_context(pair_name, events, coverage_ok, now_utc=None):
 
     INFORMATION ONLY. Nothing here gates, filters or suppresses a trade setup.
     The caller renders two display pieces:
-      1. A whole-day list of the pair's HIGH-impact events (in IST).
+      1. A whole-day list of the pair's High and Medium-impact events (in IST).
       2. An "active now" marker when now sits inside [event-2h, event+1h] —
          this is the heads-up window the user asked for (alert from 2h before a
          release until 1h after). It is a label, not a filter.
@@ -589,12 +589,12 @@ def get_pair_news_context(pair_name, events, coverage_ok, now_utc=None):
     if day_events:
         headlines_text = "\n".join(
             f"- {(e['ts_utc'] + timedelta(hours=5, minutes=30)).strftime('%a %H:%M IST')} "
-            f"{e['currency']} HIGH: {e.get('title', '')}"
+            f"{e['currency']} {e.get('impact', '').upper()}: {e.get('title', '')}"
             for e in day_events
         )
     else:
         headlines_text = (
-            f"No scheduled HIGH-impact events for {sorted(ccys)} today."
+            f"No scheduled High/Medium-impact events for {sorted(ccys)} today."
         )
 
     return {
@@ -1593,33 +1593,41 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         )
     else:
         day_events = news_ctx.get('day_events') or []
-        # Active heads-up marker (neutral — never "avoid").
+        # Active heads-up marker (neutral — never "avoid"). Yellow for High,
+        # orange for Medium so the email visually distinguishes severity.
         if news_ctx.get('active_now') and news_ctx.get('active_event'):
             ev = news_ctx['active_event']
+            is_high = ev.get('impact', '').lower() == 'high'
+            marker_color = '#f1c40f' if is_high else '#e67e22'
             marker = (
-                '<div style="margin-bottom:8px;color:#f1c40f;">'
-                f"&#9201; Heads-up: {ev['currency']} HIGH-impact — "
+                f'<div style="margin-bottom:8px;color:{marker_color};">'
+                f"&#9201; Heads-up: {ev['currency']} {ev.get('impact','').upper()}-impact — "
                 f"{ev.get('title','')} at {_ist(ev)} "
                 f"(within {NEWS_BLACKOUT_BEFORE_H:g}h before / "
                 f"{NEWS_BLACKOUT_AFTER_H:g}h after the release).</div>"
             )
         else:
             marker = ""
-        # Whole-day calendar list.
+        # Whole-day calendar list. Each row tagged with its own impact level;
+        # Medium rows rendered in orange, High rows in the default grey.
         if day_events:
             rows = "".join(
-                f"<div style=\"color:#bbb;\">&#8226; {_ist(e)} &middot; "
-                f"{e['currency']} &middot; {e.get('title','')}</div>"
+                '<div style="color:{0};">&#8226; {1} &middot; '
+                '{2} &middot; <b>{3}</b> &middot; {4}</div>'.format(
+                    '#bbb' if e.get('impact', '').lower() == 'high' else '#e67e22',
+                    _ist(e), e['currency'], e.get('impact', '').upper(),
+                    e.get('title', ''),
+                )
                 for e in day_events
             )
             day_block = (
                 '<div style="color:#9ad29a;margin-bottom:4px;">Today\'s '
-                'HIGH-impact (IST):</div>' + rows
+                'High/Medium-impact (IST):</div>' + rows
             )
         else:
             day_block = (
-                '<div style="color:#bbb;">No scheduled HIGH-impact events for '
-                'this pair today.</div>'
+                '<div style="color:#bbb;">No scheduled High/Medium-impact '
+                'events for this pair today.</div>'
             )
         news_banner_html = (
             '<div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;'
