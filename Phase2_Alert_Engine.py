@@ -2534,7 +2534,38 @@ if __name__ == "__main__":
             ob['bos_verdict'] = bos_counter.get('verdict', 'holding')
 
             zone_dir = ob.get('direction')
-            if current_trend is None:
+            # Pending-reversal context (Fix A, 2026-06-30). A CHoCH ARMS a flip but
+            # does NOT flip `current_trend` until a Confirmation BOS prints, so the
+            # raw `trend` field still reads the OLD direction while the reversal is
+            # contested. Without this branch a zone in the OLD direction was tagged
+            # "WITH H1 trend" off that stale field (the EURUSD 2026-06-29 bug: a
+            # SHORT labelled with-trend while a bullish CHoCH was pending). The
+            # banner is information-only; the trader decides.
+            flip_pending     = bos_counter.get('flip_pending', False)
+            flip_pending_dir = bos_counter.get('flip_pending_dir')  # 'bullish'|'bearish'|None
+            _choch_ts        = bos_counter.get('choch_ts')
+            _choch_day = ""
+            if _choch_ts:
+                try:
+                    _choch_day = " (" + str(_choch_ts)[:10] + ")"
+                except Exception:
+                    _choch_day = ""
+            if flip_pending and zone_dir != flip_pending_dir:
+                # Zone is in the OLD trend direction while a reversal AGAINST it is
+                # pending. This is NOT with-trend — it is counter to the forming
+                # reversal. Drop the with-trend badge and warn.
+                trend_alignment = "counter_trend"
+                trend_label = (f"AGAINST pending H1 reversal — {flip_pending_dir} "
+                               f"CHoCH printed{_choch_day}, Confirmation BOS pending "
+                               f"(zone is {zone_dir})")
+            elif flip_pending:
+                # Zone direction matches the pending reversal. The trend is contested
+                # and UNCONFIRMED, so do not credit it as with-trend (no score
+                # inflation on an unconfirmed flip) — surface it as forming.
+                trend_alignment = "ambiguous"
+                trend_label = (f"Pending H1 reversal in zone's favour — {flip_pending_dir} "
+                               f"CHoCH printed{_choch_day}, Confirmation BOS pending")
+            elif current_trend is None:
                 trend_alignment = "ambiguous"
                 trend_label = "H1 trend ambiguous — no clear BOS sequence"
             elif current_trend == zone_dir:
