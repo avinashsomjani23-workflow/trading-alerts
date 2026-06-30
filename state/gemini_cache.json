@@ -7,5 +7,11 @@
   },
   "NAS100|SHORT|2026-06-30": {
     "macro_summary": "There are no scheduled high-impact events for the USD today that will directly affect the NAS100. Therefore, this trade setup is not influenced by today's macroeconomic calendar."
+  },
+  "EURUSD|LONG|2026-06-30": {
+    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no external macroeconomic factors are expected to directly influence this EURUSD setup. The trade will be driven solely by technical factors and market sentiment."
+  },
+  "GOLD|SHORT|2026-06-30": {
+    "macro_summary": "There are no scheduled high-impact events for USD today that could directly influence Gold. Therefore, this trade setup is not subject to immediate macro event risk. Price action and technicals will be the primary drivers for Gold today."
   }
 }
