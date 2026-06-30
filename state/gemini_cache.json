@@ -16,5 +16,9 @@
   },
   "NZDUSD|SHORT|2026-06-30": {
     "macro_summary": "There are no scheduled high-impact events for NZD or USD today. Therefore, no scheduled events will directly influence this NZDUSD short setup."
+  },
+  "NAS100|LONG|2026-06-30": {
+    "macro_summary": null,
+    "macro_unavailable": true
   }
 }
