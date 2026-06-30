@@ -590,6 +590,11 @@ def compute_bos_sequence_count(pair_name):
         'trend':       'bullish' | 'bearish' | None,
         'count_maxed': bool  (True if event ring is full — count may be capped),
         'verdict':     'holding' | 'fading'  (displacement-decay read),
+        'flip_pending':     bool  (a CHoCH has armed a reversal that has NOT yet
+                                   been confirmed by a Confirmation BOS),
+        'flip_pending_dir': 'bullish' | 'bearish' | None  (direction the pending
+                                   CHoCH is trying to flip the trend toward),
+        'choch_ts':         str | None  (timestamp of that pending CHoCH),
       }
 
     `count` is LABEL CONTEXT only ("BOS #N"). It does NOT set the structure
@@ -597,20 +602,40 @@ def compute_bos_sequence_count(pair_name):
     recent break displacement is materially weaker than how the leg started
     (the genuine "late continuation" signal); 'holding' means drive is intact or
     not yet measurable.
+
+    `flip_pending*` carry the CONTESTED-trend state (Fix A, 2026-06-30). A CHoCH
+    ARMS a reversal but does NOT flip `trend` until a Confirmation BOS prints
+    (dealing_range structure_v2). While `flip_pending` is True the market is
+    contested — `trend` still reads the OLD direction. Phase 2 uses these so it
+    does not tag an old-trend zone "with trend" during a live pending reversal,
+    and so it can surface the character change. Read-only from structure_v2.
     """
+    _no_pending = {'flip_pending': False, 'flip_pending_dir': None,
+                   'choch_ts': None}
     try:
         import dealing_range as _dr
         state_all = _dr.load_state()
         pair_state = state_all.get(pair_name) or {}
     except Exception:
         return {'count': 1, 'trend': None, 'count_maxed': False,
-                'verdict': 'holding'}
+                'verdict': 'holding', **_no_pending}
 
     events = pair_state.get('events', []) or []
     trend = pair_state.get('trend')
+
+    # Pending-reversal context — read-only from structure_v2. `choch_pending_dir`
+    # is 'up'|'down' (the v2 internal axis); map it to the bullish/bearish axis
+    # the rest of the system speaks. Only meaningful while `flip_unconfirmed`.
+    _sv2 = pair_state.get('structure_v2') or {}
+    _pdir = _sv2.get('choch_pending_dir') if _sv2.get('flip_unconfirmed') else None
+    _flip_dir = {'up': 'bullish', 'down': 'bearish'}.get(_pdir)
+    pending = {'flip_pending': _flip_dir is not None,
+               'flip_pending_dir': _flip_dir,
+               'choch_ts': _sv2.get('choch_ts') if _flip_dir is not None else None}
+
     if not events:
         return {'count': 1, 'trend': trend, 'count_maxed': False,
-                'verdict': 'holding'}
+                'verdict': 'holding', **pending}
 
     # Walk events forward and rebuild the CURRENT continuation leg.
     #
@@ -671,7 +696,7 @@ def compute_bos_sequence_count(pair_name):
 
     count_maxed = (len(events) >= _dr.EVENT_RING_MAX)
     return {'count': count, 'trend': trend, 'count_maxed': count_maxed,
-            'verdict': verdict}
+            'verdict': verdict, **pending}
 
 # SHARED P1+P2+P3 — chart label stacking utility. Used by every chart-rendering
 # path across all three phases. Cosmetic only — chart label overlap if broken,
