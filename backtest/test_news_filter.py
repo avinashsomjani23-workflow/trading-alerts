@@ -260,55 +260,57 @@ def _extract_metrics(summary):
 
 
 def test_metric_exclusion_invariant():
-    """Live-parity contract (2026-06-18): the ONLY thing excluded from the
-    headline is a BELOW-SCORE-FLOOR row. News / IST / killzone are
-    informational in live -- they never gate -- so they MUST be counted.
+    """Live-parity contract (UPDATED 2026-06-30): the score floor is RETIRED.
+    The backtest no longer filters ANY row on score (h1_only_reporting
+    ._below_score_floor always False) -- we report the true, unfiltered P&L of
+    every OB-touch. News / IST / killzone were already informational (never
+    gate). So the ONLY rows excluded from the headline are unresolved fills.
 
-    1. Adding resolved below-floor trades does NOT move any aggregate metric
-       (they are the excluded set) but DOES bump below_score_floor_trade_rows.
-    2. Adding a resolved news-blocked trade that clears the floor DOES move the
-       headline (it is counted, exactly as live would email it)."""
+    1. Adding resolved low-score ("below-floor") trades NOW DOES count in the
+       aggregates (score no longer excludes), the below_score_floor audit/rows
+       stay 0 (retired), and the sub-floor score buckets DO appear.
+    2. Adding a resolved news-blocked trade DOES move the headline (counted,
+       exactly as live would email it)."""
     print("\n== test_metric_exclusion_invariant ==")
 
     baseline = _baseline_trades()
     summary_a = _build_summary(baseline)
-    metrics_a = _extract_metrics(summary_a)
 
-    # --- 1. Below-floor rows: extreme outcomes that WOULD distort metrics if
-    # they leaked in. score below config floor (4) -> must be excluded.
+    # --- 1. Low-score rows are NO LONGER excluded (score floor retired). A
+    # resolved low-score winner must be counted, moving the headline P&L, and
+    # must NOT be parked in a below_score_floor audit (that path is retired).
     win = baseline[0]   # EURUSD proximal tp2 template
     loss = baseline[2]  # EURUSD proximal sl template
-    below_floor = [
+    low_score = [
         {**win,  "score": 2.0, "r_realised": +10.0, "pnl_usd": 2500.0,
          "entry_zone": "proximal"},
-        {**win,  "score": 2.0, "r_realised": +10.0, "pnl_usd": 2500.0,
-         "entry_zone": "50pct"},
         {**loss, "score": 3.5, "r_realised": -5.0,  "pnl_usd": -1250.0,
          "entry_zone": "proximal"},
-        {**loss, "score": 3.5, "r_realised": -5.0,  "pnl_usd": -1250.0,
-         "entry_zone": "50pct"},
     ]
-    summary_b = _build_summary(baseline + below_floor)
-    metrics_b = _extract_metrics(summary_b)
-    # Below-floor rows are excluded from EVERYTHING -- every metric, including
-    # score buckets and the total row count -- so nothing may move.
-    for k in metrics_a:
-        assert metrics_a[k] == metrics_b[k], (
-            f"{k} changed after adding below-floor trades "
-            f"(must be excluded everywhere): {metrics_a[k]} -> {metrics_b[k]}")
-    assert summary_b["below_score_floor_trade_rows"] == 4, (
-        f"below_score_floor_trade_rows should be 4, "
-        f"got {summary_b['below_score_floor_trade_rows']}")
+    summary_b = _build_summary(baseline + low_score)
+    # The low-score winner + loser now count: total rows grow by 2 and the
+    # proximal headline P&L moves by their net (+2500 - 1250 = +1250).
+    assert summary_b["total_trade_rows"] == summary_a["total_trade_rows"] + 2, (
+        f"low-score rows must now be counted in total_trade_rows: "
+        f"{summary_a['total_trade_rows']} -> {summary_b['total_trade_rows']}")
+    base_pnl_1 = summary_a["scoreboards"]["proximal_realised"]["total_pnl_usd"]
+    low_pnl_1  = summary_b["scoreboards"]["proximal_realised"]["total_pnl_usd"]
+    assert low_pnl_1 == base_pnl_1 + 1250.0, (
+        f"low-score rows must now move the headline (floor retired): "
+        f"{base_pnl_1} -> {low_pnl_1}")
+    # The below-score-floor exclusion path is retired: nothing is parked there.
     assert summary_a["below_score_floor_trade_rows"] == 0
-    # They DO appear in their own audit list (one row per alert = 2).
-    assert len(summary_b["below_score_floor_audit"]) == 2, (
-        f"below_score_floor_audit should list 2 alerts, "
+    assert summary_b["below_score_floor_trade_rows"] == 0, (
+        f"score floor retired -> below_score_floor_trade_rows must stay 0, "
+        f"got {summary_b['below_score_floor_trade_rows']}")
+    assert len(summary_b["below_score_floor_audit"]) == 0, (
+        f"score floor retired -> below_score_floor_audit must be empty, "
         f"got {len(summary_b['below_score_floor_audit'])}")
-    # Score buckets must NOT contain any sub-floor bucket.
+    # Sub-floor score buckets are now PRESENT (low-score rows are real data).
     b_labels = {b["score_bucket"]
                 for b in summary_b["score_buckets_proximal_realised"]}
-    assert "2-3" not in b_labels and "3-4" not in b_labels, (
-        f"sub-floor buckets must be absent, got {b_labels}")
+    assert "2-3" in b_labels, (
+        f"sub-floor score bucket must now appear (floor retired), got {b_labels}")
 
     # --- 2. News-blocked but scoring rows ARE counted (live parity). A +10R
     # news-blocked winner must MOVE the proximal headline upward.
