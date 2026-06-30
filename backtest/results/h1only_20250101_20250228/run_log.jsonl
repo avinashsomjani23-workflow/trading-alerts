@@ -1,0 +1,15 @@
+{"ts": "2026-06-30T12:29:55.435033+00:00", "level": "info", "event": "run_start", "regime": "bau", "regime_label": null, "mode": "h1_only", "start": "2025-01-01", "end": "2025-02-28", "pairs": ["EURUSD", "GOLD", "BTCUSD"], "risk_usd": 250.0, "send_email": false}
+{"ts": "2026-06-30T12:29:55.435267+00:00", "level": "info", "event": "backtest_atr_cap", "pair": "EURUSD", "pair_type": "forex", "live": 2.5, "backtest": 2.5}
+{"ts": "2026-06-30T12:29:55.435346+00:00", "level": "info", "event": "backtest_atr_cap", "pair": "GOLD", "pair_type": "commodity", "live": 3.0, "backtest": 3.0}
+{"ts": "2026-06-30T12:29:55.435391+00:00", "level": "info", "event": "backtest_atr_cap", "pair": "BTCUSD", "pair_type": "crypto", "live": 3.0, "backtest": 3.0}
+{"ts": "2026-06-30T12:29:55.435944+00:00", "level": "info", "event": "news_fetched", "events": 0, "coverage": {"ff": false}, "range": "2024-12-31T00:00:00+00:00..2025-03-01T00:00:00+00:00"}
+{"ts": "2026-06-30T12:29:56.075334+00:00", "level": "info", "event": "pair_data_loaded", "pair": "EURUSD", "h1_rows": 1560, "h1_first": "2024-11-27 00:00:00+00:00", "h1_last": "2025-02-28 00:00:00+00:00"}
+{"ts": "2026-06-30T12:29:56.075460+00:00", "level": "info", "event": "pair_data_loaded", "pair": "GOLD", "h1_rows": 1483, "h1_first": "2024-11-27 00:00:00+00:00", "h1_last": "2025-02-28 00:00:00+00:00"}
+{"ts": "2026-06-30T12:29:56.075531+00:00", "level": "info", "event": "pair_data_loaded", "pair": "BTCUSD", "h1_rows": 2089, "h1_first": "2024-11-27 00:00:00+00:00", "h1_last": "2025-02-28 00:00:00+00:00"}
+{"ts": "2026-06-30T12:37:45.542634+00:00", "level": "info", "event": "pair_alerts_collected", "pair": "EURUSD", "alerts": 200, "mode": "h1_only"}
+{"ts": "2026-06-30T12:37:45.542737+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "EURUSD", "trades": 43, "news_blocked": 0, "ist_blocked": 9, "killzone_dropped_alerts": 22}
+{"ts": "2026-06-30T12:37:45.544932+00:00", "level": "info", "event": "pair_alerts_collected", "pair": "GOLD", "alerts": 87, "mode": "h1_only"}
+{"ts": "2026-06-30T12:37:45.544972+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "GOLD", "trades": 35, "news_blocked": 0, "ist_blocked": 9, "killzone_dropped_alerts": 23}
+{"ts": "2026-06-30T12:37:45.546843+00:00", "level": "info", "event": "pair_alerts_collected", "pair": "BTCUSD", "alerts": 124, "mode": "h1_only"}
+{"ts": "2026-06-30T12:37:45.546881+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "BTCUSD", "trades": 57, "news_blocked": 0, "ist_blocked": 14, "killzone_dropped_alerts": 42}
+{"ts": "2026-06-30T12:37:50.110009+00:00", "level": "info", "event": "report_written", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20250101_20250228", "total_alerts": 411, "total_trades": 135}

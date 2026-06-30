@@ -1,14 +1,14 @@
 # Backtest Registry
 
-*Last updated: 2026-06-26 13:08 UTC*
+*Last updated: 2026-06-30 12:37 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **16** of 16
-- Total filled trades across all runs: **651**
-- Average expectancy across runs: **-0.16R**
+- Runs completed: **17** of 17
+- Total filled trades across all runs: **707**
+- Average expectancy across runs: **-0.15R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
 - **Group 3 (Live-era):** 1 runs, 9 trades, avg expectancy -0.20R
@@ -29,7 +29,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +11.00R |
 | Longest losing streak | 8 trades |
 | Proximal fill rate | 65.8% |
-| 50% fill rate | 60.5% |
 | Score verdict | WORKS — higher score leads to better trades |
 
 **By pair (proximal entry, TP2 exit):**
@@ -74,7 +73,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +9.00R |
 | Longest losing streak | 4 trades |
 | Proximal fill rate | 63.8% |
-| 50% fill rate | 59.5% |
 | Score verdict | WEAK — partial relationship |
 
 **By pair (proximal entry, TP2 exit):**
@@ -119,7 +117,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +13.12R |
 | Longest losing streak | 6 trades |
 | Proximal fill rate | 64.0% |
-| 50% fill rate | 59.2% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -164,7 +161,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +5.94R |
 | Longest losing streak | 3 trades |
 | Proximal fill rate | 61.0% |
-| 50% fill rate | 52.5% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -193,6 +189,47 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 ---
 
+### h1only_20250101_20250228
+
+**Unclassified** | 2025-01-01 to 2025-02-28 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 56 (of 93 rows) |
+| Win rate | 42.6% |
+| Expectancy | +0.01R |
+| Max drawdown | +6.88R |
+| Longest losing streak | 5 trades |
+| Proximal fill rate | 60.2% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| BTCUSD | 20 | 50.0% | +0.11R |
+| GOLD | 16 | 50.0% | +0.11R |
+| EURUSD | 20 | 29.4% | -0.17R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 6 | 20.0% | -0.34R |
+| London | 25 | 44.4% | +0.09R |
+| NY | 26 | 48.0% | +0.02R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 4-5 | 10 | 88.9% | +1.33R |
+| 5-6 | 13 | 30.0% | -0.29R |
+| 6-7 | 20 | 47.1% | -0.03R |
+| 7+ | 13 | 9.1% | -0.65R |
+
+---
+
 ### h1only_20250101_20250331
 
 **Unclassified** | 2025-01-01 to 2025-03-31 | Regime: `bau`
@@ -205,7 +242,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +3.89R |
 | Longest losing streak | 3 trades |
 | Proximal fill rate | 56.5% |
-| 50% fill rate | 51.1% |
 | Score verdict | WEAK — partial relationship |
 
 **By pair (proximal entry, TP2 exit):**
@@ -244,7 +280,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +6.46R |
 | Longest losing streak | 4 trades |
 | Proximal fill rate | 73.6% |
-| 50% fill rate | 64.2% |
 | Score verdict | WEAK — partial relationship |
 
 **By pair (proximal entry, TP2 exit):**
@@ -289,7 +324,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +34.79R |
 | Longest losing streak | 9 trades |
 | Proximal fill rate | 69.6% |
-| 50% fill rate | 64.0% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -334,7 +368,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +22.34R |
 | Longest losing streak | 12 trades |
 | Proximal fill rate | 60.7% |
-| 50% fill rate | 56.5% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -379,7 +412,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +6.33R |
 | Longest losing streak | 4 trades |
 | Proximal fill rate | 73.5% |
-| 50% fill rate | 59.2% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -420,7 +452,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +3.00R |
 | Longest losing streak | 3 trades |
 | Proximal fill rate | 54.5% |
-| 50% fill rate | 36.4% |
 | Score verdict | WORKS — higher score leads to better trades |
 
 **By pair (proximal entry, TP2 exit):**
@@ -457,7 +488,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +13.28R |
 | Longest losing streak | 8 trades |
 | Proximal fill rate | 62.5% |
-| 50% fill rate | 58.3% |
 | Score verdict | WEAK — partial relationship |
 
 **By pair (proximal entry, TP2 exit):**
@@ -504,7 +534,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +27.91R |
 | Longest losing streak | 7 trades |
 | Proximal fill rate | 61.5% |
-| 50% fill rate | 56.4% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -545,7 +574,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +5.00R |
 | Longest losing streak | 5 trades |
 | Proximal fill rate | 68.9% |
-| 50% fill rate | 60.0% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -590,7 +618,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +17.00R |
 | Longest losing streak | 13 trades |
 | Proximal fill rate | 60.0% |
-| 50% fill rate | 57.1% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -636,7 +663,6 @@ Market: *BAU choppy — post-Yen-carry-unwind settle*
 | Max drawdown | +9.27R |
 | Longest losing streak | 7 trades |
 | Proximal fill rate | 42.1% |
-| 50% fill rate | 42.1% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -683,7 +709,6 @@ Market: *Recent — April 2026*
 | Max drawdown | +11.74R |
 | Longest losing streak | 8 trades |
 | Proximal fill rate | 60.0% |
-| 50% fill rate | 60.0% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
