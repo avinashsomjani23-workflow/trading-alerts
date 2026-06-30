@@ -2453,13 +2453,18 @@ def classify_setup(ob, pd_position, trend_alignment):
                 "premium")
 
     # --- Caution "Late-Trend Chase" ------------------------------------------
-    # Third-or-later leg of a mature trend, entered from the EXPENSIVE side.
+    # A fading continuation leg (displacement decaying — see bos_verdict in
+    # compute_bos_sequence_count), entered from the EXPENSIVE side. Gates on the
+    # decay verdict, not the raw break count (2026-06-24 displacement-decay
+    # overhaul made count label-only; this badge still read the count until
+    # now, contradicting the Structure row's holding/fading wording).
     pd_expensive_side = (pd_position is not None and (
         (direction == 'bullish' and pd_position >= 0.5) or
         (direction == 'bearish' and pd_position <= 0.5)))
-    if bos_tag == 'BOS' and seq >= 3 and pd_expensive_side:
+    bos_verdict = ob.get('bos_verdict', 'holding')
+    if bos_tag == 'BOS' and bos_verdict == 'fading' and pd_expensive_side:
         return ("Caution: Late-Trend Chase",
-                "This is the third-or-later leg of a mature trend, entered from "
+                "This continuation leg's displacement is fading, entered from "
                 "the expensive side — you may be buying exactly what smart money "
                 "is distributing into. Treat with suspicion.",
                 "caution")
