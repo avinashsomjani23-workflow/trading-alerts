@@ -232,25 +232,19 @@ def _build_summary(trades):
 
 
 def _extract_metrics(summary):
-    """Pull every aggregate metric we care about into a flat dict."""
+    """Pull every aggregate metric we care about into a flat dict. Proximal
+    only (2026-06-30): the 50% mean entry is dead and no longer in summary.json."""
     sb_prox     = summary["scoreboards"]["proximal_realised"]
-    sb_mid      = summary["scoreboards"]["fifty_pct_realised"]
     sb_prox_tp2 = summary["scoreboards"]["proximal_exit_tp2"]
-    sb_mid_tp2  = summary["scoreboards"]["fifty_pct_exit_tp2"]
     sb_prox_tp1 = summary["scoreboards"]["proximal_exit_tp1"]
-    sb_mid_tp1  = summary["scoreboards"]["fifty_pct_exit_tp1"]
     return {
         "total_trade_rows":              summary["total_trade_rows"],
         "fill_rate_proximal":            summary["fill_rate_proximal"],
-        "fill_rate_50pct":               summary["fill_rate_50pct"],
         "exit_reason_counts_proximal":   summary["exit_reason_counts_proximal"],
-        "exit_reason_counts_50pct":      summary["exit_reason_counts_50pct"],
         "prox_pnl":                      sb_prox.get("total_pnl_usd"),
         "prox_wr":                       sb_prox.get("win_rate_pct"),
         "prox_exp":                      sb_prox.get("expectancy_r"),
         "prox_trades":                   sb_prox.get("trades"),
-        "mid_pnl":                       sb_mid.get("total_pnl_usd"),
-        "mid_wr":                        sb_mid.get("win_rate_pct"),
         "prox_tp2_pnl":                  sb_prox_tp2.get("total_pnl_usd"),
         "prox_tp2_wr":                   sb_prox_tp2.get("win_rate_pct"),
         "prox_tp2_exp":                  sb_prox_tp2.get("expectancy_r"),
@@ -259,15 +253,9 @@ def _extract_metrics(summary):
         "prox_tp2_losses":               sb_prox_tp2.get("losses"),
         "prox_tp1_pnl":                  sb_prox_tp1.get("total_pnl_usd"),
         "prox_tp1_wr":                   sb_prox_tp1.get("win_rate_pct"),
-        "mid_tp2_pnl":                   sb_mid_tp2.get("total_pnl_usd"),
-        "mid_tp2_wr":                    sb_mid_tp2.get("win_rate_pct"),
-        "mid_tp1_pnl":                   sb_mid_tp1.get("total_pnl_usd"),
         "per_pair_proximal_realised":    summary["per_pair_proximal_realised"],
-        "per_pair_50pct_realised":       summary["per_pair_50pct_realised"],
         "per_session_proximal_realised": summary["per_session_proximal_realised"],
-        "per_session_50pct_realised":    summary["per_session_50pct_realised"],
         "score_buckets_proximal_realised": summary["score_buckets_proximal_realised"],
-        "score_buckets_50pct_realised":    summary["score_buckets_50pct_realised"],
     }
 
 

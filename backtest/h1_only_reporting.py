@@ -1,11 +1,14 @@
 """H1-only backtest report writer.
 
 Produces:
-  results/<run_id>/trades.csv        machine-readable, full column set
-  results/<run_id>/trades.xlsx       human-readable, plain-English column names
-  results/<run_id>/report.html       email body (3-5 min read)
-  results/<run_id>/raw_alerts.jsonl  OB-touch alerts before simulation
-  results/<run_id>/summary.json      all metrics, machine-readable
+  results/<run_id>/trades.csv          machine-readable, full column set (both zones)
+  results/<run_id>/trades.xlsx         human-readable, plain-English column names
+  results/<run_id>/report_forex.html   Book A email (FX majors + Gold), proximal-only
+  results/<run_id>/report_gold_nas.html Book B email (new FX + BTC), proximal-only
+  results/<run_id>/raw_alerts.jsonl    OB-touch alerts before simulation
+  results/<run_id>/summary.json        all metrics, machine-readable
+(The combined report.html was removed 2026-06-30: it was never emailed and
+rendered the per-zone block twice. The two per-group emails are the only HTML.)
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 from backtest.insights import win_rate_pct as _win_rate
+from backtest.insights import bootstrap_ci as _bootstrap_ci
 
 
 # ---------------------------------------------------------------------------
@@ -329,6 +333,117 @@ def _flag_vet_review(t: Dict[str, Any]) -> Tuple[bool, str]:
 # "insufficient sample" rather than asserted. Reader still sees the numbers.
 MIN_N_FOR_VERDICT = 5
 
+# Driver-engine guard (the §4 anti-phantom-pattern gate). A surfaced bucket is
+# promoted to a "driver" only if it clears ALL THREE: enough trades, a real gap
+# from the system base-rate, and a per-quarter sign that mostly holds. A bucket
+# that misses any one is NOT hidden -- it is flagged "directional, thin" so the
+# reader sees it but is told not to trust it as a rule. (Trader: flag, never hide.)
+DRIVER_MIN_N          = 8      # below this: thin, flagged not promoted
+DRIVER_MIN_EXR_GAP    = 0.20   # |bucket expR - base expR| must clear this (R)
+DRIVER_PQ_SIGN_FRAC   = 0.60   # share of quarters whose sign matches the bucket
+
+
+# ---------------------------------------------------------------------------
+# Shared statistics engine (one implementation, reused by the headline, the
+# driver engine, and the exit-recipe table). Every "is this real?" call in the
+# email goes through here so the method is identical everywhere:
+#   bootstrap 95% CI  +  per-quarter sign  +  a plain one-line verdict.
+# RECOMMENDATIONS.md mandates CI + per-quarter on every "is it good" call.
+# ---------------------------------------------------------------------------
+
+def _quarter_of(ts_str: Any) -> Optional[str]:
+    """Calendar quarter label (e.g. '2025Q3') from an alert timestamp. None on
+    unparseable input. Matches exit_lab._quarter so backtest views agree."""
+    if not ts_str:
+        return None
+    try:
+        ts = pd.to_datetime(ts_str, utc=True)
+    except Exception:
+        return None
+    return f"{ts.year}Q{(ts.month - 1) // 3 + 1}"
+
+
+def _per_quarter_expr(trades: List[Dict[str, Any]], r_col: str) -> Dict[str, float]:
+    """Mean R per calendar quarter, over resolved (filled) rows. The sign of
+    each quarter is what a real edge must hold; a sign that flips quarter to
+    quarter is noise even if the pooled average looks good."""
+    by_q: Dict[str, List[float]] = {}
+    for t in trades:
+        if not _is_real_filled(t):
+            continue
+        q = _quarter_of(t.get("alert_ts"))
+        if q is None:
+            continue
+        by_q.setdefault(q, []).append(float(t.get(r_col) or 0.0))
+    return {q: round(sum(v) / len(v), 3) for q, v in by_q.items() if v}
+
+
+def _pq_sign_consistency(pq: Dict[str, float], expr: float) -> Tuple[int, int]:
+    """(quarters agreeing in sign with `expr`, total quarters). A quarter at
+    exactly 0 counts as neither for/against -- excluded from the numerator but
+    kept in the denominator so it dilutes confidence honestly."""
+    if not pq:
+        return 0, 0
+    want_pos = expr >= 0
+    agree = sum(1 for v in pq.values() if (v > 0) == want_pos and v != 0)
+    return agree, len(pq)
+
+
+def _stat_block(values: List[float], ts_values: List[Any] = None) -> Dict[str, Any]:
+    """The shared 'is this real?' computation over a list of R outcomes.
+
+    Returns n, expR, CI (lo, hi), per-quarter dict, sign-consistency, and a
+    plain verdict in {edge, unproven, loser, thin}. `ts_values` (alert
+    timestamps aligned to `values`) drives the per-quarter sign; omit it to
+    skip the per-quarter read (CI-only).
+    """
+    n = len(values)
+    if n == 0:
+        return {"n": 0, "expR": None, "ci": (None, None), "pq": {},
+                "pq_agree": 0, "pq_total": 0, "verdict": "thin"}
+    expr = round(sum(values) / n, 3)
+    lo, hi = _bootstrap_ci(values)  # (None, None) when n < 5
+    pq: Dict[str, float] = {}
+    if ts_values is not None:
+        by_q: Dict[str, List[float]] = {}
+        for v, ts in zip(values, ts_values):
+            q = _quarter_of(ts)
+            if q is not None:
+                by_q.setdefault(q, []).append(v)
+        pq = {q: round(sum(x) / len(x), 3) for q, x in by_q.items() if x}
+    agree, total = _pq_sign_consistency(pq, expr)
+
+    # Verdict ladder. CI is the primary gate (RECOMMENDATIONS.md): an edge is
+    # real only if its 95% CI clears 0. Thin sample (no CI) => never asserted.
+    if lo is None:
+        verdict = "thin"
+    elif lo > 0:
+        verdict = "edge"        # CI entirely above 0
+    elif hi < 0:
+        verdict = "loser"       # CI entirely below 0
+    else:
+        verdict = "unproven"    # CI straddles 0
+    return {"n": n, "expR": expr, "ci": (lo, hi), "pq": pq,
+            "pq_agree": agree, "pq_total": total, "verdict": verdict}
+
+
+def _verdict_phrase(stat: Dict[str, Any]) -> str:
+    """One-line plain-English read of a _stat_block result."""
+    v = stat["verdict"]
+    lo, hi = stat["ci"]
+    pq_s = ""
+    if stat["pq_total"]:
+        pq_s = (f" Sign held in {stat['pq_agree']}/{stat['pq_total']} quarters.")
+    if v == "thin":
+        return (f"Too few trades ({stat['n']}) to prove anything — directional only, "
+                f"confirm on more data.")
+    ci_s = f"[{lo:+.2f}, {hi:+.2f}]R"
+    if v == "edge":
+        return f"Real edge: 95% CI {ci_s} clears zero.{pq_s}"
+    if v == "loser":
+        return f"Real loser: 95% CI {ci_s} sits below zero.{pq_s}"
+    return f"Unproven: 95% CI {ci_s} straddles zero — no demonstrable edge.{pq_s}"
+
 
 def _runner_r(t: Dict[str, Any]) -> float:
     """R under TP1+runner reference policy: 50% closes at TP1 when TP1 hit,
@@ -356,188 +471,6 @@ def _attach_runner_r(trades: List[Dict[str, Any]]) -> None:
         if "r_if_runner" not in t:
             t["r_if_runner"] = round(_runner_r(t), 3)
 
-
-def _exit_policy_table(trades: List[Dict[str, Any]],
-                       risk_usd: float) -> List[Dict[str, Any]]:
-    """Aggregate the four exit policies side by side: TP1 + BE@1R (LIVE — the
-    traded policy), TP1-only, TP1+runner, TP2-ride (all three references).
-    Aggregates use `_aggregate_for_exit` for consistency with the per-zone
-    scoreboards.
-    """
-    _attach_runner_r(trades)
-    out = []
-    for label, col in [
-        ("TP1 + BE@1R (LIVE)", "r_realised"),
-        ("TP1-only (ref)",      "r_if_exit_tp1"),
-        ("TP1 + runner (ref)",  "r_if_runner"),
-        ("TP2-ride (ref)",      "r_if_exit_tp2"),
-    ]:
-        sb = _aggregate_for_exit(trades, col, risk_usd)
-        out.append({"policy": label, "col": col, **sb})
-    return out
-
-
-def _best_policy_by_dim(trades: List[Dict[str, Any]],
-                        dim: str,
-                        risk_usd: float) -> List[Dict[str, Any]]:
-    """For each value of `dim` (pair or session), find which exit policy
-    produced the highest total R. Returns rows sorted by trade count desc.
-    """
-    _attach_runner_r(trades)
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return []
-    df = pd.DataFrame(filled)
-    if dim not in df.columns:
-        return []
-    out = []
-    for val, sub in df.groupby(dim):
-        n = int(len(sub))
-        totals = {
-            "TP1 + BE@1R (LIVE)":  float(sub["r_realised"].sum()),
-            "TP1-only":            float(sub["r_if_exit_tp1"].sum()),
-            "TP1 + runner":        float(sub["r_if_runner"].sum()),
-            "TP2-ride":            float(sub["r_if_exit_tp2"].sum()),
-        }
-        best_label = max(totals, key=totals.get)
-        # edge_r = how much the best alternative beats the LIVE policy by.
-        live_total = totals["TP1 + BE@1R (LIVE)"]
-        out.append({
-            dim:        val,
-            "trades":   n,
-            "live_r":   round(live_total, 2),
-            "tp1_r":    round(totals["TP1-only"], 2),
-            "runner_r": round(totals["TP1 + runner"], 2),
-            "tp2_r":    round(totals["TP2-ride"], 2),
-            "best":     best_label,
-            "edge_r":   round(totals[best_label] - live_total, 2),
-        })
-    out.sort(key=lambda r: r["trades"], reverse=True)
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Findings panel — auto-derived one-liners that lead each zone block.
-# Output is a list of (severity, text) pairs. Severity drives the bullet color.
-# Severities: "good" (green), "warn" (amber), "bad" (red), "info" (grey).
-# ---------------------------------------------------------------------------
-
-def _findings_panel(trades: List[Dict[str, Any]],
-                    sb: Dict[str, Any],
-                    risk_usd: float) -> List[Tuple[str, str]]:
-    findings: List[Tuple[str, str]] = []
-    filled = [t for t in trades if _is_real_filled(t)]
-    n = len(filled)
-    if n == 0:
-        return [("info", "No filled trades this period.")]
-    df = pd.DataFrame(filled)
-
-    # 1. Headline result.
-    pnl = sb.get("total_pnl_usd", 0)
-    exp = sb.get("expectancy_r", 0)
-    wr  = _wr_str(sb.get("win_rate_pct"))
-    if pnl >= 0 and exp >= 0.3:
-        findings.append(("good", f"Net <b>{_m(pnl)}</b> across {n} trades "
-                                 f"(avg {_r(exp)}, {wr} WR). Edge present."))
-    elif pnl >= 0:
-        findings.append(("info", f"Net <b>{_m(pnl)}</b> across {n} trades "
-                                 f"(avg {_r(exp)}, {wr} WR). Marginal — verify before sizing up."))
-    else:
-        findings.append(("bad", f"Net <b>{_m(pnl)}</b> across {n} trades "
-                                f"(avg {_r(exp)}, {wr} WR). Edge missing this period."))
-
-    # 2. Best exit policy. LIVE = r_realised (TP1 + BE@1R). The others are
-    # study references — we report whether any beats the live policy.
-    _attach_runner_r(trades)
-    live_total = float(df["r_realised"].sum())
-    pol = {
-        "TP1 + BE@1R (LIVE)": live_total,
-        "TP1-only":           float(df["r_if_exit_tp1"].sum()),
-        "TP1 + runner":       float(df["r_if_runner"].sum()),
-        "TP2-ride":           float(df["r_if_exit_tp2"].sum()),
-    }
-    best_pol = max(pol, key=pol.get)
-    delta = pol[best_pol] - live_total
-    if best_pol != "TP1 + BE@1R (LIVE)" and delta >= 1.0:
-        findings.append(("warn",
-            f"A reference policy <b>{best_pol}</b> would have beaten the live "
-            f"TP1+BE@1R ({pol[best_pol]:+.1f}R vs {live_total:+.1f}R, "
-            f"delta {delta:+.1f}R). Study before changing."))
-    else:
-        findings.append(("info",
-            f"Live TP1+BE@1R is best of the set "
-            f"(LIVE {live_total:+.1f}R · TP1-only {pol['TP1-only']:+.1f}R · "
-            f"runner {pol['TP1 + runner']:+.1f}R · TP2 {pol['TP2-ride']:+.1f}R)."))
-
-    # 3. Best and worst (pair, session) — only show with n >= 3 in the cell.
-    if "pair" in df.columns and "session" in df.columns:
-        cells = []
-        for (p, s), sub in df.groupby(["pair", "session"]):
-            if len(sub) >= 3:
-                cells.append((p, s, len(sub), float(sub["r_realised"].mean()),
-                              _win_rate(sub, "r_realised")))
-        if cells:
-            cells.sort(key=lambda x: x[3], reverse=True)
-            p, s, nn, e, w = cells[0]
-            if e > 0.3:
-                wr_txt = "—" if w is None else f"{w:.0f}%"
-                findings.append(("good",
-                    f"Best edge: <b>{p} / {s}</b> ({nn} trades, "
-                    f"{wr_txt} WR, avg {_r(e)})."))
-            p, s, nn, e, w = cells[-1]
-            if e < -0.3 and len(cells) > 1:
-                wr_txt = "—" if w is None else f"{w:.0f}%"
-                findings.append(("bad",
-                    f"Weakest cell: <b>{p} / {s}</b> ({nn} trades, "
-                    f"{wr_txt} WR, avg {_r(e)}). Consider gating off."))
-
-    # 4. Same-bar resolution among losers (H1-resolution artifact, NOT a leak).
-    # A -1R loss that peaked >=+1R is necessarily intrabar: had +1R printed on an
-    # earlier bar, break-even would have armed and capped it at 0R. So no trailing
-    # stop could have captured it. Reported as info, not a warning to act on.
-    losers = df[df["r_realised"] < 0]
-    if len(losers) >= 3:
-        samebar = losers[losers["mfe_r"] >= 1.0]
-        if len(samebar) >= max(2, int(0.3 * len(losers))):
-            findings.append(("info",
-                f"<b>{len(samebar)} of {len(losers)}</b> losers spiked ≥+1R and stopped in the "
-                f"same H1 bar (intrabar — BE can't arm, no trail could catch them). "
-                f"H1-resolution limit, not a leak."))
-
-    # 5. Win capture — too tight vs too loose.
-    cap = sb.get("win_capture_pct", 0)
-    avg_mfe = sb.get("avg_mfe_r", 0)
-    if sb.get("wins", 0) >= MIN_N_FOR_VERDICT and avg_mfe > 0:
-        if cap < 60:
-            findings.append(("warn",
-                f"Winners captured only {cap:.0f}% of peak (avg peak {_r(avg_mfe)}) — "
-                f"TP placement is leaving runner R on the table."))
-        elif cap >= 85:
-            findings.append(("info",
-                f"Winners captured {cap:.0f}% of peak — TP placement is tight to peak; "
-                f"little headroom left."))
-
-    return findings
-
-
-def _findings_panel_html(findings: List[Tuple[str, str]]) -> str:
-    color_map = {
-        "good": ("#27ae60", "✓"),
-        "warn": ("#f39c12", "!"),
-        "bad":  ("#e74c3c", "✗"),
-        "info": ("#6c757d", "•"),
-    }
-    items = []
-    for sev, text in findings:
-        col, sym = color_map.get(sev, color_map["info"])
-        items.append(
-            f"<li style='list-style:none;padding:6px 0 6px 18px;"
-            f"border-left:3px solid {col};margin-bottom:4px;'>"
-            f"<span style='color:{col};font-weight:700;margin-right:6px;'>{sym}</span>"
-            f"{text}</li>"
-        )
-    return ("<ul style='padding-left:0;margin:0;font-size:13px;line-height:1.5;'>"
-            + "".join(items) + "</ul>")
 
 
 # ---------------------------------------------------------------------------
@@ -1205,180 +1138,353 @@ def _signal_vs_noise_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     return f"<div style='font-size:13px;line-height:1.6;'>{body}</div>{note}"
 
 
-def _exit_policy_html(trades: List[Dict[str, Any]], risk_usd: float) -> str:
-    rows_data = _exit_policy_table(trades, risk_usd)
-    if not rows_data or rows_data[0].get("trades", 0) == 0:
-        return "<p style='color:#888;'>No filled trades to compare policies on.</p>"
+# Plain-English labels for the exit-lab recipe keys (exit_lab.CONFIGS). The
+# email never shows the raw config name. Anything not mapped falls back to the
+# raw key so a newly-added recipe still renders.
+_EXIT_RECIPE_LABELS = {
+    "baseline_liqTP_be1.0":  "TP1 + BE@1R (LIVE)",
+    "B_be0.5":               "TP1, BE@0.5R",
+    "B_be0.7":               "TP1, BE@0.7R",
+    "C_fullTP_0.5R":         "Fixed TP 0.5R",
+    "C_fullTP_1.0R":         "Fixed TP 1.0R",
+    "C_fullTP_1.5R":         "Fixed TP 1.5R",
+    "C_fullTP_2.0R":         "Fixed TP 2.0R",
+    "D_partial50_1R_runLiq": "Partial 50% @1R, runner to TP1",
+}
+_EXIT_BASELINE_KEY = "baseline_liqTP_be1.0"
 
-    n = rows_data[0]["trades"]
-    header = _table_row(
-        ["Exit policy", "Win rate", "Avg R", "Total R", "Total P&L"],
-        header=True,
-    )
+
+def _exit_recipe_html(exit_lab_sink: List[Dict[str, Any]]) -> str:
+    """Phase 4 — the rich per-recipe exit table, the POINT of the email now.
+
+    Reads the exit-lab side-channel (every recipe replayed over the same
+    post-fill bars as the live trade) and ranks all recipes by expR with the
+    full 'is it real' read: bootstrap CI + per-quarter sign + a winner flag.
+    This is the run-level exit data the edge engine's Stage 3 consumes to draw
+    per-cluster conclusions over the long history -- the email carries the data,
+    Stage 3 carries the verdict. Proximal book only (the live model).
+    """
+    if not exit_lab_sink:
+        return ("<p style='color:#888;'>Exit-lab side-channel produced no rows "
+                "this run (no fills, or the channel was not armed).</p>")
+
+    prox = [r for r in exit_lab_sink if r.get("entry_zone") == "proximal"]
+    if not prox:
+        return "<p style='color:#888;'>No proximal fills to study exits on.</p>"
+
+    # Self-check: the baseline recipe must reproduce committed r_realised on the
+    # same bars. If it drifts, the side-channel is not faithful -- say so loud.
+    base_rows = [r for r in prox if r.get("config") == _EXIT_BASELINE_KEY]
+    selfcheck = ""
+    if base_rows:
+        repl = sum(float(r.get("r") or 0) for r in base_rows) / len(base_rows)
+        comm = sum(float(r.get("committed_r") or 0) for r in base_rows) / len(base_rows)
+        diff = abs(repl - comm)
+        ok = diff <= 0.01
+        selfcheck = (
+            f"<p style='font-size:12px;color:{'#27ae60' if ok else '#e74c3c'};"
+            f"margin-bottom:8px;'>"
+            f"Engine self-check: baseline replay avg {_r(round(repl,3))} vs "
+            f"committed {_r(round(comm,3))} (|diff| {diff:.3f}) — "
+            f"{'PASS' if ok else 'FAIL: side-channel not faithful, do not trust the ranking'}."
+            f"</p>")
+
+    # One stat block per recipe, ranked by expR (the winner is the top row).
+    by_cfg: Dict[str, List[Dict[str, Any]]] = {}
+    for r in prox:
+        by_cfg.setdefault(r.get("config"), []).append(r)
+
+    ranked = []
+    for cfg, rows in by_cfg.items():
+        vals = [float(r.get("r") or 0.0) for r in rows]
+        ts   = [r.get("alert_ts") for r in rows]
+        stat = _stat_block(vals, ts)
+        ranked.append({"cfg": cfg, "stat": stat,
+                       "total_r": round(sum(vals), 1)})
+    ranked.sort(key=lambda x: (x["stat"]["expR"] if x["stat"]["expR"] is not None
+                               else -1e9), reverse=True)
+    if not ranked:
+        return "<p style='color:#888;'>No exit recipes to rank.</p>"
+
+    best_cfg = ranked[0]["cfg"]
+    live_exr = next((x["stat"]["expR"] for x in ranked
+                     if x["cfg"] == _EXIT_BASELINE_KEY), None)
+
+    header = ("<tr><th>Exit recipe</th><th>N</th><th>Avg R</th>"
+              "<th>Total R</th><th>95% CI</th><th>Per-quarter sign</th>"
+              "<th>vs LIVE</th></tr>")
     body = ""
-    for r in rows_data:
-        is_current = "(LIVE)" in r["policy"]
-        pnl = r.get("total_pnl_usd", 0)
-        color = "#eafaf1" if pnl >= 0 else "#fdf2f2"
-        # Tint the live policy row so the reader sees which one is deployed.
-        if is_current:
-            color = "#fff7e0"
-        label = f"<b>{r['policy']}</b>"
-        body += _table_row([
-            label,
-            _wr_str(r.get('win_rate_pct')),
-            _r(r.get("expectancy_r", 0)),
-            f"{r.get('total_r', 0):+.1f}R",
-            f"<b style='color:{'#27ae60' if pnl >= 0 else '#e74c3c'};'>{_m(pnl)}</b>",
-        ], color=color)
+    for x in ranked:
+        cfg, stat = x["cfg"], x["stat"]
+        label = _EXIT_RECIPE_LABELS.get(cfg, cfg)
+        lo, hi = stat["ci"]
+        ci_s = f"[{lo:+.2f}, {hi:+.2f}]" if lo is not None else "—"
+        if stat["pq_total"]:
+            pq_s = f"{stat['pq_agree']}/{stat['pq_total']} q"
+        else:
+            pq_s = "—"
+        # vs LIVE delta in expR (the live policy is the incumbent we'd switch from).
+        if live_exr is not None and stat["expR"] is not None and cfg != _EXIT_BASELINE_KEY:
+            d = stat["expR"] - live_exr
+            vs = f"<span style='color:{'#27ae60' if d > 0 else '#888'};'>{d:+.2f}R</span>"
+        elif cfg == _EXIT_BASELINE_KEY:
+            vs = "<i>incumbent</i>"
+        else:
+            vs = "—"
+        is_best = cfg == best_cfg
+        is_live = cfg == _EXIT_BASELINE_KEY
+        bg = "#eafaf1" if is_best else ("#fff7e0" if is_live else "")
+        flag = " 🏆" if is_best else ""
+        body += (
+            f"<tr style='background:{bg};'>"
+            f"<td><b>{label}</b>{flag}</td>"
+            f"<td>{stat['n']}</td>"
+            f"<td>{_r(stat['expR'])}</td>"
+            f"<td>{x['total_r']:+.1f}R</td>"
+            f"<td>{ci_s}</td>"
+            f"<td>{pq_s}</td>"
+            f"<td>{vs}</td>"
+            f"</tr>"
+        )
 
-    note = (f"<p style='font-size:12px;color:#666;margin-top:6px;'>"
-            f"All four policies use the same fills ({n} trades). "
-            f"TP1 + BE@1R: move stop to break-even once +1R prints, then exit "
-            f"at TP1 (<b>current live policy</b>). "
-            f"TP1-only: close full position at TP1. "
-            f"TP1+runner: half off at TP1, rest rides with SL-to-BE. "
-            f"TP2-ride: full position rides to TP2 (study reference only).</p>")
-    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>{note}"
+    note = (
+        f"<p style='font-size:12px;color:#666;margin-top:8px;'>"
+        f"Every recipe is replayed over the <b>same post-fill bars</b> as the "
+        f"live trade, so the ranking is apples-to-apples. <b>Avg R</b> is "
+        f"expectancy per trade; the winner (🏆) has the highest. A recipe only "
+        f"beats LIVE if its CI clears LIVE's and its per-quarter sign holds — "
+        f"a higher pooled average alone is not enough. Same-bar intrabar spikes "
+        f"are uncapturable on H1, so tight-TP recipes flatter here vs reality "
+        f"(no spread modelled).</p>")
+
+    return (f"{selfcheck}<table><thead>{header}</thead><tbody>{body}</tbody>"
+            f"</table>{note}")
 
 
-def _exit_policy_by_dim_html(trades: List[Dict[str, Any]],
-                             risk_usd: float, dim: str, dim_label: str) -> str:
-    rows_data = _best_policy_by_dim(trades, dim, risk_usd)
-    if not rows_data:
-        return ""
-    header = _table_row(
-        [dim_label, "Trades", "LIVE (TP1+BE)", "TP1-only", "TP1+runner", "TP2-ride",
-         "Best", "Edge vs LIVE"],
-        header=True,
+# Dimensions the driver engine screens. Categorical => value as-is; continuous
+# => tertile buckets (low/mid/high) from this run's distribution. Adding a
+# logged column here is the only step to give the engine a new lever.
+_DRIVER_CATEGORICAL = [
+    ("pair",                "Pair"),
+    ("session",             "Alert session"),
+    ("ob_session",          "OB session"),
+    ("fill_session",        "Fill session"),
+    ("bos_tag",             "Break type (BOS/CHoCH)"),
+    ("bos_tier",            "Structure tier"),
+    ("break_tier",          "Break-quality tier"),
+    ("fvg_state",           "FVG state"),
+    ("killzone_alignment",  "Killzone alignment"),
+    ("trend_alignment",     "Trend alignment"),
+    ("pd_zone",             "PD zone"),
+    ("pd_alignment",        "PD alignment"),
+    ("reversed_from_extreme", "CHoCH from extreme"),
+    ("dow",                 "Day of week"),
+]
+_DRIVER_CONTINUOUS = [
+    ("break_close_atr",   "Break close (ATR)"),
+    ("break_body_atr",    "Break body (ATR)"),
+    ("ob_range_atr",      "OB range / stop (ATR)"),
+    ("fvg_size_atr",      "FVG size (ATR)"),
+    ("impulse_leg_atr",   "Impulse leg (ATR)"),
+    ("ob_age_h1_bars",    "OB age (H1 bars)"),
+    ("tp1_rr",            "TP1 distance (R)"),
+    ("score",             "Confidence score"),
+    ("atr_at_ob",         "ATR at OB (volatility)"),
+]
+
+_DOW_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def _driver_buckets(filled: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Build every candidate bucket across all screened dimensions.
+
+    One bucket = {dim_label, value_label, rows}. Continuous features are split
+    into low/mid/high tertiles on the non-null values present this run. Buckets
+    with zero rows are skipped (they can't be a candidate). Day-of-week is
+    derived here from alert_ts so it needs no new logged column."""
+    df = pd.DataFrame(filled)
+    if df.empty:
+        return []
+    # Derive day-of-week once (Mon..Sun) from the alert timestamp.
+    if "alert_ts" in df.columns:
+        _dt = pd.to_datetime(df["alert_ts"], utc=True, errors="coerce")
+        df["dow"] = _dt.dt.dayofweek.map(
+            lambda i: _DOW_NAMES[int(i)] if pd.notna(i) else None)
+
+    out: List[Dict[str, Any]] = []
+
+    for col, label in _DRIVER_CATEGORICAL:
+        if col not in df.columns:
+            continue
+        for val, sub in df.groupby(df[col].astype("object")):
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                continue
+            rows = sub.to_dict("records")
+            if rows:
+                out.append({"dim": label, "value": str(val), "rows": rows})
+
+    for col, label in _DRIVER_CONTINUOUS:
+        if col not in df.columns:
+            continue
+        ser = pd.to_numeric(df[col], errors="coerce")
+        valid = ser.dropna()
+        if len(valid) < DRIVER_MIN_N * 2 or valid.nunique() < 3:
+            continue  # not enough spread to bucket meaningfully
+        try:
+            lo_q, hi_q = valid.quantile([1 / 3, 2 / 3]).tolist()
+        except Exception:
+            continue
+        if lo_q == hi_q:
+            continue
+        bands = [
+            (f"low (≤{lo_q:.2f})",          ser <= lo_q),
+            (f"mid ({lo_q:.2f}–{hi_q:.2f})", (ser > lo_q) & (ser <= hi_q)),
+            (f"high (>{hi_q:.2f})",         ser > hi_q),
+        ]
+        for band_label, mask in bands:
+            sub = df[mask.fillna(False)]
+            rows = sub.to_dict("records")
+            if rows:
+                out.append({"dim": label, "value": band_label, "rows": rows})
+
+    return out
+
+
+def _driver_two_way(filled: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The handful of 2-way interactions a univariate pass can't see. Only the
+    pairings SMC actually cares about: pair×session and PD-zone×break-type."""
+    df = pd.DataFrame(filled)
+    if df.empty:
+        return []
+    out: List[Dict[str, Any]] = []
+    combos = [
+        (("pair", "session"),  "Pair × session"),
+        (("pd_zone", "bos_tag"), "PD zone × break type"),
+    ]
+    for (a, b), label in combos:
+        if a not in df.columns or b not in df.columns:
+            continue
+        for (va, vb), sub in df.groupby([df[a].astype("object"),
+                                         df[b].astype("object")]):
+            if va is None or vb is None:
+                continue
+            rows = sub.to_dict("records")
+            if len(rows) >= DRIVER_MIN_N:   # 2-way only worth showing if not trivially thin
+                out.append({"dim": label, "value": f"{va} / {vb}", "rows": rows})
+    return out
+
+
+def _driver_engine_html(trades: List[Dict[str, Any]]) -> str:
+    """Auto-surface where losses and wins concentrate vs the book's base-rate.
+
+    Output = two short ranked lists (losses / wins). Each row carries the
+    bucket, its expR vs base, N, WR, the guard verdict, and a one-line read.
+    Buckets that fail the guard are FLAGGED, not dropped."""
+    filled = [t for t in trades if _is_real_filled(t)]
+    n = len(filled)
+    if n < DRIVER_MIN_N:
+        return ("<p style='color:#888;'>Too few filled trades to mine drivers "
+                f"this period (have {n}, need ≥{DRIVER_MIN_N}).</p>")
+
+    base_vals = [float(t.get("r_realised") or 0.0) for t in filled]
+    base_exr = sum(base_vals) / n
+
+    cands = _driver_buckets(filled) + _driver_two_way(filled)
+
+    scored: List[Dict[str, Any]] = []
+    for c in cands:
+        rows = c["rows"]
+        # Exclude an all-population bucket (a dimension with one value tells us
+        # nothing vs base) and require at least a couple of trades to score.
+        if len(rows) < 2 or len(rows) == n:
+            continue
+        vals = [float(r.get("r_realised") or 0.0) for r in rows]
+        ts   = [r.get("alert_ts") for r in rows]
+        stat = _stat_block(vals, ts)
+        gap = stat["expR"] - base_exr
+        # Guard: promoted only if N, gap, and per-quarter sign all clear.
+        pq_ok = (stat["pq_total"] == 0 or
+                 stat["pq_agree"] / stat["pq_total"] >= DRIVER_PQ_SIGN_FRAC)
+        promoted = (len(rows) >= DRIVER_MIN_N
+                    and abs(gap) >= DRIVER_MIN_EXR_GAP
+                    and pq_ok)
+        scored.append({**c, "stat": stat, "gap": gap, "n": len(rows),
+                       "promoted": promoted,
+                       # rank = how far from base × how much support (sqrt N)
+                       "rank": abs(gap) * (len(rows) ** 0.5)})
+
+    if not scored:
+        return ("<p style='color:#888;'>No bucket diverged from the base-rate "
+                "this period.</p>")
+
+    losers  = sorted([s for s in scored if s["gap"] < 0],
+                     key=lambda s: s["rank"], reverse=True)
+    winners = sorted([s for s in scored if s["gap"] > 0],
+                     key=lambda s: s["rank"], reverse=True)
+
+    def _rows_html(items, kind):
+        if not items:
+            return (f"<p style='color:#888;font-size:13px;'>"
+                    f"No {kind} cluster cleared the screen.</p>")
+        out = ""
+        for s in items[:6]:   # top 6 each side keeps the email tight
+            stat = s["stat"]
+            gap = s["gap"]
+            wins = sum(1 for r in s["rows"] if (r.get("r_realised") or 0) > 0)
+            losses = sum(1 for r in s["rows"] if (r.get("r_realised") or 0) < 0)
+            wr = (f"{wins / (wins + losses) * 100:.0f}%"
+                  if (wins + losses) else "—")
+            if s["promoted"]:
+                tag = ("<span style='color:#27ae60;font-weight:700;'>driver</span>"
+                       if kind == "win"
+                       else "<span style='color:#e74c3c;font-weight:700;'>driver</span>")
+            else:
+                why = []
+                if s["n"] < DRIVER_MIN_N:
+                    why.append(f"N={s['n']}")
+                if abs(gap) < DRIVER_MIN_EXR_GAP:
+                    why.append("small gap")
+                if (stat["pq_total"] and
+                        stat["pq_agree"] / stat["pq_total"] < DRIVER_PQ_SIGN_FRAC):
+                    why.append(f"sign held {stat['pq_agree']}/{stat['pq_total']}q")
+                tag = (f"<span style='color:#999;'>directional, thin "
+                       f"({', '.join(why)})</span>")
+            out += (
+                f"<tr>"
+                f"<td><b>{s['dim']}:</b> {s['value']}</td>"
+                f"<td>{s['n']}</td>"
+                f"<td>{wr}</td>"
+                f"<td>{_r(stat['expR'])}</td>"
+                f"<td style='color:{'#27ae60' if gap >= 0 else '#e74c3c'};'>"
+                f"{gap:+.2f}R</td>"
+                f"<td>{tag}</td>"
+                f"</tr>"
+            )
+        return (f"<table><thead><tr>"
+                f"<th>Bucket</th><th>N</th><th>WR</th><th>Avg R</th>"
+                f"<th>vs base</th><th>Verdict</th></tr></thead>"
+                f"<tbody>{out}</tbody></table>")
+
+    base_txt = (f"<p style='font-size:13px;color:#555;margin-bottom:10px;'>"
+                f"Book base-rate: <b>{_r(base_exr)}</b> over {n} filled trades. "
+                f"Each row is one slice of the book; <b>vs base</b> is how far its "
+                f"average R sits from that line. A slice is a <b>driver</b> only "
+                f"if it clears the guard (N≥{DRIVER_MIN_N}, gap≥{DRIVER_MIN_EXR_GAP:.2f}R, "
+                f"per-quarter sign holds); otherwise it is flagged "
+                f"<i>directional, thin</i> — shown, not trusted.</p>")
+
+    return (
+        f"{base_txt}"
+        f"<h4 style='margin-top:14px;'>Where losses concentrate</h4>"
+        f"{_rows_html(losers, 'loss')}"
+        f"<h4 style='margin-top:16px;'>Where wins concentrate</h4>"
+        f"{_rows_html(winners, 'win')}"
     )
-    body = ""
-    for r in rows_data:
-        edge_color = "#27ae60" if r["edge_r"] > 0 else "#888"
-        body += _table_row([
-            f"<b>{r[dim]}</b>",
-            str(r["trades"]),
-            f"{r['live_r']:+.1f}R",
-            f"{r['tp1_r']:+.1f}R",
-            f"{r['runner_r']:+.1f}R",
-            f"{r['tp2_r']:+.1f}R",
-            f"<b>{r['best']}</b>",
-            f"<span style='color:{edge_color};'>{r['edge_r']:+.1f}R</span>",
-        ])
-    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
 
 
 # ---------------------------------------------------------------------------
 # Where the edge leaked — replaces the old "losing trades" bullet block.
 # Same data as before plus MFE-leak, OB-age distribution, time-in-trade.
-# ---------------------------------------------------------------------------
-
-def _edge_leak_html(trades: List[Dict[str, Any]]) -> str:
-    filled = [t for t in trades if _is_real_filled(t)]
-    losers = [t for t in filled if (t.get("r_realised") or 0) < 0]
-    winners = [t for t in filled if (t.get("r_realised") or 0) > 0]
-    n_loss = len(losers)
-    if n_loss == 0:
-        return "<p style='color:#27ae60;'>No losing trades this period.</p>"
-
-    findings: List[str] = []
-
-    # 1. Same-bar resolution among losers (NOT a give-back leak).
-    # A -1R loss that peaked >=+1R is, by the simulator's BE@1R logic, ALWAYS a
-    # single-bar event: if +1R had printed on an EARLIER bar, break-even would
-    # have armed and the loss would be 0R, not -1R. So the peak is an intrabar
-    # spike (often the fill bar, where TP/BE are deliberately not credited) that
-    # H1 cannot resolve TP-vs-SL on. No trailing stop or partial could capture
-    # it. The old "ran +1R then reversed -> trailing stop warranted" wording was
-    # a phantom: verified 2026-06-18 on Mar-2026, 10/10 such losers were same-bar.
-    samebar = sum(1 for t in losers if (t.get("mfe_r") or 0) >= 1.0)
-    fillbar = sum(1 for t in losers if int(t.get("bars_to_exit") or 0) == 0)
-    tp1_touched = sum(1 for t in losers
-                      if (t.get("mfe_r") or 0) >= (t.get("tp1_rr") or 1e9))
-    if samebar >= 2:
-        findings.append(
-            f"<b>{samebar} of {n_loss}</b> losers spiked ≥+1R and hit SL in the "
-            f"<b>same H1 bar</b> ({fillbar} on the fill bar; {tp1_touched} also "
-            f"touched TP1's price). Intrabar on H1 — break-even cannot arm and no "
-            f"trailing stop could catch these. This is an H1-resolution limit, "
-            f"not a management leak."
-        )
-
-    # 2. Tight TP1. TP1 is the nearest opposing H1 swing (ATR-leg-filtered, not a
-    # wick) that clears the 1.5R floor, so a 1.5-2.0R TP1 means the nearest real
-    # liquidity sat just past the floor -- thin reward for the risk, worth noting.
-    tight_tp = sum(1 for t in losers if 1.5 <= (t.get("tp1_rr") or 0) < 2.0)
-    if tight_tp >= 2:
-        findings.append(
-            f"<b>{tight_tp} of {n_loss}</b> losers had TP1 between 1.5R and 2.0R — "
-            f"the nearest opposing liquidity was only just past the 1.5R floor. "
-            f"Thin reward for the risk; these setups need strong confluence to justify."
-        )
-
-    # 3. OB age distribution.
-    ages = [(t.get("ob_age_h1_bars") or 0) for t in losers]
-    if ages:
-        old = sum(1 for a in ages if a > 48)
-        fresh = sum(1 for a in ages if a <= 12)
-        if old >= max(2, int(0.3 * n_loss)):
-            findings.append(
-                f"<b>{old} of {n_loss}</b> losers used an OB older than 48 H1 bars (2 days). "
-                f"Old OBs are more likely to be mitigated. Consider a freshness cutoff."
-            )
-        elif fresh >= max(2, int(0.5 * n_loss)) and fresh > old:
-            findings.append(
-                f"<b>{fresh} of {n_loss}</b> losers used a fresh OB (≤12 bars old). "
-                f"Freshness alone isn't a guarantee — other confluences should carry the setup."
-            )
-
-    # 4. Time-in-trade for winners vs losers.
-    win_hrs = [(t.get("bars_to_exit") or 0) for t in winners if (t.get("bars_to_exit") or 0) > 0]
-    loss_hrs = [(t.get("bars_to_exit") or 0) for t in losers if (t.get("bars_to_exit") or 0) > 0]
-    if len(win_hrs) >= MIN_N_FOR_VERDICT and len(loss_hrs) >= MIN_N_FOR_VERDICT:
-        avg_w = sum(win_hrs) / len(win_hrs)
-        avg_l = sum(loss_hrs) / len(loss_hrs)
-        if avg_l < avg_w * 0.6:
-            findings.append(
-                f"Losers stopped out fast (avg {avg_l:.0f}h held vs {avg_w:.0f}h for winners). "
-                f"Fast losses suggest the bias was wrong from entry — not late management failures."
-            )
-        elif avg_l > avg_w * 1.5:
-            findings.append(
-                f"Losers held long (avg {avg_l:.0f}h vs {avg_w:.0f}h for winners). "
-                f"Slow losses suggest TP1 is too far — trade idea was right but target was unreachable."
-            )
-
-    # 5. CHoCH — kept, but only flagged when meaningful share.
-    choch = sum(1 for t in losers if str(t.get("bos_tag") or "").upper() == "CHOCH")
-    if choch >= 2 and choch / n_loss >= 0.25:
-        findings.append(
-            f"<b>{choch} of {n_loss}</b> losers were CHoCH setups (counter-trend). "
-            f"CHoCH carries higher failure risk than BOS."
-        )
-
-    # 6. Minor structure — kept, threshold tightened.
-    minor = sum(1 for t in losers if str(t.get("bos_tier") or "").lower() == "minor")
-    if minor >= 2 and minor / n_loss >= 0.5:
-        findings.append(
-            f"<b>{minor} of {n_loss}</b> losers were on Minor structure events. "
-            f"If this repeats across runs, consider restricting entries to Major events only."
-        )
-
-    if not findings:
-        return (f"<p>{n_loss} losing trades this period. No dominant loss pattern detected — "
-                f"losses appear distributed normally across conditions.</p>")
-
-    items = "".join(f"<li style='margin-bottom:8px;'>{f}</li>" for f in findings)
-    return f"<ul style='padding-left:18px;font-size:13px;line-height:1.6;'>{items}</ul>"
-
-
-# ---------------------------------------------------------------------------
-# Backtest fidelity — same-bar resolutions. On H1 we cannot resolve the
-# intrabar TP-vs-SL order, so a bar that fills the limit AND spans both TP1 and
-# SL is booked SL (pessimistic, no look-ahead). This panel sizes that ambiguity
-# so the reader knows how much of the result is H1-resolution-limited rather
-# than a clean directional outcome -- the honest companion to "where the edge
-# leaked". (2026-06-18.)
 # ---------------------------------------------------------------------------
 
 def _same_bar_resolution_html(trades: List[Dict[str, Any]]) -> str:
@@ -2820,216 +2926,63 @@ def _score_verdict_text(buckets: List[Dict]) -> str:
     return "✗ No — score did not predict outcomes this period."
 
 
-def _score_table_html(buckets: List[Dict]) -> str:
-    if not buckets:
-        return "<p style='color:#888;'>No score data.</p>"
-    rows = _table_row(["Score", "Trades", "Win rate", "Avg R per trade"], header=True)
-    for b in buckets:
-        color = "#eafaf1" if b["expectancy_r"] >= 0 else "#fdf2f2"
-        rows += _table_row([
-            b["score_bucket"], str(b["trades"]),
-            _wr_str(b['win_rate_pct']), _r(b["expectancy_r"]),
-        ], color=color)
-    return f"<table><thead>{rows}</thead></table>"  # already has header in rows
+def _headline_html(prox_trades: List[Dict[str, Any]], sb_prox: Dict,
+                   group_meta: Dict, group_label: str) -> str:
+    """Phase 2 — the headline. Proximal book only (the live model). Shows P&L,
+    expR, WR AND the 'is it real' read the rest of the project mandates but the
+    old headline skipped: bootstrap 95% CI + per-quarter sign + a plain verdict.
+    """
+    filled = [t for t in prox_trades if _is_real_filled(t)]
+    vals = [float(t.get("r_realised") or 0.0) for t in filled]
+    ts   = [t.get("alert_ts") for t in filled]
+    stat = _stat_block(vals, ts)
 
+    total_pnl = sb_prox.get("total_pnl_usd", 0)
+    n         = sb_prox.get("trades", 0)
+    wr        = _wr_str(sb_prox.get("win_rate_pct"))
+    exp_r     = sb_prox.get("expectancy_r", 0)
+    pnl_color = "#27ae60" if total_pnl >= 0 else "#e74c3c"
 
-def _verdict_banner_html(sb_prox: Dict, sb_mid: Dict, group_meta: Dict,
-                         group_label: str) -> str:
-    """One-line plain-English verdict at the very top, with the regime + sample
-    caveat. The reader should know the call (edge / marginal / missing) and how
-    much to trust it BEFORE any table. Verdict is keyed off the live entry zone
-    (proximal); the 50% zone is reference."""
-    pnl_prox = sb_prox.get("total_pnl_usd", 0)
-    exp_prox = sb_prox.get("expectancy_r", 0)
-    n_prox   = sb_prox.get("trades", 0)
-    pnl_mid  = sb_mid.get("total_pnl_usd", 0)
-
-    if n_prox == 0:
-        verdict, vc = "No resolved proximal trades this period.", "#6c757d"
-    elif pnl_prox > 0 and exp_prox >= 0.3:
-        verdict, vc = (f"Edge present on the live (proximal) book: "
-                       f"{_m(pnl_prox)}, avg {_r(exp_prox)}.", "#27ae60")
-    elif pnl_prox >= 0:
-        verdict, vc = (f"Marginal — proximal is a scratch ({_m(pnl_prox)}, "
-                       f"avg {_r(exp_prox)}). No demonstrable edge.", "#f39c12")
+    lo, hi = stat["ci"]
+    ci_s = f"[{lo:+.2f}, {hi:+.2f}]R" if lo is not None else "— (thin sample)"
+    if stat["pq_total"]:
+        pq_s = " · ".join(f"{q} {v:+.2f}" for q, v in sorted(stat["pq"].items()))
+        pq_line = (f"<div style='font-size:12px;color:#666;margin-top:6px;'>"
+                   f"Per-quarter avg R: {pq_s} "
+                   f"(<b>sign held {stat['pq_agree']}/{stat['pq_total']}</b>)</div>")
     else:
-        verdict, vc = (f"Edge missing — proximal lost {_m(pnl_prox)} "
-                       f"(avg {_r(exp_prox)}).", "#e74c3c")
+        pq_line = ""
 
-    # Regime + sample-size confidence.
+    verdict = _verdict_phrase(stat)
+    vc = {"edge": "#27ae60", "loser": "#e74c3c",
+          "unproven": "#f39c12", "thin": "#6c757d"}[stat["verdict"]]
+
+    # Regime / war caveat (kept from the old banner).
     regime = str(group_meta.get("regime", "") or "").lower()
     caveats = []
     if regime == "war":
         rl = group_meta.get("regime_label")
-        caveats.append(f"<b>WAR regime{f' ({rl})' if rl else ''}</b> — "
-                       f"price behaviour is abnormal; treat as low confidence.")
-    if n_prox and n_prox < 30:
-        caveats.append(f"Small sample ({n_prox} proximal trades) — directional, "
-                       f"not significant. Confirm across BAU months before acting.")
-    caveat_html = ""
-    if caveats:
-        caveat_html = ("<div class='caveat' style='margin-top:10px;'>"
-                       + "<br>".join(caveats) + "</div>")
+        caveats.append(f"<b>WAR regime{f' ({rl})' if rl else ''}</b> — price "
+                       f"behaviour is abnormal; treat as low confidence.")
+    caveat_html = ("<div class='caveat' style='margin-top:10px;'>"
+                   + "<br>".join(caveats) + "</div>") if caveats else ""
 
     return (
-        f"<div style='padding:18px 28px;border-bottom:1px solid #eee;'>"
-        f"<div style='font-size:11px;color:#888;text-transform:uppercase;"
-        f"letter-spacing:0.08em;margin-bottom:6px;'>Verdict</div>"
-        f"<div style='font-size:15px;font-weight:600;color:{vc};line-height:1.5;'>"
-        f"{verdict}</div>"
-        f"<div style='font-size:12px;color:#888;margin-top:6px;'>50% mean entry "
-        f"(reference): {_m(pnl_mid)}. The story (why, and what predicts) leads "
-        f"below; reference tables sit under the divider.</div>"
+        f"<div class='headline'>"
+        f"<div style='font-size:13px;color:#888;text-transform:uppercase;"
+        f"letter-spacing:0.08em;margin-bottom:8px;'>Period summary "
+        f"&mdash; proximal (live) book &mdash; {group_label}</div>"
+        f"<div class='big' style='color:{pnl_color};'>{_m(total_pnl)}</div>"
+        f"<div class='sub'>{n} filled &middot; {wr} won &middot; "
+        f"avg {_r(exp_r)} ({_m(sb_prox.get('expectancy_usd', 0))}/trade) "
+        f"&middot; 95% CI {ci_s}</div>"
+        f"{pq_line}"
+        f"<div class='verdict' style='border-left:4px solid {vc};color:{vc};"
+        f"font-weight:600;'>{verdict}</div>"
         f"{caveat_html}"
         f"</div>"
     )
 
-
-def _exit_policy_summary_html(sb_prox: Dict, sb_prox_tp1: Dict,
-                              sb_mid: Dict, sb_mid_tp1: Dict) -> str:
-    """Compact exit-policy summary, placed right under the headline.
-
-    We trade TP1: the live policy books the full position at TP1 and moves the
-    stop to break-even once price reaches +1R (TP1 + BE@1R). This box puts that
-    live policy next to plain TP1-only (book at TP1, initial stop held) so the
-    reader sees what the break-even stop costs or saves, per entry zone. The
-    right column is `r_realised` (the live policy); the left is `r_if_exit_tp1`.
-    Every figure comes from `_aggregate_for_exit` over the same filtered trade
-    list as the headline, so totals reconcile. (No TP2 ride -- TP2 is a
-    reference-only study column elsewhere, never the traded policy.)
-    """
-    def _cell(sb: Dict) -> str:
-        total = sb.get("total_pnl_usd", 0)
-        exp_r = sb.get("expectancy_r", 0)
-        exp_d = sb.get("expectancy_usd", 0)
-        color = "#27ae60" if total >= 0 else "#e74c3c"
-        return (f"<span style='color:{color};font-weight:600;'>{_m(total)}</span> "
-                f"<span style='color:#888;'>&middot; avg {_r(exp_r)} "
-                f"({_m(exp_d)}/trade)</span>")
-
-    def _row(zone_label: str, sb_tp1: Dict, sb_tp2: Dict) -> str:
-        return (
-            f"<tr>"
-            f"<td style='padding:6px 10px;font-weight:600;color:#555;'>{zone_label}</td>"
-            f"<td style='padding:6px 10px;'>{_cell(sb_tp1)}</td>"
-            f"<td style='padding:6px 10px;'>{_cell(sb_tp2)}</td>"
-            f"</tr>"
-        )
-
-    header = (
-        f"<tr style='background:#f8f9fa;'>"
-        f"<th style='padding:6px 10px;text-align:left;font-size:11px;"
-        f"color:#888;text-transform:uppercase;letter-spacing:0.04em;'></th>"
-        f"<th style='padding:6px 10px;text-align:left;font-size:11px;"
-        f"color:#888;text-transform:uppercase;letter-spacing:0.04em;'>"
-        f"TP1-only (book at TP1)</th>"
-        f"<th style='padding:6px 10px;text-align:left;font-size:11px;"
-        f"color:#888;text-transform:uppercase;letter-spacing:0.04em;'>"
-        f"TP1 + BE@1R (current policy)</th>"
-        f"</tr>"
-    )
-    return (
-        f"<div style='margin-top:18px;padding:12px 14px;"
-        f"border:1px solid #eee;border-radius:6px;background:#fcfcfc;'>"
-        f"<div style='font-size:11px;color:#888;text-transform:uppercase;"
-        f"letter-spacing:0.06em;margin-bottom:6px;'>Exit policy &mdash; "
-        f"what each policy would have paid</div>"
-        f"<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
-        f"{header}"
-        f"{_row('Proximal entry', sb_prox_tp1, sb_prox)}"
-        f"{_row('50% mean entry', sb_mid_tp1, sb_mid)}"
-        f"</table>"
-        f"<div style='font-size:11px;color:#888;margin-top:6px;'>"
-        f"Same trade set on both sides &mdash; only the exit differs. "
-        f"TP1-only closes the full position at TP1 on the initial stop; the "
-        f"current policy also closes at TP1 but moves the stop to break-even "
-        f"once price reaches +1R. Neither rides to TP2.</div>"
-        f"</div>"
-    )
-
-
-def _entry_comparison_html(sb_prox: Dict, sb_mid: Dict,
-                           fill_prox: Dict, fill_mid: Dict,
-                           prox_trades: List[Dict[str, Any]],
-                           mid_trades: List[Dict[str, Any]],
-                           risk_usd: float) -> str:
-    """Head-to-head of proximal vs 50% entry, broken out for each exit policy
-    (TP1-only, TP1+runner, TP2-ride). Lets the reader see whether one entry
-    zone dominates universally or only under a specific exit policy."""
-    def _row(label: str, prox_val: str, mid_val: str) -> str:
-        return f"<tr><td><b>{label}</b></td><td>{prox_val}</td><td>{mid_val}</td></tr>"
-
-    # Per-policy aggregates.
-    _attach_runner_r(prox_trades)
-    _attach_runner_r(mid_trades)
-    sb_prox_tp1 = _aggregate_for_exit(prox_trades, "r_if_exit_tp1", risk_usd)
-    sb_prox_run = _aggregate_for_exit(prox_trades, "r_if_runner",   risk_usd)
-    sb_mid_tp1  = _aggregate_for_exit(mid_trades,  "r_if_exit_tp1", risk_usd)
-    sb_mid_run  = _aggregate_for_exit(mid_trades,  "r_if_runner",   risk_usd)
-
-    rows = "".join([
-        _table_row(["", "Proximal entry", "50% midpoint entry"], header=True),
-        _row("Alerts triggered",
-             str(fill_prox["alerts"]), str(fill_mid["alerts"])),
-        _row("Orders filled",
-             f"{fill_prox['filled']} ({fill_prox['fill_rate_pct']:.0f}%)",
-             f"{fill_mid['filled']} ({fill_mid['fill_rate_pct']:.0f}%)"),
-        _row("Win rate (LIVE: TP1+BE@1R)",
-             _wr_str(sb_prox.get('win_rate_pct')),
-             _wr_str(sb_mid.get('win_rate_pct'))),
-        _row("Avg R (LIVE: TP1+BE@1R)",
-             _r(sb_prox.get("expectancy_r", 0)),
-             _r(sb_mid.get("expectancy_r", 0))),
-        _row("Avg $/trade (LIVE: TP1+BE@1R)",
-             _m(sb_prox.get("expectancy_usd", 0)),
-             _m(sb_mid.get("expectancy_usd", 0))),
-        _row("Avg R (TP1-only ref)",
-             _r(sb_prox_tp1.get("expectancy_r", 0)),
-             _r(sb_mid_tp1.get("expectancy_r", 0))),
-        _row("Avg $/trade (TP1-only ref)",
-             _m(sb_prox_tp1.get("expectancy_usd", 0)),
-             _m(sb_mid_tp1.get("expectancy_usd", 0))),
-        _row("Total P&L &mdash; TP1-only (ref)",
-             _m(sb_prox_tp1.get("total_pnl_usd", 0)),
-             _m(sb_mid_tp1.get("total_pnl_usd", 0))),
-        _row("Total P&L &mdash; TP1 + runner (ref)",
-             _m(sb_prox_run.get("total_pnl_usd", 0)),
-             _m(sb_mid_run.get("total_pnl_usd", 0))),
-        _row("Total P&L &mdash; LIVE (TP1+BE@1R)",
-             f"<b>{_m(sb_prox.get('total_pnl_usd', 0))}</b>",
-             f"<b>{_m(sb_mid.get('total_pnl_usd', 0))}</b>"),
-    ])
-
-    # Best (entry, policy) call-out. LIVE = TP1+BE@1R (from sb_prox/sb_mid,
-    # which aggregate r_realised). The rest are study references.
-    grid = {
-        ("Proximal", "TP1-only"):          sb_prox_tp1.get("total_pnl_usd", 0),
-        ("Proximal", "TP1+runner"):        sb_prox_run.get("total_pnl_usd", 0),
-        ("Proximal", "LIVE (TP1+BE@1R)"):  sb_prox.get("total_pnl_usd", 0),
-        ("50% entry", "TP1-only"):          sb_mid_tp1.get("total_pnl_usd", 0),
-        ("50% entry", "TP1+runner"):        sb_mid_run.get("total_pnl_usd", 0),
-        ("50% entry", "LIVE (TP1+BE@1R)"):  sb_mid.get("total_pnl_usd", 0),
-    }
-    best_combo = max(grid, key=grid.get)
-    live = grid[("Proximal", "LIVE (TP1+BE@1R)")] + grid[("50% entry", "LIVE (TP1+BE@1R)")]
-    best_pnl = grid[best_combo]
-
-    if best_combo[1] == "LIVE (TP1+BE@1R)":
-        verdict = ("<p style='font-size:13px;color:#27ae60;margin-top:10px;'>"
-                   f"<b>Live policy is best on the single dominant entry/exit pair.</b> "
-                   f"Best single combo: {best_combo[0]} + {best_combo[1]} ({_m(best_pnl)}).</p>")
-    else:
-        verdict = ("<p style='font-size:13px;color:#f39c12;margin-top:10px;'>"
-                   f"<b>Best single combo this period: {best_combo[0]} + {best_combo[1]} "
-                   f"({_m(best_pnl)})</b> &mdash; "
-                   f"vs live TP1+BE@1R total {_m(live)}. Study before changing.</p>")
-
-    note = ("<p style='font-size:12px;color:#666;margin-top:4px;'>"
-            "LIVE = TP1 close with SL moved to entry at +1R (the traded policy). "
-            "References (never traded): TP1-only closes at TP1; TP1+runner takes "
-            "half at TP1 and rides the rest to TP2 on a BE stop; TP2-ride rides the "
-            "full position to TP2.</p>")
-    return f"<table>{rows}</table>{verdict}{note}"
 
 
 def _vet_review_html(trades: List[Dict]) -> str:
@@ -3052,201 +3005,16 @@ def _vet_review_html(trades: List[Dict]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Per-entry-zone block: emits the full per-zone analysis stack.
-# ---------------------------------------------------------------------------
-
-def _zone_block_html(
-    zone_label: str,
-    zone_trades: List[Dict[str, Any]],
-    sb_realised: Dict[str, Any],
-    sb_tp1: Dict[str, Any],
-    sb_tp2: Dict[str, Any],
-    risk_usd: float,
-    band_color: str,
-) -> str:
-    """One self-contained section per entry zone. Narrative layout (2026-06-18):
-      VERDICT  : compact header + findings panel
-      WHY      : where the edge leaked -> same-bar fidelity
-      PREDICTS : confidence score -> confluences -> structure events
-      APPENDIX : vet review, by-pair, by-session, matrices, killzone,
-                 counterfactual, exit-policy comparison.
-    The story (verdict + why + what predicts) leads; the reference tables sit
-    below a divider so the reader is not handed a wall of grids first.
-
-    Every aggregate inside this block uses r_realised so the headline and
-    the breakdowns reconcile to the same total. Exit-policy section uses
-    r_if_exit_tp1, r_if_runner and r_realised side by side.
-    """
-    # Headline figures.
-    n         = sb_realised.get("trades", 0)
-    total_pnl = sb_realised.get("total_pnl_usd", 0)
-    exp_r     = sb_realised.get("expectancy_r", 0)
-    wr        = _wr_str(sb_realised.get("win_rate_pct"))
-    wins      = sb_realised.get("wins", 0)
-    losses    = sb_realised.get("losses", 0)
-    bes       = sb_realised.get("breakevens", 0)
-    pnl_color = "#27ae60" if total_pnl >= 0 else "#e74c3c"
-
-    # Auto-derived findings — the lead.
-    findings = _findings_panel(zone_trades, sb_realised, risk_usd)
-    findings_block = _findings_panel_html(findings)
-
-    # Score buckets + verdict (this zone's data only). Below-floor trades are
-    # excluded from the run entirely, so buckets only span scores >= floor.
-    score_buckets = _score_buckets(zone_trades, "r_realised")
-    score_verdict = _score_verdict_text(score_buckets)
-
-    return f"""
-<!-- ZONE BAND -->
-<div style="background:{band_color};color:#fff;padding:14px 28px;
-            font-size:14px;font-weight:700;letter-spacing:0.04em;
-            text-transform:uppercase;">
-  {zone_label}
-</div>
-
-<!-- COMPACT HEADER + FINDINGS PANEL -->
-<div class="section">
-  <div style="display:flex;justify-content:space-between;align-items:baseline;
-              flex-wrap:wrap;gap:14px;margin-bottom:14px;">
-    <div style="font-size:24px;font-weight:700;color:{pnl_color};">
-      {_m(total_pnl)}
-    </div>
-    <div style="font-size:13px;color:#666;">
-      <b>{n}</b> filled &middot; <b>{wr}</b> WR &middot; <b>{_r(exp_r)}</b> avg &middot;
-      {wins}W / {losses}L / {bes}BE
-    </div>
-  </div>
-  {findings_block}
-</div>
-
-<!-- ===== THE STORY: why this result, then what predicts it ===== -->
-
-<!-- SIGNAL vs NOISE: top-level read before the detail tables -->
-<div class="section">
-  <h2>What predicted outcomes &mdash; signal vs noise</h2>
-  {_signal_vs_noise_html(zone_trades, "r_realised")}
-</div>
-
-<!-- WHY: where the edge leaked -->
-<div class="section">
-  <h2>Where the edge leaked</h2>
-  {_edge_leak_html(zone_trades)}
-</div>
-
-<!-- H1 FIDELITY: same-bar resolutions (companion to edge leak) -->
-<div class="section">
-  <h2>Backtest fidelity &mdash; same-bar resolutions</h2>
-  {_same_bar_resolution_html(zone_trades)}
-</div>
-
-<!-- WHAT PREDICTS: confidence score -->
-<div class="section">
-  <h2>Confidence score &mdash; did it predict outcomes?</h2>
-  <p><b>{score_verdict}</b></p>
-  {_score_table_html(score_buckets)}
-</div>
-
-<!-- WHAT PREDICTS: confluences -->
-<div class="section">
-  <h2>Confluences &mdash; does each one earn its weight?</h2>
-  <p style="font-size:12px;color:#666;">Expectancy with the confluence present vs absent. This is the direct answer to "which confluences actually work" &mdash; a confluence that does not lift average R is decoration, not signal.</p>
-  {_confluence_uplift_html(zone_trades, "r_realised")}
-  <h4 style="margin-top:16px;">Confluences by pair</h4>
-  {_confluence_per_pair_html(zone_trades, "r_realised")}
-</div>
-
-<!-- WHAT PREDICTS: structure events -->
-<div class="section">
-  <h2>Structure event performance</h2>
-  {_structure_event_breakdown_html(zone_trades, "r_realised")}
-</div>
-
-<!-- ===== REFERENCE TABLES (appendix) ===== -->
-<div style="margin:26px 0 6px;padding:8px 14px;background:#f4f4f4;
-            border-left:4px solid #bbb;font-size:12px;color:#666;
-            text-transform:uppercase;letter-spacing:0.06em;">
-  Reference tables &mdash; breakdowns &amp; filters (verdict is above)
-</div>
-
-<!-- VET REVIEW -->
-<div class="section">
-  <h2>Trades worth a second look</h2>
-  {_vet_review_html(zone_trades)}
-</div>
-
-<!-- BY PAIR -->
-<div class="section">
-  <h2>By pair</h2>
-  {_by_pair_html(zone_trades, "r_realised")}
-</div>
-
-<!-- BY SESSION -->
-<div class="section">
-  <h2>By session</h2>
-  {_by_session_html(zone_trades, "r_realised")}
-</div>
-
-<!-- PAIR x SESSION MATRIX -->
-<div class="section">
-  <h2>Pair &times; session</h2>
-  {_pair_session_matrix_html(zone_trades, "r_realised")}
-</div>
-
-<!-- TREND ALIGNMENT (with vs against H1 trend) -->
-<div class="section">
-  <h2>Trend alignment &mdash; with vs against the H1 trend</h2>
-  <p>The backtest fires counter-trend setups by design. This table shows whether trading <b>against</b> the H1 trend wins less often than trading <b>with</b> it &mdash; the signal you need to decide whether to filter against-trend zones out.</p>
-  <ul>
-    <li><b>With trend</b>: zone direction matches the H1 trend (BOS continuation).</li>
-    <li><b>Against trend</b>: zone direction opposes the H1 trend (CHoCH / counter setup).</li>
-    <li><b>No trend</b>: H1 trend ambiguous &mdash; no clear BOS sequence.</li>
-  </ul>
-  {_trend_alignment_html(zone_trades, "r_realised")}
-</div>
-
-<!-- KILLZONE ALIGNMENT (OB vs Fill in killzone) -->
-<div class="section">
-  <h2>Killzone alignment &mdash; OB candle vs fill candle</h2>
-  <p>SMC hypothesis: trades where both the OB candle and the fill candle land in a configured killzone window should outperform trades where one or both fall outside it. Buckets:</p>
-  <ul>
-    <li><b>Both</b>: OB formed AND filled in killzone &mdash; A-grade per SMC orthodoxy.</li>
-    <li><b>OB only</b> / <b>Fill only</b>: one side in killzone &mdash; B-grade.</li>
-    <li><b>Neither</b>: both off-hours &mdash; weakest setup.</li>
-  </ul>
-  <p style="font-size:12px;color:#666;">Why this is not redundant with the killzone filter: the <b>filter</b> gates on the <b>alert</b> timestamp, but these buckets are scored on two <i>different</i> moments &mdash; the <b>OB-candle</b> session and the <b>fill</b> session. A trade can alert inside the killzone yet have formed its OB, or filled, outside it &mdash; so "Neither" rows can still appear after filtering. This table answers: given we only alert in-killzone, does it <i>also</i> matter when the OB formed and when the order filled?</p>
-  {_killzone_alignment_html(zone_trades, "r_realised")}
-  <h4 style="margin-top:16px;">Losing trades by alignment bucket</h4>
-  {_killzone_alignment_losses_html(zone_trades)}
-</div>
-
-<!-- WHAT IF — counterfactual filter analysis -->
-<div class="section">
-  <h2>"What if" &mdash; counterfactual filter analysis</h2>
-  <p>For each filter dimension below, the table shows what would have happened if we had only taken trades meeting the filter. <b>vs baseline</b> compares each subset's R-per-trade and total P&amp;L to the unfiltered baseline. Buckets with fewer than 10 trades are marked <i>(low n)</i> &mdash; treat as directional, not significant.</p>
-  {_counterfactual_html(zone_trades, risk_usd)}
-</div>
-
-<!-- EXIT POLICY COMPARISON -->
-<div class="section">
-  <h2>Exit policy comparison</h2>
-  {_exit_policy_html(zone_trades, risk_usd)}
-  <h4 style="margin-top:16px;">Best policy by pair</h4>
-  {_exit_policy_by_dim_html(zone_trades, risk_usd, "pair", "Pair")}
-  <h4 style="margin-top:16px;">Best policy by fill session</h4>
-  {_exit_policy_by_dim_html(zone_trades, risk_usd, "fill_session", "Fill Session")}
-</div>
-"""
-
-
-# ---------------------------------------------------------------------------
 # Pair groups for split per-email reports
 # ---------------------------------------------------------------------------
 
-# Email bucket 1 ("original"): the original 4 FX majors + GOLD.
-# Email bucket 2 ("new"): the new evaluation FX + BTC + NAS100.
+# Email bucket 1 ("original" / Book A): the original 4 FX majors + GOLD.
+# Email bucket 2 ("new" / Book B): the new evaluation FX + BTC.
+# NAS100 is excluded ENTIRELY (run-level, 2026-06-30 trader decision): it
+# generates no trade rows and appears in no email, Excel, or audit.
 # (Var names kept for minimal blast radius; the SETS are what the split reads.)
 FOREX_PAIRS = {"EURUSD", "NZDUSD", "USDJPY", "USDCHF", "GOLD", "XAUUSD"}
-INDEX_COMMODITY_PAIRS = {"GBPUSD", "AUDUSD", "USDCAD", "EURJPY", "BTCUSD", "NAS100"}
+INDEX_COMMODITY_PAIRS = {"GBPUSD", "AUDUSD", "USDCAD", "EURJPY", "BTCUSD"}
 
 
 def _filter_meta_by_pairs(meta: Dict[str, Any], allowed: set) -> Dict[str, Any]:
@@ -3274,58 +3042,70 @@ def _build_group_html(
     out_dir: Path,
     html_filename: str,
     excel_filename: str,
+    exit_lab_sink: List[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Build one HTML report + one Excel for a single pair group.
+    """Build one HTML email + one Excel for a single pair group.
 
-    Mirrors the section layout of the combined report, but every aggregate
-    is recomputed against `group_trades_all` so the headline, Sections A/B,
-    head-to-head, and every audit section are internally consistent.
-    Returns the group's summary dict so the caller can fold it into the
-    combined summary.json under `by_group`.
+    Proximal-only (the live model — 50% mean entry is dead and shown nowhere in
+    the body). Section order is decision-first (2026-06-30 overhaul):
+      1. Headline (P&L + CI + per-quarter + verdict)
+      2. Exit recipe ranking (the point — full per-recipe data for edge engine)
+      3. Where losses / wins concentrate (the dynamic driver engine)
+      4. Backtest fidelity (H1 same-bar honesty)
+      5. By pair
+      6. Structure events · Trend alignment · Killzone alignment · Break quality
+      7. Filters + validation (one-line counters + the validation guard)
+      8. Appendix (confluences, by-session, pair×session, counterfactual, vet)
+    Every aggregate is recomputed against this group's pairs so the email is
+    internally consistent. Returns the group summary for summary.json.
     """
-    # `group_trades_all` is ALREADY the core set: below-floor and out-of-IST
-    # rows were removed by write_h1_only_report before the split, so they
-    # never reach a group report at all. The filter below is therefore a
-    # no-op kept only for defensive symmetry with the combined path.
+    # `group_trades_all` is ALREADY the core set (below-floor + out-of-IST rows
+    # removed run-wide upstream). The hard-block filter below is a defensive
+    # no-op kept for symmetry.
     trades = [t for t in group_trades_all if not _is_hard_blocked(t)]
     blocked_trades = [t for t in group_trades_all if t.get("news_blocked")]
     kz_blocked_trades = [t for t in group_trades_all if t.get("killzone_blocked")]
 
+    # Proximal is the only live model. 50% rows still exist in the simulator
+    # output (and the Excel Zone Register, for reference) but never enter the
+    # email body or this group's headline aggregates.
     prox_trades = [t for t in trades if t.get("entry_zone") == "proximal"]
-    mid_trades  = [t for t in trades if t.get("entry_zone") == "50pct"]
 
-    sb_prox     = _aggregate_for_exit(prox_trades, "r_realised",     risk_usd)
-    sb_mid      = _aggregate_for_exit(mid_trades,  "r_realised",     risk_usd)
-    sb_prox_tp1 = _aggregate_for_exit(prox_trades, "r_if_exit_tp1",  risk_usd)
-    sb_prox_tp2 = _aggregate_for_exit(prox_trades, "r_if_exit_tp2",  risk_usd)
-    sb_mid_tp1  = _aggregate_for_exit(mid_trades,  "r_if_exit_tp1",  risk_usd)
-    sb_mid_tp2  = _aggregate_for_exit(mid_trades,  "r_if_exit_tp2",  risk_usd)
+    sb_prox     = _aggregate_for_exit(prox_trades, "r_realised",    risk_usd)
+    sb_prox_tp1 = _aggregate_for_exit(prox_trades, "r_if_exit_tp1", risk_usd)
+    sb_prox_tp2 = _aggregate_for_exit(prox_trades, "r_if_exit_tp2", risk_usd)
     fill_prox   = _fill_rate(trades, "proximal")
-    fill_mid    = _fill_rate(trades, "50pct")
 
-    # Reconciliation invariant within this group, same as the combined path.
-    def _reconcile(zone_label, scoreboard, zone_trades):
-        from_scoreboard = round(float(scoreboard.get("total_pnl_usd", 0)), 2)
-        filled = [t for t in zone_trades if _is_real_filled(t)]
-        from_trades = round(sum(float(t.get("pnl_usd") or 0) for t in filled), 2)
-        if abs(from_scoreboard - from_trades) > 0.01:
-            raise AssertionError(
-                f"P&L reconciliation failed for {group_label}/{zone_label}: "
-                f"scoreboard={from_scoreboard} vs per-trade-sum={from_trades}.")
-    _reconcile("proximal", sb_prox, prox_trades)
-    _reconcile("50pct",    sb_mid,  mid_trades)
+    # Reconciliation invariant: headline P&L must equal the per-trade sum.
+    from_scoreboard = round(float(sb_prox.get("total_pnl_usd", 0)), 2)
+    _filled = [t for t in prox_trades if _is_real_filled(t)]
+    from_trades = round(sum(float(t.get("pnl_usd") or 0) for t in _filled), 2)
+    if abs(from_scoreboard - from_trades) > 0.01:
+        raise AssertionError(
+            f"P&L reconciliation failed for {group_label}/proximal: "
+            f"scoreboard={from_scoreboard} vs per-trade-sum={from_trades}.")
 
-    # Excel: this group's filled+blocked rows only (matches what trades.xlsx
-    # does for the combined report -- audit rows preserved).
+    # Excel: this group's filled+blocked rows (audit rows preserved). The Excel
+    # still carries BOTH entry zones side by side as reference data.
     excel_ok = _try_excel(group_trades_all, out_dir / excel_filename,
                           risk_usd=risk_usd) is not None
 
-    total_pnl_prox = sb_prox.get("total_pnl_usd", 0)
-    total_pnl_mid  = sb_mid.get("total_pnl_usd", 0)
-    n_prox_filled  = sb_prox.get("trades", 0)
-    n_mid_filled   = sb_mid.get("trades", 0)
-    pnl_color_prox = "#27ae60" if total_pnl_prox >= 0 else "#e74c3c"
-    pnl_color_mid  = "#27ae60" if total_pnl_mid  >= 0 else "#e74c3c"
+    # Exit-lab sink scoped to this group's pairs (the sink rows carry `pair`).
+    allowed_pairs = set(group_meta.get("pairs", []))
+    group_sink = [r for r in (exit_lab_sink or [])
+                  if r.get("pair") in allowed_pairs] if allowed_pairs else []
+
+    # Filter-counter one-liners (collapsed audits). Expanded sections move to
+    # the Excel / appendix; the body just states the count.
+    n_news = len(blocked_trades)
+    n_kz   = int(group_meta.get("killzone_dropped_alerts") or 0)
+    filter_line = (
+        f"News blackout removed <b>{n_news}</b> alert(s); killzone filter "
+        f"dropped <b>{n_kz}</b> off-window alert(s). "
+        f"(Both are informational — neither gates the live headline. Full rows "
+        f"in the Excel.)") if (n_news or n_kz) else (
+        "No alerts removed by the news or killzone filters this period.")
+
     pairs_str  = ", ".join(group_meta.get("pairs", []))
     regime_str = group_meta.get("regime", "")
 
@@ -3342,12 +3122,10 @@ def _build_group_html(
   .top-band h1 {{ font-size: 18px; font-weight: 700; margin-bottom: 4px; }}
   .top-band .meta {{ font-size: 12px; color: #bdc3c7; }}
   .headline {{ padding: 24px 28px; border-bottom: 1px solid #eee; }}
-  .summary-strip {{ display: flex; gap: 12px; margin-top: 16px; }}
-  .summary-card {{ flex: 1; padding: 14px; border-radius: 6px; border: 1px solid #eee; }}
-  .summary-card .label {{ font-size: 11px; color: #888;
-                          text-transform: uppercase; letter-spacing: 0.06em; }}
-  .summary-card .val {{ font-size: 22px; font-weight: 700; margin-top: 4px; }}
-  .summary-card .meta {{ font-size: 11px; color: #888; margin-top: 4px; }}
+  .headline .big {{ font-size: 32px; font-weight: 700; }}
+  .headline .sub {{ font-size: 14px; color: #555; margin-top: 4px; }}
+  .headline .verdict {{ font-size: 13px; margin-top: 12px; background: #f8f9fa;
+                        padding: 10px 14px; border-radius: 0 4px 4px 0; }}
   .section {{ padding: 22px 28px; border-bottom: 1px solid #eee; }}
   .section h2 {{ font-size: 13px; font-weight: 700; text-transform: uppercase;
                  letter-spacing: 0.06em; color: #888; margin-bottom: 14px; }}
@@ -3358,14 +3136,11 @@ def _build_group_html(
   td {{ padding: 7px 10px; border-bottom: 1px solid #eee; }}
   tr:last-child td {{ border-bottom: none; }}
   h4 {{ font-size: 12px; font-weight: 700; color: #666; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }}
-  .stats-strip {{ display: flex; gap: 0; border: 1px solid #eee; border-radius: 6px;
-                  overflow: hidden; margin-bottom: 16px; }}
-  .stat {{ flex: 1; padding: 14px 12px; text-align: center; border-right: 1px solid #eee; }}
-  .stat:last-child {{ border-right: none; }}
-  .stat .val {{ font-size: 20px; font-weight: 700; }}
-  .stat .lbl {{ font-size: 11px; color: #888; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }}
   .caveat {{ background: #fffbea; border-left: 3px solid #f59e0b; padding: 10px 14px;
              border-radius: 0 4px 4px 0; font-size: 12px; color: #555; margin-top: 8px; }}
+  .appendix-divider {{ margin: 0; padding: 12px 28px; background: #f4f4f4;
+             border-left: 4px solid #bbb; font-size: 12px; color: #666;
+             text-transform: uppercase; letter-spacing: 0.06em; }}
   .footer {{ padding: 16px 28px; background: #f8f9fa; font-size: 11px; color: #999; }}
 </style>
 </head>
@@ -3376,83 +3151,123 @@ def _build_group_html(
   <h1>{group_label} &mdash; {group_meta.get('start')} to {group_meta.get('end')}</h1>
   <div class="meta">
     {pairs_str} &nbsp;&middot;&nbsp; 1R = ${risk_usd:.0f} &nbsp;&middot;&nbsp;
-    Regime: {regime_str} &nbsp;&middot;&nbsp; H1 bars only, no spread or slippage modelled
+    Regime: {regime_str} &nbsp;&middot;&nbsp; H1 bars only, proximal entry, no spread modelled
   </div>
 </div>
 
-{_verdict_banner_html(sb_prox, sb_mid, group_meta, group_label)}
+<!-- 1. HEADLINE: P&L + CI + per-quarter + verdict (proximal/live book) -->
+{_headline_html(prox_trades, sb_prox, group_meta, group_label)}
 
-<div class="headline">
-  <div style="font-size:13px;color:#888;text-transform:uppercase;
-              letter-spacing:0.08em;margin-bottom:8px;">
-    Period summary &mdash; both entry zones ({group_label})
-  </div>
-  <div class="summary-strip">
-    <div class="summary-card" style="border-left:4px solid #2c3e50;">
-      <div class="label">Proximal entry</div>
-      <div class="val" style="color:{pnl_color_prox};">{_m(total_pnl_prox)}</div>
-      <div class="meta">{n_prox_filled} filled &middot;
-        {_wr_str(sb_prox.get('win_rate_pct'))} won &middot;
-        avg {_r(sb_prox.get('expectancy_r', 0))} ({_m(sb_prox.get('expectancy_usd', 0))}/trade)</div>
-    </div>
-    <div class="summary-card" style="border-left:4px solid #34495e;">
-      <div class="label">50% mean entry</div>
-      <div class="val" style="color:{pnl_color_mid};">{_m(total_pnl_mid)}</div>
-      <div class="meta">{n_mid_filled} filled &middot;
-        {_wr_str(sb_mid.get('win_rate_pct'))} won &middot;
-        avg {_r(sb_mid.get('expectancy_r', 0))} ({_m(sb_mid.get('expectancy_usd', 0))}/trade)</div>
-    </div>
-  </div>
-
-  {_exit_policy_summary_html(sb_prox, sb_prox_tp1, sb_mid, sb_mid_tp1)}
-
-  <p style="font-size:12px;color:#888;margin-top:14px;">
-    Aggregates above and in every section below are scoped to
-    {group_label.lower()} pairs only. Numbers reconcile within this email.
+<!-- 2. EXIT RECIPE RANKING — the point of the email now -->
+<div class="section">
+  <h2>Exit recipe ranking &mdash; which exit pays most</h2>
+  <p style="font-size:13px;color:#555;margin-bottom:6px;">
+    Every recipe replayed over the same post-fill bars as the live trade.
+    This is the run-level exit data; the edge engine reads it to draw
+    per-cluster conclusions over the long history.
   </p>
+  {_exit_recipe_html(group_sink)}
 </div>
 
-<!-- BREAK QUALITY — BOS vs CHoCH benchmark for the ATR multiplier knob -->
+<!-- 3. WHERE LOSSES / WINS CONCENTRATE — the dynamic driver engine -->
+<div class="section">
+  <h2>Where losses &amp; wins concentrate</h2>
+  {_driver_engine_html(prox_trades)}
+</div>
+
+<!-- 4. BACKTEST FIDELITY — H1 same-bar honesty -->
+<div class="section">
+  <h2>Backtest fidelity &mdash; same-bar resolutions</h2>
+  {_same_bar_resolution_html(prox_trades)}
+</div>
+
+<!-- 5. BY PAIR -->
+<div class="section">
+  <h2>By pair</h2>
+  {_by_pair_html(prox_trades, "r_realised")}
+</div>
+
+<!-- 6. STRUCTURE / TREND / KILLZONE / BREAK QUALITY -->
+<div class="section">
+  <h2>Structure event performance</h2>
+  {_structure_event_breakdown_html(prox_trades, "r_realised")}
+</div>
+
+<div class="section">
+  <h2>Trend alignment &mdash; with vs against the H1 trend</h2>
+  <p style="font-size:13px;color:#555;">The label flips on a confirmation BOS,
+  so against-trend is a real, populated bucket — the signal for whether to
+  filter counter-trend zones out.</p>
+  {_trend_alignment_html(prox_trades, "r_realised")}
+</div>
+
+<div class="section">
+  <h2>Killzone alignment &mdash; OB candle vs fill candle</h2>
+  <p style="font-size:13px;color:#555;">Scored on two different moments — the
+  <b>OB-candle</b> session and the <b>fill</b> session — not the alert time the
+  filter gates on. Answers: given we only alert in-killzone, does it also matter
+  when the OB formed and when the order filled?</p>
+  {_killzone_alignment_html(prox_trades, "r_realised")}
+  <h4 style="margin-top:16px;">Losing trades by alignment bucket</h4>
+  {_killzone_alignment_losses_html(prox_trades)}
+</div>
+
 <div class="section">
   <h2>Break quality &mdash; BOS vs CHoCH ATR-multiple benchmark</h2>
   <p style="font-size:13px;color:#555;margin-bottom:10px;">
-    How far past the broken level the break candle <b>closed</b>, in ATR units,
-    on the live (proximal) book. The bucket where win rate and avg R lift is the
-    benchmark for the BOS / CHoCH ATR-multiplier knob. Exact per-trade numbers
-    are in the Excel (columns Break ATR Multiple / Break &times; Over Floor).
+    How far past the broken level the break candle <b>closed</b>, in ATR units.
+    The bucket where win rate and avg R lift is the benchmark for the BOS/CHoCH
+    ATR-multiplier knob. Per-trade numbers are in the Excel.
   </p>
   {_break_benchmark_html(prox_trades, "r_realised")}
 </div>
 
-{_zone_block_html(
-    "Section A &mdash; Proximal entry",
-    prox_trades, sb_prox, sb_prox_tp1, sb_prox_tp2, risk_usd,
-    "#2c3e50",
-)}
+<!-- 7. FILTERS + VALIDATION -->
+<div class="section">
+  <h2>Filters &amp; validation</h2>
+  <p style="font-size:13px;color:#555;">{filter_line}</p>
+  {_validation_html(prox_trades)}
+</div>
 
-{_zone_block_html(
-    "Section B &mdash; 50% mean entry",
-    mid_trades, sb_mid, sb_mid_tp1, sb_mid_tp2, risk_usd,
-    "#34495e",
-)}
+<!-- 8. APPENDIX — reference tables, settled questions -->
+<div class="appendix-divider">Appendix &mdash; reference (verdict is above)</div>
 
 <div class="section">
-  <h2>Proximal entry vs 50% midpoint entry &mdash; head-to-head</h2>
-  {_entry_comparison_html(sb_prox, sb_mid, fill_prox, fill_mid,
-                          prox_trades, mid_trades, risk_usd)}
+  <h2>What predicted outcomes &mdash; signal vs noise (settled)</h2>
+  <p style="font-size:13px;color:#555;">The confidence score is settled noise
+  (Spearman ~0.05): it does not rank outcomes, so it stays a logged number, not
+  a gate. The systematic per-factor read is the driver engine above; this line
+  records the settled finding.</p>
+  {_signal_vs_noise_html(prox_trades, "r_realised")}
 </div>
 
 <div class="section">
-  <h2>Killzone window &mdash; off-killzone trade behaviour (no longer filtered)</h2>
-  {_killzone_audit_html(kz_blocked_trades, group_meta)}
+  <h2>Confluences &mdash; does each earn its weight?</h2>
+  <p style="font-size:12px;color:#666;">Expectancy with the confluence present
+  vs absent. Settled non-predictive; kept for reference.</p>
+  {_confluence_uplift_html(prox_trades, "r_realised")}
+  <h4 style="margin-top:16px;">Confluences by pair</h4>
+  {_confluence_per_pair_html(prox_trades, "r_realised")}
 </div>
 
-<!-- Below-floor + IST-blocked rows are excluded from the whole run upstream;
-     their audit lists live in the combined report only, so no section here. -->
+<div class="section">
+  <h2>By session</h2>
+  {_by_session_html(prox_trades, "r_realised")}
+</div>
 
 <div class="section">
-  <h2>News blackout &mdash; trades filtered</h2>
-  {_news_blackout_html(blocked_trades, group_meta)}
+  <h2>Pair &times; session</h2>
+  {_pair_session_matrix_html(prox_trades, "r_realised")}
+</div>
+
+<div class="section">
+  <h2>"What if" &mdash; counterfactual filter analysis</h2>
+  {_counterfactual_html(prox_trades, risk_usd)}
+</div>
+
+<div class="section">
+  <h2>Trades worth a second look</h2>
+  {_vet_review_html(prox_trades)}
 </div>
 
 <div class="section">
@@ -3460,13 +3275,8 @@ def _build_group_html(
   <ul style="padding-left:18px;font-size:13px;">
     <li><b>{excel_filename} — Trades tab:</b>
       {"every filled trade for this group, plain-English headers." if excel_ok else "<span style='color:#e74c3c;'>FAILED — openpyxl not installed.</span>"}</li>
-    <li><b>{excel_filename} — Zone Register tab:</b> one row per OB, both entry zones side by side.</li>
+    <li><b>{excel_filename} — Zone Register tab:</b> one row per OB (both entry zones side by side, reference).</li>
   </ul>
-</div>
-
-<div class="section">
-  <h2>System validation check</h2>
-  {_validation_html(prox_trades + mid_trades)}
 </div>
 
 <div class="footer">
@@ -3485,19 +3295,15 @@ def _build_group_html(
     return {
         "label": group_label,
         "pairs": group_meta.get("pairs", []),
+        # Proximal only — 50% is dead and no longer reported. Keys kept stable
+        # for the registry / aggregate_runs readers (they read *proximal*).
         "scoreboards": {
             "proximal_realised":  sb_prox,
             "proximal_exit_tp1":  sb_prox_tp1,
             "proximal_exit_tp2":  sb_prox_tp2,
-            "fifty_pct_realised": sb_mid,
-            "fifty_pct_exit_tp1": sb_mid_tp1,
-            "fifty_pct_exit_tp2": sb_mid_tp2,
         },
         "fill_rate_proximal": fill_prox,
-        "fill_rate_50pct":    fill_mid,
         "news_blocked_trade_rows": len(blocked_trades),
-        # Group reports see the CORE set only; below-floor + out-of-IST rows
-        # were removed run-wide upstream, so these are always 0 here.
         "ist_blocked_trade_rows":  0,
         "killzone_dropped_alerts": int(group_meta.get("killzone_dropped_alerts") or 0),
         "score_floor":                  SCORE_FLOOR,
@@ -3518,6 +3324,7 @@ def write_h1_only_report(
     meta: Dict[str, Any],
     risk_usd: float = 250.0,
     out_root: Path = None,
+    exit_lab_sink: List[Dict[str, Any]] = None,
 ) -> Path:
     base = out_root if out_root is not None else (Path(__file__).parent / "results")
     out_dir = Path(base) / run_id
@@ -3551,41 +3358,25 @@ def write_h1_only_report(
     blocked_trades = [t for t in trades_all if t.get("news_blocked")]
     kz_blocked_trades = [t for t in trades_all if t.get("killzone_blocked")]
 
+    # Proximal is the only live model; 50% mean entry is dead and no longer
+    # reported (2026-06-30 overhaul). The simulator still emits 50% rows (they
+    # survive in the Excel Zone Register as reference) but no metric, summary
+    # key, or email section is computed for them.
     prox_trades = [t for t in trades if t.get("entry_zone") == "proximal"]
-    mid_trades  = [t for t in trades if t.get("entry_zone") == "50pct"]
 
-    # Primary view: r_realised under the LIVE policy (TP1 + break-even at +1R:
-    # SL jumps to entry once +1R prints, then exit at TP1). Every per-pair /
-    # per-session / score / killzone / structure / loss table now uses
-    # r_realised, so the headline and the breakdowns reconcile. The TP1-only
-    # hypothetical column (r_if_exit_tp1) and pure TP2-ride reference column
-    # (r_if_exit_tp2) are only used in the explicit
-    # "Proximal vs 50%" comparison table where the exit policy is the variable
-    # under test.
+    # r_realised = the LIVE policy (TP1 + break-even at +1R). Every per-pair /
+    # per-session / score breakdown uses it so headline + breakdowns reconcile.
     sb_prox    = _aggregate_for_exit(prox_trades, "r_realised",     risk_usd)
-    sb_mid     = _aggregate_for_exit(mid_trades,  "r_realised",     risk_usd)
     sb_prox_tp2 = _aggregate_for_exit(prox_trades, "r_if_exit_tp2", risk_usd)
-    sb_mid_tp2  = _aggregate_for_exit(mid_trades,  "r_if_exit_tp2", risk_usd)
     sb_prox_tp1 = _aggregate_for_exit(prox_trades, "r_if_exit_tp1", risk_usd)
-    sb_mid_tp1  = _aggregate_for_exit(mid_trades,  "r_if_exit_tp1", risk_usd)
 
     pp_prox   = _per_pair_breakdown(prox_trades,  "r_realised", risk_usd)
-    pp_mid    = _per_pair_breakdown(mid_trades,   "r_realised", risk_usd)
     ss_prox   = _per_session_breakdown(prox_trades, "r_realised", risk_usd)
-    ss_mid    = _per_session_breakdown(mid_trades,  "r_realised", risk_usd)
     fill_prox = _fill_rate(trades, "proximal")
-    fill_mid  = _fill_rate(trades, "50pct")
 
-    # Score buckets over the CORE set only. Below-floor trades are excluded
-    # from the run entirely (trader decision), so there are no sub-floor
-    # buckets by design.
-    score_buckets      = _score_buckets(prox_trades, "r_realised")
-    score_buckets_mid  = _score_buckets(mid_trades,  "r_realised")
-    # Exit counts must be scoped per entry-zone — the headline counts proximal
-    # trades only, so mixing zones here makes the "How trades closed" line
-    # contradict the headline (e.g. 21 filled but 29 SL hits across both zones).
+    # Score buckets over the CORE set only (no sub-floor buckets by design).
+    score_buckets    = _score_buckets(prox_trades, "r_realised")
     exit_counts_prox = _exit_reason_counts(prox_trades)
-    exit_counts_mid  = _exit_reason_counts(mid_trades)
 
     # News-blackout audit. Every blocked row is listed (without the trade
     # outcome — that would imply we counted it; we did not). The list is
@@ -3631,28 +3422,20 @@ def write_h1_only_report(
         "risk_per_trade_usd":  risk_usd,
         "total_trade_rows":    len(trades),
         "fill_rate_proximal":  fill_prox,
-        "fill_rate_50pct":     fill_mid,
         "exit_reason_counts_proximal": exit_counts_prox,
-        "exit_reason_counts_50pct":    exit_counts_mid,
         # Scoreboards under the exit policies. r_realised is the LIVE policy
         # (TP1 + break-even at +1R); the tp1/tp2 columns are pure hypotheticals
-        # and named accordingly.
+        # and named accordingly. Proximal only — 50% mean entry is dead.
         "scoreboards": {
             "proximal_realised":  sb_prox,
             "proximal_exit_tp1":  sb_prox_tp1,
             "proximal_exit_tp2":  sb_prox_tp2,
-            "fifty_pct_realised": sb_mid,
-            "fifty_pct_exit_tp1": sb_mid_tp1,
-            "fifty_pct_exit_tp2": sb_mid_tp2,
         },
         # Per-pair / per-session breakdowns use r_realised so they reconcile
         # to the headline total. Keys carry the column name explicitly.
         "per_pair_proximal_realised": pp_prox,
-        "per_pair_50pct_realised":    pp_mid,
         "per_session_proximal_realised": ss_prox,
-        "per_session_50pct_realised":    ss_mid,
         "score_buckets_proximal_realised": score_buckets,
-        "score_buckets_50pct_realised":    score_buckets_mid,
         # News blackout is INFORMATIONAL ONLY (live never suppresses on news);
         # these rows ARE counted in the metrics above. Listed for reference.
         "news_blocked_trade_rows": len(blocked_trades),
@@ -3674,10 +3457,9 @@ def write_h1_only_report(
         "ist_blocked_audit":            ist_audit,
     }
 
-    # Reconciliation invariant. The headline P&L (sb_prox / sb_mid) MUST
-    # equal the sum of per-trade pnl_usd for the same population. If this
-    # fails, the email is publishing inconsistent numbers across sections
-    # -- the kind of bug that wastes hours to debug downstream. Fail loud.
+    # Reconciliation invariant. The headline P&L (sb_prox) MUST equal the sum
+    # of per-trade pnl_usd for the same population. If this fails, the email is
+    # publishing inconsistent numbers -- fail loud.
     def _reconcile(zone_label, scoreboard, zone_trades):
         from_scoreboard = round(float(scoreboard.get("total_pnl_usd", 0)), 2)
         filled = [t for t in zone_trades if _is_real_filled(t)]
@@ -3690,7 +3472,6 @@ def write_h1_only_report(
                 f"Fix the aggregator before shipping the report."
             )
     _reconcile("proximal", sb_prox, prox_trades)
-    _reconcile("50pct",    sb_mid,  mid_trades)
 
     # Files. Use trades_all for CSV and Excel so blocked rows appear in
     # the audit outputs (column news_blocked + event metadata). Metrics
@@ -3705,246 +3486,16 @@ def write_h1_only_report(
     with open(out_dir / "summary.json", "w") as f:
         json.dump(summary, f, indent=2, default=str)
 
-    # --- HTML ---
-    # Top-of-email headline mirrors the Proximal zone's r_realised (the
-    # default-policy column). This is the same column the zone breakdowns
-    # use, so headline + breakdowns reconcile to the same total.
-    total_pnl_prox = sb_prox.get("total_pnl_usd", 0)
-    total_pnl_mid  = sb_mid.get("total_pnl_usd", 0)
-    n_prox_filled  = sb_prox.get("trades", 0)
-    n_mid_filled   = sb_mid.get("trades", 0)
-    pnl_color_prox = "#27ae60" if total_pnl_prox >= 0 else "#e74c3c"
-    pnl_color_mid  = "#27ae60" if total_pnl_mid  >= 0 else "#e74c3c"
-    pairs_str      = ", ".join(meta.get("pairs", []))
-    regime_str     = meta.get("regime", "")
+    # NOTE (2026-06-30 overhaul): the combined `report.html` is GONE. It was
+    # never emailed (reporting_email.py sends only the two per-group HTMLs) and
+    # rendered the 13-section zone block twice. The two group emails below are
+    # now the only HTML output. summary.json / trades.csv / trades.xlsx are
+    # unchanged for update_registry.py + aggregate_runs.py.
 
-    html = f"""<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-          background: #f8f9fa; color: #212529; font-size: 14px; line-height: 1.6; }}
-  .wrap {{ max-width: 680px; margin: 0 auto; background: #fff; }}
-
-  /* Top band */
-  .top-band {{ background: #2c3e50; color: #fff; padding: 20px 28px; }}
-  .top-band h1 {{ font-size: 18px; font-weight: 700; margin-bottom: 4px; }}
-  .top-band .meta {{ font-size: 12px; color: #bdc3c7; }}
-
-  /* Headline number */
-  .headline {{ padding: 24px 28px; border-bottom: 1px solid #eee; }}
-  .headline .big {{ font-size: 32px; font-weight: 700; }}
-  .headline .sub {{ font-size: 14px; color: #555; margin-top: 4px; }}
-  .headline .verdict {{ font-size: 13px; color: #444; margin-top: 10px;
-                        background: #f8f9fa;
-                        padding: 8px 12px; border-radius: 0 4px 4px 0; }}
-  .summary-strip {{ display: flex; gap: 12px; margin-top: 16px; }}
-  .summary-card {{ flex: 1; padding: 14px; border-radius: 6px; border: 1px solid #eee; }}
-  .summary-card .label {{ font-size: 11px; color: #888;
-                          text-transform: uppercase; letter-spacing: 0.06em; }}
-  .summary-card .val {{ font-size: 22px; font-weight: 700; margin-top: 4px; }}
-  .summary-card .meta {{ font-size: 11px; color: #888; margin-top: 4px; }}
-
-  /* Sections */
-  .section {{ padding: 22px 28px; border-bottom: 1px solid #eee; }}
-  .section h2 {{ font-size: 13px; font-weight: 700; text-transform: uppercase;
-                 letter-spacing: 0.06em; color: #888; margin-bottom: 14px; }}
-  .section p {{ margin-bottom: 10px; font-size: 14px; }}
-
-  /* Tables */
-  table {{ width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }}
-  th {{ background: #2c3e50; color: #fff; padding: 8px 10px; text-align: left;
-        font-weight: 600; font-size: 12px; }}
-  td {{ padding: 7px 10px; border-bottom: 1px solid #eee; }}
-  tr:last-child td {{ border-bottom: none; }}
-  h4 {{ font-size: 12px; font-weight: 700; color: #666; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }}
-
-  /* Stats strip */
-  .stats-strip {{ display: flex; gap: 0; border: 1px solid #eee; border-radius: 6px;
-                  overflow: hidden; margin-bottom: 16px; }}
-  .stat {{ flex: 1; padding: 14px 12px; text-align: center; border-right: 1px solid #eee; }}
-  .stat:last-child {{ border-right: none; }}
-  .stat .val {{ font-size: 20px; font-weight: 700; }}
-  .stat .lbl {{ font-size: 11px; color: #888; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }}
-
-  /* Caveat */
-  .caveat {{ background: #fffbea; border-left: 3px solid #f59e0b; padding: 10px 14px;
-             border-radius: 0 4px 4px 0; font-size: 12px; color: #555; margin-top: 8px; }}
-
-  /* Footer */
-  .footer {{ padding: 16px 28px; background: #f8f9fa; font-size: 11px; color: #999; }}
-</style>
-</head>
-<body>
-<div class="wrap">
-
-<!-- TOP BAND -->
-<div class="top-band">
-  <h1>H1-Only Backtest &mdash; {meta.get('start')} to {meta.get('end')}</h1>
-  <div class="meta">
-    {pairs_str} &nbsp;&middot;&nbsp; 1R = ${risk_usd:.0f} &nbsp;&middot;&nbsp;
-    Regime: {regime_str} &nbsp;&middot;&nbsp; H1 bars only, no spread or slippage modelled
-  </div>
-</div>
-
-<!-- VERDICT BANNER (mirrors the per-group reports) -->
-{_verdict_banner_html(sb_prox, sb_mid, meta, "Combined")}
-
-<!-- HEADLINE: side-by-side summary of both entry zones -->
-<div class="headline">
-  <div style="font-size:13px;color:#888;text-transform:uppercase;
-              letter-spacing:0.08em;margin-bottom:8px;">
-    Week summary &mdash; both entry zones
-  </div>
-  <div class="summary-strip">
-    <div class="summary-card" style="border-left:4px solid #2c3e50;">
-      <div class="label">Proximal entry</div>
-      <div class="val" style="color:{pnl_color_prox};">{_m(total_pnl_prox)}</div>
-      <div class="meta">{n_prox_filled} filled &middot;
-        {_wr_str(sb_prox.get('win_rate_pct'))} won &middot;
-        avg {_r(sb_prox.get('expectancy_r', 0))} ({_m(sb_prox.get('expectancy_usd', 0))}/trade)</div>
-    </div>
-    <div class="summary-card" style="border-left:4px solid #34495e;">
-      <div class="label">50% mean entry</div>
-      <div class="val" style="color:{pnl_color_mid};">{_m(total_pnl_mid)}</div>
-      <div class="meta">{n_mid_filled} filled &middot;
-        {_wr_str(sb_mid.get('win_rate_pct'))} won &middot;
-        avg {_r(sb_mid.get('expectancy_r', 0))} ({_m(sb_mid.get('expectancy_usd', 0))}/trade)</div>
-    </div>
-  </div>
-
-  {_exit_policy_summary_html(sb_prox, sb_prox_tp1, sb_mid, sb_mid_tp1)}
-
-  <p style="font-size:12px;color:#888;margin-top:14px;">
-    Each section below is a self-contained analysis of one entry zone.
-    Numbers within a section reconcile to that zone's headline.
-  </p>
-</div>
-
-<!-- WHAT PREDICTED vs NOISE — top-level read off the live (proximal) book -->
-<div class="section">
-  <h2>What predicted outcomes &mdash; signal vs noise</h2>
-  {_signal_vs_noise_html(prox_trades, "r_realised")}
-</div>
-
-<!-- BREAK QUALITY — BOS vs CHoCH benchmark for the ATR multiplier knob -->
-<div class="section">
-  <h2>Break quality &mdash; BOS vs CHoCH ATR-multiple benchmark</h2>
-  <p style="font-size:13px;color:#555;margin-bottom:10px;">
-    How far past the broken level the break candle <b>closed</b>, in ATR units,
-    on the live (proximal) book. The bucket where win rate and avg R lift is the
-    benchmark for the BOS / CHoCH ATR-multiplier knob. Exact per-trade numbers
-    are in the Excel (columns Break ATR Multiple / Break &times; Over Floor).
-  </p>
-  {_break_benchmark_html(prox_trades, "r_realised")}
-</div>
-
-<!-- ============================================================ -->
-<!-- SECTION A: PROXIMAL ENTRY -->
-<!-- ============================================================ -->
-{_zone_block_html(
-    "Section A &mdash; Proximal entry",
-    prox_trades, sb_prox, sb_prox_tp1, sb_prox_tp2, risk_usd,
-    "#2c3e50",
-)}
-
-<!-- ============================================================ -->
-<!-- SECTION B: 50% MEAN ENTRY -->
-<!-- ============================================================ -->
-{_zone_block_html(
-    "Section B &mdash; 50% mean entry",
-    mid_trades, sb_mid, sb_mid_tp1, sb_mid_tp2, risk_usd,
-    "#34495e",
-)}
-
-<!-- ============================================================ -->
-<!-- SECTION C: ENTRY-MODE COMPARISON (single table, cross-zone) -->
-<!-- ============================================================ -->
-<div class="section">
-  <h2>Proximal entry vs 50% midpoint entry &mdash; head-to-head</h2>
-  {_entry_comparison_html(sb_prox, sb_mid, fill_prox, fill_mid,
-                          prox_trades, mid_trades, risk_usd)}
-</div>
-
-<!-- ============================================================ -->
-<!-- SECTION D0: KILLZONE FILTER AUDIT -->
-<!-- ============================================================ -->
-<div class="section">
-  <h2>Killzone window &mdash; off-killzone trade behaviour (no longer filtered)</h2>
-  {_killzone_audit_html(kz_blocked_trades, meta)}
-</div>
-
-<!-- ============================================================ -->
-<!-- SECTION C2: BELOW-SCORE-FLOOR AUDIT (excluded from the whole run) -->
-<!-- ============================================================ -->
-<div class="section">
-  <h2>Below the score floor &mdash; setups skipped entirely</h2>
-  {_below_floor_html(audit_below_floor)}
-</div>
-
-<!-- ============================================================ -->
-<!-- SECTION D: IST BLACKOUT AUDIT (excluded from the whole run) -->
-<!-- ============================================================ -->
-<div class="section">
-  <h2>IST trading-window gate &mdash; alerts dropped</h2>
-  {_ist_blackout_html(audit_ist, meta)}
-</div>
-
-<!-- ============================================================ -->
-<!-- SECTION E: NEWS BLACKOUT AUDIT -->
-<!-- ============================================================ -->
-<div class="section">
-  <h2>News blackout &mdash; trades filtered</h2>
-  {_news_blackout_html(blocked_trades, meta)}
-</div>
-
-<!-- SECTION 8: FILES -->
-<div class="section">
-  <h2>What's attached</h2>
-  <ul style="padding-left:18px;font-size:13px;">
-    <li><b>trades.xlsx — Trades tab:</b> {"every filled trade, plain-English headers, day of week, color-coded P&L, amber highlights on flagged trades. News-blocked rows are highlighted and marked in column News Blocked." if excel_ok else "<span style='color:#e74c3c;'>FAILED — openpyxl not installed. Use trades.csv instead.</span>"}</li>
-    <li><b>trades.xlsx — Zone Register tab:</b> one row per OB, both entry zones side by side — use this to verify entry/SL/TP levels and fill logic. Includes News Blocked + event details columns.</li>
-    <li><b>trades.csv</b> — machine-readable column names, used by aggregate_runs.py</li>
-    <li><b>summary.json</b> — all metrics in structured format</li>
-    <li><b>run_log.jsonl + console.log</b> — full diagnostic log</li>
-  </ul>
-</div>
-
-<!-- SECTION 9: VALIDATION -->
-<div class="section">
-  <h2>System validation check</h2>
-  <p style="font-size:12px;color:#666;margin-bottom:8px;">
-    Verifies that entry prices are correctly positioned relative to SL and TP,
-    and that exit outcomes match exit types (e.g. SL exit has negative R).
-  </p>
-  {_validation_html(prox_trades + mid_trades)}
-</div>
-
-<!-- FOOTER -->
-<div class="footer">
-  <b>Limitations:</b>
-  No spread, slippage, or swap costs modelled — real P&amp;L ~5–10% lower.
-  Exits simulated at H1 bar boundaries. Same-bar SL+TP collision resolves SL-first (pessimistic).
-  yfinance bars may differ slightly from broker bars.
-  <br><br>
-  <b>Run log:</b> <code>backtest/results/{run_id}/</code> &middot;
-  verify with <code>git log --grep="Backtest logs: {run_id}"</code>
-</div>
-
-</div><!-- /wrap -->
-</body></html>"""
-
-    (out_dir / "report.html").write_text(html, encoding="utf-8")
-
-    # ---- Per-group split reports (bucket 1: original FX+Gold | bucket 2: new) ----
-    # Same Section A/B layout, same thresholds, but every aggregate and audit
-    # section is recomputed against the group's pair subset. The combined
-    # report above is unchanged so update_registry.py / aggregate_runs.py keep
-    # reading trades.xlsx + summary.json as today. The by_group KEYS and output
-    # filenames are kept stable (downstream readers depend on them); only the
-    # pair membership (above) and the human LABELS change.
+    # ---- Per-group emails (Book A: original FX+Gold | Book B: new FX+BTC) ----
+    # The ONLY HTML output. Each is proximal-only, decision-first, with every
+    # aggregate recomputed against the group's pair subset. by_group KEYS and
+    # filenames are kept stable (registry / aggregate_runs depend on them).
     forex_trades_all = [t for t in trades_all if t.get("pair") in FOREX_PAIRS]
     indcom_trades_all = [t for t in trades_all if t.get("pair") in INDEX_COMMODITY_PAIRS]
 
@@ -3956,11 +3507,13 @@ def write_h1_only_report(
         by_group["forex"] = _build_group_html(
             "Original (FX majors + Gold)", forex_trades_all, forex_meta, risk_usd,
             out_dir, "report_forex.html", "forex_trades.xlsx",
+            exit_lab_sink=exit_lab_sink,
         )
     if indcom_trades_all:
         by_group["gold_nas"] = _build_group_html(
-            "New (new FX + BTC + NAS100)", indcom_trades_all, indcom_meta, risk_usd,
+            "New (new FX + BTC)", indcom_trades_all, indcom_meta, risk_usd,
             out_dir, "report_gold_nas.html", "nas_xau_trades.xlsx",
+            exit_lab_sink=exit_lab_sink,
         )
 
     if by_group:

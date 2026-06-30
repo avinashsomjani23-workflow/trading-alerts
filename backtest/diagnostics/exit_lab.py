@@ -32,7 +32,6 @@ from typing import Any, Dict, List
 import numpy as np
 import pandas as pd
 
-import backtest.h1_only_simulator as sim
 from backtest.insights import bootstrap_ci
 
 # ── The locked experiment set (HANDOFF / RECOMMENDATIONS) ───────────────────
@@ -109,10 +108,10 @@ def main():
     _ur.build_registry = lambda *a, **k: None
     _cl.commit_run_logs = lambda *a, **k: "diag-nocommit"
 
-    # Arm the side-channel.
+    # The side-channel is armed INSIDE run() now (the ProcessPoolExecutor uses
+    # spawn, so a parent-set global never reaches the workers -- each worker arms
+    # its own sink and returns it). We just pass a list for run() to fill.
     sink: List[Dict[str, Any]] = []
-    sim.EXIT_LAB_CONFIGS = CONFIGS
-    sim.EXIT_LAB_SINK = sink
 
     import backtest.run_backtest as rb
     start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
@@ -120,11 +119,9 @@ def main():
     pairs = [p.strip() for p in args.pairs.split(",") if p.strip()]
 
     print(f"Fresh backtest {args.start}..{args.end}  pairs={pairs}")
-    print("(persistence disabled; exit-lab side-channel armed)")
-    out_dir = rb.run(start, end, pairs, regime="bau", risk_usd=250.0, send_email=False)
-
-    sim.EXIT_LAB_CONFIGS = None
-    sim.EXIT_LAB_SINK = None
+    print("(persistence disabled; exit-lab side-channel armed inside run())")
+    out_dir = rb.run(start, end, pairs, regime="bau", risk_usd=250.0,
+                     send_email=False, exit_lab_sink_out=sink)
 
     rep = pd.DataFrame(sink)
     rep = rep[rep["entry_zone"] == "proximal"].copy()  # the live model

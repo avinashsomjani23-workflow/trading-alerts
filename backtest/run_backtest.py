@@ -87,15 +87,21 @@ def _build_scanlog(run_id, start, end, pairs_to_run, dfs, risk_usd, fetch_pad_da
 
 
 def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
-                  news_events, risk_usd) -> dict:
+                  news_events, risk_usd, exit_lab_configs=None) -> dict:
     """Run one pair's full replay + simulation in an isolated worker process.
 
     Called by ProcessPoolExecutor — must be a top-level function so Python can
     pickle it. Each worker process gets its own memory: the global scanlog and
     run_logger state are isolated, so concurrent writes never collide.
 
-    Returns a dict with alerts, trades, and per-pair tallies for the main
-    process to merge.
+    `exit_lab_configs` (when passed) arms the simulator's exit-lab side-channel
+    INSIDE this worker. The pool uses spawn (Windows + py3.14), so a sink set in
+    the parent is never seen here — the worker must arm its OWN sink and RETURN
+    it. The side-channel stays pure (it never touches r_realised or the trade
+    row); it only replays alternative exit recipes over the same post-fill bars.
+
+    Returns a dict with alerts, trades, per-pair tallies, and (when armed) the
+    worker's exit-lab sink rows for the main process to merge.
     """
     # Worker-local imports (each process re-imports these; no shared state).
     import pandas as _pd
@@ -106,6 +112,14 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
 
     name = pair_conf["name"]
     pair_type = pair_conf.get("pair_type", "forex")
+
+    # Arm the exit-lab side-channel in THIS worker (spawn => parent globals don't
+    # reach us). Pure observe: replays each recipe over the same post-fill bars,
+    # appends per-recipe R to the local sink, never touches r_realised.
+    exit_lab_sink: list = []
+    if exit_lab_configs:
+        _sim.EXIT_LAB_CONFIGS = exit_lab_configs
+        _sim.EXIT_LAB_SINK = exit_lab_sink
 
     pair_alerts = []
     pair_trades = []
@@ -190,6 +204,12 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
             "bos_tier": (event.get("ob") or {}).get("bos_tier"),
         })
 
+    # Disarm + harvest the side-channel so the sink rides home in the pickled
+    # return (the parent's global was never the one we appended to).
+    if exit_lab_configs:
+        _sim.EXIT_LAB_CONFIGS = None
+        _sim.EXIT_LAB_SINK = None
+
     return {
         "name": name,
         "alerts": alert_rows,
@@ -198,6 +218,7 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
         "n_blocked": n_blocked,
         "n_ist_blocked": n_ist_blocked,
         "n_kz_dropped": n_kz_dropped,
+        "exit_lab_sink": exit_lab_sink,
     }
 
 
@@ -226,8 +247,21 @@ def _regime_label_for(regime: str, start: datetime, end: datetime):
 
 def run(start: datetime, end: datetime, pair_names: list,
         regime: str = "auto", risk_usd: float = 250.0,
-        send_email: bool = False) -> Path:
+        send_email: bool = False,
+        exit_lab_sink_out: list = None) -> Path:
+    """Run an H1-only backtest. If `exit_lab_sink_out` is a list, the merged
+    exit-lab side-channel rows (every recipe replayed per fill) are appended to
+    it for a diagnostic caller (exit_lab.py) -- the email already gets the same
+    data internally, so normal callers leave this None."""
     cfg = _load_config()
+
+    # NAS100 is excluded ENTIRELY from the backtest (2026-06-30 trader decision).
+    # Hard-drop it here so NO caller -- CLI default, cron, or any list passed in
+    # -- can generate a NAS100 trade row. Removing it run-level (not just at the
+    # reporting split) guarantees it never reaches a CSV, Excel, summary, or
+    # email. Other diagnostics that still want it pass their own list to a
+    # different entry point; the live backtest does not trade it.
+    pair_names = [p for p in pair_names if p != "NAS100"]
 
     # Regime: 'auto' (default) consults WAR_REGIME_WEEKS.json. Explicit
     # 'war'/'bau' overrides the file. We resolve once here so every downstream
@@ -251,7 +285,8 @@ def run(start: datetime, end: datetime, pair_names: list,
 
     try:
         return _run_h1_only(cfg, start, end, pair_names, regime,
-                            risk_usd, send_email, out_dir, run_id)
+                            risk_usd, send_email, out_dir, run_id,
+                            exit_lab_sink_out=exit_lab_sink_out)
     except Exception as e:
         log_event("run_fatal", level="error", error=f"{type(e).__name__}: {e}")
         raise
@@ -261,7 +296,7 @@ def run(start: datetime, end: datetime, pair_names: list,
 
 
 def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
-                 out_dir, run_id):
+                 out_dir, run_id, exit_lab_sink_out=None):
     """H1-only backtest run.
 
       - Skips M15 + M5 data fetches entirely (faster, no yfinance 60d issue).
@@ -379,13 +414,19 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
     print(f"\n  [parallel] launching {len(valid_pairs)} pairs "
           f"across {n_workers} workers")
 
+    # Exit-lab recipe set, armed in every worker so the email's exit section has
+    # the full per-recipe data (the same recipes the standalone exit_lab studies).
+    # One canonical source -- imported, not redefined here. The side-channel is
+    # pure observe; it adds replay work per fill but never changes r_realised.
+    from backtest.diagnostics.exit_lab import CONFIGS as _EXIT_LAB_CONFIGS
+
     pair_results: dict = {}
     with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futures = {
             pool.submit(
                 _process_pair,
                 pair_conf, df_h1, walk_start_ts, walk_end_ts,
-                news_events, risk_usd,
+                news_events, risk_usd, _EXIT_LAB_CONFIGS,
             ): pair_conf["name"]
             for pair_conf, df_h1 in valid_pairs
         }
@@ -400,6 +441,7 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
 
     # Merge results back into main-process accumulators in config order so
     # report output is deterministic regardless of which pair finished first.
+    exit_lab_sink: list = []
     for pair_conf in pairs_to_run:
         name = pair_conf["name"]
         res = pair_results.get(name)
@@ -409,6 +451,7 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
 
         all_alerts.extend(res["alerts"])
         all_trades.extend(res["trades"])
+        exit_lab_sink.extend(res.get("exit_lab_sink") or [])
         killzone_drops_by_pair[name] = res["n_kz_dropped"]
 
         log_event("pair_alerts_collected", pair=name,
@@ -440,6 +483,11 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                           r_if_exit_tp1=row.get("r_if_exit_tp1"),
                           r_if_exit_tp2=row.get("r_if_exit_tp2"),
                           hypothetical=True)
+
+    # Hand the merged exit-lab sink to a diagnostic caller (exit_lab.py) if one
+    # asked for it. The email gets the same rows via write_h1_only_report below.
+    if exit_lab_sink_out is not None:
+        exit_lab_sink_out.extend(exit_lab_sink)
 
     n_blocked_total = sum(1 for t in all_trades if t.get("news_blocked"))
     n_ist_blocked_total = sum(1 for t in all_trades if t.get("ist_blocked"))
@@ -483,6 +531,7 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
     }
     report_dir = h1_only_reporting.write_h1_only_report(
         run_id, all_trades, all_alerts, meta, risk_usd=risk_usd,
+        exit_lab_sink=exit_lab_sink,
     )
     log_event("report_written", path=str(report_dir),
               total_alerts=len(all_alerts), total_trades=len(all_trades))
@@ -580,19 +629,18 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
 
 
 def _read_realised_headline(report_dir) -> float:
-    """The reporting layer's realised headline, summed across both scoreboards.
-    G1 requires our independent r_realised figure to equal this. Returns 0.0 if
-    summary.json is absent (the gate then reconciles only the per-row sum)."""
+    """The reporting layer's realised headline. PROXIMAL ONLY (2026-06-30): the
+    report is now the proximal/live book alone — 50% mean entry is dead — so G1
+    reconciles the proximal scoreboard against the proximal r_realised sum.
+    Returns None if summary.json is absent (gate then reconciles per-row only)."""
     p = report_dir / "summary.json"
     if not p.exists():
         return None
     try:
         s = json.loads(p.read_text(encoding="utf-8"))
         boards = s.get("scoreboards", {})
-        total = 0.0
-        for key in ("proximal_realised", "fifty_pct_realised"):
-            total += float(boards.get(key, {}).get("total_pnl_usd", 0.0))
-        return round(total, 6)
+        return round(float(boards.get("proximal_realised", {})
+                           .get("total_pnl_usd", 0.0)), 6)
     except Exception:
         return None
 
@@ -684,8 +732,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", required=True, help="YYYY-MM-DD")
     ap.add_argument("--end", required=True, help="YYYY-MM-DD")
-    ap.add_argument("--pairs", default="EURUSD,NZDUSD,USDJPY,USDCHF,NAS100,GOLD",
-                    help="Comma-separated pair names")
+    ap.add_argument("--pairs",
+                    default="EURUSD,NZDUSD,USDJPY,USDCHF,GOLD,"
+                            "GBPUSD,AUDUSD,USDCAD,EURJPY,BTCUSD",
+                    help="Comma-separated pair names (NAS100 is dropped run-level)")
     ap.add_argument("--regime", default="auto", choices=["auto", "war", "bau"],
                     help="auto reads backtest/WAR_REGIME_WEEKS.json; explicit war/bau overrides")
     ap.add_argument("--risk-usd", type=float, default=250.0)

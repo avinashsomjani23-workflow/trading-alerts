@@ -76,22 +76,29 @@ class HealthResult:
 
 
 def _is_counted(t: Dict[str, Any]) -> bool:
-    """A trade row that feeds the reporting headline. Delegates to the reporting
-    layer's _is_eligible (resolved fill AND clears the live score floor) so the
-    gate sums the IDENTICAL row set the scoreboards do -- otherwise G1
-    reconciles two different sums. Live parity: news / IST / killzone NEVER gate
-    (they don't suppress an alert in live), so they are not consulted here."""
-    return _is_eligible(t)
+    """A trade row that feeds the reporting headline. Must sum the IDENTICAL row
+    set the scoreboards do, or G1 reconciles two different sums.
+
+    PROXIMAL ONLY (2026-06-30): the reporting headline is now the proximal/live
+    book alone — the 50% mean entry is dead and shown nowhere. So G1's
+    independent r_realised sum is restricted to proximal too, matching the
+    report. (The 50% split field is computed separately for audit.)
+    Delegates to _is_eligible (resolved fill AND clears the live score floor).
+    Live parity: news / IST / killzone NEVER gate, so they are not consulted."""
+    return t.get("entry_zone") == "proximal" and _is_eligible(t)
 
 
-def _sum_r_realised_pnl(trades: List[Dict[str, Any]], risk_usd: float) -> float:
+def _sum_r_realised_pnl(trades: List[Dict[str, Any]], risk_usd: float,
+                        counted=None) -> float:
     """Headline from r_realised ONLY (G1/G6). Never reads pnl_usd or the
     hypothetical tp1/tp2 columns. Rows are restricted to the SAME set the
-    reporting layer aggregates: not blocked, and a resolved fill (never_filled
-    and timeout excluded). This is the single source of truth the reporting
-    layer must reconcile against."""
+    reporting layer aggregates: proximal, not blocked, resolved fill, clears the
+    score floor. This is the single source of truth the reporting layer must
+    reconcile against. `counted` overrides the row predicate (used to compute
+    the 50%-zone audit split, which the default proximal-only predicate hides)."""
+    pred = counted or _is_counted
     return round(
-        sum(float(t.get("r_realised", 0.0)) for t in trades if _is_counted(t))
+        sum(float(t.get("r_realised", 0.0)) for t in trades if pred(t))
         * risk_usd, 6)
 
 
@@ -298,8 +305,11 @@ def evaluate(
         headline_pnl_usd=headline,
         proximal_headline_usd=_sum_r_realised_pnl(
             [t for t in trades if t.get("entry_zone") == "proximal"], risk_usd),
+        # 50% is an audit-only split now (not in the headline); count it with a
+        # 50%-zone predicate since the default _is_counted is proximal-only.
         fifty_pct_headline_usd=_sum_r_realised_pnl(
-            [t for t in trades if t.get("entry_zone") == "50pct"], risk_usd),
+            trades, risk_usd,
+            counted=lambda t: t.get("entry_zone") == "50pct" and _is_eligible(t)),
         content_hash=chash,
     )
 
