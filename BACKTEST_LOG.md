@@ -1,6 +1,6 @@
 # Backtest Registry
 
-*Last updated: 2026-07-01 08:52 UTC*
+*Last updated: 2026-07-01 13:41 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
@@ -24,9 +24,9 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Metric | Value |
 |--------|-------|
 | Filled trades | 667 (of 970 rows) |
-| Win rate | 33.7% |
-| Expectancy | -0.07R |
-| Max drawdown | +70.96R |
+| Win rate | 34.6% |
+| Expectancy | -0.06R |
+| Max drawdown | +56.69R |
 | Longest losing streak | 11 trades |
 | Proximal fill rate | 68.8% |
 | Score verdict | WEAK — partial relationship |
@@ -35,30 +35,30 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 | Pair | Trades | Win rate | Expectancy |
 |------|--------|----------|------------|
-| USDJPY | 139 | 39.1% | +0.03R |
-| NZDUSD | 86 | 37.8% | -0.04R |
-| EURUSD | 151 | 31.4% | -0.10R |
-| USDCHF | 128 | 31.6% | -0.13R |
-| GOLD | 163 | 31.0% | -0.12R |
+| USDJPY | 140 | 40.4% | +0.04R |
+| NZDUSD | 86 | 38.4% | -0.03R |
+| EURUSD | 150 | 32.2% | -0.08R |
+| USDCHF | 129 | 32.8% | -0.10R |
+| GOLD | 162 | 31.7% | -0.10R |
 
 **By session:**
 
 | Session | Trades | Win rate | Expectancy |
 |---------|--------|----------|------------|
-| Asia | 113 | 47.8% | +0.22R |
-| London | 275 | 30.6% | -0.13R |
-| NY | 280 | 31.5% | -0.14R |
+| Asia | 114 | 48.9% | +0.24R |
+| London | 275 | 31.9% | -0.11R |
+| NY | 280 | 31.8% | -0.13R |
 
 **Score vs outcome:**
 
 | Score bucket | Trades | Win rate | Expectancy |
 |-------------|--------|----------|------------|
 | 2-3 | 1 | — | +0.00R |
-| 3-4 | 17 | 53.3% | +0.41R |
-| 4-5 | 95 | 31.1% | -0.13R |
-| 5-6 | 173 | 27.0% | -0.23R |
-| 6-7 | 175 | 36.2% | -0.01R |
-| 7+ | 206 | 36.5% | -0.02R |
+| 3-4 | 18 | 57.1% | +0.44R |
+| 4-5 | 96 | 32.4% | -0.13R |
+| 5-6 | 172 | 29.0% | -0.18R |
+| 6-7 | 176 | 35.6% | -0.01R |
+| 7+ | 204 | 37.5% | -0.00R |
 
 ---
 
