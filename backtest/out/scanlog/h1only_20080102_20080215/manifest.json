@@ -1,0 +1,46 @@
+{
+  "run_id": "h1only_20080102_20080215",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-07-01T19:38:10.876998+00:00",
+  "git_sha": "cf49a26",
+  "risk_usd": 250.0,
+  "min_warmup_bars": 50,
+  "fetch_pad_days": 35,
+  "pairs": [
+    {
+      "name": "EURUSD",
+      "symbol": "EURUSD=X",
+      "requested_start": "2008-01-02T00:00:00+00:00",
+      "requested_end": "2008-02-15T00:00:00+00:00",
+      "served_start": "2008-01-02T07:00:00+00:00",
+      "served_end": "2008-02-15T00:00:00+00:00",
+      "n_bars": 756,
+      "fingerprint": "62a2a235b10f36c6",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "GOLD",
+      "symbol": "GC=F",
+      "requested_start": "2008-01-02T00:00:00+00:00",
+      "requested_end": "2008-02-15T00:00:00+00:00",
+      "served_start": "2008-01-02T08:00:00+00:00",
+      "served_end": "2008-02-15T00:00:00+00:00",
+      "n_bars": 723,
+      "fingerprint": "44eb339e6be121c7",
+      "prox_cap_atr": 3.0
+    }
+  ],
+  "knobs": {
+    "EURUSD.atr_multiplier": 2.5,
+    "EURUSD.distal_invalidation_mode": "close",
+    "EURUSD.spread_pips": 2.0,
+    "GOLD.atr_multiplier": 3.0,
+    "GOLD.distal_invalidation_mode": "close",
+    "GOLD.spread_pips": 0.5
+  },
+  "versions": {
+    "python": "3.14.5",
+    "pandas": "3.0.3",
+    "yfinance": "1.3.0"
+  }
+}
