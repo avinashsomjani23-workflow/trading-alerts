@@ -254,4 +254,59 @@ relative ranging-vs-expansion gap is robust across all 3 instruments — re-run 
 - **Glossary:** Buyside = above price (PWH/PDH/forming-high); Sellside = below (PWL/PDL/forming-low).
   Sweep = wick through + close back (fuel). Break/displacement = close beyond + hold (N=1). DOL =
   nearest unswept pool in bias direction. A pool dies once swept. Tier: `PWH/PWL > PDH/PDL > internal`.
+
+---
+
+## 11. Addendum — chat of 2026-06-30 (re-tests + two live bugs found)
+
+**All scripts here are committed/uncommitted scratch under `backtest/diagnostics/`:
+`scratch_daily_bias_selection.py` (walk-based labeler), `_csv.py` (no-walk, committed
+trades), `_bau.py` (A/B/hybrid traces), `scratch_bau_committed.py` (BAU re-test),
+`scratch_bau_walk.py` + `scratch_bau_launch.py` (detached walk dumper).**
+
+**Selection value, re-tested the RIGHT way (real D1 bias, not the H1 proxy):**
+- Method: attach a point-in-time D1 bias (compute_structure, buffer OFF, lb3, true 21:00 UTC
+  close) to every committed H1 trade (proximal, score>=4, resolved, not ist_blocked —
+  killzone/news stay IN per `h1_only_reporting:184-186,3653`). Slice `r_realised` with/counter.
+- Full set (6 pairs, Jul2024–Jun2026, 495 trades): with−counter **+0.13R but NOT significant
+  (t≈1.2)**, and it lived ENTIRELY in the 2026 war regime — discovery half (≤Jun2025) ≈ 0,
+  validation (war) +0.24. i.e. an artifact, the opposite of "survives OOS".
+- **BAU-only (war excluded, <2026, 4 pairs EUR/NZD/JPY/XAU, 304 trades):**
+  Rule B (confirmation = live engine) sep **+0.055** (CI ±0.28, NOT sig);
+  Rule A (formation) sep **−0.111 (NEGATIVE)**; Hybrid **−0.098**. Per-instrument incoherent.
+- **VERDICT: no daily-bias selection edge survives into clean BAU data.** The old "+0.153R" AND
+  this chat's "+0.13R" were artifacts (H1-trend proxy / war-year / 6-pair pooling). Formation
+  does NOT buy selection — **timeliness ≠ edge.** Do NOT build a daily-bias selection filter;
+  observe-only at most. (Underpowered: CI ±0.28 on 304 trades — can't prove zero, but nothing
+  to build on, and formation came in negative.)
+
+**Flip-rule lag re-confirmed live (`scratch_d1_bias_flip.py`, re-run):** raw FORMATION (A)
+median lag **14** D1 bars; CHoCH+BOS confirmation (B) **31**. Formation is the EARLIER signal.
+(If anyone says it's the other way round, it's swapped — see §5 table + the live re-run.)
+
+**LIVE BUG #1 — stale trend mislabels OB alignment.** `trend_alignment`
+(`Phase2_Alert_Engine.py:2494,2523`) uses ONLY the confirmed trend. `flip_unconfirmed` (a
+pending opposite CHoCH) is consumed in EXACTLY ONE place — a text caption (`smc_radar.py:2806`)
+— never to gate. So a bearish OB reads **"WITH H1 trend"** while an up-CHoCH is pending: a
+counter-real-trend short dressed as with-trend (trader nearly traded one). FIX (proposed,
+UNBUILT, needs approval): when `flip_unconfirmed` and `choch_pending_dir` is opposite the OB
+direction → never `with_trend`; demote/skip.
+
+**LIVE BUG #2 — confirmation BOS can miss a textbook confirmation.** The engine confirms a flip
+on breaking the FIRST confirmed swing high with pivot **strictly after** the CHoCH arm bar
+(`confirm_break_swing`, `dealing_range.py:1137`), broken by ≥0.4×ATR with a ≥1.0×ATR body
+(`:868`), and that swing must pass the **1.5×ATR leg filter** (`MIN_LEG_ATR_MULT`, `:328`) and a
+3-bar right-lookback (`:314`). It does **NOT** confirm on breaking "the CHoCH's own high." So a
+trader-obvious CHoCH→pullback→break-CHoCH-high can go undetected via: (1) the
+`idx > choch_arm_idx` exclusion of the CHoCH's own high; (2) the 1.5×ATR leg filter suppressing
+the post-CHoCH swing so `confirm_break_swing` stays None and confirmation NEVER fires; (3) the
+body/displacement gates rejecting the break candle. Suspected on a live EURUSD H1 chart (~Jun
+2026); NOT yet reproduced on the exact bars (no `TWELVEDATA_API_KEY` in that chat; MT5 cache
+ended 2026-06-26 with price 0.4 pips short of even arming the CHoCH). FIX candidates (UNBUILT,
+need approval): (a) allow the CHoCH's own high as the confirm level; (b) drop/relax leg+body
+gates for the confirmation BOS (as D1 already does); (c) lower right_lookback for confirmation.
+
+**Perf note:** the diagnostic walk (`driver.walk_alerts`) re-runs detection on a growing slice
+each bar (≈O(n²)); 2yr×4pairs got killed by the environment's process cap. Use committed
+`trades.csv` for any multi-year selection study; only walk for windows not already committed.
 ```
