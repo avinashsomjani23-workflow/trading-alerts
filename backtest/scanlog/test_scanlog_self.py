@@ -71,6 +71,9 @@ def _good_trade(**over):
         "pnl_usd": round(2.0 * 250.0, 2),
         "score": 10.0,       # must clear SCORE_FLOOR (config min_score_to_email)
         "ist_blocked": False, # must not be IST-blocked
+        "entry_zone": "proximal", # headline is proximal-only (2026-06-30); the
+                                  # gate counts proximal rows only, so the fixture
+                                  # must be proximal to be reconciled.
     }
     t.update(over)
     return t
