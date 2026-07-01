@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-01T19:38:43.340741+00:00",
+  "updated_at": "2026-07-01T19:41:48.303004+00:00",
   "runs": [
     {
       "run_id": "h1only_20080102_20080215",
@@ -86,6 +86,99 @@
       },
       "notes": "",
       "recorded_at": "2026-07-01T19:38:43.337916+00:00"
+    },
+    {
+      "run_id": "h1only_20080102_20080331",
+      "start": "2008-01-02",
+      "end": "2008-03-31",
+      "group": 0,
+      "regime": "bau",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 154,
+        "filled_trades": 107,
+        "win_rate_pct": 32.6,
+        "expectancy_r": -0.074,
+        "max_dd_r": 11.416,
+        "longest_losing_streak": 11,
+        "fill_rate_proximal_pct": 69.5,
+        "per_pair": [
+          {
+            "pair": "EURUSD",
+            "trades": 34,
+            "win_rate_pct": 34.6,
+            "expectancy_r": -0.025,
+            "total_pnl_usd": -214.75
+          },
+          {
+            "pair": "USDJPY",
+            "trades": 31,
+            "win_rate_pct": 34.8,
+            "expectancy_r": -0.069,
+            "total_pnl_usd": -538.5
+          },
+          {
+            "pair": "GOLD",
+            "trades": 42,
+            "win_rate_pct": 29.7,
+            "expectancy_r": -0.116,
+            "total_pnl_usd": -1222.75
+          }
+        ],
+        "by_session": {
+          "Asia": {
+            "trades": 25,
+            "win_rate_pct": 61.1,
+            "expectancy_r": 0.55
+          },
+          "London": {
+            "trades": 36,
+            "win_rate_pct": 26.7,
+            "expectancy_r": -0.234
+          },
+          "NY": {
+            "trades": 46,
+            "win_rate_pct": 23.7,
+            "expectancy_r": -0.287
+          }
+        },
+        "score_buckets": [
+          {
+            "score_bucket": "3-4",
+            "trades": 4,
+            "win_rate_pct": 100.0,
+            "expectancy_r": 1.095
+          },
+          {
+            "score_bucket": "4-5",
+            "trades": 18,
+            "win_rate_pct": 21.4,
+            "expectancy_r": -0.423
+          },
+          {
+            "score_bucket": "5-6",
+            "trades": 30,
+            "win_rate_pct": 31.8,
+            "expectancy_r": -0.148
+          },
+          {
+            "score_bucket": "6-7",
+            "trades": 21,
+            "win_rate_pct": 17.6,
+            "expectancy_r": -0.351
+          },
+          {
+            "score_bucket": "7+",
+            "trades": 34,
+            "win_rate_pct": 41.9,
+            "expectancy_r": 0.21
+          }
+        ],
+        "score_verdict": "WEAK \u2014 partial relationship"
+      },
+      "notes": "",
+      "recorded_at": "2026-07-01T19:41:48.300395+00:00"
     },
     {
       "run_id": "h1only_20080102_20081231",
