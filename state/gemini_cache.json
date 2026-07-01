@@ -16,5 +16,12 @@
   },
   "GOLD|SHORT|2026-07-01": {
     "macro_summary": "The ADP Non-Farm Employment Change at 21:45 IST could help this short Gold trade if it prints significantly below expectations, while a strong print would hurt it. Fed Chairman Warsh speaking at 22:30 IST could hurt the trade if he signals a hawkish stance, but could help if he signals a dovish stance. The ISM Manufacturing PMI and Prices at 23:30 IST could hurt the trade if they print strong, indicating economic expansion, and help if they print weak. President Trump speaking at 04:45 IST could hurt the trade if he makes hawkish remarks on trade or the economy."
+  },
+  "USDCHF|SHORT|2026-07-01": {
+    "macro_summary": "USDCHF SHORT setup faces key USD events. The ADP Non-Farm Employment Change at 21:45 IST, Fed Chairman Warsh Speaks at 22:30 IST, ISM Manufacturing PMI and Prices at 23:30 IST, and President Trump Speaks at 04:45 IST are all critical. We need weaker than expected US employment and manufacturing data, and dovish commentary from Fed Chairman Warsh and President Trump to help this trade; stronger data or hawkish remarks would hurt it."
+  },
+  "USDCHF|LONG|2026-07-01": {
+    "macro_summary": null,
+    "macro_unavailable": true
   }
 }
