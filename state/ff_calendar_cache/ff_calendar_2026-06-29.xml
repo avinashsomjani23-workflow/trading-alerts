@@ -726,9 +726,19 @@
 		<date><![CDATA[07-01-2026]]></date>
 		<time><![CDATA[2:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-3.4M]]></forecast>
+		<forecast><![CDATA[-2.9M]]></forecast>
 		<previous><![CDATA[-6.1M]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/10-us-crude-oil-inventories]]></url>
+	</event>
+	<event>
+		<title>President Trump Speaks</title>
+		<country>USD</country>
+		<date><![CDATA[07-01-2026]]></date>
+		<time><![CDATA[7:15pm]]></time>
+		<impact><![CDATA[Medium]]></impact>
+		<forecast />
+		<previous />
+		<url><![CDATA[https://www.forexfactory.com/calendar/645-us-president-trump-speaks]]></url>
 	</event>
 	<event>
 		<title>Building Consents m/m</title>
@@ -896,7 +906,7 @@
 		<date><![CDATA[07-02-2026]]></date>
 		<time><![CDATA[12:30pm]]></time>
 		<impact><![CDATA[High]]></impact>
-		<forecast><![CDATA[110K]]></forecast>
+		<forecast><![CDATA[114K]]></forecast>
 		<previous><![CDATA[172K]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/66-us-non-farm-employment-change]]></url>
 	</event>
@@ -946,7 +956,7 @@
 		<date><![CDATA[07-02-2026]]></date>
 		<time><![CDATA[2:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast />
+		<forecast><![CDATA[81B]]></forecast>
 		<previous><![CDATA[76B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/26-us-natural-gas-storage]]></url>
 	</event>
