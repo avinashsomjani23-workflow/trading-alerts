@@ -23,5 +23,9 @@
   "USDCHF|LONG|2026-07-01": {
     "macro_summary": null,
     "macro_unavailable": true
+  },
+  "EURUSD|SHORT|2026-07-01": {
+    "macro_summary": null,
+    "macro_unavailable": true
   }
 }
