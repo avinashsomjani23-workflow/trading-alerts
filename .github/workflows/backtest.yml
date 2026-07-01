@@ -49,6 +49,22 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Pre-flight — verify GitHub push will work
+        # A backtest runs ~20 min, then pushes its result logs to main at the
+        # very end (backtest/commit_logs.py). If that push can't reach GitHub or
+        # isn't authorised, the run wastes 20 min and NO email is sent (push is
+        # gated before the email by design). This read-only check proves the
+        # remote is reachable and writable-in-principle in a few seconds, so a
+        # connectivity/permission problem fails the workflow up front instead of
+        # after the full run. It is read-only (ls-remote) -- it never pushes.
+        run: |
+          set -e
+          echo "Checking GitHub remote is reachable and authorised..."
+          git fetch origin main
+          # ls-remote proves auth + reachability without mutating anything.
+          git ls-remote origin main
+          echo "Pre-flight OK: origin/main reachable. Push at end of run should succeed."
+
       - name: Run H1-only sanity test (synthetic OB)
         # Fast guardrail: catches regressions in compute_phase2_levels h1_only
         # path or the dual-entry simulator before we spend cycles on a full run.
