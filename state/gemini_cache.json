@@ -16,5 +16,22 @@
   },
   "GOLD|SHORT|2026-07-01": {
     "macro_summary": "The ADP Non-Farm Employment Change at 21:45 IST could help this short Gold trade if it prints significantly below expectations, while a strong print would hurt it. Fed Chairman Warsh speaking at 22:30 IST could hurt the trade if he signals a hawkish stance, but could help if he signals a dovish stance. The ISM Manufacturing PMI and Prices at 23:30 IST could hurt the trade if they print strong, indicating economic expansion, and help if they print weak. President Trump speaking at 04:45 IST could hurt the trade if he makes hawkish remarks on trade or the economy."
+  },
+  "USDCHF|SHORT|2026-07-01": {
+    "macro_summary": "USDCHF SHORT setup faces key USD events. The ADP Non-Farm Employment Change at 21:45 IST, Fed Chairman Warsh Speaks at 22:30 IST, ISM Manufacturing PMI and Prices at 23:30 IST, and President Trump Speaks at 04:45 IST are all critical. We need weaker than expected US employment and manufacturing data, and dovish commentary from Fed Chairman Warsh and President Trump to help this trade; stronger data or hawkish remarks would hurt it."
+  },
+  "USDCHF|LONG|2026-07-01": {
+    "macro_summary": null,
+    "macro_unavailable": true
+  },
+  "EURUSD|SHORT|2026-07-01": {
+    "macro_summary": null,
+    "macro_unavailable": true
+  },
+  "USDJPY|SHORT|2026-07-01": {
+    "macro_summary": "USDJPY SHORT setup faces key USD events: ADP Employment Change (21:45 IST) - a weaker number helps, a stronger number hurts. Fed Chairman Warsh Speaks (22:30 IST) - hawkish comments hurt, dovish comments help. ISM Manufacturing PMI (23:30 IST) - a lower PMI helps, a higher PMI hurts. President Trump Speaks (04:45 IST) - comments supporting a weaker dollar help, protectionist remarks hurt."
+  },
+  "GOLD|LONG|2026-07-01": {
+    "macro_summary": "The ADP Non-Farm Employment Change at 21:45 IST could help if it shows a strong increase, hurting if it shows a weak increase. Fed Chairman Warsh speaking at 22:30 IST could help if he signals dovish policy, hurting if he signals hawkish policy. ISM Manufacturing PMI and Prices at 23:30 IST could help if they are strong, hurting if they are weak. President Trump speaking at 04:45 IST could help if he signals de-escalation of trade tensions, hurting if he signals increased tensions."
   }
 }
