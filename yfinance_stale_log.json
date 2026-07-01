@@ -740,5 +740,12 @@
     "interval": "1h",
     "reason": "stale data (age 47.10h, limit 2.0h)",
     "age_hours": 47.1
+  },
+  {
+    "ts": "2026-07-01T23:37:48.774551",
+    "symbol": "JPY=X",
+    "interval": "1h",
+    "reason": "feed fetch failed",
+    "age_hours": null
   }
 ]
