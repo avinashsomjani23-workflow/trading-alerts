@@ -1,0 +1,60 @@
+{
+  "run_id": "h1only_20250101_20250228",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-06-30T12:29:56.073309+00:00",
+  "git_sha": "c4f3b42",
+  "risk_usd": 250.0,
+  "min_warmup_bars": 50,
+  "fetch_pad_days": 35,
+  "pairs": [
+    {
+      "name": "EURUSD",
+      "symbol": "EURUSD=X",
+      "requested_start": "2025-01-01T00:00:00+00:00",
+      "requested_end": "2025-02-28T00:00:00+00:00",
+      "served_start": "2024-11-27T00:00:00+00:00",
+      "served_end": "2025-02-28T00:00:00+00:00",
+      "n_bars": 1560,
+      "fingerprint": "0f6b95a521a53219",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "GOLD",
+      "symbol": "GC=F",
+      "requested_start": "2025-01-01T00:00:00+00:00",
+      "requested_end": "2025-02-28T00:00:00+00:00",
+      "served_start": "2024-11-27T00:00:00+00:00",
+      "served_end": "2025-02-28T00:00:00+00:00",
+      "n_bars": 1483,
+      "fingerprint": "1bed8a17e557934f",
+      "prox_cap_atr": 3.0
+    },
+    {
+      "name": "BTCUSD",
+      "symbol": "BTCUSD=X",
+      "requested_start": "2025-01-01T00:00:00+00:00",
+      "requested_end": "2025-02-28T00:00:00+00:00",
+      "served_start": "2024-11-27T00:00:00+00:00",
+      "served_end": "2025-02-28T00:00:00+00:00",
+      "n_bars": 2089,
+      "fingerprint": "3055ee6c4c4b3770",
+      "prox_cap_atr": 3.0
+    }
+  ],
+  "knobs": {
+    "EURUSD.atr_multiplier": 2.5,
+    "EURUSD.distal_invalidation_mode": "close",
+    "EURUSD.spread_pips": 2.0,
+    "GOLD.atr_multiplier": 3.0,
+    "GOLD.distal_invalidation_mode": "close",
+    "GOLD.spread_pips": 0.5,
+    "BTCUSD.atr_multiplier": 3.0,
+    "BTCUSD.distal_invalidation_mode": "close",
+    "BTCUSD.spread_pips": 20.0
+  },
+  "versions": {
+    "python": "3.14.5",
+    "pandas": "3.0.3",
+    "yfinance": "1.3.0"
+  }
+}

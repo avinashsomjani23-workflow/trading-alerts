@@ -105,7 +105,6 @@ def test_headline_matches_per_trade_sum():
         s = json.loads(summary_path.read_text())
 
         sb_prox = s["scoreboards"]["proximal_realised"]
-        sb_mid  = s["scoreboards"]["fifty_pct_realised"]
 
         # $250, not $375 -- the window_end row is excluded from the headline.
         if sb_prox["total_pnl_usd"] != 250.0:
@@ -119,9 +118,10 @@ def test_headline_matches_per_trade_sum():
                     f"got {sb_prox['trades']}")
         _passed(f"proximal trade count = {sb_prox['trades']} (resolved only)")
 
-        if sb_mid["total_pnl_usd"] != 0.0:
-            _failed(f"50pct headline expected $0, got ${sb_mid['total_pnl_usd']}")
-        _passed(f"50pct headline = ${sb_mid['total_pnl_usd']}")
+        # 50% mean entry is dead (2026-06-30): its scoreboard must NOT be written.
+        if "fifty_pct_realised" in s["scoreboards"]:
+            _failed("fifty_pct_realised must not be in summary (50% is dead)")
+        _passed("50% scoreboard absent (proximal-only report)")
 
         # window_end stays VISIBLE in the exit-reason counts -- audit-only,
         # not hidden. The veteran's requirement: trader must see how many
@@ -144,12 +144,10 @@ def test_registry_uses_realised_not_tp2():
     summary = {
         "total_trade_rows": 4,
         "fill_rate_proximal": {"alerts": 4, "filled": 2, "fill_rate_pct": 50.0},
-        "fill_rate_50pct":    {"alerts": 4, "filled": 1, "fill_rate_pct": 25.0},
         "scoreboards": {
             "proximal_realised":  {"trades": 2, "win_rate_pct": 50.0, "expectancy_r": 0.5},
             "proximal_exit_tp1":  {"trades": 2, "win_rate_pct": 100.0, "expectancy_r": 1.0},
             "proximal_exit_tp2":  {"trades": 2, "win_rate_pct": 100.0, "expectancy_r": 2.0},
-            "fifty_pct_realised": {"trades": 1, "win_rate_pct": 0.0,  "expectancy_r": -1.0},
         },
         "per_pair_proximal_realised":     [{"pair": "EURUSD", "trades": 2}],
         "score_buckets_proximal_realised":[{"score_bucket": "3-4", "trades": 2}],
@@ -227,31 +225,39 @@ def test_exported_csv_reconciles_to_headline():
         "unresolved:timeout":   _mk_trade("X", "proximal", 2.0, 2.0, 2.0, exit_reason="timeout"),
         "unresolved:window_end":_mk_trade("X", "proximal", 0.5, 0.5, 0.5, exit_reason="window_end"),
         "never_filled":         _mk_trade("X", "proximal", 0.0, 0.0, 0.0, exit_reason="never_filled"),
-        "below_score_floor":    {**_mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"), "score": 2},
+        # Score floor RETIRED (2026-06-30): a low-score resolved trade is now
+        # ELIGIBLE — the backtest reports the true P&L of every OB-touch. The
+        # old "below_score_floor" exclusion no longer fires.
+        "":                     {**_mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"), "score": 2},
         "ist_blocked":          {**_mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"), "ist_blocked": True},
-        "":                     _mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"),
     }
     for expected, row in cases.items():
         got = he(row)
         if got != expected:
             _failed(f"_headline_exclusion expected {expected!r}, got {got!r}")
-    _passed("_headline_exclusion branches (timeout/window_end/never_filled/floor/ist/eligible) correct")
+    # Belt-and-braces: a score-2 trade MUST be eligible now (floor retired).
+    if not h1_only_reporting._is_eligible(
+            {**_mk_trade("X", "proximal", 1.0, 1.0, 1.0, exit_reason="tp1"), "score": 1}):
+        _failed("score floor retired but a score-1 trade is still excluded")
+    _passed("_headline_exclusion branches (timeout/window_end/never_filled/ist/eligible; score NEVER gates) correct")
 
     # A timeout winner (+2R) MUST be excluded from the headline but MUST stay
-    # present in trades.csv flagged ineligible (audit, not hidden). Below-floor
-    # and ist_blocked rows are pulled from the run UPSTREAM (audit list, never
-    # the CSV), so the only ineligible rows reaching the file are unresolved.
+    # present in trades.csv flagged ineligible (audit, not hidden). ist_blocked
+    # rows are pulled from the run UPSTREAM (audit list, never the CSV), so the
+    # only ineligible rows reaching the file are unresolved. Score never gates.
     trades = [
         _mk_trade("EURUSD", "proximal",  2.0,  1.0, 2.0, exit_reason="tp2"),   # eligible
         _mk_trade("EURUSD", "proximal", -1.0, -1.0, -1.0, exit_reason="sl"),   # eligible
         _mk_trade("EURUSD", "proximal",  2.0,  2.0, 2.0, exit_reason="timeout"),  # in file, excluded
-        _mk_trade("NAS100", "50pct",     1.0,  1.0, 1.0, exit_reason="tp1"),   # eligible
+        _mk_trade("EURUSD", "50pct",     1.0,  1.0, 1.0, exit_reason="tp1"),   # eligible row, NOT in headline
     ]
-    # Resolved+eligible headline = (+2R -1R) prox + (+1R) 50pct = +2R * 250 = $500.
+    # Headline is PROXIMAL ONLY now: (+2R -1R) prox = +1R * 250 = $250.
+    # The 50% row is still an eligible (resolved) fill in the CSV, but the
+    # headline scoreboard no longer counts it.
 
     with tempfile.TemporaryDirectory() as td:
         meta = {"start": "2024-08-19", "end": "2024-08-23", "regime": "bau",
-                "pairs": ["EURUSD", "NAS100"]}
+                "pairs": ["EURUSD"]}
         h1_only_reporting.write_h1_only_report(
             "test_run", trades, [], meta, risk_usd=250.0, out_root=Path(td),
         )
@@ -265,20 +271,21 @@ def test_exported_csv_reconciles_to_headline():
         _passed("trades.csv carries eligible_for_headline column")
 
         def _truthy(v): return str(v).strip().lower() in ("true", "1")
-        elig_sum = round(sum(float(r["pnl_usd"]) for r in rows
-                             if _truthy(r["eligible_for_headline"])), 2)
+        # The headline is proximal-only, so reconcile the PROXIMAL eligible rows.
+        prox_elig_sum = round(sum(
+            float(r["pnl_usd"]) for r in rows
+            if _truthy(r["eligible_for_headline"]) and r["entry_zone"] == "proximal"), 2)
 
-        headline = round(sum(
-            s["scoreboards"][k].get("total_pnl_usd", 0.0)
-            for k in ("proximal_realised", "fifty_pct_realised")), 2)
+        headline = round(
+            s["scoreboards"]["proximal_realised"].get("total_pnl_usd", 0.0), 2)
 
-        if elig_sum != headline:
-            _failed(f"CSV eligible sum ${elig_sum} != summary headline ${headline}")
-        _passed(f"CSV eligible-sum ${elig_sum} == headline ${headline}")
+        if prox_elig_sum != headline:
+            _failed(f"CSV proximal-eligible sum ${prox_elig_sum} != headline ${headline}")
+        _passed(f"CSV proximal-eligible sum ${prox_elig_sum} == headline ${headline}")
 
-        if elig_sum != 500.0:
-            _failed(f"expected $500 eligible (timeout excluded), got ${elig_sum}")
-        _passed(f"eligible sum = ${elig_sum} (timeout row correctly excluded)")
+        if headline != 250.0:
+            _failed(f"expected $250 proximal headline (timeout excluded), got ${headline}")
+        _passed(f"proximal headline = ${headline} (timeout row correctly excluded)")
 
         # The timeout row stays in the file, flagged with its reason -- audit,
         # not hidden. Summing the raw column (the bug) would have over-counted it.

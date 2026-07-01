@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -85,6 +86,142 @@ def _build_scanlog(run_id, start, end, pairs_to_run, dfs, risk_usd, fetch_pad_da
     return scanlog_emitter.ScanLog.begin(out_dir, manifest), knobs
 
 
+def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
+                  news_events, risk_usd, exit_lab_configs=None) -> dict:
+    """Run one pair's full replay + simulation in an isolated worker process.
+
+    Called by ProcessPoolExecutor — must be a top-level function so Python can
+    pickle it. Each worker process gets its own memory: the global scanlog and
+    run_logger state are isolated, so concurrent writes never collide.
+
+    `exit_lab_configs` (when passed) arms the simulator's exit-lab side-channel
+    INSIDE this worker. The pool uses spawn (Windows + py3.14), so a sink set in
+    the parent is never seen here — the worker must arm its OWN sink and RETURN
+    it. The side-channel stays pure (it never touches r_realised or the trade
+    row); it only replays alternative exit recipes over the same post-fill bars.
+
+    Returns a dict with alerts, trades, per-pair tallies, and (when armed) the
+    worker's exit-lab sink rows for the main process to merge.
+    """
+    # Worker-local imports (each process re-imports these; no shared state).
+    import pandas as _pd
+    from backtest import replay_engine as _re, h1_only_simulator as _sim
+    from backtest import ist_window as _ist
+    from backtest import killzone as _kz
+    import news_filter as _nf
+
+    name = pair_conf["name"]
+    pair_type = pair_conf.get("pair_type", "forex")
+
+    # Arm the exit-lab side-channel in THIS worker (spawn => parent globals don't
+    # reach us). Pure observe: replays each recipe over the same post-fill bars,
+    # appends per-recipe R to the local sink, never touches r_realised.
+    exit_lab_sink: list = []
+    if exit_lab_configs:
+        _sim.EXIT_LAB_CONFIGS = exit_lab_configs
+        _sim.EXIT_LAB_SINK = exit_lab_sink
+
+    pair_alerts = []
+    pair_trades = []
+    n_trades = 0
+    n_blocked = 0
+    n_ist_blocked = 0
+    n_kz_dropped = 0
+
+    state = _re.ReplayState()
+    for event in _re.replay_pair(
+        pair_conf, df_h1,
+        state=state, walk_start_ts=walk_start_ts, walk_end_ts=walk_end_ts,
+    ):
+        if event["kind"] == "alert":
+            pair_alerts.append(event)
+
+    print(f"  {name}: {len(pair_alerts)} OB-touch alerts")
+
+    seen_obs: set = set()
+    for alert in pair_alerts:
+        ob_key = (
+            (alert.get("ob") or {}).get("ob_timestamp"),
+            (alert.get("ob") or {}).get("direction"),
+        )
+        if ob_key in seen_obs:
+            continue
+        seen_obs.add(ob_key)
+
+        alert_ts_raw = alert["ts"]
+        if not isinstance(alert_ts_raw, _pd.Timestamp):
+            alert_ts_raw = _pd.Timestamp(alert_ts_raw)
+        if alert_ts_raw.tzinfo is None:
+            alert_ts_raw = alert_ts_raw.tz_localize("UTC")
+
+        killzone_blocked = not _kz.in_pair_killzone(alert_ts_raw, pair_conf)
+        if killzone_blocked:
+            n_kz_dropped += 1
+
+        rows = _sim.simulate_h1_only_dual(alert, pair_conf, df_h1, risk_usd=risk_usd)
+
+        alert_ts = alert_ts_raw
+        blocked, src_event = _nf.is_news_blackout(
+            alert_ts.to_pydatetime(), name, news_events, window_minutes=30,
+        )
+        ist_blocked = not _ist.in_user_trading_window(alert_ts, pair_type)
+
+        for row in rows:
+            row["news_blocked"]        = bool(blocked)
+            row["news_event_title"]    = src_event["title"]    if blocked else ""
+            row["news_event_currency"] = src_event["currency"] if blocked else ""
+            row["news_event_source"]   = src_event["source"]   if blocked else ""
+            row["news_event_ts"]       = src_event["ts_utc"].isoformat() if blocked else ""
+            row["ist_blocked"]         = bool(ist_blocked)
+            row["killzone_blocked"]    = bool(killzone_blocked)
+            row["killzone_windows"]    = _kz.windows_label(pair_conf)
+            row["alert_utc_hour"]      = int(alert_ts.hour)
+            pair_trades.append(row)
+            n_trades += 1
+            if blocked:
+                n_blocked += 1
+            if ist_blocked:
+                n_ist_blocked += 1
+
+    print(f"  {name}: {n_trades} simulated trade rows "
+          f"({n_blocked} news-blocked, {n_ist_blocked} IST-blocked, "
+          f"{n_kz_dropped} killzone-dropped alerts)")
+
+    # Return plain dicts only — no pandas objects, no live-module references.
+    # ProcessPoolExecutor pickles the return value back to the main process.
+    alert_rows = []
+    for event in pair_alerts:
+        alert_rows.append({
+            "pair": event["pair"],
+            "ts": str(event["ts"]),
+            "alert_bar_ts": (str(event["alert_bar_ts"])
+                             if event.get("alert_bar_ts") is not None else None),
+            "alert_seq": int(event.get("alert_seq", 1)),
+            "ob_timestamp": (event.get("ob") or {}).get("ob_timestamp"),
+            "bos_timestamp": (event.get("ob") or {}).get("bos_timestamp"),
+            "direction": (event.get("ob") or {}).get("direction"),
+            "bos_tag": (event.get("ob") or {}).get("bos_tag"),
+            "bos_tier": (event.get("ob") or {}).get("bos_tier"),
+        })
+
+    # Disarm + harvest the side-channel so the sink rides home in the pickled
+    # return (the parent's global was never the one we appended to).
+    if exit_lab_configs:
+        _sim.EXIT_LAB_CONFIGS = None
+        _sim.EXIT_LAB_SINK = None
+
+    return {
+        "name": name,
+        "alerts": alert_rows,
+        "trades": pair_trades,
+        "n_trades": n_trades,
+        "n_blocked": n_blocked,
+        "n_ist_blocked": n_ist_blocked,
+        "n_kz_dropped": n_kz_dropped,
+        "exit_lab_sink": exit_lab_sink,
+    }
+
+
 def _load_config() -> dict:
     with open(_REPO_ROOT / "config.json") as f:
         return json.load(f)
@@ -110,8 +247,21 @@ def _regime_label_for(regime: str, start: datetime, end: datetime):
 
 def run(start: datetime, end: datetime, pair_names: list,
         regime: str = "auto", risk_usd: float = 250.0,
-        send_email: bool = False) -> Path:
+        send_email: bool = False,
+        exit_lab_sink_out: list = None) -> Path:
+    """Run an H1-only backtest. If `exit_lab_sink_out` is a list, the merged
+    exit-lab side-channel rows (every recipe replayed per fill) are appended to
+    it for a diagnostic caller (exit_lab.py) -- the email already gets the same
+    data internally, so normal callers leave this None."""
     cfg = _load_config()
+
+    # NAS100 is excluded ENTIRELY from the backtest (2026-06-30 trader decision).
+    # Hard-drop it here so NO caller -- CLI default, cron, or any list passed in
+    # -- can generate a NAS100 trade row. Removing it run-level (not just at the
+    # reporting split) guarantees it never reaches a CSV, Excel, summary, or
+    # email. Other diagnostics that still want it pass their own list to a
+    # different entry point; the live backtest does not trade it.
+    pair_names = [p for p in pair_names if p != "NAS100"]
 
     # Regime: 'auto' (default) consults WAR_REGIME_WEEKS.json. Explicit
     # 'war'/'bau' overrides the file. We resolve once here so every downstream
@@ -135,7 +285,8 @@ def run(start: datetime, end: datetime, pair_names: list,
 
     try:
         return _run_h1_only(cfg, start, end, pair_names, regime,
-                            risk_usd, send_email, out_dir, run_id)
+                            risk_usd, send_email, out_dir, run_id,
+                            exit_lab_sink_out=exit_lab_sink_out)
     except Exception as e:
         log_event("run_fatal", level="error", error=f"{type(e).__name__}: {e}")
         raise
@@ -145,14 +296,16 @@ def run(start: datetime, end: datetime, pair_names: list,
 
 
 def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
-                 out_dir, run_id):
+                 out_dir, run_id, exit_lab_sink_out=None):
     """H1-only backtest run.
 
-      - Skips M15 + M5 data fetches entirely (faster, no yfinance 60d issue).
-      - No scoring gate (every OB-touch fires).
-      - Fires TWO trade rows per OB-touch (proximal + 50% mean) via
-        h1_only_simulator.simulate_h1_only_dual.
-      - Uses h1_only_reporting for the side-by-side TP1/TP2 scoreboard.
+      - H1 data only (MT5/FundingPips parquet cache). No M15/M5 fetches.
+      - No scoring gate at detection (every OB-touch fires); the live score
+        floor is applied later by the reporting/headline layer.
+      - Fires ONE trade row per OB-touch: the proximal entry (the live limit),
+        via h1_only_simulator.simulate_h1_only_dual. The 50% mean leg is dormant
+        (h1_only_simulator._ENABLE_50PCT_ENTRY=False, retired 2026-06-30).
+      - Uses h1_only_reporting for the TP1/TP2 scoreboard.
     """
     fetch_start = start - timedelta(days=35)
     pairs_to_run = [p for p in cfg["pairs"] if p["name"] in pair_names]
@@ -173,7 +326,6 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                   pair_type=p.get("pair_type"),
                   live=live_mult, backtest=live_mult)
 
-    state = replay_engine.ReplayState()
     all_alerts: list = []
     all_trades: list = []
     # Per-pair tally of alerts dropped by the killzone hard filter. Reported
@@ -230,8 +382,11 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         run_id, start, end, pairs_to_run, dfs, risk_usd,
         fetch_pad_days=35)
     print(f"  [scanlog] manifest written -> {scanlog.run_dir}")
-    # YF_CLAMP: served history starts later than requested (yfinance 720d cap).
-    # Recorded as a WARN condition so the gate table shows it, never hidden.
+    # YF_CLAMP (legacy condition name): served history starts later than
+    # requested -- now because the MT5/FundingPips cache doesn't reach that far
+    # back, not the old yfinance 720d cap. Recorded as a WARN condition so the
+    # gate table shows it, never hidden. (Identifier kept for scanlog schema
+    # stability; the cause is the cache extent.)
     for pair_conf in pairs_to_run:
         _df = dfs.get(pair_conf["name"])
         if _df is not None and not _df.empty and _df.index.min() > walk_start_ts:
@@ -239,185 +394,105 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                               requested_start=str(walk_start_ts),
                               served_start=str(_df.index.min()))
 
+    # Log data-load stats for every pair before launching workers.
     for pair_conf in pairs_to_run:
         name = pair_conf["name"]
-        symbol = pair_conf["symbol"]
-        print(f"\n=== {name} ({symbol}) ===")
-
         df_h1 = dfs.get(name)
         if df_h1 is None or df_h1.empty:
-            log_event("pair_skip", level="warn", pair=name,
-                      reason="h1_unavailable")
+            log_event("pair_skip", level="warn", pair=name, reason="h1_unavailable")
             print(f"  [SKIP] H1 unavailable for {name}")
-            continue
-        log_event("pair_data_loaded", pair=name, h1_rows=len(df_h1),
-                  h1_first=str(df_h1.index.min()),
-                  h1_last=str(df_h1.index.max()))
+        else:
+            log_event("pair_data_loaded", pair=name, h1_rows=len(df_h1),
+                      h1_first=str(df_h1.index.min()),
+                      h1_last=str(df_h1.index.max()))
 
-        # Walk H1 bars and collect OB-touch alerts.
-        alerts_for_pair = []
-        for event in replay_engine.replay_pair(
-            pair_conf, df_h1,
-            state=state, walk_start_ts=walk_start_ts, walk_end_ts=walk_end_ts,
-        ):
-            if event["kind"] == "alert":
-                alerts_for_pair.append(event)
-                all_alerts.append({
-                    "pair": event["pair"],
-                    "ts": str(event["ts"]),
-                    "alert_bar_ts": (str(event["alert_bar_ts"])
-                                     if event.get("alert_bar_ts") is not None
-                                     else None),
-                    "alert_seq": int(event.get("alert_seq", 1)),
-                    "ob_timestamp": (event.get("ob") or {}).get("ob_timestamp"),
-                    "bos_timestamp": (event.get("ob") or {}).get("bos_timestamp"),
-                    "direction": (event.get("ob") or {}).get("direction"),
-                    "bos_tag": (event.get("ob") or {}).get("bos_tag"),
-                    "bos_tier": (event.get("ob") or {}).get("bos_tier"),
-                })
+    # Run all pairs concurrently. Each pair is independent: ReplayState is
+    # per-pair, scanlog/run_logger globals live in isolated worker memory
+    # (ProcessPoolExecutor forks separate processes, not threads). Wall time
+    # drops from sum(pairs) to max(slowest_pair). CI runner is 2-core so we
+    # cap workers at min(6, cpu_count) to avoid over-subscribing.
+    import os as _os
+    n_workers = min(len(pairs_to_run), (_os.cpu_count() or 2))
+    valid_pairs = [(p, dfs[p["name"]]) for p in pairs_to_run
+                   if dfs.get(p["name"]) is not None and not dfs[p["name"]].empty]
+
+    print(f"\n  [parallel] launching {len(valid_pairs)} pairs "
+          f"across {n_workers} workers")
+
+    # Exit-lab recipe set, armed in every worker so the email's exit section has
+    # the full per-recipe data (the same recipes the standalone exit_lab studies).
+    # One canonical source -- imported, not redefined here. The side-channel is
+    # pure observe; it adds replay work per fill but never changes r_realised.
+    from backtest.diagnostics.exit_lab import CONFIGS as _EXIT_LAB_CONFIGS
+
+    pair_results: dict = {}
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
+        futures = {
+            pool.submit(
+                _process_pair,
+                pair_conf, df_h1, walk_start_ts, walk_end_ts,
+                news_events, risk_usd, _EXIT_LAB_CONFIGS,
+            ): pair_conf["name"]
+            for pair_conf, df_h1 in valid_pairs
+        }
+        for fut in as_completed(futures):
+            name = futures[fut]
+            try:
+                pair_results[name] = fut.result()
+            except Exception as e:
+                log_event("pair_worker_error", level="error", pair=name,
+                          error=f"{type(e).__name__}: {e}")
+                print(f"  [ERROR] {name} worker failed: {e}")
+
+    # Merge results back into main-process accumulators in config order so
+    # report output is deterministic regardless of which pair finished first.
+    exit_lab_sink: list = []
+    for pair_conf in pairs_to_run:
+        name = pair_conf["name"]
+        res = pair_results.get(name)
+        if res is None:
+            killzone_drops_by_pair[name] = 0
+            continue
+
+        all_alerts.extend(res["alerts"])
+        all_trades.extend(res["trades"])
+        exit_lab_sink.extend(res.get("exit_lab_sink") or [])
+        killzone_drops_by_pair[name] = res["n_kz_dropped"]
 
         log_event("pair_alerts_collected", pair=name,
-                  alerts=len(alerts_for_pair), mode="h1_only")
-        print(f"  {name}: {len(alerts_for_pair)} OB-touch alerts")
+                  alerts=len(res["alerts"]), mode="h1_only")
+        log_event("pair_trades_simulated", pair=name,
+                  trades=res["n_trades"],
+                  news_blocked=res["n_blocked"],
+                  ist_blocked=res["n_ist_blocked"],
+                  killzone_dropped_alerts=res["n_kz_dropped"])
 
-        n_trades_for_pair = 0
-        n_blocked_for_pair = 0
-        n_ist_blocked_for_pair = 0
-        n_killzone_dropped_for_pair = 0
-        pair_type = pair_conf.get("pair_type", "forex")
-        # Dedup: only the FIRST alert per (OB, entry_zone) is simulated.
-        # The replay engine emits one alert per re-armed approach (state
-        # machine), but the 2026-03 run showed the same OB firing 5-60
-        # times and producing identical loser clones. Treat each OB as
-        # one trade attempt per backtest -- once it fires, it's done.
-        # See RCA #1, #7, #8.
-        seen_obs: set = set()
-        for alert in alerts_for_pair:
-            ob_key = (
-                (alert.get("ob") or {}).get("ob_timestamp"),
-                (alert.get("ob") or {}).get("direction"),
-            )
-            if ob_key in seen_obs:
-                log_event("ob_dedup_skip", pair=name,
-                          alert_ts=str(alert["ts"]),
-                          ob_ts=ob_key[0], direction=ob_key[1],
-                          alert_seq=int(alert.get("alert_seq", 1)))
-                scanlog.condition("DEDUP_SUPPRESSED", pair=name,
-                                  ob_timestamp=ob_key[0], direction=ob_key[1])
-                scanlog.event("alert_suppressed_dedup", pair=name,
-                              ob_timestamp=ob_key[0], direction=ob_key[1])
-                continue
-            seen_obs.add(ob_key)
-            # Killzone gate -- alerts outside the pair's configured killzone
-            # are SIMULATED for audit (so we can show "what you would have
-            # made if you had traded outside the killzone") but tagged
-            # `killzone_blocked=True` and EXCLUDED from every aggregate
-            # metric in the report. This mirrors the IST/news gates so the
-            # user can verify per-pair killzone filtering is actually saving
-            # R, not just dropping winners.
-            alert_ts_raw = alert["ts"]
-            if not isinstance(alert_ts_raw, pd.Timestamp):
-                alert_ts_raw = pd.Timestamp(alert_ts_raw)
-            if alert_ts_raw.tzinfo is None:
-                alert_ts_raw = alert_ts_raw.tz_localize("UTC")
-            killzone_blocked = not killzone_filter.in_pair_killzone(
-                alert_ts_raw, pair_conf
-            )
-            if killzone_blocked:
-                n_killzone_dropped_for_pair += 1
-                log_event("killzone_drop", pair=name,
-                          alert_ts=str(alert["ts"]),
-                          utc_hour=int(alert_ts_raw.hour),
-                          utc_minute=int(alert_ts_raw.minute),
-                          windows=killzone_filter.windows_label(pair_conf))
-
-            rows = h1_only_simulator.simulate_h1_only_dual(
-                alert, pair_conf, df_h1, risk_usd=risk_usd,
-            )
-            # Blackout tagging. Option B: simulate every alert; tag
-            # blocked rows so they appear in Excel for audit but are
-            # excluded from every aggregate metric (handled in reporting).
-            #
-            # The blackout check uses the alert timestamp, not the fill
-            # timestamp, because that is the moment we would (live) decide
-            # whether to place the limit order.
-            alert_ts = alert_ts_raw
-            blocked, src_event = news_filter.is_news_blackout(
-                alert_ts.to_pydatetime(), name, news_events,
-                window_minutes=30,
-            )
-            # IST trading-window gate. Live system suppresses everything
-            # outside the user's IST window -- backtest must mirror this.
-            # Alerts outside the window are simulated for audit but excluded
-            # from every aggregate metric. Killzone-blocked rows are also
-            # excluded by the same mechanism (handled in reporting).
-            ist_blocked = not ist_window.in_user_trading_window(
-                alert_ts, pair_type
-            )
-            for row in rows:
-                row["news_blocked"]        = bool(blocked)
-                row["news_event_title"]    = src_event["title"]    if blocked else ""
-                row["news_event_currency"] = src_event["currency"] if blocked else ""
-                row["news_event_source"]   = src_event["source"]   if blocked else ""
-                row["news_event_ts"]       = src_event["ts_utc"].isoformat() if blocked else ""
-                row["ist_blocked"]         = bool(ist_blocked)
-                row["killzone_blocked"]    = bool(killzone_blocked)
-                row["killzone_windows"]    = killzone_filter.windows_label(pair_conf)
-                row["alert_utc_hour"]      = int(alert_ts.hour)
-                all_trades.append(row)
-                n_trades_for_pair += 1
-                if blocked:
-                    n_blocked_for_pair += 1
-                if ist_blocked:
-                    n_ist_blocked_for_pair += 1
-                # scanlog: fill + exit events with the full causality chain so
-                # G1 (P&L reconciliation) and G3 (causality) can judge each
-                # trade. r_if_exit_* are carried but tagged hypothetical (G6).
-                if row.get("fill_ts"):
-                    scanlog.event("trade_fill", pair=name,
-                                  alert_ts=row.get("alert_ts"),
-                                  fill_ts=row.get("fill_ts"),
-                                  entry=row.get("entry"),
-                                  entry_zone=row.get("entry_zone"))
-                scanlog.event("trade_exit", pair=name,
+        # Replay scanlog events from worker results back into the main scanlog
+        # so the audit trail (trade_fill, trade_exit) is complete.
+        for row in res["trades"]:
+            if row.get("fill_ts"):
+                scanlog.event("trade_fill", pair=name,
                               alert_ts=row.get("alert_ts"),
-                              ob_timestamp=row.get("ob_timestamp"),
-                              bos_timestamp=row.get("bos_timestamp"),
                               fill_ts=row.get("fill_ts"),
-                              exit_ts=row.get("exit_ts"),
-                              exit_reason=row.get("exit_reason"),
-                              r_realised=row.get("r_realised"),
-                              pnl_usd=row.get("pnl_usd"),
-                              r_if_exit_tp1=row.get("r_if_exit_tp1"),
-                              r_if_exit_tp2=row.get("r_if_exit_tp2"),
-                              hypothetical=True)
-                log_event("trade_simulated", pair=name,
-                          alert_ts=str(alert["ts"]),
-                          entry_zone=row.get("entry_zone"),
-                          score=row.get("score"),
-                          model="h1_only",
+                              entry=row.get("entry"),
+                              entry_zone=row.get("entry_zone"))
+            scanlog.event("trade_exit", pair=name,
+                          alert_ts=row.get("alert_ts"),
+                          ob_timestamp=row.get("ob_timestamp"),
+                          bos_timestamp=row.get("bos_timestamp"),
+                          fill_ts=row.get("fill_ts"),
+                          exit_ts=row.get("exit_ts"),
                           exit_reason=row.get("exit_reason"),
                           r_realised=row.get("r_realised"),
+                          pnl_usd=row.get("pnl_usd"),
                           r_if_exit_tp1=row.get("r_if_exit_tp1"),
                           r_if_exit_tp2=row.get("r_if_exit_tp2"),
-                          pnl_usd=row.get("pnl_usd"),
-                          news_blocked=bool(blocked),
-                          ist_blocked=bool(ist_blocked),
-                          news_event_title=row.get("news_event_title"),
-                          news_event_source=row.get("news_event_source"))
+                          hypothetical=True)
 
-        log_event("pair_trades_simulated", pair=name,
-                  trades=n_trades_for_pair,
-                  news_blocked=n_blocked_for_pair,
-                  ist_blocked=n_ist_blocked_for_pair,
-                  killzone_dropped_alerts=n_killzone_dropped_for_pair)
-        print(f"  {name}: {n_trades_for_pair} simulated trade rows "
-              f"(2 per qualified OB-touch; "
-              f"{n_blocked_for_pair} news-blocked, "
-              f"{n_ist_blocked_for_pair} IST-blocked, "
-              f"{n_killzone_dropped_for_pair} killzone-dropped alerts)")
-        # Aggregate killzone drops onto a run-level dict for the meta block.
-        killzone_drops_by_pair[name] = n_killzone_dropped_for_pair
+    # Hand the merged exit-lab sink to a diagnostic caller (exit_lab.py) if one
+    # asked for it. The email gets the same rows via write_h1_only_report below.
+    if exit_lab_sink_out is not None:
+        exit_lab_sink_out.extend(exit_lab_sink)
 
     n_blocked_total = sum(1 for t in all_trades if t.get("news_blocked"))
     n_ist_blocked_total = sum(1 for t in all_trades if t.get("ist_blocked"))
@@ -461,6 +536,7 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
     }
     report_dir = h1_only_reporting.write_h1_only_report(
         run_id, all_trades, all_alerts, meta, risk_usd=risk_usd,
+        exit_lab_sink=exit_lab_sink,
     )
     log_event("report_written", path=str(report_dir),
               total_alerts=len(all_alerts), total_trades=len(all_trades))
@@ -558,19 +634,18 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
 
 
 def _read_realised_headline(report_dir) -> float:
-    """The reporting layer's realised headline, summed across both scoreboards.
-    G1 requires our independent r_realised figure to equal this. Returns 0.0 if
-    summary.json is absent (the gate then reconciles only the per-row sum)."""
+    """The reporting layer's realised headline. PROXIMAL ONLY (2026-06-30): the
+    report is now the proximal/live book alone — 50% mean entry is dead — so G1
+    reconciles the proximal scoreboard against the proximal r_realised sum.
+    Returns None if summary.json is absent (gate then reconciles per-row only)."""
     p = report_dir / "summary.json"
     if not p.exists():
         return None
     try:
         s = json.loads(p.read_text(encoding="utf-8"))
         boards = s.get("scoreboards", {})
-        total = 0.0
-        for key in ("proximal_realised", "fifty_pct_realised"):
-            total += float(boards.get(key, {}).get("total_pnl_usd", 0.0))
-        return round(total, 6)
+        return round(float(boards.get("proximal_realised", {})
+                           .get("total_pnl_usd", 0.0)), 6)
     except Exception:
         return None
 
@@ -662,8 +737,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", required=True, help="YYYY-MM-DD")
     ap.add_argument("--end", required=True, help="YYYY-MM-DD")
-    ap.add_argument("--pairs", default="EURUSD,NZDUSD,USDJPY,USDCHF,NAS100,GOLD",
-                    help="Comma-separated pair names")
+    ap.add_argument("--pairs",
+                    default="EURUSD,NZDUSD,USDJPY,USDCHF,GOLD,"
+                            "GBPUSD,AUDUSD,USDCAD,EURJPY,BTCUSD",
+                    help="Comma-separated pair names (NAS100 is dropped run-level)")
     ap.add_argument("--regime", default="auto", choices=["auto", "war", "bau"],
                     help="auto reads backtest/WAR_REGIME_WEEKS.json; explicit war/bau overrides")
     ap.add_argument("--risk-usd", type=float, default=250.0)

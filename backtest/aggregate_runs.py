@@ -312,8 +312,8 @@ def _build_verdict_md(
         "1. No spread, slippage, or swap cost modelled. Real P&L ~5–10% lower.",
         "2. Same-bar SL+TP collision resolves SL-first (pessimistic assumption).",
         "3. H1 bar resolution only — entry and exit are approximate.",
-        "4. yfinance bars may differ from broker bars.",
-        "5. 50% entry fill rate is approximated using H1 bar lows/highs.",
+        "4. MT5/FundingPips bars may differ from your broker's bars.",
+        "5. Proximal entry only (the live model); the 50% leg is retired.",
         "6. Regime labels (BAU/war) are based on known calendar events, not verified ATR data.",
         "",
     ]

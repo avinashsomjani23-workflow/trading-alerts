@@ -69,8 +69,19 @@ TARGETS = {
     "USDCHF": ["USDCHF"],
     "XAUUSD": ["XAUUSD", "GOLD"],
     "NAS100": ["NAS100", "US100", "USTEC", "USTECH", "NDX100", "NDX", "USTech100"],
+    # --- New-pair evaluation batch (config-only experiment; not yet live) ------
+    # Confirmed for backtest after the foundation discussion: 4 FX (deep
+    # institutional liquidity + clean SMC structure + range that pays RR) plus
+    # BTC as its own crypto experiment. Silver is NOT pulled yet — it is gated
+    # on Gold proving out over the full 18y history first.
+    "GBPUSD": ["GBPUSD"],
+    "AUDUSD": ["AUDUSD"],
+    "USDCAD": ["USDCAD"],
+    "EURJPY": ["EURJPY"],
+    "BTCUSD": ["BTCUSD", "BTCUSDT", "BTCUSD.", "BITCOIN", "XBTUSD"],
 }
-SCAN = ["EUR", "JPY", "NZD", "CHF", "XAU", "GOLD", "NAS", "US100", "USTEC", "NDX", "TECH"]
+SCAN = ["EUR", "JPY", "NZD", "CHF", "XAU", "GOLD", "NAS", "US100", "USTEC", "NDX",
+        "TECH", "GBP", "AUD", "CAD", "BTC", "XBT", "BITCOIN"]
 
 
 def main():
@@ -100,24 +111,31 @@ def main():
 
     start = datetime(2008, 1, 1, tzinfo=timezone.utc)
     end = datetime.now(timezone.utc)
-    print("\nPulling H1 (times = BROKER SERVER clock; Claude converts to true UTC):")
-    summary = []
-    for canon, cands in TARGETS.items():
-        name = resolve(cands)
-        if not name:
-            print(f"   {canon:8} -> SYMBOL NOT FOUND (check matching list above)")
-            summary.append((canon, "NOT FOUND", 0, "", ""))
-            continue
-        mt5.symbol_select(name, True)
-        rates = mt5.copy_rates_range(name, mt5.TIMEFRAME_H1, start, end)
+
+    # Timeframes pulled per symbol. Each saves to its OWN file (<CANON>_<TF>.csv)
+    # so the backtest reads each timeframe from a distinct, unambiguous file and
+    # can never confuse H1 with D1/W1. The suffix here IS the filename suffix.
+    # D1/W1 are fetched DIRECTLY from the broker (official daily/weekly closes)
+    # rather than resampled, so the higher-timeframe narrative layer reads the
+    # broker's true session closes with no edge-lag. Same symbol, same server
+    # clock, same -3h offset as H1 -> all three timeframes reconcile exactly.
+    TIMEFRAMES = [
+        ("H1", mt5.TIMEFRAME_H1),
+        ("D1", mt5.TIMEFRAME_D1),
+        ("W1", mt5.TIMEFRAME_W1),
+    ]
+
+    def pull_one(canon, name, tf_label, tf_const):
+        """Fetch one symbol+timeframe, write <canon>_<tf_label>.csv. Returns
+        (bars, first_str, last_str). bars==0 means no data (history not loaded)."""
+        rates = mt5.copy_rates_range(name, tf_const, start, end)
         if rates is None or len(rates) == 0:
-            rates = mt5.copy_rates_from_pos(name, mt5.TIMEFRAME_H1, 0, 200000)
+            rates = mt5.copy_rates_from_pos(name, tf_const, 0, 200000)
         if rates is None or len(rates) == 0:
-            print(f"   {canon:8} ({name}) -> NO DATA ({mt5.last_error()}); "
-                  f"open its H1 chart, press Home, scroll left, re-run")
-            summary.append((canon, name, 0, "", ""))
-            continue
-        path = os.path.join(OUTDIR, f"{canon}_H1.csv")
+            print(f"   {canon:8} {tf_label} ({name}) -> NO DATA ({mt5.last_error()}); "
+                  f"open its {tf_label} chart, press Home, scroll left, re-run")
+            return 0, "", ""
+        path = os.path.join(OUTDIR, f"{canon}_{tf_label}.csv")
         with open(path, "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
             w.writerow(["time_server", "open", "high", "low", "close", "tick_volume"])
@@ -126,14 +144,27 @@ def main():
                 w.writerow([ts, r["open"], r["high"], r["low"], r["close"], int(r["tick_volume"])])
         first = datetime.fromtimestamp(int(rates[0]["time"]), tz=timezone.utc)
         last = datetime.fromtimestamp(int(rates[-1]["time"]), tz=timezone.utc)
-        print(f"   {canon:8} ({name:12}) -> {len(rates):>7} bars | "
+        print(f"   {canon:8} {tf_label} ({name:12}) -> {len(rates):>7} bars | "
               f"{first:%Y-%m-%d} .. {last:%Y-%m-%d} | saved {os.path.basename(path)}")
-        summary.append((canon, name, len(rates), f"{first:%Y-%m-%d}", f"{last:%Y-%m-%d}"))
+        return len(rates), f"{first:%Y-%m-%d}", f"{last:%Y-%m-%d}"
+
+    print("\nPulling H1 + D1 + W1 (times = BROKER SERVER clock; Claude converts to true UTC):")
+    summary = []
+    for canon, cands in TARGETS.items():
+        name = resolve(cands)
+        if not name:
+            print(f"   {canon:8} -> SYMBOL NOT FOUND (check matching list above)")
+            summary.append((canon, "NOT FOUND", "H1", 0, "", ""))
+            continue
+        mt5.symbol_select(name, True)
+        for tf_label, tf_const in TIMEFRAMES:
+            n, fr, la = pull_one(canon, name, tf_label, tf_const)
+            summary.append((canon, name, tf_label, n, fr, la))
 
     mt5.shutdown()
     print("\n===== SUMMARY (paste this to Claude) =====")
-    for canon, name, n, fr, la in summary:
-        print(f"  {canon:8} {name:12} bars={n:>7}  {fr} .. {la}")
+    for canon, name, tf_label, n, fr, la in summary:
+        print(f"  {canon:8} {tf_label:2} {name:12} bars={n:>7}  {fr} .. {la}")
     print(f"\nFiles saved in: {OUTDIR}")
 
 

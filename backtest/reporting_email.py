@@ -1,8 +1,8 @@
 """Backtest-only email sender. Own SMTP, no live-system reuse.
 
 Sends two emails per backtest run:
-  1. Forex pairs    (report_forex.html    + forex_trades.xlsx)
-  2. Gold + NAS100  (report_gold_nas.html + nas_xau_trades.xlsx)
+  1. Original (FX majors + Gold)   (report_forex.html    + forex_trades.xlsx)
+  2. New (new FX + BTC)            (report_gold_nas.html + nas_xau_trades.xlsx)
 
 Subject lines carry the date window and the auto-detected regime
 (WAR vs BAU). Only the per-group Excel rides along as an attachment --
@@ -146,8 +146,8 @@ def send_report(run_dir: Path, recipient: str = None, subject_suffix: str = "") 
     tag_str = (" [" + " ".join(failure_tags) + "]") if failure_tags else ""
 
     groups = [
-        ("Forex backtest",         "report_forex.html",    "forex_trades.xlsx"),
-        ("Gold + NAS100 backtest", "report_gold_nas.html", "nas_xau_trades.xlsx"),
+        ("Original backtest (FX majors + Gold)", "report_forex.html",    "forex_trades.xlsx"),
+        ("New backtest (new FX + BTC)", "report_gold_nas.html", "nas_xau_trades.xlsx"),
     ]
 
     any_sent = False

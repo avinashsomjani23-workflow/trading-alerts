@@ -253,13 +253,15 @@ ROUND_NUMBER_GRID = {
     "forex":     0.0050,   # 50 pips on 5-dp pairs
     "forex_jpy": 0.50,     # 50 pips on 3-dp JPY pairs
     "index":     50.0,     # 50 points on NAS100
-    "commodity": 5.0       # $5 on Gold
+    "commodity": 5.0,      # $5 on Gold
+    "crypto":    500.0     # $500 on BTC (psychological levels cluster at 500/1000)
 }
 ROUND_NUMBER_TOLERANCE = {
     "forex":     0.0005,   # 5 pips
     "forex_jpy": 0.05,     # 5 pips (JPY)
     "index":     5.0,      # 5 points
-    "commodity": 0.50      # $0.50
+    "commodity": 0.50,     # $0.50
+    "crypto":    50.0      # $50 on BTC
 }
 
 # INTERNAL — session windows in UTC. Asia wraps midnight (22 prev-day -> 07 same-day).
@@ -588,6 +590,11 @@ def compute_bos_sequence_count(pair_name):
         'trend':       'bullish' | 'bearish' | None,
         'count_maxed': bool  (True if event ring is full — count may be capped),
         'verdict':     'holding' | 'fading'  (displacement-decay read),
+        'flip_pending':     bool  (a CHoCH has armed a reversal that has NOT yet
+                                   been confirmed by a Confirmation BOS),
+        'flip_pending_dir': 'bullish' | 'bearish' | None  (direction the pending
+                                   CHoCH is trying to flip the trend toward),
+        'choch_ts':         str | None  (timestamp of that pending CHoCH),
       }
 
     `count` is LABEL CONTEXT only ("BOS #N"). It does NOT set the structure
@@ -595,20 +602,40 @@ def compute_bos_sequence_count(pair_name):
     recent break displacement is materially weaker than how the leg started
     (the genuine "late continuation" signal); 'holding' means drive is intact or
     not yet measurable.
+
+    `flip_pending*` carry the CONTESTED-trend state (Fix A, 2026-06-30). A CHoCH
+    ARMS a reversal but does NOT flip `trend` until a Confirmation BOS prints
+    (dealing_range structure_v2). While `flip_pending` is True the market is
+    contested — `trend` still reads the OLD direction. Phase 2 uses these so it
+    does not tag an old-trend zone "with trend" during a live pending reversal,
+    and so it can surface the character change. Read-only from structure_v2.
     """
+    _no_pending = {'flip_pending': False, 'flip_pending_dir': None,
+                   'choch_ts': None}
     try:
         import dealing_range as _dr
         state_all = _dr.load_state()
         pair_state = state_all.get(pair_name) or {}
     except Exception:
         return {'count': 1, 'trend': None, 'count_maxed': False,
-                'verdict': 'holding'}
+                'verdict': 'holding', **_no_pending}
 
     events = pair_state.get('events', []) or []
     trend = pair_state.get('trend')
+
+    # Pending-reversal context — read-only from structure_v2. `choch_pending_dir`
+    # is 'up'|'down' (the v2 internal axis); map it to the bullish/bearish axis
+    # the rest of the system speaks. Only meaningful while `flip_unconfirmed`.
+    _sv2 = pair_state.get('structure_v2') or {}
+    _pdir = _sv2.get('choch_pending_dir') if _sv2.get('flip_unconfirmed') else None
+    _flip_dir = {'up': 'bullish', 'down': 'bearish'}.get(_pdir)
+    pending = {'flip_pending': _flip_dir is not None,
+               'flip_pending_dir': _flip_dir,
+               'choch_ts': _sv2.get('choch_ts') if _flip_dir is not None else None}
+
     if not events:
         return {'count': 1, 'trend': trend, 'count_maxed': False,
-                'verdict': 'holding'}
+                'verdict': 'holding', **pending}
 
     # Walk events forward and rebuild the CURRENT continuation leg.
     #
@@ -669,7 +696,7 @@ def compute_bos_sequence_count(pair_name):
 
     count_maxed = (len(events) >= _dr.EVENT_RING_MAX)
     return {'count': count, 'trend': trend, 'count_maxed': count_maxed,
-            'verdict': verdict}
+            'verdict': verdict, **pending}
 
 # SHARED P1+P2+P3 — chart label stacking utility. Used by every chart-rendering
 # path across all three phases. Cosmetic only — chart label overlap if broken,
@@ -1261,6 +1288,8 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
             pip_unit = 0.01 if pair_name == 'USDJPY' else 0.0001
         elif pair_type == 'index':
             pip_unit = 1.0
+        elif pair_type == 'crypto':
+            pip_unit = 1.0   # $1 = 1 "pip" on BTC (display only; ATR drives gates)
         else:  # commodity (Gold)
             pip_unit = 1.0
         if bias_low:
@@ -1421,9 +1450,10 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
         except Exception:
             return None
 
-    # Close-based full mit for index (NAS) and commodity (Gold) — both wick
-    # through levels on news without genuine fills. Forex keeps touch-based.
-    close_based_full_mit = pair_type in ("index", "commodity")
+    # Close-based full mit for index (NAS), commodity (Gold) and crypto (BTC) —
+    # all wick through levels on news/thin liquidity without genuine fills.
+    # Forex keeps touch-based.
+    close_based_full_mit = pair_type in ("index", "commodity", "crypto")
 
     # Session-gap guard. A textbook 3-candle FVG requires candle 2 to be a
     # real traded candle whose body+wicks didn't fill the imbalance between
@@ -1435,24 +1465,39 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
     # Detection: infer the dominant timestamp delta from the median pairwise
     # gap of the df index, then reject any 3-candle pattern where ts(k+1)-ts(k)
     # exceeds 1.5x that delta. Applied to BOTH LONG and SHORT branches below.
+    # PERF: precompute the index as an int64 seconds array ONCE (no per-element
+    # Timestamp boxing in the scan below). _idx_secs[k] is the bar's epoch in
+    # seconds; deltas are plain integer subtraction. Falls back to None when the
+    # index is not a DatetimeIndex, in which case the gap guard is a no-op (the
+    # exact same outcome as the old hasattr(..,'to_pydatetime') guards).
+    _idx_secs = None
+    try:
+        import numpy as _np
+        if isinstance(df.index, pd.DatetimeIndex):
+            _i8 = df.index.asi8
+            _unit = getattr(df.index, 'unit', None) or getattr(df.index.dtype, 'unit', 'ns')
+            _per_sec = {'ns': 1_000_000_000, 'us': 1_000_000,
+                        'ms': 1_000, 's': 1}.get(_unit)
+            if _per_sec is not None:
+                _idx_secs = _i8 / float(_per_sec)
+    except Exception:
+        _idx_secs = None
+
     def _session_gap_between(a: int, b: int) -> bool:
+        if _idx_secs is None:
+            return False
         try:
-            ta = df.index[int(a)]
-            tb = df.index[int(b)]
-            if not (hasattr(ta, 'to_pydatetime') and hasattr(tb, 'to_pydatetime')):
-                return False
-            delta_seconds = (tb - ta).total_seconds()
+            delta_seconds = float(_idx_secs[int(b)] - _idx_secs[int(a)])
             return delta_seconds > _bar_seconds * 1.5
         except Exception:
             return False
 
     _bar_seconds = None
     try:
-        idx = df.index
-        if len(idx) >= 5 and hasattr(idx[0], 'to_pydatetime'):
+        if _idx_secs is not None and len(_idx_secs) >= 5:
             diffs = []
-            for k in range(1, min(len(idx), 30)):
-                d = (idx[k] - idx[k - 1]).total_seconds()
+            for k in range(1, min(len(_idx_secs), 30)):
+                d = float(_idx_secs[k] - _idx_secs[k - 1])
                 if d > 0:
                     diffs.append(d)
             if diffs:
@@ -2423,13 +2468,18 @@ def classify_setup(ob, pd_position, trend_alignment):
                 "premium")
 
     # --- Caution "Late-Trend Chase" ------------------------------------------
-    # Third-or-later leg of a mature trend, entered from the EXPENSIVE side.
+    # A fading continuation leg (displacement decaying — see bos_verdict in
+    # compute_bos_sequence_count), entered from the EXPENSIVE side. Gates on the
+    # decay verdict, not the raw break count (2026-06-24 displacement-decay
+    # overhaul made count label-only; this badge still read the count until
+    # now, contradicting the Structure row's holding/fading wording).
     pd_expensive_side = (pd_position is not None and (
         (direction == 'bullish' and pd_position >= 0.5) or
         (direction == 'bearish' and pd_position <= 0.5)))
-    if bos_tag == 'BOS' and seq >= 3 and pd_expensive_side:
+    bos_verdict = ob.get('bos_verdict', 'holding')
+    if bos_tag == 'BOS' and bos_verdict == 'fading' and pd_expensive_side:
         return ("Caution: Late-Trend Chase",
-                "This is the third-or-later leg of a mature trend, entered from "
+                "This continuation leg's displacement is fading, entered from "
                 "the expensive side — you may be buying exactly what smart money "
                 "is distributing into. Treat with suspicion.",
                 "caution")

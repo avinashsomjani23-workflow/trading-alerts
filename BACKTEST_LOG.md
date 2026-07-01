@@ -1,14 +1,14 @@
 # Backtest Registry
 
-*Last updated: 2026-06-24 07:25 UTC*
+*Last updated: 2026-06-30 17:59 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **15** of 15
-- Total filled trades across all runs: **699**
-- Average expectancy across runs: **-0.18R**
+- Runs completed: **23** of 23
+- Total filled trades across all runs: **1158**
+- Average expectancy across runs: **-0.12R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
 - **Group 3 (Live-era):** 1 runs, 9 trades, avg expectancy -0.20R
@@ -29,7 +29,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +11.00R |
 | Longest losing streak | 8 trades |
 | Proximal fill rate | 65.8% |
-| 50% fill rate | 60.5% |
 | Score verdict | WORKS — higher score leads to better trades |
 
 **By pair (proximal entry, TP2 exit):**
@@ -74,7 +73,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +9.00R |
 | Longest losing streak | 4 trades |
 | Proximal fill rate | 63.8% |
-| 50% fill rate | 59.5% |
 | Score verdict | WEAK — partial relationship |
 
 **By pair (proximal entry, TP2 exit):**
@@ -107,6 +105,88 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 ---
 
+### h1only_20240701_20250701
+
+**Unclassified** | 2024-07-01 to 2025-07-01 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 342 (of 508 rows) |
+| Win rate | 39.4% |
+| Expectancy | -0.03R |
+| Max drawdown | +30.39R |
+| Longest losing streak | 7 trades |
+| Proximal fill rate | 67.3% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| GOLD | 103 | 39.8% | +0.06R |
+| NZDUSD | 103 | 45.1% | +0.02R |
+| EURUSD | 136 | 34.5% | -0.14R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 62 | 34.0% | -0.14R |
+| London | 129 | 36.9% | -0.07R |
+| NY | 154 | 44.0% | +0.04R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 4-5 | 39 | 51.4% | +0.34R |
+| 5-6 | 71 | 38.6% | +0.01R |
+| 6-7 | 106 | 40.2% | -0.05R |
+| 7+ | 126 | 35.2% | -0.15R |
+
+---
+
+### h1only_20240801_20240901
+
+**Unclassified** | 2024-08-01 to 2024-09-01 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 23 (of 32 rows) |
+| Win rate | 25.0% |
+| Expectancy | -0.25R |
+| Max drawdown | +6.78R |
+| Longest losing streak | 4 trades |
+| Proximal fill rate | 71.9% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| EURUSD | 13 | 30.8% | -0.10R |
+| GOLD | 10 | 14.3% | -0.45R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 2 | 0.0% | -0.50R |
+| London | 11 | 20.0% | -0.46R |
+| NY | 11 | 40.0% | +0.04R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 3-4 | 1 | 100.0% | +1.47R |
+| 4-5 | 2 | 0.0% | -1.00R |
+| 5-6 | 3 | 33.3% | +0.23R |
+| 6-7 | 7 | 40.0% | -0.17R |
+| 7+ | 10 | 11.1% | -0.48R |
+
+---
+
 ### h1only_20241001_20241231
 
 **Unclassified** | 2024-10-01 to 2024-12-31 | Regime: `war`
@@ -119,7 +199,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +13.12R |
 | Longest losing streak | 6 trades |
 | Proximal fill rate | 64.0% |
-| 50% fill rate | 59.2% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -152,48 +231,164 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 ---
 
-### h1only_20250101_20250331
+### h1only_20250101_20250131
 
-**Unclassified** | 2025-01-01 to 2025-03-31 | Regime: `bau`
+**Unclassified** | 2025-01-01 to 2025-01-31 | Regime: `bau`
 
 | Metric | Value |
 |--------|-------|
-| Filled trades | 99 (of 298 rows) |
-| Win rate | 33.3% |
-| Expectancy | -0.12R |
-| Max drawdown | +18.41R |
-| Longest losing streak | 4 trades |
-| Proximal fill rate | 66.4% |
-| 50% fill rate | 59.1% |
+| Filled trades | 25 (of 81 rows) |
+| Win rate | 31.6% |
+| Expectancy | -0.21R |
+| Max drawdown | +5.94R |
+| Longest losing streak | 3 trades |
+| Proximal fill rate | 61.0% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
 
 | Pair | Trades | Win rate | Expectancy |
 |------|--------|----------|------------|
-| GOLD | 12 | 44.4% | +0.20R |
-| USDJPY | 16 | 38.5% | +0.01R |
-| NZDUSD | 19 | 41.2% | -0.08R |
-| USDCHF | 13 | 30.0% | -0.20R |
-| NAS100 | 14 | 25.0% | -0.24R |
-| EURUSD | 25 | 23.5% | -0.26R |
+| BTCUSD | 15 | 42.9% | -0.01R |
+| GBPUSD | 10 | 0.0% | -0.50R |
 
 **By session:**
 
 | Session | Trades | Win rate | Expectancy |
 |---------|--------|----------|------------|
-| Asia | 14 | 33.3% | -0.19R |
-| London | 51 | 26.8% | -0.24R |
-| NY | 34 | 44.0% | +0.10R |
+| Asia | 1 | — | +0.00R |
+| London | 13 | 44.4% | +0.10R |
+| NY | 11 | 20.0% | -0.58R |
 
 **Score vs outcome:**
 
 | Score bucket | Trades | Win rate | Expectancy |
 |-------------|--------|----------|------------|
-| 4-5 | 17 | 33.3% | -0.07R |
-| 5-6 | 31 | 16.7% | -0.42R |
-| 6-7 | 27 | 50.0% | +0.23R |
-| 7+ | 24 | 35.0% | -0.15R |
+| 4-5 | 4 | 75.0% | +0.93R |
+| 5-6 | 4 | 0.0% | -0.75R |
+| 6-7 | 7 | 60.0% | +0.16R |
+| 7+ | 10 | 0.0% | -0.70R |
+
+---
+
+### h1only_20250101_20250228
+
+**Unclassified** | 2025-01-01 to 2025-02-28 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 56 (of 93 rows) |
+| Win rate | 42.6% |
+| Expectancy | +0.01R |
+| Max drawdown | +6.88R |
+| Longest losing streak | 5 trades |
+| Proximal fill rate | 60.2% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| BTCUSD | 20 | 50.0% | +0.11R |
+| GOLD | 16 | 50.0% | +0.11R |
+| EURUSD | 20 | 29.4% | -0.17R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 6 | 20.0% | -0.34R |
+| London | 25 | 44.4% | +0.09R |
+| NY | 26 | 48.0% | +0.02R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 4-5 | 10 | 88.9% | +1.33R |
+| 5-6 | 13 | 30.0% | -0.29R |
+| 6-7 | 20 | 47.1% | -0.03R |
+| 7+ | 13 | 9.1% | -0.65R |
+
+---
+
+### h1only_20250101_20250331
+
+**Unclassified** | 2025-01-01 to 2025-03-31 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 26 (of 91 rows) |
+| Win rate | 47.6% |
+| Expectancy | +0.18R |
+| Max drawdown | +3.89R |
+| Longest losing streak | 3 trades |
+| Proximal fill rate | 56.5% |
+| Score verdict | WEAK — partial relationship |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| BTCUSD | 26 | 47.6% | +0.18R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| London | 11 | 77.8% | +1.04R |
+| NY | 15 | 25.0% | -0.45R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 4-5 | 7 | 80.0% | +0.78R |
+| 5-6 | 4 | 33.3% | -0.48R |
+| 6-7 | 10 | 44.4% | +0.02R |
+| 7+ | 5 | 25.0% | +0.19R |
+
+---
+
+### h1only_20250101_20250401
+
+**Unclassified** | 2025-01-01 to 2025-04-01 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 76 (of 127 rows) |
+| Win rate | 46.0% |
+| Expectancy | +0.11R |
+| Max drawdown | +6.88R |
+| Longest losing streak | 5 trades |
+| Proximal fill rate | 59.8% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| GOLD | 28 | 57.1% | +0.34R |
+| NZDUSD | 20 | 55.0% | +0.20R |
+| EURUSD | 28 | 27.3% | -0.18R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 11 | 22.2% | -0.35R |
+| London | 32 | 45.8% | +0.14R |
+| NY | 34 | 54.8% | +0.24R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 3-4 | 1 | 100.0% | +2.31R |
+| 4-5 | 8 | 85.7% | +1.07R |
+| 5-6 | 18 | 53.8% | +0.30R |
+| 6-7 | 23 | 55.0% | +0.22R |
+| 7+ | 26 | 18.2% | -0.50R |
 
 ---
 
@@ -209,7 +404,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +6.46R |
 | Longest losing streak | 4 trades |
 | Proximal fill rate | 73.6% |
-| 50% fill rate | 64.2% |
 | Score verdict | WEAK — partial relationship |
 
 **By pair (proximal entry, TP2 exit):**
@@ -242,6 +436,117 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 ---
 
+### h1only_20250301_20250308
+
+**Unclassified** | 2025-03-01 to 2025-03-08 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 2 (of 3 rows) |
+| Win rate | — |
+| Expectancy | +0.00R |
+| Max drawdown | +0.00R |
+| Longest losing streak | 0 trades |
+| Proximal fill rate | 66.7% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| EURUSD | 2 | — | +0.00R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 1 | — | +0.00R |
+| London | 1 | — | +0.00R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 4-5 | 1 | — | +0.00R |
+| 7+ | 1 | — | +0.00R |
+
+---
+
+### h1only_20250301_20250315
+
+**Unclassified** | 2025-03-01 to 2025-03-15 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 2 (of 5 rows) |
+| Win rate | — |
+| Expectancy | +0.00R |
+| Max drawdown | +0.00R |
+| Longest losing streak | 0 trades |
+| Proximal fill rate | 40.0% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| EURUSD | 2 | — | +0.00R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 1 | — | +0.00R |
+| London | 1 | — | +0.00R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 4-5 | 1 | — | +0.00R |
+| 7+ | 1 | — | +0.00R |
+
+---
+
+### h1only_20250301_20250401
+
+**Unclassified** | 2025-03-01 to 2025-04-01 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 6 (of 13 rows) |
+| Win rate | 33.3% |
+| Expectancy | +0.06R |
+| Max drawdown | +2.00R |
+| Longest losing streak | 2 trades |
+| Proximal fill rate | 46.2% |
+| Score verdict | WEAK — partial relationship |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| EURUSD | 6 | 33.3% | +0.06R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 1 | — | +0.00R |
+| London | 3 | 50.0% | +0.46R |
+| NY | 2 | 0.0% | -0.50R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 4-5 | 1 | — | +0.00R |
+| 5-6 | 2 | 100.0% | +1.19R |
+| 6-7 | 1 | 0.0% | -1.00R |
+| 7+ | 2 | 0.0% | -0.50R |
+
+---
+
 ### h1only_20250401_20250630
 
 **Unclassified** | 2025-04-01 to 2025-06-30 | Regime: `bau`
@@ -254,7 +559,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +34.79R |
 | Longest losing streak | 9 trades |
 | Proximal fill rate | 69.6% |
-| 50% fill rate | 64.0% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -299,7 +603,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +22.34R |
 | Longest losing streak | 12 trades |
 | Proximal fill rate | 60.7% |
-| 50% fill rate | 56.5% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -344,7 +647,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +6.33R |
 | Longest losing streak | 4 trades |
 | Proximal fill rate | 73.5% |
-| 50% fill rate | 59.2% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -385,7 +687,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +3.00R |
 | Longest losing streak | 3 trades |
 | Proximal fill rate | 54.5% |
-| 50% fill rate | 36.4% |
 | Score verdict | WORKS — higher score leads to better trades |
 
 **By pair (proximal entry, TP2 exit):**
@@ -422,7 +723,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +13.28R |
 | Longest losing streak | 8 trades |
 | Proximal fill rate | 62.5% |
-| 50% fill rate | 58.3% |
 | Score verdict | WEAK — partial relationship |
 
 **By pair (proximal entry, TP2 exit):**
@@ -469,7 +769,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +27.91R |
 | Longest losing streak | 7 trades |
 | Proximal fill rate | 61.5% |
-| 50% fill rate | 56.4% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -510,7 +809,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +5.00R |
 | Longest losing streak | 5 trades |
 | Proximal fill rate | 68.9% |
-| 50% fill rate | 60.0% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -555,7 +853,6 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +17.00R |
 | Longest losing streak | 13 trades |
 | Proximal fill rate | 60.0% |
-| 50% fill rate | 57.1% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -601,7 +898,6 @@ Market: *BAU choppy — post-Yen-carry-unwind settle*
 | Max drawdown | +9.27R |
 | Longest losing streak | 7 trades |
 | Proximal fill rate | 42.1% |
-| 50% fill rate | 42.1% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
@@ -648,7 +944,6 @@ Market: *Recent — April 2026*
 | Max drawdown | +11.74R |
 | Longest losing streak | 8 trades |
 | Proximal fill rate | 60.0% |
-| 50% fill rate | 60.0% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**

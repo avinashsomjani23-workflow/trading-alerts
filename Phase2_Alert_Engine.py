@@ -1,4 +1,4 @@
-import yfinance as yf
+import feed_adapter
 import pandas as pd
 import numpy as np
 import json
@@ -352,14 +352,6 @@ def rotate_scan_log(ist_now):
     except Exception as e:
         print(f"  [SCANLOG ROT ERR] {e}")
 
-def clean_df(df):
-    if df is None or df.empty:
-        return None
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [col[0] for col in df.columns]
-    return df
-
-
 def pip_size(pair_conf):
     dp = pair_conf.get("decimal_places", 5)
     if dp == 5:
@@ -423,39 +415,26 @@ def _check_staleness(df, interval):
 
 def fetch_with_retry(symbol, period, interval, retries=2):
     """
-    Fetch yfinance data with retry + staleness check.
-    Returns cleaned df on success, None on persistent failure/staleness.
-    Logs staleness skips to yfinance_stale_log.json for weekly review.
+    Fetch H1 from Twelve Data (via feed_adapter) with a staleness check.
+    Returns the df on success, None on persistent failure/staleness.
+    `period` is accepted for call-site compatibility; the adapter fetches a fixed
+    most-recent window (200 H1 bars ≈ 30 days, the live window the engine needs).
+    Logs staleness skips to yfinance_stale_log.json (kept name) for weekly review.
     """
-    last_error = None
-    last_age = None
+    df = feed_adapter.fetch_h1(symbol, outputsize=200, retries=retries)
+    if df is None:
+        # Adapter already retried and logged the cause; record the skip for review.
+        _log_stale_skip(symbol, interval, "feed fetch failed", None)
+        return None
 
-    for attempt in range(retries + 1):
-        try:
-            raw = yf.download(symbol, period=period, interval=interval,
-                              progress=False, timeout=20)
-            df = clean_df(raw)
-            is_stale, age_hours = _check_staleness(df, interval)
+    is_stale, age_hours = _check_staleness(df, interval)
+    if not is_stale:
+        return df
 
-            if df is not None and not is_stale:
-                return df
-
-            last_age = age_hours
-            if is_stale:
-                last_error = f"stale data (age {age_hours:.2f}h, limit {STALENESS_HOURS.get(interval, 2.0)}h)"
-            else:
-                last_error = "empty dataframe"
-        except Exception as e:
-            last_error = str(e)
-
-        if attempt < retries:
-            wait = 2 ** attempt  # 1s, 2s
-            print(f"  [RETRY {attempt + 1}/{retries}] {symbol} {interval}: {last_error}. Waiting {wait}s.")
-            time.sleep(wait)
-
-    # All retries exhausted — log and return None
+    last_error = (f"stale data (age {age_hours:.2f}h, "
+                  f"limit {STALENESS_HOURS.get(interval, 2.0)}h)")
     print(f"  [SKIP] {symbol} {interval}: {last_error}")
-    _log_stale_skip(symbol, interval, last_error, last_age)
+    _log_stale_skip(symbol, interval, last_error, age_hours)
     return None
 
 
@@ -538,7 +517,7 @@ NEWS_BLACKOUT_AFTER_H  = float(_NEWS_CFG.get("news_blackout_hours_after", 1))
 
 
 def fetch_scheduled_news(now_utc=None):
-    """Fetch the ForexFactory scheduled HIGH-impact calendar ONCE per scan.
+    """Fetch the ForexFactory scheduled High/Medium-impact calendar ONCE per scan.
 
     Returns (events, coverage_ok). This is the SAME single-source calendar the
     backtest uses (news_filter.py) — wired into live Phase 2 here so the alert
@@ -574,7 +553,7 @@ def get_pair_news_context(pair_name, events, coverage_ok, now_utc=None):
 
     INFORMATION ONLY. Nothing here gates, filters or suppresses a trade setup.
     The caller renders two display pieces:
-      1. A whole-day list of the pair's HIGH-impact events (in IST).
+      1. A whole-day list of the pair's High and Medium-impact events (in IST).
       2. An "active now" marker when now sits inside [event-2h, event+1h] —
          this is the heads-up window the user asked for (alert from 2h before a
          release until 1h after). It is a label, not a filter.
@@ -610,12 +589,12 @@ def get_pair_news_context(pair_name, events, coverage_ok, now_utc=None):
     if day_events:
         headlines_text = "\n".join(
             f"- {(e['ts_utc'] + timedelta(hours=5, minutes=30)).strftime('%a %H:%M IST')} "
-            f"{e['currency']} HIGH: {e.get('title', '')}"
+            f"{e['currency']} {e.get('impact', '').upper()}: {e.get('title', '')}"
             for e in day_events
         )
     else:
         headlines_text = (
-            f"No scheduled HIGH-impact events for {sorted(ccys)} today."
+            f"No scheduled High/Medium-impact events for {sorted(ccys)} today."
         )
 
     return {
@@ -1614,33 +1593,41 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         )
     else:
         day_events = news_ctx.get('day_events') or []
-        # Active heads-up marker (neutral — never "avoid").
+        # Active heads-up marker (neutral — never "avoid"). Yellow for High,
+        # orange for Medium so the email visually distinguishes severity.
         if news_ctx.get('active_now') and news_ctx.get('active_event'):
             ev = news_ctx['active_event']
+            is_high = ev.get('impact', '').lower() == 'high'
+            marker_color = '#f1c40f' if is_high else '#e67e22'
             marker = (
-                '<div style="margin-bottom:8px;color:#f1c40f;">'
-                f"&#9201; Heads-up: {ev['currency']} HIGH-impact — "
+                f'<div style="margin-bottom:8px;color:{marker_color};">'
+                f"&#9201; Heads-up: {ev['currency']} {ev.get('impact','').upper()}-impact — "
                 f"{ev.get('title','')} at {_ist(ev)} "
                 f"(within {NEWS_BLACKOUT_BEFORE_H:g}h before / "
                 f"{NEWS_BLACKOUT_AFTER_H:g}h after the release).</div>"
             )
         else:
             marker = ""
-        # Whole-day calendar list.
+        # Whole-day calendar list. Each row tagged with its own impact level;
+        # Medium rows rendered in orange, High rows in the default grey.
         if day_events:
             rows = "".join(
-                f"<div style=\"color:#bbb;\">&#8226; {_ist(e)} &middot; "
-                f"{e['currency']} &middot; {e.get('title','')}</div>"
+                '<div style="color:{0};">&#8226; {1} &middot; '
+                '{2} &middot; <b>{3}</b> &middot; {4}</div>'.format(
+                    '#bbb' if e.get('impact', '').lower() == 'high' else '#e67e22',
+                    _ist(e), e['currency'], e.get('impact', '').upper(),
+                    e.get('title', ''),
+                )
                 for e in day_events
             )
             day_block = (
                 '<div style="color:#9ad29a;margin-bottom:4px;">Today\'s '
-                'HIGH-impact (IST):</div>' + rows
+                'High/Medium-impact (IST):</div>' + rows
             )
         else:
             day_block = (
-                '<div style="color:#bbb;">No scheduled HIGH-impact events for '
-                'this pair today.</div>'
+                '<div style="color:#bbb;">No scheduled High/Medium-impact '
+                'events for this pair today.</div>'
             )
         news_banner_html = (
             '<div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;'
@@ -1996,14 +1983,14 @@ def collect_heartbeat_diagnostics(ist_now, active_obs):
             "action": "Check gemini_failure_log.json — likely rate limit or key issue."
         })
 
-    # Rule 3: yfinance stale skips in window
+    # Rule 3: feed stale skips in window (log filename kept for history continuity)
     yf_stale = _count_recent_log_entries(
         "yfinance_stale_log.json", HEARTBEAT_WINDOW_HOURS, ist_now
     )
     if yf_stale >= 3:
         issues.append({
-            "title": f"{yf_stale} yfinance stale/failed fetches in last {HEARTBEAT_WINDOW_HOURS}h",
-            "action": "Check yfinance_stale_log.json. If persistent, yfinance may be rate-limiting."
+            "title": f"{yf_stale} stale/failed data fetches in last {HEARTBEAT_WINDOW_HOURS}h",
+            "action": "Check yfinance_stale_log.json. If persistent, the Twelve Data feed may be rate-limiting or down."
         })
 
     # Rule 5: active_obs empty
@@ -2335,6 +2322,10 @@ if __name__ == "__main__":
           f"(coverage_ok={news_coverage_ok})")
 
     for pair_conf in config["pairs"]:
+        # backtest_only pairs are config-present for the backtest harness but
+        # MUST NOT alert live until they have earned promotion. Skip them here.
+        if pair_conf.get("backtest_only"):
+            continue
         symbol = pair_conf["symbol"]
         name = pair_conf["name"]
         dp = pair_conf.get("decimal_places", 5)
@@ -2534,7 +2525,38 @@ if __name__ == "__main__":
             ob['bos_verdict'] = bos_counter.get('verdict', 'holding')
 
             zone_dir = ob.get('direction')
-            if current_trend is None:
+            # Pending-reversal context (Fix A, 2026-06-30). A CHoCH ARMS a flip but
+            # does NOT flip `current_trend` until a Confirmation BOS prints, so the
+            # raw `trend` field still reads the OLD direction while the reversal is
+            # contested. Without this branch a zone in the OLD direction was tagged
+            # "WITH H1 trend" off that stale field (the EURUSD 2026-06-29 bug: a
+            # SHORT labelled with-trend while a bullish CHoCH was pending). The
+            # banner is information-only; the trader decides.
+            flip_pending     = bos_counter.get('flip_pending', False)
+            flip_pending_dir = bos_counter.get('flip_pending_dir')  # 'bullish'|'bearish'|None
+            _choch_ts        = bos_counter.get('choch_ts')
+            _choch_day = ""
+            if _choch_ts:
+                try:
+                    _choch_day = " (" + str(_choch_ts)[:10] + ")"
+                except Exception:
+                    _choch_day = ""
+            if flip_pending and zone_dir != flip_pending_dir:
+                # Zone is in the OLD trend direction while a reversal AGAINST it is
+                # pending. This is NOT with-trend — it is counter to the forming
+                # reversal. Drop the with-trend badge and warn.
+                trend_alignment = "counter_trend"
+                trend_label = (f"AGAINST pending H1 reversal — {flip_pending_dir} "
+                               f"CHoCH printed{_choch_day}, Confirmation BOS pending "
+                               f"(zone is {zone_dir})")
+            elif flip_pending:
+                # Zone direction matches the pending reversal. The trend is contested
+                # and UNCONFIRMED, so do not credit it as with-trend (no score
+                # inflation on an unconfirmed flip) — surface it as forming.
+                trend_alignment = "ambiguous"
+                trend_label = (f"Pending H1 reversal in zone's favour — {flip_pending_dir} "
+                               f"CHoCH printed{_choch_day}, Confirmation BOS pending")
+            elif current_trend is None:
                 trend_alignment = "ambiguous"
                 trend_label = "H1 trend ambiguous — no clear BOS sequence"
             elif current_trend == zone_dir:

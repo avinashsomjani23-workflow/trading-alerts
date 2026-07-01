@@ -1,7 +1,7 @@
 """News blackout filter.
 
-Single source of truth for "is this timestamp inside a high-impact news
-window for this pair." Used by backtest (FF only) and reserved for live
+Single source of truth for "is this timestamp inside a high/medium-impact
+news window for this pair." Used by backtest (FF only) and reserved for live
 (FF + Reuters; not wired here since Phase 2/3 are paused).
 
 Public surface:
@@ -119,7 +119,7 @@ def _ff_monday_for(d: datetime) -> str:
 
 
 def _parse_ff_xml(xml_bytes: bytes) -> List[Dict[str, Any]]:
-    """Parse a FairEconomy weekly XML. Returns High-impact events only.
+    """Parse a FairEconomy weekly XML. Returns High and Medium-impact events.
     Each event has: ts_utc (datetime), currency (str), impact (str),
     title (str), source ('ff')."""
     out: List[Dict[str, Any]] = []
@@ -131,7 +131,7 @@ def _parse_ff_xml(xml_bytes: bytes) -> List[Dict[str, Any]]:
 
     for event in root.findall(".//event"):
         impact = (event.findtext("impact") or "").strip()
-        if impact.lower() != "high":
+        if impact.lower() not in ("high", "medium"):
             continue
         date_str = (event.findtext("date") or "").strip()       # "MM-DD-YYYY"
         time_str = (event.findtext("time") or "").strip()       # "1:30pm"
@@ -197,7 +197,7 @@ def _http_get(url: str, timeout: float = 20.0, retries: int = 2) -> Optional[byt
 
 
 def fetch_ff_events(start_utc: datetime, end_utc: datetime) -> Tuple[List[Dict[str, Any]], bool]:
-    """Fetch FF High-impact events covering [start_utc, end_utc].
+    """Fetch FF High and Medium-impact events covering [start_utc, end_utc].
 
     Returns (events, coverage_complete). coverage_complete=False means at
     least one weekly fetch failed — the caller should propagate that to

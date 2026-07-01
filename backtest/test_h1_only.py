@@ -244,7 +244,13 @@ def test_dual_simulator_columns():
                     f"entry_zone valid ({r.get('entry_zone')})")
     zones = {r["entry_zone"] for r in rows}
     ok &= check("proximal" in zones, "proximal row present")
-    ok &= check("50pct" in zones, "50pct row present")
+    # 50pct entry is dormant (proximal-only). When the flag is off it must NOT
+    # be simulated or emitted (no wasted compute, no row). When re-enabled the
+    # original dual-row contract holds.
+    if h1_only_simulator._ENABLE_50PCT_ENTRY:
+        ok &= check("50pct" in zones, "50pct row present")
+    else:
+        ok &= check("50pct" not in zones, "50pct row absent (dormant)")
     return ok
 
 

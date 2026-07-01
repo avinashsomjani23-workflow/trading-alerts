@@ -1,0 +1,46 @@
+{
+  "run_id": "h1only_20250101_20250131",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-06-26T12:32:46.192975+00:00",
+  "git_sha": "fb568ec",
+  "risk_usd": 250.0,
+  "min_warmup_bars": 50,
+  "fetch_pad_days": 35,
+  "pairs": [
+    {
+      "name": "GBPUSD",
+      "symbol": "GBPUSD=X",
+      "requested_start": "2025-01-01T00:00:00+00:00",
+      "requested_end": "2025-01-31T00:00:00+00:00",
+      "served_start": "2024-11-27T00:00:00+00:00",
+      "served_end": "2025-01-31T00:00:00+00:00",
+      "n_bars": 1080,
+      "fingerprint": "35fa577be8b6db68",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "BTCUSD",
+      "symbol": "BTCUSD=X",
+      "requested_start": "2025-01-01T00:00:00+00:00",
+      "requested_end": "2025-01-31T00:00:00+00:00",
+      "served_start": "2024-11-27T00:00:00+00:00",
+      "served_end": "2025-01-31T00:00:00+00:00",
+      "n_bars": 1561,
+      "fingerprint": "fda4e04b295cb17f",
+      "prox_cap_atr": 3.0
+    }
+  ],
+  "knobs": {
+    "GBPUSD.atr_multiplier": 2.5,
+    "GBPUSD.distal_invalidation_mode": "close",
+    "GBPUSD.spread_pips": 2.0,
+    "BTCUSD.atr_multiplier": 3.0,
+    "BTCUSD.distal_invalidation_mode": "close",
+    "BTCUSD.spread_pips": 20.0
+  },
+  "versions": {
+    "python": "3.14.5",
+    "pandas": "3.0.3",
+    "yfinance": "1.3.0"
+  }
+}

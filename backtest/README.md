@@ -14,7 +14,9 @@ the trading system *would have done* on a given week.
 
 ## What it does
 
-1. Fetch historical OHLC from yfinance for the requested date range.
+1. Load historical OHLC from the MT5/FundingPips parquet cache for the
+   requested date range (yfinance was removed 2026-06-26; a missing cache is a
+   hard error — see `data_loader.py`).
 2. Walk H1 bars one at a time. At each H1 close:
    - Slice H1 + M15 (+ M5 if available) up to that timestamp.
    - Feed slices to `smc_radar.compute_pair_walls` and `smc_radar.detect_smc_radar`.
@@ -34,11 +36,9 @@ H1-only is the only mode. Tests the SMC system on H1 data alone:
   confluence score. Score is still computed (via live
   `smc_detector.run_scorecard`, H1-only since 2026-05-26) and logged so the
   user can discover the optimal threshold empirically from trade outcomes.
-- **Dual entry** — every OB-touch produces TWO trade rows: one with entry
-  at the OB proximal edge, one at the OB 50% mean. Same SL (OB distal),
-  same TP price levels (opposing H1 swing liquidity, reused from live
-  `compute_phase2_levels`). R-distance halves on the 50% entry, so RR
-  doubles for the same TP.
+- **Proximal entry only** (the live model) — every OB-touch produces ONE
+  trade row: entry at the OB proximal edge, SL at OB distal, TP from opposing
+  H1 swing liquidity (reused from live `compute_phase2_levels`).
 - Logs `r_if_exit_tp1` AND `r_if_exit_tp2` for every trade so the user can
   see TP1-only behaviour vs default TP2 side by side.
 
@@ -62,9 +62,9 @@ on a synthetic OB. Runs in <2s. Same script runs on CI before every backtest.
 
 ## Files
 
-- `data_loader.py` — yfinance fetch + parquet cache.
+- `data_loader.py` — loads the MT5/FundingPips parquet cache (no live fetch).
 - `replay_engine.py` — bar-by-bar H1 walk with lookahead guard.
-- `h1_only_simulator.py` — H1-only dual-entry simulator.
+- `h1_only_simulator.py` — H1-only proximal-entry simulator (50% leg dormant).
 - `h1_only_reporting.py` — report writer with TP1/TP2 side-by-side
   scoreboard and score-vs-winrate diagnostic table.
 - `reporting_email.py` — own SMTP, no live email reuse.

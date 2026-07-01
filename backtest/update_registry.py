@@ -174,7 +174,6 @@ def _extract_metrics(run_dir: Path, summary: Dict[str, Any]) -> Dict[str, Any]:
     win_rate = primary.get("win_rate_pct", 0)
     expectancy_r = primary.get("expectancy_r", 0)
     fill_prox = summary.get("fill_rate_proximal", {})
-    fill_50pct = summary.get("fill_rate_50pct", {})
 
     # Breakdown keys match the writer in h1_only_reporting.write_h1_only_report
     # (per_pair_proximal_realised, score_buckets_proximal_realised).
@@ -205,7 +204,6 @@ def _extract_metrics(run_dir: Path, summary: Dict[str, Any]) -> Dict[str, Any]:
         "max_dd_r": max_dd,
         "longest_losing_streak": streak,
         "fill_rate_proximal_pct": fill_prox.get("fill_rate_pct", 0),
-        "fill_rate_50pct_pct": fill_50pct.get("fill_rate_pct", 0),
         "per_pair": per_pair,
         "by_session": session_data,
         "score_buckets": score_buckets,
@@ -317,7 +315,6 @@ def _write_markdown(entries: List[Dict[str, Any]]) -> None:
             f"| Max drawdown | {_fmt_r(m.get('max_dd_r', 0))} |",
             f"| Longest losing streak | {m.get('longest_losing_streak', 0)} trades |",
             f"| Proximal fill rate | {_fmt_pct(m.get('fill_rate_proximal_pct', 0))} |",
-            f"| 50% fill rate | {_fmt_pct(m.get('fill_rate_50pct_pct', 0))} |",
             f"| Score verdict | {m.get('score_verdict', '?')} |",
             "",
         ]

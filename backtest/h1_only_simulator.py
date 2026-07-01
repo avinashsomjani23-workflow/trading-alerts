@@ -1,19 +1,15 @@
-"""H1-only dual-entry trade simulator.
+"""H1-only trade simulator (proximal entry — the live model).
 
 Tests the SMC system using ONLY H1 data — H1 finds the OB, entry happens at
 the OB, SL/TP are sized off the H1 OB and H1 swing liquidity. No M15, no M5.
 
-For every H1 OB-touch alert, this simulator fires TWO trade rows:
-  1. Proximal entry  — fills the bar the OB is touched (entry = OB proximal).
-  2. 50% mean entry  — pending limit at OB midpoint; fills only if price
-                       penetrates deep enough.
+For every H1 OB-touch alert, this simulator fires ONE trade row: the proximal
+entry (fills when price touches the OB proximal edge = the live limit). SL is
+the OB distal +/- spread; TP price levels are the liquidity-based opposing H1
+swings, reused from live compute_phase2_levels.
 
-Both share the same SL (OB distal +/- spread) and the same TP price levels
-(liquidity-based opposing H1 swings, reused from live compute_phase2_levels).
-R-distance and RR-multiples differ per entry zone by construction.
-
-No scoring gate — every OB-touch fires regardless of confluence score. Score
-is logged for post-run analysis (discover the optimal threshold empirically).
+No scoring gate — every OB-touch is simulated regardless of confluence score.
+Score is logged for post-run analysis (discover the optimal threshold empirically).
 
 Per-trade outputs cover both exit policies (TP1 vs TP2) so the user can
 see what their real-life TP1-only behaviour would produce vs the system's
@@ -57,6 +53,18 @@ DEFAULT_RISK_USD = 250.0
 WEEKEND_FLAT = True
 WEEKEND_FLAT_HOUR_UTC = 18
 
+# ── Exit-lab side-channel (diagnostic only; OFF by default) ──────────────────
+# When EXIT_LAB_SINK is a list AND EXIT_LAB_CONFIGS is a {name: config} dict, the
+# simulator ALSO replays each alternative exit recipe over the SAME in-memory
+# post-fill bars via exit_engine.walk_multileg, and appends per-config R to the
+# sink. This is a PURE side-channel: r_realised, the trade row, and live parity
+# are never touched. It is the only faithful way to study exits: every recipe sees
+# the EXACT in-memory post-fill bars the trade was born from, so entry/SL/TP1/exits
+# all share one consistent dataset (a replay over separately-reloaded bars would
+# drift). Driven by backtest/diagnostics/exit_lab.py. Never set in a normal or
+# live run.
+EXIT_LAB_CONFIGS = None
+EXIT_LAB_SINK = None
 
 def _session_from_utc_hour(h: int) -> str:
     """Map UTC hour -> trading session label. Matches reporting._classify_session_utc."""
@@ -258,6 +266,10 @@ def _event_label(bos_tag: Optional[str], bos_tier: Optional[str]) -> str:
 # band here instead of the OB proximal. If the replay constant changes, change
 # this too.
 _FVG_REARM_ATR = 1.0
+
+# Retired A/B leg (OB-midpoint entry). OFF = proximal-only (the live model).
+# Kept only so the path can be re-enabled for a one-off study; never on in a run.
+_ENABLE_50PCT_ENTRY = False
 
 
 def _fvg_state(ob: Dict[str, Any], df_h1: pd.DataFrame,
@@ -515,9 +527,17 @@ def _simulate_single_entry(
     # TP levels are NOT widened -- pessimistic, matches what the user gets
     # at the bid/ask after entering. Slippage and swap are NOT modelled
     # (user decision; revisit when needed). RCA #9.
+    #
+    # CRYPTO EXCEPTION: BTC is quoted in dollars and its spread is stated in
+    # dollars (~$20), not in 0.01 "pips". Using pip_size=0.01 would shrink a $20
+    # spread to $0.20 (100x too small) and flatter RR. For crypto, spread_pips is
+    # read as a DOLLAR spread directly (pip_size = 1.0).
     spread_pips = float(pair_conf.get("spread_pips", 0.0))
     decimal_places = int(pair_conf.get("decimal_places", 5))
-    pip_size = 0.01 if decimal_places <= 3 else 0.0001
+    if pair_conf.get("pair_type") == "crypto":
+        pip_size = 1.0
+    else:
+        pip_size = 0.01 if decimal_places <= 3 else 0.0001
     spread_price = spread_pips * pip_size
     if spread_price > 0:
         if bias == "LONG":
@@ -689,19 +709,26 @@ def _simulate_single_entry(
             break
 
         if bias == "LONG":
-            mfe_price = max(mfe_price, bar_hi)
-            mae_price = min(mae_price, bar_lo)
             sl_hit_in_bar = bar_lo <= cur_sl
             tp1_hit_in_bar = bar_hi >= tp1
             tp2_hit_in_bar = (tp2 is not None) and (bar_hi >= tp2)
             be_reached_in_bar = bar_hi >= be_trigger
+            # MFE/MAE must not include the SL bar: on the bar that fires the
+            # stop, the wick that touched SL also touched the opposite extreme.
+            # Crediting that extreme inflates MFE (the bar's high can show a
+            # positive excursion on the very bar the trade was stopped out).
+            # Only update excursion tracking on bars where SL does not fire.
+            if not sl_hit_in_bar:
+                mfe_price = max(mfe_price, bar_hi)
+                mae_price = min(mae_price, bar_lo)
         else:
-            mfe_price = min(mfe_price, bar_lo)
-            mae_price = max(mae_price, bar_hi)
             sl_hit_in_bar = bar_hi >= cur_sl
             tp1_hit_in_bar = bar_lo <= tp1
             tp2_hit_in_bar = (tp2 is not None) and (bar_lo <= tp2)
             be_reached_in_bar = bar_lo <= be_trigger
+            if not sl_hit_in_bar:
+                mfe_price = min(mfe_price, bar_lo)
+                mae_price = max(mae_price, bar_hi)
 
         # Fill-bar rule (2026-05-25):
         # On the bar where the limit just filled, we cannot infer intra-bar
@@ -820,6 +847,27 @@ def _simulate_single_entry(
 
     bars_to_exit = max(0, bars_walked_post_fill)
 
+    # ── Exit-lab side-channel (diagnostic; no effect on r_realised / the row) ──
+    if EXIT_LAB_CONFIGS and EXIT_LAB_SINK is not None and fill_bar_idx >= 0:
+        from backtest.exit_engine import walk_multileg
+        _post = future.iloc[fill_bar_idx:]
+        for _name, _cfg in EXIT_LAB_CONFIGS.items():
+            try:
+                _res = walk_multileg(
+                    _post, bias, entry, sl, r_distance, tp1, _cfg,
+                    weekend_flat=WEEKEND_FLAT,
+                    weekend_hour_utc=WEEKEND_FLAT_HOUR_UTC,
+                    max_hold=MAX_HOLD_H1_BARS,
+                )
+                EXIT_LAB_SINK.append({
+                    "pair": pair, "alert_ts": str(alert_ts),
+                    "entry_zone": entry_zone, "committed_r": round(r_realised, 4),
+                    "config": _name, "r": _res["r_realised"],
+                })
+            except Exception as _e:  # never let a diagnostic break a run
+                log_event("exit_lab_error", level="warn", pair=pair,
+                          config=_name, error=f"{type(_e).__name__}: {_e}")
+
     return _build_row(
         alert=alert, pair_conf=pair_conf, ob=ob,
         entry_zone=entry_zone, entry=entry, sl=sl, tp1=tp1, tp2=tp2,
@@ -894,6 +942,48 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         reversed_from_extreme = None
     else:
         reversed_from_extreme = bool(float(reversal_pct) >= 1.0)
+
+    # ── Setup-geometry features (observe-only; feed the edge-discovery engine) ──
+    # All ATR-normalized against the OB-formation ATR (ob['h1_atr'], frozen at
+    # detection) so a single bucket boundary works across instruments. Every value
+    # here is read from fields the detector already froze on the OB — nothing is
+    # recomputed, so all are point-in-time clean (no look-ahead). None when the
+    # input is missing (legacy zone) or the ATR is unavailable (avoids div-by-zero).
+    _h1_atr = ob.get("h1_atr")
+
+    def _atr_norm(v):
+        return round(v / _h1_atr, 3) if (_h1_atr and v is not None) else None
+
+    # OB candle range in ATR. NOTE: with SL at the distal and entry at the
+    # proximal, this ~= the stop distance — the NAS failure axis (stop < one
+    # candle's range). Same quantity as "zone thickness"; logged once.
+    ob_range_atr = _atr_norm(abs(float(ob.get("high", 0.0)) - float(ob.get("low", 0.0)))) \
+        if ob.get("high") is not None and ob.get("low") is not None else None
+
+    # FVG size in ATR — the displacement gap's magnitude (present/absent throws
+    # this gradient away). FVG-mitigation-agnostic: measures the gap as detected.
+    _fvg = ob.get("fvg") or {}
+    if _fvg.get("exists") and _fvg.get("fvg_top") is not None and _fvg.get("fvg_bottom") is not None:
+        fvg_size_atr = _atr_norm(abs(float(_fvg["fvg_top"]) - float(_fvg["fvg_bottom"])))
+    else:
+        fvg_size_atr = None
+
+    # Impulse-leg size in ATR — the displacement that broke structure and left
+    # the OB behind: origin (impulse_start) -> the swing it broke (bos_swing).
+    # FVG-INDEPENDENT by construction (defined on the swing structure, not the
+    # gap), per the SMC definition. Measures the leg up to the break level; a
+    # full-extreme variant (origin -> leg high/low) is a future refinement but
+    # needs the detection-frame bars, so it can't be done cross-fetch here.
+    _isp = ob.get("impulse_start_price")
+    _bsp = ob.get("bos_swing_price")
+    impulse_leg_atr = _atr_norm(abs(float(_bsp) - float(_isp))) \
+        if (_isp is not None and _bsp is not None) else None
+
+    # Raw OB-formation ATR (price units) — volatility context. NOT cross-instrument
+    # comparable raw; the engine normalizes it within-pair (vs the pair's typical
+    # ATR) for a regime read. Logged because it's free and frozen.
+    atr_at_ob = round(float(_h1_atr), 6) if _h1_atr else None
+
     pnl_usd = round(r_realised * risk_usd, 2)
     return {
         "pair":          alert["pair"],
@@ -964,6 +1054,11 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "break_close_atr":   _bq.get("close_beyond_atr"),
         "break_excess":      _bq.get("excess"),
         "break_body_atr":    _bq.get("body_atr"),
+        # Setup-geometry features (ATR-normalized; observe-only edge-engine inputs).
+        "ob_range_atr":      ob_range_atr,
+        "fvg_size_atr":      fvg_size_atr,
+        "impulse_leg_atr":   impulse_leg_atr,
+        "atr_at_ob":         atr_at_ob,
         "fvg_present":   bool((ob.get("fvg") or {}).get("exists")),
         # fresh / stale / no_fvg — was the FVG already discharged on an earlier
         # approach before this trigger? Feeds the FVG-staleness breakdown.
@@ -991,12 +1086,10 @@ def simulate_h1_only_dual(
     df_h1: pd.DataFrame,
     risk_usd: float = DEFAULT_RISK_USD,
 ) -> List[Dict[str, Any]]:
-    """Public entry point: simulate BOTH entry zones for one OB-touch alert.
+    """Public entry point: simulate the proximal entry for one OB-touch alert.
 
-    Returns a list of 0, 1, or 2 trade row dicts:
-      - 0 rows: both entry zones returned levels-invalid (e.g. no TP1 >= 1.5R).
-      - 1 row : only one entry zone produced valid levels.
-      - 2 rows: standard case, proximal + 50pct rows.
+    Returns [] if proximal levels are invalid (e.g. no TP1 >= 1.5R), else the
+    one proximal trade row. (`_dual` is a historical name; one row out.)
     """
     alert_ts = alert["ts"]
     if not isinstance(alert_ts, pd.Timestamp):
@@ -1014,15 +1107,17 @@ def simulate_h1_only_dual(
     if prox_row is None:
         return []
 
-    # 50pct entry reuses proximal TP prices — same opposing liquidity target,
-    # only the entry zone differs. This makes the A/B comparison clean.
-    mid_row = _simulate_single_entry(
-        alert, pair_conf, df_h1, "50pct", score, breakdown, risk_usd,
-        forced_tp1=prox_row["tp1"],
-        forced_tp2=prox_row.get("tp2"),
-    )
-
     rows: List[Dict[str, Any]] = [prox_row]
-    if mid_row is not None:
-        rows.append(mid_row)
+
+    # Dormant A/B leg — off by default (see _ENABLE_50PCT_ENTRY). Reuses the
+    # proximal TP prices so only the entry zone differs.
+    if _ENABLE_50PCT_ENTRY:
+        mid_row = _simulate_single_entry(
+            alert, pair_conf, df_h1, "50pct", score, breakdown, risk_usd,
+            forced_tp1=prox_row["tp1"],
+            forced_tp2=prox_row.get("tp2"),
+        )
+        if mid_row is not None:
+            rows.append(mid_row)
+
     return rows

@@ -16,6 +16,7 @@ jobs:
           GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           ALERT_EMAIL:        ${{ secrets.ALERT_EMAIL }}
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
         run: python Phase2_Alert_Engine.py
 
       - name: Commit state files

@@ -205,6 +205,51 @@ def _ts_iso(df, idx: int) -> Optional[str]:
         return None
 
 
+def _iso_source(df):
+    """Return the tz/column datetime source for df (DatetimeIndex), or None.
+
+    Same source precedence as _ts_iso: 'Datetime' column -> 'Date' column ->
+    DatetimeIndex. None when no datetime source exists. Centralises the lookup
+    so the batched stamper and _ts_iso agree exactly.
+    """
+    if df is None:
+        return None
+    try:
+        import pandas as _pd  # lazy import, matches module style
+        cols = getattr(df, 'columns', [])
+        if 'Datetime' in cols:
+            return _pd.DatetimeIndex(_pd.to_datetime(df['Datetime']))
+        if 'Date' in cols:
+            return _pd.DatetimeIndex(_pd.to_datetime(df['Date']))
+        if isinstance(df.index, _pd.DatetimeIndex):
+            return df.index
+        return None
+    except Exception:
+        return None
+
+
+def _iso_for_indices(df, indices) -> Optional[List[Optional[str]]]:
+    """Vectorized ISO timestamps for the given positional `indices`, or None
+    when no datetime source exists.
+
+    PERF: resolves only the requested rows (the handful of emitted swings) in a
+    single boxing pass via DatetimeIndex.take, instead of one boxed-Timestamp
+    access per swing. Result entry k == _ts_iso(df, indices[k]); same datetime
+    source precedence, same "no source => None (list-level)" contract. Returns
+    None (not a list) only when there is no datetime source at all, so the
+    caller falls back to per-row _ts_iso and behaviour never changes.
+    """
+    src = _iso_source(df)
+    if src is None:
+        return None
+    try:
+        taken = src.take(list(int(i) for i in indices))
+        return [t.isoformat() if t is not None and hasattr(t, 'isoformat') else None
+                for t in taken]
+    except Exception:
+        return None
+
+
 # --- Swing detection ---------------------------------------------------------
 
 def _true_range_series(df) -> List[float]:
@@ -212,14 +257,21 @@ def _true_range_series(df) -> List[float]:
     close). Pure-python True Range; lives here (lowest layer) so the ATR
     leg-size filter has no cross-import. smc_detector delegates to it.
     """
+    import numpy as _np
     H = df['High'].values.astype(float)
     L = df['Low'].values.astype(float)
     C = df['Close'].values.astype(float)
     n = len(df)
-    tr = [float('nan')] * n
-    for i in range(1, n):
-        tr[i] = max(H[i] - L[i], abs(H[i] - C[i - 1]), abs(L[i] - C[i - 1]))
-    return tr
+    # Vectorized True Range (PERF; bit-identical to the per-bar max loop).
+    # Element 0 stays NaN (no prior close). For i>=1, TR = max(H-L, |H-prevC|,
+    # |L-prevC|) computed as a single numpy reduce over the three components.
+    tr = _np.full(n, _np.nan)
+    if n > 1:
+        prevC = C[:-1]
+        tr[1:] = _np.maximum.reduce([H[1:] - L[1:],
+                                     _np.abs(H[1:] - prevC),
+                                     _np.abs(L[1:] - prevC)])
+    return tr.tolist()
 
 
 def _filter_swings_by_leg_atr(swings: List[Dict[str, Any]], df,
@@ -307,24 +359,62 @@ def detect_swings(df, lookback: int = SWING_LOOKBACK,
     rb = lookback if right_lookback is None else right_lookback
     if df is None or len(df) < lookback + rb + 1:
         return []
+    import numpy as _np
     H = df['High'].values.astype(float)
     L = df['Low'].values.astype(float)
     n = len(df)
+
+    # --- Vectorized geometry (PERF; byte-identical to the old per-bar loop) ---
+    # A candle i is a swing high iff H[i] is STRICTLY greater than every
+    # neighbour in [i-lookback, i+rb] (excluding i); swing low symmetric. We
+    # build the per-index neighbour max/min with `lookback`+`rb` shifted
+    # numpy comparisons (both are tiny: 1 or 3) instead of a Python max()/min()
+    # over slices on every bar. The emit window [lookback, n-rb) and the STRICT
+    # `>` / `<` comparison are preserved exactly. Verified identical (incl. the
+    # right_lookback=1 early pass) across EURUSD / NZDUSD / GOLD up to 80k bars.
+    neg_inf = -_np.inf
+    pos_inf = _np.inf
+    left_max_h = _np.full(n, neg_inf); right_max_h = _np.full(n, neg_inf)
+    left_min_l = _np.full(n, pos_inf); right_min_l = _np.full(n, pos_inf)
+    for d in range(1, lookback + 1):
+        left_max_h[d:] = _np.maximum(left_max_h[d:], H[:-d])
+        left_min_l[d:] = _np.minimum(left_min_l[d:], L[:-d])
+    for d in range(1, rb + 1):
+        right_max_h[:-d] = _np.maximum(right_max_h[:-d], H[d:])
+        right_min_l[:-d] = _np.minimum(right_min_l[:-d], L[d:])
+    neigh_max_h = _np.maximum(left_max_h, right_max_h)
+    neigh_min_l = _np.minimum(left_min_l, right_min_l)
+    valid = _np.zeros(n, dtype=bool)
+    valid[lookback: n - rb] = True
+    is_high = (H > neigh_max_h) & valid
+    is_low  = (L < neigh_min_l) & valid
+    hi_idx = _np.nonzero(is_high)[0]
+    lo_idx = _np.nonzero(is_low)[0]
+
+    # Stamp ISO timestamps ONLY for emitted swing indices, in one boxing pass
+    # (PERF). The old code called _ts_iso(df, i) per swing (one boxed Timestamp
+    # each); here we resolve all emitted indices via one vectorized lookup. The
+    # union of indices preserves the original emit order (idx-sorted, high
+    # before low at the same idx — matched by the merge below).
+    all_idx = _np.unique(_np.concatenate([hi_idx, lo_idx])) if (len(hi_idx) or len(lo_idx)) else _np.array([], dtype=int)
+    iso_by_idx: Dict[int, Optional[str]] = {}
+    if len(all_idx):
+        iso_vals = _iso_for_indices(df, all_idx)
+        if iso_vals is not None:
+            iso_by_idx = {int(ix): iso_vals[k] for k, ix in enumerate(all_idx)}
+        else:
+            # No datetime source — fall back to the exact per-row path.
+            iso_by_idx = {int(ix): _ts_iso(df, int(ix)) for ix in all_idx}
+
     out = []
-    for i in range(lookback, n - rb):
-        # Compare against every neighbour in window EXCLUDING i itself.
-        wh_left  = H[i - lookback: i]
-        wh_right = H[i + 1: i + rb + 1]
-        wl_left  = L[i - lookback: i]
-        wl_right = L[i + 1: i + rb + 1]
-        # Use Python max/min on numpy slices — fine for small windows.
-        max_neighbour_h = max(max(wh_left), max(wh_right)) if len(wh_left) and len(wh_right) else None
-        min_neighbour_l = min(min(wl_left), min(wl_right)) if len(wl_left) and len(wl_right) else None
-        if max_neighbour_h is not None and H[i] > max_neighbour_h:
-            out.append({'type': 'high', 'idx': i, 'price': float(H[i]), 'ts': _ts_iso(df, i)})
-        if min_neighbour_l is not None and L[i] < min_neighbour_l:
-            out.append({'type': 'low',  'idx': i, 'price': float(L[i]), 'ts': _ts_iso(df, i)})
-    out.sort(key=lambda s: s['idx'])
+    hi_set = set(int(i) for i in hi_idx)
+    lo_set = set(int(i) for i in lo_idx)
+    for i in sorted(hi_set | lo_set):
+        # Preserve original per-i append order: high appended before low.
+        if i in hi_set:
+            out.append({'type': 'high', 'idx': i, 'price': float(H[i]), 'ts': iso_by_idx.get(i)})
+        if i in lo_set:
+            out.append({'type': 'low',  'idx': i, 'price': float(L[i]), 'ts': iso_by_idx.get(i)})
     if min_leg_atr_mult is not None and min_leg_atr_mult > 0:
         out = _filter_swings_by_leg_atr(out, df, min_mult=min_leg_atr_mult)
     return out

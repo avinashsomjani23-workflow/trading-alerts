@@ -75,6 +75,7 @@ FVG, liquidity sweep, kill zone, macro news, PD array alignment, OB and FVG fres
 **Accuracy**
 - SMC terminology must be 100% correct. Errors cascade into bad alerts and lost money.
 - Verify against codebase before stating. Say "I haven't verified" rather than imply you did.
+- **Code is truth, comments are not.** When checking, auditing, or describing what the system DOES, trace the live code path, config values, flags, and actual output (run logs / CSVs). NEVER state behaviour from a docstring, comment, README, or markdown handoff — those go stale and have been wrong before (e.g. "dual entry" / "yfinance" after both were removed). If code and a comment disagree, the code wins and the comment is a bug to fix.
 
 **Data vs SMC methodology — never conclude on data alone**
 - Every data finding must be mapped against verified SMC methodology before it becomes a conclusion or an action.
