@@ -10,5 +10,11 @@
   },
   "NAS100|SHORT|2026-07-01": {
     "macro_summary": "Fed Chairman Warsh speaks at 22:30 IST; hawkish comments would help this short, dovish comments would hurt. ISM Manufacturing PMI at 23:30 IST; a weak reading would help this short, a strong reading would hurt."
+  },
+  "USDJPY|LONG|2026-07-01": {
+    "macro_summary": "USDJPY LONG: ADP Employment Change at 21:45 IST; a strong number helps, a weak number hurts. Fed Chairman Warsh speaks at 22:30 IST; hawkish comments help, dovish comments hurt. ISM Manufacturing PMI at 23:30 IST; a strong PMI helps, a weak PMI hurts. President Trump speaks at 04:45 IST; supportive trade comments help, negative comments hurt."
+  },
+  "GOLD|SHORT|2026-07-01": {
+    "macro_summary": "The ADP Non-Farm Employment Change at 21:45 IST could help this short Gold trade if it prints significantly below expectations, while a strong print would hurt it. Fed Chairman Warsh speaking at 22:30 IST could hurt the trade if he signals a hawkish stance, but could help if he signals a dovish stance. The ISM Manufacturing PMI and Prices at 23:30 IST could hurt the trade if they print strong, indicating economic expansion, and help if they print weak. President Trump speaking at 04:45 IST could hurt the trade if he makes hawkish remarks on trade or the economy."
   }
 }
