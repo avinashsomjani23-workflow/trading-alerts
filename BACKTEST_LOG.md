@@ -1,6 +1,6 @@
 # Backtest Registry
 
-*Last updated: 2026-07-01 13:41 UTC*
+*Last updated: 2026-07-01 18:48 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
@@ -157,40 +157,42 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Metric | Value |
 |--------|-------|
 | Filled trades | 610 (of 875 rows) |
-| Win rate | 37.5% |
-| Expectancy | -0.04R |
-| Max drawdown | +43.21R |
-| Longest losing streak | 8 trades |
+| Win rate | 40.0% |
+| Expectancy | +0.01R |
+| Max drawdown | +15.95R |
+| Longest losing streak | 7 trades |
 | Proximal fill rate | 69.7% |
-| Score verdict | WEAK — partial relationship |
+| Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
 
 | Pair | Trades | Win rate | Expectancy |
 |------|--------|----------|------------|
-| GOLD | 106 | 38.4% | +0.03R |
-| NZDUSD | 102 | 45.6% | +0.03R |
-| USDJPY | 130 | 35.9% | -0.05R |
-| USDCHF | 134 | 34.5% | -0.07R |
-| EURUSD | 138 | 34.8% | -0.13R |
+| GOLD | 106 | 40.7% | +0.09R |
+| NZDUSD | 102 | 46.2% | +0.04R |
+| USDCHF | 134 | 38.4% | +0.02R |
+| USDJPY | 130 | 37.6% | -0.01R |
+| EURUSD | 138 | 38.4% | -0.06R |
 
 **By session:**
 
 | Session | Trades | Win rate | Expectancy |
 |---------|--------|----------|------------|
-| Asia | 117 | 29.0% | -0.20R |
-| London | 233 | 35.1% | -0.08R |
-| NY | 264 | 43.4% | +0.06R |
+| Asia | 118 | 33.0% | -0.12R |
+| London | 232 | 37.3% | -0.04R |
+| NY | 265 | 45.8% | +0.11R |
 
 **Score vs outcome:**
 
 | Score bucket | Trades | Win rate | Expectancy |
 |-------------|--------|----------|------------|
-| 3-4 | 19 | 22.2% | -0.43R |
-| 4-5 | 83 | 48.0% | +0.23R |
-| 5-6 | 143 | 31.9% | -0.12R |
-| 6-7 | 168 | 38.3% | -0.05R |
-| 7+ | 197 | 37.5% | -0.06R |
+| 0-2 | 2 | 0.0% | -0.50R |
+| 2-3 | 2 | 50.0% | +0.25R |
+| 3-4 | 17 | 23.5% | -0.42R |
+| 4-5 | 83 | 50.0% | +0.28R |
+| 5-6 | 144 | 39.3% | +0.03R |
+| 6-7 | 168 | 40.0% | -0.01R |
+| 7+ | 194 | 37.6% | -0.06R |
 
 ---
 
