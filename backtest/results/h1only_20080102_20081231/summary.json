@@ -13,7 +13,7 @@
       "USDCHF",
       "GOLD"
     ],
-    "generated_utc": "2026-07-01T06:21:10.087105+00:00",
+    "generated_utc": "2026-07-01T08:51:34.195397+00:00",
     "news_coverage": {
       "ff": false
     },
@@ -171,10 +171,16 @@
   ],
   "score_buckets_proximal_realised": [
     {
+      "score_bucket": "2-3",
+      "trades": 1,
+      "win_rate_pct": null,
+      "expectancy_r": 0.0
+    },
+    {
       "score_bucket": "3-4",
-      "trades": 15,
-      "win_rate_pct": 61.5,
-      "expectancy_r": 0.601
+      "trades": 17,
+      "win_rate_pct": 53.3,
+      "expectancy_r": 0.412
     },
     {
       "score_bucket": "4-5",
@@ -184,21 +190,21 @@
     },
     {
       "score_bucket": "5-6",
-      "trades": 174,
-      "win_rate_pct": 26.8,
-      "expectancy_r": -0.231
+      "trades": 173,
+      "win_rate_pct": 27.0,
+      "expectancy_r": -0.227
     },
     {
       "score_bucket": "6-7",
-      "trades": 176,
+      "trades": 175,
       "win_rate_pct": 36.2,
       "expectancy_r": -0.008
     },
     {
       "score_bucket": "7+",
-      "trades": 207,
-      "win_rate_pct": 36.3,
-      "expectancy_r": -0.026
+      "trades": 206,
+      "win_rate_pct": 36.5,
+      "expectancy_r": -0.021
     }
   ],
   "news_blocked_trade_rows": 0,
@@ -877,7 +883,7 @@
     {
       "pair": "USDJPY",
       "alert_ts": "2008-10-23T19:00:00+00:00",
-      "score": 8.0,
+      "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -891,7 +897,7 @@
     {
       "pair": "USDJPY",
       "alert_ts": "2008-11-07T01:00:00+00:00",
-      "score": 7.0,
+      "score": 5.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -1045,7 +1051,7 @@
     {
       "pair": "NZDUSD",
       "alert_ts": "2008-03-27T21:00:00+00:00",
-      "score": 7.0,
+      "score": 5.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -1143,7 +1149,7 @@
     {
       "pair": "NZDUSD",
       "alert_ts": "2008-05-27T01:00:00+00:00",
-      "score": 5.0,
+      "score": 3.0,
       "exit_reason": "tp1",
       "would_have_r": 1.222
     },
@@ -1710,7 +1716,7 @@
     {
       "pair": "GOLD",
       "alert_ts": "2008-03-24T03:00:00+00:00",
-      "score": 5.0,
+      "score": 3.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
