@@ -3,7 +3,7 @@
     "trend": "bullish",
     "ceiling_price": 1.14347,
     "ceiling_is_placeholder": false,
-    "floor_price": 1.13932,
+    "floor_price": 1.13827,
     "floor_is_placeholder": false,
     "last_event_type": "BOS",
     "last_event_tier": "BOS",
@@ -30,7 +30,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.97
+        "break_body_atr": 1.84
       },
       {
         "type": "CHoCH",
@@ -44,7 +44,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.72
+        "break_body_atr": 1.6
       },
       {
         "type": "CHoCH_FAILED",
@@ -58,7 +58,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.18
+        "break_body_atr": 2.03
       },
       {
         "type": "BOS",
@@ -72,7 +72,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 4.6
+        "break_body_atr": 4.3
       },
       {
         "type": "BOS",
@@ -86,7 +86,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.9
+        "break_body_atr": 2.71
       },
       {
         "type": "BOS",
@@ -100,7 +100,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.84
+        "break_body_atr": 1.72
       },
       {
         "type": "BOS",
@@ -114,121 +114,121 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 4.99
+        "break_body_atr": 4.67
       }
     ],
     "swings": [
       {
         "type": "high",
-        "idx": 5,
+        "idx": 4,
         "price": 1.13728,
         "ts": "2026-06-25T09:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 7,
+        "idx": 6,
         "price": 1.13336,
         "ts": "2026-06-25T11:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 11,
+        "idx": 10,
         "price": 1.13899,
         "ts": "2026-06-25T15:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 22,
+        "idx": 21,
         "price": 1.13545,
         "ts": "2026-06-26T02:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 33,
+        "idx": 32,
         "price": 1.14331,
         "ts": "2026-06-26T13:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 39,
+        "idx": 38,
         "price": 1.13811,
         "ts": "2026-06-26T19:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 46,
+        "idx": 45,
         "price": 1.13969,
         "ts": "2026-06-27T02:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 56,
+        "idx": 55,
         "price": 1.13968,
         "ts": "2026-06-27T12:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 61,
+        "idx": 60,
         "price": 1.13968,
         "ts": "2026-06-27T17:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 68,
+        "idx": 67,
         "price": 1.13958,
         "ts": "2026-06-28T00:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 74,
+        "idx": 73,
         "price": 1.13967,
         "ts": "2026-06-28T06:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 88,
+        "idx": 87,
         "price": 1.13958,
         "ts": "2026-06-28T20:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 96,
+        "idx": 95,
         "price": 1.13812,
         "ts": "2026-06-29T04:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 99,
+        "idx": 98,
         "price": 1.14174,
         "ts": "2026-06-29T07:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 108,
+        "idx": 107,
         "price": 1.14309,
         "ts": "2026-06-29T16:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 121,
+        "idx": 120,
         "price": 1.13827,
         "ts": "2026-06-30T05:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 123,
+        "idx": 122,
         "price": 1.14094,
         "ts": "2026-06-30T07:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 131,
+        "idx": 130,
         "price": 1.14347,
         "ts": "2026-06-30T15:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 145,
+        "idx": 144,
         "price": 1.14109,
         "ts": "2026-07-01T05:00:00+00:00"
       }
@@ -236,10 +236,10 @@
     "h4_range": {
       "valid": true,
       "ceiling": 1.14347,
-      "floor": 1.13932,
-      "equilibrium": 1.1413950000000002,
+      "floor": 1.13827,
+      "equilibrium": 1.14087,
       "ceiling_ts": "2026-06-30T13:00:00+00:00",
-      "floor_ts": "2026-07-01T05:00:00+00:00",
+      "floor_ts": "2026-06-30T05:00:00+00:00",
       "ceiling_broken": false,
       "floor_broken": false,
       "confirmed_valid": true,
@@ -248,18 +248,18 @@
       "confirmed_eq": 1.14087,
       "confirmed_ceiling_ts": "2026-06-30T13:00:00+00:00",
       "confirmed_floor_ts": "2026-06-30T05:00:00+00:00",
-      "n_confirmed_highs": 4,
+      "n_confirmed_highs": 3,
       "n_confirmed_lows": 3,
-      "current_price": 1.13969,
+      "current_price": 1.13869,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
         "full4": 37,
-        "short": 2,
+        "short": 1,
         "bars_per_candle": {
-          "1": 2,
-          "4": 37
+          "4": 37,
+          "2": 1
         }
       }
     },
@@ -296,7 +296,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 1.97
+          "break_body_atr": 1.84
         },
         {
           "type": "CHoCH",
@@ -310,7 +310,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 1.72
+          "break_body_atr": 1.6
         },
         {
           "type": "CHoCH_FAILED",
@@ -324,7 +324,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 2.18
+          "break_body_atr": 2.03
         },
         {
           "type": "BOS",
@@ -338,7 +338,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 4.6
+          "break_body_atr": 4.3
         },
         {
           "type": "BOS",
@@ -352,7 +352,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 2.9
+          "break_body_atr": 2.71
         },
         {
           "type": "BOS",
@@ -366,7 +366,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 1.84
+          "break_body_atr": 1.72
         },
         {
           "type": "BOS",
@@ -380,122 +380,122 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 4.99
+          "break_body_atr": 4.67
         }
       ],
       "trend": "bullish",
       "swings": [
         {
           "type": "high",
-          "idx": 5,
+          "idx": 4,
           "price": 1.13728,
           "ts": "2026-06-25T09:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 7,
+          "idx": 6,
           "price": 1.13336,
           "ts": "2026-06-25T11:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 11,
+          "idx": 10,
           "price": 1.13899,
           "ts": "2026-06-25T15:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 22,
+          "idx": 21,
           "price": 1.13545,
           "ts": "2026-06-26T02:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 33,
+          "idx": 32,
           "price": 1.14331,
           "ts": "2026-06-26T13:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 39,
+          "idx": 38,
           "price": 1.13811,
           "ts": "2026-06-26T19:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 46,
+          "idx": 45,
           "price": 1.13969,
           "ts": "2026-06-27T02:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 56,
+          "idx": 55,
           "price": 1.13968,
           "ts": "2026-06-27T12:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 61,
+          "idx": 60,
           "price": 1.13968,
           "ts": "2026-06-27T17:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 68,
+          "idx": 67,
           "price": 1.13958,
           "ts": "2026-06-28T00:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 74,
+          "idx": 73,
           "price": 1.13967,
           "ts": "2026-06-28T06:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 88,
+          "idx": 87,
           "price": 1.13958,
           "ts": "2026-06-28T20:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 96,
+          "idx": 95,
           "price": 1.13812,
           "ts": "2026-06-29T04:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 99,
+          "idx": 98,
           "price": 1.14174,
           "ts": "2026-06-29T07:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 108,
+          "idx": 107,
           "price": 1.14309,
           "ts": "2026-06-29T16:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 121,
+          "idx": 120,
           "price": 1.13827,
           "ts": "2026-06-30T05:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 123,
+          "idx": 122,
           "price": 1.14094,
           "ts": "2026-06-30T07:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 131,
+          "idx": 130,
           "price": 1.14347,
           "ts": "2026-06-30T15:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 145,
+          "idx": 144,
           "price": 1.14109,
           "ts": "2026-07-01T05:00:00+00:00"
         }
@@ -533,7 +533,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.21
+        "break_body_atr": 1.19
       },
       {
         "type": "CHoCH",
@@ -547,7 +547,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.08
+        "break_body_atr": 2.05
       },
       {
         "type": "BOS",
@@ -561,159 +561,165 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.07
+        "break_body_atr": 1.05
       }
     ],
     "swings": [
       {
         "type": "high",
-        "idx": 7,
+        "idx": 6,
         "price": 161.9891,
         "ts": "2026-06-25T11:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 10,
+        "idx": 9,
         "price": 161.60219,
         "ts": "2026-06-25T14:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 14,
+        "idx": 13,
         "price": 161.84386,
         "ts": "2026-06-25T18:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 17,
+        "idx": 16,
         "price": 161.70344,
         "ts": "2026-06-25T21:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 21,
+        "idx": 20,
         "price": 161.85427,
         "ts": "2026-06-26T01:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 25,
+        "idx": 24,
         "price": 161.53792,
         "ts": "2026-06-26T05:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 29,
+        "idx": 28,
         "price": 161.54041,
         "ts": "2026-06-26T09:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 34,
+        "idx": 33,
         "price": 161.58712,
         "ts": "2026-06-26T14:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 38,
+        "idx": 37,
         "price": 161.78675,
         "ts": "2026-06-26T18:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 41,
+        "idx": 40,
         "price": 161.6835,
         "ts": "2026-06-26T21:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 45,
+        "idx": 44,
         "price": 161.76492,
         "ts": "2026-06-27T01:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 49,
+        "idx": 48,
         "price": 161.76968,
         "ts": "2026-06-27T05:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 60,
+        "idx": 59,
         "price": 161.77028,
         "ts": "2026-06-27T16:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 66,
+        "idx": 65,
         "price": 161.77846,
         "ts": "2026-06-27T22:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 69,
+        "idx": 68,
         "price": 161.74723,
         "ts": "2026-06-28T01:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 82,
+        "idx": 81,
         "price": 161.78664,
         "ts": "2026-06-28T14:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 86,
+        "idx": 85,
         "price": 162.09366,
         "ts": "2026-06-28T18:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 99,
+        "idx": 98,
         "price": 161.7805,
         "ts": "2026-06-29T07:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 101,
+        "idx": 100,
         "price": 161.90471,
         "ts": "2026-06-29T09:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 106,
+        "idx": 105,
         "price": 161.97581,
         "ts": "2026-06-29T14:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 110,
+        "idx": 109,
         "price": 161.97982,
         "ts": "2026-06-29T18:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 116,
+        "idx": 115,
         "price": 162.31747,
         "ts": "2026-06-30T00:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 132,
+        "idx": 131,
         "price": 162.67306,
         "ts": "2026-06-30T16:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 137,
+        "idx": 136,
         "price": 162.53387,
         "ts": "2026-06-30T21:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 143,
+        "idx": 142,
         "price": 162.8446,
         "ts": "2026-07-01T03:00:00+00:00"
+      },
+      {
+        "type": "low",
+        "idx": 146,
+        "price": 162.6161,
+        "ts": "2026-07-01T07:00:00+00:00"
       }
     ],
     "h4_range": {
@@ -733,22 +739,22 @@
       "confirmed_floor_ts": "2026-06-26T05:00:00+00:00",
       "n_confirmed_highs": 3,
       "n_confirmed_lows": 1,
-      "current_price": 162.66733,
+      "current_price": 162.74281,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
         "full4": 37,
-        "short": 2,
+        "short": 1,
         "bars_per_candle": {
-          "1": 2,
-          "4": 37
+          "4": 37,
+          "2": 1
         }
       }
     },
     "structure_v2": {
       "state": "up",
-      "ranging": true,
+      "ranging": false,
       "prior_trend": null,
       "choch_pending_dir": null,
       "flip_unconfirmed": false,
@@ -757,7 +763,7 @@
       "choch_level": null,
       "choch_from_zone": false,
       "choch_flip_count": 1,
-      "defended": 161.8386,
+      "defended": 162.6161,
       "broken_swing_ts": null,
       "last_bos": {
         "kind": "BOS",
@@ -765,7 +771,7 @@
         "ts": "2026-07-01T02:00:00+00:00",
         "tier": "Confirm"
       },
-      "label": "H1 trend UP (ranging)",
+      "label": "H1 trend UP",
       "events": [
         {
           "type": "BOS",
@@ -779,7 +785,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 1.21
+          "break_body_atr": 1.19
         },
         {
           "type": "CHoCH",
@@ -793,7 +799,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 2.08
+          "break_body_atr": 2.05
         },
         {
           "type": "BOS",
@@ -807,160 +813,166 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 1.07
+          "break_body_atr": 1.05
         }
       ],
       "trend": "bullish",
       "swings": [
         {
           "type": "high",
-          "idx": 7,
+          "idx": 6,
           "price": 161.9891,
           "ts": "2026-06-25T11:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 10,
+          "idx": 9,
           "price": 161.60219,
           "ts": "2026-06-25T14:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 14,
+          "idx": 13,
           "price": 161.84386,
           "ts": "2026-06-25T18:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 17,
+          "idx": 16,
           "price": 161.70344,
           "ts": "2026-06-25T21:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 21,
+          "idx": 20,
           "price": 161.85427,
           "ts": "2026-06-26T01:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 25,
+          "idx": 24,
           "price": 161.53792,
           "ts": "2026-06-26T05:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 29,
+          "idx": 28,
           "price": 161.54041,
           "ts": "2026-06-26T09:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 34,
+          "idx": 33,
           "price": 161.58712,
           "ts": "2026-06-26T14:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 38,
+          "idx": 37,
           "price": 161.78675,
           "ts": "2026-06-26T18:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 41,
+          "idx": 40,
           "price": 161.6835,
           "ts": "2026-06-26T21:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 45,
+          "idx": 44,
           "price": 161.76492,
           "ts": "2026-06-27T01:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 49,
+          "idx": 48,
           "price": 161.76968,
           "ts": "2026-06-27T05:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 60,
+          "idx": 59,
           "price": 161.77028,
           "ts": "2026-06-27T16:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 66,
+          "idx": 65,
           "price": 161.77846,
           "ts": "2026-06-27T22:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 69,
+          "idx": 68,
           "price": 161.74723,
           "ts": "2026-06-28T01:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 82,
+          "idx": 81,
           "price": 161.78664,
           "ts": "2026-06-28T14:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 86,
+          "idx": 85,
           "price": 162.09366,
           "ts": "2026-06-28T18:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 99,
+          "idx": 98,
           "price": 161.7805,
           "ts": "2026-06-29T07:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 101,
+          "idx": 100,
           "price": 161.90471,
           "ts": "2026-06-29T09:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 106,
+          "idx": 105,
           "price": 161.97581,
           "ts": "2026-06-29T14:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 110,
+          "idx": 109,
           "price": 161.97982,
           "ts": "2026-06-29T18:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 116,
+          "idx": 115,
           "price": 162.31747,
           "ts": "2026-06-30T00:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 132,
+          "idx": 131,
           "price": 162.67306,
           "ts": "2026-06-30T16:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 137,
+          "idx": 136,
           "price": 162.53387,
           "ts": "2026-06-30T21:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 143,
+          "idx": 142,
           "price": 162.8446,
           "ts": "2026-07-01T03:00:00+00:00"
+        },
+        {
+          "type": "low",
+          "idx": 146,
+          "price": 162.6161,
+          "ts": "2026-07-01T07:00:00+00:00"
         }
       ]
     }
@@ -996,7 +1008,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.17
+        "break_body_atr": 1.16
       },
       {
         "type": "CHoCH",
@@ -1010,163 +1022,157 @@
         "reversal_pct": 1.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 4.65
+        "break_body_atr": 4.64
       }
     ],
     "swings": [
       {
         "type": "low",
-        "idx": 3,
-        "price": 0.56344,
-        "ts": "2026-06-25T07:00:00+00:00"
-      },
-      {
-        "type": "low",
-        "idx": 8,
+        "idx": 7,
         "price": 0.56327,
         "ts": "2026-06-25T12:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 12,
+        "idx": 11,
         "price": 0.56613,
         "ts": "2026-06-25T16:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 17,
+        "idx": 16,
         "price": 0.56577,
         "ts": "2026-06-25T21:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 22,
+        "idx": 21,
         "price": 0.5627,
         "ts": "2026-06-26T02:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 29,
+        "idx": 28,
         "price": 0.56573,
         "ts": "2026-06-26T09:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 34,
+        "idx": 33,
         "price": 0.56576,
         "ts": "2026-06-26T14:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 40,
+        "idx": 39,
         "price": 0.56361,
         "ts": "2026-06-26T20:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 44,
+        "idx": 43,
         "price": 0.5646,
         "ts": "2026-06-27T00:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 48,
+        "idx": 47,
         "price": 0.56456,
         "ts": "2026-06-27T04:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 49,
+        "idx": 48,
         "price": 0.56357,
         "ts": "2026-06-27T05:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 55,
+        "idx": 54,
         "price": 0.56376,
         "ts": "2026-06-27T11:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 59,
+        "idx": 58,
         "price": 0.56424,
         "ts": "2026-06-27T15:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 65,
+        "idx": 64,
         "price": 0.56433,
         "ts": "2026-06-27T21:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 77,
+        "idx": 76,
         "price": 0.56365,
         "ts": "2026-06-28T09:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 82,
+        "idx": 81,
         "price": 0.5637,
         "ts": "2026-06-28T14:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 87,
+        "idx": 86,
         "price": 0.56718,
         "ts": "2026-06-28T19:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 92,
+        "idx": 91,
         "price": 0.56318,
         "ts": "2026-06-29T00:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 99,
+        "idx": 98,
         "price": 0.56594,
         "ts": "2026-06-29T07:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 103,
+        "idx": 102,
         "price": 0.56559,
         "ts": "2026-06-29T11:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 106,
+        "idx": 105,
         "price": 0.56413,
         "ts": "2026-06-29T14:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 112,
+        "idx": 111,
         "price": 0.56552,
         "ts": "2026-06-29T20:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 117,
+        "idx": 116,
         "price": 0.56412,
         "ts": "2026-06-30T01:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 130,
+        "idx": 129,
         "price": 0.56907,
         "ts": "2026-06-30T14:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 137,
+        "idx": 136,
         "price": 0.5683,
         "ts": "2026-06-30T21:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 142,
+        "idx": 141,
         "price": 0.56603,
         "ts": "2026-07-01T02:00:00+00:00"
       }
@@ -1186,18 +1192,18 @@
       "confirmed_eq": 0.566595,
       "confirmed_ceiling_ts": "2026-06-30T13:00:00+00:00",
       "confirmed_floor_ts": "2026-06-30T01:00:00+00:00",
-      "n_confirmed_highs": 5,
+      "n_confirmed_highs": 4,
       "n_confirmed_lows": 4,
-      "current_price": 0.56756,
+      "current_price": 0.56721,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
         "full4": 37,
-        "short": 2,
+        "short": 1,
         "bars_per_candle": {
-          "1": 2,
-          "4": 37
+          "4": 37,
+          "2": 1
         }
       }
     },
@@ -1234,7 +1240,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 1.17
+          "break_body_atr": 1.16
         },
         {
           "type": "CHoCH",
@@ -1248,164 +1254,158 @@
           "reversal_pct": 1.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 4.65
+          "break_body_atr": 4.64
         }
       ],
       "trend": "bearish",
       "swings": [
         {
           "type": "low",
-          "idx": 3,
-          "price": 0.56344,
-          "ts": "2026-06-25T07:00:00+00:00"
-        },
-        {
-          "type": "low",
-          "idx": 8,
+          "idx": 7,
           "price": 0.56327,
           "ts": "2026-06-25T12:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 12,
+          "idx": 11,
           "price": 0.56613,
           "ts": "2026-06-25T16:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 17,
+          "idx": 16,
           "price": 0.56577,
           "ts": "2026-06-25T21:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 22,
+          "idx": 21,
           "price": 0.5627,
           "ts": "2026-06-26T02:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 29,
+          "idx": 28,
           "price": 0.56573,
           "ts": "2026-06-26T09:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 34,
+          "idx": 33,
           "price": 0.56576,
           "ts": "2026-06-26T14:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 40,
+          "idx": 39,
           "price": 0.56361,
           "ts": "2026-06-26T20:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 44,
+          "idx": 43,
           "price": 0.5646,
           "ts": "2026-06-27T00:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 48,
+          "idx": 47,
           "price": 0.56456,
           "ts": "2026-06-27T04:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 49,
+          "idx": 48,
           "price": 0.56357,
           "ts": "2026-06-27T05:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 55,
+          "idx": 54,
           "price": 0.56376,
           "ts": "2026-06-27T11:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 59,
+          "idx": 58,
           "price": 0.56424,
           "ts": "2026-06-27T15:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 65,
+          "idx": 64,
           "price": 0.56433,
           "ts": "2026-06-27T21:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 77,
+          "idx": 76,
           "price": 0.56365,
           "ts": "2026-06-28T09:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 82,
+          "idx": 81,
           "price": 0.5637,
           "ts": "2026-06-28T14:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 87,
+          "idx": 86,
           "price": 0.56718,
           "ts": "2026-06-28T19:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 92,
+          "idx": 91,
           "price": 0.56318,
           "ts": "2026-06-29T00:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 99,
+          "idx": 98,
           "price": 0.56594,
           "ts": "2026-06-29T07:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 103,
+          "idx": 102,
           "price": 0.56559,
           "ts": "2026-06-29T11:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 106,
+          "idx": 105,
           "price": 0.56413,
           "ts": "2026-06-29T14:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 112,
+          "idx": 111,
           "price": 0.56552,
           "ts": "2026-06-29T20:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 117,
+          "idx": 116,
           "price": 0.56412,
           "ts": "2026-06-30T01:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 130,
+          "idx": 129,
           "price": 0.56907,
           "ts": "2026-06-30T14:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 137,
+          "idx": 136,
           "price": 0.5683,
           "ts": "2026-06-30T21:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 142,
+          "idx": 141,
           "price": 0.56603,
           "ts": "2026-07-01T02:00:00+00:00"
         }
@@ -1414,8 +1414,8 @@
   },
   "USDCHF": {
     "trend": "bearish",
-    "ceiling_price": 0.81035,
-    "ceiling_is_placeholder": false,
+    "ceiling_price": 0.81053,
+    "ceiling_is_placeholder": true,
     "floor_price": 0.80722,
     "floor_is_placeholder": false,
     "last_event_type": "BOS",
@@ -1443,7 +1443,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.99
+        "break_body_atr": 1.9
       },
       {
         "type": "BOS",
@@ -1457,7 +1457,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.67
+        "break_body_atr": 1.6
       },
       {
         "type": "CHoCH",
@@ -1471,7 +1471,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.18
+        "break_body_atr": 2.08
       },
       {
         "type": "BOS",
@@ -1485,7 +1485,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.3
+        "break_body_atr": 2.2
       },
       {
         "type": "BOS",
@@ -1499,151 +1499,151 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 4.35
+        "break_body_atr": 4.17
       }
     ],
     "swings": [
       {
         "type": "low",
-        "idx": 4,
+        "idx": 3,
         "price": 0.8103,
         "ts": "2026-06-25T08:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 8,
+        "idx": 7,
         "price": 0.8135,
         "ts": "2026-06-25T12:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 12,
+        "idx": 11,
         "price": 0.80899,
         "ts": "2026-06-25T16:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 14,
+        "idx": 13,
         "price": 0.81034,
         "ts": "2026-06-25T18:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 22,
+        "idx": 21,
         "price": 0.81119,
         "ts": "2026-06-26T02:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 34,
+        "idx": 33,
         "price": 0.80682,
         "ts": "2026-06-26T14:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 40,
+        "idx": 39,
         "price": 0.81015,
         "ts": "2026-06-26T20:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 42,
+        "idx": 41,
         "price": 0.80855,
         "ts": "2026-06-26T22:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 49,
+        "idx": 48,
         "price": 0.80966,
         "ts": "2026-06-27T05:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 55,
+        "idx": 54,
         "price": 0.80931,
         "ts": "2026-06-27T11:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 60,
+        "idx": 59,
         "price": 0.80984,
         "ts": "2026-06-27T16:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 66,
+        "idx": 65,
         "price": 0.80934,
         "ts": "2026-06-27T22:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 78,
+        "idx": 77,
         "price": 0.80979,
         "ts": "2026-06-28T10:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 82,
+        "idx": 81,
         "price": 0.80975,
         "ts": "2026-06-28T14:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 88,
+        "idx": 87,
         "price": 0.81062,
         "ts": "2026-06-28T20:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 96,
+        "idx": 95,
         "price": 0.81018,
         "ts": "2026-06-29T04:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 112,
+        "idx": 111,
         "price": 0.80722,
         "ts": "2026-06-29T20:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 123,
+        "idx": 122,
         "price": 0.80836,
         "ts": "2026-06-30T07:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 125,
+        "idx": 124,
         "price": 0.81014,
         "ts": "2026-06-30T09:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 130,
+        "idx": 129,
         "price": 0.80639,
         "ts": "2026-06-30T14:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 138,
+        "idx": 137,
         "price": 0.80772,
         "ts": "2026-06-30T22:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 143,
+        "idx": 142,
         "price": 0.80969,
         "ts": "2026-07-01T03:00:00+00:00"
       }
     ],
     "h4_range": {
       "valid": true,
-      "ceiling": 0.81035,
+      "ceiling": 0.81053,
       "floor": 0.80722,
-      "equilibrium": 0.8087850000000001,
-      "ceiling_ts": "2026-07-01T05:00:00+00:00",
+      "equilibrium": 0.808875,
+      "ceiling_ts": null,
       "floor_ts": "2026-06-29T17:00:00+00:00",
-      "ceiling_broken": false,
+      "ceiling_broken": true,
       "floor_broken": false,
       "confirmed_valid": true,
       "confirmed_ceiling": 0.81014,
@@ -1653,16 +1653,16 @@
       "confirmed_floor_ts": "2026-06-29T17:00:00+00:00",
       "n_confirmed_highs": 4,
       "n_confirmed_lows": 2,
-      "current_price": 0.80993,
+      "current_price": 0.81051,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
         "full4": 37,
-        "short": 2,
+        "short": 1,
         "bars_per_candle": {
-          "1": 2,
-          "4": 37
+          "4": 37,
+          "2": 1
         }
       }
     },
@@ -1699,7 +1699,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 1.99
+          "break_body_atr": 1.9
         },
         {
           "type": "BOS",
@@ -1713,7 +1713,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 1.67
+          "break_body_atr": 1.6
         },
         {
           "type": "CHoCH",
@@ -1727,7 +1727,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 2.18
+          "break_body_atr": 2.08
         },
         {
           "type": "BOS",
@@ -1741,7 +1741,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 2.3
+          "break_body_atr": 2.2
         },
         {
           "type": "BOS",
@@ -1755,140 +1755,140 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 4.35
+          "break_body_atr": 4.17
         }
       ],
       "trend": "bearish",
       "swings": [
         {
           "type": "low",
-          "idx": 4,
+          "idx": 3,
           "price": 0.8103,
           "ts": "2026-06-25T08:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 8,
+          "idx": 7,
           "price": 0.8135,
           "ts": "2026-06-25T12:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 12,
+          "idx": 11,
           "price": 0.80899,
           "ts": "2026-06-25T16:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 14,
+          "idx": 13,
           "price": 0.81034,
           "ts": "2026-06-25T18:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 22,
+          "idx": 21,
           "price": 0.81119,
           "ts": "2026-06-26T02:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 34,
+          "idx": 33,
           "price": 0.80682,
           "ts": "2026-06-26T14:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 40,
+          "idx": 39,
           "price": 0.81015,
           "ts": "2026-06-26T20:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 42,
+          "idx": 41,
           "price": 0.80855,
           "ts": "2026-06-26T22:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 49,
+          "idx": 48,
           "price": 0.80966,
           "ts": "2026-06-27T05:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 55,
+          "idx": 54,
           "price": 0.80931,
           "ts": "2026-06-27T11:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 60,
+          "idx": 59,
           "price": 0.80984,
           "ts": "2026-06-27T16:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 66,
+          "idx": 65,
           "price": 0.80934,
           "ts": "2026-06-27T22:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 78,
+          "idx": 77,
           "price": 0.80979,
           "ts": "2026-06-28T10:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 82,
+          "idx": 81,
           "price": 0.80975,
           "ts": "2026-06-28T14:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 88,
+          "idx": 87,
           "price": 0.81062,
           "ts": "2026-06-28T20:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 96,
+          "idx": 95,
           "price": 0.81018,
           "ts": "2026-06-29T04:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 112,
+          "idx": 111,
           "price": 0.80722,
           "ts": "2026-06-29T20:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 123,
+          "idx": 122,
           "price": 0.80836,
           "ts": "2026-06-30T07:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 125,
+          "idx": 124,
           "price": 0.81014,
           "ts": "2026-06-30T09:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 130,
+          "idx": 129,
           "price": 0.80639,
           "ts": "2026-06-30T14:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 138,
+          "idx": 137,
           "price": 0.80772,
           "ts": "2026-06-30T22:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 143,
+          "idx": 142,
           "price": 0.80969,
           "ts": "2026-07-01T03:00:00+00:00"
         }
@@ -2572,14 +2572,14 @@
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2026-06-25T12:00:00+00:00",
-        "impulse_start_ts": "2026-06-25T07:00:00+00:00",
+        "impulse_start_ts": "2026-06-25T08:00:00+00:00",
         "broken_swing_price": 4001.60064,
         "broken_swing_ts": "2026-06-25T08:00:00+00:00",
         "broken_was_wall": false,
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.39
+        "break_body_atr": 2.4
       },
       {
         "type": "BOS",
@@ -2593,7 +2593,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.52
+        "break_body_atr": 1.53
       },
       {
         "type": "CHoCH",
@@ -2607,7 +2607,7 @@
         "reversal_pct": 1.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.8
+        "break_body_atr": 1.81
       },
       {
         "type": "BOS",
@@ -2621,7 +2621,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.61
+        "break_body_atr": 1.62
       },
       {
         "type": "BOS",
@@ -2635,7 +2635,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.36
+        "break_body_atr": 2.38
       },
       {
         "type": "BOS",
@@ -2649,147 +2649,147 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.66
+        "break_body_atr": 1.67
       }
     ],
     "swings": [
       {
-        "type": "low",
-        "idx": 3,
-        "price": 3972.98371,
-        "ts": "2026-06-25T07:00:00+00:00"
-      },
-      {
         "type": "high",
-        "idx": 4,
+        "idx": 3,
         "price": 4001.60064,
         "ts": "2026-06-25T08:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 8,
+        "idx": 7,
         "price": 3971.54328,
         "ts": "2026-06-25T12:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 14,
+        "idx": 13,
         "price": 4044.57442,
         "ts": "2026-06-25T18:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 22,
+        "idx": 21,
         "price": 3984.06375,
         "ts": "2026-06-26T02:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 35,
+        "idx": 34,
         "price": 4095.31638,
         "ts": "2026-06-26T15:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 40,
+        "idx": 39,
         "price": 4063.81756,
         "ts": "2026-06-26T20:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 41,
+        "idx": 40,
         "price": 4091.22487,
         "ts": "2026-06-26T21:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 45,
+        "idx": 44,
         "price": 4080.75528,
         "ts": "2026-06-27T01:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 49,
+        "idx": 48,
         "price": 4080.75694,
         "ts": "2026-06-27T05:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 90,
+        "idx": 89,
         "price": 4092.0206,
         "ts": "2026-06-28T22:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 92,
+        "idx": 91,
         "price": 4048.91084,
         "ts": "2026-06-29T00:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 95,
+        "idx": 94,
         "price": 4074.81358,
         "ts": "2026-06-29T03:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 97,
+        "idx": 96,
         "price": 4039.91435,
         "ts": "2026-06-29T05:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 101,
+        "idx": 100,
         "price": 4026.08906,
         "ts": "2026-06-29T09:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 105,
+        "idx": 104,
         "price": 4052.19224,
         "ts": "2026-06-29T13:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 106,
+        "idx": 105,
         "price": 4002.40144,
         "ts": "2026-06-29T14:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 111,
+        "idx": 110,
         "price": 4005.7401,
         "ts": "2026-06-29T19:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 115,
+        "idx": 114,
         "price": 4021.87902,
         "ts": "2026-06-29T23:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 117,
+        "idx": 116,
         "price": 3949.44708,
         "ts": "2026-06-30T01:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 124,
+        "idx": 123,
         "price": 4036.9413,
         "ts": "2026-06-30T08:00:00+00:00"
       },
       {
         "type": "low",
-        "idx": 128,
+        "idx": 127,
         "price": 4009.30158,
         "ts": "2026-06-30T12:00:00+00:00"
       },
       {
         "type": "high",
-        "idx": 130,
+        "idx": 129,
         "price": 4063.05867,
         "ts": "2026-06-30T14:00:00+00:00"
+      },
+      {
+        "type": "low",
+        "idx": 146,
+        "price": 3959.59368,
+        "ts": "2026-07-01T07:00:00+00:00"
       }
     ],
     "h4_range": {
@@ -2809,16 +2809,16 @@
       "confirmed_floor_ts": "2026-06-30T01:00:00+00:00",
       "n_confirmed_highs": 4,
       "n_confirmed_lows": 2,
-      "current_price": 3974.86639,
+      "current_price": 3985.96495,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
         "full4": 37,
-        "short": 2,
+        "short": 1,
         "bars_per_candle": {
-          "1": 2,
-          "4": 37
+          "4": 37,
+          "2": 1
         }
       }
     },
@@ -2848,14 +2848,14 @@
           "tier": "BOS",
           "direction": "bullish",
           "candle_ts": "2026-06-25T12:00:00+00:00",
-          "impulse_start_ts": "2026-06-25T07:00:00+00:00",
+          "impulse_start_ts": "2026-06-25T08:00:00+00:00",
           "broken_swing_price": 4001.60064,
           "broken_swing_ts": "2026-06-25T08:00:00+00:00",
           "broken_was_wall": false,
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 2.39
+          "break_body_atr": 2.4
         },
         {
           "type": "BOS",
@@ -2869,7 +2869,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 1.52
+          "break_body_atr": 1.53
         },
         {
           "type": "CHoCH",
@@ -2883,7 +2883,7 @@
           "reversal_pct": 1.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 1.8
+          "break_body_atr": 1.81
         },
         {
           "type": "BOS",
@@ -2897,7 +2897,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 1.61
+          "break_body_atr": 1.62
         },
         {
           "type": "BOS",
@@ -2911,7 +2911,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 2.36
+          "break_body_atr": 2.38
         },
         {
           "type": "BOS",
@@ -2925,148 +2925,148 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 1.66
+          "break_body_atr": 1.67
         }
       ],
       "trend": "bearish",
       "swings": [
         {
-          "type": "low",
-          "idx": 3,
-          "price": 3972.98371,
-          "ts": "2026-06-25T07:00:00+00:00"
-        },
-        {
           "type": "high",
-          "idx": 4,
+          "idx": 3,
           "price": 4001.60064,
           "ts": "2026-06-25T08:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 8,
+          "idx": 7,
           "price": 3971.54328,
           "ts": "2026-06-25T12:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 14,
+          "idx": 13,
           "price": 4044.57442,
           "ts": "2026-06-25T18:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 22,
+          "idx": 21,
           "price": 3984.06375,
           "ts": "2026-06-26T02:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 35,
+          "idx": 34,
           "price": 4095.31638,
           "ts": "2026-06-26T15:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 40,
+          "idx": 39,
           "price": 4063.81756,
           "ts": "2026-06-26T20:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 41,
+          "idx": 40,
           "price": 4091.22487,
           "ts": "2026-06-26T21:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 45,
+          "idx": 44,
           "price": 4080.75528,
           "ts": "2026-06-27T01:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 49,
+          "idx": 48,
           "price": 4080.75694,
           "ts": "2026-06-27T05:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 90,
+          "idx": 89,
           "price": 4092.0206,
           "ts": "2026-06-28T22:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 92,
+          "idx": 91,
           "price": 4048.91084,
           "ts": "2026-06-29T00:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 95,
+          "idx": 94,
           "price": 4074.81358,
           "ts": "2026-06-29T03:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 97,
+          "idx": 96,
           "price": 4039.91435,
           "ts": "2026-06-29T05:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 101,
+          "idx": 100,
           "price": 4026.08906,
           "ts": "2026-06-29T09:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 105,
+          "idx": 104,
           "price": 4052.19224,
           "ts": "2026-06-29T13:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 106,
+          "idx": 105,
           "price": 4002.40144,
           "ts": "2026-06-29T14:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 111,
+          "idx": 110,
           "price": 4005.7401,
           "ts": "2026-06-29T19:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 115,
+          "idx": 114,
           "price": 4021.87902,
           "ts": "2026-06-29T23:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 117,
+          "idx": 116,
           "price": 3949.44708,
           "ts": "2026-06-30T01:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 124,
+          "idx": 123,
           "price": 4036.9413,
           "ts": "2026-06-30T08:00:00+00:00"
         },
         {
           "type": "low",
-          "idx": 128,
+          "idx": 127,
           "price": 4009.30158,
           "ts": "2026-06-30T12:00:00+00:00"
         },
         {
           "type": "high",
-          "idx": 130,
+          "idx": 129,
           "price": 4063.05867,
           "ts": "2026-06-30T14:00:00+00:00"
+        },
+        {
+          "type": "low",
+          "idx": 146,
+          "price": 3959.59368,
+          "ts": "2026-07-01T07:00:00+00:00"
         }
       ]
     }
