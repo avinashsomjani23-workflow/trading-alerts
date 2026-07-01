@@ -84,15 +84,6 @@ def normalized_score(raw, pair_conf):
     return round(float(raw) / real_max * 10.0, 1)
 
 
-# Re-email thresholds for the same zone (2026-06-16): symmetric +-1.0 on the
-# RAW score (now the /10 scale for both pair classes). The old asymmetric
-# 0.7/0.5 band let tiny yfinance-driven wobbles trigger update emails — too much
-# spam. Now a zone must gain a FULL point or lose a FULL point before we re-email
-# it; anything smaller stays silent. Compared on raw score in
-# hysteresis_should_reemail's caller (current_score_raw vs prior_score_raw).
-SCORE_REEMAIL_UP_THRESHOLD   = 1.0   # current >= prior + 1.0 -> re-email up
-SCORE_REEMAIL_DOWN_THRESHOLD = 1.0   # current <= prior - 1.0 -> re-email down
-
 # Re-entry flicker guard. A zone that leaves proximity and returns re-emails
 # (plain TRADE READY — price has come back). But a zone hovering on the
 # proximity boundary must NOT spam an email every hour it jitters across the
@@ -168,24 +159,6 @@ def _entry_killzone_forecast_label(data, pair_conf):
     return "<b style='color:#e67e22;'>likely outside killzone</b> <i>(est.)</i>"
 
 
-def hysteresis_should_reemail(current_score, prior_score):
-    """
-    Decide whether a same-zone re-sighting deserves an update email.
-
-    Returns 'up' if score crossed the upward threshold (confluence gained),
-    'down' if it crossed the downward threshold (confluence lost), or
-    None if inside the dead band (silent).
-    """
-    if prior_score is None:
-        return 'up'  # first sighting — always email (caller treats as new)
-    delta = current_score - prior_score
-    if delta >= SCORE_REEMAIL_UP_THRESHOLD:
-        return 'up'
-    if delta <= -SCORE_REEMAIL_DOWN_THRESHOLD:
-        return 'down'
-    return None
-
-
 def load_json(path, default):
     try:
         with open(path) as f:
@@ -200,43 +173,6 @@ def save_json(path, data):
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
-    
-def format_score_driver_line(prior_raw, current_raw, prior_breakdown, current_breakdown):
-    """
-    One-line summary explaining what drove the score change.
-    Compares prior vs current breakdown component-by-component, surfaces
-    the top movers (largest absolute deltas).
-
-    Falls back gracefully if prior breakdown is missing (older state files
-    written before this field was tracked).
-    """
-    delta_total = round(current_raw - prior_raw, 2)
-    sign = "+" if delta_total >= 0 else ""
-    header = f"Score {prior_raw:.1f} → {current_raw:.1f} ({sign}{delta_total:+.1f})."
-
-    if not isinstance(prior_breakdown, dict) or not isinstance(current_breakdown, dict):
-        return f"{header} Drivers: not available (first update post-deploy)."
-
-    component_deltas = []
-    keys = set(prior_breakdown.keys()) | set(current_breakdown.keys())
-    for k in keys:
-        try:
-            p = float(prior_breakdown.get(k, 0.0))
-            c = float(current_breakdown.get(k, 0.0))
-        except (TypeError, ValueError):
-            continue
-        d = round(c - p, 2)
-        if abs(d) >= 0.05:  # ignore noise-level shifts
-            component_deltas.append((k, d))
-
-    if not component_deltas:
-        return f"{header} Drivers: rounding-level adjustments only."
-
-    # Sort by absolute delta descending; show top 2.
-    component_deltas.sort(key=lambda x: abs(x[1]), reverse=True)
-    top = component_deltas[:2]
-    parts = [f"{name} {d:+.2f}" for name, d in top]
-    return f"{header} Drivers: {', '.join(parts)}."
     
 def load_slate_as_pair_map(path="active_obs.json"):
     """
@@ -1556,16 +1492,6 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     else:
         m15_chart_block = '<div style="padding:10px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:12px;margin-bottom:12px;">&#9888; H1 zoomed chart failed to render for this alert. Check GitHub Actions logs.</div>'
 
-    # Score-change driver line: only shown on update emails.
-    score_change_line = data.get("score_change_line")
-    if score_change_line:
-        score_change_html = f"""
-    <div style="margin-bottom:12px;padding:10px 14px;background:#1a1a2e;border-left:3px solid #f1c40f;border-radius:4px;font-size:12px;color:#eee;line-height:1.5;">
-        <b style="color:#f1c40f;">Score change:</b> {score_change_line}
-    </div>"""
-    else:
-        score_change_html = ""
-
     sweep_breakdown_html = build_sweep_breakdown_html(data, dp)
 
     # Scheduled-news block — INFORMATION ONLY. Never gates, filters or suppresses
@@ -2688,15 +2614,15 @@ if __name__ == "__main__":
             #   1. fresh       — never emailed → TRADE READY
             #   2. reentry     — left proximity (>1.5x cap) and returned, any
             #                    day → TRADE READY (plain; price has come back)
-            #   3. still_valid — new trading day, still in proximity, any
-            #                    score → TRADE READY (STILL VALID)
-            #   4. updated     — same day, score crosses +0.7/-0.5 → UPDATED
-            #   - silent       — same day, in proximity, score in dead band
+            #   3. still_valid — new trading day, still in proximity, ONLY on
+            #                    the 11:35 IST scan → TRADE READY (STILL VALID)
+            #   - silent       — same trading day, already emailed (intraday
+            #                    score moves NEVER re-email — one email per day)
             current_score_raw = float(score_res['total'])
             current_breakdown = score_res.get('breakdown', {})
 
             # Score floor (2026-06-18). Zones scoring below MIN_SCORE_TO_EMAIL
-            # never email in ANY path (fresh, still_valid, reentry, updated).
+            # never email in ANY path (fresh, still_valid, reentry).
             # This is the only quality gate in Phase 2; raw 3.8 floors to "3"
             # in the UI so it must be blocked — gate on raw < floor.
             if current_score_raw < MIN_SCORE_TO_EMAIL:
@@ -2709,7 +2635,7 @@ if __name__ == "__main__":
 
             prior = phase2_zones.get(zone_id)
             today_id = get_day_id_ist(ist_now)
-            email_kind = "fresh"            # fresh | reentry | still_valid | updated
+            email_kind = "fresh"            # fresh | reentry | still_valid
             prior_score_raw = None
             prior_breakdown = None
             prior_alert_ist = None
@@ -2751,26 +2677,40 @@ if __name__ == "__main__":
                         email_kind = "fresh"
                     else:
                         # Exactly 1 new trading day — still valid reminder.
+                        # Gate (2026-07-02): still-valid reminders fire ONLY on
+                        # the 11:35 IST scan, never the 09:35 scan. The engine
+                        # runs 3x/day (09:35, 11:35, 19:35 IST); the 11:35 run
+                        # lands in the 11:xx hour. If this is any other scan, go
+                        # silent WITHOUT stamping last_email_day, so the 11:35
+                        # scan still re-detects and emails the zone.
+                        if ist_now.hour != 11:
+                            prior["last_seen_ist"] = ist_now.isoformat()
+                            save_json("phase2_sent.json", phase2_state)
+                            scan_record["final_action"] = (
+                                f"still_valid_deferred_to_1135 "
+                                f"(scan {ist_now.strftime('%H:%M')} IST)"
+                            )
+                            append_scan_log(scan_record)
+                            continue
                         email_kind = "still_valid"
                 else:
-                    # Same trading day, continuously in proximity → hysteresis.
-                    direction = hysteresis_should_reemail(current_score_raw, prior_score_raw)
-                    if direction is None:
-                        # Silent — but persist updated watermarks for diagnostics.
-                        prior["score_high_water"] = hi_water
-                        prior["score_low_water"]  = lo_water
-                        # Refresh last_seen_ist so stale-entry GC doesn't evict
-                        # a live silent-band zone.
-                        prior["last_seen_ist"] = ist_now.isoformat()
-                        save_json("phase2_sent.json", phase2_state)
-                        scan_record["final_action"] = (
-                            f"dedup_hysteresis_silent "
-                            f"({prior_score_raw:.1f}->{current_score_raw:.1f}, "
-                            f"band -{SCORE_REEMAIL_DOWN_THRESHOLD:.1f}/+{SCORE_REEMAIL_UP_THRESHOLD:.1f})"
-                        )
-                        append_scan_log(scan_record)
-                        continue
-                    email_kind = "updated"
+                    # Same trading day, already emailed → always silent.
+                    # Score-change ("UPDATED") re-emails are retired (2026-07-02):
+                    # a zone is emailed ONCE per day; intraday score moves no
+                    # longer re-email. Watermarks are still persisted for
+                    # diagnostics so the score history survives.
+                    prior["score_high_water"] = hi_water
+                    prior["score_low_water"]  = lo_water
+                    # Refresh last_seen_ist so stale-entry GC doesn't evict
+                    # a live silent zone.
+                    prior["last_seen_ist"] = ist_now.isoformat()
+                    save_json("phase2_sent.json", phase2_state)
+                    scan_record["final_action"] = (
+                        f"dedup_same_day_silent "
+                        f"({prior_score_raw:.1f}->{current_score_raw:.1f})"
+                    )
+                    append_scan_log(scan_record)
+                    continue
 
             # Register zone state in-memory. Persisted AFTER send_email so
             # a crash mid-send re-attempts the alert next scan (duplicate
@@ -2818,25 +2758,7 @@ if __name__ == "__main__":
             if not m15_ok:
                 _log_chart_failure(name, "h1_zoomed_phase2_limit")
 
-            if email_kind == "updated":
-                drivers_line = format_score_driver_line(
-                    prior_score_raw, current_score_raw,
-                    prior_breakdown, current_breakdown
-                )
-                subject_prefix = "TRADE READY (UPDATED)"
-                email_label = (
-                    f"TRADE READY — Score updated {prior_score_raw:.1f} → {current_score_raw:.1f}"
-                )
-                trade_data["score_change_line"] = drivers_line
-                log_action = (
-                    f"alert_sent_TRADE_READY_UPDATED "
-                    f"({prior_score_raw:.1f}->{current_score_raw:.1f})"
-                )
-                print_label = (
-                    f"TRADE READY UPDATE: {name} "
-                    f"score {prior_score_raw:.1f}->{current_score_raw:.1f}"
-                )
-            elif email_kind == "still_valid":
+            if email_kind == "still_valid":
                 # Next-day reminder for a zone still sitting in proximity.
                 subject_prefix = "TRADE READY (STILL VALID)"
                 email_label = "TRADE READY — still valid"

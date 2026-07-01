@@ -42,6 +42,14 @@ from backtest.run_logger import log_event
 MAX_HOLD_H1_BARS = 48
 DEFAULT_RISK_USD = 250.0
 
+# Backtest trade-existence floor (2026-07). Live rejects any setup whose best
+# target clears < 1.5R; the backtest relaxes that to 0.5R so we can study the
+# sub-1.5R population live never sees. This ONLY adds previously-rejected trades
+# — TP1 selection still prefers a >= 1.5R target when one exists, so every trade
+# that lives today keeps its exact TP1 (winners are never cut). See
+# compute_phase2_levels(tp1_min_rr=...).
+BACKTEST_TP1_MIN_RR = 0.5
+
 # Weekend-flat (user rule, 2026-06-21): never hold a position into the FX
 # weekend. Any OPEN trade is force-closed at the first Friday bar at/after
 # WEEKEND_FLAT_HOUR_UTC, at that bar's open. Set WEEKEND_FLAT=False to disable.
@@ -474,7 +482,7 @@ def _simulate_single_entry(
     try:
         levels = smc_detector.compute_phase2_levels(
             pair_conf, bias, ob, current_price, df_h1_at_alert,
-            entry_zone=entry_zone,
+            entry_zone=entry_zone, tp1_min_rr=BACKTEST_TP1_MIN_RR,
         )
     except Exception as e:
         log_event("h1only_levels_error", level="error", pair=pair,

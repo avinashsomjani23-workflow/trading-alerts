@@ -16,3 +16,5 @@
 {"ts": "2026-07-01T19:44:52.997956+00:00", "level": "info", "event": "pair_alerts_collected", "pair": "GOLD", "alerts": 182, "mode": "h1_only"}
 {"ts": "2026-07-01T19:44:52.998056+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "GOLD", "trades": 67, "news_blocked": 0, "ist_blocked": 6, "killzone_dropped_alerts": 29}
 {"ts": "2026-07-01T19:45:00.771633+00:00", "level": "info", "event": "report_written", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20080102_20080331", "total_alerts": 480, "total_trades": 189}
+{"ts": "2026-07-01T19:45:01.483418+00:00", "level": "info", "event": "logs_committed_local_only", "run_id": "h1only_20080102_20080331", "sha": "4e62492e"}
+{"ts": "2026-07-01T19:45:01.484677+00:00", "level": "info", "event": "run_end"}

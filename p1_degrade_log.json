@@ -1,1028 +1,638 @@
 [
   {
-    "ts": "2026-07-01T18:47:31.482298",
+    "ts": "2026-07-02T01:13:20.003676",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_68h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.017562",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_71h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.036549",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_69h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.051743",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_69h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.065170",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_72h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.080952",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_73h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.095482",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_73h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.108263",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_73h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.123448",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_72h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.138332",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_74h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.157731",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_73h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.172198",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_73h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.189969",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_74h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.206384",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_76h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.228089",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_77h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.245638",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_77h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.260693",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_78h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.276099",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_76h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.293554",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_79h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.306791",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_79h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.322176",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_80h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.334229",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_80h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.347331",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_81h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.360856",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_81h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.380648",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_80h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.393337",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_80h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.412863",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_81h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.424339",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_83h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.441588",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_84h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.458936",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_82h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.486383",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "USDJPY",
+    "source": "legacy_window_85h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.504506",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_83h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.531694",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_84h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.548803",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_84h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.573438",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_85h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.589451",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_85h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.612138",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_86h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.629952",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_86h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.653130",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_87h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.666858",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_87h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.691090",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_88h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.718743",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_88h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.744496",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_89h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.761062",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_89h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.783547",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_90h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.803513",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_90h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.822450",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_90h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.852675",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_91h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.871586",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_91h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.890109",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_91h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.914392",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_92h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.932678",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_92h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.951397",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_92h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.981564",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_93h"
+  },
+  {
+    "ts": "2026-07-02T01:13:20.999552",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_93h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.016794",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_93h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.040911",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_94h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.058181",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_94h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.073614",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_94h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.097808",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_95h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.117563",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_95h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.133113",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_95h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.150866",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_96h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.165027",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_96h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.179597",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_96h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.200520",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_97h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.212264",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_97h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.233148",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_97h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.258564",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_98h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.274471",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_98h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.295887",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_99h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.310439",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_99h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.331238",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_100h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.345496",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_100h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.364010",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_101h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.380050",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_101h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.399048",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_102h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.415179",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_102h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.434469",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_103h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.450800",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_103h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.478582",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_104h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.496068",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_104h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.522489",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_105h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.537343",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_105h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.556962",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_106h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.569124",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_106h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.591805",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_107h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.609006",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_107h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.630453",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_108h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.646159",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_108h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.668306",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_109h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.684151",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_109h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.700392",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_109h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.721892",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_110h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.738315",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_110h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.754241",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_110h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.777733",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_111h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.792288",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_111h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.807842",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_111h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.830245",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_112h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.845184",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_112h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.860594",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_112h"
+  },
+  {
+    "ts": "2026-07-02T01:13:21.885286",
     "kind": "dealing_range_legacy_fallback",
     "pair": "EURUSD",
     "source": "legacy_window_113h"
   },
   {
-    "ts": "2026-07-01T18:47:31.498643",
+    "ts": "2026-07-02T01:13:21.897326",
     "kind": "dealing_range_legacy_fallback",
     "pair": "EURUSD",
     "source": "legacy_window_113h"
   },
   {
-    "ts": "2026-07-01T18:47:31.530886",
+    "ts": "2026-07-02T01:13:21.914367",
     "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_99h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.547490",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_99h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.566046",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_99h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.597809",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_100h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.612069",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_100h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.625232",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_100h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.648422",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_101h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.664827",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_101h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.682966",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_101h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.700381",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_101h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.743175",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_102h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.760750",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_102h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.778107",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_102h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.814998",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_103h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.831051",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_103h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.846946",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_103h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.861191",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_103h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.885172",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_104h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.898534",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_104h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.915073",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_104h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.948194",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_105h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.964455",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_105h"
-  },
-  {
-    "ts": "2026-07-01T18:47:31.981636",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_105h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.019181",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_106h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.035583",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_106h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.053874",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_106h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.070020",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_106h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.103262",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_107h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.121725",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_107h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.139042",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_107h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.155495",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_107h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.180019",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_108h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.197956",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_108h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.214812",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_108h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.244540",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_109h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.262737",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_109h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.282465",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_109h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.319562",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_110h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.339024",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_110h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.353328",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_110h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.387185",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_111h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.405295",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_111h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.424193",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_111h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.449919",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_112h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.467662",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_112h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.483687",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_112h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.519423",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
+    "pair": "EURUSD",
     "source": "legacy_window_113h"
   },
   {
-    "ts": "2026-07-01T18:47:32.536258",
+    "ts": "2026-07-02T01:13:21.931549",
     "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
+    "pair": "EURUSD",
     "source": "legacy_window_113h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.554637",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_113h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.594226",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_114h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.613886",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_114h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.629857",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_114h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.656859",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_115h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.671198",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_115h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.685599",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_115h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.706881",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_115h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.736624",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_116h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.755664",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_116h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.773103",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_116h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.795283",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_116h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.830037",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_117h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.848594",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_117h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.863230",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_117h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.885113",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_117h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.918194",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_118h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.932621",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_118h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.946419",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_118h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.966265",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_118h"
-  },
-  {
-    "ts": "2026-07-01T18:47:32.999894",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_119h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.018430",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_119h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.038259",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_119h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.060844",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_119h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.097427",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.117491",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.132412",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.151502",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.187373",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.204645",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.224263",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.244173",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.287715",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.307911",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.327499",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.353199",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.395668",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.411390",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.426009",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.442377",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.470593",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.485967",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.499271",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.516676",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.564331",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.584555",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.604027",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.627952",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.669390",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.689745",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.708876",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.731118",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.773086",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.794024",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.815134",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.838734",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.881043",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.900928",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.919030",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.952893",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.970249",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:33.988906",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.021554",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.038876",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.083006",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.104293",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.126995",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.170159",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.189421",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.206934",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.235543",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.252257",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.268557",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.285029",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.324560",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.345919",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.365837",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.386856",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.432060",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.455926",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.473685",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.488175",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.506180",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.536871",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.552049",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.569374",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.610025",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.631890",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.650542",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.696047",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.715825",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.731612",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.750545",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.787506",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.809349",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.830460",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.855902",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.900864",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.921660",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.943474",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.964776",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:34.998948",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.015237",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.031696",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.055872",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.088222",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.110433",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.131137",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.157857",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.205310",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.227418",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.246121",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.266404",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.304949",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.328375",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.348208",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.371281",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.413906",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.433079",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.452614",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-01T18:47:35.476073",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
   }
 ]

@@ -1632,9 +1632,19 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
 # migration; if it is ever re-enabled, this function's H1-only behaviour is
 # what it will get.)
 def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
-                          entry_zone="proximal"):
+                          entry_zone="proximal", tp1_min_rr=1.5):
     """
     Phase 2 entry / SL / TP computation. H1-only since 2026-05-26 migration.
+
+    `tp1_min_rr` (default 1.5) is the LIVE trade-existence floor: TP1 must clear
+    it or there is no trade. Live callers never pass it, so live behaviour is
+    frozen at 1.5R. The backtest passes 0.5 to study the sub-1.5R population it
+    could never see before. CRITICAL: this ONLY relaxes trade EXISTENCE, never
+    TP1 SELECTION. TP1 is still chosen as the nearest target clearing 1.5R when
+    one exists (winners are byte-identical to the 1.5R world); the lower floor is
+    a pure FALLBACK used only when nothing clears 1.5R, so the change is strictly
+    additive — every trade that exists today keeps its exact TP1, and only
+    previously-rejected trades appear (targeting their best >= tp1_min_rr option).
 
     Entry: always taken from H1 OB geometry. `entry_zone` selects the line:
       - "proximal" (default, live) -> OB proximal edge. Standard SMC limit.
@@ -1646,8 +1656,11 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     TP swings: H1 swings at lookback=3.
       TP1 = nearest opposing H1 swing past entry that clears 1.5R. If NO swing
             clears 1.5R, fall back to the H4 dealing-range wall (ceiling for
-            LONG / floor for SHORT) if it clears 1.5R. If neither qualifies ->
-            no trade (reason 'no_qualifying_target', logged for counting).
+            LONG / floor for SHORT) if it clears 1.5R. If neither qualifies at
+            1.5R AND the caller lowered `tp1_min_rr` (backtest passes 0.5), the
+            same swing/wall pick re-runs at that lower floor so the setup can
+            still exist. If nothing clears `tp1_min_rr` -> no trade (reason
+            'no_qualifying_target', logged for counting).
       TP2 = next opposing H1 swing past TP1 (no RR gate). None when TP1 is the
             wall, or when no further swing exists; simulator rides TP1 + BE-stop.
 
@@ -1728,41 +1741,43 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
                     if s['type'] == 'low' and s['price'] < entry]
         opposing.sort(key=lambda s: s['price'], reverse=True)  # descending -- nearest first
 
-    # TP1: nearest opposing swing past entry clearing 1.5R.
-    tp1 = None
-    tp1_rr = 0.0
-    tp1_idx_in_opposing = None
-    for i, sw in enumerate(opposing):
-        rr = abs(sw['price'] - entry) / risk
-        if rr >= 1.5:
-            tp1 = sw['price']
-            tp1_rr = rr
-            tp1_idx_in_opposing = i
-            break
-
-    # TP1 fallback ladder (2026-06). A fresh CHoCH often has NO opposing
-    # leg-filtered swing >= 1.5R yet, which silently no-traded the best setups.
-    # Fallback to the H4 dealing-range WALL — the institutional draw on liquidity
-    # (LONG aims at the ceiling, SHORT at the floor). The wall is frozen per-OB on
-    # ob['dealing_range'] (no state load, no wobble) and still must clear 1.5R.
-    tp1_source = "swing"
-    if tp1 is None:
-        dr_for_tp = ob.get('dealing_range') if isinstance(ob, dict) else None
+    # TP1 selection is a two-stage floor. Stage 1 always demands 1.5R so the
+    # LIVE target is unchanged and winners are never cut. Stage 2 only runs when
+    # nothing cleared 1.5R AND the caller relaxed the floor (backtest passes
+    # 0.5); it re-scans with the lower floor purely to let a previously-rejected
+    # setup EXIST. A helper does the pick so swing + H4-wall use the identical
+    # rule at whichever floor is active.
+    dr_for_tp = ob.get('dealing_range') if isinstance(ob, dict) else None
+    wall = None
+    if isinstance(dr_for_tp, dict) and dr_for_tp.get('valid'):
+        wall = dr_for_tp.get('range_high') if bias == "LONG" else dr_for_tp.get('range_low')
+    try:
+        wall = float(wall) if wall is not None else None
+    except (TypeError, ValueError):
         wall = None
-        if isinstance(dr_for_tp, dict) and dr_for_tp.get('valid'):
-            wall = dr_for_tp.get('range_high') if bias == "LONG" else dr_for_tp.get('range_low')
-        try:
-            wall = float(wall) if wall is not None else None
-        except (TypeError, ValueError):
-            wall = None
+
+    def _pick_tp1(floor):
+        """(tp1, tp1_rr, idx_in_opposing, source) for the given RR floor, or
+        (None, ...) if nothing clears it. Nearest qualifying swing first; H4
+        dealing-range wall as the fallback draw-on-liquidity (LONG ceiling /
+        SHORT floor). Same rule live has always used, parameterised on floor."""
+        for i, sw in enumerate(opposing):
+            rr = abs(sw['price'] - entry) / risk
+            if rr >= floor:
+                return sw['price'], rr, i, "swing"
+        # H4 wall fallback (2026-06): a fresh CHoCH often has no qualifying
+        # opposing swing yet — aim at the institutional draw instead.
         if wall is not None:
             on_side = (wall > entry) if bias == "LONG" else (wall < entry)
             wall_rr = abs(wall - entry) / risk
-            if on_side and wall_rr >= 1.5:
-                tp1 = wall
-                tp1_rr = wall_rr
-                tp1_idx_in_opposing = None  # wall has no swing index -> no swing TP2
-                tp1_source = "h4_wall"
+            if on_side and wall_rr >= floor:
+                return wall, wall_rr, None, "h4_wall"
+        return None, 0.0, None, "swing"
+
+    tp1, tp1_rr, tp1_idx_in_opposing, tp1_source = _pick_tp1(1.5)
+    # Stage 2: only when the live floor found nothing AND the caller relaxed it.
+    if tp1 is None and tp1_min_rr < 1.5:
+        tp1, tp1_rr, tp1_idx_in_opposing, tp1_source = _pick_tp1(tp1_min_rr)
 
     if tp1 is None:
         return {
@@ -1770,8 +1785,8 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
             # Distinct, machine-readable reason so the scan log can COUNT how often
             # a real setup is dropped purely for lack of a target (the quiet
             # no-trade hole). Was previously two prose strings that were hard to tally.
-            "reason": ("no_qualifying_target -- no opposing H1 swing and no H4 wall "
-                       ">= 1.5R past entry."),
+            "reason": (f"no_qualifying_target -- no opposing H1 swing and no H4 wall "
+                       f">= {tp1_min_rr}R past entry."),
             "entry": round(entry, dp),
             "sl": round(sl, dp),
         }
