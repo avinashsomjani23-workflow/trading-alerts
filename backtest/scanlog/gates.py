@@ -174,9 +174,14 @@ def evaluate(
     ))
 
     # ---- G3 causality ------------------------------------------------------
-    # For every filled trade: ob_ts <= bos_ts < alert_ts < fill_ts,
-    # and fill_ts >= alert_ts + 1h. Strict where shown; equality on
-    # alert/bos is the historical bug -> FAIL.
+    # For every filled trade: ob_ts <= bos_ts < alert_ts <= fill_ts.
+    # fill_ts >= alert_ts (NOT strictly >): the fill candle is the ALERT candle
+    # itself (alert_ts = candle B, the candle the trader places the order into a
+    # few minutes after the trigger candle closed), so fill_ts == alert_ts is the
+    # earliest legal fill, not a bug. The old rule (fill_ts >= alert_ts + 1h)
+    # skipped candle B and filled a candle late; that requirement is removed.
+    # bos_ts < alert_ts stays strict (a BOS on the just-closed candle cannot
+    # alert the same cycle — the historical lookahead bug).
     causality_violations = []
     for t in trades:
         fill = t.get("fill_ts")
@@ -198,10 +203,8 @@ def evaluate(
             bad.append("ob<=bos")
         if bos_t is not None and not (bos_t < alert_t):
             bad.append("bos<alert")
-        if not (alert_t < fill_t):
-            bad.append("alert<fill")
-        if fill_t < alert_t + pd.Timedelta(hours=1):
-            bad.append("fill>=alert+1h")
+        if not (alert_t <= fill_t):
+            bad.append("alert<=fill")
         if bad:
             causality_violations.append(
                 {"pair": t.get("pair"), "alert_ts": str(alert), "violations": bad})
@@ -210,7 +213,7 @@ def evaluate(
                               violations=bad)
     g3_ok = not causality_violations
     gates.append(Gate(
-        "G3", "ob<=bos<alert<fill and fill>=alert+1h on every filled trade",
+        "G3", "ob<=bos<alert<=fill on every filled trade (fill on the alert candle allowed)",
         "strict inequalities",
         {"violations": len(causality_violations),
          "sample": causality_violations[:5]},

@@ -103,6 +103,11 @@ FVG, liquidity sweep, kill zone, macro news, PD array alignment, OB and FVG fres
 - Flag design / logic / system problems proactively.
 - Anticipate edge cases before responding. Present options when input is needed; never surface a problem without solutions.
 
+**Logging (log everything measurable)**
+- If a value can be measured, LOG IT. Storage is free; a missing column is a blind spot the edge engine can never recover.
+- Every new metric / feature / verdict MUST ship with its logging wired in the same change — into the per-trade row (trades.csv) at minimum, and the email breakdown when it's a win-rate lever.
+- Always FLAG in the response what you logged and where (e.g. "logged `bos_verdict` to trades.csv + email"). If a new metric is NOT being logged, say so and why.
+
 **Dual perspective by question type**
 - Trading logic: think like a vet who has placed thousands of trades. "Would a vet respect this signal?"
 - Architecture: think like a senior Python architect. "Is this clean, observable, maintainable?"

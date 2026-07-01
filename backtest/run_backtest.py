@@ -158,6 +158,12 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
         if killzone_blocked:
             n_kz_dropped += 1
 
+        # Remember where this alert's exit-lab rows START so we can stamp the
+        # hard-block flags onto exactly the rows this alert produced (the sink is
+        # a shared module list appended to across every alert). Without this the
+        # sink keeps IST/weekend-blocked fills the headline throws out, so the
+        # exit table's N over-counts vs the headline (the 826-vs-668 RCA).
+        _sink_mark = len(exit_lab_sink)
         rows = _sim.simulate_h1_only_dual(alert, pair_conf, df_h1, risk_usd=risk_usd)
 
         alert_ts = alert_ts_raw
@@ -165,6 +171,15 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
             alert_ts.to_pydatetime(), name, news_events, window_minutes=30,
         )
         ist_blocked = not _ist.in_user_trading_window(alert_ts, pair_type)
+
+        # Stamp the same hard-block flags on this alert's exit-lab sink rows so the
+        # exit table can drop exactly what the headline drops. weekend_blocked is
+        # already on the trade row (per entry_zone); reuse it by (entry_zone) match.
+        _wk_by_zone = {r.get("entry_zone"): bool(r.get("weekend_blocked"))
+                       for r in rows}
+        for _sr in exit_lab_sink[_sink_mark:]:
+            _sr["ist_blocked"] = bool(ist_blocked)
+            _sr["weekend_blocked"] = _wk_by_zone.get(_sr.get("entry_zone"), False)
 
         for row in rows:
             row["news_blocked"]        = bool(blocked)
@@ -303,8 +318,8 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
       - No scoring gate at detection (every OB-touch fires); the live score
         floor is applied later by the reporting/headline layer.
       - Fires ONE trade row per OB-touch: the proximal entry (the live limit),
-        via h1_only_simulator.simulate_h1_only_dual. The 50% mean leg is dormant
-        (h1_only_simulator._ENABLE_50PCT_ENTRY=False, retired 2026-06-30).
+        via h1_only_simulator.simulate_h1_only_dual. Proximal is the only entry
+        zone (the 50% mean leg was removed 2026-07).
       - Uses h1_only_reporting for the TP1/TP2 scoreboard.
     """
     fetch_start = start - timedelta(days=35)

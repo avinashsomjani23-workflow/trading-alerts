@@ -491,6 +491,13 @@ def replay_pair(
                     pass
 
             # Fire!
+            # Stamp the continuation-drive verdict (holding/fading) at alert time
+            # from the in-memory event leg — the SAME shared read live Phase 2 uses
+            # (smc_detector.bos_leg_read). Without this the OB carries the default
+            # 'holding' and the backtest structure score silently diverges from live
+            # for a fading late-continuation. Point-in-time clean: events come from
+            # the closed-bar walls slice.
+            ob["bos_verdict"] = smc_detector.bos_leg_read(events).get("verdict", "holding")
             diag["alerts_emitted"] += 1
             ob_state["state"] = "cooling"
             ob_state["fire_count"] += 1

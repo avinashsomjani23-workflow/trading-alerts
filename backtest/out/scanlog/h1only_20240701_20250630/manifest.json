@@ -1,8 +1,8 @@
 {
   "run_id": "h1only_20240701_20250630",
   "schema_version": "1.0.0",
-  "generated_utc": "2026-07-01T06:36:23.157212+00:00",
-  "git_sha": "95abb6b",
+  "generated_utc": "2026-07-01T18:22:48.470041+00:00",
+  "git_sha": "29e18b9",
   "risk_usd": 250.0,
   "min_warmup_bars": 50,
   "fetch_pad_days": 35,
@@ -81,8 +81,8 @@
     "GOLD.spread_pips": 0.5
   },
   "versions": {
-    "python": "3.11.15",
+    "python": "3.14.5",
     "pandas": "3.0.3",
-    "yfinance": "1.5.1"
+    "yfinance": "1.3.0"
   }
 }

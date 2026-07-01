@@ -183,10 +183,10 @@ def test_excel_dollar_pnl_formula():
     print("\n== test_excel_dollar_pnl_formula ==")
 
     # +6.88R at $250 risk MUST render as $1,720. Previous bug rendered
-    # r * pnl_usd = 6.88 * 1720 = $11,833.
+    # r * pnl_usd = 6.88 * 1720 = $11,833. (50% mean entry removed 2026-07 —
+    # the Zone Register is proximal-only now.)
     trades = [
         _mk_trade("EURUSD", "proximal", 6.88, 1.0, 6.88, exit_reason="tp2"),
-        _mk_trade("EURUSD", "50pct",   -1.0, -1.0, -1.0, exit_reason="sl"),
     ]
     pivot_df = h1_only_reporting._build_zone_register_df(trades)
     if pivot_df.empty:
@@ -198,12 +198,6 @@ def test_excel_dollar_pnl_formula():
         _failed(f"Proximal Dollar P&L: expected ${expected}, got ${actual} "
                 f"(would be ${round(6.88 * 6.88 * 250)} under the old bug)")
     _passed(f"Proximal Dollar P&L = ${actual} (correct, not the bug value)")
-
-    mid_actual = row["50% Dollar P&L"]
-    mid_expected = round(-1.0 * 250, 0)
-    if mid_actual != mid_expected:
-        _failed(f"50% Dollar P&L: expected ${mid_expected}, got ${mid_actual}")
-    _passed(f"50% Dollar P&L = ${mid_actual}")
 
 
 # ---------------------------------------------------------------------------

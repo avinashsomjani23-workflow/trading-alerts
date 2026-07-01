@@ -267,10 +267,6 @@ def _event_label(bos_tag: Optional[str], bos_tier: Optional[str]) -> str:
 # this too.
 _FVG_REARM_ATR = 1.0
 
-# Retired A/B leg (OB-midpoint entry). OFF = proximal-only (the live model).
-# Kept only so the path can be re-enabled for a one-off study; never on in a run.
-_ENABLE_50PCT_ENTRY = False
-
 
 def _fvg_state(ob: Dict[str, Any], df_h1: pd.DataFrame,
                alert_ts: pd.Timestamp) -> str:
@@ -436,14 +432,12 @@ def _simulate_single_entry(
     score: float,
     breakdown: Dict[str, float],
     risk_usd: float,
-    forced_tp1: Optional[float] = None,
-    forced_tp2: Optional[float] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Simulate one trade for one entry zone ('proximal' or '50pct').
+    """Simulate one proximal trade for one OB-touch alert.
 
     Returns a row dict or None if the trade is invalid (e.g. no TP1 clearing
-    1.5R — same gate as live). Returns "never_filled" row for 50pct entries
-    that don't get filled within the hold window, so we can count the miss.
+    1.5R — same gate as live). Returns a "never_filled" row when the limit is
+    not touched within the hold window, so we can count the miss.
     """
     ob = alert["ob"]
     pair = alert["pair"]
@@ -488,35 +482,18 @@ def _simulate_single_entry(
                   error=f"{type(e).__name__}: {e}")
         return None
 
-    if forced_tp1 is not None:
-        # Shared-TP mode: only need entry and sl from levels (may be "invalid"
-        # because the TP gate failed from the 50pct entry, but entry/sl are
-        # still present in the dict after the smc_detector change).
-        if not isinstance(levels, dict) or "entry" not in levels:
-            log_event("h1only_sim_skip", level="info", pair=pair,
-                      entry_zone=entry_zone, alert_ts=str(alert_ts),
-                      reason="entry_not_computable_for_forced_tp_mode")
-            return None
-        entry  = float(levels["entry"])
-        sl     = float(levels["sl"])
-        tp1    = float(forced_tp1)
-        tp2    = float(forced_tp2) if forced_tp2 is not None else None
-        r_dist = abs(entry - sl)
-        tp1_rr = abs(tp1 - entry) / r_dist if r_dist > 0 else 0.0
-        tp2_rr = abs(tp2 - entry) / r_dist if (r_dist > 0 and tp2 is not None) else 0.0
-    else:
-        if not levels or not levels.get("valid", False):
-            log_event("h1only_sim_skip", level="info", pair=pair,
-                      entry_zone=entry_zone, alert_ts=str(alert_ts),
-                      reason=levels.get("reason", "levels_invalid")
-                             if isinstance(levels, dict) else "levels_none")
-            return None
-        entry  = float(levels["entry"])
-        sl     = float(levels["sl"])
-        tp1    = float(levels["tp1"])
-        tp2    = float(levels["tp2"]) if levels.get("tp2") is not None else None
-        tp1_rr = float(levels.get("rr", 0.0))
-        tp2_rr = float(levels.get("tp2_rr", 0.0)) if tp2 is not None else 0.0
+    if not levels or not levels.get("valid", False):
+        log_event("h1only_sim_skip", level="info", pair=pair,
+                  entry_zone=entry_zone, alert_ts=str(alert_ts),
+                  reason=levels.get("reason", "levels_invalid")
+                         if isinstance(levels, dict) else "levels_none")
+        return None
+    entry  = float(levels["entry"])
+    sl     = float(levels["sl"])
+    tp1    = float(levels["tp1"])
+    tp2    = float(levels["tp2"]) if levels.get("tp2") is not None else None
+    tp1_rr = float(levels.get("rr", 0.0))
+    tp2_rr = float(levels.get("tp2_rr", 0.0)) if tp2 is not None else 0.0
 
     # Apply pair spread to widen SL (worst-case execution). spread_pips is
     # the pair's typical broker spread. pip_size derived from decimal_places:
@@ -539,6 +516,9 @@ def _simulate_single_entry(
     else:
         pip_size = 0.01 if decimal_places <= 3 else 0.0001
     spread_price = spread_pips * pip_size
+    # Pre-spread stop (the raw OB distal boundary), logged so a spread audit is a
+    # clean two-column diff (sl_raw vs sl_initial) instead of a reconstruction.
+    sl_raw = sl
     if spread_price > 0:
         if bias == "LONG":
             sl = sl - spread_price
@@ -564,26 +544,32 @@ def _simulate_single_entry(
                       tp1=tp1, tp2=tp2, bias=bias)
             return None
 
-    # Walk H1 bars from (alert_ts + 1H) forward up to MAX_HOLD_H1_BARS bars.
-    # The alert fires when its bar CLOSES; a live broker can only place the
-    # limit AFTER close, so the earliest legal fill is the NEXT bar's open.
-    # Including the alert bar caused 283/1792 cloned-fill rows in the
-    # 2026-03 backtest -- physically impossible "fills" on the bar that
-    # only just published the alert (see RCA #2, #4).
+    # Fill walk starts on the ALERT candle itself (alert_ts).
+    #
+    # Timeline (the trader's real clock, MT5 feed): the candle that triggered the
+    # proximity alert is `alert_bar_ts` (the last CLOSED candle — "candle A"). It
+    # closes, and the alert publishes at `alert_ts` = candle A's close = the OPEN
+    # of the next candle ("candle B"). In real life the trader reads the email a
+    # few minutes after candle A closes and places the limit a few minutes into
+    # candle B — so candle B is the FIRST candle the order can fill on. We fill
+    # from candle B (alert_ts), not candle C (alert_ts + 1h). The old +1h skipped
+    # candle B entirely and filled a whole candle late (the "18%" of fills where
+    # price reached entry on candle B were pushed to candle C or lost). The only
+    # unmodelled sliver is candle B's first ~5 min before the order was placed —
+    # negligible on H1. Same-bar fill+SL is still resolved SL-first by the
+    # fill-bar rule below, so a candle-B fill never fabricates an unearned win.
+    #
+    # NOTE the earlier "cloned-fill" RCA (2026-03): that was fixed by the OB dedup
+    # in run_backtest (first alert per OB only) — NOT by the +1h, which was an
+    # over-correction on top. Filling on candle B is safe because dedup already
+    # removed the identical re-fire rows.
+    #
     # Two separate clocks:
-    #   - Pre-fill:  limit pends at most MAX_HOLD_H1_BARS bars after alert.
-    #                If price never comes back to entry inside that window,
-    #                emit never_filled.
-    #   - Post-fill: once filled, trade runs at most MAX_HOLD_H1_BARS bars
-    #                before forced timeout. Independent of pre-fill wait.
-    # Earlier version pre-sliced future to MAX_HOLD_H1_BARS bars TOTAL from
-    # alert, conflating the two clocks. A trade that pended N bars only got
-    # MAX_HOLD - N bars to play out, producing false window_end exits at
-    # whatever R the position happened to sit at when the slice ran out
-    # (often a positive number for trades that would have hit SL one bar
-    # later). See RCA Mar 9 EURUSD long, filled bar 46/48 -> window_end at
-    # +0.125R when real SL hit 8 bars after fill.
-    fill_walk_start = alert_ts + pd.Timedelta(hours=1)
+    #   - Pre-fill:  limit pends at most MAX_HOLD_H1_BARS candles from candle B.
+    #                If price never reaches entry in that window -> never_filled.
+    #   - Post-fill: once filled, trade runs at most MAX_HOLD_H1_BARS candles
+    #                before forced timeout. Independent of the pre-fill wait.
+    fill_walk_start = alert_ts
     future = df_h1.loc[fill_walk_start:]
     if future.empty:
         return None
@@ -631,14 +617,13 @@ def _simulate_single_entry(
     filled = False
     fill_ts: Optional[pd.Timestamp] = None
     fill_bar_idx = -1
-    # Both proximal and 50pct entries are modelled as pre-placed pending limits
-    # sitting at their respective levels for the OB's lifetime. Fill when price
-    # first crosses the entry level (long fills on bar low <= entry; short on
-    # bar high >= entry). This handles three cases uniformly:
+    # The proximal entry is a pre-placed pending limit sitting at the OB proximal
+    # edge for the OB's lifetime. Fill when price first crosses the entry level
+    # (long fills on bar low <= entry; short on bar high >= entry). This handles
+    # three cases uniformly:
     #   - alert bar exactly touched the level   -> fills on alert bar
     #   - alert bar approaching but not yet at  -> fills on subsequent bar
     #   - alert bar overshot past the level     -> fills when price pulls back
-    # Same logic for both entry zones means proximal vs 50% is a clean A/B.
 
     exit_ts: Optional[pd.Timestamp] = None
     exit_reason: Optional[str] = None
@@ -674,8 +659,7 @@ def _simulate_single_entry(
         is_fill_bar_this_iter = False
         if not filled:
             # Pending limit fill: long fills when bar.low <= entry,
-            # short fills when bar.high >= entry. Applies to both proximal
-            # and 50pct entries (pre-placed limit semantics).
+            # short fills when bar.high >= entry (pre-placed limit semantics).
             if (bias == "LONG" and bar_lo <= entry) or \
                (bias == "SHORT" and bar_hi >= entry):
                 filled = True
@@ -780,12 +764,12 @@ def _simulate_single_entry(
             cur_sl = entry
 
     if not filled:
-        # 50pct entry that never filled. Emit a row with exit_reason="never_filled"
+        # Limit never touched within the hold window. Emit a "never_filled" row
         # so the report can count "would-have-missed" trades.
         bars_to_exit = bars_walked_post_fill
         return _build_row(
             alert=alert, pair_conf=pair_conf, ob=ob,
-            entry_zone=entry_zone, entry=entry, sl=sl, tp1=tp1, tp2=tp2,
+            entry_zone=entry_zone, entry=entry, sl=sl, sl_raw=sl_raw, tp1=tp1, tp2=tp2,
             tp1_rr=tp1_rr, tp2_rr=tp2_rr,
             score=score, breakdown=breakdown,
             df_h1=df_h1, alert_ts=alert_ts,
@@ -861,7 +845,16 @@ def _simulate_single_entry(
                 )
                 EXIT_LAB_SINK.append({
                     "pair": pair, "alert_ts": str(alert_ts),
+                    # ob_timestamp + direction make the row uniquely joinable back
+                    # to its trade: two different OBs can alert on the same pair at
+                    # the same timestamp, so (pair, alert_ts) alone is NOT unique.
+                    "ob_timestamp": ob.get("ob_timestamp"),
+                    "direction": ob.get("direction"),
                     "entry_zone": entry_zone, "committed_r": round(r_realised, 4),
+                    # Realised exit reason of the LIVE walk — lets the exit report
+                    # score the exit study over the SAME population the headline
+                    # counts (drop never_filled/timeout/window_end unresolved rows).
+                    "exit_reason": exit_reason,
                     "config": _name, "r": _res["r_realised"],
                 })
             except Exception as _e:  # never let a diagnostic break a run
@@ -870,7 +863,7 @@ def _simulate_single_entry(
 
     return _build_row(
         alert=alert, pair_conf=pair_conf, ob=ob,
-        entry_zone=entry_zone, entry=entry, sl=sl, tp1=tp1, tp2=tp2,
+        entry_zone=entry_zone, entry=entry, sl=sl, sl_raw=sl_raw, tp1=tp1, tp2=tp2,
         tp1_rr=tp1_rr, tp2_rr=tp2_rr,
         score=score, breakdown=breakdown,
         df_h1=df_h1, alert_ts=alert_ts,
@@ -892,7 +885,7 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                fill_ts, exit_ts, exit_reason, exit_price,
                r_realised, r_if_exit_tp1, r_if_exit_tp2,
                mfe_r, mae_r, bars_to_exit, bars_to_tp1, bars_to_tp2,
-               sl_collision, risk_usd) -> Dict[str, Any]:
+               sl_collision, risk_usd, sl_raw=None) -> Dict[str, Any]:
     """Assemble the final trade row dict in stable column order."""
     direction = ob.get("direction", "?")
     bos_tag = ob.get("bos_tag", "BOS")
@@ -1002,6 +995,10 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "event":         _event_label(bos_tag, bos_tier),
         "entry_zone":    entry_zone,
         "entry":         entry,
+        # sl_raw = the raw OB distal (pre-spread) stop. sl_initial = sl_raw widened
+        # by one spread (the stop actually traded). Logging both makes a spread
+        # audit a clean diff instead of reconstructing sl_raw from sl_initial.
+        "sl_raw":        sl_raw,
         "sl_initial":    sl,
         "tp1":           tp1,
         "tp2":           tp2,
@@ -1044,6 +1041,12 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "sl_collision":  sl_collision,
         "bos_tag":       bos_tag,
         "bos_tier":      bos_tier,
+        # Continuation-drive verdict (holding / fading) at alert time — the same
+        # signal live scores structure on. 'fading' = the leg's recent break
+        # bodies decayed vs its start (late/exhausted continuation). Stamped by
+        # replay_engine via smc_detector.bos_leg_read. Pair with bos_sequence_count
+        # to see whether deep AND fading legs are the real losers.
+        "bos_verdict":   ob.get("bos_verdict", "holding"),
         # Continuation depth: # of BOS since the last CHoCH (CHoCH resets to 0,
         # each continuation BOS +1). Stamped on the OB by detect_smc_radar
         # (smc_radar.py). Surfaced here so the backtest can benchmark whether
@@ -1063,6 +1066,15 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # fresh / stale / no_fvg — was the FVG already discharged on an earlier
         # approach before this trigger? Feeds the FVG-staleness breakdown.
         "fvg_state":     _fvg_state(ob, df_h1, alert_ts),
+        # FVG mitigation label (none / pristine / partial / full) — the raw
+        # discharge state of the gap, frozen at OB detection. Point-in-time clean.
+        # Complements fvg_state (which is approach-relative) + fvg_size_atr (size).
+        "fvg_mitigation": (ob.get("fvg") or {}).get("mitigation"),
+        # Proximal touch count at OB detection (0 = pristine, 3 = mitigated).
+        # CAVEAT: frozen at first detection, NOT re-counted at a later re-approach.
+        # Since only the first alert per OB is traded, this is usually 0-1 and close
+        # to the alert-time count — but it is not a live-updated tally.
+        "ob_touches":    ob.get("touches"),
         "sweep_present": bool((ob.get("sweep_observed") or {}).get("exists")),
         # Session breakdown — OB formation vs fill, plus killzone alignment.
         # Fill session is the more honest label (when capital was actually
@@ -1089,7 +1101,8 @@ def simulate_h1_only_dual(
     """Public entry point: simulate the proximal entry for one OB-touch alert.
 
     Returns [] if proximal levels are invalid (e.g. no TP1 >= 1.5R), else the
-    one proximal trade row. (`_dual` is a historical name; one row out.)
+    one proximal trade row. (`_dual` is a historical name from the removed 50%
+    A/B leg; it now yields a single proximal row.)
     """
     alert_ts = alert["ts"]
     if not isinstance(alert_ts, pd.Timestamp):
@@ -1099,25 +1112,11 @@ def simulate_h1_only_dual(
 
     score, breakdown = _score_h1_only(alert, pair_conf, df_h1, alert_ts)
 
-    # Proximal entry defines the trade structure — simulate it first.
-    # If proximal levels are invalid (no TP1 clears 1.5R), skip both entries.
+    # Proximal is the only live model. (The 50% mean-entry A/B leg was removed
+    # 2026-07: it never traded live and its rows leaked into the exit-lab sink.)
     prox_row = _simulate_single_entry(
         alert, pair_conf, df_h1, "proximal", score, breakdown, risk_usd,
     )
     if prox_row is None:
         return []
-
-    rows: List[Dict[str, Any]] = [prox_row]
-
-    # Dormant A/B leg — off by default (see _ENABLE_50PCT_ENTRY). Reuses the
-    # proximal TP prices so only the entry zone differs.
-    if _ENABLE_50PCT_ENTRY:
-        mid_row = _simulate_single_entry(
-            alert, pair_conf, df_h1, "50pct", score, breakdown, risk_usd,
-            forced_tp1=prox_row["tp1"],
-            forced_tp2=prox_row.get("tp2"),
-        )
-        if mid_row is not None:
-            rows.append(mid_row)
-
-    return rows
+    return [prox_row]

@@ -572,6 +572,54 @@ def build_ts_to_local_x(df_plot):
 _BOS_DECAY_RATIO = 0.60
 
 
+def bos_leg_read(events):
+    """Pure continuation-leg read from an events list — count + drive verdict.
+
+    ONE implementation shared by live (compute_bos_sequence_count, which reads
+    the events from dealing_range state) and the backtest (replay_engine, which
+    passes the in-memory walls['events'] at the bar). Same events in -> same
+    count/verdict out. Keeping this pure is what lets the backtest reproduce the
+    live structure score instead of silently defaulting the verdict to 'holding'.
+
+    Clock-reset rules and the decay verdict are documented on
+    compute_bos_sequence_count. Returns {'count': int, 'verdict': 'holding'|'fading'}.
+    """
+    events = events or []
+    count = 0
+    leg_bodies = []  # body_atr of each plain BOS in the current leg, in order
+    for ev in events:
+        kind = ev.get('type')
+        tier = ev.get('tier')
+        if kind == 'CHoCH':
+            count = 0
+            leg_bodies = []
+        elif kind == 'BOS' and tier in ('Range', 'Confirm', 'Major'):
+            # Strong break — re-confirms drive. Restart the continuation clock at 1.
+            count = 1
+            leg_bodies = []
+        elif kind == 'BOS' and tier == 'BOS':
+            count += 1
+            leg_bodies.append(ev.get('break_body_atr'))
+
+    # count=1 floor so callers treating the latest event as the anchor don't /0.
+    if count == 0:
+        count = 1
+
+    # Continuation-drive verdict (displacement decay). 'fading' = recent pushes
+    # materially weaker than how the leg started; 'holding' = intact or not yet
+    # measurable. Needs >= 3 plain BOS with all break bodies present; compares the
+    # mean of the last 2 breaks vs the first 2 against DECAY_RATIO. Graceful:
+    # any missing body -> holding (never claim exhaustion we cannot measure).
+    verdict = 'holding'
+    usable = [b for b in leg_bodies if isinstance(b, (int, float))]
+    if len(leg_bodies) >= 3 and len(usable) == len(leg_bodies):
+        early = sum(leg_bodies[:2]) / 2.0
+        late = sum(leg_bodies[-2:]) / 2.0
+        if early > 0 and late < _BOS_DECAY_RATIO * early:
+            verdict = 'fading'
+    return {'count': count, 'verdict': verdict}
+
+
 def compute_bos_sequence_count(pair_name):
     """Continuation-leg read for the given pair: depth + drive verdict.
 
@@ -649,50 +697,11 @@ def compute_bos_sequence_count(pair_name):
     # Only a PLAIN BOS (tier 'BOS') ages the leg. Counting strong breaks as
     # "ageing" was the old bug — a wall break does not exhaust a trend.
     #
-    # `leg_bodies` collects each PLAIN-BOS break-candle body in ATR (the same
-    # displacement measure the body gate fires on). The decay verdict reads it.
-    count = 0
-    leg_bodies = []  # body_atr of each plain BOS in the current leg, in order
-    for ev in events:
-        kind = ev.get('type')
-        tier = ev.get('tier')
-        if kind == 'CHoCH':
-            count = 0
-            leg_bodies = []
-        elif kind == 'BOS' and tier in ('Range', 'Confirm', 'Major'):
-            # Strong break — re-confirms drive. Restart the continuation clock at 1.
-            count = 1
-            leg_bodies = []
-        elif kind == 'BOS' and tier == 'BOS':
-            count += 1
-            leg_bodies.append(ev.get('break_body_atr'))
-
-    # If no BOS has fired since the last reset, report count=1 so callers treating
-    # the latest event as "the structural anchor" don't divide-by-zero.
-    if count == 0:
-        count = 1
-
-    # --- Continuation-drive verdict (displacement decay) ---------------------
-    # 'fading'  = the trend's recent pushes are materially weaker than how the
-    #             leg started -> momentum is leaving. The genuine "late" signal,
-    #             and what drives the structure score (NOT the raw count).
-    # 'holding' = drive intact, OR not enough plain BOS yet to judge (we never
-    #             claim exhaustion we cannot measure), OR a break body is missing
-    #             (graceful: legacy state without break_body_atr reads as holding).
-    #
-    # Rule (lean, no pair tuning): with >= 3 plain BOS in the leg, compare the
-    # mean body of the last 2 breaks against the mean body of the first 2. If the
-    # recent mean is below DECAY_RATIO of the early mean, the leg is fading.
-    # Anchoring on the EARLY mean (not the single strongest break) avoids one
-    # mid-leg spike poisoning the read; requiring 2 recent breaks below the line
-    # avoids a single noisy soft candle tripping it.
-    verdict = 'holding'
-    usable = [b for b in leg_bodies if isinstance(b, (int, float))]
-    if len(leg_bodies) >= 3 and len(usable) == len(leg_bodies):
-        early = sum(leg_bodies[:2]) / 2.0
-        late = sum(leg_bodies[-2:]) / 2.0
-        if early > 0 and late < _BOS_DECAY_RATIO * early:
-            verdict = 'fading'
+    # Leg depth + drive verdict — the shared pure read (also used by the backtest
+    # replay so both paths score structure identically). See bos_leg_read.
+    leg = bos_leg_read(events)
+    count = leg['count']
+    verdict = leg['verdict']
 
     count_maxed = (len(events) >= _dr.EVENT_RING_MAX)
     return {'count': count, 'trend': trend, 'count_maxed': count_maxed,

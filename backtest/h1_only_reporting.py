@@ -506,6 +506,113 @@ def _killzone_alignment_table(trades: List[Dict[str, Any]], r_col: str
     return out
 
 
+def _bos_sequence_table(trades: List[Dict[str, Any]], r_col: str
+                        ) -> List[Dict[str, Any]]:
+    """One row per BOS-sequence-count bucket: trades, win rate, avg R, total R.
+
+    bos_sequence_count = number of BOS since the last CHoCH (CHoCH resets to 0).
+    A high count = late/exhausted continuation. This table answers directly:
+    does win rate fall as the count climbs? The counts are bucketed 0, 1, 2, 3,
+    4+ so the deep-continuation tail doesn't fragment into thin one-trade rows.
+    """
+    filled = [t for t in trades if _is_real_filled(t)]
+    if not filled:
+        return []
+    df = pd.DataFrame(filled)
+    if "bos_sequence_count" not in df.columns or r_col not in df.columns:
+        return []
+    df = df[df["bos_sequence_count"].notna()].copy()
+    if df.empty:
+        return []
+    df["bos_sequence_count"] = df["bos_sequence_count"].astype(int)
+
+    def _bucket(n: int) -> str:
+        return str(n) if n <= 3 else "4+"
+
+    df["_bucket"] = df["bos_sequence_count"].map(_bucket)
+    out = []
+    for bucket in ["0", "1", "2", "3", "4+"]:
+        sub = df[df["_bucket"] == bucket]
+        if sub.empty:
+            continue
+        out.append({
+            "bucket":       bucket,
+            "trades":       int(len(sub)),
+            "win_rate_pct": _win_rate(sub, r_col),
+            "expectancy_r": round(float(sub[r_col].mean()), 3),
+            "total_r":      round(float(sub[r_col].sum()), 3),
+        })
+    return out
+
+
+def _bos_verdict_table(trades: List[Dict[str, Any]], r_col: str
+                       ) -> List[Dict[str, Any]]:
+    """Win rate by continuation-drive verdict (holding vs fading).
+
+    'fading' = the leg's recent break bodies decayed vs its start (late,
+    exhausted continuation). This is what the live scorer down-rates. The table
+    answers: does the fading read actually separate winners from losers?
+    """
+    filled = [t for t in trades if _is_real_filled(t)]
+    if not filled:
+        return []
+    df = pd.DataFrame(filled)
+    if "bos_verdict" not in df.columns or r_col not in df.columns:
+        return []
+    out = []
+    for bucket in ["holding", "fading"]:
+        sub = df[df["bos_verdict"] == bucket]
+        if sub.empty:
+            continue
+        out.append({
+            "bucket":       bucket,
+            "trades":       int(len(sub)),
+            "win_rate_pct": _win_rate(sub, r_col),
+            "expectancy_r": round(float(sub[r_col].mean()), 3),
+            "total_r":      round(float(sub[r_col].sum()), 3),
+        })
+    return out
+
+
+def _bos_verdict_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    rows = _bos_verdict_table(trades, r_col)
+    if not rows:
+        return "<p style='color:#888;'>No filled trades to break down by drive verdict.</p>"
+    header = _table_row(
+        ["Drive verdict", "Trades", "Win rate", "Avg R", "Total R"], header=True,
+    )
+    body = ""
+    for r in rows:
+        color = "#eafaf1" if r["expectancy_r"] >= 0 else "#fdf2f2"
+        body += _table_row([
+            r["bucket"], str(r["trades"]),
+            _wr_str(r['win_rate_pct']),
+            _r(r["expectancy_r"]),
+            f"{r['total_r']:+.1f}R",
+        ], color=color)
+    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
+
+
+def _bos_sequence_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    rows = _bos_sequence_table(trades, r_col)
+    if not rows:
+        return "<p style='color:#888;'>No filled trades to break down by BOS count.</p>"
+    header = _table_row(
+        ["BOS # since CHoCH", "Trades", "Win rate", "Avg R", "Total R"],
+        header=True,
+    )
+    body = ""
+    for r in rows:
+        color = "#eafaf1" if r["expectancy_r"] >= 0 else "#fdf2f2"
+        body += _table_row([
+            r["bucket"], str(r["trades"]),
+            _wr_str(r['win_rate_pct']),
+            _r(r["expectancy_r"]),
+            f"{r['total_r']:+.1f}R",
+        ], color=color)
+    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
+
+
 def _killzone_alignment_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     rows = _killzone_alignment_table(trades, r_col)
     if not rows:
@@ -575,6 +682,37 @@ def _trend_alignment_table(trades: List[Dict[str, Any]], r_col: str
     return out
 
 
+def _trend_pairwise_table(trades: List[Dict[str, Any]], r_col: str
+                          ) -> List[Dict[str, Any]]:
+    """Per-pair with-trend vs against-trend: trades, win rate, avg R, total R.
+    One row per (pair, bucket). Only the two directional buckets are kept
+    (no-trend is dropped) since the question is whether counter-trend pays."""
+    filled = [t for t in trades if _is_real_filled(t)]
+    if not filled:
+        return []
+    df = pd.DataFrame(filled)
+    if "trend_alignment" not in df.columns or r_col not in df.columns \
+            or "pair" not in df.columns:
+        return []
+    df = df.copy()
+    df["_trend_bucket"] = df["trend_alignment"].map(_TREND_LABEL_MAP)
+    out = []
+    for pair in sorted(df["pair"].dropna().unique()):
+        for bucket in ["With trend", "Against trend"]:
+            sub = df[(df["pair"] == pair) & (df["_trend_bucket"] == bucket)]
+            if sub.empty:
+                continue
+            out.append({
+                "pair":         pair,
+                "bucket":       bucket,
+                "trades":       int(len(sub)),
+                "win_rate_pct": _win_rate(sub, r_col),
+                "expectancy_r": round(float(sub[r_col].mean()), 3),
+                "total_r":      round(float(sub[r_col].sum()), 3),
+            })
+    return out
+
+
 def _trend_alignment_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     rows = _trend_alignment_table(trades, r_col)
     if not rows:
@@ -592,7 +730,41 @@ def _trend_alignment_html(trades: List[Dict[str, Any]], r_col: str) -> str:
             _r(r["expectancy_r"]),
             f"{r['total_r']:+.1f}R",
         ], color=color)
-    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
+    combined = f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
+
+    # SMC conflict check: the method expects WITH-trend to beat AGAINST-trend.
+    # If against-trend's avg R is >= with-trend's, the data disagrees — flag it.
+    with_r = next((r["expectancy_r"] for r in rows if r["bucket"] == "With trend"), None)
+    agn_r  = next((r["expectancy_r"] for r in rows if r["bucket"] == "Against trend"), None)
+    flag = ""
+    if with_r is not None and agn_r is not None and agn_r >= with_r:
+        flag = (
+            "<p style='font-size:12px;color:#e67e22;font-weight:600;margin:6px 0;'>"
+            "⚠ Conflicts with SMC: against-trend did as well or better than "
+            "with-trend this period. SMC expects with-trend to lead — treat this "
+            "as suspect (thin sample or a detector quirk), not a rule.</p>")
+
+    # Per-pair breakdown (Q3): does the with/against picture hold pair by pair?
+    pw = _trend_pairwise_table(trades, r_col)
+    pw_html = ""
+    if pw:
+        pw_header = _table_row(
+            ["Pair", "Bucket", "Trades", "Win rate", "Avg R", "Total R"],
+            header=True)
+        pw_body = ""
+        for r in pw:
+            color = "#eafaf1" if r["expectancy_r"] >= 0 else "#fdf2f2"
+            pw_body += _table_row([
+                r["pair"], r["bucket"], str(r["trades"]),
+                _wr_str(r["win_rate_pct"]),
+                _r(r["expectancy_r"]),
+                f"{r['total_r']:+.1f}R",
+            ], color=color)
+        pw_html = (
+            "<h4 style='margin-top:14px;'>By pair — with vs against trend</h4>"
+            f"<table><thead>{pw_header}</thead><tbody>{pw_body}</tbody></table>")
+
+    return combined + flag + pw_html
 
 
 # FVG-staleness experiment (2026-06-16). Was a setup taken with a stale FVG
@@ -1155,7 +1327,9 @@ _EXIT_RECIPE_LABELS = {
 _EXIT_BASELINE_KEY = "baseline_liqTP_be1.0"
 
 
-def _exit_recipe_html(exit_lab_sink: List[Dict[str, Any]]) -> str:
+def _exit_recipe_html(exit_lab_sink: List[Dict[str, Any]],
+                      headline_filled_n: Optional[int] = None,
+                      risk_usd: float = 250.0) -> str:
     """Phase 4 — the rich per-recipe exit table, the POINT of the email now.
 
     Reads the exit-lab side-channel (every recipe replayed over the same
@@ -1169,9 +1343,46 @@ def _exit_recipe_html(exit_lab_sink: List[Dict[str, Any]]) -> str:
         return ("<p style='color:#888;'>Exit-lab side-channel produced no rows "
                 "this run (no fills, or the channel was not armed).</p>")
 
-    prox = [r for r in exit_lab_sink if r.get("entry_zone") == "proximal"]
+    # Proximal is the live model. Score the exit table over EXACTLY the headline
+    # population: (1) proximal only, (2) drop hard-blocked fills (IST / weekend)
+    # that could never happen live, (3) drop UNRESOLVED exits (never_filled /
+    # timeout / window_end) — the headline's `_is_real_filled` drops them too, so
+    # keeping them here made the sink and headline count different books and the
+    # invariant below tripped whenever the two drifted (the fill-on-candle-B
+    # change exposed this). All three filters must match `_is_real_filled` + the
+    # block treatment used for headline_filled_n at the call site.
+    prox = [r for r in exit_lab_sink
+            if r.get("entry_zone") == "proximal"
+            and not (r.get("ist_blocked") or r.get("weekend_blocked"))
+            and r.get("exit_reason") not in _EXCLUDE_REASONS]
     if not prox:
         return "<p style='color:#888;'>No proximal fills to study exits on.</p>"
+
+    # INVARIANT: the exit table must be scored over the SAME trades the headline
+    # counts. Each filled trade contributes exactly ONE sink row per recipe, so a
+    # single recipe's row count IS the per-recipe N shown in the table. Compare
+    # that to the headline filled-proximal count. (Do NOT use distinct
+    # (pair, alert_ts): two different OBs can alert on the same pair at the same
+    # timestamp, so that key under-counts real trades.) If the two drift, the
+    # sink and the headline are scoring different books -- fail loud rather than
+    # email a contaminated ranking (the 826-vs-668 bug shipped silently before).
+    if headline_filled_n is not None:
+        per_recipe_counts = {}
+        for r in prox:
+            per_recipe_counts[r.get("config")] = per_recipe_counts.get(
+                r.get("config"), 0) + 1
+        # Every recipe should see the same trade set; take the baseline's count
+        # (fall back to the max if the baseline recipe key is absent).
+        recipe_n = per_recipe_counts.get(_EXIT_BASELINE_KEY)
+        if recipe_n is None:
+            recipe_n = max(per_recipe_counts.values()) if per_recipe_counts else 0
+        if recipe_n != headline_filled_n:
+            raise ValueError(
+                f"Exit-table population ({recipe_n} fills per recipe) != headline "
+                f"filled-proximal count ({headline_filled_n}). The exit sink and "
+                f"the headline are scoring different books -- refuse to emit a "
+                f"contaminated exit ranking. Check the hard-block (IST/weekend) "
+                f"filter on the exit sink.")
 
     # Self-check: the baseline recipe must reproduce committed r_realised on the
     # same bars. If it drifts, the side-channel is not faithful -- say so loud.
@@ -1212,8 +1423,8 @@ def _exit_recipe_html(exit_lab_sink: List[Dict[str, Any]]) -> str:
                      if x["cfg"] == _EXIT_BASELINE_KEY), None)
 
     header = ("<tr><th>Exit recipe</th><th>N</th><th>Avg R</th>"
-              "<th>Total R</th><th>95% CI</th><th>Per-quarter sign</th>"
-              "<th>vs LIVE</th></tr>")
+              "<th>Total R</th><th>Total P&amp;L</th><th>95% CI</th>"
+              "<th>Per-quarter sign</th><th>vs LIVE</th></tr>")
     body = ""
     for x in ranked:
         cfg, stat = x["cfg"], x["stat"]
@@ -1236,12 +1447,14 @@ def _exit_recipe_html(exit_lab_sink: List[Dict[str, Any]]) -> str:
         is_live = cfg == _EXIT_BASELINE_KEY
         bg = "#eafaf1" if is_best else ("#fff7e0" if is_live else "")
         flag = " 🏆" if is_best else ""
+        total_pnl = x["total_r"] * risk_usd
         body += (
             f"<tr style='background:{bg};'>"
             f"<td><b>{label}</b>{flag}</td>"
             f"<td>{stat['n']}</td>"
             f"<td>{_r(stat['expR'])}</td>"
             f"<td>{x['total_r']:+.1f}R</td>"
+            f"<td>{_m(total_pnl)}</td>"
             f"<td>{ci_s}</td>"
             f"<td>{pq_s}</td>"
             f"<td>{vs}</td>"
@@ -1256,10 +1469,69 @@ def _exit_recipe_html(exit_lab_sink: List[Dict[str, Any]]) -> str:
         f"beats LIVE if its CI clears LIVE's and its per-quarter sign holds — "
         f"a higher pooled average alone is not enough. Same-bar intrabar spikes "
         f"are uncapturable on H1, so tight-TP recipes flatter here vs reality "
-        f"(no spread modelled).</p>")
+        f"(the entry stop already carries one spread; TP fills are not spread-"
+        f"adjusted).</p>")
 
-    return (f"{selfcheck}<table><thead>{header}</thead><tbody>{body}</tbody>"
-            f"</table>{note}")
+    # One plain-English line so the CI / per-quarter columns are self-explaining.
+    plain = (
+        "<p style='font-size:12px;color:#444;margin:4px 0 8px;'>"
+        "<b>In plain words:</b> the <b>95% CI</b> is the honest range the true "
+        "average result could sit in — if the whole range stays above zero the "
+        "edge is real, not luck; if it crosses zero it might be luck. The "
+        "<b>per-quarter sign</b> counts how many quarters kept the same direction "
+        "— more agreement means a steady edge, not one lucky stretch.</p>")
+
+    return (f"{selfcheck}{plain}<table><thead>{header}</thead><tbody>{body}"
+            f"</tbody></table>{note}")
+
+
+def _winning_recipe_remap(prox_trades: List[Dict[str, Any]],
+                          exit_lab_sink: List[Dict[str, Any]]):
+    """Pick the winning exit recipe (highest avg R over the SAME hard-block-
+    filtered proximal book) and return (winner_label, remapped_trades) where each
+    trade's r_realised is the winner's R for that trade. The driver engine then
+    mines losses/wins concentration on the CHOSEN exit, not the live one.
+
+    Returns (None, []) when there is no usable sink (falls back to live book)."""
+    if not exit_lab_sink:
+        return None, []
+    prox_sink = [r for r in exit_lab_sink
+                 if r.get("entry_zone") == "proximal"
+                 and not (r.get("ist_blocked") or r.get("weekend_blocked"))]
+    if not prox_sink:
+        return None, []
+
+    # Rank recipes by pooled avg R (same rule as the exit table's winner flag).
+    by_cfg: Dict[str, List[float]] = {}
+    for r in prox_sink:
+        by_cfg.setdefault(r.get("config"), []).append(float(r.get("r") or 0.0))
+    ranked = sorted(
+        ((cfg, sum(v) / len(v)) for cfg, v in by_cfg.items() if v),
+        key=lambda kv: kv[1], reverse=True)
+    if not ranked:
+        return None, []
+    winner_cfg = ranked[0][0]
+    winner_label = _EXIT_RECIPE_LABELS.get(winner_cfg, winner_cfg)
+
+    # Join key = (pair, ob_timestamp, direction): unique per OB/trade. (pair,
+    # alert_ts) is NOT unique — two OBs can alert on the same pair at the same
+    # time — so keying on it would cross-assign their R.
+    def _join_key(d):
+        return (d.get("pair"), str(d.get("ob_timestamp")), d.get("direction"))
+    win_r = {_join_key(r): float(r.get("r") or 0.0)
+             for r in prox_sink if r.get("config") == winner_cfg}
+
+    remapped = []
+    for t in prox_trades:
+        if not _is_real_filled(t):
+            continue
+        key = _join_key(t)
+        if key not in win_r:
+            continue  # no winner R for this trade -> skip (keeps books aligned)
+        t2 = dict(t)
+        t2["r_realised"] = win_r[key]
+        remapped.append(t2)
+    return winner_label, remapped
 
 
 # Dimensions the driver engine screens. Categorical => value as-is; continuous
@@ -1375,6 +1647,80 @@ def _driver_two_way(filled: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
+# SMC methodology priors — what a veteran EXPECTS each slice to do to expectancy.
+# Keyed by (dim_label, matcher). Value = +1 if the slice SHOULD help (raise avg R),
+# -1 if it SHOULD hurt. A row "conflicts with SMC" when the data's direction
+# (gap sign) opposes this prior. Conflicts are flagged, never hidden — per the
+# project rule, data-vs-SMC disagreement is a discussion point, not a conclusion.
+def _smc_expected_direction(dim: str, value: str):
+    """Return +1 (SMC expects this slice to HELP), -1 (SMC expects it to HURT),
+    or None (no strong SMC prior — do not flag). dim = human label, value = raw
+    bucket label as shown in the table."""
+    d = (dim or "").lower()
+    v = (value or "").lower()
+
+    # Trend: with-trend is the draw on liquidity (help); against-trend fights it.
+    if "trend alignment" in d:
+        if "with trend" in v:
+            return +1
+        if "against trend" in v:
+            return -1
+        return None
+    # FVG size: a bigger imbalance is real displacement (help); a tiny gap is noise.
+    if "fvg size" in d:
+        if v.startswith("high"):
+            return +1
+        if v.startswith("low"):
+            return -1
+        return None
+    # FVG state: fresh gap unmitigated (help); stale = already discharged (hurt).
+    if "fvg state" in d:
+        if "fresh" in v:
+            return +1
+        if "stale" in v:
+            return -1
+        return None
+    # Break quality / displacement: a stronger break past the level is conviction.
+    if "break-quality tier" in d or "break close" in d or "break body" in d:
+        if v.startswith("high") or "strong" in v:
+            return +1
+        if v.startswith("low") or "weak" in v:
+            return -1
+        return None
+    # Killzone alignment: in-killzone formation/fill is the institutional window.
+    if "killzone alignment" in d:
+        if v == "both":
+            return +1
+        if v == "neither":
+            return -1
+        return None
+    # PD array: aligned side (long in discount / short in premium) is the premise.
+    if "pd alignment" in d:
+        if "aligned" in v:
+            return +1
+        if "counter" in v:
+            return -1
+        return None
+    return None
+
+
+def _driver_read_sentence(dim: str, value: str, gap: float, promoted: bool,
+                          kind: str, conflict: bool) -> str:
+    """One plain-English sentence explaining what a driver row means, so the
+    numbers don't have to be decoded. kind = 'win' | 'loss'."""
+    mag = abs(gap)
+    strength = ("far " if mag >= 0.20 else "")
+    direction = "better" if gap >= 0 else "worse"
+    trust = ("a real, repeatable pattern" if promoted
+             else "only a hint here — too few trades or not steady enough to trust")
+    base = (f"{dim} = {value} did {strength}{direction} than a normal trade "
+            f"(by {mag:.2f}R); {trust}.")
+    if conflict:
+        base += (" ⚠ This fights standard SMC — treat it as suspect "
+                 "(likely a thin sample or a detector quirk), not a rule.")
+    return base
+
+
 def _driver_engine_html(trades: List[Dict[str, Any]]) -> str:
     """Auto-surface where losses and wins concentrate vs the book's base-rate.
 
@@ -1450,6 +1796,15 @@ def _driver_engine_html(trades: List[Dict[str, Any]]) -> str:
                     why.append(f"sign held {stat['pq_agree']}/{stat['pq_total']}q")
                 tag = (f"<span style='color:#999;'>directional, thin "
                        f"({', '.join(why)})</span>")
+            # SMC conflict: data direction (gap sign) vs the veteran prior.
+            exp = _smc_expected_direction(s["dim"], s["value"])
+            conflict = exp is not None and (exp * gap) < 0
+            if conflict:
+                tag += (" <span style='color:#e67e22;font-weight:700;'>"
+                        "⚠ conflicts with SMC</span>")
+            read = _driver_read_sentence(
+                s["dim"], s["value"], gap, s["promoted"],
+                "win" if kind == "win" else "loss", conflict)
             out += (
                 f"<tr>"
                 f"<td><b>{s['dim']}:</b> {s['value']}</td>"
@@ -1459,11 +1814,13 @@ def _driver_engine_html(trades: List[Dict[str, Any]]) -> str:
                 f"<td style='color:{'#27ae60' if gap >= 0 else '#e74c3c'};'>"
                 f"{gap:+.2f}R</td>"
                 f"<td>{tag}</td>"
+                f"<td style='font-size:12px;color:#555;'>{read}</td>"
                 f"</tr>"
             )
         return (f"<table><thead><tr>"
                 f"<th>Bucket</th><th>N</th><th>WR</th><th>Avg R</th>"
-                f"<th>vs base</th><th>Verdict</th></tr></thead>"
+                f"<th>vs base</th><th>Verdict</th><th>What it means</th>"
+                f"</tr></thead>"
                 f"<tbody>{out}</tbody></table>")
 
     base_txt = (f"<p style='font-size:13px;color:#555;margin-bottom:10px;'>"
@@ -1472,7 +1829,10 @@ def _driver_engine_html(trades: List[Dict[str, Any]]) -> str:
                 f"average R sits from that line. A slice is a <b>driver</b> only "
                 f"if it clears the guard (N≥{DRIVER_MIN_N}, gap≥{DRIVER_MIN_EXR_GAP:.2f}R, "
                 f"per-quarter sign holds); otherwise it is flagged "
-                f"<i>directional, thin</i> — shown, not trusted.</p>")
+                f"<i>directional, thin</i> — shown, not trusted. The "
+                f"<b>What it means</b> column says each row in plain English. Any "
+                f"row marked <b>⚠ conflicts with SMC</b> is doing the opposite of "
+                f"what the method expects — treat it as suspect, not a rule.</p>")
 
     return (
         f"{base_txt}"
@@ -1481,6 +1841,27 @@ def _driver_engine_html(trades: List[Dict[str, Any]]) -> str:
         f"<h4 style='margin-top:16px;'>Where wins concentrate</h4>"
         f"{_rows_html(winners, 'win')}"
     )
+
+
+def _driver_concentrate_section(prox_trades: List[Dict[str, Any]],
+                                exit_lab_sink: List[Dict[str, Any]]) -> str:
+    """Where losses/wins concentrate, scored on the WINNING exit recipe (not the
+    live one). Picks the top recipe from the sink, re-maps each trade's R to that
+    recipe, and runs the driver engine on it. Falls back to the live book when no
+    sink is available so the section never goes blank."""
+    winner_label, remapped = _winning_recipe_remap(prox_trades, exit_lab_sink)
+    if winner_label and remapped:
+        note = (
+            f"<p style='font-size:13px;color:#444;margin-bottom:8px;'>"
+            f"Scored on the <b>winning exit recipe: {winner_label}</b> — the "
+            f"clusters below reflect where that exit wins and loses, so they line "
+            f"up with the exit we would actually pick (not the current live exit)."
+            f"</p>")
+        return note + _driver_engine_html(remapped)
+    # Fallback: no sink -> score on the live book, and say so.
+    note = ("<p style='font-size:13px;color:#888;margin-bottom:8px;'>"
+            "Scored on the live exit (no exit-recipe data available this run).</p>")
+    return note + _driver_engine_html(prox_trades)
 
 
 # ---------------------------------------------------------------------------
@@ -1882,8 +2263,7 @@ def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
         header
         + f"<p style='font-size:13px;margin-bottom:8px;'>"
           f"<b>{total_drops} alert(s)</b> fell outside the configured killzone. "
-          f"{n} produced a simulatable proximal trade (shown below; each may "
-          f"have a paired 50% row too).{gap_note}</p>"
+          f"{n} produced a simulatable proximal trade (shown below).{gap_note}</p>"
         + by_pair_table + by_hour_table
     )
 
@@ -1945,8 +2325,8 @@ def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
     the R outcomes those alerts *would* have produced if traded. This is
     the data the user needs to decide whether to shift sleep hours.
     """
-    # Filter to one row per alert (proximal trade is canonical -- it always
-    # gets a row, 50pct sometimes does not). Avoids double-counting alerts.
+    # One row per alert (proximal is the only entry zone). Kept as a defensive
+    # filter so a future second entry zone can't double-count alerts here.
     rows = [t for t in ist_blocked_trades
             if t.get("entry_zone") == "proximal"]
     n = len(rows)
@@ -2056,8 +2436,7 @@ def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
     return (
         header
         + f"<p style='font-size:13px;margin-bottom:8px;'>"
-          f"<b>{n} alert(s)</b> dropped by IST gate "
-          f"(proximal rows; each alert may have a paired 50% row too).</p>"
+          f"<b>{n} alert(s)</b> dropped by IST gate (proximal rows).</p>"
         + by_hour_table + by_pair_table
     )
 
@@ -2171,8 +2550,7 @@ def _news_blackout_html(blocked_trades: List[Dict[str, Any]],
             "</p>"
         )
 
-    # Deduplicate by (pair, alert_ts, event_ts) so we show one entry per
-    # alert (proximal+50pct share the same news block).
+    # Deduplicate by (pair, alert_ts, event_ts) so we show one entry per alert.
     seen = set()
     unique_rows = []
     for t in blocked_trades:
@@ -2340,19 +2718,12 @@ def _validate_trades(trades: List[Dict[str, Any]]) -> List[str]:
 def _validation_html(trades: List[Dict[str, Any]]) -> str:
     violations = _validate_trades(trades)
     if not violations:
-        # Validation runs over BOTH entry zones (it's a sim-integrity check),
-        # so the count here is rows across proximal + 50pct, NOT the headline
-        # filled-trade count (proximal only). Make that explicit so the number
-        # doesn't appear to contradict the headline.
         n_prox = len([t for t in trades
                       if _is_real_filled(t)
                       and t.get("entry_zone") == "proximal"])
-        n_mid  = len([t for t in trades
-                      if _is_real_filled(t)
-                      and t.get("entry_zone") == "50pct"])
-        return (f"<p style='color:#27ae60;'>✓ All filled trade rows passed validation "
-                f"({n_prox} proximal + {n_mid} 50pct) — "
-                f"entry/SL/TP levels are correctly ordered, and exit outcomes match exit reasons.</p>")
+        return (f"<p style='color:#27ae60;'>✓ All {n_prox} filled proximal trade "
+                f"rows passed validation — entry/SL/TP levels are correctly "
+                f"ordered, and exit outcomes match exit reasons.</p>")
     items = "".join(f"<li style='color:#e74c3c;font-family:monospace;font-size:12px;'>{v}</li>"
                     for v in violations)
     return (f"<p style='color:#e74c3c;'><b>⚠ {len(violations)} validation issue(s) found:</b></p>"
@@ -2384,30 +2755,24 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
     rows = []
     for (pair, alert_ts), grp in df.groupby(["pair", "alert_ts"]):
         prox = grp[grp["entry_zone"] == "proximal"].iloc[0].to_dict() if not grp[grp["entry_zone"] == "proximal"].empty else {}
-        mid  = grp[grp["entry_zone"] == "50pct"].iloc[0].to_dict()   if not grp[grp["entry_zone"] == "50pct"].empty else {}
 
         def _v(d, k, default=""):
             return d.get(k, default)
 
-        # News flag is set at the alert level, so prox and 50pct always
-        # share the same value. Take from prox first; fall back to mid.
-        news_blocked = bool(_v(prox, "news_blocked") or _v(mid, "news_blocked"))
-        news_event_title    = _v(prox, "news_event_title")    or _v(mid, "news_event_title")
-        news_event_currency = _v(prox, "news_event_currency") or _v(mid, "news_event_currency")
-        news_event_source   = _v(prox, "news_event_source")   or _v(mid, "news_event_source")
-        news_event_ts       = _v(prox, "news_event_ts")       or _v(mid, "news_event_ts")
-        # Killzone flag is alert-level; prox and 50pct share the same value.
-        kz_blocked = bool(_v(prox, "killzone_blocked") or _v(mid, "killzone_blocked"))
-        ist_blocked_zr = bool(_v(prox, "ist_blocked") or _v(mid, "ist_blocked"))
+        news_blocked = bool(_v(prox, "news_blocked"))
+        news_event_title    = _v(prox, "news_event_title")
+        news_event_currency = _v(prox, "news_event_currency")
+        news_event_source   = _v(prox, "news_event_source")
+        news_event_ts       = _v(prox, "news_event_ts")
+        kz_blocked = bool(_v(prox, "killzone_blocked"))
+        ist_blocked_zr = bool(_v(prox, "ist_blocked"))
 
         # Prefer fill_session (when the trade was actually live). Fall back
         # to alert-hour session for never-filled OBs. Same logic for DOW.
-        prox_fill_ts = _v(prox, "fill_ts") or _v(mid, "fill_ts")
+        prox_fill_ts = _v(prox, "fill_ts")
         zr_dow = _day_of_week(prox_fill_ts or alert_ts)
         rows.append({
-            # Both zone serials so this row maps to both Trade tabs / the CSV.
             "Proximal ID":             _v(prox, "setup_id"),
-            "50% ID":                  _v(mid,  "setup_id"),
             "Pair":                    pair,
             "OB Candle (IST)":         _to_ist_str(_v(prox, "ob_timestamp")),
             "Scan / Alert Time (IST)": _to_ist_str(alert_ts),
@@ -2416,12 +2781,12 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
             "Structure Tier":          _v(prox, "bos_tier"),
             "OB Age (H1 bars)":        _v(prox, "ob_age_h1_bars"),
             "Setup Score":             _v(prox, "score"),
-            "Fill Session":            _v(prox, "fill_session") or _v(mid, "fill_session"),
+            "Fill Session":            _v(prox, "fill_session"),
             "OB Session":              _v(prox, "ob_session"),
-            "Killzone Alignment":      _v(prox, "killzone_alignment") or _v(mid, "killzone_alignment"),
+            "Killzone Alignment":      _v(prox, "killzone_alignment"),
             "Day of Week":             zr_dow,
             "Entry Price (Proximal)":  _v(prox, "entry"),
-            "Entry Price (50% Mid)":   _v(mid,  "entry"),
+            "Stop Loss (raw)":         _v(prox, "sl_raw"),
             "Stop Loss":               _v(prox, "sl_initial"),
             "Take Profit 1":           _v(prox, "tp1"),
             "Take Profit 2":           _v(prox, "tp2"),
@@ -2431,10 +2796,6 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
             "Proximal Outcome":        _exit_labels.get(_v(prox, "exit_reason"), _v(prox, "exit_reason")),
             "Proximal R":              _v(prox, "r_realised"),
             "Proximal Dollar P&L":     round(float(_v(prox, "pnl_usd", 0) or 0), 0) if prox else "",
-            "50% Filled?":             "Yes" if _v(mid, "exit_reason") != "never_filled" and mid else "No",
-            "50% Outcome":             _exit_labels.get(_v(mid, "exit_reason"), _v(mid, "exit_reason")),
-            "50% R":                   _v(mid, "r_realised"),
-            "50% Dollar P&L":          round(float(_v(mid, "pnl_usd", 0) or 0), 0) if mid else "",
             "FVG Present":             "Yes" if _v(prox, "fvg_present") else "No",
             "Sweep Present":           "Yes" if _v(prox, "sweep_present") else "No",
             "Confluences Active":      _v(prox, "confluences_present"),
@@ -2483,7 +2844,7 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "setup_id",
         "pair", "alert_ts", "fill_ts", "exit_ts", "session",
         "direction", "event", "entry_zone",
-        "entry", "sl_initial", "tp1", "tp2", "tp1_rr", "tp2_rr",
+        "entry", "sl_raw", "sl_initial", "tp1", "tp2", "tp1_rr", "tp2_rr",
         "exit_reason", "exit_price",
         "r_realised", "r_if_exit_tp1", "r_if_exit_tp2", "pnl_usd",
         # Headline membership: True rows sum to the email headline. When False,
@@ -2497,7 +2858,7 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "score", "structure_pts", "sweep_pts", "fvg_pts",
         "freshness_pts", "killzone_pts", "confluences_present",
         "sl_collision", "model", "ob_timestamp", "bos_tag", "bos_tier",
-        "fvg_present", "sweep_present",
+        "bos_verdict", "fvg_present", "fvg_mitigation", "sweep_present", "ob_touches",
         # Setup-geometry features (ATR-normalized) — edge-discovery engine inputs.
         "break_close_atr", "break_body_atr", "break_excess", "break_tier",
         "ob_range_atr", "fvg_size_atr", "impulse_leg_atr", "atr_at_ob",
@@ -2608,7 +2969,6 @@ _EXIT_LABELS = {
 
 _ENTRY_LABELS = {
     "proximal": "Proximal (OB edge)",
-    "50pct":    "50% Midpoint",
 }
 
 _DIR_LABELS = {
@@ -2726,12 +3086,11 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
                    if c in df.columns]
         out_df = df[desired].rename(columns=_col_names_with_dow)
 
-        # Zone register (one row per OB — both entry zones side by side).
+        # Zone register (one row per OB — the proximal trade for that OB).
         zone_df = _build_zone_register_df(trades)
 
-        # Split trades into proximal and 50% tabs.
+        # Proximal is the only entry zone (50% mean entry removed 2026-07).
         prox_df = out_df[out_df["Entry Type"] == _ENTRY_LABELS["proximal"]] if "Entry Type" in out_df.columns else out_df
-        mid_df  = out_df[out_df["Entry Type"] == _ENTRY_LABELS["50pct"]]   if "Entry Type" in out_df.columns else pd.DataFrame()
 
         col_widths = {
             "Setup ID": 10,
@@ -2747,7 +3106,7 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
             "R if Closed at TP1": 18, "Dollar P&L (TP1-only)": 20,
             "R if TP1 + Runner": 18, "Dollar P&L (TP1+Runner)": 22,
             "Proximal R": 12, "Proximal Dollar P&L": 18,
-            "50% R": 12, "50% Dollar P&L": 18,
+            "Stop Loss (raw)": 14,
             "Best Price Reached (R)": 20, "Worst Price Reached (R)": 20,
             "Hours Held": 10, "Hours to TP1 (-1 if never)": 22,
             "Setup Score (0–8)": 14,
@@ -2782,7 +3141,7 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
             headers = [cell.value for cell in ws[1]]
             pnl_cols = [headers.index(h) + 1 for h in
                         ("Dollar P&L (LIVE: TP1+BE@1R)", "Dollar P&L",
-                         "Proximal Dollar P&L", "50% Dollar P&L")
+                         "Proximal Dollar P&L")
                         if h in headers]
             rev_col = headers.index("Worth Reviewing") + 1 if "Worth Reviewing" in headers else None
             nb_col  = headers.index("News Blocked") + 1   if "News Blocked" in headers else None
@@ -2820,8 +3179,6 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
 
         with pd.ExcelWriter(path, engine="openpyxl") as xw:
             prox_df.to_excel(xw, sheet_name="Proximal", index=False)
-            if not mid_df.empty:
-                mid_df.to_excel(xw, sheet_name="50% Entry", index=False)
             if not zone_df.empty:
                 zone_df.to_excel(xw, sheet_name="Zone Register", index=False)
 
@@ -2847,8 +3204,6 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
                 _opx = {"PatternFill": PatternFill, "Font": Font, "Alignment": Alignment}
 
                 _style_trades_sheet(xw.sheets["Proximal"], _opx)
-                if "50% Entry" in xw.sheets:
-                    _style_trades_sheet(xw.sheets["50% Entry"], _opx)
 
                 if "Zone Register" in xw.sheets:
                     zws = xw.sheets["Zone Register"]
@@ -3152,7 +3507,7 @@ def _build_group_html(
   <h1>{group_label} &mdash; {group_meta.get('start')} to {group_meta.get('end')}</h1>
   <div class="meta">
     {pairs_str} &nbsp;&middot;&nbsp; 1R = ${risk_usd:.0f} &nbsp;&middot;&nbsp;
-    Regime: {regime_str} &nbsp;&middot;&nbsp; H1 bars only, proximal entry, no spread modelled
+    Regime: {regime_str} &nbsp;&middot;&nbsp; H1 bars only, proximal entry, spread modelled on the stop
   </div>
 </div>
 
@@ -3167,13 +3522,13 @@ def _build_group_html(
     This is the run-level exit data; the edge engine reads it to draw
     per-cluster conclusions over the long history.
   </p>
-  {_exit_recipe_html(group_sink)}
+  {_exit_recipe_html(group_sink, headline_filled_n=len([t for t in prox_trades if _is_real_filled(t) and not (t.get("ist_blocked") or t.get("weekend_blocked"))]), risk_usd=risk_usd)}
 </div>
 
 <!-- 3. WHERE LOSSES / WINS CONCENTRATE — the dynamic driver engine -->
 <div class="section">
   <h2>Where losses &amp; wins concentrate</h2>
-  {_driver_engine_html(prox_trades)}
+  {_driver_concentrate_section(prox_trades, group_sink)}
 </div>
 
 <!-- 4. BACKTEST FIDELITY — H1 same-bar honesty -->
@@ -3200,6 +3555,21 @@ def _build_group_html(
   so against-trend is a real, populated bucket — the signal for whether to
   filter counter-trend zones out.</p>
   {_trend_alignment_html(prox_trades, "r_realised")}
+</div>
+
+<div class="section">
+  <h2>Continuation depth &mdash; win rate by BOS count since last CHoCH</h2>
+  <p style="font-size:13px;color:#555;">Each BOS after a CHoCH is one step deeper
+  into a continuation. A high count = a late, potentially exhausted trend. This
+  answers directly: does win rate fall as the count climbs? If it does, deep
+  continuations are worth de-rating.</p>
+  {_bos_sequence_html(prox_trades, "r_realised")}
+  <h4 style="margin-top:16px;">Drive verdict &mdash; holding vs fading</h4>
+  <p style="font-size:13px;color:#555;">'fading' = the leg's recent break bodies
+  decayed vs how it started (the live scorer down-rates it). Does the read
+  actually separate winners from losers? Read alongside the count above &mdash; a
+  deep <b>and</b> fading leg is the real late-trend trap.</p>
+  {_bos_verdict_html(prox_trades, "r_realised")}
 </div>
 
 <div class="section">
@@ -3282,7 +3652,8 @@ def _build_group_html(
 
 <div class="footer">
   <b>Limitations:</b>
-  No spread, slippage, or swap costs modelled. Exits simulated at H1 bar boundaries.
+  Spread modelled: the stop-loss is widened by one configured spread (worst-case
+  fill). Slippage and swap are not modelled. Exits simulated at H1 bar boundaries.
   Same-bar SL+TP collision resolves SL-first (pessimistic).
   <br><br>
   <b>Run log:</b> <code>backtest/results/{out_dir.name}/</code> &middot;
@@ -3356,10 +3727,9 @@ def write_h1_only_report(
     blocked_trades = [t for t in trades_all if t.get("news_blocked")]
     kz_blocked_trades = [t for t in trades_all if t.get("killzone_blocked")]
 
-    # Proximal is the only live model; 50% mean entry is dead and no longer
-    # reported (2026-06-30 overhaul). The simulator still emits 50% rows (they
-    # survive in the Excel Zone Register as reference) but no metric, summary
-    # key, or email section is computed for them.
+    # Proximal is the only entry zone (50% mean entry removed 2026-07). This
+    # filter is now a defensive no-op — every row is proximal — kept so any
+    # future re-introduction of a second zone can't silently leak into metrics.
     prox_trades = [t for t in trades if t.get("entry_zone") == "proximal"]
 
     # r_realised = the LIVE policy (TP1 + break-even at +1R). Every per-pair /
@@ -3447,8 +3817,8 @@ def write_h1_only_report(
         # in their own audit list here (with would-have R). Below score floor,
         # and outside the IST trading window.
         "score_floor":                  SCORE_FLOOR,
-        # *_trade_rows = all rows (proximal + 50pct); *_audit = one row per
-        # alert (proximal canonical) with would-have R, for human reading.
+        # *_trade_rows = all proximal rows; *_audit = one row per alert with
+        # would-have R, for human reading.
         "below_score_floor_trade_rows": len(audit_below_floor),
         "below_score_floor_audit":      below_floor_audit,
         "ist_blocked_trade_rows":       len(audit_ist),

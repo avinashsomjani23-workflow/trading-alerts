@@ -227,7 +227,7 @@ def test_dual_simulator_columns():
         print("  FAIL: dual simulator returned 0 rows for valid setup")
         return False
     expected_cols = {
-        "pair", "alert_ts", "entry_zone", "entry", "sl_initial",
+        "pair", "alert_ts", "entry_zone", "entry", "sl_raw", "sl_initial",
         "tp1", "tp2", "tp1_rr", "tp2_rr", "exit_reason",
         "r_realised", "r_if_exit_tp1", "r_if_exit_tp2",
         "mfe_r", "mae_r", "bars_to_exit", "ob_age_h1_bars",
@@ -240,17 +240,13 @@ def test_dual_simulator_columns():
         missing = expected_cols - set(r.keys())
         ok &= check(not missing, f"all expected columns present (missing={missing})")
         ok &= check(r.get("model") == "h1_only", "model tag = h1_only")
-        ok &= check(r.get("entry_zone") in ("proximal", "50pct"),
-                    f"entry_zone valid ({r.get('entry_zone')})")
+        ok &= check(r.get("entry_zone") == "proximal",
+                    f"entry_zone is proximal ({r.get('entry_zone')})")
     zones = {r["entry_zone"] for r in rows}
-    ok &= check("proximal" in zones, "proximal row present")
-    # 50pct entry is dormant (proximal-only). When the flag is off it must NOT
-    # be simulated or emitted (no wasted compute, no row). When re-enabled the
-    # original dual-row contract holds.
-    if h1_only_simulator._ENABLE_50PCT_ENTRY:
-        ok &= check("50pct" in zones, "50pct row present")
-    else:
-        ok &= check("50pct" not in zones, "50pct row absent (dormant)")
+    # Proximal is the only entry zone (50% mean entry removed 2026-07): exactly
+    # one proximal row per valid alert, and no 50pct row ever.
+    ok &= check(zones == {"proximal"}, f"only proximal rows emitted ({zones})")
+    ok &= check(len(rows) == 1, f"exactly one row per alert ({len(rows)})")
     return ok
 
 

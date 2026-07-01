@@ -30,6 +30,12 @@ _LOG_FILES = [
     "summary.json",
     "trades.csv",
     "zone_register.json",
+    # The exact HTML that was emailed, per book. Committed so every email is
+    # auditable from the run folder afterwards (they were written to disk but
+    # never persisted before, so past runs had no logged email). Missing files
+    # are skipped by the `.exists()` filter in _LOG_FILES consumers.
+    "report_forex.html",
+    "report_gold_nas.html",
 ]
 
 

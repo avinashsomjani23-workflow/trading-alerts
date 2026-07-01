@@ -3,7 +3,7 @@
 Usage:
   python backtest/aggregate_runs.py                    # all completed runs
   python backtest/aggregate_runs.py --groups 1,2       # specific groups only
-  python backtest/aggregate_runs.py --entry proximal   # proximal or 50pct
+  python backtest/aggregate_runs.py --entry proximal   # proximal (only zone)
 
 Outputs (written to backtest/results/combined/):
   all_trades.csv      combined raw trades
@@ -255,7 +255,7 @@ def _build_verdict_md(
     # --- Entry zone comparison ---
     if entry_comp:
         lines += [
-            "## Proximal vs 50% entry",
+            "## Entry zone (proximal only)",
             "",
             "| Entry zone | Fills | Fill rate | Win rate | Expectancy | CI |",
             "|------------|-------|-----------|----------|------------|-----|",
@@ -429,8 +429,9 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--groups", default=None,
                     help="Comma-separated group numbers to include, e.g. 1,2. Default: all.")
-    ap.add_argument("--entry", default="proximal", choices=["proximal", "50pct"],
-                    help="Which entry zone to use as the primary analysis view.")
+    ap.add_argument("--entry", default="proximal", choices=["proximal"],
+                    help="Which entry zone to use as the primary analysis view. "
+                         "Proximal is the only zone (50% mean entry removed 2026-07).")
     ap.add_argument("--r-col", default="r_realised",
                     choices=["r_realised", "r_if_exit_tp1", "r_if_exit_tp2"],
                     help="Which R column to use as the outcome measure.")

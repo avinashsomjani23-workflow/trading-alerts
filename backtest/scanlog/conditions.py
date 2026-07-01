@@ -41,7 +41,7 @@ CONDITIONS: dict[str, tuple[str, str]] = {
     # just arithmetic). Each is a logical impossibility, not a weak signal.
     "TREND_CONTRADICTION":      (FAIL, "alert tagged with-trend while trend reading is opposite"),
     "ZONE_STATE_CONTRADICTION": (FAIL, "OB reported active and mitigated in the same bar"),
-    "FILL_BEFORE_ALERT":        (FAIL, "trade fill ts <= its own alert ts"),
+    "FILL_BEFORE_ALERT":        (FAIL, "trade fill ts < its own alert ts (fill on the alert candle is legal)"),
     "UNCLASSIFIED_CONDITION":   (FAIL, "an anomaly with no registered code"),
 }
 
