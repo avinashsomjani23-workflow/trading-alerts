@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-01T20:43:06.649763+00:00",
+  "updated_at": "2026-07-02T12:07:40.191816+00:00",
   "runs": [
     {
       "run_id": "h1only_20080102_20080215",
@@ -366,51 +366,51 @@
         "score_buckets": [
           {
             "score_bucket": "0-2",
-            "trades": 1,
-            "win_rate_pct": 0.0,
-            "expectancy_r": -1.0
+            "trades": 2,
+            "win_rate_pct": 50.0,
+            "expectancy_r": -0.387
           },
           {
             "score_bucket": "2-3",
-            "trades": 1,
-            "win_rate_pct": 100.0,
-            "expectancy_r": 1.96
+            "trades": 7,
+            "win_rate_pct": 66.7,
+            "expectancy_r": 0.513
           },
           {
             "score_bucket": "3-4",
-            "trades": 17,
-            "win_rate_pct": 57.1,
-            "expectancy_r": 0.461
+            "trades": 23,
+            "win_rate_pct": 45.0,
+            "expectancy_r": 0.276
           },
           {
             "score_bucket": "4-5",
-            "trades": 98,
-            "win_rate_pct": 51.9,
-            "expectancy_r": 0.26
+            "trades": 103,
+            "win_rate_pct": 49.4,
+            "expectancy_r": 0.218
           },
           {
             "score_bucket": "5-6",
-            "trades": 179,
-            "win_rate_pct": 39.6,
-            "expectancy_r": -0.027
+            "trades": 177,
+            "win_rate_pct": 41.1,
+            "expectancy_r": -0.0
           },
           {
             "score_bucket": "6-7",
-            "trades": 179,
-            "win_rate_pct": 41.1,
-            "expectancy_r": 0.036
+            "trades": 172,
+            "win_rate_pct": 41.8,
+            "expectancy_r": 0.051
           },
           {
             "score_bucket": "7+",
-            "trades": 229,
-            "win_rate_pct": 34.0,
-            "expectancy_r": -0.135
+            "trades": 220,
+            "win_rate_pct": 32.8,
+            "expectancy_r": -0.162
           }
         ],
         "score_verdict": "BROKEN \u2014 score does not predict outcome"
       },
       "notes": "",
-      "recorded_at": "2026-07-01T20:43:06.649328+00:00"
+      "recorded_at": "2026-07-02T12:07:40.181424+00:00"
     },
     {
       "run_id": "h1only_20240701_20240731",
