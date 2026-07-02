@@ -1,13 +1,13 @@
 # Backtest Registry
 
-*Last updated: 2026-07-02 13:15 UTC*
+*Last updated: 2026-07-02 18:00 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **30** of 30
-- Total filled trades across all runs: **3325**
+- Runs completed: **31** of 31
+- Total filled trades across all runs: **3410**
 - Average expectancy across runs: **-0.12R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
@@ -887,6 +887,56 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | 5-6 | 31 | 7.7% | -0.68R |
 | 6-7 | 23 | 36.8% | -0.04R |
 | 7+ | 11 | 22.2% | -0.30R |
+
+---
+
+### h1only_20250501_20250531
+
+**Unclassified** | 2025-05-01 to 2025-05-31 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 85 (of 144 rows) |
+| Win rate | 40.0% |
+| Expectancy | +0.05R |
+| Max drawdown | +8.22R |
+| Longest losing streak | 7 trades |
+| Proximal fill rate | 59.0% |
+| Score verdict | WEAK — partial relationship |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| USDJPY | 8 | 50.0% | +0.53R |
+| USDCHF | 8 | 57.1% | +0.49R |
+| AUDUSD | 13 | 66.7% | +0.27R |
+| BTCUSD | 8 | 50.0% | +0.33R |
+| EURJPY | 4 | 66.7% | +0.44R |
+| GBPUSD | 5 | 25.0% | -0.01R |
+| GOLD | 10 | 33.3% | -0.04R |
+| EURUSD | 9 | 28.6% | -0.19R |
+| NZDUSD | 8 | 28.6% | -0.48R |
+| USDCAD | 12 | 18.2% | -0.51R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 20 | 43.8% | +0.17R |
+| London | 35 | 42.9% | +0.16R |
+| NY | 31 | 37.0% | -0.15R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 2-3 | 1 | 0.0% | -1.00R |
+| 3-4 | 4 | 50.0% | +0.28R |
+| 4-5 | 17 | 52.9% | +0.61R |
+| 5-6 | 15 | 46.2% | +0.00R |
+| 6-7 | 25 | 23.5% | -0.21R |
+| 7+ | 23 | 38.9% | -0.07R |
 
 ---
 

@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-02T13:15:46.644791+00:00",
+  "updated_at": "2026-07-02T18:00:43.915770+00:00",
   "runs": [
     {
       "run_id": "h1only_20080102_20080215",
@@ -2028,6 +2028,154 @@
       },
       "notes": "",
       "recorded_at": "2026-06-20T07:34:58.040182+00:00"
+    },
+    {
+      "run_id": "h1only_20250501_20250531",
+      "start": "2025-05-01",
+      "end": "2025-05-31",
+      "group": 0,
+      "regime": "bau",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 144,
+        "filled_trades": 85,
+        "win_rate_pct": 40.0,
+        "expectancy_r": 0.046,
+        "max_dd_r": 8.216,
+        "longest_losing_streak": 7,
+        "fill_rate_proximal_pct": 59.0,
+        "per_pair": [
+          {
+            "pair": "USDJPY",
+            "trades": 8,
+            "win_rate_pct": 50.0,
+            "expectancy_r": 0.526,
+            "total_pnl_usd": 1051.5
+          },
+          {
+            "pair": "USDCHF",
+            "trades": 8,
+            "win_rate_pct": 57.1,
+            "expectancy_r": 0.486,
+            "total_pnl_usd": 971.75
+          },
+          {
+            "pair": "AUDUSD",
+            "trades": 13,
+            "win_rate_pct": 66.7,
+            "expectancy_r": 0.274,
+            "total_pnl_usd": 890.75
+          },
+          {
+            "pair": "BTCUSD",
+            "trades": 8,
+            "win_rate_pct": 50.0,
+            "expectancy_r": 0.334,
+            "total_pnl_usd": 667.75
+          },
+          {
+            "pair": "EURJPY",
+            "trades": 4,
+            "win_rate_pct": 66.7,
+            "expectancy_r": 0.439,
+            "total_pnl_usd": 438.5
+          },
+          {
+            "pair": "GBPUSD",
+            "trades": 5,
+            "win_rate_pct": 25.0,
+            "expectancy_r": -0.014,
+            "total_pnl_usd": -17.0
+          },
+          {
+            "pair": "GOLD",
+            "trades": 10,
+            "win_rate_pct": 33.3,
+            "expectancy_r": -0.037,
+            "total_pnl_usd": -92.0
+          },
+          {
+            "pair": "EURUSD",
+            "trades": 9,
+            "win_rate_pct": 28.6,
+            "expectancy_r": -0.191,
+            "total_pnl_usd": -428.75
+          },
+          {
+            "pair": "NZDUSD",
+            "trades": 8,
+            "win_rate_pct": 28.6,
+            "expectancy_r": -0.484,
+            "total_pnl_usd": -968.5
+          },
+          {
+            "pair": "USDCAD",
+            "trades": 12,
+            "win_rate_pct": 18.2,
+            "expectancy_r": -0.512,
+            "total_pnl_usd": -1536.5
+          }
+        ],
+        "by_session": {
+          "Asia": {
+            "trades": 20,
+            "win_rate_pct": 43.8,
+            "expectancy_r": 0.173
+          },
+          "London": {
+            "trades": 35,
+            "win_rate_pct": 42.9,
+            "expectancy_r": 0.162
+          },
+          "NY": {
+            "trades": 31,
+            "win_rate_pct": 37.0,
+            "expectancy_r": -0.15
+          }
+        },
+        "score_buckets": [
+          {
+            "score_bucket": "2-3",
+            "trades": 1,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
+          },
+          {
+            "score_bucket": "3-4",
+            "trades": 4,
+            "win_rate_pct": 50.0,
+            "expectancy_r": 0.275
+          },
+          {
+            "score_bucket": "4-5",
+            "trades": 17,
+            "win_rate_pct": 52.9,
+            "expectancy_r": 0.612
+          },
+          {
+            "score_bucket": "5-6",
+            "trades": 15,
+            "win_rate_pct": 46.2,
+            "expectancy_r": 0.004
+          },
+          {
+            "score_bucket": "6-7",
+            "trades": 25,
+            "win_rate_pct": 23.5,
+            "expectancy_r": -0.207
+          },
+          {
+            "score_bucket": "7+",
+            "trades": 23,
+            "win_rate_pct": 38.9,
+            "expectancy_r": -0.065
+          }
+        ],
+        "score_verdict": "WEAK \u2014 partial relationship"
+      },
+      "notes": "",
+      "recorded_at": "2026-07-02T18:00:43.912692+00:00"
     },
     {
       "run_id": "h1only_20250701_20251231",
