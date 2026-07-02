@@ -1,6 +1,6 @@
 # Backtest Registry
 
-*Last updated: 2026-07-02 09:56 UTC*
+*Last updated: 2026-07-02 10:10 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
@@ -682,7 +682,7 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 | Score bucket | Trades | Win rate | Expectancy |
 |-------------|--------|----------|------------|
-| 4-5 | 1 | — | +0.00R |
+| 2-3 | 1 | — | +0.00R |
 | 7+ | 2 | 0.0% | -0.50R |
 
 ---

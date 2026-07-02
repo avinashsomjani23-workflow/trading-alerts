@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-02T09:56:03.659709+00:00",
+  "updated_at": "2026-07-02T10:10:11.197838+00:00",
   "runs": [
     {
       "run_id": "h1only_20080102_20080215",
@@ -1586,7 +1586,7 @@
         },
         "score_buckets": [
           {
-            "score_bucket": "4-5",
+            "score_bucket": "2-3",
             "trades": 1,
             "win_rate_pct": null,
             "expectancy_r": 0.0
@@ -1601,7 +1601,7 @@
         "score_verdict": "BROKEN \u2014 score does not predict outcome"
       },
       "notes": "",
-      "recorded_at": "2026-07-02T06:23:21.133397+00:00"
+      "recorded_at": "2026-07-02T10:10:11.195178+00:00"
     },
     {
       "run_id": "h1only_20250301_20250331",
