@@ -841,6 +841,26 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/367-uk-boe-credit-conditions-survey]]></url>
 	</event>
 	<event>
+		<title>Spanish 10-y Bond Auction</title>
+		<country>EUR</country>
+		<date><![CDATA[07-02-2026]]></date>
+		<time><![CDATA[8:41am]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast />
+		<previous><![CDATA[3.38|1.9]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/525-sp-10-y-bond-auction]]></url>
+	</event>
+	<event>
+		<title>French 10-y Bond Auction</title>
+		<country>EUR</country>
+		<date><![CDATA[07-02-2026]]></date>
+		<time><![CDATA[8:56am]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast />
+		<previous><![CDATA[3.80|2.4]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/523-fr-10-y-bond-auction]]></url>
+	</event>
+	<event>
 		<title>Unemployment Rate</title>
 		<country>EUR</country>
 		<date><![CDATA[07-02-2026]]></date>
@@ -851,30 +871,10 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/59-ez-unemployment-rate]]></url>
 	</event>
 	<event>
-		<title>Spanish 10-y Bond Auction</title>
-		<country>EUR</country>
-		<date><![CDATA[07-02-2026]]></date>
-		<time><![CDATA[9:03am]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast />
-		<previous><![CDATA[3.38|1.9]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/525-sp-10-y-bond-auction]]></url>
-	</event>
-	<event>
-		<title>French 10-y Bond Auction</title>
-		<country>EUR</country>
-		<date><![CDATA[07-02-2026]]></date>
-		<time><![CDATA[9:18am]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast />
-		<previous><![CDATA[3.80|2.4]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/523-fr-10-y-bond-auction]]></url>
-	</event>
-	<event>
 		<title>10-y Bond Auction</title>
 		<country>GBP</country>
 		<date><![CDATA[07-02-2026]]></date>
-		<time><![CDATA[9:33am]]></time>
+		<time><![CDATA[9:03am]]></time>
 		<impact><![CDATA[Low]]></impact>
 		<forecast />
 		<previous><![CDATA[4.86|3.5]]></previous>

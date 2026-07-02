@@ -1,14 +1,14 @@
 # Backtest Registry
 
-*Last updated: 2026-07-02 10:16 UTC*
+*Last updated: 2026-07-01 20:43 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
 - Runs completed: **28** of 28
-- Total filled trades across all runs: **2737**
-- Average expectancy across runs: **-0.11R**
+- Total filled trades across all runs: **3304**
+- Average expectancy across runs: **-0.10R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
 - **Group 3 (Live-era):** 1 runs, 9 trades, avg expectancy -0.20R
@@ -142,6 +142,52 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | 5-6 | 176 | 30.2% | -0.17R |
 | 6-7 | 182 | 36.1% | -0.01R |
 | 7+ | 205 | 37.9% | +0.00R |
+
+---
+
+### h1only_20090101_20091231
+
+**Unclassified** | 2009-01-01 to 2009-12-31 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 704 (of 1021 rows) |
+| Win rate | 40.3% |
+| Expectancy | +0.01R |
+| Max drawdown | +36.64R |
+| Longest losing streak | 8 trades |
+| Proximal fill rate | 69.0% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| GOLD | 154 | 40.8% | +0.06R |
+| EURUSD | 135 | 41.7% | +0.06R |
+| NZDUSD | 114 | 46.5% | +0.06R |
+| USDJPY | 135 | 38.9% | -0.04R |
+| USDCHF | 166 | 35.4% | -0.10R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 104 | 46.0% | +0.14R |
+| London | 317 | 37.1% | -0.05R |
+| NY | 284 | 42.0% | +0.02R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 0-2 | 1 | 0.0% | -1.00R |
+| 2-3 | 1 | 100.0% | +1.96R |
+| 3-4 | 17 | 57.1% | +0.46R |
+| 4-5 | 98 | 51.9% | +0.26R |
+| 5-6 | 179 | 39.6% | -0.03R |
+| 6-7 | 179 | 41.1% | +0.04R |
+| 7+ | 229 | 34.0% | -0.14R |
 
 ---
 
@@ -492,39 +538,35 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 | Metric | Value |
 |--------|-------|
-| Filled trades | 59 (of 94 rows) |
-| Win rate | 44.7% |
-| Expectancy | +0.15R |
-| Max drawdown | +5.04R |
-| Longest losing streak | 4 trades |
-| Proximal fill rate | 62.8% |
+| Filled trades | 26 (of 91 rows) |
+| Win rate | 47.6% |
+| Expectancy | +0.18R |
+| Max drawdown | +3.89R |
+| Longest losing streak | 3 trades |
+| Proximal fill rate | 56.5% |
 | Score verdict | WEAK — partial relationship |
 
 **By pair (proximal entry, TP2 exit):**
 
 | Pair | Trades | Win rate | Expectancy |
 |------|--------|----------|------------|
-| GOLD | 29 | 56.5% | +0.42R |
-| EURUSD | 30 | 33.3% | -0.11R |
+| BTCUSD | 26 | 47.6% | +0.18R |
 
 **By session:**
 
 | Session | Trades | Win rate | Expectancy |
 |---------|--------|----------|------------|
-| Asia | 11 | 30.0% | -0.18R |
-| London | 23 | 40.0% | +0.10R |
-| NY | 25 | 54.5% | +0.34R |
+| London | 11 | 77.8% | +1.04R |
+| NY | 15 | 25.0% | -0.45R |
 
 **Score vs outcome:**
 
 | Score bucket | Trades | Win rate | Expectancy |
 |-------------|--------|----------|------------|
-| 2-3 | 1 | — | +0.00R |
-| 3-4 | 2 | 50.0% | +0.66R |
-| 4-5 | 6 | 66.7% | +0.96R |
-| 5-6 | 17 | 61.5% | +0.54R |
-| 6-7 | 17 | 50.0% | +0.06R |
-| 7+ | 16 | 8.3% | -0.53R |
+| 4-5 | 7 | 80.0% | +0.78R |
+| 5-6 | 4 | 33.3% | -0.48R |
+| 6-7 | 10 | 44.4% | +0.02R |
+| 7+ | 5 | 25.0% | +0.19R |
 
 ---
 
@@ -656,19 +698,19 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 | Metric | Value |
 |--------|-------|
-| Filled trades | 3 (of 6 rows) |
-| Win rate | 0.0% |
-| Expectancy | -0.33R |
-| Max drawdown | +1.00R |
-| Longest losing streak | 1 trades |
-| Proximal fill rate | 50.0% |
+| Filled trades | 2 (of 5 rows) |
+| Win rate | — |
+| Expectancy | +0.00R |
+| Max drawdown | +0.00R |
+| Longest losing streak | 0 trades |
+| Proximal fill rate | 40.0% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
 
 | Pair | Trades | Win rate | Expectancy |
 |------|--------|----------|------------|
-| EURUSD | 3 | 0.0% | -0.33R |
+| EURUSD | 2 | — | +0.00R |
 
 **By session:**
 
@@ -676,64 +718,13 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 |---------|--------|----------|------------|
 | Asia | 1 | — | +0.00R |
 | London | 1 | — | +0.00R |
-| NY | 1 | 0.0% | -1.00R |
 
 **Score vs outcome:**
 
 | Score bucket | Trades | Win rate | Expectancy |
 |-------------|--------|----------|------------|
-| 2-3 | 1 | — | +0.00R |
-| 7+ | 2 | 0.0% | -0.50R |
-
----
-
-### h1only_20250301_20250331
-
-**Unclassified** | 2025-03-01 to 2025-03-31 | Regime: `bau`
-
-| Metric | Value |
-|--------|-------|
-| Filled trades | 103 (of 146 rows) |
-| Win rate | 42.9% |
-| Expectancy | +0.12R |
-| Max drawdown | +9.56R |
-| Longest losing streak | 5 trades |
-| Proximal fill rate | 70.5% |
-| Score verdict | WEAK — partial relationship |
-
-**By pair (proximal entry, TP2 exit):**
-
-| Pair | Trades | Win rate | Expectancy |
-|------|--------|----------|------------|
-| GOLD | 10 | 62.5% | +0.54R |
-| USDJPY | 11 | 54.5% | +0.32R |
-| NZDUSD | 7 | 71.4% | +0.45R |
-| BTCUSD | 8 | 40.0% | +0.39R |
-| EURJPY | 10 | 42.9% | +0.27R |
-| USDCHF | 8 | 50.0% | +0.28R |
-| AUDUSD | 11 | 45.5% | +0.15R |
-| EURUSD | 7 | 25.0% | -0.09R |
-| USDCAD | 23 | 27.8% | -0.18R |
-| GBPUSD | 8 | 14.3% | -0.54R |
-
-**By session:**
-
-| Session | Trades | Win rate | Expectancy |
-|---------|--------|----------|------------|
-| Asia | 17 | 12.5% | -0.58R |
-| London | 52 | 53.5% | +0.37R |
-| NY | 34 | 44.0% | +0.10R |
-
-**Score vs outcome:**
-
-| Score bucket | Trades | Win rate | Expectancy |
-|-------------|--------|----------|------------|
-| 2-3 | 2 | 0.0% | -0.50R |
-| 3-4 | 6 | 25.0% | -0.20R |
-| 4-5 | 12 | 60.0% | +0.46R |
-| 5-6 | 23 | 35.0% | -0.02R |
-| 6-7 | 30 | 48.0% | +0.23R |
-| 7+ | 30 | 41.7% | +0.10R |
+| 4-5 | 1 | — | +0.00R |
+| 7+ | 1 | — | +0.00R |
 
 ---
 
