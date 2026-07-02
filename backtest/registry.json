@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-02T12:40:06.022704+00:00",
+  "updated_at": "2026-07-02T13:15:46.644791+00:00",
   "runs": [
     {
       "run_id": "h1only_20080102_20080215",
@@ -1142,6 +1142,79 @@
       },
       "notes": "",
       "recorded_at": "2026-06-19T20:11:34.980433+00:00"
+    },
+    {
+      "run_id": "h1only_20241201_20241231",
+      "start": "2024-12-01",
+      "end": "2024-12-31",
+      "group": 0,
+      "regime": "bau",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 19,
+        "filled_trades": 10,
+        "win_rate_pct": 14.3,
+        "expectancy_r": -0.377,
+        "max_dd_r": 3.0,
+        "longest_losing_streak": 2,
+        "fill_rate_proximal_pct": 52.6,
+        "per_pair": [
+          {
+            "pair": "USDCHF",
+            "trades": 10,
+            "win_rate_pct": 14.3,
+            "expectancy_r": -0.377,
+            "total_pnl_usd": -942.0
+          }
+        ],
+        "by_session": {
+          "Asia": {
+            "trades": 1,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
+          },
+          "London": {
+            "trades": 5,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -0.705
+          },
+          "NY": {
+            "trades": 4,
+            "win_rate_pct": 50.0,
+            "expectancy_r": 0.189
+          }
+        },
+        "score_buckets": [
+          {
+            "score_bucket": "4-5",
+            "trades": 1,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
+          },
+          {
+            "score_bucket": "5-6",
+            "trades": 4,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -0.5
+          },
+          {
+            "score_bucket": "6-7",
+            "trades": 1,
+            "win_rate_pct": null,
+            "expectancy_r": 0.0
+          },
+          {
+            "score_bucket": "7+",
+            "trades": 4,
+            "win_rate_pct": 25.0,
+            "expectancy_r": -0.192
+          }
+        ],
+        "score_verdict": "WEAK \u2014 partial relationship"
+      },
+      "notes": "",
+      "recorded_at": "2026-07-02T13:15:46.642594+00:00"
     },
     {
       "run_id": "h1only_20250101_20250131",
