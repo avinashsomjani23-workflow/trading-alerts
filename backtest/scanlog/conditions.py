@@ -34,6 +34,7 @@ CONDITIONS: dict[str, tuple[str, str]] = {
     "NORMALIZE_NONDICT":        (WARN, "radar returned non-dict shape"),
     "CONFIG_DRIFT":             (FAIL, "knob value observed mid-run != manifest value"),
     "PNL_MISMATCH":             (FAIL, "pnl_usd != r_realised * risk_usd on a row"),
+    "PHYS_IMPOSSIBLE_METRIC":   (FAIL, "per-trade metric violates physical possibility (G10)"),
     "HEARTBEAT_GAP":            (FAIL, "a (pair, bar) in the walk produced no scan record"),
     "TS_NOT_BOUNDARY":          (FAIL, "a wall-clock ts is not an element of df.index"),
     "TZ_NAIVE":                 (FAIL, "a naive (tz-unaware) timestamp appeared"),

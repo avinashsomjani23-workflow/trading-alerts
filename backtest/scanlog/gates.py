@@ -164,12 +164,21 @@ def evaluate(
     if missing_by_pair:
         for p, gap in missing_by_pair.items():
             scanlog.condition("HEARTBEAT_GAP", pair=p, missing=gap)
-    g2_ok = (expected_total == actual_total) and not missing_by_pair
+    # ANTI-VACUOUS (2026-07-02): a run that produced trades but declared ZERO
+    # walk bars did not pass the heartbeat — it never recorded one. This is
+    # exactly what happened when pairs moved into ProcessPoolExecutor workers:
+    # each worker got the NullScanLog, every scan/event/condition record was
+    # silently swallowed, and G2 "passed" on 0 == 0 while the audit layer was
+    # blind. 0 expected + >0 trades is a FAIL, never a pass.
+    g2_vacuous = (expected_total == 0 and len(trades) > 0)
+    g2_ok = ((expected_total == actual_total) and not missing_by_pair
+             and not g2_vacuous)
     gates.append(Gate(
-        "G2", "scan records == expected (pair x walk bars); zero HEARTBEAT_GAP",
-        "exact",
+        "G2", "scan records == expected (pair x walk bars); zero HEARTBEAT_GAP; "
+              "never vacuous (0 declared bars with trades present = blind run)",
+        "exact, non-vacuous",
         {"expected": expected_total, "actual": actual_total,
-         "missing_by_pair": missing_by_pair},
+         "missing_by_pair": missing_by_pair, "vacuous": g2_vacuous},
         PASS if g2_ok else FAIL,
     ))
 
@@ -291,6 +300,50 @@ def evaluate(
     gates.append(Gate(
         "G9", "every record validated against SCHEMA.md (ts/tz/outcome)",
         "0 schema FAILs", schema_fail, PASS if schema_fail == 0 else FAIL,
+    ))
+
+    # ---- G10 physical possibility of per-trade metrics ---------------------
+    # Tripwires for the "measured a thing that could not have happened" class
+    # (the MFE fill-bar bug family). Parent-side over trade rows, so worker
+    # log loss can never hide it. Rules (tolerances cover 3dp rounding):
+    #   a) mfe_r < 0 or mae_r > 0            — impossible by construction
+    #      (both start at entry = 0 and only widen).
+    #   b) exit sl at ~-1R with mfe_r >= ~+1R — impossible under BE@1R: a clean
+    #      +1R print arms break-even (worst exit 0R), and contaminated bars
+    #      (fill/SL/TP1-exit) are excluded from MFE. Any such row means the
+    #      excursion walk credited pre-fill / same-bar price again.
+    #   c) exit tp1 with mfe_r > r_realised   — MFE is capped at the TP1 exit
+    #      level; beyond it is post-exit price.
+    phys_violations = []
+    for t in trades:
+        if t.get("exit_reason") == "never_filled":
+            continue
+        try:
+            mfe = float(t.get("mfe_r") or 0.0)
+            mae = float(t.get("mae_r") or 0.0)
+            r = float(t.get("r_realised") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        bad = []
+        if mfe < -0.002 or mae > 0.002:
+            bad.append("excursion_sign")
+        if t.get("exit_reason") == "sl" and r <= -0.999 and mfe >= 0.999:
+            bad.append("full_sl_loser_with_1R_mfe")
+        if t.get("exit_reason") == "tp1" and mfe > r + 0.002:
+            bad.append("mfe_beyond_tp1_exit")
+        if bad:
+            phys_violations.append({"pair": t.get("pair"),
+                                    "alert_ts": t.get("alert_ts"),
+                                    "exit_reason": t.get("exit_reason"),
+                                    "r": r, "mfe_r": mfe, "mae_r": mae,
+                                    "violations": bad})
+            scanlog.condition("PHYS_IMPOSSIBLE_METRIC", pair=t.get("pair"),
+                              alert_ts=t.get("alert_ts"), violations=bad)
+    gates.append(Gate(
+        "G10", "per-trade metrics physically possible (no fake excursions)",
+        "0 violations",
+        {"violations": len(phys_violations), "sample": phys_violations[:5]},
+        PASS if not phys_violations else FAIL,
     ))
 
     # ---- overall ----------------------------------------------------------

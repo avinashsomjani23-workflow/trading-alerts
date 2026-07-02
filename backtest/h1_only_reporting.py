@@ -1721,9 +1721,15 @@ def _winning_recipe_remap(prox_trades: List[Dict[str, Any]],
     Returns (None, []) when there is no usable sink (falls back to live book)."""
     if not exit_lab_sink:
         return None, []
+    # Same population as _exit_recipe_html (2026-07-02 fix): drop UNRESOLVED
+    # exits (never_filled / timeout / window_end) too. Previously this remap
+    # kept them, so the "winning recipe" could be picked over a different book
+    # than the exit table ranks — the driver engine then mined a winner the
+    # table never showed.
     prox_sink = [r for r in exit_lab_sink
                  if r.get("entry_zone") == "proximal"
-                 and not (r.get("ist_blocked") or r.get("weekend_blocked"))]
+                 and not (r.get("ist_blocked") or r.get("weekend_blocked"))
+                 and r.get("exit_reason") not in _EXCLUDE_REASONS]
     if not prox_sink:
         return None, []
 
@@ -2148,24 +2154,27 @@ def _mfe_mae_html(trades: List[Dict[str, Any]]) -> str:
     def _r_or_dash(v):
         return _r(v) if v is not None else "&mdash;"
 
-    # System headline sentences — the actionable read.
+    # System headline sentences — the honest read. MFE/MAE are PATH PEAKS
+    # (in-trade excursion, fill -> exit), never bankable money. Any "what an
+    # exit change would earn" number must come from the exit-recipe table
+    # (real-order replay), not from these peaks (insights.verify_capturable law).
     parts = []
     if s["avg_win_mfe"] is not None and s["avg_win_r"] is not None:
-        cap_s = f"{s['capture']:.0f}%" if s["capture"] is not None else "&mdash;"
         parts.append(
-            f"<b>Winners</b> peaked at {_r(s['avg_win_mfe'])} on average but booked "
-            f"{_r(s['avg_win_r'])} — you keep <b>{cap_s}</b> of the run and give back "
-            f"<b>{_r_or_dash(s['giveback'])}</b>. "
-            + ("That give-back is large; a further target or a trail is worth testing."
-               if (s["giveback"] or 0) >= 1.0 else
-               "That give-back is modest; the current exit captures most of the move."))
+            f"<b>Winners</b> booked {_r(s['avg_win_r'])} on average "
+            f"(in-trade peak {_r(s['avg_win_mfe'])}; under the TP1 limit exit the "
+            f"two match by construction). What price did AFTER the exit is not "
+            f"measured here — the exit-recipe table below replays real "
+            f"alternative exits and is the only place to judge a farther target.")
     if s["avg_loss_mae"] is not None:
         parts.append(
             f"<b>Losers</b> sank to {_r(s['avg_loss_mae'])} on average before the stop. "
-            + (f"<b>{s['near_miss_n']}</b> of {s['n_loss']} losers first ran to "
+            + (f"<b>{s['near_miss_n']}</b> of {s['n_loss']} losers first TOUCHED "
                f"{_r_or_dash(s['near_miss_r'])} in profit before reversing to a full "
-               f"&minus;1R — that is the stop/break-even leak: a break-even or partial "
-               f"rule would have rescued real R on those."
+               f"&minus;1R. A touch is not a bankable exit (same-bar spikes are "
+               f"uncapturable on H1), and break-even at +1R is ALREADY the live "
+               f"policy — read this as a hint only, and judge stop/partial ideas "
+               f"on the exit-recipe table's replayed numbers."
                if s["near_miss_n"] else
                "Few losers showed meaningful profit first, so the stop is not the main leak."))
     headline = "<p style='font-size:13px;line-height:1.6;'>" + " ".join(parts) + "</p>"
@@ -2199,11 +2208,13 @@ def _mfe_mae_html(trades: List[Dict[str, Any]]) -> str:
         pair_tbl = ""
 
     note = ("<p style='font-size:12px;color:#666;margin-top:6px;'>"
-            "<b>Give-back</b> = average winner peak minus what it booked (money "
-            "left on the table). <b>Loss drawdown</b> = how deep the average loser "
-            "went before the stop. <b>Losers green first</b> = losers that showed "
-            "&ge;+0.5R before reversing to &minus;1R — the stop/break-even leak. "
-            "Red pair rows give back &ge;1R per winner.</p>")
+            "All columns here are <b>path peaks</b> (where price touched while "
+            "the trade was open), not money. <b>Give-back</b> = winner peak minus "
+            "booked (&asymp;0 by construction under the TP1 limit exit). "
+            "<b>Loss drawdown</b> = deepest in-trade excursion of the average "
+            "loser. <b>Losers green first</b> = losers that TOUCHED &ge;+0.5R "
+            "before the stop — a hint, not a bankable outcome; capturable "
+            "equivalents live in the exit-recipe table.</p>")
     return headline + pair_tbl + note
 
 
@@ -4112,10 +4123,11 @@ def _vet_review_html(trades: List[Dict]) -> str:
         peak = sum(float(t.get("mfe_r") or 0) for t in lm) / len(lm)
         conc = _worst_group(lm, "pair")
         blocks.append(
-            f"<li><b>{len(lm)} winners left money on the table</b> — they peaked at "
-            f"{_r(peak)} on average but you booked far less, handing back "
-            f"<b>{_r(avg_gb)}</b> per trade. This is an <b>exit/target</b> lesson: "
-            f"the runner or a farther TP would recover it. "
+            f"<li><b>{len(lm)} winners showed a much higher in-trade peak than "
+            f"booked</b> — peak {_r(peak)} avg vs booked, a gap of <b>{_r(avg_gb)}</b> "
+            f"per trade. The peak is a TOUCH, not money a real exit banks — whether "
+            f"a farther target actually earns more is answered ONLY by the "
+            f"exit-recipe table (real-order replay). "
             + (f"Most concentrated on {conc}." if conc else "") + "</li>")
 
     # 2. Nearly worked — losers that ran green first.
@@ -4126,11 +4138,13 @@ def _vet_review_html(trades: List[Dict]) -> str:
         big = [t for t in nw if float(t.get("mfe_r") or 0) >= 1.0]
         conc = _worst_group(nw, "session")
         blocks.append(
-            f"<li><b>{len(nw)} losers ran green first</b> — they reached {_r(peak)} "
+            f"<li><b>{len(nw)} losers ran green first</b> — they TOUCHED {_r(peak)} "
             f"in profit on average before reversing to a full loss, bleeding "
-            f"<b>{bled:+.1f}R</b> in total. <b>{len(big)}</b> of them showed &ge;+1R. "
-            f"This is a <b>stop/break-even</b> lesson: a BE or partial rule would "
-            f"have rescued real R. "
+            f"<b>{bled:+.1f}R</b> in total. <b>{len(big)}</b> of them touched &ge;+1R "
+            f"(should be ~0: break-even at +1R is already live policy, so a clean "
+            f"+1R print arms BE — if this count is high, suspect same-bar spikes "
+            f"or a measurement bug, not a missing rule). Judge stop/partial ideas "
+            f"on the exit-recipe table, not on these touches. "
             + (f"Worst in the {conc} bucket." if conc else "") + "</li>")
 
     # 3. High-score losses — scoring didn't protect.

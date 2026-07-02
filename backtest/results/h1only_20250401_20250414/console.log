@@ -1,0 +1,49 @@
+[INFO] run_start regime=bau regime_label=None mode=h1_only start=2025-04-01 end=2025-04-14 pairs=['EURUSD', 'GOLD'] risk_usd=250.0 send_email=False
+[INFO] backtest_atr_cap pair=EURUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=GOLD pair_type=commodity live=3.0 backtest=3.0
+
+[H1-ONLY MODE] start=2025-04-01 end=2025-04-14 pairs=['EURUSD', 'GOLD'] risk_per_trade=$250
+  No M15/M5 fetches. No scoring gate. Dual entry per OB.
+  News: SKIPPED (BACKTEST_SKIP_NEWS set)
+[INFO] news_fetched events=0 coverage={'ff': False} range=2025-03-31T00:00:00+00:00..2025-04-15T00:00:00+00:00
+  [scanlog] manifest written -> C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\out\scanlog\h1only_20250401_20250414
+[INFO] pair_data_loaded pair=EURUSD h1_rows=817 h1_first=2025-02-25 00:00:00+00:00 h1_last=2025-04-14 00:00:00+00:00
+[INFO] pair_data_loaded pair=GOLD h1_rows=784 h1_first=2025-02-25 00:00:00+00:00 h1_last=2025-04-14 00:00:00+00:00
+
+  [parallel] launching 2 pairs across 2 workers
+[INFO] pair_alerts_collected pair=EURUSD alerts=33 mode=h1_only
+[INFO] pair_trades_simulated pair=EURUSD trades=15 news_blocked=0 ist_blocked=5 killzone_dropped_alerts=9
+[INFO] pair_alerts_collected pair=GOLD alerts=19 mode=h1_only
+[INFO] pair_trades_simulated pair=GOLD trades=11 news_blocked=0 ist_blocked=2 killzone_dropped_alerts=7
+[INFO] report_written path=C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20250401_20250414 total_alerts=52 total_trades=26
+
+H1-only report written to C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20250401_20250414
+================================================================
+SCAN-LOG RUN HEALTH
+================================================================
+GATE  VERDICT DESCRIPTION
+G1    PASS    Sum pnl_usd == Sum r_realised*risk, and equals reporting headline
+G2    PASS    scan records == expected (pair x walk bars); zero HEARTBEAT_GAP; never vacuous (0 declared bars with trades present = blind run)
+G3    PASS    ob<=bos<alert<=fill on every filled trade (fill on the alert candle allowed)
+G4    PASS    every FAIL-severity condition counter is 0
+G5    PASS    every knob re-read at END equals manifest (no drift)
+G6    PASS    headline recomputed from r_realised only; tp1/tp2 excluded
+G7    PASS    content hash of scan_log + events recorded for re-run compare
+G8    PASS    NAN_ATR_SKIP <= 1% post-warmup per pair (WARN >1%, FAIL >5%)
+G9    PASS    every record validated against SCHEMA.md (ts/tz/outcome)
+G10   PASS    per-trade metrics physically possible (no fake excursions)
+----------------------------------------------------------------
+CONDITION COUNTERS: none
+----------------------------------------------------------------
+headline (from r_realised): $-1,289.75
+OVERALL: PASS (exit code 0)
+================================================================
+  [scanlog] compressed artifacts in C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\out\scanlog\h1only_20250401_20250414
+  [registry] processed h1only_20250401_20250414 — 11 filled trades, expectancy -0.47R
+  [registry] registry.json written (29 runs)
+  [registry] BACKTEST_LOG.md written (29 runs)
+[commit_logs] committed 13cb3bd5 -- 5 files for h1only_20250401_20250414
+  [log commit OK — LOCAL ONLY, not pushed] h1only_20250401_20250414 -> 13cb3bd5
+    To publish to GitHub when ready: git push origin main
+[INFO] logs_committed_local_only run_id=h1only_20250401_20250414 sha=13cb3bd5
+[INFO] run_end

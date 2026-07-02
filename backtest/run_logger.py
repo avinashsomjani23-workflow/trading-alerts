@@ -101,6 +101,16 @@ class RunLogger:
         sys.stdout = self._orig_stdout
         sys.stderr = self._orig_stderr
 
+    def write_raw(self, rec: dict) -> None:
+        """Append an already-built record (a worker's buffered event) verbatim,
+        preserving its original ts/level. Used by the parent to replay worker
+        events into run_log.jsonl."""
+        try:
+            self._jsonl_f.write(json.dumps(rec, default=str) + "\n")
+            self._jsonl_f.flush()
+        except Exception:
+            pass
+
     @classmethod
     def init(cls, out_dir: Path) -> "RunLogger":
         if cls._instance is not None:
@@ -114,6 +124,35 @@ class RunLogger:
     @classmethod
     def get(cls) -> Optional["RunLogger"]:
         return cls._instance
+
+
+class BufferRunLogger:
+    """In-memory logger for ProcessPoolExecutor workers (2026-07-02 fix).
+
+    Workers get a fresh interpreter where RunLogger._instance is None, so every
+    log_event() there — sim skips (levels_invalid, distal-touch drops), the
+    pair_funnel diagnostics, scorecard/levels errors — was a silent no-op and
+    the committed run_log.jsonl had NO record of the alert->trade funnel.
+    Install one of these as RunLogger._instance inside the worker, return
+    `.records` in the worker result, and the parent replays them into the real
+    run_log.jsonl via RunLogger.write_raw()."""
+
+    def __init__(self, pair: str = ""):
+        self.pair = pair
+        self.records: list = []
+
+    def event(self, event: str, level: str = "info", echo: bool = True,
+              **fields: Any) -> None:
+        rec = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "level": level,
+            "event": event,
+        }
+        rec.update(fields)
+        self.records.append(rec)
+
+    def close(self) -> None:
+        pass
 
 
 def log_event(event: str, level: str = "info", echo: bool = True, **fields: Any) -> None:

@@ -87,7 +87,8 @@ def _build_scanlog(run_id, start, end, pairs_to_run, dfs, risk_usd, fetch_pad_da
 
 
 def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
-                  news_events, risk_usd, exit_lab_configs=None) -> dict:
+                  news_events, risk_usd, exit_lab_configs=None,
+                  scanlog_worker_dir=None) -> dict:
     """Run one pair's full replay + simulation in an isolated worker process.
 
     Called by ProcessPoolExecutor — must be a top-level function so Python can
@@ -105,13 +106,28 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
     """
     # Worker-local imports (each process re-imports these; no shared state).
     import pandas as _pd
+    from pathlib import Path as _Path
     from backtest import replay_engine as _re, h1_only_simulator as _sim
     from backtest import ist_window as _ist
     from backtest import killzone as _kz
+    from backtest.run_logger import RunLogger as _RL, BufferRunLogger as _BRL
+    from backtest.scanlog import emitter as _sle
     import news_filter as _nf
 
     name = pair_conf["name"]
     pair_type = pair_conf.get("pair_type", "forex")
+
+    # Arm worker-local observability (2026-07-02 fix). A spawned worker has no
+    # RunLogger and no active ScanLog, so every log_event / scanlog emit from
+    # the replay + simulator was silently dropped — the committed run_log had
+    # no funnel/skip events and the scan-log gates judged zero records. The
+    # buffer logger collects events for the parent to replay; the worker
+    # ScanLog writes real records into its own subdir for the parent to merge.
+    _buf = _BRL(pair=name)
+    _RL._instance = _buf
+    _wsl = None
+    if scanlog_worker_dir:
+        _wsl = _sle.ScanLog.begin_worker(_Path(scanlog_worker_dir))
 
     # Arm the exit-lab side-channel in THIS worker (spawn => parent globals don't
     # reach us). Pure observe: replays each recipe over the same post-fill bars,
@@ -225,6 +241,12 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
         _sim.EXIT_LAB_CONFIGS = None
         _sim.EXIT_LAB_SINK = None
 
+    # Close + summarise worker observability for the parent merge.
+    _scanlog_summary = None
+    if _wsl is not None:
+        _wsl.close()
+        _scanlog_summary = _wsl.worker_summary()
+
     return {
         "name": name,
         "alerts": alert_rows,
@@ -234,6 +256,8 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
         "n_ist_blocked": n_ist_blocked,
         "n_kz_dropped": n_kz_dropped,
         "exit_lab_sink": exit_lab_sink,
+        "scanlog_summary": _scanlog_summary,
+        "log_records": _buf.records,
     }
 
 
@@ -447,6 +471,11 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                 _process_pair,
                 pair_conf, df_h1, walk_start_ts, walk_end_ts,
                 news_events, risk_usd, _EXIT_LAB_CONFIGS,
+                # Per-pair worker scanlog dir: the worker writes real scan/event
+                # records there; the parent merges them below (2026-07-02 fix —
+                # workers previously emitted into the NullScanLog and the gate
+                # layer judged zero records).
+                str(scanlog.run_dir / "workers" / pair_conf["name"]),
             ): pair_conf["name"]
             for pair_conf, df_h1 in valid_pairs
         }
@@ -473,6 +502,16 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         all_trades.extend(res["trades"])
         exit_lab_sink.extend(res.get("exit_lab_sink") or [])
         killzone_drops_by_pair[name] = res["n_kz_dropped"]
+
+        # Fold the worker's observability back in (config-pair order, so the
+        # merged artifacts and the G7 stamp are deterministic): scanlog records
+        # + counters feed G2/G4/G8; buffered log events land in run_log.jsonl.
+        if res.get("scanlog_summary"):
+            scanlog.merge_worker(res["scanlog_summary"])
+        _lg = RunLogger.get()
+        if _lg is not None:
+            for _rec in (res.get("log_records") or []):
+                _lg.write_raw(_rec)
 
         log_event("pair_alerts_collected", pair=name,
                   alerts=len(res["alerts"]), mode="h1_only")
@@ -722,6 +761,7 @@ def _email_scanlog_failure(report_dir, scanlog, health, start, end, regime):
               if v and k in ("ALERT_LOOKAHEAD_BLOCKED", "FILL_BEFORE_ALERT",
                              "TREND_CONTRADICTION", "ZONE_STATE_CONTRADICTION",
                              "CONFIG_DRIFT", "PNL_MISMATCH", "HEARTBEAT_GAP",
+                             "PHYS_IMPOSSIBLE_METRIC",
                              "TS_NOT_BOUNDARY", "TZ_NAIVE", "UNCLASSIFIED_CONDITION")}
         if nz:
             lines.append("")

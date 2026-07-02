@@ -419,14 +419,18 @@ def _reference_touch_indices(future, bias, entry, sl, tp1, tp2, fill_bar_idx):
             tp2_hit = (tp2 is not None) and (bar_lo <= tp2)
         if is_fill_bar:
             tp1_hit = False; tp2_hit = False
+        # SL-first on ANY collision bar (2026-07-02 fix): when the same bar hits
+        # both the stop and a TP, the intra-bar order is unprovable, so the TP
+        # touch must NOT be recorded. Previously tp1_idx/tp2_idx were stamped
+        # BEFORE the SL check, so r_if_exit_tp1/r_if_exit_tp2 booked the TP as a
+        # win on the very bar the walk itself resolved as SL — the reference
+        # columns were optimistic exactly where the realised walk is pessimistic.
+        if sl_hit:
+            ref_exit_price = sl_after_tp1; break
         if tp1_hit and tp1_idx == -1:
             tp1_idx = bars_post
         if tp2_hit and tp2_idx == -1:
             tp2_idx = bars_post
-        if sl_hit and (tp1_hit or tp2_hit):
-            ref_exit_price = sl_after_tp1; break
-        if sl_hit:
-            ref_exit_price = sl_after_tp1; break
         if tp2_hit:
             ref_exit_price = tp2; break
         if tp1_hit and sl_after_tp1 != entry:
@@ -597,28 +601,35 @@ def _simulate_single_entry(
     # wick) double-counted the impulse leg and diverged from live. One concept,
     # one implementation -- the engine owns mitigation.
 
-    # ── Alert-candle distal-touch gate (2026-06-19) ─────────────────────────
+    # ── Alert-candle distal-touch gate (2026-06-19; bar fixed 2026-07-02) ───
     # Live, the alert email is sent only AFTER the alert bar closes. A trader
     # reading that email re-checks the setup against the just-closed candle: if
     # that candle traded into the OB's DISTAL (far) line, the zone is spent /
-    # violated and no email goes out. The backtest must mirror this -- otherwise
-    # it sends an alert and fills next bar into a setup a live trader would never
-    # have received (e.g. EURUSD 2024-07-03 06:00: alert candle high 1.07515
-    # tagged distal 1.07492, then SL'd next bar -> -2R that never happens live).
+    # violated and no trade is placed. The just-closed candle is candle A
+    # (alert_bar_ts = alert_ts - 1h), whose high/low the replay engine stamps on
+    # the alert as alert_bar_high / alert_bar_low.
     #
-    # Rule (alert candle ONLY): drop the setup if the alert candle's wick TOUCHES
-    # the distal line. Touch, not close -- a wick into the far edge is enough.
-    #   SHORT (bearish OB, distal above): drop if alert_bar.high >= distal
-    #   LONG  (bullish OB, distal below): drop if alert_bar.low  <= distal
-    # Only the alert candle is checked here; later bars are handled by the
-    # normal fill/SL walk below.
+    # LOOKAHEAD FIX (2026-07-02): this gate previously read df_h1.loc[alert_ts]
+    # — the bar that OPENS at alert_ts, i.e. candle B, which is STILL FORMING
+    # when the alert publishes. Using candle B's final high/low dropped setups
+    # based on where price went AFTER the decision moment. Since a candle-B
+    # distal touch usually means fill-then-stop, the gate was deleting mostly
+    # losers with future knowledge and inflating the headline. Now it checks
+    # candle A only — the candle a live trader can actually see.
+    #
+    # Rule (just-closed candle ONLY): drop the setup if its wick TOUCHES the
+    # distal line. Touch, not close -- a wick into the far edge is enough.
+    #   SHORT (bearish OB, distal above): drop if alert_bar_high >= distal
+    #   LONG  (bullish OB, distal below): drop if alert_bar_low  <= distal
+    # Later bars (candle B onward) are handled by the normal fill/SL walk.
     distal_line = ob.get("distal_line")
-    if distal_line is not None and alert_ts in df_h1.index:
-        alert_bar = df_h1.loc[alert_ts]
+    ab_hi = alert.get("alert_bar_high")
+    ab_lo = alert.get("alert_bar_low")
+    if distal_line is not None and ab_hi is not None and ab_lo is not None:
         distal_line = float(distal_line)
         distal_touched = (
-            float(alert_bar["High"]) >= distal_line if bias == "SHORT"
-            else float(alert_bar["Low"]) <= distal_line
+            float(ab_hi) >= distal_line if bias == "SHORT"
+            else float(ab_lo) <= distal_line
         )
         if distal_touched:
             log_event("h1only_sim_skip", level="info", pair=pair,
@@ -657,13 +668,23 @@ def _simulate_single_entry(
     # follow THIS policy and nothing else.
     #
     # `cur_sl` is the live stop: starts at the initial SL, jumps to entry once
-    # the +1R break-even arms. The walk does NOT break on the realised exit —
-    # it records the exit once, then keeps scanning bars so the diagnostic
-    # touch indices (tp1/tp2) and MFE still reflect the full window for the
-    # reference columns.
+    # the +1R break-even arms. The walk BREAKS at the realised exit, so mfe_r /
+    # mae_r measure IN-TRADE excursion only (fill -> exit), never the post-exit
+    # path. The full-window touch diagnostics (bars_to_tp1 / bars_to_tp2) and
+    # the r_if_exit_* reference columns come from the SEPARATE legacy walk in
+    # _reference_touch_indices, which ignores the realised exit.
     cur_sl = sl
     be_armed = False
     be_trigger = (entry + r_distance) if bias == "LONG" else (entry - r_distance)
+    # Measurement only (2026-07-02, no behavior change): on the bar that arms
+    # break-even, did that SAME bar's wick also trade back to entry? If so the
+    # intra-bar order of "+1R first, arm, THEN pull back to entry" vs "pull back
+    # to entry first, THEN +1R" is unprovable -- we arm at bar CLOSE regardless
+    # and let the trade ride, which is optimistic if the pullback actually came
+    # first (a live break-even stop would have been tagged for 0R that bar).
+    # Logged so the ambiguous population size can be measured before deciding
+    # whether it's worth a rule.
+    be_arm_bar_touched_entry: Optional[bool] = None
 
     for i, (ts, bar) in enumerate(future.iterrows()):
         bar_hi = float(bar["High"])
@@ -671,10 +692,21 @@ def _simulate_single_entry(
 
         is_fill_bar_this_iter = False
         if not filled:
+            # Weekend-flat fill guard (2026-07-02 fix): a limit may NOT fill on a
+            # Friday bar >= WEEKEND_FLAT_HOUR_UTC. Filling there would open a
+            # position that immediately rides the weekend gap -- the weekend-flat
+            # check above only force-closes an ALREADY-open position on a later
+            # bar, so it never catches a position opened on the Friday-evening
+            # bar itself (is_fill_bar_this_iter was True on the fill bar, which
+            # the flat check explicitly skips). The order stays pending into
+            # Monday rather than being killed -- same as any other no-touch bar.
+            friday_evening = (WEEKEND_FLAT and ts.dayofweek == 4
+                              and ts.hour >= WEEKEND_FLAT_HOUR_UTC)
             # Pending limit fill: long fills when bar.low <= entry,
             # short fills when bar.high >= entry (pre-placed limit semantics).
-            if (bias == "LONG" and bar_lo <= entry) or \
-               (bias == "SHORT" and bar_hi >= entry):
+            if not friday_evening and (
+                    (bias == "LONG" and bar_lo <= entry) or
+                    (bias == "SHORT" and bar_hi >= entry)):
                 filled = True
                 fill_ts = ts
                 fill_bar_idx = i
@@ -710,22 +742,37 @@ def _simulate_single_entry(
             tp1_hit_in_bar = bar_hi >= tp1
             tp2_hit_in_bar = (tp2 is not None) and (bar_hi >= tp2)
             be_reached_in_bar = bar_hi >= be_trigger
-            # MFE/MAE must not include the SL bar: on the bar that fires the
-            # stop, the wick that touched SL also touched the opposite extreme.
-            # Crediting that extreme inflates MFE (the bar's high can show a
-            # positive excursion on the very bar the trade was stopped out).
-            # Only update excursion tracking on bars where SL does not fire.
-            if not sl_hit_in_bar:
-                mfe_price = max(mfe_price, bar_hi)
-                mae_price = min(mae_price, bar_lo)
+            # MFE/MAE track the trade's IN-TRADE excursion only (fill -> exit).
+            # Three bars cannot contribute their raw extremes:
+            #   - SL bar: the wick that touched SL also printed the bar high, so
+            #     crediting that high fakes a positive excursion on the very bar
+            #     that stopped us out.
+            #   - FILL bar: a LONG limit fills on the bar LOW; that bar's HIGH
+            #     happened BEFORE the fill (price fell through entry), so it is
+            #     pre-fill price, not favourable excursion. Crediting it fakes a
+            #     large MFE on a bar where price was actually falling to SL.
+            #   - TP1-EXIT bar (2026-07-02): the realised exit fills AT the first
+            #     TP1 touch, so any price beyond TP1 printed at-or-after the exit
+            #     (post-exit, not ours); MFE is capped at TP1. The bar's LOW is
+            #     order-ambiguous (before or after the touch) -> no MAE update.
+            # None of these bars lets us infer the intra-bar sequence.
+            if not sl_hit_in_bar and not is_fill_bar_this_iter:
+                if tp1_hit_in_bar:
+                    mfe_price = max(mfe_price, tp1)
+                else:
+                    mfe_price = max(mfe_price, bar_hi)
+                    mae_price = min(mae_price, bar_lo)
         else:
             sl_hit_in_bar = bar_hi >= cur_sl
             tp1_hit_in_bar = bar_lo <= tp1
             tp2_hit_in_bar = (tp2 is not None) and (bar_lo <= tp2)
             be_reached_in_bar = bar_lo <= be_trigger
-            if not sl_hit_in_bar:
-                mfe_price = min(mfe_price, bar_lo)
-                mae_price = max(mae_price, bar_hi)
+            if not sl_hit_in_bar and not is_fill_bar_this_iter:
+                if tp1_hit_in_bar:
+                    mfe_price = min(mfe_price, tp1)
+                else:
+                    mfe_price = min(mfe_price, bar_lo)
+                    mae_price = max(mae_price, bar_hi)
 
         # Fill-bar rule (2026-05-25):
         # On the bar where the limit just filled, we cannot infer intra-bar
@@ -775,6 +822,9 @@ def _simulate_single_entry(
             # stop to entry. A later pullback to entry now books 0R.
             be_armed = True
             cur_sl = entry
+            be_arm_bar_touched_entry = bool(
+                bar_lo <= entry if bias == "LONG" else bar_hi >= entry
+            )
 
     if not filled:
         # Limit never touched within the hold window. Emit a "never_filled" row
@@ -972,6 +1022,7 @@ def _simulate_single_entry(
         sl_swept_then_tp1=sl_swept_then_tp1,
         ob_to_fill_hours=ob_to_fill_hours,
         bars_break_to_pullback=bars_break_to_pullback,
+        be_arm_bar_touched_entry=be_arm_bar_touched_entry,
     )
 
 
@@ -982,7 +1033,8 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                mfe_r, mae_r, bars_to_exit, bars_to_tp1, bars_to_tp2,
                sl_collision, risk_usd, sl_raw=None,
                sl_bar_was_sweep=None, sl_swept_then_tp1=None, ob_to_fill_hours=None,
-               bars_break_to_pullback=None) -> Dict[str, Any]:
+               bars_break_to_pullback=None,
+               be_arm_bar_touched_entry=None) -> Dict[str, Any]:
     """Assemble the final trade row dict in stable column order."""
     direction = ob.get("direction", "?")
     bos_tag = ob.get("bos_tag", "BOS")
@@ -1128,6 +1180,12 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         #                       check, not a real-order replay; never free money).
         "sl_bar_was_sweep":  sl_bar_was_sweep,
         "sl_swept_then_tp1": sl_swept_then_tp1,
+        # Measurement only, no behavior change (2026-07-02). True when the bar
+        # that armed break-even (+1R touch) ALSO traded back to entry within the
+        # same bar -- the intra-bar order (arm-then-pullback vs pullback-then-arm)
+        # is unprovable, so we arm at bar close and let the trade ride either way.
+        # None when BE never armed (SL/TP1 hit first, or trade never reached +1R).
+        "be_arm_bar_touched_entry": be_arm_bar_touched_entry,
         # OB-formation -> fill gap (hours). Diagnostic only, corr with r ~0.
         "ob_to_fill_hours": ob_to_fill_hours,
         # H1 bars from break candle to the pullback that fills us (BS1 flag).

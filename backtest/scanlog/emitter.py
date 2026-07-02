@@ -112,6 +112,10 @@ class ScanLog:
         # rolling content hash of every scan + event record, for G7.
         self._content_hash = hashlib.sha256()
         self._closed = False
+        # Worker-merge support (2026-07-02): per-worker content hashes folded
+        # into G7 order-independently. Empty for a plain single-process run.
+        self._worker_hashes: List[str] = []
+        self._is_worker = False
 
     # -- construction --------------------------------------------------------
 
@@ -137,6 +141,65 @@ class ScanLog:
             json.dump(manifest, f, indent=2, default=str)
         set_active(sl)
         return sl
+
+    @classmethod
+    def begin_worker(cls, out_dir: Path) -> "ScanLog":
+        """Start a WORKER emitter (2026-07-02 fix). ProcessPoolExecutor workers
+        get a fresh interpreter where no ScanLog is active, so every scan /
+        event / condition emitted by the replay walk was silently swallowed by
+        the NullScanLog — G2 and G8 passed vacuously (0 == 0) and worker-raised
+        FAIL conditions (e.g. ALERT_LOOKAHEAD_BLOCKED) never reached G4. A
+        worker emitter writes real records into its own subdir (unique per
+        pair, so no file contention) and the parent folds them back in via
+        merge_worker(). No manifest is written — the parent owns it."""
+        sl = cls(out_dir)
+        sl._is_worker = True
+        set_active(sl)
+        return sl
+
+    def worker_summary(self) -> Dict[str, Any]:
+        """Counters + artifact location for the parent merge. Call after
+        close() so the jsonl files are flushed and readable."""
+        return {
+            "run_dir": str(self.run_dir),
+            "condition_counts": dict(self.condition_counts),
+            "event_counts": dict(self.event_counts),
+            "outcome_counts": dict(self.outcome_counts),
+            "expected_scan_records": dict(self.expected_scan_records),
+            "actual_scan_records": dict(self.actual_scan_records),
+            "post_warmup_bars": dict(self.post_warmup_bars),
+            "nan_atr_skips": dict(self.nan_atr_skips),
+            "content_hash": self._content_hash.hexdigest(),
+        }
+
+    def merge_worker(self, summary: Dict[str, Any]) -> None:
+        """Fold one worker's output into this parent emitter: counters are
+        ADDED, the worker's scan/event lines are appended to the parent files
+        (each record was already validated at write time in the worker), and
+        the worker's content hash is folded into G7 order-independently (see
+        content_hash). Worker files are deleted after the merge so the run dir
+        keeps the canonical single scan_log.jsonl / events.jsonl pair."""
+        for attr in ("condition_counts", "event_counts", "outcome_counts",
+                     "actual_scan_records", "post_warmup_bars",
+                     "nan_atr_skips"):
+            getattr(self, attr).update(Counter(summary.get(attr) or {}))
+        for pair, n in (summary.get("expected_scan_records") or {}).items():
+            self.expected_scan_records[pair] = (
+                self.expected_scan_records.get(pair, 0) + int(n))
+        wdir = Path(summary["run_dir"])
+        for name, fh in (("scan_log.jsonl", self._scan_f),
+                         ("events.jsonl", self._events_f)):
+            src = wdir / name
+            if src.exists():
+                with open(src, "r", encoding="utf-8") as f:
+                    for line in f:
+                        fh.write(line)
+                src.unlink()
+        try:
+            wdir.rmdir()
+        except OSError:
+            pass  # non-empty or locked (OneDrive) — harmless leftovers
+        self._worker_hashes.append(str(summary.get("content_hash") or ""))
 
     # -- helpers -------------------------------------------------------------
 
@@ -238,7 +301,17 @@ class ScanLog:
     # -- finalisation --------------------------------------------------------
 
     def content_hash(self) -> str:
-        return self._content_hash.hexdigest()
+        """G7 determinism stamp. When workers were merged, their per-worker
+        hashes are folded in SORTED order so the combined hash is independent
+        of worker completion order — two runs over identical data produce
+        identical stamps regardless of scheduling."""
+        h = self._content_hash.hexdigest()
+        if not self._worker_hashes:
+            return h
+        comb = hashlib.sha256(h.encode("utf-8"))
+        for wh in sorted(self._worker_hashes):
+            comb.update(wh.encode("utf-8"))
+        return comb.hexdigest()
 
     def flush(self) -> None:
         self._scan_f.flush()
