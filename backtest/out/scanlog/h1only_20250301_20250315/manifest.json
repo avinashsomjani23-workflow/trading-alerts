@@ -1,8 +1,8 @@
 {
   "run_id": "h1only_20250301_20250315",
   "schema_version": "1.0.0",
-  "generated_utc": "2026-06-30T14:30:46.250287+00:00",
-  "git_sha": "1aae235",
+  "generated_utc": "2026-07-02T06:23:05.991246+00:00",
+  "git_sha": "e0dfaf6",
   "risk_usd": 250.0,
   "min_warmup_bars": 50,
   "fetch_pad_days": 35,

@@ -3,14 +3,14 @@
   "overall": "PASS",
   "exit_code": 0,
   "warnings_present": false,
-  "headline_pnl_usd": 0.0,
-  "live_proximal_headline_usd": 0.0,
+  "headline_pnl_usd": -250.0,
+  "live_proximal_headline_usd": -250.0,
   "study_fifty_pct_headline_usd": 0.0,
-  "content_hash": "8e0497e8f3ee267089d3e7044b2641f81b13d2dc9765cbae9a792fb38ca1768a",
+  "content_hash": "d07167798fb6eee757e609896e0fbb78642982ade1a59226690253e64b60443d",
   "condition_counts": {},
   "event_counts": {
-    "trade_fill": 3,
-    "trade_exit": 6
+    "trade_fill": 4,
+    "trade_exit": 7
   },
   "outcome_counts": {},
   "gates": [
@@ -19,8 +19,8 @@
       "description": "Sum pnl_usd == Sum r_realised*risk, and equals reporting headline",
       "threshold": "rel_tol 1e-09",
       "observed": {
-        "headline_usd": 0.0,
-        "reported": 0.0,
+        "headline_usd": -250.0,
+        "reported": -250.0,
         "row_mismatches": 0
       },
       "verdict": "PASS"
@@ -38,7 +38,7 @@
     },
     {
       "id": "G3",
-      "description": "ob<=bos<alert<fill and fill>=alert+1h on every filled trade",
+      "description": "ob<=bos<alert<=fill on every filled trade (fill on the alert candle allowed)",
       "threshold": "strict inequalities",
       "observed": {
         "violations": 0,
@@ -65,8 +65,8 @@
       "description": "headline recomputed from r_realised only; tp1/tp2 excluded",
       "threshold": "independent recompute",
       "observed": {
-        "realised_headline": 0.0,
-        "tp2_headline_for_contrast": -500.0
+        "realised_headline": -250.0,
+        "tp2_headline_for_contrast": -750.0
       },
       "verdict": "PASS"
     },
@@ -74,7 +74,7 @@
       "id": "G7",
       "description": "content hash of scan_log + events recorded for re-run compare",
       "threshold": "recorded",
-      "observed": "8e0497e8f3ee267089d3e7044b2641f81b13d2dc9765cbae9a792fb38ca1768a",
+      "observed": "d07167798fb6eee757e609896e0fbb78642982ade1a59226690253e64b60443d",
       "verdict": "PASS"
     },
     {

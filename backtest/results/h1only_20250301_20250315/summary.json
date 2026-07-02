@@ -9,7 +9,7 @@
     "pairs": [
       "EURUSD"
     ],
-    "generated_utc": "2026-06-30T14:31:09.772049+00:00",
+    "generated_utc": "2026-07-02T06:23:19.163133+00:00",
     "news_coverage": {
       "ff": false
     },
@@ -28,79 +28,79 @@
     }
   },
   "risk_per_trade_usd": 250.0,
-  "total_trade_rows": 5,
+  "total_trade_rows": 6,
   "fill_rate_proximal": {
-    "alerts": 5,
-    "filled": 2,
-    "fill_rate_pct": 40.0
+    "alerts": 6,
+    "filled": 3,
+    "fill_rate_pct": 50.0
   },
   "exit_reason_counts_proximal": {
-    "sl": 2,
+    "sl": 3,
     "never_filled": 3
   },
   "scoreboards": {
     "proximal_realised": {
-      "trades": 2,
+      "trades": 3,
       "wins": 0,
-      "losses": 0,
+      "losses": 1,
       "breakevens": 2,
-      "win_rate_pct": null,
-      "expectancy_r": 0.0,
-      "expectancy_usd": 0.0,
-      "total_r": 0.0,
-      "total_pnl_usd": 0.0,
+      "win_rate_pct": 0.0,
+      "expectancy_r": -0.333,
+      "expectancy_usd": -83.33,
+      "total_r": -1.0,
+      "total_pnl_usd": -250.0,
       "avg_win_r": 0.0,
-      "avg_loss_r": 0.0,
+      "avg_loss_r": -1.0,
       "avg_win_usd": 0.0,
-      "avg_loss_usd": 0.0,
+      "avg_loss_usd": -250.0,
       "avg_mfe_r": 0,
-      "avg_mae_r": 0,
+      "avg_mae_r": -0.302,
       "win_capture_pct": 0
     },
     "proximal_exit_tp1": {
-      "trades": 2,
+      "trades": 3,
       "wins": 0,
-      "losses": 2,
+      "losses": 3,
       "breakevens": 0,
       "win_rate_pct": 0.0,
       "expectancy_r": -1.0,
       "expectancy_usd": -250.0,
-      "total_r": -2.0,
-      "total_pnl_usd": -500.0,
+      "total_r": -3.0,
+      "total_pnl_usd": -750.0,
       "avg_win_r": 0.0,
       "avg_loss_r": -1.0,
       "avg_win_usd": 0.0,
       "avg_loss_usd": -250.0,
       "avg_mfe_r": 0,
-      "avg_mae_r": -0.076,
+      "avg_mae_r": -0.151,
       "win_capture_pct": 0
     },
     "proximal_exit_tp2": {
-      "trades": 2,
+      "trades": 3,
       "wins": 0,
-      "losses": 2,
+      "losses": 3,
       "breakevens": 0,
       "win_rate_pct": 0.0,
       "expectancy_r": -1.0,
       "expectancy_usd": -250.0,
-      "total_r": -2.0,
-      "total_pnl_usd": -500.0,
+      "total_r": -3.0,
+      "total_pnl_usd": -750.0,
       "avg_win_r": 0.0,
       "avg_loss_r": -1.0,
       "avg_win_usd": 0.0,
       "avg_loss_usd": -250.0,
       "avg_mfe_r": 0,
-      "avg_mae_r": -0.076,
+      "avg_mae_r": -0.151,
       "win_capture_pct": 0
     }
   },
   "per_pair_proximal_realised": [
     {
       "pair": "EURUSD",
-      "trades": 2,
-      "win_rate_pct": null,
-      "expectancy_r": 0.0,
-      "total_pnl_usd": 0.0
+      "trades": 3,
+      "win_rate_pct": 0.0,
+      "expectancy_r": -0.333,
+      "total_pnl_usd": -250.0
     }
   ],
   "per_session_proximal_realised": [
@@ -117,6 +117,13 @@
       "win_rate_pct": null,
       "expectancy_r": 0.0,
       "total_pnl_usd": 0.0
+    },
+    {
+      "session": "NY",
+      "trades": 1,
+      "win_rate_pct": 0.0,
+      "expectancy_r": -1.0,
+      "total_pnl_usd": -250.0
     }
   ],
   "score_buckets_proximal_realised": [
@@ -128,9 +135,9 @@
     },
     {
       "score_bucket": "7+",
-      "trades": 1,
-      "win_rate_pct": null,
-      "expectancy_r": 0.0
+      "trades": 2,
+      "win_rate_pct": 0.0,
+      "expectancy_r": -0.5
     }
   ],
   "news_blocked_trade_rows": 0,
@@ -143,8 +150,10 @@
     "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
   },
   "score_floor": 4.0,
-  "below_score_floor_trade_rows": 1,
-  "below_score_floor_audit": [
+  "below_score_floor_trade_rows": 0,
+  "below_score_floor_audit": [],
+  "ist_blocked_trade_rows": 1,
+  "ist_blocked_audit": [
     {
       "pair": "EURUSD",
       "alert_ts": "2025-03-14T03:00:00+00:00",
@@ -153,8 +162,6 @@
       "would_have_r": -1.0
     }
   ],
-  "ist_blocked_trade_rows": 0,
-  "ist_blocked_audit": [],
   "by_group": {
     "forex": {
       "label": "Original (FX majors + Gold)",
@@ -163,64 +170,64 @@
       ],
       "scoreboards": {
         "proximal_realised": {
-          "trades": 2,
+          "trades": 3,
           "wins": 0,
-          "losses": 0,
+          "losses": 1,
           "breakevens": 2,
-          "win_rate_pct": null,
-          "expectancy_r": 0.0,
-          "expectancy_usd": 0.0,
-          "total_r": 0.0,
-          "total_pnl_usd": 0.0,
+          "win_rate_pct": 0.0,
+          "expectancy_r": -0.333,
+          "expectancy_usd": -83.33,
+          "total_r": -1.0,
+          "total_pnl_usd": -250.0,
           "avg_win_r": 0.0,
-          "avg_loss_r": 0.0,
+          "avg_loss_r": -1.0,
           "avg_win_usd": 0.0,
-          "avg_loss_usd": 0.0,
+          "avg_loss_usd": -250.0,
           "avg_mfe_r": 0,
-          "avg_mae_r": 0,
+          "avg_mae_r": -0.302,
           "win_capture_pct": 0
         },
         "proximal_exit_tp1": {
-          "trades": 2,
+          "trades": 3,
           "wins": 0,
-          "losses": 2,
+          "losses": 3,
           "breakevens": 0,
           "win_rate_pct": 0.0,
           "expectancy_r": -1.0,
           "expectancy_usd": -250.0,
-          "total_r": -2.0,
-          "total_pnl_usd": -500.0,
+          "total_r": -3.0,
+          "total_pnl_usd": -750.0,
           "avg_win_r": 0.0,
           "avg_loss_r": -1.0,
           "avg_win_usd": 0.0,
           "avg_loss_usd": -250.0,
           "avg_mfe_r": 0,
-          "avg_mae_r": -0.076,
+          "avg_mae_r": -0.151,
           "win_capture_pct": 0
         },
         "proximal_exit_tp2": {
-          "trades": 2,
+          "trades": 3,
           "wins": 0,
-          "losses": 2,
+          "losses": 3,
           "breakevens": 0,
           "win_rate_pct": 0.0,
           "expectancy_r": -1.0,
           "expectancy_usd": -250.0,
-          "total_r": -2.0,
-          "total_pnl_usd": -500.0,
+          "total_r": -3.0,
+          "total_pnl_usd": -750.0,
           "avg_win_r": 0.0,
           "avg_loss_r": -1.0,
           "avg_win_usd": 0.0,
           "avg_loss_usd": -250.0,
           "avg_mfe_r": 0,
-          "avg_mae_r": -0.076,
+          "avg_mae_r": -0.151,
           "win_capture_pct": 0
         }
       },
       "fill_rate_proximal": {
-        "alerts": 5,
-        "filled": 2,
-        "fill_rate_pct": 40.0
+        "alerts": 6,
+        "filled": 3,
+        "fill_rate_pct": 50.0
       },
       "news_blocked_trade_rows": 0,
       "ist_blocked_trade_rows": 0,

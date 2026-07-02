@@ -1,14 +1,14 @@
 # Backtest Registry
 
-*Last updated: 2026-07-01 20:12 UTC*
+*Last updated: 2026-07-02 06:23 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
 - Runs completed: **27** of 27
-- Total filled trades across all runs: **2600**
-- Average expectancy across runs: **-0.10R**
+- Total filled trades across all runs: **2601**
+- Average expectancy across runs: **-0.12R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
 - **Group 3 (Live-era):** 1 runs, 9 trades, avg expectancy -0.20R
@@ -652,19 +652,19 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 | Metric | Value |
 |--------|-------|
-| Filled trades | 2 (of 5 rows) |
-| Win rate | — |
-| Expectancy | +0.00R |
-| Max drawdown | +0.00R |
-| Longest losing streak | 0 trades |
-| Proximal fill rate | 40.0% |
+| Filled trades | 3 (of 6 rows) |
+| Win rate | 0.0% |
+| Expectancy | -0.33R |
+| Max drawdown | +1.00R |
+| Longest losing streak | 1 trades |
+| Proximal fill rate | 50.0% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
 
 | Pair | Trades | Win rate | Expectancy |
 |------|--------|----------|------------|
-| EURUSD | 2 | — | +0.00R |
+| EURUSD | 3 | 0.0% | -0.33R |
 
 **By session:**
 
@@ -672,13 +672,14 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 |---------|--------|----------|------------|
 | Asia | 1 | — | +0.00R |
 | London | 1 | — | +0.00R |
+| NY | 1 | 0.0% | -1.00R |
 
 **Score vs outcome:**
 
 | Score bucket | Trades | Win rate | Expectancy |
 |-------------|--------|----------|------------|
 | 4-5 | 1 | — | +0.00R |
-| 7+ | 1 | — | +0.00R |
+| 7+ | 2 | 0.0% | -0.50R |
 
 ---
 
