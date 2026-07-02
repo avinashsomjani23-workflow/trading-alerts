@@ -7,578 +7,435 @@
     "regime_label": null,
     "mode": "h1_only",
     "pairs": [
-      "BTCUSD"
+      "EURUSD",
+      "GOLD"
     ],
-    "generated_utc": "2026-06-26T12:59:22.022982+00:00",
+    "generated_utc": "2026-07-02T06:57:14.000218+00:00",
     "news_coverage": {
       "ff": false
     },
     "news_events_fetched": 0,
     "news_blocked_rows": 0,
     "news_window_minutes": 30,
-    "ist_blocked_rows": 42,
+    "ist_blocked_rows": 24,
     "ist_window_forex": "UTC 03:30-18:30 (IST 09:00-24:00)",
     "ist_window_index": "UTC 03:30-18:30 (IST 09:00-24:00)",
-    "killzone_dropped_alerts": 57,
+    "killzone_dropped_alerts": 59,
     "killzone_drops_by_pair": {
-      "BTCUSD": 57
+      "EURUSD": 30,
+      "GOLD": 29
     },
     "killzone_windows_by_pair": {
-      "BTCUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York"
+      "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "GOLD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
     }
   },
   "risk_per_trade_usd": 250.0,
-  "total_trade_rows": 91,
+  "total_trade_rows": 94,
   "fill_rate_proximal": {
-    "alerts": 46,
-    "filled": 26,
-    "fill_rate_pct": 56.5
-  },
-  "fill_rate_50pct": {
-    "alerts": 45,
-    "filled": 23,
-    "fill_rate_pct": 51.1
+    "alerts": 94,
+    "filled": 59,
+    "fill_rate_pct": 62.8
   },
   "exit_reason_counts_proximal": {
-    "friday_flat": 3,
-    "never_filled": 20,
-    "sl": 15,
-    "tp1": 8
-  },
-  "exit_reason_counts_50pct": {
-    "never_filled": 22,
-    "sl": 20,
-    "tp1": 3
+    "sl": 37,
+    "never_filled": 35,
+    "tp1": 19,
+    "friday_flat": 3
   },
   "scoreboards": {
     "proximal_realised": {
-      "trades": 26,
-      "wins": 10,
-      "losses": 11,
-      "breakevens": 5,
-      "win_rate_pct": 47.6,
-      "expectancy_r": 0.182,
-      "expectancy_usd": 45.54,
-      "total_r": 4.736,
-      "total_pnl_usd": 1184.0,
-      "avg_win_r": 1.508,
-      "avg_loss_r": -0.94,
-      "avg_win_usd": 377.0,
-      "avg_loss_usd": -235.0,
-      "avg_mfe_r": 2.932,
-      "avg_mae_r": -1.635,
-      "win_capture_pct": 51.0
+      "trades": 59,
+      "wins": 21,
+      "losses": 26,
+      "breakevens": 12,
+      "win_rate_pct": 44.7,
+      "expectancy_r": 0.15,
+      "expectancy_usd": 37.42,
+      "total_r": 8.832,
+      "total_pnl_usd": 2208.0,
+      "avg_win_r": 1.613,
+      "avg_loss_r": -0.963,
+      "avg_win_usd": 403.0,
+      "avg_loss_usd": -241.0,
+      "avg_mfe_r": 2.587,
+      "avg_mae_r": -0.455,
+      "win_capture_pct": 62.0
     },
     "proximal_exit_tp1": {
-      "trades": 26,
-      "wins": 11,
-      "losses": 15,
+      "trades": 59,
+      "wins": 23,
+      "losses": 36,
       "breakevens": 0,
-      "win_rate_pct": 42.3,
-      "expectancy_r": 0.208,
-      "expectancy_usd": 52.12,
-      "total_r": 5.42,
-      "total_pnl_usd": 1355.0,
-      "avg_win_r": 1.856,
+      "win_rate_pct": 39.0,
+      "expectancy_r": 0.099,
+      "expectancy_usd": 24.74,
+      "total_r": 5.839,
+      "total_pnl_usd": 1459.75,
+      "avg_win_r": 1.819,
       "avg_loss_r": -1.0,
-      "avg_win_usd": 464.0,
+      "avg_win_usd": 455.0,
       "avg_loss_usd": -250.0,
-      "avg_mfe_r": 3.037,
-      "avg_mae_r": -1.323,
-      "win_capture_pct": 61.0
+      "avg_mfe_r": 2.634,
+      "avg_mae_r": -0.456,
+      "win_capture_pct": 69.0
     },
     "proximal_exit_tp2": {
-      "trades": 26,
-      "wins": 2,
-      "losses": 15,
-      "breakevens": 9,
-      "win_rate_pct": 11.8,
-      "expectancy_r": -0.45,
-      "expectancy_usd": -112.49,
-      "total_r": -11.699,
-      "total_pnl_usd": -2924.75,
-      "avg_win_r": 1.65,
-      "avg_loss_r": -1.0,
-      "avg_win_usd": 413.0,
-      "avg_loss_usd": -250.0,
-      "avg_mfe_r": 2.523,
-      "avg_mae_r": -1.323,
-      "win_capture_pct": 65.0
-    },
-    "fifty_pct_realised": {
-      "trades": 23,
-      "wins": 3,
-      "losses": 13,
-      "breakevens": 7,
-      "win_rate_pct": 18.8,
-      "expectancy_r": -0.082,
-      "expectancy_usd": -20.57,
-      "total_r": -1.892,
-      "total_pnl_usd": -473.0,
-      "avg_win_r": 3.703,
-      "avg_loss_r": -1.0,
-      "avg_win_usd": 926.0,
-      "avg_loss_usd": -250.0,
-      "avg_mfe_r": 8.356,
-      "avg_mae_r": -2.453,
-      "win_capture_pct": 44.0
-    },
-    "fifty_pct_exit_tp1": {
-      "trades": 23,
-      "wins": 5,
-      "losses": 18,
-      "breakevens": 0,
+      "trades": 59,
+      "wins": 10,
+      "losses": 36,
+      "breakevens": 13,
       "win_rate_pct": 21.7,
-      "expectancy_r": 0.116,
-      "expectancy_usd": 28.98,
-      "total_r": 2.666,
-      "total_pnl_usd": 666.5,
-      "avg_win_r": 4.133,
+      "expectancy_r": 0.037,
+      "expectancy_usd": 9.19,
+      "total_r": 2.168,
+      "total_pnl_usd": 542.0,
+      "avg_win_r": 3.817,
       "avg_loss_r": -1.0,
-      "avg_win_usd": 1033.0,
+      "avg_win_usd": 954.0,
       "avg_loss_usd": -250.0,
-      "avg_mfe_r": 6.763,
-      "avg_mae_r": -1.999,
-      "win_capture_pct": 61.0
-    },
-    "fifty_pct_exit_tp2": {
-      "trades": 23,
-      "wins": 1,
-      "losses": 18,
-      "breakevens": 4,
-      "win_rate_pct": 5.3,
-      "expectancy_r": -0.653,
-      "expectancy_usd": -163.29,
-      "total_r": -15.023,
-      "total_pnl_usd": -3755.75,
-      "avg_win_r": 2.977,
-      "avg_loss_r": -1.0,
-      "avg_win_usd": 744.0,
-      "avg_loss_usd": -250.0,
-      "avg_mfe_r": 5.616,
-      "avg_mae_r": -1.999,
-      "win_capture_pct": 53.0
+      "avg_mfe_r": 2.833,
+      "avg_mae_r": -0.456,
+      "win_capture_pct": 135.0
     }
   },
   "per_pair_proximal_realised": [
     {
-      "pair": "BTCUSD",
-      "trades": 26,
-      "win_rate_pct": 47.6,
-      "expectancy_r": 0.182,
-      "total_pnl_usd": 1184.0
-    }
-  ],
-  "per_pair_50pct_realised": [
+      "pair": "GOLD",
+      "trades": 29,
+      "win_rate_pct": 56.5,
+      "expectancy_r": 0.416,
+      "total_pnl_usd": 3012.75
+    },
     {
-      "pair": "BTCUSD",
-      "trades": 23,
-      "win_rate_pct": 18.8,
-      "expectancy_r": -0.082,
-      "total_pnl_usd": -473.0
+      "pair": "EURUSD",
+      "trades": 30,
+      "win_rate_pct": 33.3,
+      "expectancy_r": -0.107,
+      "total_pnl_usd": -804.75
     }
   ],
   "per_session_proximal_realised": [
     {
-      "session": "London",
+      "session": "Asia",
       "trades": 11,
-      "win_rate_pct": 77.8,
-      "expectancy_r": 1.039,
-      "total_pnl_usd": 2856.5
+      "win_rate_pct": 30.0,
+      "expectancy_r": -0.177,
+      "total_pnl_usd": -486.25
     },
-    {
-      "session": "NY",
-      "trades": 15,
-      "win_rate_pct": 25.0,
-      "expectancy_r": -0.446,
-      "total_pnl_usd": -1672.5
-    }
-  ],
-  "per_session_50pct_realised": [
     {
       "session": "London",
-      "trades": 9,
-      "win_rate_pct": 37.5,
-      "expectancy_r": 0.679,
-      "total_pnl_usd": 1527.0
+      "trades": 23,
+      "win_rate_pct": 40.0,
+      "expectancy_r": 0.095,
+      "total_pnl_usd": 548.25
     },
     {
       "session": "NY",
-      "trades": 14,
-      "win_rate_pct": 0.0,
-      "expectancy_r": -0.571,
-      "total_pnl_usd": -2000.0
+      "trades": 25,
+      "win_rate_pct": 54.5,
+      "expectancy_r": 0.343,
+      "total_pnl_usd": 2146.0
     }
   ],
   "score_buckets_proximal_realised": [
     {
+      "score_bucket": "2-3",
+      "trades": 1,
+      "win_rate_pct": null,
+      "expectancy_r": 0.0
+    },
+    {
+      "score_bucket": "3-4",
+      "trades": 2,
+      "win_rate_pct": 50.0,
+      "expectancy_r": 0.657
+    },
+    {
       "score_bucket": "4-5",
-      "trades": 7,
-      "win_rate_pct": 80.0,
-      "expectancy_r": 0.782
+      "trades": 6,
+      "win_rate_pct": 66.7,
+      "expectancy_r": 0.965
     },
     {
       "score_bucket": "5-6",
-      "trades": 4,
-      "win_rate_pct": 33.3,
-      "expectancy_r": -0.484
+      "trades": 17,
+      "win_rate_pct": 61.5,
+      "expectancy_r": 0.542
     },
     {
       "score_bucket": "6-7",
-      "trades": 10,
-      "win_rate_pct": 44.4,
-      "expectancy_r": 0.024
+      "trades": 17,
+      "win_rate_pct": 50.0,
+      "expectancy_r": 0.058
     },
     {
       "score_bucket": "7+",
-      "trades": 5,
-      "win_rate_pct": 25.0,
-      "expectancy_r": 0.19
-    }
-  ],
-  "score_buckets_50pct_realised": [
-    {
-      "score_bucket": "4-5",
-      "trades": 7,
-      "win_rate_pct": 33.3,
-      "expectancy_r": 0.541
-    },
-    {
-      "score_bucket": "5-6",
-      "trades": 3,
-      "win_rate_pct": 0.0,
-      "expectancy_r": -0.667
-    },
-    {
-      "score_bucket": "6-7",
-      "trades": 8,
-      "win_rate_pct": 20.0,
-      "expectancy_r": -0.085
-    },
-    {
-      "score_bucket": "7+",
-      "trades": 5,
-      "win_rate_pct": 0.0,
-      "expectancy_r": -0.6
+      "trades": 16,
+      "win_rate_pct": 8.3,
+      "expectancy_r": -0.529
     }
   ],
   "news_blocked_trade_rows": 0,
   "news_blocked_audit": [],
-  "killzone_dropped_alerts": 57,
+  "killzone_dropped_alerts": 59,
   "killzone_drops_by_pair": {
-    "BTCUSD": 57
+    "EURUSD": 30,
+    "GOLD": 29
   },
   "killzone_windows_by_pair": {
-    "BTCUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York"
+    "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "GOLD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
   },
   "score_floor": 4.0,
-  "below_score_floor_trade_rows": 10,
-  "below_score_floor_audit": [
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-01-16T08:00:00+00:00",
-      "score": 3.5,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-02-03T02:00:00+00:00",
-      "score": 3.5,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-02-14T08:00:00+00:00",
-      "score": 3.5,
-      "exit_reason": "sl",
-      "would_have_r": 0.0
-    },
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-02-18T15:00:00+00:00",
-      "score": 3.5,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-03-19T19:00:00+00:00",
-      "score": 3.5,
-      "exit_reason": "sl",
-      "would_have_r": 0.0
-    }
-  ],
-  "ist_blocked_trade_rows": 38,
+  "below_score_floor_trade_rows": 0,
+  "below_score_floor_audit": [],
+  "ist_blocked_trade_rows": 24,
   "ist_blocked_audit": [
     {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-01-04T21:00:00+00:00",
-      "score": 4.0,
+      "pair": "EURUSD",
+      "alert_ts": "2025-01-02T03:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-01-21T01:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-01-24T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-01-24T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-01-24T03:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-01-28T00:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-02-04T23:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-02-11T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-02-17T21:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-03-14T03:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-03-26T22:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-01-01T23:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-01-01T23:00:00+00:00",
+      "score": 5.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-01-02T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-01-10T19:00:00+00:00",
+      "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": 0.0
     },
     {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-01-11T22:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-01-17T02:00:00+00:00",
+      "pair": "GOLD",
+      "alert_ts": "2025-01-21T02:00:00+00:00",
       "score": 4.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
     {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-01-19T20:00:00+00:00",
-      "score": 5.2,
+      "pair": "GOLD",
+      "alert_ts": "2025-01-28T23:00:00+00:00",
+      "score": 7.0,
       "exit_reason": "sl",
-      "would_have_r": -1.0
+      "would_have_r": 0.0
     },
     {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-01-19T23:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-01-27T00:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-01-28T22:00:00+00:00",
-      "score": 7.7,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "BTCUSD",
+      "pair": "GOLD",
       "alert_ts": "2025-01-31T19:00:00+00:00",
       "score": 5.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
+      "exit_reason": "sl",
+      "would_have_r": -1.0
     },
     {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-02-01T23:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "tp1",
-      "would_have_r": 1.517
-    },
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-02-04T22:00:00+00:00",
+      "pair": "GOLD",
+      "alert_ts": "2025-02-03T02:00:00+00:00",
       "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-02-11T00:00:00+00:00",
+      "score": 3.0,
       "exit_reason": "tp1",
-      "would_have_r": 1.47
+      "would_have_r": 0.956
     },
     {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-02-05T19:00:00+00:00",
-      "score": 5.0,
+      "pair": "GOLD",
+      "alert_ts": "2025-02-17T02:00:00+00:00",
+      "score": 8.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
     {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-02-07T21:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "BTCUSD",
+      "pair": "GOLD",
       "alert_ts": "2025-02-24T23:00:00+00:00",
-      "score": 4.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-02-28T02:00:00+00:00",
-      "score": 4.0,
+      "score": 3.5,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
     {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-03-04T02:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-03-07T01:00:00+00:00",
+      "pair": "GOLD",
+      "alert_ts": "2025-03-19T19:00:00+00:00",
       "score": 4.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
     {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-03-11T19:00:00+00:00",
-      "score": 6.7,
-      "exit_reason": "sl",
-      "would_have_r": 0.0
-    },
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-03-11T21:00:00+00:00",
-      "score": 6.7,
-      "exit_reason": "sl",
-      "would_have_r": 0.0
-    },
-    {
-      "pair": "BTCUSD",
-      "alert_ts": "2025-03-24T00:00:00+00:00",
+      "pair": "GOLD",
+      "alert_ts": "2025-03-28T02:00:00+00:00",
       "score": 6.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     }
   ],
   "by_group": {
-    "gold_nas": {
-      "label": "New (new FX + BTC + NAS100)",
+    "forex": {
+      "label": "Original (FX majors + Gold)",
       "pairs": [
-        "BTCUSD"
+        "EURUSD",
+        "GOLD"
       ],
       "scoreboards": {
         "proximal_realised": {
-          "trades": 26,
-          "wins": 10,
-          "losses": 11,
-          "breakevens": 5,
-          "win_rate_pct": 47.6,
-          "expectancy_r": 0.182,
-          "expectancy_usd": 45.54,
-          "total_r": 4.736,
-          "total_pnl_usd": 1184.0,
-          "avg_win_r": 1.508,
-          "avg_loss_r": -0.94,
-          "avg_win_usd": 377.0,
-          "avg_loss_usd": -235.0,
-          "avg_mfe_r": 2.932,
-          "avg_mae_r": -1.635,
-          "win_capture_pct": 51.0
+          "trades": 59,
+          "wins": 21,
+          "losses": 26,
+          "breakevens": 12,
+          "win_rate_pct": 44.7,
+          "expectancy_r": 0.15,
+          "expectancy_usd": 37.42,
+          "total_r": 8.832,
+          "total_pnl_usd": 2208.0,
+          "avg_win_r": 1.613,
+          "avg_loss_r": -0.963,
+          "avg_win_usd": 403.0,
+          "avg_loss_usd": -241.0,
+          "avg_mfe_r": 2.587,
+          "avg_mae_r": -0.455,
+          "win_capture_pct": 62.0
         },
         "proximal_exit_tp1": {
-          "trades": 26,
-          "wins": 11,
-          "losses": 15,
+          "trades": 59,
+          "wins": 23,
+          "losses": 36,
           "breakevens": 0,
-          "win_rate_pct": 42.3,
-          "expectancy_r": 0.208,
-          "expectancy_usd": 52.12,
-          "total_r": 5.42,
-          "total_pnl_usd": 1355.0,
-          "avg_win_r": 1.856,
+          "win_rate_pct": 39.0,
+          "expectancy_r": 0.099,
+          "expectancy_usd": 24.74,
+          "total_r": 5.839,
+          "total_pnl_usd": 1459.75,
+          "avg_win_r": 1.819,
           "avg_loss_r": -1.0,
-          "avg_win_usd": 464.0,
+          "avg_win_usd": 455.0,
           "avg_loss_usd": -250.0,
-          "avg_mfe_r": 3.037,
-          "avg_mae_r": -1.323,
-          "win_capture_pct": 61.0
+          "avg_mfe_r": 2.634,
+          "avg_mae_r": -0.456,
+          "win_capture_pct": 69.0
         },
         "proximal_exit_tp2": {
-          "trades": 26,
-          "wins": 2,
-          "losses": 15,
-          "breakevens": 9,
-          "win_rate_pct": 11.8,
-          "expectancy_r": -0.45,
-          "expectancy_usd": -112.49,
-          "total_r": -11.699,
-          "total_pnl_usd": -2924.75,
-          "avg_win_r": 1.65,
-          "avg_loss_r": -1.0,
-          "avg_win_usd": 413.0,
-          "avg_loss_usd": -250.0,
-          "avg_mfe_r": 2.523,
-          "avg_mae_r": -1.323,
-          "win_capture_pct": 65.0
-        },
-        "fifty_pct_realised": {
-          "trades": 23,
-          "wins": 3,
-          "losses": 13,
-          "breakevens": 7,
-          "win_rate_pct": 18.8,
-          "expectancy_r": -0.082,
-          "expectancy_usd": -20.57,
-          "total_r": -1.892,
-          "total_pnl_usd": -473.0,
-          "avg_win_r": 3.703,
-          "avg_loss_r": -1.0,
-          "avg_win_usd": 926.0,
-          "avg_loss_usd": -250.0,
-          "avg_mfe_r": 8.356,
-          "avg_mae_r": -2.453,
-          "win_capture_pct": 44.0
-        },
-        "fifty_pct_exit_tp1": {
-          "trades": 23,
-          "wins": 5,
-          "losses": 18,
-          "breakevens": 0,
+          "trades": 59,
+          "wins": 10,
+          "losses": 36,
+          "breakevens": 13,
           "win_rate_pct": 21.7,
-          "expectancy_r": 0.116,
-          "expectancy_usd": 28.98,
-          "total_r": 2.666,
-          "total_pnl_usd": 666.5,
-          "avg_win_r": 4.133,
+          "expectancy_r": 0.037,
+          "expectancy_usd": 9.19,
+          "total_r": 2.168,
+          "total_pnl_usd": 542.0,
+          "avg_win_r": 3.817,
           "avg_loss_r": -1.0,
-          "avg_win_usd": 1033.0,
+          "avg_win_usd": 954.0,
           "avg_loss_usd": -250.0,
-          "avg_mfe_r": 6.763,
-          "avg_mae_r": -1.999,
-          "win_capture_pct": 61.0
-        },
-        "fifty_pct_exit_tp2": {
-          "trades": 23,
-          "wins": 1,
-          "losses": 18,
-          "breakevens": 4,
-          "win_rate_pct": 5.3,
-          "expectancy_r": -0.653,
-          "expectancy_usd": -163.29,
-          "total_r": -15.023,
-          "total_pnl_usd": -3755.75,
-          "avg_win_r": 2.977,
-          "avg_loss_r": -1.0,
-          "avg_win_usd": 744.0,
-          "avg_loss_usd": -250.0,
-          "avg_mfe_r": 5.616,
-          "avg_mae_r": -1.999,
-          "win_capture_pct": 53.0
+          "avg_mfe_r": 2.833,
+          "avg_mae_r": -0.456,
+          "win_capture_pct": 135.0
         }
       },
       "fill_rate_proximal": {
-        "alerts": 46,
-        "filled": 26,
-        "fill_rate_pct": 56.5
-      },
-      "fill_rate_50pct": {
-        "alerts": 45,
-        "filled": 23,
-        "fill_rate_pct": 51.1
+        "alerts": 94,
+        "filled": 59,
+        "fill_rate_pct": 62.8
       },
       "news_blocked_trade_rows": 0,
       "ist_blocked_trade_rows": 0,
-      "killzone_dropped_alerts": 57,
+      "killzone_dropped_alerts": 59,
       "score_floor": 4.0,
       "below_score_floor_trade_rows": 0,
-      "html_file": "report_gold_nas.html",
-      "excel_file": "nas_xau_trades.xlsx"
+      "html_file": "report_forex.html",
+      "excel_file": "forex_trades.xlsx"
     }
   }
 }
