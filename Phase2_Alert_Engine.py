@@ -562,8 +562,12 @@ def fetch_macro_news(pair_name, news_ctx=None):
 _GEMINI_CACHE_PATH = os.path.join("state", "gemini_cache.json")
 
 
-def _gemini_cache_key(pair, bias, date_ist):
-    return f"{pair}|{bias}|{date_ist}"
+def _gemini_cache_key(pair, date_ist):
+    # Keyed on pair+day only — NOT bias. Bias can flip intraday as structure
+    # updates live; that's real trading logic and must keep moving freely.
+    # The macro cache is a separate concern (Gemini call-budget control) and
+    # must never gate on or react to bias.
+    return f"{pair}|{date_ist}"
 
 
 def _gemini_cache_load():
@@ -580,21 +584,21 @@ def _gemini_cache_save(cache, today_date_ist):
         print(f"  [GEMINI CACHE] write failed: {e}")
 
 
-def _gemini_cache_get(pair, bias, date_ist):
+def _gemini_cache_get(pair, date_ist):
     cache = _gemini_cache_load()
-    key = _gemini_cache_key(pair, bias, date_ist)
+    key = _gemini_cache_key(pair, date_ist)
     entry = cache.get(key)
     if entry and (entry.get("macro_summary") or entry.get("macro_unavailable")):
-        print(f"  [GEMINI] {pair} {bias}: cache hit for {date_ist}")
+        print(f"  [GEMINI] {pair}: cache hit for {date_ist}")
         return entry
     return None
 
 
-def _gemini_cache_set(pair, bias, date_ist, result):
+def _gemini_cache_set(pair, date_ist, result):
     if not result or (not result.get("macro_summary") and not result.get("macro_unavailable")):
         return
     cache = _gemini_cache_load()
-    key = _gemini_cache_key(pair, bias, date_ist)
+    key = _gemini_cache_key(pair, date_ist)
     cache[key] = result
     _gemini_cache_save(cache, date_ist)
 
@@ -602,8 +606,10 @@ def _gemini_cache_set(pair, bias, date_ist, result):
 def call_gemini_flash(pair, bias, news_headlines):
     date_ist = get_day_id_ist()
 
-    # Cache hit: same pair+bias+day already summarised — skip API call.
-    cached = _gemini_cache_get(pair, bias, date_ist)
+    # Cache hit: same pair+day already summarised — skip API call. Keyed on
+    # pair+day only (not bias) so a live bias flip never triggers a re-call;
+    # the cached briefing is reused as-is for the rest of the day.
+    cached = _gemini_cache_get(pair, date_ist)
     if cached is not None:
         return cached
 
@@ -643,7 +649,7 @@ def call_gemini_flash(pair, bias, news_headlines):
             r = resp.json()
             if "candidates" in r:
                 result = json.loads(r["candidates"][0]["content"]["parts"][0]["text"].strip())
-                _gemini_cache_set(pair, bias, date_ist, result)
+                _gemini_cache_set(pair, date_ist, result)
                 return result
 
             # No candidates -> the body always says why. Capture the real reason
@@ -688,7 +694,7 @@ def call_gemini_flash(pair, bias, news_headlines):
     # lets the email render a distinct "unavailable" banner.
     _log_gemini_failure(pair, last_err)
     failure = {"macro_summary": None, "macro_unavailable": True}
-    _gemini_cache_set(pair, bias, date_ist, failure)
+    _gemini_cache_set(pair, date_ist, failure)
     return failure
 
 
@@ -1534,21 +1540,36 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             )
         else:
             marker = ""
-        # Whole-day calendar list. Each row tagged with its own impact level;
-        # Medium rows rendered in orange, High rows in the default grey.
+        # Trading-day calendar list (09:00 IST -> 09:00 IST next day), NOT a
+        # calendar day. Each row tagged with its own impact level; Medium rows
+        # rendered in orange, High rows in the default grey. A divider is
+        # inserted before the first row that rolls into the next calendar day
+        # so it can't be misread as part of "today."
         if day_events:
-            rows = "".join(
-                '<div style="color:{0};">&#8226; {1} &middot; '
-                '{2} &middot; <b>{3}</b> &middot; {4}</div>'.format(
-                    '#bbb' if e.get('impact', '').lower() == 'high' else '#e67e22',
-                    _ist(e), e['currency'], e.get('impact', '').upper(),
-                    e.get('title', ''),
+            first_day = (day_events[0]['ts_utc'] + timedelta(hours=5, minutes=30)).date()
+            rows_parts = []
+            crossed = False
+            for e in day_events:
+                ist_date = (e['ts_utc'] + timedelta(hours=5, minutes=30)).date()
+                if not crossed and ist_date != first_day:
+                    rows_parts.append(
+                        '<div style="border-top:1px solid #333;margin:6px 0;'
+                        'padding-top:4px;color:#888;font-size:11px;">'
+                        '&#8629; rolls into next day (IST)</div>'
+                    )
+                    crossed = True
+                rows_parts.append(
+                    '<div style="color:{0};">&#8226; {1} &middot; '
+                    '{2} &middot; <b>{3}</b> &middot; {4}</div>'.format(
+                        '#bbb' if e.get('impact', '').lower() == 'high' else '#e67e22',
+                        _ist(e), e['currency'], e.get('impact', '').upper(),
+                        e.get('title', ''),
+                    )
                 )
-                for e in day_events
-            )
+            rows = "".join(rows_parts)
             day_block = (
-                '<div style="color:#9ad29a;margin-bottom:4px;">Today\'s '
-                'High/Medium-impact (IST):</div>' + rows
+                '<div style="color:#9ad29a;margin-bottom:4px;">Trading-day '
+                'High/Medium-impact, 09:00 IST&ndash;09:00 IST (IST):</div>' + rows
             )
         else:
             day_block = (

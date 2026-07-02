@@ -379,6 +379,77 @@ def score_validation(df: pd.DataFrame, r_col: str = "r_realised") -> Dict[str, A
 
 
 # ---------------------------------------------------------------------------
+# Setup badge validation (Phase 2 email banners — A+/First Pullback/Late-Trend
+# Chase). smc_detector.classify_setup output, logged per EDGE_ENGINE_HANDOFF.md
+# §3 "Setup badges". A banner name is a CLAIM, not a signal, until this runs.
+# ---------------------------------------------------------------------------
+
+def setup_badge_validation(df: pd.DataFrame, r_col: str = "r_realised") -> Dict[str, Any]:
+    """Bucket trades by setup_badge, test whether the badge predicts outcome.
+
+    Per-badge N/WR/expectancy/bootstrap CI, plus Spearman's rank correlation
+    between badge conviction (caution=-1, none=0, premium=+1) and r_realised —
+    the standing Stage-1 rule (EDGE_ENGINE_HANDOFF.md §4): any new insight must
+    clear this bar before it's trusted, same as the confidence score was.
+    """
+    f = _filled(df)
+    if f.empty or "setup_badge" not in f.columns:
+        return {"verdict": "insufficient data"}
+
+    f = f.copy()
+    f["setup_badge"] = f["setup_badge"].fillna("(none)")
+    kind_col = f["setup_badge_kind"] if "setup_badge_kind" in f.columns else pd.Series(
+        [None] * len(f), index=f.index)
+    _kind_rank = {"caution": -1, None: 0, "premium": 1}
+    f["_badge_rank"] = kind_col.map(lambda k: _kind_rank.get(k, 0))
+
+    buckets = []
+    for badge in f["setup_badge"].unique():
+        sub = f[f["setup_badge"] == badge]
+        if sub.empty:
+            continue
+        vals = sub[r_col].tolist()
+        ci_lo, ci_hi = bootstrap_ci(vals)
+        buckets.append({
+            "badge":        badge,
+            "n":            len(sub),
+            "win_rate_pct": win_rate_pct(sub, r_col),
+            "expectancy_r": round(float(sub[r_col].mean()), 3),
+            "ci_lo_95":     ci_lo,
+            "ci_hi_95":     ci_hi,
+        })
+    buckets.sort(key=lambda b: -b["n"])
+
+    n_badged = int((f["setup_badge"] != "(none)").sum())
+    if n_badged < 15 or f["_badge_rank"].nunique() < 2:
+        return {"verdict": "insufficient data (< 15 badged trades, or only one badge fired)",
+                "buckets": buckets}
+
+    if _HAS_SCIPY:
+        r_stat, p_val = _spearmanr(f["_badge_rank"], f[r_col])
+        r_stat, p_val = float(r_stat), float(p_val)
+    else:
+        r_stat = float(f["_badge_rank"].rank().corr(f[r_col].rank(), method="spearman"))
+        p_val = None
+
+    if p_val is not None and p_val < 0.05 and abs(r_stat) > 0.10:
+        verdict = "SIGNAL — badge rank correlates with outcome (p < 0.05)"
+    elif abs(r_stat) > 0.10:
+        verdict = "DIRECTIONAL, UNCONFIRMED — correlation present but not significant (p >= 0.05)"
+    else:
+        verdict = "NOISE — badge does not predict outcome"
+
+    return {
+        "spearman_r": round(r_stat, 3),
+        "p_value":    round(p_val, 4) if p_val is not None else None,
+        "n_badged":   n_badged,
+        "n_total":    len(f),
+        "buckets":    buckets,
+        "verdict":    verdict,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Group-by-group consistency
 # ---------------------------------------------------------------------------
 
@@ -599,3 +670,90 @@ def generate_verdict(
         "live_cells": [f"{c['pair']} × {c['session']} ({c['n']} trades, {_fmt_r(c['expectancy_r'])})"
                        for c in live_cells],
     }
+
+
+# ---------------------------------------------------------------------------
+# PEAK-vs-FILL GUARD  (hardcoded lesson — read the docstring before deleting)
+# ---------------------------------------------------------------------------
+# THE MISTAKE THIS EXISTS TO PREVENT (made twice, both cost trust):
+#   1. "47% of stop-outs reached +1R before stopping -> we leave money."
+#   2. "93% of trades reversed from +0.5R."
+# Both read a column that records where price *touched* (mfe_r / mae_r / any
+# "price reached level L" count) and treated that touch as an *outcome we could
+# have banked*. It is not. A touch is a peak on the path; banking it needs a
+# resting ORDER at L that fills BEFORE the stop, under the sim's pessimistic
+# same-bar rule (SL is checked first). When claim (1) was re-run with a REAL fixed
+# exit at +1R (exit_lab C_fullTP_1.0R, 2024-07..2025-06), 23.5% of live-stopped
+# trades booked +1R vs 41.4% that merely TOUCHED it — an 18pp gap. That gap is
+# same-candle +1R-and-stop collisions a real order cannot bank. So the touch
+# number is still a trap, but the capturable figure is ~23%, not the ~1-2% once
+# claimed here.
+#
+# THE GENERAL LAW (applies far beyond MFE):
+#   An EXTREMUM or a THRESHOLD-CROSSING is never an ACHIEVABLE OUTCOME until it
+#   is replayed as a real order and reconciled to r_realised. This covers:
+#     - mfe_r as "profit we could have taken"        (TP that fills before SL?)
+#     - mae_r as "a wider stop would have survived"  (does the wider stop trade?)
+#     - "price reached X% N times"                   (a limit at X — does it fill?)
+#     - "reversed from level L"                       (entry at L — fills, then?)
+#     - any "best/worst/max/min ... before exit" stat.
+#   If a claim's number comes from a peak/touch column and NOT from an exit
+#   replay (exit_engine.walk_multileg / exit_lab), it is UNVERIFIED. Say so.
+
+# Column-name fragments that signal a peak/touch metric (not a bankable outcome).
+_PEAK_METRIC_TOKENS = ("mfe", "mae", "reached", "touched", "excursion",
+                       "peak", "max_r", "min_r", "reversed_from", "best_", "worst_")
+
+
+def is_peak_metric(name: str) -> bool:
+    """True if `name` looks like a peak/touch/extremum metric whose value is a
+    point on the price PATH, not an achievable exit. Such metrics must never be
+    quoted as bankable P&L without a real-exit replay (see verify_capturable)."""
+    n = str(name).lower()
+    return any(tok in n for tok in _PEAK_METRIC_TOKENS)
+
+
+def verify_capturable(claim: str,
+                      peak_count: int,
+                      captured_count: int,
+                      total: int,
+                      *,
+                      tolerance: float = 0.15) -> Dict[str, Any]:
+    """HARD GATE for any claim of the form "X% of trades reached level L".
+
+    You MUST supply BOTH:
+      - peak_count     : how many trades TOUCHED L (from an mfe/mae/reached column).
+      - captured_count : how many ACTUALLY EXIT with the L-outcome when replayed
+                         as a real order (exit_engine.walk_multileg fixed-L / exit_lab
+                         C_fullTP_*). If you have not run that replay, DO NOT call
+                         this — the claim is unverified by definition.
+
+    Returns {'verified': bool, 'severity', 'peak_pct', 'captured_pct',
+             'gap_pct', 'message'}. `verified` is True only when the capturable
+            fraction tracks the touch fraction within `tolerance`. A large gap
+            means the touches are uncapturable intrabar spikes — the classic
+            MFE trap — and the claim is REJECTED.
+
+    Use it as a tripwire in any analysis script:
+        r = verify_capturable("47% reached +1R", peak, captured, n)
+        assert r['verified'], r['message']
+    """
+    total = max(int(total), 1)
+    peak_pct = 100.0 * peak_count / total
+    captured_pct = 100.0 * captured_count / total
+    gap = peak_pct - captured_pct
+    # A claim is only capturable if what actually fills tracks what merely touched.
+    verified = (peak_count == 0) or (gap <= tolerance * peak_pct)
+    if verified:
+        sev, msg = "ok", (
+            f"OK: '{claim}' — {captured_pct:.0f}% capturable vs {peak_pct:.0f}% "
+            f"touched (gap {gap:.0f}pp within tolerance).")
+    else:
+        sev, msg = "reject", (
+            f"REJECT: '{claim}' — {peak_pct:.0f}% merely TOUCHED the level but only "
+            f"{captured_pct:.0f}% is CAPTURABLE with a real exit (gap {gap:.0f}pp). "
+            f"This is the peak-vs-fill trap: a touch is not an outcome. Re-state the "
+            f"claim using the capturable number, or drop it.")
+    return {"verified": verified, "severity": sev,
+            "peak_pct": round(peak_pct, 1), "captured_pct": round(captured_pct, 1),
+            "gap_pct": round(gap, 1), "message": msg}

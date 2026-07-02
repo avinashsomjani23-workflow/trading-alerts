@@ -563,12 +563,13 @@ def build_ts_to_local_x(df_plot):
 
 # PHASE 2 ONLY — counts BOS events since the last CHoCH. Reads dealing_range
 # event state. Called only by Phase2_Alert_Engine.py.
-# Continuation-drive decay threshold. A leg is 'fading' when the mean break-body
-# (ATR) of its last 2 plain BOS drops below this fraction of the mean of its
-# first 2. 0.60 = recent drive running under ~two-thirds of opening drive — a
-# veteran's "this is limping" line. Anchored on the EARLY mean (not the single
-# strongest break) so one mid-leg spike can't poison the read. One number, no
-# per-pair tuning: momentum decay reads the same on EURUSD as on Gold.
+# Continuation-drive decay threshold. A leg is 'fading' when the LATEST plain-BOS
+# break body (ATR) drops below this fraction of the leg's FIRST plain-BOS body.
+# 0.60 = current drive running under ~two-thirds of opening drive — a veteran's
+# "this is limping" line. Anchored on the FIRST break (not the strongest) so one
+# mid-leg spike can't poison the read. One number, no per-pair tuning: momentum
+# decay reads the same on EURUSD as on Gold. (Loosened 2026-07 from a >=3-break
+# last-2-vs-first-2 mean test to fire from the 2nd break — see bos_leg_read.)
 _BOS_DECAY_RATIO = 0.60
 
 
@@ -606,16 +607,23 @@ def bos_leg_read(events):
         count = 1
 
     # Continuation-drive verdict (displacement decay). 'fading' = recent pushes
-    # materially weaker than how the leg started; 'holding' = intact or not yet
-    # measurable. Needs >= 3 plain BOS with all break bodies present; compares the
-    # mean of the last 2 breaks vs the first 2 against DECAY_RATIO. Graceful:
-    # any missing body -> holding (never claim exhaustion we cannot measure).
+    # materially weaker than how the leg STARTED; 'holding' = intact or not yet
+    # measurable. Fires from the 2nd plain BOS onward (loosened 2026-07 — the old
+    # >=3-break / last-2-vs-first-2 form fired only ~12/900 times and missed the
+    # decay; data: verdict='fading' WR 18% vs 'holding' 37%, so the signal is
+    # sound, it just needed to fire earlier). Rule: anchor on the FIRST break body
+    # (how the leg opened, not the strongest — one spike can't poison it), and
+    # tag 'fading' the moment the LATEST break body drops under DECAY_RATIO of it.
+    # This is DISPLACEMENT-decay, NOT leg-depth: the data shows depth alone is not
+    # exhaustion (seq 5-9 WIN; only weakening-drive legs fail), so we must read the
+    # body, never just the count. Graceful: any missing body -> holding (never
+    # claim exhaustion we cannot measure).
     verdict = 'holding'
     usable = [b for b in leg_bodies if isinstance(b, (int, float))]
-    if len(leg_bodies) >= 3 and len(usable) == len(leg_bodies):
-        early = sum(leg_bodies[:2]) / 2.0
-        late = sum(leg_bodies[-2:]) / 2.0
-        if early > 0 and late < _BOS_DECAY_RATIO * early:
+    if len(leg_bodies) >= 2 and len(usable) == len(leg_bodies):
+        first = leg_bodies[0]
+        latest = leg_bodies[-1]
+        if first > 0 and latest < _BOS_DECAY_RATIO * first:
             verdict = 'fading'
     return {'count': count, 'verdict': verdict}
 

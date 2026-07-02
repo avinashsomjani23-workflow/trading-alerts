@@ -42,6 +42,11 @@ from backtest.run_logger import log_event
 MAX_HOLD_H1_BARS = 48
 DEFAULT_RISK_USD = 250.0
 
+# sl_swept_then_tp1 lookahead: bars after an SL exit to check for a reversal to
+# TP1 (only when the stop bar itself was a sweep). Matches the hold horizon so a
+# late reversal is still caught. Diagnostic only.
+SL_SWEEP_LOOKBACK_BARS = MAX_HOLD_H1_BARS
+
 # Backtest trade-existence floor (2026-07). Live rejects any setup whose best
 # target clears < 1.5R; the backtest relaxes that to 0.5R so we can study the
 # sub-1.5R population live never sees. This ONLY adds previously-rejected trades
@@ -787,6 +792,8 @@ def _simulate_single_entry(
             mfe_r=0.0, mae_r=0.0, bars_to_exit=0,
             bars_to_tp1=-1, bars_to_tp2=-1,
             sl_collision=False, risk_usd=risk_usd,
+            sl_bar_was_sweep=None, sl_swept_then_tp1=None, ob_to_fill_hours=None,
+            bars_break_to_pullback=None,
         )
 
     if exit_reason is None:
@@ -839,6 +846,82 @@ def _simulate_single_entry(
 
     bars_to_exit = max(0, bars_walked_post_fill)
 
+    # ── Sweep diagnostics: was the STOP a liquidity grab, and did it reverse? ──
+    # SMC definition of a sweep: the candle WICKS through the level but CLOSES BACK
+    # on our side (grab-then-reject). A candle that CLOSES THROUGH the stop is a
+    # genuine break, not a sweep — and a wider stop would just lose more.
+    #
+    #   sl_bar_was_sweep   : the STOP CANDLE itself was a sweep of the stop that
+    #                        fired (cur_sl — the initial SL, or entry once BE armed).
+    #                        Long : Low <= cur_sl AND Close > cur_sl.
+    #                        Short: High >= cur_sl AND Close < cur_sl.
+    #   sl_swept_then_tp1  : sl_bar_was_sweep is True AND, within
+    #                        SL_SWEEP_LOOKBACK_BARS bars AFTER the stop bar, price
+    #                        reached TP1 in our direction. This is the honest
+    #                        "a wider stop plausibly wins" signal.
+    #
+    # HONEST CAVEAT (peak-vs-fill law): sl_swept_then_tp1 still ends on a TOUCH
+    # check of a later bar, not a real-order replay — that later TP1 tag could be
+    # its own spike-and-fade. Read it as a strong HINT ("would a wider stop have
+    # saved us"), never as bankable "free money". Both are None for non-SL exits.
+    # cur_sl at this point is the level that actually stopped the trade (BE-aware).
+    sl_bar_was_sweep = None
+    sl_swept_then_tp1 = None
+    if exit_reason == "sl" and exit_ts is not None:
+        try:
+            sl_bar = future.loc[exit_ts]
+            sl_bar_hi = float(sl_bar["High"])
+            sl_bar_lo = float(sl_bar["Low"])
+            sl_bar_cl = float(sl_bar["Close"])
+            if bias == "LONG":
+                sl_bar_was_sweep = bool(sl_bar_lo <= cur_sl and sl_bar_cl > cur_sl)
+            else:
+                sl_bar_was_sweep = bool(sl_bar_hi >= cur_sl and sl_bar_cl < cur_sl)
+
+            # Later-reversal check only matters when the stop bar was a sweep.
+            if sl_bar_was_sweep:
+                post_sl = future.loc[future.index > exit_ts]
+                horizon = post_sl.iloc[:SL_SWEEP_LOOKBACK_BARS]
+                if len(horizon):
+                    if bias == "LONG":
+                        sl_swept_then_tp1 = bool((horizon["High"] >= tp1).any())
+                    else:
+                        sl_swept_then_tp1 = bool((horizon["Low"] <= tp1).any())
+                else:
+                    sl_swept_then_tp1 = False
+            else:
+                sl_swept_then_tp1 = False
+        except Exception:
+            sl_bar_was_sweep = None
+            sl_swept_then_tp1 = None
+
+    # ── ob_to_fill_hours: OB formation -> fill gap (diagnostic; NOT a gate) ──
+    # corr with r ~0 both years, not monotonic — logged only for the edge engine
+    # to slice. See EDGE_ENGINE_HANDOFF 9b.
+    ob_to_fill_hours = None
+    try:
+        _ob_ts = pd.to_datetime(ob.get("ob_timestamp"), utc=True)
+        if _ob_ts is not None and fill_ts is not None:
+            ob_to_fill_hours = round(
+                (pd.to_datetime(fill_ts, utc=True) - _ob_ts).total_seconds() / 3600.0, 2)
+    except Exception:
+        ob_to_fill_hours = None
+
+    # ── bars_break_to_pullback: H1 bars from the break candle to the first bar
+    # that traded back to the OB proximal (the pullback that fills us). Flags the
+    # "strong break + very fast snapback" bucket (BS1) — thin + news-confounded,
+    # validate over 18yr before gating. See EDGE_ENGINE_HANDOFF 9b.
+    bars_break_to_pullback = None
+    try:
+        _bos_ts = pd.to_datetime(ob.get("bos_timestamp"), utc=True)
+        if _bos_ts is not None and fill_ts is not None:
+            _post_break = df_h1.loc[df_h1.index > _bos_ts]
+            _fill_dt = pd.to_datetime(fill_ts, utc=True)
+            _hit = _post_break.index <= _fill_dt
+            bars_break_to_pullback = int(_hit.sum())
+    except Exception:
+        bars_break_to_pullback = None
+
     # ── Exit-lab side-channel (diagnostic; no effect on r_realised / the row) ──
     if EXIT_LAB_CONFIGS and EXIT_LAB_SINK is not None and fill_bar_idx >= 0:
         from backtest.exit_engine import walk_multileg
@@ -885,6 +968,10 @@ def _simulate_single_entry(
         bars_to_tp1=tp1_hit_bar_idx,
         bars_to_tp2=tp2_hit_bar_idx,
         sl_collision=sl_collision, risk_usd=risk_usd,
+        sl_bar_was_sweep=sl_bar_was_sweep,
+        sl_swept_then_tp1=sl_swept_then_tp1,
+        ob_to_fill_hours=ob_to_fill_hours,
+        bars_break_to_pullback=bars_break_to_pullback,
     )
 
 
@@ -893,7 +980,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                fill_ts, exit_ts, exit_reason, exit_price,
                r_realised, r_if_exit_tp1, r_if_exit_tp2,
                mfe_r, mae_r, bars_to_exit, bars_to_tp1, bars_to_tp2,
-               sl_collision, risk_usd, sl_raw=None) -> Dict[str, Any]:
+               sl_collision, risk_usd, sl_raw=None,
+               sl_bar_was_sweep=None, sl_swept_then_tp1=None, ob_to_fill_hours=None,
+               bars_break_to_pullback=None) -> Dict[str, Any]:
     """Assemble the final trade row dict in stable column order."""
     direction = ob.get("direction", "?")
     bos_tag = ob.get("bos_tag", "BOS")
@@ -986,6 +1075,17 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     atr_at_ob = round(float(_h1_atr), 6) if _h1_atr else None
 
     pnl_usd = round(r_realised * risk_usd, 2)
+
+    # Setup badge (Phase 2 email banner) — same classifier live fires
+    # (Phase2_Alert_Engine.py:2542), same inputs, so the backtest can finally
+    # check whether "A+ Reversal at the Wall" / "A First Pullback" /
+    # "Caution: Late-Trend Chase" actually correlate with r_realised.
+    # classify_setup wants pd_position on a 0-1 scale; pd_pct here is 0-100.
+    _pd_position_01 = (pd_pct / 100.0) if pd_pct is not None else None
+    setup_badge, _setup_note, setup_kind = smc_detector.classify_setup(
+        ob, _pd_position_01, alert.get("trend_alignment")
+    )
+
     return {
         "pair":          alert["pair"],
         "alert_ts":      alert_ts.isoformat() if hasattr(alert_ts, "isoformat") else str(alert_ts),
@@ -1020,6 +1120,18 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "pnl_usd":       pnl_usd,
         "mfe_r":         mfe_r,
         "mae_r":         mae_r,
+        # Sweep diagnostics (SL exits only; None otherwise).
+        #   sl_bar_was_sweep  : stop candle wicked the stop but closed back on our
+        #                       side (SMC grab-then-reject) vs a clean close-through.
+        #   sl_swept_then_tp1 : sweep bar AND price later reached TP1 — the honest
+        #                       "wider stop plausibly wins" HINT (still a touch
+        #                       check, not a real-order replay; never free money).
+        "sl_bar_was_sweep":  sl_bar_was_sweep,
+        "sl_swept_then_tp1": sl_swept_then_tp1,
+        # OB-formation -> fill gap (hours). Diagnostic only, corr with r ~0.
+        "ob_to_fill_hours": ob_to_fill_hours,
+        # H1 bars from break candle to the pullback that fills us (BS1 flag).
+        "bars_break_to_pullback": bars_break_to_pullback,
         "bars_to_exit":  bars_to_exit,
         "bars_to_tp1":   bars_to_tp1,
         "bars_to_tp2":   bars_to_tp2,
@@ -1097,6 +1209,10 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "killzone_alignment":  _killzone_alignment(ob, fill_ts, alert_ts, pair_conf),
         "h1_trend":            alert.get("h1_trend"),
         "trend_alignment":     alert.get("trend_alignment"),
+        # Setup badge (email banner) — see build comment above. None = no
+        # named pattern matched. kind is 'premium' or 'caution'; None otherwise.
+        "setup_badge":         setup_badge,
+        "setup_badge_kind":    setup_kind,
     }
 
 

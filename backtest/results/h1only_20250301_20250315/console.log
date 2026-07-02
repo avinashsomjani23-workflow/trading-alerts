@@ -1,0 +1,44 @@
+[INFO] run_start regime=bau regime_label=None mode=h1_only start=2025-03-01 end=2025-03-15 pairs=['EURUSD', 'XAUUSD'] risk_usd=250.0 send_email=False
+[INFO] backtest_atr_cap pair=EURUSD pair_type=forex live=2.5 backtest=2.5
+
+[H1-ONLY MODE] start=2025-03-01 end=2025-03-15 pairs=['EURUSD', 'XAUUSD'] risk_per_trade=$250
+  No M15/M5 fetches. No scoring gate. Dual entry per OB.
+  News: 0 High-impact events fetched (coverage: {'ff': False})
+[INFO] news_fetched events=0 coverage={'ff': False} range=2025-02-28T00:00:00+00:00..2025-03-16T00:00:00+00:00
+  [scanlog] manifest written -> C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\out\scanlog\h1only_20250301_20250315
+[INFO] pair_data_loaded pair=EURUSD h1_rows=839 h1_first=2025-01-26 22:00:00+00:00 h1_last=2025-03-14 20:00:00+00:00
+
+  [parallel] launching 1 pairs across 1 workers
+[INFO] pair_alerts_collected pair=EURUSD alerts=8 mode=h1_only
+[INFO] pair_trades_simulated pair=EURUSD trades=7 news_blocked=0 ist_blocked=1 killzone_dropped_alerts=3
+[INFO] report_written path=C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20250301_20250315 total_alerts=8 total_trades=7
+
+H1-only report written to C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20250301_20250315
+================================================================
+SCAN-LOG RUN HEALTH
+================================================================
+GATE  VERDICT DESCRIPTION
+G1    PASS    Sum pnl_usd == Sum r_realised*risk, and equals reporting headline
+G2    PASS    scan records == expected (pair x walk bars); zero HEARTBEAT_GAP
+G3    PASS    ob<=bos<alert<=fill on every filled trade (fill on the alert candle allowed)
+G4    PASS    every FAIL-severity condition counter is 0
+G5    PASS    every knob re-read at END equals manifest (no drift)
+G6    PASS    headline recomputed from r_realised only; tp1/tp2 excluded
+G7    PASS    content hash of scan_log + events recorded for re-run compare
+G8    PASS    NAN_ATR_SKIP <= 1% post-warmup per pair (WARN >1%, FAIL >5%)
+G9    PASS    every record validated against SCHEMA.md (ts/tz/outcome)
+----------------------------------------------------------------
+CONDITION COUNTERS: none
+----------------------------------------------------------------
+headline (from r_realised): $-250.00
+OVERALL: PASS (exit code 0)
+================================================================
+  [scanlog] compressed artifacts in C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\out\scanlog\h1only_20250301_20250315
+  [registry] processed h1only_20250301_20250315 — 3 filled trades, expectancy -0.33R
+  [registry] registry.json written (28 runs)
+  [registry] BACKTEST_LOG.md written (28 runs)
+[commit_logs] committed 5389cabb -- 5 files for h1only_20250301_20250315
+  [log commit OK — LOCAL ONLY, not pushed] h1only_20250301_20250315 -> 5389cabb
+    To publish to GitHub when ready: git push origin main
+[INFO] logs_committed_local_only run_id=h1only_20250301_20250315 sha=5389cabb
+[INFO] run_end

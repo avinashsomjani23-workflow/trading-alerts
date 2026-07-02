@@ -1384,6 +1384,62 @@ def _confluence_uplift_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>{note}"
 
 
+# ---------------------------------------------------------------------------
+# Setup badge validation — does the email banner (A+ Reversal at the Wall /
+# A First Pullback / Caution: Late-Trend Chase) actually predict outcome?
+# smc_detector.classify_setup output, logged per EDGE_ENGINE_HANDOFF.md §3.
+# Mirrors backtest/insights.setup_badge_validation's bucketing (kept
+# independent — this file works on trade dicts, insights.py on DataFrames).
+# ---------------------------------------------------------------------------
+
+def _setup_badge_html(trades: List[Dict[str, Any]], r_col: str) -> str:
+    """Per-badge win rate / expectancy — is the banner a real signal or decor?"""
+    filled = [t for t in trades if _is_real_filled(t)]
+    if not filled:
+        return "<p style='color:#888;'>No filled trades to attribute badges.</p>"
+
+    badges = {}
+    for t in filled:
+        name = t.get("setup_badge") or "(no badge)"
+        badges.setdefault(name, []).append(float(t.get(r_col) or 0.0))
+
+    header = _table_row(
+        ["Badge", "Trades", "Win rate", "Expectancy"], header=True,
+    )
+    body = ""
+    # (no badge) last regardless of count — it's the reference row, not a signal.
+    for name in sorted(badges, key=lambda n: (n == "(no badge)", -len(badges[n]))):
+        vals = badges[name]
+        n = len(vals)
+        wins = sum(1 for v in vals if v > 0)
+        losses = sum(1 for v in vals if v < 0)
+        wr = (wins / (wins + losses) * 100) if (wins + losses) else None
+        exp_r = sum(vals) / n
+
+        if name == "(no badge)":
+            row_c = ""
+        elif n < _LOW_N_THRESHOLD:
+            row_c = ""
+        elif exp_r >= 0.20:
+            row_c = "#eafaf1"
+        elif exp_r < 0:
+            row_c = "#fdf2f2"
+        else:
+            row_c = ""
+
+        label = name if n >= _LOW_N_THRESHOLD or name == "(no badge)" \
+            else f"{name} <span style='color:#888;font-size:11px;'>(n&lt;{_LOW_N_THRESHOLD}, directional only)</span>"
+        body += _table_row([label, str(n), _wr_str(wr), _r(exp_r)], color=row_c)
+
+    note = ("<p style='font-size:12px;color:#666;margin-top:6px;'>"
+            "UNVALIDATED — badges are rare per run; this table is a running "
+            "check, not a verdict. Needs the 18-yr edge-engine pass "
+            "(bootstrap CI + Spearman + OOS split, EDGE_ENGINE_HANDOFF.md §4) "
+            "before any badge is trusted as a real signal. Rows with fewer than "
+            f"{_LOW_N_THRESHOLD} trades are directional only.</p>")
+    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>{note}"
+
+
 def _signal_vs_noise_html(trades: List[Dict[str, Any]], r_col: str) -> str:
     """Top-level plain-English read of what ACTUALLY predicted outcomes this
     run vs what was decoration. Data-driven, not a hardcoded belief: each
@@ -1575,7 +1631,12 @@ def _exit_recipe_html(exit_lab_sink: List[Dict[str, Any]],
         vals = [float(r.get("r") or 0.0) for r in rows]
         ts   = [r.get("alert_ts") for r in rows]
         stat = _stat_block(vals, ts)
-        ranked.append({"cfg": cfg, "stat": stat,
+        # WR = wins/(wins+losses); breakevens excluded (project convention). None
+        # when no resolved trade -> em-dash, never 0%.
+        _w = sum(1 for v in vals if v > 0)
+        _l = sum(1 for v in vals if v < 0)
+        wr = (100.0 * _w / (_w + _l)) if (_w + _l) else None
+        ranked.append({"cfg": cfg, "stat": stat, "wr": wr,
                        "total_r": round(sum(vals), 1)})
     ranked.sort(key=lambda x: (x["stat"]["expR"] if x["stat"]["expR"] is not None
                                else -1e9), reverse=True)
@@ -1586,7 +1647,7 @@ def _exit_recipe_html(exit_lab_sink: List[Dict[str, Any]],
     live_exr = next((x["stat"]["expR"] for x in ranked
                      if x["cfg"] == _EXIT_BASELINE_KEY), None)
 
-    header = ("<tr><th>Exit recipe</th><th>N</th><th>Avg R</th>"
+    header = ("<tr><th>Exit recipe</th><th>N</th><th>WR</th><th>Avg R</th>"
               "<th>Total R</th><th>Total P&amp;L</th><th>95% CI</th>"
               "<th>Per-quarter sign</th><th>vs LIVE</th></tr>")
     body = ""
@@ -1616,6 +1677,7 @@ def _exit_recipe_html(exit_lab_sink: List[Dict[str, Any]],
             f"<tr style='background:{bg};'>"
             f"<td><b>{label}</b>{flag}</td>"
             f"<td>{stat['n']}</td>"
+            f"<td>{_wr_str(x['wr'])}</td>"
             f"<td>{_r(stat['expR'])}</td>"
             f"<td>{x['total_r']:+.1f}R</td>"
             f"<td>{_m(total_pnl)}</td>"
@@ -3457,7 +3519,9 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # headline_exclusion names why (unresolved:*, below_score_floor,
         # ist_blocked). Stamped from the single _headline_exclusion rule.
         "eligible_for_headline", "headline_exclusion",
-        "mfe_r", "mae_r", "bars_to_exit", "bars_to_tp1", "bars_to_tp2",
+        "mfe_r", "mae_r", "sl_bar_was_sweep", "sl_swept_then_tp1",
+        "bars_to_exit", "bars_to_tp1", "bars_to_tp2",
+        "ob_to_fill_hours", "bars_break_to_pullback",
         "ob_age_h1_bars", "pd_zone",
         # Reversal book: exact CHoCH-origin-in-extreme flag (raw) + derived bool.
         "reversal_pct", "reversed_from_extreme",
@@ -4374,6 +4438,14 @@ def _build_group_html(
   {_confluence_uplift_html(prox_trades, "r_realised")}
   <h4 style="margin-top:16px;">Confluences by pair</h4>
   {_confluence_per_pair_html(prox_trades, "r_realised")}
+</div>
+
+<div class="section">
+  <h2>Setup badges &mdash; does the banner earn its name?</h2>
+  <p style="font-size:12px;color:#666;">A+ Reversal at the Wall / A First
+  Pullback / Caution: Late-Trend Chase &mdash; win rate and expectancy per
+  badge, this run.</p>
+  {_setup_badge_html(prox_trades, "r_realised")}
 </div>
 
 <div class="section">

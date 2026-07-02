@@ -79,6 +79,7 @@ def _build_verdict_md(
     instr_v: Dict,
     pair_sess: List,
     score_v: Dict,
+    badge_v: Dict,
     group_comp: Dict,
     entry_comp: Dict,
     freshness: List,
@@ -234,6 +235,38 @@ def _build_verdict_md(
             )
         lines.append("")
 
+    # --- Setup badge validation (email banners: A+, First Pullback, etc.) ---
+    bv = badge_v
+    lines += [
+        "## Setup badge validation",
+        "",
+        "Does the Phase 2 email banner (A+ Reversal, First Pullback, Late-Trend Chase) "
+        "actually predict outcome?",
+        "",
+        f"**Verdict: {bv.get('verdict', 'n/a')}**",
+        "",
+    ]
+    if bv.get("spearman_r") is not None:
+        lines.append(
+            f"Spearman correlation between badge conviction (caution=-1, none=0, premium=+1) "
+            f"and outcome: {bv['spearman_r']:.3f}"
+            + (f", p={bv['p_value']:.4f}" if bv.get("p_value") is not None else "")
+        )
+        lines.append("")
+    if bv.get("buckets"):
+        lines += [
+            "| Badge | Trades | Win rate | Expectancy | 95% CI |",
+            "|-------|--------|----------|------------|--------|",
+        ]
+        for b in bv["buckets"]:
+            ci = (f"[{_fmt(b['ci_lo_95'])}, {_fmt(b['ci_hi_95'])}]"
+                  if b.get("ci_lo_95") is not None else "n/a")
+            lines.append(
+                f"| {b['badge']} | {b['n']} | {_wr(b['win_rate_pct'])} "
+                f"| {_fmt(b['expectancy_r'])} | {ci} |"
+            )
+        lines.append("")
+
     # --- Confluence attribution ---
     if confluence:
         lines += [
@@ -378,6 +411,7 @@ def run(
     instr_v     = ins.instrument_verdicts(filled, r_col)
     pair_sess   = ins.pair_session_matrix(filled, r_col)
     score_v     = ins.score_validation(filled, r_col)
+    badge_v     = ins.setup_badge_validation(filled, r_col)
     group_comp  = ins.group_comparison(filled, r_col)
     entry_comp  = ins.entry_zone_comparison(primary, r_col)  # uses full primary (incl never_filled for fill rate)
     freshness   = ins.ob_freshness_comparison(filled, r_col)
@@ -397,6 +431,7 @@ def run(
         "instrument":        instr_v,
         "pair_session":      pair_sess,
         "score":             score_v,
+        "setup_badge":       badge_v,
         "groups":            group_comp,
         "entry_zones":       entry_comp,
         "ob_freshness":      freshness,
@@ -408,7 +443,7 @@ def run(
 
     # Write human-readable verdict.
     verdict_md = _build_verdict_md(
-        verdict, overall, instr_v, pair_sess, score_v,
+        verdict, overall, instr_v, pair_sess, score_v, badge_v,
         group_comp, entry_comp, freshness, confluence, regime_v,
         included_runs, groups_included, r_col,
     )
@@ -431,7 +466,7 @@ def main() -> None:
                     help="Comma-separated group numbers to include, e.g. 1,2. Default: all.")
     ap.add_argument("--entry", default="proximal", choices=["proximal"],
                     help="Which entry zone to use as the primary analysis view. "
-                         "Proximal is the only zone (50% mean entry removed 2026-07).")
+                         "Proximal is the only zone (50%% mean entry removed 2026-07).")
     ap.add_argument("--r-col", default="r_realised",
                     choices=["r_realised", "r_if_exit_tp1", "r_if_exit_tp2"],
                     help="Which R column to use as the outcome measure.")

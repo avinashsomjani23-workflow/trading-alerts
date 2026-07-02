@@ -114,17 +114,69 @@ All ATR-normalized (cross-instrument comparable). Status: ✓ already logged · 
 - ✗ `sweep_present` is logged but **drop it from any score** — detector inverts SMC (−0.440R).
   Keep the column for audit; do not feature it until the detector is rebuilt.
 
+**Stop-out anatomy (SL exits only — the MOST IMPORTANT split to bucket over 18 yr)**
+- ✓ `sl_bar_was_sweep` / `sl_swept_then_tp1` (added 2026-07-02; replaced the old touch-only
+  `sl_was_swept`). Definitions in `h1_only_simulator.py` (~line 850). **Bucket every stop-out into
+  two populations and study them for OPPOSITE reasons — they are not the same failure:**
+    - **`sl_bar_was_sweep = True` → an EXIT / stop-placement problem.** The setup was right, the
+      market grabbed liquidity and rejected. Lever = wider stop / better stop placement / exit
+      policy. `sl_swept_then_tp1 = True` sub-bucket = the stop was swept AND price then reached TP1
+      → the strongest "a wider stop would have won" candidate. (March-2025 real slice: 37/63
+      stop-outs were sweeps, 22 of those later tagged TP1 — real signal, collect over 18 yr.)
+    - **`sl_bar_was_sweep = False` → an ENTRY / SETUP problem.** Price CLOSED CLEAN THROUGH the
+      stop. That is not a stop-hunt — it is the market rejecting the setup outright (wrong OB, wrong
+      bias, broken structure). A wider stop only loses MORE here. If a feature slice (event type, PD
+      zone, pair, session) over-produces clean-break stop-outs, the fault is UPSTREAM of the exit —
+      screen those setups out, do not re-place the stop. **This bucket is the entry-quality
+      tripwire the exit study alone would miss.**
+  - CAVEAT (small, ignore during discovery, respect only at recipe stage): `sl_swept_then_tp1` ends
+    on a TOUCH of a later bar, so it can slightly over-count (that TP1 tag could be its own
+    spike-fade). It does NOT hide the pattern across 18 yr — only matters when a pattern is turned
+    into a real rule, at which point replay it as a real wider-stop order (`exit_lab`).
+
+**News (already logged — do NOT web-search per trade; it is token-heavy and unreliable)**
+- ✓ `news_blocked`, `news_event_title`, `news_event_currency`, `news_event_source`, `news_event_ts`
+  are ALREADY columns in trades.csv (from `ci_filter.py`). Timestamp→event mapping is free from the
+  news feed — no web search. Population depends on the run's news-feed config; **verify these
+  populate on the 18-yr run before slicing on them** (they were empty on the March-2025 slice
+  because no row was near a flagged event). Use to check whether clean-break stop-outs cluster on
+  news bars (a confounder, not a setup fault).
+
+**Setup badges (Phase 2 email banners)**
+- + `setup_badge` — `smc_detector.classify_setup(ob, pd_position, trend_alignment)`
+  (`smc_detector.py:2442`) output: "A+ Reversal at the Wall" / "A First Pullback" /
+  "Caution: Late-Trend Chase" / none. **Fires live in the email
+  (`Phase2_Alert_Engine.py:2542`) but is NOT called in the backtest simulator** — no
+  column exists to check whether these banners actually correlate with win rate.
+  Must be added to the simulator (same inputs it already computes) before Stage 1 can
+  screen it. Treat as UNVALIDATED until it survives Stage 1 like any other feature —
+  a banner name is not evidence.
+
 **Outcomes (the targets)**
 - ✓ `r_realised` (P&L truth), `mfe_r`, `mae_r`, `bars_to_exit`, `exit_reason`, `tp1_rr`.
+- ✓ `sl_bar_was_sweep` / `sl_swept_then_tp1` — outcome-side flags on SL exits; the stop-out-anatomy
+  split above. Screen features against BOTH (which setups produce clean-break vs sweep stop-outs).
 
 ---
 
 ## 4. THE ENGINE — four stages
 
 ### Stage 1 — Univariate feature screen (kill the noise)
+
+**Standing rule — ANY new candidate insight goes through this before it is trusted.** Any metric,
+banner, badge, or signal we can measure and bucket (e.g. `setup_badge` vs win rate, insight quality
+vs P&L) MUST be run through this screen — bucket it, compute **Spearman's rank correlation**
+(`backtest/insights.py` already has `_spearmanr` — reuse it, don't reimplement) between the
+feature and `r_realised` (or WR per bucket), and read the p-value/CI before it graduates from
+"looks right in email copy" to "actually predicts outcome." A banner name, a star rating, or a
+plain-English label is a CLAIM, not a signal, until it clears this bar. No exceptions — this is how
+`sweep_present` was caught inverted (−0.440R) instead of shipped on vibes.
+
 For each feature in §3:
 - Bucket it (quantiles for continuous; categories as-is).
 - Per bucket: N, expR, **bootstrap 95% CI**, **per-quarter sign**, WR (wins/(wins+losses)).
+- **Spearman's r** (feature rank vs outcome rank) + p-value — statistical soundness check, not just
+  eyeballed bucket differences.
 - Split DISCOVERY (e.g. ≤2018) vs OOS (later years) — a feature survives ONLY if its separation
   holds in OOS.
 - **Output:** a ranked table of features that *robustly* separate outcomes (survivors) vs noise
@@ -177,8 +229,17 @@ For each feature in §3:
   the run MUST be done with gates off, or Stage 1 is blind to half the answer.
 - **Spread / costs.** The backtest models no spread/slippage. The FINAL recipe must be re-checked
   net of realistic cost — tight-TP recipes are the most cost-fragile.
-- **MFE caveat.** `mfe_r` for losers is the realised-path max and often an uncapturable intrabar
-  spike. Never treat raw MFE as bankable profit.
+- **PEAK-vs-FILL — the trap that has bitten twice (READ THIS).** A touch/extremum is NOT an
+  achievable outcome. `mfe_r`, `mae_r`, "price reached X% N times", "reversed from level L" — all
+  record where price *touched* on the path, not where you could have *exited*. Banking a level needs
+  a resting order that fills BEFORE the stop under the sim's pessimistic same-bar rule (SL checked
+  first). Two false claims came from ignoring this: "47% of stop-outs reached +1R" and "93% reversed
+  from +0.5R" — both collapsed to ~1-2% when replayed with a REAL fixed exit. **THE LAW: any claim
+  whose number comes from a peak/touch column is UNVERIFIED until re-run as a real order
+  (`exit_engine.walk_multileg` / `exit_lab`) and reconciled to `r_realised`.** Enforced in code:
+  `backtest/insights.verify_capturable(...)` (hard gate — pass touch-count AND replayed capturable-
+  count; it rejects the claim if they diverge) and `insights.is_peak_metric(name)` (flags such
+  columns). Call the gate before quoting any "reached a level" stat. Never treat raw MFE as profit.
 - **r_realised is truth.** Every P&L number reconciles to it. Reject any stage whose baseline
   doesn't reproduce committed `r_realised` (the `exit_lab` self-check pattern).
 - **War regime.** Keep 2026 bucketed separate from BAU end-to-end.
@@ -236,6 +297,64 @@ git/registry/live (neutralise persistence exactly as `exit_lab.py:109-114` does)
    (OOS recipe + verdict). Prove each stage's baseline reproduces committed `r_realised`.
 
 ---
+
+## 9b. INVESTIGATION LOG (BOS-quality dig, 2026-07-02 — collect more data before concluding)
+
+Two runs analysed: 2008 full year + 2024-07..2025-06. BOS-family filled trades ~905.
+None of these are conclusions yet — flagged for the 18-year run to confirm/kill.
+
+- **FVG-proximal entry for strong breaks — TESTED, does NOT help. Parked.**
+  Hypothesis: on a strong break the OB proximal is too far, so enter at the FVG near-edge
+  instead. Reconstructed the real 3-candle FVG from MT5 for all 52 strong+FVG breaks and
+  checked which line price reverses from first. Result: FVG near-edge and OB proximal are
+  ~28 bps apart (median) — effectively the same price. Combined: 34/52 reached OB proximal,
+  10/52 reversed in the thin gap, 8/52 reversed short of both. FVG-proximal entry would not
+  save these. Strong breaks fail because the pullback often doesn't return to EITHER line, not
+  because of line placement. Collect more (18-yr) before final kill, but no edge in sight.
+
+- **ob_to_fill_hours × WR — log as diagnostic, NOT a gate.** Gap from OB formation to fill.
+  corr(gap, r_realised) ≈ 0 both years (2008 −0.007, 2024-25 +0.053). Not monotonic: 2008
+  fast fills worst, 2024-25 fast fills best (opposite). Mild tilt: middle buckets (10-60h)
+  best, extremes (<6h and 60h+) worst — weak, not tradeable. Symptom, not edge. Log the column
+  (`ob_to_fill_hours`) for the engine to slice; do NOT pre-gate on it.
+
+- **Strong-break early-pullback flag (BS1) — promising, thin, confounded by news.** Strong break
+  + pullback within 3h = 11% WR / −0.69R (n=9); ≤6h = 21% WR (n=14); slower = 26%. A strong
+  break that snaps back fast is the worst bucket. BUT samples tiny and the likely cause is a
+  news spike reverting, not structure quality. Log `bars_break_to_pullback`; validate over 18-yr
+  AND tag news bars before it can gate anything.
+
+- **Fading verdict — FIXED & SHIPPED (2026-07).** Old rule needed >=3 plain BOS and compared
+  last-2-vs-first-2 body mean; fired only ~12/900 (1.3%). New rule (`smc_detector.bos_leg_read`):
+  fire from the 2nd plain BOS — tag 'fading' when the LATEST break body < 0.60 × the leg's FIRST
+  break body. It is DISPLACEMENT-decay, NOT leg-depth: data showed depth alone is not exhaustion
+  (seq 3-4 lose 26-31% WR but seq 5-9 WIN 40-67%), so a flat "seq>=3 = fading" was rejected — we
+  read the body, never the count. Verified: fading now fires ~10% of BOS and correctly splits
+  losers (fading 0% WR / −0.75R vs holding 50% / +0.27R on a Q1-2025 slice). Scorer already maps
+  fading -> structure=1 (vs holding=3), so the penalty now reaches the trades it should.
+
+- **"Given-back winner" / SL-sweep (BS2) — my mfe≥1R read was a TRAP; corrected.** Raw
+  `mfe_r` on baseline SL-losers said ~41% touched ≥1R favourable before stopping (the loose "47%"
+  once quoted). But applying a REAL fixed-1R exit (`exit_lab C_fullTP_1.0R`, 2024-07..2025-06)
+  converts **23.5%** of live-stopped trades to a booked +1R (92/391) — vs 41.4% that merely
+  touched it. The 18pp gap = same-candle +1R-and-SL collisions a real 1R limit cannot bank (SL
+  resolves first, pessimistic — the Stage-3 intrabar trap). So the honest capturable figure is
+  ~23%, NOT the ~1-2% once written here, and NOT the touch-based 47%. Fixed-1R still LOSES money
+  net as a blanket policy (2024-25 −15R, 2008 −60R, CI excludes 0) — the 23% that flip do not pay
+  for the ones the earlier TP costs.
+
+- **Sweep columns replaced `sl_was_swept` (2026-07-02).** `sl_was_swept` (later-bars-only, no
+  sweep gate) is GONE from new runs. Two honest columns replace it, both `None` unless `exit_reason
+  == 'sl'`:
+    - `sl_bar_was_sweep` — the STOP CANDLE itself was a sweep: it wicked through the stop that
+      fired (`cur_sl`, break-even-aware) but CLOSED BACK on our side. Long: `Low<=cur_sl AND
+      Close>cur_sl`. Short: `High>=cur_sl AND Close<cur_sl`. Strict close-back (a close exactly AT
+      the stop is NOT a sweep). This is the SMC grab-then-reject shape vs a clean close-through
+      (genuine break — a wider stop just loses more).
+    - `sl_swept_then_tp1` — `sl_bar_was_sweep` is True AND, within `SL_SWEEP_LOOKBACK_BARS` bars
+      AFTER the stop bar, price reached TP1 in our direction. The honest "a wider stop plausibly
+      wins" signal. CAVEAT: still ends on a TOUCH check of a later bar, not a real-order replay —
+      read as a HINT, never bankable free money (peak-vs-fill law).
 
 ## 10. GLOSSARY
 
