@@ -1,25 +1,5 @@
 [
   {
-    "ts": "2026-06-18T16:35:41.929302",
-    "ts_human": "16:35 IST, 18 Jun 2026",
-    "ob_count_total": 4,
-    "ob_count_per_pair": {
-      "EURUSD": 0,
-      "USDJPY": 1,
-      "NZDUSD": 0,
-      "USDCHF": 1,
-      "NAS100": 0,
-      "GOLD": 2
-    },
-    "ob_age_hrs": 0.006359257777777778,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 0,
-    "issues": []
-  },
-  {
     "ts": "2026-06-18T19:35:50.069036",
     "ts_human": "19:35 IST, 18 Jun 2026",
     "ob_count_total": 4,
@@ -1115,6 +1095,31 @@
       "BTCUSD": 0
     },
     "ob_age_hrs": 0.007292892222222222,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
+  },
+  {
+    "ts": "2026-07-02T15:35:51.064253",
+    "ts_human": "15:35 IST, 02 Jul 2026",
+    "ob_count_total": 7,
+    "ob_count_per_pair": {
+      "EURUSD": 0,
+      "USDJPY": 1,
+      "NZDUSD": 2,
+      "USDCHF": 1,
+      "NAS100": 2,
+      "GOLD": 1,
+      "GBPUSD": 0,
+      "AUDUSD": 0,
+      "USDCAD": 0,
+      "EURJPY": 0,
+      "BTCUSD": 0
+    },
+    "ob_age_hrs": 0.007416054444444445,
     "gemini_fails_3h": 0,
     "yfinance_stale_3h": 0,
     "chart_fails_3h": 0,
