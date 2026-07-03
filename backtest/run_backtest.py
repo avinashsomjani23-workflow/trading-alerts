@@ -27,7 +27,7 @@ from backtest import h1_only_simulator
 from backtest import h1_only_reporting
 from backtest import ist_window
 from backtest import killzone as killzone_filter
-from backtest.run_logger import RunLogger, log_event
+from backtest.run_logger import RunLogger, log_event, STALL_GAP_S
 from backtest.scanlog import emitter as scanlog_emitter
 from backtest.scanlog import gates as scanlog_gates
 import news_filter
@@ -334,7 +334,21 @@ def run(start: datetime, end: datetime, pair_names: list,
         log_event("run_fatal", level="error", error=f"{type(e).__name__}: {e}")
         raise
     finally:
-        log_event("run_end")
+        # Honest timing: wall clock vs active compute. A big idle_s/max_gap_s
+        # means the machine was frozen (laptop asleep, CI paused) -- that
+        # inflates wall time but never touches the data. Budget future runs on
+        # active_min, NOT wall_min (which lies when the box slept mid-run).
+        try:
+            _t = logger.timing_summary()
+            log_event("run_end", **_t)
+            if _t["idle_s"] > STALL_GAP_S:
+                print(f"  [timing] WALL {_t['wall_min']}min but ACTIVE only "
+                      f"{_t['active_min']}min -- machine was FROZEN "
+                      f"{round(_t['idle_s']/60,1)}min (longest freeze "
+                      f"{round(_t['max_gap_s']/60,1)}min). Data unaffected; "
+                      f"budget on active_min.")
+        except Exception:
+            log_event("run_end")
         logger.close()
 
 

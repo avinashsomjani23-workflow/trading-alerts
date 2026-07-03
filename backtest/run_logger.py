@@ -18,9 +18,17 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+
+# A gap between two logged events longer than this is treated as the machine
+# being FROZEN (laptop asleep, CI paused, process suspended), not real work.
+# Real backtest work emits events far more often than this. Time inside such a
+# gap is "idle" -- it inflates wall-clock but does NOT touch the data (a paused
+# process resumes at the same instruction; nothing is computed while frozen).
+STALL_GAP_S = 120.0
 
 
 class _Tee:
@@ -55,6 +63,15 @@ class RunLogger:
     def __init__(self, out_dir: Path):
         out_dir.mkdir(parents=True, exist_ok=True)
         self.out_dir = out_dir
+        # Timing (honest wall vs idle split). _wall_start is real clock;
+        # _mono_start / _last_mono use a monotonic clock so a system clock jump
+        # can't corrupt the elapsed math. _idle_s sums the FROZEN gaps (> STALL);
+        # active_s = wall - idle is the real compute time to budget against.
+        self._wall_start = time.time()
+        self._mono_start = time.monotonic()
+        self._last_mono = self._mono_start
+        self._idle_s = 0.0
+        self._max_gap_s = 0.0
         self.jsonl_path = out_dir / "run_log.jsonl"
         self.console_path = out_dir / "console.log"
         self._jsonl_f = open(self.jsonl_path, "w", encoding="utf-8")
@@ -70,6 +87,16 @@ class RunLogger:
         """Append a structured event to run_log.jsonl. Echoes a compact
         one-liner to stdout (which goes to console.log too) unless echo=False.
         """
+        # Track the gap since the previous event. A gap > STALL_GAP_S means the
+        # process was frozen (not working) -- accumulate it as idle so the final
+        # timing split can subtract sleep time from the wall clock.
+        now_mono = time.monotonic()
+        gap = now_mono - self._last_mono
+        self._last_mono = now_mono
+        if gap > self._max_gap_s:
+            self._max_gap_s = gap
+        if gap > STALL_GAP_S:
+            self._idle_s += gap
         rec = {
             "ts": datetime.now(timezone.utc).isoformat(),
             "level": level,
@@ -88,6 +115,27 @@ class RunLogger:
         if echo:
             kv = " ".join(f"{k}={v}" for k, v in fields.items())
             print(f"[{level.upper()}] {event}{(' ' + kv) if kv else ''}")
+
+    def timing_summary(self) -> dict:
+        """Honest wall vs active split for the run so far.
+
+        wall_s   = real clock elapsed (what a stopwatch shows -- includes any
+                   time the machine was asleep/frozen).
+        idle_s   = summed frozen gaps (> STALL_GAP_S between events): sleep,
+                   suspend, CI pause. NOT compute -- does not touch the data.
+        active_s = wall_s - idle_s: the real work time to budget future runs on.
+        max_gap_s= the single longest freeze (a big value => the machine slept).
+        """
+        wall = time.monotonic() - self._mono_start
+        active = max(0.0, wall - self._idle_s)
+        return {
+            "wall_s": round(wall, 1),
+            "active_s": round(active, 1),
+            "idle_s": round(self._idle_s, 1),
+            "max_gap_s": round(self._max_gap_s, 1),
+            "wall_min": round(wall / 60, 2),
+            "active_min": round(active / 60, 2),
+        }
 
     def close(self) -> None:
         try:
