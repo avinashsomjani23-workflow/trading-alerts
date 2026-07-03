@@ -1,24 +1,5 @@
 {
-  "EURUSD|SHORT|2026-07-02": {
-    "macro_summary": "All high-impact USD events are scheduled for Thu 22:00 IST. Stronger Average Hourly Earnings, Non-Farm Employment Change, and a lower Unemployment Rate would hurt this EURUSD SHORT trade, while weaker data would help. Lower Unemployment Claims would also help this trade."
-  },
-  "NZDUSD|LONG|2026-07-02": {
-    "macro_summary": "US Average Hourly Earnings, Non-Farm Employment Change, and Unemployment Rate at 22:00 IST are the key events. Stronger US data would hurt this NZDUSD LONG trade, while weaker data would help. US Unemployment Claims at 22:00 IST is also scheduled; higher claims would help, lower claims would hurt."
-  },
-  "GOLD|LONG|2026-07-02": {
-    "macro_summary": "The US Average Hourly Earnings m/m, Non-Farm Employment Change, and Unemployment Rate at 22:00 IST are the key events. Stronger than expected US employment data would hurt this GOLD LONG trade, while weaker data would help. The US Unemployment Claims at 22:00 IST is a medium-impact event; weaker claims would help this trade, stronger claims would hurt."
-  },
-  "NZDUSD|2026-07-02": {
-    "macro_summary": null,
-    "macro_unavailable": true
-  },
-  "GOLD|2026-07-02": {
-    "macro_summary": "The US Average Hourly Earnings, Non-Farm Employment Change, and Unemployment Rate at 22:00 IST are the key events. Stronger than expected US employment data would hurt this GOLD LONG trade, while weaker data would help. The US Unemployment Claims at 22:00 IST is a medium impact event; weaker claims would help this trade, stronger claims would hurt."
-  },
-  "EURUSD|2026-07-02": {
-    "macro_summary": "The US Average Hourly Earnings, Non-Farm Employment Change, and Unemployment Rate at 22:00 IST are the key events. Stronger than expected US data would hurt this EURUSD long, while weaker data would help. The US Unemployment Claims at 22:00 IST is a medium-impact event; weaker claims would help this trade, stronger claims would hurt."
-  },
-  "USDCHF|2026-07-02": {
-    "macro_summary": "CHF CPI at 16:00 IST is scheduled; a lower-than-expected print would help this short USDCHF trade, while a higher print would hurt it. The US jobs report at 22:00 IST, including Average Hourly Earnings, Non-Farm Employment Change, and Unemployment Rate, is critical; weaker US data would help this trade, while stronger data would hurt it. Unemployment Claims at 22:00 IST are also due; higher claims would help, lower claims would hurt."
+  "EURUSD|2026-07-03": {
+    "macro_summary": "The only scheduled high-impact event is ECB President Lagarde Speaks at 17:30 IST; hawkish commentary would help this EURUSD long, while dovish remarks would hurt it."
   }
 }
