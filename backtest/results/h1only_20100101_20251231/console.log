@@ -1,0 +1,61 @@
+[INFO] run_start regime=bau regime_label=None mode=h1_only start=2010-01-01 end=2025-12-31 pairs=['EURUSD', 'NZDUSD', 'USDJPY', 'USDCHF', 'GOLD', 'GBPUSD', 'AUDUSD', 'USDCAD', 'EURJPY', 'BTCUSD'] risk_usd=250.0 send_email=True
+[INFO] backtest_atr_cap pair=EURUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDJPY pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=NZDUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDCHF pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=GOLD pair_type=commodity live=3.0 backtest=3.0
+[INFO] backtest_atr_cap pair=GBPUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=AUDUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDCAD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=EURJPY pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=BTCUSD pair_type=crypto live=3.0 backtest=3.0
+
+[H1-ONLY MODE] start=2010-01-01 end=2025-12-31 pairs=['EURUSD', 'NZDUSD', 'USDJPY', 'USDCHF', 'GOLD', 'GBPUSD', 'AUDUSD', 'USDCAD', 'EURJPY', 'BTCUSD'] risk_per_trade=$250
+  No M15/M5 fetches. No scoring gate. Dual entry per OB.
+  News: SKIPPED (BACKTEST_SKIP_NEWS set)
+[INFO] news_fetched events=0 coverage={'ff': False} range=2009-12-31T00:00:00+00:00..2026-01-01T00:00:00+00:00
+[WARN] data_partial_coverage symbol=BTCUSD=X interval=1h requested=2009-11-27T00:00:00+00:00..2025-12-31T00:00:00+00:00 available=2011-03-23T22:00:00+00:00..2026-06-26T04:00:00+00:00
+  [partial coverage] BTCUSD=X 1h: requested 2009-11-27..2025-12-31 runs beyond cache 2011-03-23..2026-06-26 — returning available slice
+  [scanlog] manifest written -> /home/runner/work/trading-alerts/trading-alerts/backtest/out/scanlog/h1only_20100101_20251231
+[INFO] pair_data_loaded pair=EURUSD h1_rows=99835 h1_first=2009-11-27 00:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=USDJPY h1_rows=99833 h1_first=2009-11-27 00:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=NZDUSD h1_rows=99817 h1_first=2009-11-27 00:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=USDCHF h1_rows=99810 h1_first=2009-11-27 00:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=GOLD h1_rows=94270 h1_first=2009-11-27 00:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=GBPUSD h1_rows=99827 h1_first=2009-11-27 00:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=AUDUSD h1_rows=99826 h1_first=2009-11-27 00:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=USDCAD h1_rows=99833 h1_first=2009-11-27 00:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=EURJPY h1_rows=99827 h1_first=2009-11-27 00:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=BTCUSD h1_rows=74268 h1_first=2011-03-23 22:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+
+  [parallel] launching 10 pairs across 2 workers
+  [DIAG USDJPY] walked=99273 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=99273 bars_with_obs=76181 new_obs=5293 prox_checks=343283 closest=0.00×ATR (cap=2.5×ATR) alerts=8511 resuppressed=0 rearmed=4501 aged_out=1045
+  USDJPY: 8511 OB-touch alerts
+  USDJPY: 3865 simulated trade rows (0 news-blocked, 1053 IST-blocked, 2504 killzone-dropped alerts)
+  [DIAG NZDUSD] walked=99257 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=99257 bars_with_obs=72957 new_obs=4708 prox_checks=299968 closest=0.00×ATR (cap=2.5×ATR) alerts=7677 resuppressed=0 rearmed=4016 aged_out=941
+  NZDUSD: 7677 OB-touch alerts
+  NZDUSD: 3589 simulated trade rows (0 news-blocked, 1052 IST-blocked, 2423 killzone-dropped alerts)
+  [DIAG GOLD] walked=93733 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=93733 bars_with_obs=74051 new_obs=5192 prox_checks=344367 closest=0.00×ATR (cap=3.0×ATR) alerts=8825 resuppressed=0 rearmed=4791 aged_out=1115
+  GOLD: 8825 OB-touch alerts
+  GOLD: 3939 simulated trade rows (0 news-blocked, 639 IST-blocked, 2127 killzone-dropped alerts)
+  [DIAG AUDUSD] walked=99266 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=99266 bars_with_obs=73689 new_obs=5158 prox_checks=323179 closest=0.00×ATR (cap=2.5×ATR) alerts=8159 resuppressed=0 rearmed=4252 aged_out=992
+  AUDUSD: 8159 OB-touch alerts
+  AUDUSD: 3707 simulated trade rows (0 news-blocked, 1123 IST-blocked, 2393 killzone-dropped alerts)
+  [DIAG EURJPY] walked=99267 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=99267 bars_with_obs=74081 new_obs=5106 prox_checks=342910 closest=0.00×ATR (cap=2.5×ATR) alerts=8462 resuppressed=0 rearmed=4518 aged_out=1080
+  EURJPY: 8462 OB-touch alerts
+  EURJPY: 3894 simulated trade rows (0 news-blocked, 955 IST-blocked, 2595 killzone-dropped alerts)
+  [DIAG EURUSD] walked=99275 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=99275 bars_with_obs=77581 new_obs=5844 prox_checks=389501 closest=0.00×ATR (cap=2.5×ATR) alerts=9884 resuppressed=0 rearmed=5322 aged_out=1144
+  EURUSD: 9884 OB-touch alerts
+  EURUSD: 4345 simulated trade rows (0 news-blocked, 691 IST-blocked, 2595 killzone-dropped alerts)
+  [DIAG USDCHF] walked=99250 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=99250 bars_with_obs=75945 new_obs=5468 prox_checks=369024 closest=0.00×ATR (cap=2.5×ATR) alerts=9260 resuppressed=0 rearmed=5037 aged_out=1132
+  USDCHF: 9260 OB-touch alerts
+  USDCHF: 4095 simulated trade rows (0 news-blocked, 612 IST-blocked, 2327 killzone-dropped alerts)
+  [DIAG GBPUSD] walked=99267 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=99267 bars_with_obs=77183 new_obs=5930 prox_checks=401475 closest=0.00×ATR (cap=2.5×ATR) alerts=10198 resuppressed=0 rearmed=5604 aged_out=1211
+  GBPUSD: 10198 OB-touch alerts
+  GBPUSD: 4439 simulated trade rows (0 news-blocked, 671 IST-blocked, 2545 killzone-dropped alerts)
+  [DIAG USDCAD] walked=99273 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=99273 bars_with_obs=74515 new_obs=5388 prox_checks=345354 closest=0.00×ATR (cap=2.5×ATR) alerts=9066 resuppressed=0 rearmed=4811 aged_out=1027
+  USDCAD: 9066 OB-touch alerts
+  USDCAD: 4115 simulated trade rows (0 news-blocked, 602 IST-blocked, 2241 killzone-dropped alerts)
+  [DIAG BTCUSD] walked=74268 warmup_skip=150 dr_err=0 radar_err=0 bars_with_events=74118 bars_with_obs=57538 new_obs=4781 prox_checks=312285 closest=0.00×ATR (cap=3.0×ATR) alerts=6877 resuppressed=0 rearmed=3485 aged_out=1760
+  BTCUSD: 6877 OB-touch alerts
+  BTCUSD: 2955 simulated trade rows (0 news-blocked, 1016 IST-blocked, 2543 killzone-dropped alerts)
