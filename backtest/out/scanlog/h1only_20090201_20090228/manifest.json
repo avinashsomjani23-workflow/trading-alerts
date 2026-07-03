@@ -1,0 +1,74 @@
+{
+  "run_id": "h1only_20090201_20090228",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-07-03T04:27:43.773021+00:00",
+  "git_sha": "3aa09ee",
+  "risk_usd": 250.0,
+  "min_warmup_bars": 50,
+  "fetch_pad_days": 35,
+  "pairs": [
+    {
+      "name": "EURUSD",
+      "symbol": "EURUSD=X",
+      "requested_start": "2009-02-01T00:00:00+00:00",
+      "requested_end": "2009-02-28T00:00:00+00:00",
+      "served_start": "2008-12-28T22:00:00+00:00",
+      "served_end": "2009-02-27T20:00:00+00:00",
+      "n_bars": 1038,
+      "fingerprint": "49dffdc25669ae67",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "USDJPY",
+      "symbol": "JPY=X",
+      "requested_start": "2009-02-01T00:00:00+00:00",
+      "requested_end": "2009-02-28T00:00:00+00:00",
+      "served_start": "2008-12-28T22:00:00+00:00",
+      "served_end": "2009-02-27T20:00:00+00:00",
+      "n_bars": 1032,
+      "fingerprint": "7500fcb01d7d5113",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "NZDUSD",
+      "symbol": "NZDUSD=X",
+      "requested_start": "2009-02-01T00:00:00+00:00",
+      "requested_end": "2009-02-28T00:00:00+00:00",
+      "served_start": "2008-12-28T22:00:00+00:00",
+      "served_end": "2009-02-27T20:00:00+00:00",
+      "n_bars": 1031,
+      "fingerprint": "0b1e6f349c7e5f2b",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "USDCHF",
+      "symbol": "CHF=X",
+      "requested_start": "2009-02-01T00:00:00+00:00",
+      "requested_end": "2009-02-28T00:00:00+00:00",
+      "served_start": "2008-12-28T22:00:00+00:00",
+      "served_end": "2009-02-27T20:00:00+00:00",
+      "n_bars": 1033,
+      "fingerprint": "31530ef89c6b996c",
+      "prox_cap_atr": 2.5
+    }
+  ],
+  "knobs": {
+    "EURUSD.atr_multiplier": 2.5,
+    "EURUSD.distal_invalidation_mode": "close",
+    "EURUSD.spread_pips": 2.0,
+    "USDJPY.atr_multiplier": 2.5,
+    "USDJPY.distal_invalidation_mode": "close",
+    "USDJPY.spread_pips": 2.0,
+    "NZDUSD.atr_multiplier": 2.5,
+    "NZDUSD.distal_invalidation_mode": "close",
+    "NZDUSD.spread_pips": 4.0,
+    "USDCHF.atr_multiplier": 2.5,
+    "USDCHF.distal_invalidation_mode": "close",
+    "USDCHF.spread_pips": 2.0
+  },
+  "versions": {
+    "python": "3.14.5",
+    "pandas": "3.0.3",
+    "yfinance": "1.3.0"
+  }
+}

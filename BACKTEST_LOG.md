@@ -1,13 +1,13 @@
 # Backtest Registry
 
-*Last updated: 2026-07-03 04:21 UTC*
+*Last updated: 2026-07-03 04:28 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **31** of 31
-- Total filled trades across all runs: **3424**
+- Runs completed: **32** of 32
+- Total filled trades across all runs: **3464**
 - Average expectancy across runs: **-0.12R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
@@ -188,6 +188,51 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | 5-6 | 177 | 41.1% | +-0.00R |
 | 6-7 | 172 | 41.8% | +0.05R |
 | 7+ | 220 | 32.8% | -0.16R |
+
+---
+
+### h1only_20090201_20090228
+
+**Unclassified** | 2009-02-01 to 2009-02-28 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 40 (of 55 rows) |
+| Win rate | 30.3% |
+| Expectancy | -0.17R |
+| Max drawdown | +7.44R |
+| Longest losing streak | 5 trades |
+| Proximal fill rate | 72.7% |
+| Score verdict | WEAK — partial relationship |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| NZDUSD | 7 | 66.7% | +0.82R |
+| USDJPY | 9 | 33.3% | -0.20R |
+| EURUSD | 12 | 27.3% | -0.27R |
+| USDCHF | 12 | 10.0% | -0.62R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 8 | 40.0% | +0.01R |
+| London | 15 | 35.7% | -0.16R |
+| NY | 17 | 21.4% | -0.26R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 0-2 | 1 | 100.0% | +0.67R |
+| 2-3 | 1 | 0.0% | -1.00R |
+| 3-4 | 5 | 50.0% | +0.23R |
+| 4-5 | 13 | 10.0% | -0.53R |
+| 5-6 | 13 | 36.4% | -0.07R |
+| 6-7 | 2 | 0.0% | -1.00R |
+| 7+ | 5 | 50.0% | +0.44R |
 
 ---
 
