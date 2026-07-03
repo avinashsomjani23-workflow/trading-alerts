@@ -1,13 +1,13 @@
 # Backtest Registry
 
-*Last updated: 2026-07-03 04:33 UTC*
+*Last updated: 2026-07-03 05:45 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **37** of 37
-- Total filled trades across all runs: **3670**
+- Runs completed: **38** of 38
+- Total filled trades across all runs: **3874**
 - Average expectancy across runs: **-0.11R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
@@ -142,6 +142,55 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | 5-6 | 176 | 30.2% | -0.17R |
 | 6-7 | 182 | 36.1% | -0.01R |
 | 7+ | 205 | 37.9% | +0.00R |
+
+---
+
+### h1only_20080301_20080430
+
+**Unclassified** | 2008-03-01 to 2008-04-30 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 204 (of 303 rows) |
+| Win rate | 21.4% |
+| Expectancy | -0.36R |
+| Max drawdown | +79.61R |
+| Longest losing streak | 11 trades |
+| Proximal fill rate | 67.3% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| USDJPY | 17 | 30.8% | -0.16R |
+| EURUSD | 24 | 22.2% | -0.19R |
+| GOLD | 27 | 26.1% | -0.25R |
+| EURJPY | 20 | 23.5% | -0.37R |
+| AUDUSD | 25 | 29.2% | -0.32R |
+| USDCAD | 22 | 18.8% | -0.39R |
+| NZDUSD | 16 | 8.3% | -0.60R |
+| USDCHF | 27 | 18.2% | -0.42R |
+| GBPUSD | 26 | 13.0% | -0.58R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 37 | 30.0% | -0.13R |
+| London | 97 | 22.5% | -0.35R |
+| NY | 71 | 16.9% | -0.49R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 2-3 | 2 | 50.0% | +0.10R |
+| 3-4 | 15 | 33.3% | -0.04R |
+| 4-5 | 32 | 38.5% | -0.07R |
+| 5-6 | 48 | 23.1% | -0.34R |
+| 6-7 | 32 | 14.3% | -0.56R |
+| 7+ | 75 | 14.1% | -0.50R |
 
 ---
 
