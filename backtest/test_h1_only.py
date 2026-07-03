@@ -338,6 +338,46 @@ def test_be_arms_at_exact_1r_touch():
     return ok
 
 
+def test_g10_rounded_near_miss_is_not_a_violation():
+    """Regression (2026-07-03): G10 rule (b) must NOT fire on a genuine full-SL
+    loser whose raw MFE (0.9995-0.99999R) rounds UP to exactly 1.000R.
+
+    Root bug: rule (b) tripped at `mfe_r >= 0.999`. A real trade can reach just
+    under +1R (below the be_eps arm tolerance, so break-even never arms) and then
+    take a full -1R stop -> the stored 3dp-rounded mfe_r shows 1.000. That is
+    physically possible, but the old threshold flagged it as PHYS_IMPOSSIBLE.
+    Over an 18yr run 2 such rows tripped G10 FAIL after the be_eps walk fix was
+    already in place -- the gate threshold, not the walk, was the residual gap.
+    This pins rule (b) at +1.001R: rounding a sub-(1-1e-6)R excursion can never
+    reach it, but the true fake-excursion bug (MFE of 2-5R) still trips.
+    Binds to the LIVE predicate (g10_violations), not a copy of the threshold.
+    """
+    print("\n== test_g10_rounded_near_miss_is_not_a_violation ==")
+    from backtest.scanlog.gates import g10_violations
+    ok = True
+    # (A) The exact failing shape: full SL, mfe_r rounded to 1.0 -> must PASS.
+    near_miss = {"exit_reason": "sl", "r_realised": -1.0, "mfe_r": 1.0,
+                 "mae_r": -1.0}
+    ok &= check("full_sl_loser_with_1R_mfe" not in g10_violations(near_miss),
+                f"rounded near-miss (mfe_r=1.0, r=-1.0) is not a G10 violation "
+                f"(got {g10_violations(near_miss)})")
+    # (B) The real fake-excursion bug: MFE well past +1R -> must still FAIL.
+    fake = {"exit_reason": "sl", "r_realised": -1.0, "mfe_r": 2.3, "mae_r": -1.0}
+    ok &= check("full_sl_loser_with_1R_mfe" in g10_violations(fake),
+                f"true fake excursion (mfe_r=2.3 on a full SL) still trips G10 "
+                f"(got {g10_violations(fake)})")
+    # (C) Sign rules and TP1-cap rule unaffected.
+    ok &= check("excursion_sign" in g10_violations(
+                    {"exit_reason": "sl", "r_realised": -1.0, "mfe_r": -0.5,
+                     "mae_r": 0.0}),
+                "negative mfe_r still trips excursion_sign")
+    ok &= check("mfe_beyond_tp1_exit" in g10_violations(
+                    {"exit_reason": "tp1", "r_realised": 1.0, "mfe_r": 1.5,
+                     "mae_r": -0.2}),
+                "mfe past TP1 exit still trips mfe_beyond_tp1_exit")
+    return ok
+
+
 def main():
     results = [
         ("test_signature_h1_only",      test_signature_h1_only()),
@@ -345,6 +385,8 @@ def main():
         ("test_dual_simulator_columns", test_dual_simulator_columns()),
         ("test_tp2_ordering_invariant", test_tp2_ordering_invariant()),
         ("test_be_arms_at_exact_1r_touch", test_be_arms_at_exact_1r_touch()),
+        ("test_g10_rounded_near_miss_is_not_a_violation",
+         test_g10_rounded_near_miss_is_not_a_violation()),
     ]
     print("\n=== SUMMARY ===")
     fail = 0

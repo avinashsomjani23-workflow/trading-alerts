@@ -102,6 +102,43 @@ def _sum_r_realised_pnl(trades: List[Dict[str, Any]], risk_usd: float,
         * risk_usd, 6)
 
 
+def g10_violations(t: Dict[str, Any]) -> List[str]:
+    """The G10 rule set (per-trade physical possibility) as a pure predicate, so
+    the gate loop and its regression test bind to ONE threshold definition.
+
+    Rules (tolerances cover 3dp rounding of the stored mfe_r/mae_r):
+      a) mfe_r < 0 or mae_r > 0            -- impossible by construction
+         (both start at entry = 0 and only widen).
+      b) exit sl at <=-1R with mfe_r >= +1.001R -- the fake-excursion bug class:
+         a bar high credited to MFE that was actually pre-fill / same-SL-bar
+         price. Threshold is +1.001R, NOT +0.999R: a GENUINE full-SL loser can
+         reach 0.9995-0.99999R MFE without arming break-even (arm tolerance
+         be_eps = 1e-6*r_distance is far tighter than the 5e-4*r_distance
+         rounding boundary of the stored mfe_r), and that rounds UP to exactly
+         1.000. Such a row is physically real. Only MFE PAST +1R -- unreachable
+         by rounding a sub-(1-1e-6)R excursion -- proves the old bug is back.
+         See h1_only_simulator.py be_eps.
+      c) exit tp1 with mfe_r > r_realised   -- MFE is capped at the TP1 exit
+         level; beyond it is post-exit price.
+    Returns the list of violated rule tags (empty = physically possible).
+    `never_filled` rows carry no excursion and are skipped by the caller.
+    """
+    try:
+        mfe = float(t.get("mfe_r") or 0.0)
+        mae = float(t.get("mae_r") or 0.0)
+        r = float(t.get("r_realised") or 0.0)
+    except (TypeError, ValueError):
+        return []
+    bad: List[str] = []
+    if mfe < -0.002 or mae > 0.002:
+        bad.append("excursion_sign")
+    if t.get("exit_reason") == "sl" and r <= -0.999 and mfe >= 1.001:
+        bad.append("full_sl_loser_with_1R_mfe")
+    if t.get("exit_reason") == "tp1" and mfe > r + 0.002:
+        bad.append("mfe_beyond_tp1_exit")
+    return bad
+
+
 def _has_fail_conditions(counts: Dict[str, int]) -> List[str]:
     out = []
     for code, n in counts.items():
@@ -303,35 +340,18 @@ def evaluate(
     ))
 
     # ---- G10 physical possibility of per-trade metrics ---------------------
-    # Tripwires for the "measured a thing that could not have happened" class
-    # (the MFE fill-bar bug family). Parent-side over trade rows, so worker
-    # log loss can never hide it. Rules (tolerances cover 3dp rounding):
-    #   a) mfe_r < 0 or mae_r > 0            — impossible by construction
-    #      (both start at entry = 0 and only widen).
-    #   b) exit sl at ~-1R with mfe_r >= ~+1R — impossible under BE@1R: a clean
-    #      +1R print arms break-even (worst exit 0R), and contaminated bars
-    #      (fill/SL/TP1-exit) are excluded from MFE. Any such row means the
-    #      excursion walk credited pre-fill / same-bar price again.
-    #   c) exit tp1 with mfe_r > r_realised   — MFE is capped at the TP1 exit
-    #      level; beyond it is post-exit price.
+    # Rule set lives in g10_violations() so the gate and its regression test
+    # bind to ONE threshold. Parent-side over trade rows, so worker log loss can
+    # never hide it. (Rule docs are on g10_violations.)
     phys_violations = []
     for t in trades:
         if t.get("exit_reason") == "never_filled":
             continue
-        try:
+        bad = g10_violations(t)
+        if bad:
+            r = float(t.get("r_realised") or 0.0)
             mfe = float(t.get("mfe_r") or 0.0)
             mae = float(t.get("mae_r") or 0.0)
-            r = float(t.get("r_realised") or 0.0)
-        except (TypeError, ValueError):
-            continue
-        bad = []
-        if mfe < -0.002 or mae > 0.002:
-            bad.append("excursion_sign")
-        if t.get("exit_reason") == "sl" and r <= -0.999 and mfe >= 0.999:
-            bad.append("full_sl_loser_with_1R_mfe")
-        if t.get("exit_reason") == "tp1" and mfe > r + 0.002:
-            bad.append("mfe_beyond_tp1_exit")
-        if bad:
             phys_violations.append({"pair": t.get("pair"),
                                     "alert_ts": t.get("alert_ts"),
                                     "exit_reason": t.get("exit_reason"),
