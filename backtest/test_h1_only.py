@@ -293,12 +293,58 @@ def test_tp2_ordering_invariant():
     return ok
 
 
+def test_be_arms_at_exact_1r_touch():
+    """Regression (2026-07-03): a bar that touches EXACTLY +1R must arm break-even.
+
+    Root bug: be_trigger = entry +/- r_distance carries float error (e.g.
+    1.0151000000000001 for a bar high of 1.0151), so `hi >= be_trigger` failed by
+    ~2e-16 on the exact-touch bar while MFE still credited the raw high as +1R. The
+    trade then rode to a full -1R loss -> a physically impossible row (exit sl at
+    -1R with mfe_r rounded to +1.0), which G10 rule (b) flags. This pins the fix
+    (be_eps tolerance) on the standalone exit walk. Real occurrence: USDCHF
+    2008-04-02, USDCAD 2008-07-18.
+    """
+    print("\n== test_be_arms_at_exact_1r_touch ==")
+    from backtest.exit_engine import walk_multileg
+    # Reproduce the exact USDCHF geometry: entry 1.0115, sl 1.0079 -> r_distance
+    # 0.0036 (with the same FP tail), be_trigger = 1.0151000000000001.
+    entry, sl = 1.0115, 1.0079
+    r_distance = abs(entry - sl)
+    be_trigger = entry + r_distance
+    check(be_trigger > 1.0151, f"FP: be_trigger {be_trigger!r} > raw 1.0151 (the trap)")
+    tp1 = 1.0194  # well past +1R; not hit in this window
+    idx = pd.date_range("2008-04-02 13:00", periods=3, freq="h", tz="UTC")
+    # Bar 0 = fill bar (low touches entry). Bar 1 = high touches EXACTLY +1R (1.0151),
+    # no other level hit. Bar 2 = drops to the initial SL.
+    future = pd.DataFrame({
+        "Open":  [1.0157, 1.0126, 1.0098],
+        "High":  [1.0157, 1.0151, 1.0098],
+        "Low":   [1.0112, 1.0112, 1.0068],
+        "Close": [1.0126, 1.0149, 1.0070],
+    }, index=idx)
+    cfg = {"legs": [(1.0, "tp1")], "be_trigger_r": 1.0, "be_to_r": 0.0}
+    res = walk_multileg(future, "LONG", entry, sl, r_distance, tp1, cfg,
+                        weekend_flat=False)
+    ok = True
+    # BE armed at +1R -> the SL exit lands at entry (0R), NOT -1R.
+    ok &= check(res["r_realised"] >= -0.002,
+                f"exact +1R touch arms BE -> exit ~0R (got r={res['r_realised']})")
+    # And the impossible pairing (sl at -1R with mfe_r ~+1R) must not occur.
+    impossible = (res["exit_reason"] == "sl" and res["r_realised"] <= -0.999
+                  and res["mfe_r"] >= 0.999)
+    ok &= check(not impossible,
+                f"no full_sl_loser_with_1R_mfe (exit={res['exit_reason']}, "
+                f"r={res['r_realised']}, mfe_r={res['mfe_r']})")
+    return ok
+
+
 def main():
     results = [
         ("test_signature_h1_only",      test_signature_h1_only()),
         ("test_levels_dual_entry",      test_levels_dual_entry()),
         ("test_dual_simulator_columns", test_dual_simulator_columns()),
         ("test_tp2_ordering_invariant", test_tp2_ordering_invariant()),
+        ("test_be_arms_at_exact_1r_touch", test_be_arms_at_exact_1r_touch()),
     ]
     print("\n=== SUMMARY ===")
     fail = 0

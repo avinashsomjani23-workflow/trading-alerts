@@ -1,0 +1,83 @@
+[INFO] run_start regime=bau regime_label=None mode=h1_only start=2008-03-01 end=2008-04-30 pairs=['EURUSD', 'NZDUSD', 'USDJPY', 'USDCHF', 'GOLD', 'GBPUSD', 'AUDUSD', 'USDCAD', 'EURJPY', 'BTCUSD'] risk_usd=250.0 send_email=False
+[INFO] backtest_atr_cap pair=EURUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDJPY pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=NZDUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDCHF pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=GOLD pair_type=commodity live=3.0 backtest=3.0
+[INFO] backtest_atr_cap pair=GBPUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=AUDUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDCAD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=EURJPY pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=BTCUSD pair_type=crypto live=3.0 backtest=3.0
+
+[H1-ONLY MODE] start=2008-03-01 end=2008-04-30 pairs=['EURUSD', 'NZDUSD', 'USDJPY', 'USDCHF', 'GOLD', 'GBPUSD', 'AUDUSD', 'USDCAD', 'EURJPY', 'BTCUSD'] risk_per_trade=$250
+  No M15/M5 fetches. No scoring gate. Dual entry per OB.
+  News: SKIPPED (BACKTEST_SKIP_NEWS set)
+[INFO] news_fetched events=0 coverage={'ff': False} range=2008-02-29T00:00:00+00:00..2008-05-01T00:00:00+00:00
+[WARN] data_partial_coverage symbol=BTCUSD=X interval=1h requested=2008-01-26T00:00:00+00:00..2008-04-30T00:00:00+00:00 available=2011-03-23T22:00:00+00:00..2026-06-26T04:00:00+00:00
+  [partial coverage] BTCUSD=X 1h: requested 2008-01-26..2008-04-30 runs beyond cache 2011-03-23..2026-06-26 — returning available slice
+  [scanlog] manifest written -> C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\out\scanlog\h1only_20080301_20080430
+[INFO] pair_data_loaded pair=EURUSD h1_rows=1597 h1_first=2008-01-27 22:00:00+00:00 h1_last=2008-04-30 00:00:00+00:00
+[INFO] pair_data_loaded pair=USDJPY h1_rows=1596 h1_first=2008-01-27 22:00:00+00:00 h1_last=2008-04-30 00:00:00+00:00
+[INFO] pair_data_loaded pair=NZDUSD h1_rows=1596 h1_first=2008-01-27 22:00:00+00:00 h1_last=2008-04-30 00:00:00+00:00
+[INFO] pair_data_loaded pair=USDCHF h1_rows=1597 h1_first=2008-01-27 22:00:00+00:00 h1_last=2008-04-30 00:00:00+00:00
+[INFO] pair_data_loaded pair=GOLD h1_rows=1524 h1_first=2008-01-27 23:00:00+00:00 h1_last=2008-04-30 00:00:00+00:00
+[INFO] pair_data_loaded pair=GBPUSD h1_rows=1596 h1_first=2008-01-27 22:00:00+00:00 h1_last=2008-04-30 00:00:00+00:00
+[INFO] pair_data_loaded pair=AUDUSD h1_rows=1596 h1_first=2008-01-27 22:00:00+00:00 h1_last=2008-04-30 00:00:00+00:00
+[INFO] pair_data_loaded pair=USDCAD h1_rows=1597 h1_first=2008-01-27 22:00:00+00:00 h1_last=2008-04-30 00:00:00+00:00
+[INFO] pair_data_loaded pair=EURJPY h1_rows=1596 h1_first=2008-01-27 22:00:00+00:00 h1_last=2008-04-30 00:00:00+00:00
+[WARN] pair_skip pair=BTCUSD reason=h1_unavailable
+  [SKIP] H1 unavailable for BTCUSD
+
+  [parallel] launching 9 pairs across 8 workers
+[INFO] pair_alerts_collected pair=EURUSD alerts=88 mode=h1_only
+[INFO] pair_trades_simulated pair=EURUSD trades=41 news_blocked=0 ist_blocked=10 killzone_dropped_alerts=26
+[INFO] pair_alerts_collected pair=USDJPY alerts=94 mode=h1_only
+[INFO] pair_trades_simulated pair=USDJPY trades=41 news_blocked=0 ist_blocked=13 killzone_dropped_alerts=27
+[INFO] pair_alerts_collected pair=NZDUSD alerts=50 mode=h1_only
+[INFO] pair_trades_simulated pair=NZDUSD trades=31 news_blocked=0 ist_blocked=7 killzone_dropped_alerts=22
+[INFO] pair_alerts_collected pair=USDCHF alerts=114 mode=h1_only
+[INFO] pair_trades_simulated pair=USDCHF trades=47 news_blocked=0 ist_blocked=7 killzone_dropped_alerts=19
+[INFO] pair_alerts_collected pair=GOLD alerts=116 mode=h1_only
+[INFO] pair_trades_simulated pair=GOLD trades=52 news_blocked=0 ist_blocked=5 killzone_dropped_alerts=23
+[INFO] pair_alerts_collected pair=GBPUSD alerts=97 mode=h1_only
+[INFO] pair_trades_simulated pair=GBPUSD trades=52 news_blocked=0 ist_blocked=12 killzone_dropped_alerts=30
+[INFO] pair_alerts_collected pair=AUDUSD alerts=73 mode=h1_only
+[INFO] pair_trades_simulated pair=AUDUSD trades=41 news_blocked=0 ist_blocked=8 killzone_dropped_alerts=20
+[INFO] pair_alerts_collected pair=USDCAD alerts=111 mode=h1_only
+[INFO] pair_trades_simulated pair=USDCAD trades=37 news_blocked=0 ist_blocked=7 killzone_dropped_alerts=19
+[INFO] pair_alerts_collected pair=EURJPY alerts=85 mode=h1_only
+[INFO] pair_trades_simulated pair=EURJPY trades=39 news_blocked=0 ist_blocked=9 killzone_dropped_alerts=23
+[INFO] report_written path=C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20080301_20080430 total_alerts=828 total_trades=381
+
+H1-only report written to C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20080301_20080430
+[INFO] exit_lab_sink_persisted path=C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20080301_20080430\exit_lab_sink.jsonl rows=2048
+================================================================
+SCAN-LOG RUN HEALTH
+================================================================
+GATE  VERDICT DESCRIPTION
+G1    PASS    Sum pnl_usd == Sum r_realised*risk, and equals reporting headline
+G2    PASS    scan records == expected (pair x walk bars); zero HEARTBEAT_GAP; never vacuous (0 declared bars with trades present = blind run)
+G3    PASS    ob<=bos<alert<=fill on every filled trade (fill on the alert candle allowed)
+G4    PASS    every FAIL-severity condition counter is 0
+G5    PASS    every knob re-read at END equals manifest (no drift)
+G6    PASS    headline recomputed from r_realised only; tp1/tp2 excluded
+G7    PASS    content hash of scan_log + events recorded for re-run compare
+G8    PASS    NAN_ATR_SKIP <= 1% post-warmup per pair (WARN >1%, FAIL >5%)
+G9    PASS    every record validated against SCHEMA.md (ts/tz/outcome)
+G10   PASS    per-trade metrics physically possible (no fake excursions)
+----------------------------------------------------------------
+CONDITION COUNTERS: none
+----------------------------------------------------------------
+headline (from r_realised): $-18,539.75
+OVERALL: PASS (exit code 0)
+================================================================
+  [scanlog] compressed artifacts in C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\out\scanlog\h1only_20080301_20080430
+  [registry] processed h1only_20080301_20080430 — 204 filled trades, expectancy -0.36R
+  [registry] registry.json written (38 runs)
+  [registry] BACKTEST_LOG.md written (38 runs)
+[commit_logs] committed de1bc9b8 -- 6 files for h1only_20080301_20080430
+  [log commit OK — LOCAL ONLY, not pushed] h1only_20080301_20080430 -> de1bc9b8
+    To publish to GitHub when ready: git push origin main
+[INFO] logs_committed_local_only run_id=h1only_20080301_20080430 sha=de1bc9b8
+[INFO] run_end

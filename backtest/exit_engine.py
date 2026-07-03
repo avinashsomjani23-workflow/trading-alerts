@@ -112,6 +112,12 @@ def walk_multileg(
               else entry - be_trigger_r * r_distance)
     )
     be_to_price = entry + be_to_r * r_distance if long else entry - be_to_r * r_distance
+    # FP-boundary tolerance: be_trigger_price = entry +/- be_trigger_r * r_distance
+    # carries accumulated float error, so a bar that touches the trigger EXACTLY can
+    # fail `hi >= be_trigger_price` by ~2e-16 while MFE credits the raw high -- the
+    # same split that produced the G10 full_sl_loser_with_1R_mfe row in the live
+    # walk (h1_only_simulator). Arm within this tolerance so the two agree.
+    be_eps = r_distance * 1e-6
 
     cur_sl = sl
     be_armed = False
@@ -191,7 +197,8 @@ def walk_multileg(
 
         # 7. Arm break-even.
         if not be_armed and be_trigger_price is not None:
-            reached = (hi >= be_trigger_price) if long else (lo <= be_trigger_price)
+            reached = ((hi >= be_trigger_price - be_eps) if long
+                       else (lo <= be_trigger_price + be_eps))
             if reached:
                 be_armed = True
                 cur_sl = be_to_price

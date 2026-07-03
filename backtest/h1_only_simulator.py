@@ -676,6 +676,15 @@ def _simulate_single_entry(
     cur_sl = sl
     be_armed = False
     be_trigger = (entry + r_distance) if bias == "LONG" else (entry - r_distance)
+    # FP-boundary tolerance (2026-07-03): be_trigger = entry +/- r_distance carries
+    # accumulated float error (e.g. 1.0151000000000001 vs a bar high of 1.0151), so
+    # a bar that touches EXACTLY +1R can fail `bar_hi >= be_trigger` by ~2e-16 while
+    # MFE still credits +1R off the raw high. That split produced a physically
+    # impossible row (exit sl at -1R with mfe_r rounded to +1.0) — G10 rule (b). Arm
+    # break-even when price reaches +1R within this tolerance so the BE trigger and
+    # the MFE recorder agree on the exact-touch bar. Scaled to r_distance so it is
+    # instrument-agnostic and far below any real tick.
+    be_eps = r_distance * 1e-6
     # Measurement only (2026-07-02, no behavior change): on the bar that arms
     # break-even, did that SAME bar's wick also trade back to entry? If so the
     # intra-bar order of "+1R first, arm, THEN pull back to entry" vs "pull back
@@ -741,7 +750,7 @@ def _simulate_single_entry(
             sl_hit_in_bar = bar_lo <= cur_sl
             tp1_hit_in_bar = bar_hi >= tp1
             tp2_hit_in_bar = (tp2 is not None) and (bar_hi >= tp2)
-            be_reached_in_bar = bar_hi >= be_trigger
+            be_reached_in_bar = bar_hi >= be_trigger - be_eps
             # MFE/MAE track the trade's IN-TRADE excursion only (fill -> exit).
             # Three bars cannot contribute their raw extremes:
             #   - SL bar: the wick that touched SL also printed the bar high, so
@@ -766,7 +775,7 @@ def _simulate_single_entry(
             sl_hit_in_bar = bar_hi >= cur_sl
             tp1_hit_in_bar = bar_lo <= tp1
             tp2_hit_in_bar = (tp2 is not None) and (bar_lo <= tp2)
-            be_reached_in_bar = bar_lo <= be_trigger
+            be_reached_in_bar = bar_lo <= be_trigger + be_eps
             if not sl_hit_in_bar and not is_fill_bar_this_iter:
                 if tp1_hit_in_bar:
                     mfe_price = min(mfe_price, tp1)
