@@ -1,0 +1,434 @@
+{
+  "run_id": "h1only_20200101_20200131",
+  "meta": {
+    "start": "2020-01-01",
+    "end": "2020-01-31",
+    "regime": "bau",
+    "regime_label": null,
+    "mode": "h1_only",
+    "pairs": [
+      "EURUSD",
+      "USDCHF",
+      "NZDUSD",
+      "USDJPY"
+    ],
+    "generated_utc": "2026-07-03T04:30:34.709140+00:00",
+    "news_coverage": {
+      "ff": false
+    },
+    "news_events_fetched": 0,
+    "news_blocked_rows": 0,
+    "news_window_minutes": 30,
+    "ist_blocked_rows": 20,
+    "ist_window_forex": "UTC 03:30-18:30 (IST 09:00-24:00)",
+    "ist_window_index": "UTC 03:30-18:30 (IST 09:00-24:00)",
+    "killzone_dropped_alerts": 53,
+    "killzone_drops_by_pair": {
+      "EURUSD": 13,
+      "USDJPY": 11,
+      "NZDUSD": 14,
+      "USDCHF": 15
+    },
+    "killzone_windows_by_pair": {
+      "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "USDJPY": "Asian Range: 20:00-00:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "NZDUSD": "Asian Range: 20:00-00:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "USDCHF": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
+    }
+  },
+  "risk_per_trade_usd": 250.0,
+  "total_trade_rows": 61,
+  "fill_rate_proximal": {
+    "alerts": 61,
+    "filled": 39,
+    "fill_rate_pct": 63.9
+  },
+  "exit_reason_counts_proximal": {
+    "sl": 25,
+    "tp1": 12,
+    "never_filled": 21,
+    "friday_flat": 2,
+    "window_end": 1
+  },
+  "scoreboards": {
+    "proximal_realised": {
+      "trades": 39,
+      "wins": 14,
+      "losses": 20,
+      "breakevens": 5,
+      "win_rate_pct": 41.2,
+      "expectancy_r": 0.057,
+      "expectancy_usd": 14.28,
+      "total_r": 2.227,
+      "total_pnl_usd": 556.75,
+      "avg_win_r": 1.588,
+      "avg_loss_r": -1.0,
+      "avg_win_usd": 397.0,
+      "avg_loss_usd": -250.0,
+      "avg_mfe_r": 1.652,
+      "avg_mae_r": -0.559,
+      "win_capture_pct": 96.0
+    },
+    "proximal_exit_tp1": {
+      "trades": 39,
+      "wins": 15,
+      "losses": 24,
+      "breakevens": 0,
+      "win_rate_pct": 38.5,
+      "expectancy_r": 0.245,
+      "expectancy_usd": 61.22,
+      "total_r": 9.55,
+      "total_pnl_usd": 2387.5,
+      "avg_win_r": 2.237,
+      "avg_loss_r": -1.0,
+      "avg_win_usd": 559.0,
+      "avg_loss_usd": -250.0,
+      "avg_mfe_r": 1.658,
+      "avg_mae_r": -0.571,
+      "win_capture_pct": 135.0
+    },
+    "proximal_exit_tp2": {
+      "trades": 39,
+      "wins": 7,
+      "losses": 24,
+      "breakevens": 8,
+      "win_rate_pct": 22.6,
+      "expectancy_r": 0.282,
+      "expectancy_usd": 70.49,
+      "total_r": 10.996,
+      "total_pnl_usd": 2749.0,
+      "avg_win_r": 4.999,
+      "avg_loss_r": -1.0,
+      "avg_win_usd": 1250.0,
+      "avg_loss_usd": -250.0,
+      "avg_mfe_r": 1.819,
+      "avg_mae_r": -0.571,
+      "win_capture_pct": 275.0
+    }
+  },
+  "per_pair_proximal_realised": [
+    {
+      "pair": "EURUSD",
+      "trades": 11,
+      "win_rate_pct": 50.0,
+      "expectancy_r": 0.308,
+      "total_pnl_usd": 846.5
+    },
+    {
+      "pair": "USDJPY",
+      "trades": 9,
+      "win_rate_pct": 42.9,
+      "expectancy_r": 0.198,
+      "total_pnl_usd": 445.25
+    },
+    {
+      "pair": "NZDUSD",
+      "trades": 10,
+      "win_rate_pct": 44.4,
+      "expectancy_r": 0.167,
+      "total_pnl_usd": 417.75
+    },
+    {
+      "pair": "USDCHF",
+      "trades": 9,
+      "win_rate_pct": 25.0,
+      "expectancy_r": -0.512,
+      "total_pnl_usd": -1152.75
+    }
+  ],
+  "per_session_proximal_realised": [
+    {
+      "session": "Asia",
+      "trades": 9,
+      "win_rate_pct": 75.0,
+      "expectancy_r": 0.804,
+      "total_pnl_usd": 1808.0
+    },
+    {
+      "session": "London",
+      "trades": 19,
+      "win_rate_pct": 36.8,
+      "expectancy_r": -0.048,
+      "total_pnl_usd": -227.0
+    },
+    {
+      "session": "NY",
+      "trades": 11,
+      "win_rate_pct": 14.3,
+      "expectancy_r": -0.372,
+      "total_pnl_usd": -1024.25
+    }
+  ],
+  "score_buckets_proximal_realised": [
+    {
+      "score_bucket": "3-4",
+      "trades": 5,
+      "win_rate_pct": 50.0,
+      "expectancy_r": 0.211
+    },
+    {
+      "score_bucket": "4-5",
+      "trades": 5,
+      "win_rate_pct": 60.0,
+      "expectancy_r": 0.753
+    },
+    {
+      "score_bucket": "5-6",
+      "trades": 15,
+      "win_rate_pct": 46.2,
+      "expectancy_r": 0.059
+    },
+    {
+      "score_bucket": "6-7",
+      "trades": 6,
+      "win_rate_pct": 25.0,
+      "expectancy_r": -0.255
+    },
+    {
+      "score_bucket": "7+",
+      "trades": 8,
+      "win_rate_pct": 25.0,
+      "expectancy_r": -0.244
+    }
+  ],
+  "news_blocked_trade_rows": 0,
+  "news_blocked_audit": [],
+  "killzone_dropped_alerts": 53,
+  "killzone_drops_by_pair": {
+    "EURUSD": 13,
+    "USDJPY": 11,
+    "NZDUSD": 14,
+    "USDCHF": 15
+  },
+  "killzone_windows_by_pair": {
+    "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "USDJPY": "Asian Range: 20:00-00:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "NZDUSD": "Asian Range: 20:00-00:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "USDCHF": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
+  },
+  "score_floor": 4.0,
+  "below_score_floor_trade_rows": 0,
+  "below_score_floor_audit": [],
+  "ist_blocked_trade_rows": 20,
+  "ist_blocked_audit": [
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-01-16T23:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-01-28T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.757
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-08T00:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-14T00:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.178
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-17T01:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-21T01:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-21T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-21T19:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-23T00:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-27T01:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2020-01-05T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2020-01-08T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2020-01-16T01:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "friday_flat",
+      "would_have_r": 0.221
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2020-01-23T22:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2020-01-23T22:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2020-01-02T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2020-01-08T00:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2020-01-09T19:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2020-01-29T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.115
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2020-01-30T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    }
+  ],
+  "by_group": {
+    "forex": {
+      "label": "Original (FX majors + Gold)",
+      "pairs": [
+        "EURUSD",
+        "USDCHF",
+        "NZDUSD",
+        "USDJPY"
+      ],
+      "scoreboards": {
+        "proximal_realised": {
+          "trades": 39,
+          "wins": 14,
+          "losses": 20,
+          "breakevens": 5,
+          "win_rate_pct": 41.2,
+          "expectancy_r": 0.057,
+          "expectancy_usd": 14.28,
+          "total_r": 2.227,
+          "total_pnl_usd": 556.75,
+          "avg_win_r": 1.588,
+          "avg_loss_r": -1.0,
+          "avg_win_usd": 397.0,
+          "avg_loss_usd": -250.0,
+          "avg_mfe_r": 1.652,
+          "avg_mae_r": -0.559,
+          "win_capture_pct": 96.0
+        },
+        "proximal_exit_tp1": {
+          "trades": 39,
+          "wins": 15,
+          "losses": 24,
+          "breakevens": 0,
+          "win_rate_pct": 38.5,
+          "expectancy_r": 0.245,
+          "expectancy_usd": 61.22,
+          "total_r": 9.55,
+          "total_pnl_usd": 2387.5,
+          "avg_win_r": 2.237,
+          "avg_loss_r": -1.0,
+          "avg_win_usd": 559.0,
+          "avg_loss_usd": -250.0,
+          "avg_mfe_r": 1.658,
+          "avg_mae_r": -0.571,
+          "win_capture_pct": 135.0
+        },
+        "proximal_exit_tp2": {
+          "trades": 39,
+          "wins": 7,
+          "losses": 24,
+          "breakevens": 8,
+          "win_rate_pct": 22.6,
+          "expectancy_r": 0.282,
+          "expectancy_usd": 70.49,
+          "total_r": 10.996,
+          "total_pnl_usd": 2749.0,
+          "avg_win_r": 4.999,
+          "avg_loss_r": -1.0,
+          "avg_win_usd": 1250.0,
+          "avg_loss_usd": -250.0,
+          "avg_mfe_r": 1.819,
+          "avg_mae_r": -0.571,
+          "win_capture_pct": 275.0
+        }
+      },
+      "fill_rate_proximal": {
+        "alerts": 61,
+        "filled": 39,
+        "fill_rate_pct": 63.9
+      },
+      "news_blocked_trade_rows": 0,
+      "ist_blocked_trade_rows": 0,
+      "killzone_dropped_alerts": 53,
+      "score_floor": 4.0,
+      "below_score_floor_trade_rows": 0,
+      "html_file": "report_forex.html",
+      "excel_file": "forex_trades.xlsx"
+    }
+  }
+}
