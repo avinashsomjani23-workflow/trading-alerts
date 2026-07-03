@@ -1,8 +1,8 @@
 {
   "run_id": "h1only_20090101_20091231",
   "schema_version": "1.0.0",
-  "generated_utc": "2026-07-02T11:03:29.978647+00:00",
-  "git_sha": "934a2d1",
+  "generated_utc": "2026-07-03T06:08:45.514033+00:00",
+  "git_sha": "037dfc8",
   "risk_usd": 250.0,
   "min_warmup_bars": 50,
   "fetch_pad_days": 35,
@@ -61,6 +61,61 @@
       "n_bars": 6319,
       "fingerprint": "55859a578b93b644",
       "prox_cap_atr": 3.0
+    },
+    {
+      "name": "GBPUSD",
+      "symbol": "GBPUSD=X",
+      "requested_start": "2009-01-01T00:00:00+00:00",
+      "requested_end": "2009-12-31T00:00:00+00:00",
+      "served_start": "2008-11-27T00:00:00+00:00",
+      "served_end": "2009-12-31T00:00:00+00:00",
+      "n_bars": 6656,
+      "fingerprint": "1c50273122ec642b",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "AUDUSD",
+      "symbol": "AUDUSD=X",
+      "requested_start": "2009-01-01T00:00:00+00:00",
+      "requested_end": "2009-12-31T00:00:00+00:00",
+      "served_start": "2008-11-27T00:00:00+00:00",
+      "served_end": "2009-12-31T00:00:00+00:00",
+      "n_bars": 6681,
+      "fingerprint": "0ef295e2e18104a7",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "USDCAD",
+      "symbol": "USDCAD=X",
+      "requested_start": "2009-01-01T00:00:00+00:00",
+      "requested_end": "2009-12-31T00:00:00+00:00",
+      "served_start": "2008-11-27T00:00:00+00:00",
+      "served_end": "2009-12-31T00:00:00+00:00",
+      "n_bars": 6680,
+      "fingerprint": "4950733fe81fdf8a",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "EURJPY",
+      "symbol": "EURJPY=X",
+      "requested_start": "2009-01-01T00:00:00+00:00",
+      "requested_end": "2009-12-31T00:00:00+00:00",
+      "served_start": "2008-11-27T00:00:00+00:00",
+      "served_end": "2009-12-31T00:00:00+00:00",
+      "n_bars": 6679,
+      "fingerprint": "3646e35017137405",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "BTCUSD",
+      "symbol": "BTCUSD=X",
+      "requested_start": "2009-01-01T00:00:00+00:00",
+      "requested_end": "2009-12-31T00:00:00+00:00",
+      "served_start": null,
+      "served_end": null,
+      "n_bars": 0,
+      "fingerprint": "none",
+      "prox_cap_atr": 3.0
     }
   ],
   "knobs": {
@@ -78,11 +133,26 @@
     "USDCHF.spread_pips": 2.0,
     "GOLD.atr_multiplier": 3.0,
     "GOLD.distal_invalidation_mode": "close",
-    "GOLD.spread_pips": 0.5
+    "GOLD.spread_pips": 0.5,
+    "GBPUSD.atr_multiplier": 2.5,
+    "GBPUSD.distal_invalidation_mode": "close",
+    "GBPUSD.spread_pips": 2.0,
+    "AUDUSD.atr_multiplier": 2.5,
+    "AUDUSD.distal_invalidation_mode": "close",
+    "AUDUSD.spread_pips": 2.0,
+    "USDCAD.atr_multiplier": 2.5,
+    "USDCAD.distal_invalidation_mode": "close",
+    "USDCAD.spread_pips": 2.0,
+    "EURJPY.atr_multiplier": 2.5,
+    "EURJPY.distal_invalidation_mode": "close",
+    "EURJPY.spread_pips": 2.0,
+    "BTCUSD.atr_multiplier": 3.0,
+    "BTCUSD.distal_invalidation_mode": "close",
+    "BTCUSD.spread_pips": 20.0
   },
   "versions": {
-    "python": "3.14.5",
+    "python": "3.11.15",
     "pandas": "3.0.3",
-    "yfinance": "1.3.0"
+    "yfinance": "1.5.1"
   }
 }

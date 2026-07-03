@@ -3843,10 +3843,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-01T19:35:51.194253",
-      "last_seen_ist": "2026-07-03T10:35:45.800028",
+      "last_seen_ist": "2026-07-03T12:35:48.634166",
       "last_email_day": "2026-07-01",
       "reentry_armed": true,
-      "max_exit_distance": 1.574690000000004,
+      "max_exit_distance": 1.7757000000000005,
       "bias": "SHORT",
       "pair": "USDJPY",
       "ob_snapshot": {
@@ -4075,7 +4075,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-02T09:35:40.611101",
-      "last_seen_ist": "2026-07-03T10:35:45.800028",
+      "last_seen_ist": "2026-07-03T12:35:48.634166",
       "last_email_day": "2026-07-02",
       "reentry_armed": true,
       "max_exit_distance": 143.9464899999998,
@@ -4424,10 +4424,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-02T18:35:44.585371",
-      "last_seen_ist": "2026-07-03T10:35:45.800028",
+      "last_seen_ist": "2026-07-03T12:35:48.634166",
       "last_email_day": "2026-07-02",
-      "reentry_armed": false,
-      "max_exit_distance": 0.0030200000000000227,
+      "reentry_armed": true,
+      "max_exit_distance": 0.003750000000000142,
       "bias": "LONG",
       "pair": "EURUSD",
       "ob_snapshot": {
@@ -4540,10 +4540,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-02T18:35:44.585371",
-      "last_seen_ist": "2026-07-03T10:35:45.800028",
+      "last_seen_ist": "2026-07-03T12:35:48.634166",
       "last_email_day": "2026-07-02",
       "reentry_armed": true,
-      "max_exit_distance": 0.0030400000000000427,
+      "max_exit_distance": 0.00378999999999996,
       "bias": "LONG",
       "pair": "NZDUSD",
       "ob_snapshot": {
@@ -4657,10 +4657,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-02T23:35:53.454454",
-      "last_seen_ist": "2026-07-03T10:35:45.800028",
+      "last_seen_ist": "2026-07-03T11:35:50.810971",
       "last_email_day": "2026-07-02",
       "reentry_armed": true,
-      "max_exit_distance": 0.0030200000000000227,
+      "max_exit_distance": 0.0032200000000000006,
       "bias": "SHORT",
       "pair": "USDCHF",
       "ob_snapshot": {
