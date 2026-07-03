@@ -3669,7 +3669,7 @@ def run_radar():
     # Idempotent: skips if the current month's log file already exists.
     _backfill_phase1_scan_log()
 
-    pair_names = [p['name'] for p in config_master['pairs']]
+    pair_names = [p['name'] for p in config_master['pairs'] if not p.get('backtest_only')]
     # Per-pair scan records accumulated across the scan; written once at end.
     phase1_scan_records = []
 
