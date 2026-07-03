@@ -1,8 +1,8 @@
 {
   "run_id": "h1only_20241001_20241231",
   "schema_version": "1.0.0",
-  "generated_utc": "2026-07-03T04:19:14.201948+00:00",
-  "git_sha": "043a548",
+  "generated_utc": "2026-07-03T04:20:30.724687+00:00",
+  "git_sha": "bd75b25",
   "risk_usd": 250.0,
   "min_warmup_bars": 50,
   "fetch_pad_days": 35,
@@ -28,6 +28,17 @@
       "n_bars": 2137,
       "fingerprint": "c23e26bc4d86043d",
       "prox_cap_atr": 2.5
+    },
+    {
+      "name": "GOLD",
+      "symbol": "GC=F",
+      "requested_start": "2024-10-01T00:00:00+00:00",
+      "requested_end": "2024-12-31T00:00:00+00:00",
+      "served_start": "2024-08-27T00:00:00+00:00",
+      "served_end": "2024-12-31T00:00:00+00:00",
+      "n_bars": 2039,
+      "fingerprint": "ad24f976ed3caaab",
+      "prox_cap_atr": 3.0
     }
   ],
   "knobs": {
@@ -36,7 +47,10 @@
     "EURUSD.spread_pips": 2.0,
     "USDJPY.atr_multiplier": 2.5,
     "USDJPY.distal_invalidation_mode": "close",
-    "USDJPY.spread_pips": 2.0
+    "USDJPY.spread_pips": 2.0,
+    "GOLD.atr_multiplier": 3.0,
+    "GOLD.distal_invalidation_mode": "close",
+    "GOLD.spread_pips": 0.5
   },
   "versions": {
     "python": "3.14.5",
