@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-03T04:30:42.490169+00:00",
+  "updated_at": "2026-07-03T04:31:33.088287+00:00",
   "runs": [
     {
       "run_id": "h1only_20080102_20080215",
@@ -723,6 +723,106 @@
       },
       "notes": "",
       "recorded_at": "2026-07-03T04:30:42.486806+00:00"
+    },
+    {
+      "run_id": "h1only_20200301_20200331",
+      "start": "2020-03-01",
+      "end": "2020-03-31",
+      "group": 0,
+      "regime": "bau",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 52,
+        "filled_trades": 24,
+        "win_rate_pct": 35.3,
+        "expectancy_r": -0.003,
+        "max_dd_r": 3.0,
+        "longest_losing_streak": 4,
+        "fill_rate_proximal_pct": 46.2,
+        "per_pair": [
+          {
+            "pair": "NZDUSD",
+            "trades": 7,
+            "win_rate_pct": 40.0,
+            "expectancy_r": 0.174,
+            "total_pnl_usd": 303.75
+          },
+          {
+            "pair": "EURUSD",
+            "trades": 8,
+            "win_rate_pct": 37.5,
+            "expectancy_r": 0.019,
+            "total_pnl_usd": 37.5
+          },
+          {
+            "pair": "USDCHF",
+            "trades": 6,
+            "win_rate_pct": 33.3,
+            "expectancy_r": -0.073,
+            "total_pnl_usd": -108.75
+          },
+          {
+            "pair": "USDJPY",
+            "trades": 3,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -0.333,
+            "total_pnl_usd": -250.0
+          }
+        ],
+        "by_session": {
+          "Asia": {
+            "trades": 5,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -0.6
+          },
+          "London": {
+            "trades": 6,
+            "win_rate_pct": 33.3,
+            "expectancy_r": -0.107
+          },
+          "NY": {
+            "trades": 13,
+            "win_rate_pct": 50.0,
+            "expectancy_r": 0.275
+          }
+        },
+        "score_buckets": [
+          {
+            "score_bucket": "3-4",
+            "trades": 6,
+            "win_rate_pct": 50.0,
+            "expectancy_r": 0.155
+          },
+          {
+            "score_bucket": "4-5",
+            "trades": 7,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -0.571
+          },
+          {
+            "score_bucket": "5-6",
+            "trades": 5,
+            "win_rate_pct": 25.0,
+            "expectancy_r": -0.242
+          },
+          {
+            "score_bucket": "6-7",
+            "trades": 4,
+            "win_rate_pct": 50.0,
+            "expectancy_r": 0.34
+          },
+          {
+            "score_bucket": "7+",
+            "trades": 2,
+            "win_rate_pct": 100.0,
+            "expectancy_r": 1.423
+          }
+        ],
+        "score_verdict": "WORKS \u2014 higher score leads to better trades"
+      },
+      "notes": "",
+      "recorded_at": "2026-07-03T04:31:33.084955+00:00"
     },
     {
       "run_id": "h1only_20240701_20240731",
