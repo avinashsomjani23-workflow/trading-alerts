@@ -1,0 +1,60 @@
+{
+  "run_id": "h1only_20240101_20240331",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-07-03T14:05:25.710184+00:00",
+  "git_sha": "474d548",
+  "risk_usd": 250.0,
+  "min_warmup_bars": 150,
+  "fetch_pad_days": 35,
+  "pairs": [
+    {
+      "name": "EURUSD",
+      "symbol": "EURUSD=X",
+      "requested_start": "2024-01-01T00:00:00+00:00",
+      "requested_end": "2024-03-31T00:00:00+00:00",
+      "served_start": "2023-11-27T00:00:00+00:00",
+      "served_end": "2024-03-29T20:00:00+00:00",
+      "n_bars": 2109,
+      "fingerprint": "a80b90b058fef22f",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "USDJPY",
+      "symbol": "JPY=X",
+      "requested_start": "2024-01-01T00:00:00+00:00",
+      "requested_end": "2024-03-31T00:00:00+00:00",
+      "served_start": "2023-11-27T00:00:00+00:00",
+      "served_end": "2024-03-29T20:00:00+00:00",
+      "n_bars": 2110,
+      "fingerprint": "a9ddf01e5438a2db",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "GOLD",
+      "symbol": "GC=F",
+      "requested_start": "2024-01-01T00:00:00+00:00",
+      "requested_end": "2024-03-31T00:00:00+00:00",
+      "served_start": "2023-11-27T00:00:00+00:00",
+      "served_end": "2024-03-28T20:00:00+00:00",
+      "n_bars": 1996,
+      "fingerprint": "d237804d6475e40b",
+      "prox_cap_atr": 3.0
+    }
+  ],
+  "knobs": {
+    "EURUSD.atr_multiplier": 2.5,
+    "EURUSD.distal_invalidation_mode": "close",
+    "EURUSD.spread_pips": 2.0,
+    "USDJPY.atr_multiplier": 2.5,
+    "USDJPY.distal_invalidation_mode": "close",
+    "USDJPY.spread_pips": 2.0,
+    "GOLD.atr_multiplier": 3.0,
+    "GOLD.distal_invalidation_mode": "close",
+    "GOLD.spread_pips": 0.5
+  },
+  "versions": {
+    "python": "3.14.5",
+    "pandas": "3.0.3",
+    "yfinance": "1.3.0"
+  }
+}
