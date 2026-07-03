@@ -1110,6 +1110,18 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'distal_line':        ob_low  if ev_dir == 'bullish' else ob_high,
             'median_leg_body':    median_leg_body,
             'ob_body':            abs(C[ob_idx] - O[ob_idx]),
+            # Setup-geometry logging (A3/DECISION_GUARDRAILS.md, observe-only):
+            # body_ratio = the chosen OB candle's own body/range (distinct from
+            # ob_body above, which is raw body vs median_leg_body). Frozen once
+            # at formation, never restamped — same *_at_alert discipline as T1.
+            'body_ratio':         round(abs(C[ob_idx] - O[ob_idx]) / (H[ob_idx] - L[ob_idx]), 3)
+                                      if (H[ob_idx] - L[ob_idx]) > 0 else None,
+            # walkback_depth = count of opposing candles skipped for ANY reason
+            # (oversized news bar, undersized floor, or doji) before this one was
+            # accepted. 0 = first opposing candidate passed. Sums all three skip
+            # counters so a knob-sweep run (MIN_OB_RANGE_ATR_MULT > 0) is counted
+            # too — each candle hits exactly one branch, so no double-count.
+            'walkback_depth':     oversized_count + undersized_count + doji_count,
             'h1_atr':             float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
             'fvg':                fvg_dict,
             'sweep_observed':     sweep_obs,

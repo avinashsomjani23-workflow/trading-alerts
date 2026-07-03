@@ -79,7 +79,11 @@ def _build_scanlog(run_id, start, end, pairs_to_run, dfs, risk_usd, fetch_pad_da
         knobs[f"{name}.spread_pips"] = p.get("spread_pips")
     manifest = scanlog_emitter.build_manifest(
         run_id=run_id, git_sha=_git_sha(), risk_usd=risk_usd,
-        min_warmup_bars=50, pairs_served=pairs_served, knobs=knobs,
+        # Clamped replay skips any bar with < LIVE_DETECTION_BARS history
+        # (replay_engine._min_warmup = detection_bars). The manifest must record
+        # that real floor, not the legacy unclamped 50-bar value.
+        min_warmup_bars=replay_engine.smc_radar.LIVE_DETECTION_BARS,
+        pairs_served=pairs_served, knobs=knobs,
         fetch_pad_days=fetch_pad_days,
     )
     out_dir = SCANLOG_ROOT / run_id
@@ -718,29 +722,38 @@ def _inject_gates_html(report_dir, health) -> None:
     the run over a cosmetic patch)."""
     try:
         overall_ok = health.overall == scanlog_gates.PASS
-        head = ("<span style='font-weight:700;color:%s;'>%s</span>" % (
-            ("#0ca30c" if overall_ok else "#d03b3b"),
-            ("ALL GATES PASS" if overall_ok else "GATE FAILURE — run not trusted")))
-        rows = ""
-        for g in health.gates:
-            ok = str(g.verdict).upper() in ("PASS", "OK", "WARN")
-            vcolor = "#0ca30c" if str(g.verdict).upper() == "PASS" else (
-                "#fab219" if str(g.verdict).upper() == "WARN" else "#d03b3b")
-            rows += (
-                "<tr><td style='padding:3px 8px;border-bottom:1px solid #e1e0d9;'>"
-                "<b>%s</b></td>"
-                "<td style='padding:3px 8px;border-bottom:1px solid #e1e0d9;'>%s</td>"
-                "<td style='padding:3px 8px;border-bottom:1px solid #e1e0d9;"
-                "color:%s;font-weight:700;'>%s</td></tr>" % (
-                    g.id, g.description, vcolor, g.verdict))
-        table = (
-            "<p style='font-size:13px;margin-bottom:6px;'>%s</p>"
-            "<table style='width:100%%;border-collapse:collapse;font-size:12px;'>"
-            "<thead><tr>"
-            "<th style='text-align:left;padding:3px 8px;'>Gate</th>"
-            "<th style='text-align:left;padding:3px 8px;'>Check</th>"
-            "<th style='text-align:left;padding:3px 8px;'>Result</th>"
-            "</tr></thead><tbody>%s</tbody></table>" % (head, rows))
+        total = len(health.gates)
+        # On a clean run, nobody reads a wall of green — one line is enough.
+        # Only surface the gates that actually broke (FAIL or WARN).
+        if overall_ok:
+            table = (
+                "<p style='font-size:13px;margin-bottom:6px;color:#0ca30c;'>"
+                "<b>&#10003; All %d integrity gates passed.</b></p>" % total)
+        else:
+            failed = [g for g in health.gates
+                      if str(g.verdict).upper() not in ("PASS", "OK")]
+            rows = ""
+            for g in failed:
+                vcolor = ("#fab219" if str(g.verdict).upper() == "WARN"
+                          else "#d03b3b")
+                rows += (
+                    "<tr><td style='padding:3px 8px;border-bottom:1px solid #e1e0d9;'>"
+                    "<b>%s</b></td>"
+                    "<td style='padding:3px 8px;border-bottom:1px solid #e1e0d9;'>%s</td>"
+                    "<td style='padding:3px 8px;border-bottom:1px solid #e1e0d9;"
+                    "color:%s;font-weight:700;'>%s</td></tr>" % (
+                        g.id, g.description, vcolor, g.verdict))
+            head = ("<span style='font-weight:700;color:#d03b3b;'>"
+                    "GATE FAILURE — run not trusted (%d of %d gates)</span>" % (
+                        len(failed), total))
+            table = (
+                "<p style='font-size:13px;margin-bottom:6px;'>%s</p>"
+                "<table style='width:100%%;border-collapse:collapse;font-size:12px;'>"
+                "<thead><tr>"
+                "<th style='text-align:left;padding:3px 8px;'>Gate</th>"
+                "<th style='text-align:left;padding:3px 8px;'>Check</th>"
+                "<th style='text-align:left;padding:3px 8px;'>Result</th>"
+                "</tr></thead><tbody>%s</tbody></table>" % (head, rows))
         for name in ("report_forex.html", "report_gold_nas.html"):
             fp = report_dir / name
             if not fp.exists():

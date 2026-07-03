@@ -166,6 +166,29 @@ def test_zero_touches_at_alert_honoured():
         _bad(f"zero snapshot dropped: got {_row_touches(ob)}, want 0")
 
 
+# --- A3) walk-back geometry: formation-time, never restamped ---------------
+# DECISION_GUARDRAILS.md A3: ob_body_ratio / ob_walkback_depth are stamped
+# once at OB formation (smc_radar.py walk-back loop) and read as-is in the
+# row build. Unlike touches/fvg/bos_verdict there is no live-mutation risk —
+# this guards that no *_at_alert snapshot is ever introduced for them (that
+# would imply the field became mutable, silently reopening the 3d/T1 bug class).
+
+def test_walkback_fields_read_directly_no_snapshot():
+    src = (_ROOT / "backtest" / "h1_only_simulator.py").read_text(encoding="utf-8")
+    assert 'ob.get("body_ratio")' in src, \
+        "ob_body_ratio must read ob['body_ratio'] directly (formation-frozen, no snapshot needed)"
+    assert 'ob.get("walkback_depth")' in src, \
+        "ob_walkback_depth must read ob['walkback_depth'] directly (formation-frozen, no snapshot needed)"
+    assert "body_ratio_at_alert" not in src and "walkback_depth_at_alert" not in src, \
+        "no *_at_alert snapshot expected for walk-back fields — they are formation-time immutable, not live state"
+
+
+def test_walkback_fields_stamped_once_in_radar():
+    src = (_ROOT / "smc_radar.py").read_text(encoding="utf-8")
+    assert src.count("'body_ratio':") == 1, "body_ratio must be stamped exactly once (formation only, never re-stamped on re-fire)"
+    assert src.count("'walkback_depth':") == 1, "walkback_depth must be stamped exactly once (formation only, never re-stamped on re-fire)"
+
+
 def main():
     print("== touches frozen ==")
     test_touches_frozen_at_alert()
@@ -179,6 +202,9 @@ def main():
     test_bos_verdict_from_payload()
     test_bos_verdict_legacy_payload_missing()
     test_source_builds_view_before_scoring()
+    print("\n== A3: walk-back geometry frozen at formation ==")
+    test_walkback_fields_read_directly_no_snapshot()
+    test_walkback_fields_stamped_once_in_radar()
     print()
     if _FAILS:
         print(f"FAILED: {len(_FAILS)} problem(s)")

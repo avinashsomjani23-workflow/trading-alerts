@@ -1139,6 +1139,11 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     ob_range_atr = _atr_norm(abs(float(ob.get("high", 0.0)) - float(ob.get("low", 0.0)))) \
         if ob.get("high") is not None and ob.get("low") is not None else None
 
+    # Walk-back geometry (A3, DECISION_GUARDRAILS.md — logging only, no gate
+    # yet). Frozen at OB formation (smc_radar.py), read as-is, never recomputed.
+    ob_body_ratio = ob.get("body_ratio")
+    ob_walkback_depth = ob.get("walkback_depth")
+
     # FVG size in ATR — the displacement gap's magnitude (present/absent throws
     # this gradient away). FVG-mitigation-agnostic: measures the gap as detected.
     _fvg = ob.get("fvg") or {}
@@ -1277,6 +1282,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "fvg_size_atr":      fvg_size_atr,
         "impulse_leg_atr":   impulse_leg_atr,
         "atr_at_ob":         atr_at_ob,
+        # Walk-back geometry (A3) — None for legacy zones built before this change.
+        "ob_body_ratio":     ob_body_ratio,
+        "ob_walkback_depth": ob_walkback_depth,
         "fvg_present":   bool((_fvg_at_alert or ob.get("fvg") or {}).get("exists")),
         # fresh / stale / no_fvg — was the FVG already discharged on an earlier
         # approach before this trigger? Feeds the FVG-staleness breakdown.

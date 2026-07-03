@@ -230,18 +230,27 @@ def _aggregate_for_exit(trades: List[Dict[str, Any]], r_col: str,
 
 def _per_pair_breakdown(trades: List[Dict[str, Any]], r_col: str,
                         risk_usd: float) -> List[Dict[str, Any]]:
+    """Per-pair scoreboard. `verdict` reuses the SAME CI + per-quarter test as
+    the headline banner (_stat_block) — a pair is only "edge"/"loser" when its
+    own bootstrap 95% CI clears zero, never from win rate or raw P&L sign
+    alone. This keeps the pair table honest on thin per-pair samples instead
+    of asserting a driver off a handful of trades."""
     filled = [t for t in trades if _is_real_filled(t)]
     if not filled:
         return []
     df = pd.DataFrame(filled)
     out = []
     for pair, sub in df.groupby("pair"):
+        vals = [float(v) for v in sub[r_col].tolist()]
+        ts = sub["alert_ts"].tolist() if "alert_ts" in sub.columns else None
+        stat = _stat_block(vals, ts)
         out.append({
             "pair":          pair,
             "trades":        int(len(sub)),
             "win_rate_pct":  _win_rate(sub, r_col),
             "expectancy_r":  round(float(sub[r_col].mean()), 3),
             "total_pnl_usd": round(float(sub[r_col].sum()) * risk_usd, 2),
+            "verdict":       stat["verdict"],
         })
     out.sort(key=lambda r: r["total_pnl_usd"], reverse=True)
     return out
@@ -1245,6 +1254,9 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # Setup-geometry features (ATR-normalized) — edge-discovery engine inputs.
         "break_close_atr", "break_body_atr", "break_excess", "break_tier",
         "ob_range_atr", "fvg_size_atr", "impulse_leg_atr", "atr_at_ob",
+        # Walk-back geometry (A3, DECISION_GUARDRAILS.md) — logging only, no
+        # gate. None for legacy zones built before this change.
+        "ob_body_ratio", "ob_walkback_depth",
         # News blackout audit columns. INFORMATIONAL ONLY — news never gates
         # (the one eligibility rule is _headline_exclusion above).
         "news_blocked", "news_event_title", "news_event_currency",
@@ -1739,6 +1751,10 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
 
         return path
     except Exception as e:
+        # Stash the real cause so the email footer can name it instead of
+        # blaming openpyxl for every failure (locked file on OneDrive, bad
+        # column, disk error all landed here as "openpyxl not installed").
+        _try_excel.last_error = f"{type(e).__name__}: {e}"
         print(f"  [excel write skipped: {e}]")
         return None
 
@@ -1973,10 +1989,13 @@ def _act1_html(prox_trades: List[Dict[str, Any]], sb_prox: Dict[str, Any],
     streak = _insights.longest_losing_streak(vals) if vals else 0
     wr = sb_prox.get("win_rate_pct")
     ci_sub = (f"CI [{lo:+.2f}, {hi:+.2f}]" if lo is not None else "thin sample")
+    _w, _l, _be = sb_prox.get("wins", 0), sb_prox.get("losses", 0), sb_prox.get("breakevens", 0)
+    _be_pct = (_be / n * 100) if n else 0.0
+    wr_sub = f"{_w}W &middot; {_l}L &middot; {_be}BE ({_be_pct:.0f}%)"
     tiles = [
         ("P&amp;L", f"{_m(pnl)}", f"{_r(total_r)} total"),
         ("Expectancy", f"{_r(exp_r)}", ci_sub),
-        ("Win rate", _wr_str(wr), "breakevens excluded"),
+        ("Win rate", _wr_str(wr), wr_sub),
         ("N filled / fill rate", f"{n}", f"{fill_prox.get('fill_rate_pct', 0):.0f}% of alerts"),
         ("Max drawdown", f"{dd_r:.1f}R", f"{_m(-dd_r * risk_usd)}"),
         ("Longest losing streak", f"{streak}", "consecutive losses"),
@@ -2365,6 +2384,56 @@ def _act3_html(prox_trades: List[Dict[str, Any]]) -> str:
             f'{_mined_panel_html(mined, "win")}{stitch}{action}</div>')
 
 
+def _verdict_pill_html(verdict: str) -> str:
+    """Small pill using the same icon/word/colour as the Act 1 banner, so a
+    pair's verdict and the book's verdict read as the same claim."""
+    icon, word, tint, vink = _VERDICT_BANNER.get(verdict, _VERDICT_BANNER["thin"])
+    return (f"<span style='background:{tint};color:{vink};font-size:11px;"
+            f"font-weight:700;padding:2px 8px;border-radius:10px;"
+            f"white-space:nowrap;'>{icon}&nbsp;{word}</span>")
+
+
+def _pair_table_html(prox_trades: List[Dict[str, Any]], risk_usd: float) -> str:
+    """Per-pair scoreboard: N · win rate · expectancy · total P&L · verdict.
+    Same filled-only, r_realised basis as the headline — sums reconcile.
+    Sorted by P&L (best pair first). Verdict is each pair's OWN bootstrap 95%
+    CI test (_stat_block), not inferred from win rate or P&L sign — a pair
+    with 3 trades and a big P&L still reads THIN, not EDGE. No drawdown per
+    pair (a whole-book measure)."""
+    rows = _per_pair_breakdown(prox_trades, "r_realised", risk_usd)
+    if not rows:
+        return ('<div class="act"><p style="color:%s;">No filled trades this '
+                'period.</p></div>' % _C["muted"])
+    body = ""
+    for p in rows:
+        pnl = p["total_pnl_usd"]
+        pnl_color = _C["good"] if pnl >= 0 else _C["critical"]
+        body += (
+            f"<tr>"
+            f"<td style='text-align:left;'><b>{p['pair']}</b></td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;'>{p['trades']}</td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;'>{_wr_str(p['win_rate_pct'])}</td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;'>{_r(p['expectancy_r'])}</td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;color:{pnl_color};'>{_m(pnl)}</td>"
+            f"<td style='text-align:center;'>{_verdict_pill_html(p['verdict'])}</td>"
+            f"</tr>")
+    intro = (f"<p style='font-size:14px;color:{_C['ink']};margin-bottom:10px;'>"
+             f"Every pair on the same basis as the headline (filled trades, "
+             f"realised R). Which instruments carry the book, which drag it. "
+             f"Verdict is each pair's own CI test — thin per-pair samples stay "
+             f"THIN even with a big headline P&amp;L.</p>")
+    table = (
+        f"<table width='100%'><thead><tr>"
+        f"<th style='text-align:left;'>Pair</th>"
+        f"<th style='text-align:right;'>N</th>"
+        f"<th style='text-align:right;'>Win rate</th>"
+        f"<th style='text-align:right;'>Expectancy</th>"
+        f"<th style='text-align:right;'>Total P&amp;L</th>"
+        f"<th style='text-align:center;'>Verdict</th>"
+        f"</tr></thead><tbody>{body}</tbody></table>")
+    return f'<div class="act">{intro}{table}</div>'
+
+
 def _val_for(t: Dict[str, Any], dim_label: str):
     """Map a cause dim human-label back to the trade's bucketed value."""
     for col, label, bucketer in _CAUSE_DIMS:
@@ -2555,7 +2624,8 @@ def _act4_html(prox_trades: List[Dict[str, Any]], group_sink: List[Dict[str, Any
         f"<table width='100%'><thead><tr>"
         f"<th style='text-align:left;'>Leak bucket</th><th style='text-align:right;'>N</th>"
         f"<th style='text-align:right;'>Avg R</th><th style='text-align:right;'>Leak share</th>"
-        f"<th style='text-align:right;'>Med bars</th><th style='text-align:right;'>Med MAE</th>"
+        f"<th style='text-align:right;'>Bars held (med)</th>"
+        f"<th style='text-align:right;'>Worst drawdown before close (med)</th>"
         f"<th style='text-align:left;'>Best exit fix</th><th style='text-align:left;'>Verdict</th>"
         f"</tr></thead><tbody>{rows_html}</tbody></table>"
         if rows_html else
@@ -3024,6 +3094,7 @@ def _build_group_html(
     # still carries BOTH entry zones side by side as reference data. Skipped when
     # write_excel is False (fast preview iteration); the "attached" footer then
     # reflects that the workbook was not rebuilt for this render.
+    _try_excel.last_error = None
     excel_ok = (write_excel and _try_excel(
         group_trades_all, out_dir / excel_filename, risk_usd=risk_usd) is not None)
 
@@ -3076,6 +3147,7 @@ def _build_group_html(
     act1 = _act1_html(prox_trades, sb_prox, fill_prox, group_meta, risk_usd)
     act2 = _act2_html(prox_trades, out_dir, chart_prefix, risk_usd)
     act3 = _act3_html(prox_trades)
+    act_pair = _pair_table_html(prox_trades, risk_usd)
     act4 = _act4_html(prox_trades, group_sink, risk_usd)
     act5 = _act5_html(prox_trades, group_sink, act4["candidates"], head_stat, risk_usd)
     recipe_tbl = _recipe_table_html(
@@ -3094,11 +3166,14 @@ def _build_group_html(
     act6 = _act6_html(prox_trades, group_sink, group_meta, raw_alert_n,
                       filter_line, any_asserted, preview)
 
-    excel_note = ("workbook not rebuilt for this preview render"
-                  if not write_excel else
-                  ("every filled trade for this group, plain-English headers."
-                   if excel_ok else
-                   "<span style='color:#d03b3b;'>FAILED — openpyxl not installed.</span>"))
+    if not write_excel:
+        excel_note = "workbook not rebuilt for this preview render"
+    elif excel_ok:
+        excel_note = "every filled trade for this group, plain-English headers."
+    else:
+        _err = getattr(_try_excel, "last_error", None) or "no filled trades to write"
+        excel_note = (
+            f"<span style='color:#d03b3b;'>FAILED — {_err}</span>")
 
     html = f"""<!DOCTYPE html>
 <html lang="en"><head>
@@ -3140,6 +3215,7 @@ def _build_group_html(
 <div class="act"><div class="act-head">Act 1 &middot; Pulse</div>{act1}</div>
 <div class="act"><div class="act-head">Act 2 &middot; What the year looked like</div>{act2}</div>
 <div class="act"><div class="act-head">Act 3 &middot; Where the edge comes from</div>{act3}</div>
+<div class="act"><div class="act-head">By pair</div>{act_pair}</div>
 <div class="act"><div class="act-head">Act 4 &middot; Where it leaks</div>{act4['html']}</div>
 <div class="act"><div class="act-head">Act 5 &middot; What to change next</div>
   <div style="margin-bottom:12px;">{act5}</div>

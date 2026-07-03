@@ -30,6 +30,15 @@ If any fire, the response is wrong. Rewrite before sending.
 
 ---
 
+## NON-NEGOTIABLE — DECISION GUARDRAILS
+
+- `DECISION_GUARDRAILS.md` holds the frozen decision rules for the edge-engine phase.
+- Before helping with any backtest/engine/detection decision, check the intended action against it.
+- If the action breaks a rule, FLAG THE RULE ID FIRST (e.g. "this breaks C5"), then help.
+- Rules there change only per that file's own change-log procedure — never in the same sitting as the decision they block.
+
+---
+
 ## What This Project Is
 
 Automated SMC alert system. 6 instruments. Goal: replicate veteran SMC judgment, not generate noise.

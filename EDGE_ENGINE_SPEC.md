@@ -8,6 +8,12 @@ decide, the experiment is specified. Do not re-derive, do not add features, do n
   parquet cache. It never touches git, registry, live state, or `r_realised`.
 - Companion docs: `EDGE_ENGINE_HANDOFF.md` (mission), `backtest/RECOMMENDATIONS.md` (methods),
   `TRUTH_LEDGER.md` (column trust). This spec supersedes the handoff where they conflict (§1).
+- **Two workflows share this one engine (§14):** MAIN (the full 3-way-split verdict engine,
+  Stages 0–4 below) and SHORT-RANGE (a curiosity/hypothesis tool — one pool, no split, soft
+  floors). Stages 0–4 as written ARE the main workflow. Short-range is a thin mode on top (§15).
+- **Activation is a GitHub Action, not a bare terminal command (§16).** The `python -m` CLI still
+  exists (it is what the Action calls, and how it runs in-chat during iteration), but the user
+  drives it from the Actions tab with date boxes + a mode selector, never a terminal.
 
 ---
 
@@ -134,6 +140,8 @@ output dir: backtest/results/<run_id>/edge_engine/
 7. **Duplicate/ordering sanity:** no duplicate `setup_id`; `alert_ts ≤ fill_ts ≤ exit_ts` on all
    eligible rows. FAIL on violation.
 8. **BTC boundary note:** count BTC rows; stamp `btc_standalone: N ≥ 300`.
+9. **Feature timing classes:** every §5.1 feature carries an alert-time/fill-time class per
+   §5.1b; the hardcoded fill-time list matches §5.1b exactly. Unclassified feature → FAIL.
 
 ---
 
@@ -145,16 +153,60 @@ output dir: backtest/results/<run_id>/edge_engine/
   `ob_range_atr`, `atr_at_ob`, `pd_pct`, `reversal_pct`, `ob_age_h1_bars`, `ob_to_fill_hours`,
   `bars_break_to_pullback`, `bos_sequence_count`, `score` (legacy score, tested as a feature —
   expected noise, prove it), `alert_utc_hour` (treat as categorical via 4 session bins? NO —
-  use `session` for that; screen `alert_utc_hour` as 24 categories, expect thin, fine).
+  use `session` for that; screen `alert_utc_hour` as 24 categories, expect thin, fine),
+  `ob_body_ratio` (A3 — the accepted OB candle's own body/range; doji floor at 0.20 already
+  filters the tail, so the surviving gradient tests whether the floor level is validated).
 - Categorical: `bos_tag`, `bos_tier`, `bos_verdict`, `event`, `reversed_from_extreme`,
   `fvg_present`, `fvg_mitigation`, `fvg_state`, `pd_zone`, `pd_alignment`, `session`,
   `ob_session`, `fill_session`, `killzone_alignment`, `ob_in_killzone`, `fill_in_killzone`,
-  `trend_alignment`, `setup_badge`, `ob_touches`, `pair`.
+  `trend_alignment`, `setup_badge`, `ob_touches`, `bias`, `pair`,
+  `ob_walkback_depth` (A3 — raw integer skip-count logged; screened as levels-as-is like
+  `ob_touches`, so deep levels (2, 3, …) auto-merge into `other` under the §5.2 discovery
+  N<150 rule rather than a hard-coded `2+` bin — keeps the full gradient for the 18-yr run.
+  Tests whether substitute-walk-back quality decays with depth, feeding the
+  substitute-vs-skip-vs-merge decision).
 - Excluded by decree: `sweep_present` (detector inverted, out-of-scope), all `news_*`
   (confounder check only, §5.5), NAS100 rows, `mfe_r`/`mae_r` (outcomes, peak law).
+- Excluded as redundant-by-construction (underlying fact is already screened directly):
+  `break_tier`/`break_excess` (graded/raw forms of `break_close_atr` — keep the ATR-normalised
+  continuous), `structure_pts`/`fvg_pts`/`freshness_pts`/`killzone_pts`/`confluences_present`
+  (legacy-score components; the composite `score` is screened once), `setup_badge_kind`
+  (duplicate of `setup_badge`), `h1_trend`/`direction` (enter via `trend_alignment`/`bias`),
+  `alert_seq` (constant 1 on traded rows — dedupe keeps first fire only).
+- Excluded with a reason worth recording: `tp1_rr`/`tp2_rr` are entry-time-known but
+  mechanically entangled with `r_realised` under tp1-based recipes (the win payoff IS tp1_rr
+  by construction) — a screen against r_realised would flag payoff mechanics, not edge. If
+  ever tested, test against WR via the logistic side only. v2 discussion, not in v1.
 - Missing-value rule: `fvg_size_atr` is None when no FVG — screen it on the `fvg_present==True`
   subpopulation only. Same pattern for any None-by-construction feature (`pd_pct` when DR
   invalid → drop those rows from that feature's screen only). Never impute.
+
+### 5.1b Feature timing class (stamped on every feature — decides where a survivor may ship)
+
+- **ALERT-TIME** (known when the alert fires): everything in §5.1 EXCEPT the list below.
+  Eligible for the Stage-2 EV model and Stage-4 alert-time gates.
+- **FILL-TIME** (known only when/if the limit fills): `ob_to_fill_hours`,
+  `bars_break_to_pullback`, `fill_session`, `fill_in_killzone`, `killzone_alignment`.
+  These are NOT knowable at alert → they must NEVER enter the Stage-2 EV model (a live scorer
+  could not compute them; using them there is a look-ahead leak into the entry score). They ARE
+  screened in Stage 1 exactly like the rest; survivors route to the ORDER-RULE track (§8.1b),
+  because live they are implementable as order-management rules (order TTL, arm-delay,
+  cancel-outside-window), not as alert scores.
+- Stage 0 addition (check 9): the engine asserts its fill-time list matches this section;
+  any §5.1 feature not classified → FAIL (no silent class assignments).
+
+### 5.1c Pre-registered hypothesis bins (frozen now, before any run — part of the family)
+
+- **H-SNAPBACK (user hypothesis 2026-07-03):** immediate return to the OB after the break
+  candle marks weak displacement → worse expR. Test: `bars_break_to_pullback` binned
+  {1–2, 3–5, 6–12, >12} (in addition to its quintile screen; both enter the same BH-FDR
+  family). SMC mechanism exists (no conviction behind the break), so a survivor here is a
+  finding, not a fish. Expect collinearity with `break_body_atr`/`impulse_leg_atr` — if both
+  survive, §6.2 VIF decides which carries the signal.
+- CAVEAT for the 1–2 bin: the backtest alerts ~1 bar later than live (closed-bar vs live
+  forming-bar proximity) — the fastest snapbacks may be under-sampled (alerted late or
+  never_filled). Report the bin's N vs live-era alert data before trusting a null; a POSITIVE
+  effect here is trustworthy, a "no effect on N=thin" is not.
 
 ### 5.2 Bucketing
 
@@ -218,9 +270,10 @@ output dir: backtest/results/<run_id>/edge_engine/
 
 ### 6.1 Inputs
 
-- Stage-1 `survivor` features + `anatomy_promoted` features. If the union is EMPTY → Stage 2
-  verdict `NO_ENTRY_SIGNAL`, emit the file with `pass: true` (an honest null is a pass — the
-  engine continues to Stage 3 with fallback clusters).
+- Stage-1 `survivor` features + `anatomy_promoted` features — **ALERT-TIME class only
+  (§5.1b)**. Fill-time survivors never enter the model; they go to §8.1b. If the alert-time
+  union is EMPTY → Stage 2 verdict `NO_ENTRY_SIGNAL`, emit the file with `pass: true` (an
+  honest null is a pass — the engine continues to Stage 3 with fallback clusters).
 - PD status: `pd_alignment/pd_zone` enters as a candidate like any other. SEPARATELY, the
   proven-once counter-PD-CHoCH rule is re-tested as a standalone gate (§8.2) regardless of
   model fate.
@@ -316,6 +369,15 @@ output dir: backtest/results/<run_id>/edge_engine/
   confirmed global recipe on validation (paired diff, CI lo > 0). Otherwise ship the global
   recipe alone — simpler is the default winner.
 
+### 7.6 Time-in-trade descriptives (REPORT ONLY — never a selection metric)
+
+- Per cluster and for the winning recipe: p25/p50/p75 of `bars_to_exit` split by exit reason
+  (tp/sl/be/forced), plus net expR of trades still open after {12, 24, 36} bars (from the
+  replay — "what is a trade worth once it has dragged N bars").
+- Purpose: the evidence base for a possible v2 time-stop knob. Outcome columns are legal here
+  because Stage 3 is exit-side and this table selects nothing. The v1 grid stays frozen (§7.3);
+  no time-stop ships from this table.
+
 ---
 
 ## 8. STAGE 4 — RECIPE SYNTHESIS + THE VERDICT
@@ -328,6 +390,20 @@ output dir: backtest/results/<run_id>/edge_engine/
 - **Gates:** counter-PD-CHoCH skip — re-tested on 18-yr MT5: gate ships iff that cell's expR
   CI < 0 in discovery AND validation. Any §5.6 flagged interaction cell with CI < 0 in both
   splits may ship as an additional skip-gate (list them explicitly in the recipe).
+
+### 8.1b Order-rule gates (from FILL-TIME survivors — §5.1b routing)
+
+- A fill-time survivor whose bad bucket has expR CI < 0 in discovery AND validation may ship
+  as an ORDER RULE, expressed live as order management: `ob_to_fill_hours > X` → order TTL of
+  X hours; `bars_break_to_pullback ≤ 2` → don't arm the limit until bar 3 after the break;
+  `fill_in_killzone == False` → cancel outside the window.
+- In-engine test = row exclusion (drop trades the rule would have declined), same CI + quarter
+  discipline as skip-gates. **Stated approximation:** exclusion assumes the declined trade
+  never happens; live, price touching during a dead window and returning later would fill a
+  later, different trade the backtest rows can't represent. Conservative for TTL/window rules;
+  for arm-delay it slightly overstates the saving. Every shipped order rule carries this
+  caveat + the affected N in the recipe JSON (`order_rules` list, same evidence schema as
+  `gates`).
 - **EV threshold (only if Stage 2 passed):** candidates = discovery EV quintile edges
   {q20,q40,q60,q80} plus "no threshold". Pick the candidate with the highest validation net
   expR whose validation CI lo > 0 AND which keeps ≥ 150 validation trades/year equivalent…
@@ -367,6 +443,8 @@ output dir: backtest/results/<run_id>/edge_engine/
   "robustness": "ROBUST | FRAGILE",
   "pair_set": ["..."], "pairs_dropped": [{"pair": "...", "evidence": {...}}],
   "gates": [{"rule": "skip counter_pd_choch", "shipped": true, "evidence": {...}}],
+  "order_rules": [{"rule": "order_ttl_hours <= X", "shipped": false, "evidence": {...},
+                    "approximation_caveat": "row-exclusion proxy, §8.1b"}],
   "ev_model": null | {"type": "ridge", "lambda": 1.0, "features": [...],
                        "standardization": {"feat": {"mean": 0, "std": 1}},
                        "coefficients": {"feat": 0.0}, "intercept": 0.0},
@@ -423,3 +501,170 @@ output dir: backtest/results/<run_id>/edge_engine/
   v2 spec with a fresh pre-registered grid, and holdout years it hasn't seen.
 - Never pool WAR or BTC into anything.
 - No sklearn, no new dependencies, no touching `exit_engine.py` / simulator / live code.
+
+## 12. COLUMN COVERAGE MAP (every logged field has a disposition — nothing is silently ignored)
+
+Where the confluence data actually gets used: §5.1 features → Stage 1 screen → Stage 2 EV
+model → Stage 4 EV gate. The final recipe's `ev_model` block carries a coefficient per
+surviving confluence — that IS the "best recipe from the data points".
+
+| group | columns | disposition |
+|---|---|---|
+| Features | the §5.1 lists (37 fields: FVG size, break distance+displacement, OB age/freshness/range, OB walk-back geometry (`ob_body_ratio`/`ob_walkback_depth`, A3), fill timing, PD, sessions, killzones, structure tags, …) | Stage 1 screen → Stage 2 model → Stage 4 gate |
+| Outcomes | `r_realised`, `pnl_usd`, `exit_reason/price/ts`, `mfe_r`/`mae_r`, `bars_to_exit/tp1/tp2`, `sl_bar_was_sweep`, `sl_swept_then_tp1`, `be_arm_bar_touched_entry`, `r_if_exit_*`, `sl_collision` | targets + diagnostics (§5.5 anatomy, §7.6 time table); NEVER entry features (look-ahead) |
+| Trade geometry | `entry`, `sl_raw/sl_initial`, `tp1/tp2`, `tp1_rr/tp2_rr` | define R and the replay; not features (§5.1 tp_rr note) |
+| Identity / bookkeeping | `setup_id`, `alert_ts/alert_bar_ts/bos_timestamp/ob_timestamp`, `model`, `entry_zone` | keys; time fields enter as derived features (`session`, `ob_age_h1_bars`, …) |
+| Population flags | `eligible_for_headline`, `headline_exclusion`, `ist_blocked`, `weekend_blocked`, `killzone_blocked`, `news_blocked` | row filters / confounder context (§3.1, §5.5); never features |
+| Redundant | §5.1 redundant-by-construction list | excluded, reason recorded there |
+| Decreed out | `sweep_*` (rebuild workstream), `news_event_*` (confounder only), NAS100 | §5.1 |
+
+- Rule for the future: any NEW trades.csv feature column added by the logging workstream must
+  be placed in this table (feature / outcome / flag / redundant) before a run feeds the engine;
+  a column with no row here is a Stage-0 FAIL (extends check §4.1's spirit: no silent fields).
+
+## 13. OUTER LOOP — DETECTION FEEDBACK PROTOCOL (the loop the engine cannot run itself)
+
+The engine reads a finished run; it cannot tune detection. But its findings are allowed to
+DRIVE detection changes — under these rules, or the anti-overfit discipline dies at the loop
+boundary:
+
+1. **Tagging:** Stage 1 stamps every survivor / anatomy-promoted feature with
+   `actionable_at: "entry_gate" | "order_rule" | "detection"`. `detection` = exploiting it
+   properly means changing what gets detected/alerted (e.g. a break-quality floor, an OB
+   filter), not just declining alerts. The report lists the `detection` group in its own
+   section — that list IS the "change detection, re-run" queue.
+2. **Evidence rule:** a detection change may only be motivated by DISCOVERY + VALIDATION
+   evidence. If the idea came from a holdout table, the change is tainted — holdout years can
+   never seed changes that will later be validated on those same years.
+3. **Re-run rule:** after a detection change → new baseline run → full engine re-run (Stage 0
+   up). The new run's holdout verdict is legitimate only if rule 2 held. The engine stamps
+   `generation: N` + `motivating_evidence: [...]` into `stage4_recipe.json` so the lineage is
+   auditable.
+4. **Generation budget:** every generation is another look at 2022–25. Cap: 3 generations on
+   the current holdout window. Past that, the window is worn out — roll holdout forward (e.g.
+   2023–26) and state it in the report. Track via the `generation` stamp.
+5. **One change per generation** (or one pre-declared bundle): if generation N+1 changes three
+   detection knobs at once and improves, nobody knows which knob did it — and knob-level
+   attribution is exactly what the user needs for the next iteration.
+
+---
+
+## 14. RUN IDS + RUN SELECTION (fixes silent overwrite; decided 2026-07-03)
+
+**The bug this fixes:** current run ID is `h1only_<start>_<end>` (`run_backtest.py:320`) — date
+range only, no uniqueness. Re-running the same date range **overwrites the previous run's
+folder** (verified on disk 2026-07-03: 49 folders, all date-range-only; e.g. four different 2008
+runs would all collide on `h1only_20080102_20081231`). Silent data loss + no way to compare two
+runs of the same years. This is a bug, not a feature.
+
+### 14.1 New run-ID format
+
+- **Drop the `h1only_` prefix** (redundant — every run is h1-only now).
+- **Format:** `<start>_<end>__<runstamp>` where `runstamp = YYYYMMDD_HHMM` of when the run started
+  (UTC). Example: `20080102_20081231__20260703_1425`.
+- **Why timestamp, not a counter:** it self-sorts lexically by "most recent," which is exactly
+  what the Option-A "latest wins" rule (§14.3) needs — no separate counter bookkeeping.
+- **Change site:** `run_backtest.py:320`. This is a run-ID/logging change, NOT trading logic —
+  but it touches `run_backtest.py`, so it ships with (a) the email-subject run-ID line (§14.2),
+  (b) any registry/commit code that parses the old `h1only_` prefix. Grep for `h1only` before
+  shipping; the run-ID string is consumed in `commit_logs.py`, registry build, and email subject.
+- **No overwriting, ever:** every run gets its own folder locally. Old runs stay. Compare freely.
+
+### 14.2 Run ID must appear everywhere it is consumed
+
+- **Backtest email:** every backtest email carries its run ID (subject or first line). The user
+  must always be able to tell which run an email came from.
+- **Edge engine report:** `edge_engine_report.md` and `stage4_recipe.json` both name the exact
+  run ID(s) they read (add `"input_run"` is already in the §8.4 schema — extend the report
+  markdown header to print it prominently). Zero ambiguity about what was analysed.
+
+### 14.3 Which run the engine reads (Option A — latest wins)
+
+- The Action passes an explicit run dir (§16), so normal operation is unambiguous.
+- **Default resolution when only a date range is given** (in-chat / CLI convenience): pick the
+  folder matching that date range with the **newest runstamp**. Newest timestamp = latest run.
+- **Override:** an exact `--run-dir` always wins over date-range resolution.
+- The resolved run ID is echoed at the top of every stage's output and the report, so "which run"
+  is answered in writing, not by folder-mtime guesswork.
+
+---
+
+## 15. SHORT-RANGE WORKFLOW (curiosity / hypothesis mode — decided 2026-07-03)
+
+**Purpose:** a second, deliberately weaker tool for exploring short date ranges (the user has run
+1-year and 2-year backtests). It exists to **generate hypotheses**, never to issue a verdict.
+
+### 15.1 What it is NOT
+
+- **NO discovery / validation / holdout split.** None. The 3-way split's only job is confirming a
+  pattern survives on unseen data — a CONFIRMATION job. Short-range confirms nothing, so the
+  split adds only complexity and empty buckets. (The proportional-split idea floated earlier was
+  withdrawn — it was over-engineering.)
+- **NO ship/don't-ship verdict.** No `ENTRY_AND_EXIT_EDGE` / `NO_EDGE` output. That verdict is the
+  MAIN workflow's exclusive product.
+
+### 15.2 What it IS
+
+- **One pool.** Screen the entire short range as a single population (all eligible rows, §3.1
+  filters still apply — NAS100 dropped, BTC separate, proximal-only, eligible-for-headline).
+- **Reuses Stage 1 machinery** (univariate screen, §5) and MAY run Stage 3 exit replays (§7) as
+  descriptives — but with the split-dependent steps removed (no "validation persistence", no
+  "holdout look"). Stage 2 EV model and Stage 4 synthesis DO NOT run in this mode.
+- **Soft floors — label, never abort.** MIN_BUCKET_N / MIN_CELL_N / MIN_QUARTER_N / MIN_SPLIT_N
+  still compute and still TAG a cell `thin` when unmet, but in short-range mode a thin/low count
+  **never stops the work and never fails a stage.** Stage 0's hard `MIN_SPLIT_N=500` FAIL (§4.4)
+  is disabled in short-range; it becomes an informational census line instead.
+- **Trade-count context (user-supplied, 2026-07-03):** ~1,200 eligible trades/year across the
+  pooled pairs → a 2-year short run ≈ 2,400 pooled trades. At the POOL level that is plenty to
+  screen; thinness only bites in rare sub-buckets (e.g. one session × one pair × top quintile),
+  which is exactly what the soft `thin` tag is for.
+
+### 15.3 Report language (mandatory — not optional phrasing)
+
+- Every short-range report is stamped, top and bottom:
+  `SHORT-RANGE MODE — EXPLORATORY. HYPOTHESES ONLY, NOT A SHIPPABLE VERDICT.`
+- Every finding is worded as a hypothesis to test on full data, e.g. "worth testing on the full
+  18-yr run", never "this is the edge". Any survivor here must go get confirmed by the MAIN
+  workflow (full 3-way split) before it can become a rule — same discipline as §13.2.
+
+### 15.4 Mode flag
+
+- CLI/Action gains `--mode main | short_range` (default `main`). `short_range` selects the
+  single-pool path above. The mode is stamped into every output file and the report header.
+
+---
+
+## 16. ACTIVATION + DELIVERY (GitHub Action, no terminal — decided 2026-07-03)
+
+### 16.1 The engine core is unchanged
+
+- Stages 0–4 stay a read-only library pointed at a run folder. The Action is a thin trigger
+  wrapper on top — the smart part is untouched. `python -m backtest.diagnostics.edge_engine`
+  still exists; it is what the Action invokes and how the engine runs in-chat during iteration.
+
+### 16.2 GitHub Action — two buttons (workflow_dispatch inputs)
+
+- **The user drives it from the Actions tab with input boxes, never a terminal:**
+  - `start_date` (YYYY-MM-DD), `end_date` (YYYY-MM-DD)
+  - `mode` = `main | short_range`
+- **Button 1 — FULL RUN:** run the backtest for the given dates → then run the edge engine on
+  that fresh run folder. Expensive (the backtest is the long pole; the engine is minutes). Use
+  when fresh data is wanted.
+- **Button 2 — ENGINE ONLY:** skip the backtest; point the engine at an existing committed run
+  folder (resolved via §14.3 latest-wins, or an explicit run ID input). Cheap. Use when iterating
+  on engine logic so Action minutes are not burned re-running the backtest.
+- **Minutes note:** the private-account 2,000-min budget is spent almost entirely by the backtest,
+  not the engine — hence the engine-only button. If it ever gets tight the user switches to the
+  public account. (Do not build minute-optimisation beyond the two-button split without asking.)
+
+### 16.3 Report delivery — all three, they do not conflict
+
+1. **Committed report file:** `edge_engine_report.md` written into the run folder and committed
+   (same `git add -f` path as other backtest logs, §backtest_logs_pipeline). Permanent, versioned,
+   renders in GitHub, and readable directly in chat — this is the full dense detail.
+2. **Email:** headline verdict + key numbers + the run ID land in the inbox (the "ping"). Summary
+   only — the file carries the tables the email would truncate.
+3. **Chat:** the committed markdown is read on request to discuss ("look at the last edge report").
+- **Division of labour:** email carries the summary, the committed file carries the detail, chat
+  is where the ship/don't-ship judgment happens over that file (handoff §7: script computes,
+  human decides).

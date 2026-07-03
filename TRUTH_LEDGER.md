@@ -88,6 +88,8 @@ Row build: h1_only_simulator.py:1141-1274. "src" = the line the value is read/wr
 | fvg_size_atr | :1240 (calc :1107-1111) | row build from refreshed fvg | **fixed** | Fix 3c LANDED (fvg refresh on re-surface); alert-time snapshot guard PASS |
 | impulse_leg_atr | :1241 (calc :1119-1122) | row build from frozen prices | verified | deterministic from immutable impulse_start_price + bos_swing_price |
 | atr_at_ob | :1242 (calc :1127) | OB build (frozen by design) | verified | formation ATR, frozen BY DESIGN (detection audit 3e) |
+| ob_body_ratio | h1_only_simulator.py:1144 (read) / :1286 (emit), stamped smc_radar.py:1117 | OB build (frozen by design) | verified | chosen OB candle's own body/range, walk-back loop smc_radar.py:883-901; range>0 guarded (is_valid_ob_candle already rejects range==0); None for legacy zones (pre-change); observe-only per DECISION_GUARDRAILS.md A3, no gate |
+| ob_walkback_depth | h1_only_simulator.py:1145 (read) / :1287 (emit), stamped smc_radar.py:1124 | OB build (frozen by design) | verified | oversized_count + undersized_count + doji_count at acceptance (smc_radar.py:878-901); 0 = first candidate passed; sums ALL three skip reasons so knob-sweep (MIN_OB_RANGE_ATR_MULT>0) is counted; None for legacy zones; observe-only per DECISION_GUARDRAILS.md A3, no gate |
 | fvg_present | :1243 | alert (fvg_at_alert) | **fixed** | Fix 3c/3d LANDED; guard tests/test_ob_alert_freeze.py PASS |
 | fvg_state | :1246 (helper) | row build | fixed (verify at review) | Fix 3d instructed re-pointing the helper; spot-check at Opus-work review |
 | fvg_mitigation | :1250 | alert (fvg_at_alert) | **fixed** | guard tests/test_ob_alert_freeze.py PASS (alert-time snapshot proven) |
