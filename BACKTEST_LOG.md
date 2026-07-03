@@ -6,8 +6,8 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 ## Cross-run snapshot
 
-- Runs completed: **32** of 32
-- Total filled trades across all runs: **3464**
+- Runs completed: **33** of 33
+- Total filled trades across all runs: **3519**
 - Average expectancy across runs: **-0.12R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
@@ -233,6 +233,49 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | 5-6 | 13 | 36.4% | -0.07R |
 | 6-7 | 2 | 0.0% | -1.00R |
 | 7+ | 5 | 50.0% | +0.44R |
+
+---
+
+### h1only_20110101_20110131
+
+**Unclassified** | 2011-01-01 to 2011-01-31 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 55 (of 82 rows) |
+| Win rate | 34.0% |
+| Expectancy | -0.05R |
+| Max drawdown | +9.32R |
+| Longest losing streak | 4 trades |
+| Proximal fill rate | 67.1% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| USDJPY | 8 | 50.0% | +0.65R |
+| NZDUSD | 14 | 45.5% | +0.06R |
+| EURUSD | 13 | 20.0% | -0.33R |
+| USDCHF | 20 | 27.8% | -0.23R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 10 | 11.1% | -0.53R |
+| London | 27 | 46.2% | +0.29R |
+| NY | 18 | 25.0% | -0.31R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 3-4 | 8 | 66.7% | +0.59R |
+| 4-5 | 18 | 40.0% | +0.10R |
+| 5-6 | 14 | 27.3% | -0.11R |
+| 6-7 | 8 | 25.0% | -0.46R |
+| 7+ | 7 | 14.3% | -0.60R |
 
 ---
 
