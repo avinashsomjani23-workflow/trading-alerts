@@ -34,6 +34,35 @@ if str(_REPO_ROOT) not in sys.path:
 from backtest import insights as ins
 
 
+# Fill-resolution outcomes that never feed P&L (audit-only rows). Mirrors the
+# reporting layer's _EXCLUDE_REASONS — the ONE eligibility rule lives there
+# (_headline_exclusion); this module consumes its exported column.
+_EXCLUDE_REASONS = {"never_filled", "timeout", "window_end"}
+
+
+def _truthy(s: pd.Series) -> pd.Series:
+    """CSV round-trips turn bools into 'True'/'False' strings — normalise."""
+    return s.astype(str).str.strip().str.lower().eq("true") | s.eq(True)
+
+
+def _eligible_mask(df: pd.DataFrame) -> pd.Series:
+    """Headline-eligible rows (TRUTH_FIXES_SPEC.md T2). Primary source: the
+    eligible_for_headline column trades.csv ships (stamped from THE single
+    rule, h1_only_reporting._headline_exclusion). Legacy CSVs that predate the
+    column are reconstructed from the same inputs the rule uses. Without this
+    filter, timeout/window_end force-closed rows (arbitrary-price exits,
+    audit-only by policy) feed every cross-run metric."""
+    if "eligible_for_headline" in df.columns:
+        return _truthy(df["eligible_for_headline"])
+    m = pd.Series(True, index=df.index)
+    if "exit_reason" in df.columns:
+        m &= ~df["exit_reason"].isin(_EXCLUDE_REASONS)
+    for col in ("ist_blocked", "weekend_blocked"):
+        if col in df.columns:
+            m &= ~_truthy(df[col])
+    return m
+
+
 def _load_registry() -> List[Dict[str, Any]]:
     if not REGISTRY_PATH.exists():
         return []
@@ -401,8 +430,15 @@ def run(
     else:
         primary = combined.copy()
 
-    filled = ins._filled(primary)
-    print(f"  Filled trades: {len(filled)}")
+    # Metric population = headline-eligible rows only (audit rows out). The
+    # combined all_trades.csv above stays FULL — it is the audit artifact.
+    eligible = primary[_eligible_mask(primary)].copy()
+    filled = ins._filled(eligible)
+    # Hard guard: fail loud if a force-closed audit row survives into metrics.
+    if "exit_reason" in filled.columns:
+        assert not filled["exit_reason"].isin(("timeout", "window_end")).any(), \
+            "aggregate population contains force-closed audit rows — eligibility filter broken"
+    print(f"  Eligible: {len(eligible)}  |  Filled trades: {len(filled)}")
 
     groups_included = sorted(combined["group"].unique().tolist()) if "group" in combined.columns else []
 
@@ -413,7 +449,11 @@ def run(
     score_v     = ins.score_validation(filled, r_col)
     badge_v     = ins.setup_badge_validation(filled, r_col)
     group_comp  = ins.group_comparison(filled, r_col)
-    entry_comp  = ins.entry_zone_comparison(primary, r_col)  # uses full primary (incl never_filled for fill rate)
+    # Fill rate needs never_filled rows in the denominator; every other audit
+    # row (timeout/window_end/ist/weekend) stays out.
+    _ec_pop = primary[_eligible_mask(primary)
+                      | primary.get("exit_reason", pd.Series(index=primary.index)).eq("never_filled")]
+    entry_comp  = ins.entry_zone_comparison(_ec_pop, r_col)
     freshness   = ins.ob_freshness_comparison(filled, r_col)
     confluence  = ins.confluence_attribution(filled, r_col)
     regime_v    = ins.regime_verification(filled)

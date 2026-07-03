@@ -96,8 +96,8 @@ def _slice_closed_before(df: pd.DataFrame, wall_clock_ts: pd.Timestamp
 def _is_ob_mitigated_replay(direction: str, distal: float, proximal: float,
                             df_h1_slice: pd.DataFrame,
                             anchor_ts: Optional[str],
-                            distal_mode: str = "close") -> Tuple[bool, str]:
-    """Wrap live mitigation logic; returns (mitigated, reason).
+                            distal_mode: str = "close") -> Tuple[bool, str, int]:
+    """Wrap live mitigation logic; returns (mitigated, reason, touches).
 
     Window = from the candle AFTER the structural-event (BOS/CHoCH) candle,
     matching live Phase 1 (smc_radar mitigation + determine_drop_reason) and
@@ -108,20 +108,38 @@ def _is_ob_mitigated_replay(direction: str, distal: float, proximal: float,
 
     `distal_mode` flows from the per-instrument config (resolve_distal_mode) so
     the backtest applies the SAME distal rule as live Phase 1/2.
+
+    `touches` is passed through (was discarded) so the replay can stamp the
+    stored OB's touch count / status every bar — see Fix 3a.
     """
     if not anchor_ts:
-        return False, ""
+        return False, "", 0
     try:
         anchor_idx, found = smc_detector.locate_ob_candle_idx(df_h1_slice, anchor_ts)
         if not found:
-            return False, ""
-        mitigated, reason, _ = smc_detector.is_ob_mitigated_phase1(
+            # FIX 1 companion: with the 150-bar clamp a stored OB can outlive its
+            # BOS candle (OB age cap 15d >> ~6 trading days of slice). If the
+            # anchor is EARLIER than the slice's first bar, every visible bar is
+            # post-event -> scan the whole slice (start_idx = -1 + 1 = 0). Any
+            # other unresolved anchor is a data problem -> keep the safe
+            # "not mitigated" answer so we never false-drop a live zone.
+            try:
+                _a = pd.Timestamp(anchor_ts)
+                if _a.tzinfo is None:
+                    _a = _a.tz_localize("UTC")
+                if len(df_h1_slice) and _a < df_h1_slice.index[0]:
+                    anchor_idx, found = -1, True
+            except Exception:
+                pass
+        if not found:
+            return False, "", 0
+        mitigated, reason, touches = smc_detector.is_ob_mitigated_phase1(
             direction, distal, proximal, df_h1_slice, start_idx=anchor_idx + 1,
             distal_mode=distal_mode,
         )
-        return bool(mitigated), reason or ""
+        return bool(mitigated), reason or "", int(touches or 0)
     except Exception as e:
-        return False, f"mitigation_check_error: {e}"
+        return False, f"mitigation_check_error: {e}", 0
 
 
 def replay_pair(
@@ -130,6 +148,7 @@ def replay_pair(
     state: ReplayState,
     walk_start_ts: pd.Timestamp,
     walk_end_ts: pd.Timestamp,
+    detection_bars: Optional[int] = smc_radar.LIVE_DETECTION_BARS,
 ) -> Iterator[Dict[str, Any]]:
     """Walk H1 bars in [walk_start_ts, walk_end_ts] and yield events.
 
@@ -139,12 +158,20 @@ def replay_pair(
 
     The caller (run_backtest) decides whether to feed an "alert" to the trade
     simulator.
+
+    `detection_bars` (FIX 1): clamp each detection slice to the last N closed
+    H1 bars — live's exact window (smc_radar.LIVE_DETECTION_BARS). Default =
+    live parity. `None` = legacy UNCLAMPED behaviour (full-history slice, old
+    50-bar warmup, no slice-length assert); the runner NEVER sets this in normal
+    runs — it exists solely for the validation A/B (arm A). See DETECTION_FIXES_SPEC.
     """
     pair_name = pair_conf["name"]
     pair_type = pair_conf["pair_type"]
 
     if df_h1 is None or df_h1.empty:
         return
+
+    _clamped = detection_bars is not None
 
     # Walk only H1 bars in the requested window. Each h1_ts in this index is
     # the OPEN time of a bar; we treat it as the wall-clock moment when the
@@ -159,8 +186,11 @@ def replay_pair(
     state.active_obs.setdefault(pair_name, [])
     state.ob_alert_state.setdefault(pair_name, {})
 
-    # Need >= 50 H1 bars of history before the walk start for reliable structure.
-    MIN_WARMUP = 50
+    # Warmup rule (FIX 1). Clamped mode: live ALWAYS runs on a full
+    # LIVE_DETECTION_BARS frame, so a bar with fewer bars of history cannot
+    # reproduce live and is SKIPPED, not approximated. Legacy (unclamped) mode
+    # keeps the old 50-bar floor so arm A of the A/B behaves as before.
+    _min_warmup = detection_bars if _clamped else 50
 
     # Re-arm threshold: price wick/close must clear (prox_cap + REARM_EXTRA_ATR)
     # × ATR from proximal before a fired OB can fire again. Stops one OB from
@@ -196,14 +226,27 @@ def replay_pair(
         diag["bars_walked"] += 1
         # P1 sees only CLOSED bars. The bar opened at h1_ts is in progress.
         h1_slice = _slice_closed_before(df_h1, h1_ts)
+        # FIX 1: clamp to live's window (the last detection_bars closed bars).
+        # tail() cannot introduce future bars, so the lookahead guard stays valid.
+        if _clamped:
+            h1_slice = h1_slice.tail(detection_bars)
         _assert_no_lookahead(h1_slice, h1_ts, "H1")
-        if len(h1_slice) < MIN_WARMUP:
+        if len(h1_slice) < _min_warmup:
             diag["warmup_skipped"] += 1
             _scanlog().scan(pair=pair_name, ts=h1_ts, index=df_h1.index,
                             outcome="WARMUP_SKIP", n_bars_in_slice=len(h1_slice),
                             bt_conditions=["WARMUP_SKIP"])
             _scanlog().condition("WARMUP_SKIP", pair=pair_name)
             continue
+        # FIX 1 regression guard (clamped mode only): every scanned bar MUST run
+        # on exactly the live window. A mismatch = silent divergence -> abort loud.
+        if _clamped and len(h1_slice) != detection_bars:
+            _scanlog().condition("SLICE_WINDOW_MISMATCH", pair=pair_name,
+                                 ts=str(h1_ts), n_bars=len(h1_slice),
+                                 expected=detection_bars)
+            raise AssertionError(
+                f"slice/window mismatch: {len(h1_slice)} != {detection_bars} "
+                f"at {pair_name} {h1_ts}")
 
         # The "just-closed" bar: the most recent bar whose open is < h1_ts.
         # All P2 proximity decisions read this bar's high/low/close.
@@ -299,7 +342,7 @@ def replay_pair(
             # Anchor on the BOS/CHoCH candle (live parity); fall back to the OB
             # candle only for legacy OBs missing bos_timestamp.
             _anchor_ts = ob.get("bos_timestamp") or ob.get("ob_timestamp")
-            mitigated, mit_reason = _is_ob_mitigated_replay(
+            mitigated, mit_reason, touches = _is_ob_mitigated_replay(
                 ob.get("direction"), float(ob["distal_line"]),
                 float(ob["proximal_line"]), h1_slice, _anchor_ts,
                 distal_mode=_distal_mode,
@@ -318,6 +361,24 @@ def replay_pair(
                     "reason": mit_reason or "mitigated",
                 }
                 continue
+            # FIX 3a: refresh mutable touch state every bar (live refreshes zone
+            # state every scan). Label format mirrors live smc_radar.py exactly.
+            ob["touches"] = int(touches)
+            ob["status"] = "Pristine" if touches == 0 else f"Tested ({touches}x proximal)"
+            # FIX 3b: one-time break_quality re-grade once the option-B window
+            # (break candle + next candle) is complete. The two candle bodies
+            # never change afterwards, so grading ONCE when the window exists is
+            # the faithful measure (the OB may have been built on the break's
+            # edge bar, before the next candle existed).
+            if not ob.get("_bq_regraded"):
+                _a_idx, _a_found = smc_detector.locate_ob_candle_idx(
+                    h1_slice, ob.get("bos_timestamp") or "")
+                if _a_found and _a_idx + 1 < len(h1_slice):
+                    ob["break_quality"] = smc_detector.compute_break_quality(
+                        h1_slice, _a_idx, ob.get("bos_swing_price"),
+                        ob.get("direction"), smc_detector.compute_atr(h1_slice),
+                        event_type=ob.get("bos_tag", "BOS"))
+                    ob["_bq_regraded"] = True
             kept.append(ob)
         state.active_obs[pair_name] = kept
 
@@ -352,9 +413,15 @@ def replay_pair(
         state.active_obs[pair_name] = kept_after_age
 
         # Merge newly-detected OBs (by ob_timestamp identity).
-        existing_ts = {o.get("ob_timestamp") for o in state.active_obs[pair_name]}
+        # FIX 3c: a re-surfaced OB is NOT skipped outright — its FVG dict is
+        # refreshed from the fresh (point-in-time clean) detection, mirroring
+        # live's per-scan zone refresh. Only `fvg` is touched here; touches/
+        # status are owned by 3a, break_quality by 3b (one concept, one impl).
+        existing_by_ts = {o.get("ob_timestamp"): o for o in state.active_obs[pair_name]}
         for ob in obs:
-            if ob.get("ob_timestamp") in existing_ts:
+            match = existing_by_ts.get(ob.get("ob_timestamp"))
+            if match is not None:
+                match["fvg"] = ob.get("fvg", match.get("fvg"))
                 continue
             state.active_obs[pair_name].append(ob)
             zone_id = ob.get("ob_timestamp") or f"{ob.get('direction')}_{ob.get('proximal_line')}"
@@ -498,6 +565,12 @@ def replay_pair(
             # for a fading late-continuation. Point-in-time clean: events come from
             # the closed-bar walls slice.
             ob["bos_verdict"] = smc_detector.bos_leg_read(events).get("verdict", "holding")
+            # FIX 3d: freeze the alert-time mutable state as scalars. run_backtest
+            # and the per-bar loop keep mutating ob["touches"]/ob["fvg"] AFTER the
+            # alert; if the trade row is built at close it would log post-alert
+            # values. Snapshot here so the row logs state AS OF THE ALERT.
+            ob["touches_at_alert"] = int(ob.get("touches") or 0)
+            ob["fvg_at_alert"] = dict(ob.get("fvg") or {})
             diag["alerts_emitted"] += 1
             ob_state["state"] = "cooling"
             ob_state["fire_count"] += 1
@@ -535,6 +608,11 @@ def replay_pair(
                 "zone_id": zone_id,
                 "h1_trend": _bt_trend,
                 "trend_alignment": _bt_align,
+                # T1 (TRUTH_FIXES_SPEC): the OB dict is shared and re-stamped on
+                # every re-fire; rows are built after the whole walk. Carry the
+                # ALERT-TIME verdict as a payload scalar so a multi-fire zone's
+                # traded row never logs a later fire's verdict.
+                "bos_verdict": ob["bos_verdict"],
                 # Just-closed bar's high/low — simulator uses these to do the
                 # SAME-BAR fill check (alert and limit order are
                 # instantaneous; if the bar that triggered the alert already

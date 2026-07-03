@@ -9,20 +9,10 @@ on:
       end_date:
         description: "End date (YYYY-MM-DD)"
         required: true
-      pairs:
-        description: "Comma-separated pairs"
-        required: false
-        default: "EURUSD,NZDUSD,USDJPY,USDCHF,NAS100,GOLD"
-      risk_gbp:
+      risk_usd:
         description: "Risk per trade in USD (1R)"
         required: false
         default: "250"
-      send_email:
-        description: "Email the report"
-        required: false
-        default: "true"
-        type: choice
-        options: ["true", "false"]
 
 jobs:
   backtest:
@@ -94,11 +84,13 @@ jobs:
           # Regime auto-detected from backtest/WAR_REGIME_WEEKS.json -- no
           # workflow input. The detector reads the date range and tags the
           # run war/bau before any logging or reporting fires.
-          ARGS="--start ${{ inputs.start_date }} --end ${{ inputs.end_date }} --pairs ${{ inputs.pairs }} --risk-usd ${{ inputs.risk_gbp }}"
-          if [ "${{ inputs.send_email }}" = "true" ]; then
-            ARGS="$ARGS --email"
-          fi
-          python backtest/run_backtest.py $ARGS
+          # Pairs: no workflow input -- run_backtest.py's own --pairs default
+          # (the 10-pair EURUSD/NZDUSD/USDJPY/USDCHF/GOLD/GBPUSD/AUDUSD/USDCAD/
+          # EURJPY/BTCUSD set, NAS100 dropped run-level) is always used.
+          # Email: always sent -- --email is no longer conditional.
+          python backtest/run_backtest.py \
+            --start ${{ inputs.start_date }} --end ${{ inputs.end_date }} \
+            --risk-usd ${{ inputs.risk_usd }} --email
 
       - name: Exit-lab (exit-recipe comparison -> Excel)
         # Runs AFTER the backtest completes, on the same frozen MT5 cache: reads

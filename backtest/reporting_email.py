@@ -15,13 +15,26 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
+from email.mime.image import MIMEImage
 from email import encoders
 from pathlib import Path
 from typing import Optional, Tuple
+
+# Chart files (report_charts.py) written next to each report HTML. On disk the
+# HTML references them by relative name; at send time we swap to cid: refs and
+# attach each as an inline MIMEImage so Gmail renders them without a blocked
+# external fetch. Missing PNG => leave the relative src + alt text, never crash.
+_CHART_CIDS = {
+    "chart_forex_equity.png":    "chart_forex_equity",
+    "chart_forex_quarters.png":  "chart_forex_quarters",
+    "chart_gold_nas_equity.png": "chart_gold_nas_equity",
+    "chart_gold_nas_quarters.png": "chart_gold_nas_quarters",
+}
 
 
 def _read_summary(run_dir: Path) -> dict:
@@ -84,14 +97,40 @@ def _send_one(
     attachment_path: Optional[Path],
     banner: str,
 ) -> bool:
-    msg = MIMEMultipart()
+    # multipart/mixed → [ multipart/related → (HTML + inline chart images),
+    #                     xlsx attachment ]. Charts ride as Content-ID inline
+    # images so Gmail shows them without an external fetch.
+    msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["From"] = sender
     msg["To"] = to
+
     html_body = html_path.read_text(encoding="utf-8")
     if banner:
         html_body = banner + html_body
-    msg.attach(MIMEText(html_body, "html"))
+
+    run_dir = html_path.parent
+    related = MIMEMultipart("related")
+    # Swap relative chart src -> cid: only for charts that actually exist on disk.
+    embedded = []
+    for fname, cid in _CHART_CIDS.items():
+        img_path = run_dir / fname
+        if not img_path.exists():
+            continue  # missing PNG: leave relative src + alt text, never crash
+        if f'src="{fname}"' not in html_body and f"src='{fname}'" not in html_body:
+            continue
+        html_body = html_body.replace(f'src="{fname}"', f'src="cid:{cid}"')
+        html_body = html_body.replace(f"src='{fname}'", f"src='cid:{cid}'")
+        embedded.append((img_path, cid))
+
+    related.attach(MIMEText(html_body, "html"))
+    for img_path, cid in embedded:
+        with open(img_path, "rb") as f:
+            img = MIMEImage(f.read(), _subtype="png")
+        img.add_header("Content-ID", f"<{cid}>")
+        img.add_header("Content-Disposition", "inline", filename=img_path.name)
+        related.attach(img)
+    msg.attach(related)
 
     if attachment_path and attachment_path.exists():
         with open(attachment_path, "rb") as f:

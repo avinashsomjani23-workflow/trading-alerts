@@ -596,6 +596,23 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
               total_alerts=len(all_alerts), total_trades=len(all_trades))
     print(f"\nH1-only report written to {report_dir}")
 
+    # Persist the EXACT in-memory exit-lab sink the email consumed, one JSON
+    # object per line. This is the ONLY faithful on-disk copy: exit_lab_trades.csv
+    # is a SEPARATE diagnostic (diagnostics/exit_lab.py) with a different schema
+    # and no ob_timestamp/entry_zone, so it cannot reconstruct the sink's join
+    # key. The email preview harness (render_report.py) reads THIS file to render
+    # byte-identical recipe numbers without re-running the 25-min simulation.
+    try:
+        _sink_path = report_dir / "exit_lab_sink.jsonl"
+        with open(_sink_path, "w", encoding="utf-8") as _sf:
+            for _row in exit_lab_sink:
+                _sf.write(json.dumps(_row, default=str) + "\n")
+        log_event("exit_lab_sink_persisted", path=str(_sink_path),
+                  rows=len(exit_lab_sink))
+    except Exception as _e:
+        log_event("exit_lab_sink_persist_failed", level="warn",
+                  error=f"{type(_e).__name__}: {_e}")
+
     # --- SCAN-LOG HARD GATE (SPEC Â§4) -------------------------------------
     # Evaluate every gate against the records this run produced, then decide
     # PASS/FAIL. The reporting headline (realised P&L) is reconciled against a
@@ -607,6 +624,13 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         scanlog, all_trades, risk_usd, report_dir, pairs_to_run,
         manifest_knobs)
     print(scanlog_gates.render_table(health, scanlog))
+
+    # Replace the Act-6 <!--GATES--> token in each report HTML with a one-line-
+    # per-gate PASS/FAIL table. Gates read the report's own headline (G1), so
+    # they can only run AFTER the report is written — hence the token + this
+    # post-gate patch. Runs on BOTH the FAIL and PASS paths so the emailed report
+    # (we email even on FAIL) always carries the real gate verdicts.
+    _inject_gates_html(report_dir, health)
     if not health.passed:
         _email_scanlog_failure(report_dir, scanlog, health, start, end, regime)
         scanlog.close()
@@ -685,6 +709,48 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
     # Scan log was already closed + zipped above (before commit) so its audit
     # artifacts ride in the same commit as the result logs.
     return report_dir
+
+
+def _inject_gates_html(report_dir, health) -> None:
+    """Replace the <!--GATES--> placeholder in each report HTML with a compact
+    PASS/FAIL gate table built from the in-process HealthResult. Idempotent and
+    best-effort: a missing token or missing file is a silent no-op (never break
+    the run over a cosmetic patch)."""
+    try:
+        overall_ok = health.overall == scanlog_gates.PASS
+        head = ("<span style='font-weight:700;color:%s;'>%s</span>" % (
+            ("#0ca30c" if overall_ok else "#d03b3b"),
+            ("ALL GATES PASS" if overall_ok else "GATE FAILURE — run not trusted")))
+        rows = ""
+        for g in health.gates:
+            ok = str(g.verdict).upper() in ("PASS", "OK", "WARN")
+            vcolor = "#0ca30c" if str(g.verdict).upper() == "PASS" else (
+                "#fab219" if str(g.verdict).upper() == "WARN" else "#d03b3b")
+            rows += (
+                "<tr><td style='padding:3px 8px;border-bottom:1px solid #e1e0d9;'>"
+                "<b>%s</b></td>"
+                "<td style='padding:3px 8px;border-bottom:1px solid #e1e0d9;'>%s</td>"
+                "<td style='padding:3px 8px;border-bottom:1px solid #e1e0d9;"
+                "color:%s;font-weight:700;'>%s</td></tr>" % (
+                    g.id, g.description, vcolor, g.verdict))
+        table = (
+            "<p style='font-size:13px;margin-bottom:6px;'>%s</p>"
+            "<table style='width:100%%;border-collapse:collapse;font-size:12px;'>"
+            "<thead><tr>"
+            "<th style='text-align:left;padding:3px 8px;'>Gate</th>"
+            "<th style='text-align:left;padding:3px 8px;'>Check</th>"
+            "<th style='text-align:left;padding:3px 8px;'>Result</th>"
+            "</tr></thead><tbody>%s</tbody></table>" % (head, rows))
+        for name in ("report_forex.html", "report_gold_nas.html"):
+            fp = report_dir / name
+            if not fp.exists():
+                continue
+            html = fp.read_text(encoding="utf-8")
+            if "<!--GATES-->" in html:
+                fp.write_text(html.replace("<!--GATES-->", table), encoding="utf-8")
+    except Exception as e:
+        log_event("gates_html_inject_failed", level="warn",
+                  error=f"{type(e).__name__}: {e}")
 
 
 def _read_realised_headline(report_dir) -> float:

@@ -32,3 +32,5 @@
 {"ts": "2026-07-03T04:31:27.157637+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "USDCHF", "trades": 18, "news_blocked": 0, "ist_blocked": 5, "killzone_dropped_alerts": 11}
 {"ts": "2026-07-03T04:31:32.941681+00:00", "level": "info", "event": "report_written", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20200301_20200331", "total_alerts": 174, "total_trades": 72}
 {"ts": "2026-07-03T04:31:32.943973+00:00", "level": "info", "event": "exit_lab_sink_persisted", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20200301_20200331\\exit_lab_sink.jsonl", "rows": 312}
+{"ts": "2026-07-03T04:31:33.806803+00:00", "level": "info", "event": "logs_committed_local_only", "run_id": "h1only_20200301_20200331", "sha": "4a48e6ce"}
+{"ts": "2026-07-03T04:31:33.808650+00:00", "level": "info", "event": "run_end"}

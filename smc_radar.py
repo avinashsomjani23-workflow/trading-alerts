@@ -78,6 +78,17 @@ ZONE_PROXIMITY_THRESHOLDS = {
 OB_PROXIMITY_ATR = 5.0   # Phase 1 surfacing window (both OBs)
 OB_MAX_KEEP = 2          # hard cap on surfaced OBs
 
+# Live Phase 1 detection window: the H1 frame every detector sees is the
+# last N CLOSED bars (fetch_data tails the adapter frame to this). The
+# backtest replay clamps its slices to the SAME window for parity.
+LIVE_DETECTION_BARS = 150
+
+# Same-leg dedupe: two same-direction OBs whose proximal lines are within
+# this fraction of H1 ATR are the same visual zone. 0.25 x a typical EURUSD
+# H1 ATR (~0.0012) ~= 0.0003, the old hardcoded forex threshold -- sub-1
+# pair behaviour is preserved; JPY/Gold/NAS dedupe starts working.
+DEDUPE_PROXIMAL_ATR_MULT = 0.25
+
 # ---------------------------------------------------------------------------
 # RANGING (INFORMATION ONLY — gates nothing). Two-component definition:
 #   1. Structure stalled: structure_v2 'ranging' flag (no new extreme for
@@ -437,7 +448,7 @@ def fetch_data(ticker, interval, period, retries=2):
 
     # Adapter returns a UTC DatetimeIndex; this engine expects a reset-index frame
     # with a `Datetime` column (already UTC), tailed to the last 150 bars.
-    tailed = df.tail(150).copy()
+    tailed = df.tail(LIVE_DETECTION_BARS).copy()
     tailed.index.name = 'Datetime'
     tailed = tailed.reset_index()
 
@@ -548,6 +559,76 @@ def _event_label_dir(bos_tag, bos_tier, direction):
 # can call the SAME function for its mid-day still-active gate. Re-exported
 # here so existing call sites continue to work unchanged.
 is_ob_mitigated_phase1 = smc_detector.is_ob_mitigated_phase1
+
+
+def _dedupe_same_leg_impl(obs, thresh):
+    """Same-leg dedupe — 4-test ladder applied in strict order.
+
+    Two OBs in the same direction whose proximal lines are within `thresh`
+    (an absolute price distance) are the same visual zone; keep one using:
+
+      Test 1: Pristine (0 touches) beats Tested.
+      Test 2: Both same touch state — FVG-holder wins.
+      Test 3: Tied on touch and FVG — freshest (higher bos_idx) wins.
+      Test 4: Defensive — identical bos_idx, keep first encountered.
+
+    Pure: no captured state. The caller supplies `thresh` (in live/backtest
+    this is DEDUPE_PROXIMAL_ATR_MULT x H1 ATR, with a 0.00030 fallback). Kept
+    at module scope so it is unit-testable in isolation.
+    """
+    if len(obs) < 2:
+        return obs
+
+    def _pick_winner(a, b):
+        a_touches = a.get('touches', 0)
+        b_touches = b.get('touches', 0)
+        a_pristine = (a_touches == 0)
+        b_pristine = (b_touches == 0)
+        if a_pristine and not b_pristine:
+            return a
+        if b_pristine and not a_pristine:
+            return b
+
+        a_fvg = a['fvg'].get('exists', False)
+        b_fvg = b['fvg'].get('exists', False)
+        if a_fvg and not b_fvg:
+            return a
+        if b_fvg and not a_fvg:
+            return b
+
+        if a['bos_idx'] > b['bos_idx']:
+            return a
+        if b['bos_idx'] > a['bos_idx']:
+            return b
+
+        logging.warning(
+            f"Dedupe Test 4 triggered — identical bos_idx {a['bos_idx']} "
+            f"for direction {a['direction']}. Keeping first."
+        )
+        return a
+
+    by_dir = {}
+    for o in obs:
+        by_dir.setdefault(o['direction'], []).append(o)
+
+    kept = []
+    for direction, group in by_dir.items():
+        if len(group) == 1:
+            kept.extend(group)
+            continue
+        survivors = []
+        for cand in group:
+            merged = False
+            for idx, surv in enumerate(survivors):
+                if abs(cand['proximal_line'] - surv['proximal_line']) <= thresh:
+                    winner = _pick_winner(cand, surv)
+                    survivors[idx] = winner
+                    merged = True
+                    break
+            if not merged:
+                survivors.append(cand)
+        kept.extend(survivors)
+    return kept
 
 
 def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=None):
@@ -1085,76 +1166,14 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     # earlier leg sitting in the 4-8 x ATR ring.
     filtered = list(tracked_obs)
 
-    # Same-leg dedupe: 4-test ladder applied in strict order.
-    # Pristine > FVG-holder > Freshest > Defensive.
-    # Touch state ('touches' field) is set above in mitigation block.
-    def _dedupe_same_leg(obs):
-        """
-        Same-leg dedupe — 4-test ladder applied in strict order.
-        Two OBs in same direction with proximal lines within pair-aware
-        threshold are the same visual zone. Keep one using:
-
-          Test 1: Pristine (0 touches) beats Tested.
-          Test 2: Both same touch state — FVG-holder wins.
-          Test 3: Tied on touch and FVG — freshest (higher bos_idx) wins.
-          Test 4: Defensive — identical bos_idx, keep first encountered.
-        """
-        if len(obs) < 2:
-            return obs
-
-        def _pick_winner(a, b):
-            a_touches = a.get('touches', 0)
-            b_touches = b.get('touches', 0)
-            a_pristine = (a_touches == 0)
-            b_pristine = (b_touches == 0)
-            if a_pristine and not b_pristine:
-                return a
-            if b_pristine and not a_pristine:
-                return b
-
-            a_fvg = a['fvg'].get('exists', False)
-            b_fvg = b['fvg'].get('exists', False)
-            if a_fvg and not b_fvg:
-                return a
-            if b_fvg and not a_fvg:
-                return b
-
-            if a['bos_idx'] > b['bos_idx']:
-                return a
-            if b['bos_idx'] > a['bos_idx']:
-                return b
-
-            logging.warning(
-                f"Dedupe Test 4 triggered — identical bos_idx {a['bos_idx']} "
-                f"for direction {a['direction']}. Keeping first."
-            )
-            return a
-
-        by_dir = {}
-        for o in obs:
-            by_dir.setdefault(o['direction'], []).append(o)
-
-        kept = []
-        for direction, group in by_dir.items():
-            if len(group) == 1:
-                kept.extend(group)
-                continue
-            survivors = []
-            for cand in group:
-                thresh = cand.get('_dedupe_thresh', 0.00030)
-                merged = False
-                for idx, surv in enumerate(survivors):
-                    if abs(cand['proximal_line'] - surv['proximal_line']) <= thresh:
-                        winner = _pick_winner(cand, surv)
-                        survivors[idx] = winner
-                        merged = True
-                        break
-                if not merged:
-                    survivors.append(cand)
-            kept.extend(survivors)
-        return kept
-
-    filtered = _dedupe_same_leg(filtered)
+    # Same-leg dedupe: 4-test ladder (Pristine > FVG-holder > Freshest >
+    # Defensive), delegated to the module-level _dedupe_same_leg_impl so it is
+    # unit-testable. Threshold is ATR-scaled (DEDUPE_PROXIMAL_ATR_MULT x H1
+    # ATR), with the old 0.00030 forex constant as the ATR-unavailable
+    # fallback. Touch state ('touches' field) is set above in mitigation block.
+    _dedupe_thresh = (DEDUPE_PROXIMAL_ATR_MULT * h1_atr_for_leg
+                      if h1_atr_for_leg and h1_atr_for_leg > 0 else 0.00030)
+    filtered = _dedupe_same_leg_impl(filtered, _dedupe_thresh)
 
     # Surface OB1 (last-event) + OB2 (best alternative within the window). OB2
     # now prefers WITH-TREND zones over a closer counter-trend zone (a with-trend
@@ -1166,7 +1185,6 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
 
     # Strip the private dedupe hint before returning.
     for o in filtered:
-        o.pop('_dedupe_thresh', None)
         o.pop('_diag_ref', None)  # OB BUILD LEDGER — internal back-reference
 
     return {

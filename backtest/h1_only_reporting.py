@@ -23,6 +23,7 @@ import pandas as pd
 
 from backtest.insights import win_rate_pct as _win_rate
 from backtest.insights import bootstrap_ci as _bootstrap_ci
+from backtest import insights as _insights
 
 
 # ---------------------------------------------------------------------------
@@ -364,19 +365,6 @@ def _quarter_of(ts_str: Any) -> Optional[str]:
     return f"{ts.year}Q{(ts.month - 1) // 3 + 1}"
 
 
-def _per_quarter_expr(trades: List[Dict[str, Any]], r_col: str) -> Dict[str, float]:
-    """Mean R per calendar quarter, over resolved (filled) rows. The sign of
-    each quarter is what a real edge must hold; a sign that flips quarter to
-    quarter is noise even if the pooled average looks good."""
-    by_q: Dict[str, List[float]] = {}
-    for t in trades:
-        if not _is_real_filled(t):
-            continue
-        q = _quarter_of(t.get("alert_ts"))
-        if q is None:
-            continue
-        by_q.setdefault(q, []).append(float(t.get(r_col) or 0.0))
-    return {q: round(sum(v) / len(v), 3) for q, v in by_q.items() if v}
 
 
 def _pq_sign_consistency(pq: Dict[str, float], expr: float) -> Tuple[int, int]:
@@ -428,22 +416,6 @@ def _stat_block(values: List[float], ts_values: List[Any] = None) -> Dict[str, A
             "pq_agree": agree, "pq_total": total, "verdict": verdict}
 
 
-def _verdict_phrase(stat: Dict[str, Any]) -> str:
-    """One-line plain-English read of a _stat_block result."""
-    v = stat["verdict"]
-    lo, hi = stat["ci"]
-    pq_s = ""
-    if stat["pq_total"]:
-        pq_s = (f" Sign held in {stat['pq_agree']}/{stat['pq_total']} quarters.")
-    if v == "thin":
-        return (f"Too few trades ({stat['n']}) to prove anything — directional only, "
-                f"confirm on more data.")
-    ci_s = f"[{lo:+.2f}, {hi:+.2f}]R"
-    if v == "edge":
-        return f"Real edge: 95% CI {ci_s} clears zero.{pq_s}"
-    if v == "loser":
-        return f"Real loser: 95% CI {ci_s} sits below zero.{pq_s}"
-    return f"Unproven: 95% CI {ci_s} straddles zero — no demonstrable edge.{pq_s}"
 
 
 # ===========================================================================
@@ -502,75 +474,14 @@ def _slice_read(rows: List[Dict[str, Any]], base_exr: float,
     }
 
 
-def _rank_slices(groups: List[Tuple[str, List[Dict[str, Any]]]],
-                 base_exr: float, r_col: str = "r_realised"
-                 ) -> List[Dict[str, Any]]:
-    """Score + rank a set of named slices. `groups` = [(label, rows), ...].
-    Returns reads (each with a `label`) sorted by rank desc, worst/strongest
-    effect first. Empty slices are dropped."""
-    out = []
-    for label, rows in groups:
-        read = _slice_read(rows, base_exr, r_col)
-        if read is not None:
-            out.append({"label": label, **read})
-    out.sort(key=lambda r: r["rank"], reverse=True)
-    return out
 
 
-def _n_trades(n: int) -> str:
-    """'1 trade' / '2 trades' — correct pluralization for reader-facing counts."""
-    return f"{n} trade" if n == 1 else f"{n} trades"
 
 
-def _thin_reason(read: Dict[str, Any]) -> str:
-    """Plain reason a slice did not earn 'driver' status (for honesty)."""
-    why = []
-    if not read["n_ok"]:
-        why.append(f"only {_n_trades(read['n'])}")
-    if not read["gap_ok"]:
-        why.append("gap too small")
-    if not read["pq_ok"]:
-        why.append(f"sign held {read['pq_agree']}/{read['pq_total']}q")
-    return ", ".join(why) if why else "borderline"
 
 
-def _insight_sentence(subject: str, read: Dict[str, Any],
-                      action_if_driver: str = "", action_if_thin: str = ""
-                      ) -> str:
-    """Turn one guarded read into a single actionable sentence. When the read is
-    a driver, assert it and give the action; when it is thin, say so plainly and
-    do NOT recommend acting on it."""
-    gap = read["gap"]
-    direction = "outperforms" if gap >= 0 else "underperforms"
-    mag = abs(gap)
-    wr_s = "" if read["wr"] is None else f", {read['wr']:.0f}% win rate"
-    core = (f"{subject} {direction} the book by {mag:.2f}R "
-            f"({read['n']} trades{wr_s})")
-    if read["promoted"]:
-        act = f" — {action_if_driver}" if action_if_driver else ""
-        return f"{core}. Cleared the guard: a real pattern this period{act}."
-    tail = (f" — {action_if_thin}" if action_if_thin
-            else " — not enough support to act on yet")
-    return f"{core}, but {_thin_reason(read)}{tail}."
 
 
-def _bucket_ranked_read(rows: List[Dict[str, Any]], col: str,
-                        base_exr: float, order: Optional[List[str]] = None
-                        ) -> List[Dict[str, Any]]:
-    """Rank the values of a single categorical column within `rows`. Convenience
-    wrapper over _rank_slices used by the per-block narratives (e.g. rank a
-    pair's sessions, or a column's ATR buckets). Values with all-null keys are
-    skipped. `order` (optional) is unused for ranking but lets callers keep a
-    stable presentation elsewhere."""
-    df = pd.DataFrame([r for r in rows if _is_real_filled(r)])
-    if df.empty or col not in df.columns:
-        return []
-    groups: List[Tuple[str, List[Dict[str, Any]]]] = []
-    for val, sub in df.groupby(df[col].astype("object")):
-        if val is None or (isinstance(val, float) and pd.isna(val)):
-            continue
-        groups.append((str(val), sub.to_dict("records")))
-    return _rank_slices(groups, base_exr)
 
 
 def _runner_r(t: Dict[str, Any]) -> float:
@@ -647,130 +558,8 @@ def _killzone_alignment_table(trades: List[Dict[str, Any]], r_col: str
     return out
 
 
-def _bos_sequence_table(trades: List[Dict[str, Any]], r_col: str
-                        ) -> List[Dict[str, Any]]:
-    """One row per BOS-sequence-count bucket: trades, win rate, avg R, total R.
-
-    bos_sequence_count = number of BOS since the last CHoCH (CHoCH resets to 0).
-    A high count = late/exhausted continuation. This table answers directly:
-    does win rate fall as the count climbs? The counts are bucketed 0, 1, 2, 3,
-    4+ so the deep-continuation tail doesn't fragment into thin one-trade rows.
-    """
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return []
-    df = pd.DataFrame(filled)
-    if "bos_sequence_count" not in df.columns or r_col not in df.columns:
-        return []
-    df = df[df["bos_sequence_count"].notna()].copy()
-    if df.empty:
-        return []
-    df["bos_sequence_count"] = df["bos_sequence_count"].astype(int)
-
-    def _bucket(n: int) -> str:
-        return str(n) if n <= 3 else "4+"
-
-    df["_bucket"] = df["bos_sequence_count"].map(_bucket)
-    out = []
-    for bucket in ["0", "1", "2", "3", "4+"]:
-        sub = df[df["_bucket"] == bucket]
-        if sub.empty:
-            continue
-        out.append({
-            "bucket":       bucket,
-            "trades":       int(len(sub)),
-            "win_rate_pct": _win_rate(sub, r_col),
-            "expectancy_r": round(float(sub[r_col].mean()), 3),
-            "total_r":      round(float(sub[r_col].sum()), 3),
-        })
-    return out
 
 
-def _bos_verdict_table(trades: List[Dict[str, Any]], r_col: str
-                       ) -> List[Dict[str, Any]]:
-    """Win rate by continuation-drive verdict (holding vs fading).
-
-    'fading' = the leg's recent break bodies decayed vs its start (late,
-    exhausted continuation). This is what the live scorer down-rates. The table
-    answers: does the fading read actually separate winners from losers?
-    """
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return []
-    df = pd.DataFrame(filled)
-    if "bos_verdict" not in df.columns or r_col not in df.columns:
-        return []
-    out = []
-    for bucket in ["holding", "fading"]:
-        sub = df[df["bos_verdict"] == bucket]
-        if sub.empty:
-            continue
-        out.append({
-            "bucket":       bucket,
-            "trades":       int(len(sub)),
-            "win_rate_pct": _win_rate(sub, r_col),
-            "expectancy_r": round(float(sub[r_col].mean()), 3),
-            "total_r":      round(float(sub[r_col].sum()), 3),
-        })
-    return out
-
-
-def _bos_verdict_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    rows = _bos_verdict_table(trades, r_col)
-    if not rows:
-        return "<p style='color:#888;'>No filled trades to break down by drive verdict.</p>"
-    header = _table_row(
-        ["Drive verdict", "Trades", "Win rate", "Avg R", "Total R"], header=True,
-    )
-    body = ""
-    for r in rows:
-        color = "#eafaf1" if r["expectancy_r"] >= 0 else "#fdf2f2"
-        body += _table_row([
-            r["bucket"], str(r["trades"]),
-            _wr_str(r['win_rate_pct']),
-            _r(r["expectancy_r"]),
-            f"{r['total_r']:+.1f}R",
-        ], color=color)
-    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
-
-
-def _bos_sequence_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    rows = _bos_sequence_table(trades, r_col)
-    if not rows:
-        return "<p style='color:#888;'>No filled trades to break down by BOS count.</p>"
-    header = _table_row(
-        ["BOS # since CHoCH", "Trades", "Win rate", "Avg R", "Total R"],
-        header=True,
-    )
-    body = ""
-    for r in rows:
-        color = "#eafaf1" if r["expectancy_r"] >= 0 else "#fdf2f2"
-        body += _table_row([
-            r["bucket"], str(r["trades"]),
-            _wr_str(r['win_rate_pct']),
-            _r(r["expectancy_r"]),
-            f"{r['total_r']:+.1f}R",
-        ], color=color)
-    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
-
-
-def _killzone_alignment_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    rows = _killzone_alignment_table(trades, r_col)
-    if not rows:
-        return "<p style='color:#888;'>No filled trades to break down by alignment.</p>"
-    header = _table_row(
-        ["Bucket", "Trades", "Win rate", "Avg R", "Total R"], header=True,
-    )
-    body = ""
-    for r in rows:
-        color = "#eafaf1" if r["expectancy_r"] >= 0 else "#fdf2f2"
-        body += _table_row([
-            _align_label(r["bucket"]), str(r["trades"]),
-            _wr_str(r['win_rate_pct']),
-            _r(r["expectancy_r"]),
-            f"{r['total_r']:+.1f}R",
-        ], color=color)
-    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
 
 
 # ---------------------------------------------------------------------------
@@ -797,205 +586,9 @@ _TREND_LABEL_MAP = {
 }
 
 
-def _trend_alignment_table(trades: List[Dict[str, Any]], r_col: str
-                           ) -> List[Dict[str, Any]]:
-    """One row per trend bucket: trades, win rate, avg R, total R."""
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return []
-    df = pd.DataFrame(filled)
-    if "trend_alignment" not in df.columns or r_col not in df.columns:
-        return []
-    df = df.copy()
-    df["_trend_bucket"] = df["trend_alignment"].map(_TREND_LABEL_MAP)
-    out = []
-    for bucket in _TREND_ORDER:
-        sub = df[df["_trend_bucket"] == bucket]
-        if sub.empty:
-            continue
-        out.append({
-            "bucket":       bucket,
-            "trades":       int(len(sub)),
-            "win_rate_pct": _win_rate(sub, r_col),
-            "expectancy_r": round(float(sub[r_col].mean()), 3),
-            "total_r":      round(float(sub[r_col].sum()), 3),
-        })
-    return out
 
 
-def _trend_pairwise_table(trades: List[Dict[str, Any]], r_col: str
-                          ) -> List[Dict[str, Any]]:
-    """Per-pair with-trend vs against-trend: trades, win rate, avg R, total R.
-    One row per (pair, bucket). Only the two directional buckets are kept
-    (no-trend is dropped) since the question is whether counter-trend pays."""
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return []
-    df = pd.DataFrame(filled)
-    if "trend_alignment" not in df.columns or r_col not in df.columns \
-            or "pair" not in df.columns:
-        return []
-    df = df.copy()
-    df["_trend_bucket"] = df["trend_alignment"].map(_TREND_LABEL_MAP)
-    out = []
-    for pair in sorted(df["pair"].dropna().unique()):
-        for bucket in ["With trend", "Against trend"]:
-            sub = df[(df["pair"] == pair) & (df["_trend_bucket"] == bucket)]
-            if sub.empty:
-                continue
-            out.append({
-                "pair":         pair,
-                "bucket":       bucket,
-                "trades":       int(len(sub)),
-                "win_rate_pct": _win_rate(sub, r_col),
-                "expectancy_r": round(float(sub[r_col].mean()), 3),
-                "total_r":      round(float(sub[r_col].sum()), 3),
-            })
-    return out
 
-
-def _trend_alignment_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    rows = _trend_alignment_table(trades, r_col)
-    if not rows:
-        return ("<p style='color:#888;'>No filled trades with trend data to "
-                "break down by trend alignment.</p>")
-    header = _table_row(
-        ["Bucket", "Trades", "Win rate", "Avg R", "Total R"], header=True,
-    )
-    body = ""
-    for r in rows:
-        color = "#eafaf1" if r["expectancy_r"] >= 0 else "#fdf2f2"
-        body += _table_row([
-            r["bucket"], str(r["trades"]),
-            _wr_str(r['win_rate_pct']),
-            _r(r["expectancy_r"]),
-            f"{r['total_r']:+.1f}R",
-        ], color=color)
-    combined = f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
-
-    # SMC conflict check: the method expects WITH-trend to beat AGAINST-trend.
-    # If against-trend's avg R is >= with-trend's, the data disagrees — flag it.
-    with_r = next((r["expectancy_r"] for r in rows if r["bucket"] == "With trend"), None)
-    agn_r  = next((r["expectancy_r"] for r in rows if r["bucket"] == "Against trend"), None)
-    flag = ""
-    if with_r is not None and agn_r is not None and agn_r >= with_r:
-        flag = (
-            "<p style='font-size:12px;color:#e67e22;font-weight:600;margin:6px 0;'>"
-            "⚠ Conflicts with SMC: against-trend did as well or better than "
-            "with-trend this period. SMC expects with-trend to lead — treat this "
-            "as suspect (thin sample or a detector quirk), not a rule.</p>")
-
-    # Per-pair breakdown (Q3): does the with/against picture hold pair by pair?
-    pw = _trend_pairwise_table(trades, r_col)
-    pw_html = ""
-    if pw:
-        pw_header = _table_row(
-            ["Pair", "Bucket", "Trades", "Win rate", "Avg R", "Total R"],
-            header=True)
-        pw_body = ""
-        for r in pw:
-            color = "#eafaf1" if r["expectancy_r"] >= 0 else "#fdf2f2"
-            pw_body += _table_row([
-                r["pair"], r["bucket"], str(r["trades"]),
-                _wr_str(r["win_rate_pct"]),
-                _r(r["expectancy_r"]),
-                f"{r['total_r']:+.1f}R",
-            ], color=color)
-        pw_html = (
-            "<h4 style='margin-top:14px;'>By pair — with vs against trend</h4>"
-            f"<table><thead>{pw_header}</thead><tbody>{pw_body}</tbody></table>")
-
-    return combined + flag + pw_html
-
-
-# FVG-staleness experiment (2026-06-16). Was a setup taken with a stale FVG
-# (gap already discharged on an earlier approach) worse than one with a fresh
-# gap? fvg_state is labelled in the simulator (_fvg_state). no_fvg is reported
-# but excluded from the fresh-vs-stale decision.
-_FVG_STATE_ORDER = ["fresh", "stale", "no_fvg"]
-
-
-def _fvg_state_table(trades: List[Dict[str, Any]], r_col: str
-                     ) -> List[Dict[str, Any]]:
-    """One row per FVG state: trades, win rate, avg R, total R. All from r_col."""
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return []
-    df = pd.DataFrame(filled)
-    if "fvg_state" not in df.columns or r_col not in df.columns:
-        return []
-    out = []
-    for bucket in _FVG_STATE_ORDER:
-        sub = df[df["fvg_state"] == bucket]
-        if sub.empty:
-            continue
-        out.append({
-            "bucket":       bucket,
-            "trades":       int(len(sub)),
-            "win_rate_pct": _win_rate(sub, r_col),
-            "expectancy_r": round(float(sub[r_col].mean()), 3),
-            "total_r":      round(float(sub[r_col].sum()), 3),
-        })
-    return out
-
-
-def _killzone_alignment_losses_html(trades: List[Dict[str, Any]]) -> str:
-    """Losing-trades view: of all SL outcomes, how do they distribute across
-    alignment buckets? If 'Neither' over-indexes vs its trade share, that's
-    the actionable signal -- block that bucket."""
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return "<p style='color:#888;'>No filled trades.</p>"
-    df = pd.DataFrame(filled)
-    if "killzone_alignment" not in df.columns or "r_realised" not in df.columns:
-        return "<p style='color:#888;'>Alignment data unavailable.</p>"
-    total_trades = len(df)
-    overall_losses = int((df["r_realised"] < 0).sum())
-    if overall_losses == 0:
-        return "<p style='color:#888;'>No losing trades in this run.</p>"
-    overall_loss_rate = overall_losses / total_trades * 100
-
-    # Plain question this table answers: in each bucket, how OFTEN do trades
-    # lose, compared with the run as a whole? Loss rate is far more intuitive
-    # than the old "share of losses minus share of trades" -- you just read the
-    # rate and the gap. A bucket that loses much more often than average is the
-    # weak one; much less often is the strong one. The threshold is wide (15pp)
-    # because per-week samples are tiny and small gaps are pure noise.
-    header = _table_row(
-        ["Bucket", "Trades", "Lost", "Loss rate", "What it means"],
-        header=True,
-    )
-    body = ""
-    for bucket in _ALIGNMENT_ORDER:
-        sub_all = df[df["killzone_alignment"] == bucket]
-        n = len(sub_all)
-        if n == 0:
-            continue
-        lost = int((sub_all["r_realised"] < 0).sum())
-        rate = lost / n * 100
-        delta = rate - overall_loss_rate
-        # Plain English, no "pp": just compare this bucket's loss rate to how
-        # often the run loses overall, and say worse / better / same.
-        if delta > 15:
-            indicator = (f"<b style='color:#e74c3c;'>worse than your usual "
-                         f"{overall_loss_rate:.0f}% &mdash; consider avoiding</b>")
-            color = "#fdf2f2"
-        elif delta < -15:
-            indicator = (f"<b style='color:#27ae60;'>better than your usual "
-                         f"{overall_loss_rate:.0f}% &mdash; a bucket to lean on</b>")
-            color = "#eafaf1"
-        else:
-            indicator = f"about your usual {overall_loss_rate:.0f}% &mdash; no signal"
-            color = ""
-        body += _table_row([
-            _align_label(bucket), str(n), str(lost), f"{rate:.0f}%", indicator,
-        ], color=color)
-    note = (f"<p style='font-size:12px;color:#666;margin-top:6px;'>"
-            f"Run average loss rate: <b>{overall_loss_rate:.0f}%</b>. "
-            f"A bucket far above it loses more often than the system as a whole "
-            f"&mdash; a candidate to avoid; far below it is a bucket to lean on. "
-            f"Gaps under 15pp are noise at this sample size.</p>")
-    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>{note}"
 
 
 # ---------------------------------------------------------------------------
@@ -1019,181 +612,8 @@ def _cf_aggregate(sub: "pd.DataFrame", risk_usd: float) -> Dict[str, Any]:
     }
 
 
-def _cf_row(label: str, sub_agg: Dict[str, Any], baseline: Dict[str, Any]
-            ) -> str:
-    """One HTML row for a counterfactual filter."""
-    n = sub_agg["n"]
-    if n == 0:
-        return _table_row([label, "0", "—", "—", "—", "—"])
-    low_n = " <i>(low n)</i>" if n < _LOW_N_THRESHOLD else ""
-    wr = sub_agg["win_rate"]
-    base_wr = baseline["win_rate"]
-    # WR is None when no trade resolved (all breakevens). Show em-dash; a delta
-    # needs both sides defined.
-    if wr is None:
-        wr_cell = "—"
-    elif base_wr is None:
-        wr_cell = f"{wr:.0f}%"
-    else:
-        wr_cell = f"{wr:.0f}% ({wr - base_wr:+.0f}pp)"
-    pnl_delta = sub_agg["total_pnl"] - baseline["total_pnl"]
-    pnl_color = "#27ae60" if pnl_delta >= 0 else "#e74c3c"
-    row_color = "#eafaf1" if sub_agg["avg_r"] >= 0 else "#fdf2f2"
-    return _table_row([
-        label + low_n,
-        str(n),
-        wr_cell,
-        _r(sub_agg["avg_r"]),
-        _m(sub_agg["total_pnl"]),
-        f"<span style='color:{pnl_color};'>{_m(pnl_delta)}</span>",
-    ], color=row_color)
 
 
-def _counterfactual_html(trades: List[Dict[str, Any]], risk_usd: float) -> str:
-    """Run a battery of counterfactual filters and show win-rate/P&L delta."""
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return "<p style='color:#888;'>No filled trades for counterfactual analysis.</p>"
-    df = pd.DataFrame(filled)
-    if "r_realised" not in df.columns:
-        return "<p style='color:#888;'>r_realised missing — cannot build counterfactuals.</p>"
-
-    baseline = _cf_aggregate(df, risk_usd)
-    if baseline["n"] == 0:
-        return "<p style='color:#888;'>Baseline empty.</p>"
-
-    # Build the filter battery. Each filter has a section label and a list
-    # of (description, predicate) pairs. Predicates take a row dict.
-    sections: List[Tuple[str, List[Tuple[str, "pd.Series"]]]] = []
-
-    # --- TP1 R bucket filters -------------------------------------------------
-    # Simplified 2026-06: dropped the "Skip TP1 R in [a,b)" band rows. They
-    # tested "exclude trades whose target landed in a middle band", which read
-    # as a confusing double-negative and was rarely actionable. The monotonic
-    # "Only TP1 R >= X" ladder answers the real question -- does demanding a
-    # farther, more-liquid target help? -- in plain terms.
-    if "tp1_rr" in df.columns:
-        tp1 = df["tp1_rr"].astype(float)
-        # The >=1.5 row is the GATE-RESTORATION counterfactual: the backtest now
-        # trades sub-1.5R setups (existence floor dropped to 0.5R), so this row
-        # answers directly "what if we kept live's old 1.5R floor?" — no longer a
-        # redundant copy of the baseline.
-        sections.append(("TP1 R-multiple filters (minimum target distance)", [
-            ("Restore live's 1.5R floor (TP1 R >= 1.5)", tp1 >= 1.5),
-            ("Only TP1 R >= 2.0",               tp1 >= 2.0),
-            ("Only TP1 R >= 2.5",               tp1 >= 2.5),
-        ]))
-
-    # --- TP2 R bucket filters -------------------------------------------------
-    if "tp2_rr" in df.columns:
-        tp2 = pd.to_numeric(df["tp2_rr"], errors="coerce")
-        sections.append(("TP2 R-multiple filters (minimum target distance)", [
-            ("Only TP2 R >= 2.0",               (tp2 >= 2.0) & tp2.notna()),
-            ("Only TP2 R >= 2.5",               (tp2 >= 2.5) & tp2.notna()),
-            ("Only TP2 R >= 3.0",               (tp2 >= 3.0) & tp2.notna()),
-        ]))
-
-    # --- Score thresholds -----------------------------------------------------
-    if "score" in df.columns:
-        sc = pd.to_numeric(df["score"], errors="coerce")
-        sections.append(("Setup score thresholds", [
-            ("Only score >= 3", sc >= 3),
-            ("Only score >= 4", sc >= 4),
-            ("Only score >= 5", sc >= 5),
-        ]))
-
-    # --- Confluence count -----------------------------------------------------
-    if "confluences_present" in df.columns:
-        conf_count = df["confluences_present"].astype(str).apply(
-            lambda s: 0 if s in ("", "none", "nan") else len([c for c in s.split(",") if c])
-        )
-        sections.append(("Number of active confluences", [
-            ("Only >= 2 confluences", conf_count >= 2),
-            ("Only >= 3 confluences", conf_count >= 3),
-            ("Only >= 4 confluences", conf_count >= 4),
-        ]))
-
-    # --- Killzone alignment ---------------------------------------------------
-    # Plain labels (2026-07): "Both/Neither/Fill only" are jargon. Spell out what
-    # each means — OB-formation-candle in killzone vs fill-candle in killzone.
-    if "killzone_alignment" in df.columns:
-        ka = df["killzone_alignment"]
-        sections.append(("Killzone timing (OB-formation candle + fill candle)", [
-            ("Only both candles in killzone",          ka == "Both"),
-            ("Drop trades with neither candle in killzone", ka != "Neither"),
-            ("Only trades filled in a killzone (both or fill-only)",
-             ka.isin(["Both", "Fill only"])),
-        ]))
-
-    # --- Fill session ---------------------------------------------------------
-    # Consistent "Only fills in <session>" phrasing (2026-07). The old mixed
-    # "Only London / Only NY / SKIP Asia" made Asia read backwards.
-    if "fill_session" in df.columns:
-        fs = df["fill_session"]
-        sections.append(("Fill session (session the order filled in)", [
-            ("Only fills in London", fs == "London"),
-            ("Only fills in NY",     fs == "NY"),
-            ("Only fills in Asia",   fs == "Asia"),
-        ]))
-
-    # --- Day of week ----------------------------------------------------------
-    if "fill_ts" in df.columns:
-        dow = pd.to_datetime(df["fill_ts"], errors="coerce", utc=True).dt.day_name()
-        sections.append(("Day of week (fill day)", [
-            ("Skip Monday",    dow != "Monday"),
-            ("Skip Friday",    dow != "Friday"),
-            ("Only Tue-Thu",   dow.isin(["Tuesday", "Wednesday", "Thursday"])),
-        ]))
-
-    # --- PD-array alignment (direction-aware) ---------------------------------
-    # Replaces the old direction-blind discount/premium split. Raw zone is
-    # meaningless without direction: a SHORT in discount is counter-PD (bad),
-    # not the same as a SHORT in premium. pd_alignment encodes that.
-    if "pd_alignment" in df.columns:
-        pa = df["pd_alignment"]
-        sections.append(("PD-array alignment (direction-aware)", [
-            ("PD-aligned (long+discount / short+premium)", pa == "aligned"),
-            ("PD-counter (long+premium / short+discount)", pa == "counter"),
-        ]))
-    elif "pd_zone" in df.columns:  # legacy runs without pd_alignment
-        pdz = df["pd_zone"]
-        sections.append(("PD-array zone of entry (legacy, direction-blind)", [
-            ("Only Discount", pdz == "discount"),
-            ("Only Premium",  pdz == "premium"),
-        ]))
-
-    # Baseline row at top.
-    baseline_row = _table_row([
-        "<b>Baseline (no filter)</b>", str(baseline["n"]),
-        "—" if baseline["win_rate"] is None else f"{baseline['win_rate']:.0f}%",
-        _r(baseline["avg_r"]),
-        _m(baseline["total_pnl"]),
-        "—",
-    ], color="#f4f4f4")
-
-    header = _table_row(
-        ["Filter", "Trades", "Win rate (vs baseline)", "Avg R", "Total P&amp;L", "P&amp;L delta"],
-        header=True,
-    )
-
-    body_parts: List[str] = [baseline_row]
-    for sect_label, filters in sections:
-        body_parts.append(_table_row([
-            f"<b style='background:#1A5490;color:white;padding:2px 6px;'>{sect_label}</b>",
-            "", "", "", "", "",
-        ]))
-        for label, mask in filters:
-            sub = df[mask.fillna(False)]
-            sub_agg = _cf_aggregate(sub, risk_usd)
-            body_parts.append(_cf_row(label, sub_agg, baseline))
-
-    note = (
-        "<p style='font-size:12px;color:#666;margin-top:6px;'>"
-        f"Baseline = all {baseline['n']} filled trades. Each filter row shows the subset that would have remained if we applied that filter. "
-        "<b>P&amp;L delta</b> = subset P&amp;L minus baseline P&amp;L &mdash; positive means the filter would have improved the run. "
-        f"Buckets with fewer than {_LOW_N_THRESHOLD} trades are marked <i>(low n)</i> and should be treated as directional only.</p>"
-    )
-    return (f"<table><thead>{header}</thead><tbody>{''.join(body_parts)}</tbody></table>{note}")
 
 
 def _counterfactual_dataframe(trades: List[Dict[str, Any]],
@@ -1298,6 +718,17 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
         for label, mask in filters:
             sub = df[mask.fillna(False)]
             agg = _cf_aggregate(sub, risk_usd)
+            # Guard columns (§11.4): the counterfactual leaves the body but only
+            # enters the email via Act 5, which recomputes with _stat_block. Ship
+            # the same guard here so the Excel row is self-judging — a filter is
+            # only worth acting on if its remainder CI clears zero and the sign
+            # holds across quarters.
+            sub_rows = sub.to_dict("records")
+            svals = [float(r.get("r_realised") or 0.0) for r in sub_rows
+                     if _is_real_filled(r)]
+            sts = [r.get("alert_ts") for r in sub_rows if _is_real_filled(r)]
+            gstat = _stat_block(svals, sts)
+            glo, ghi = gstat["ci"]
             rows.append({
                 "Section":      sect_label,
                 "Filter":       label,
@@ -1309,6 +740,12 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
                 "Avg R":        round(agg["avg_r"], 3) if agg["n"] else None,
                 "Total P&L":    round(agg["total_pnl"], 2) if agg["n"] else None,
                 "P&L Delta":    round(agg["total_pnl"] - baseline["total_pnl"], 2) if agg["n"] else None,
+                # Guard columns.
+                "CI lo":        glo,
+                "CI hi":        ghi,
+                "Quarters (sign held)": (f"{gstat['pq_agree']}/{gstat['pq_total']}"
+                                         if gstat["pq_total"] else None),
+                "CI cleared":   bool(glo is not None and glo > 0),
                 "Low N?":       "Yes" if 0 < agg["n"] < _LOW_N_THRESHOLD else "No",
             })
 
@@ -1320,220 +757,8 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Confluence uplift — does each confluence actually improve outcomes? (Q2)
-# Per confluence: expectancy WITH it minus expectancy WITHOUT it. A confluence
-# that does not lift expectancy is noise, no matter how often it appears.
-# ---------------------------------------------------------------------------
-
-_CONFLUENCE_DEFS = [
-    ("FVG present",       lambda d: d.get("fvg_present") is True),
-    ("Liquidity sweep",   lambda d: d.get("sweep_present") is True),
-    ("Structure points",  lambda d: float(d.get("structure_pts") or 0) > 0),
-    ("OB freshness",      lambda d: float(d.get("freshness_pts") or 0) > 0),
-    ("PD-aligned entry",  lambda d: d.get("pd_alignment") == "aligned"),
-]
-
-
-def _confluence_uplift_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    """Which confluences earn their weight? Expectancy with vs without each."""
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return "<p style='color:#888;'>No filled trades to attribute confluences.</p>"
-
-    def _mean(rows):
-        vals = [float(t.get(r_col) or 0) for t in rows]
-        return (sum(vals) / len(vals)) if vals else None
-
-    header = _table_row(
-        ["Confluence", "Trades with", "Avg R with", "Avg R without",
-         "Uplift", "Verdict"], header=True,
-    )
-    body = ""
-    for name, pred in _CONFLUENCE_DEFS:
-        with_c  = [t for t in filled if pred(t)]
-        without = [t for t in filled if not pred(t)]
-        n_w = len(with_c)
-        exp_w, exp_o = _mean(with_c), _mean(without)
-        uplift = (exp_w - exp_o) if (exp_w is not None and exp_o is not None) else None
-
-        if n_w < _LOW_N_THRESHOLD:
-            verdict, vc, row_c = "low n &mdash; directional only", "#888", ""
-        elif uplift is None:
-            verdict, vc, row_c = "no comparison group", "#888", ""
-        elif uplift >= 0.20:
-            verdict, vc, row_c = "earns its weight", "#27ae60", "#eafaf1"
-        elif uplift >= 0.05:
-            verdict, vc, row_c = "marginal", "#f39c12", "#fef9e7"
-        else:
-            verdict, vc, row_c = "noise &mdash; not helping", "#e74c3c", "#fdf2f2"
-
-        body += _table_row([
-            name, str(n_w),
-            _r(exp_w) if exp_w is not None else "&mdash;",
-            _r(exp_o) if exp_o is not None else "&mdash;",
-            (_r(uplift) if uplift is not None else "&mdash;"),
-            f"<span style='color:{vc};font-weight:600;'>{verdict}</span>",
-        ], color=row_c)
-
-    note = ("<p style='font-size:12px;color:#666;margin-top:6px;'>"
-            "Uplift = average R when the confluence is present minus average R "
-            "when it is absent. Positive means it adds edge. A confluence with "
-            "near-zero or negative uplift is decoration, not signal &mdash; "
-            "candidates to drop from the score. Rows with fewer than "
-            f"{_LOW_N_THRESHOLD} present-trades are directional only.</p>")
-    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>{note}"
-
-
-# ---------------------------------------------------------------------------
-# Setup badge validation — does the email banner (A+ Reversal at the Wall /
-# A First Pullback / Caution: Late-Trend Chase) actually predict outcome?
-# smc_detector.classify_setup output, logged per EDGE_ENGINE_HANDOFF.md §3.
-# Mirrors backtest/insights.setup_badge_validation's bucketing (kept
-# independent — this file works on trade dicts, insights.py on DataFrames).
-# ---------------------------------------------------------------------------
-
-def _setup_badge_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    """Per-badge win rate / expectancy — is the banner a real signal or decor?"""
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return "<p style='color:#888;'>No filled trades to attribute badges.</p>"
-
-    badges = {}
-    for t in filled:
-        name = t.get("setup_badge") or "(no badge)"
-        badges.setdefault(name, []).append(float(t.get(r_col) or 0.0))
-
-    header = _table_row(
-        ["Badge", "Trades", "Win rate", "Expectancy"], header=True,
-    )
-    body = ""
-    # (no badge) last regardless of count — it's the reference row, not a signal.
-    for name in sorted(badges, key=lambda n: (n == "(no badge)", -len(badges[n]))):
-        vals = badges[name]
-        n = len(vals)
-        wins = sum(1 for v in vals if v > 0)
-        losses = sum(1 for v in vals if v < 0)
-        wr = (wins / (wins + losses) * 100) if (wins + losses) else None
-        exp_r = sum(vals) / n
-
-        if name == "(no badge)":
-            row_c = ""
-        elif n < _LOW_N_THRESHOLD:
-            row_c = ""
-        elif exp_r >= 0.20:
-            row_c = "#eafaf1"
-        elif exp_r < 0:
-            row_c = "#fdf2f2"
-        else:
-            row_c = ""
-
-        label = name if n >= _LOW_N_THRESHOLD or name == "(no badge)" \
-            else f"{name} <span style='color:#888;font-size:11px;'>(n&lt;{_LOW_N_THRESHOLD}, directional only)</span>"
-        body += _table_row([label, str(n), _wr_str(wr), _r(exp_r)], color=row_c)
-
-    note = ("<p style='font-size:12px;color:#666;margin-top:6px;'>"
-            "UNVALIDATED — badges are rare per run; this table is a running "
-            "check, not a verdict. Needs the 18-yr edge-engine pass "
-            "(bootstrap CI + Spearman + OOS split, EDGE_ENGINE_HANDOFF.md §4) "
-            "before any badge is trusted as a real signal. Rows with fewer than "
-            f"{_LOW_N_THRESHOLD} trades are directional only.</p>")
-    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>{note}"
-
-
-def _signal_vs_noise_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    """Top-level plain-English read of what ACTUALLY predicted outcomes this
-    run vs what was decoration. Data-driven, not a hardcoded belief: each
-    factor is bucketed by the SAME uplift rule the confluence table uses
-    (>=0.20R = predicts, >=0.05R = marginal, else noise), with a low-n guard.
-    Factors covered: confidence score (monotonic trend), structure tier
-    (Major vs Minor), and each scored confluence.
-    """
-    filled = [t for t in trades if _is_real_filled(t)]
-    if len(filled) < _LOW_N_THRESHOLD:
-        return ("<p style='color:#888;'>Too few filled trades to separate "
-                "signal from noise this period.</p>")
-
-    def _mean(rows):
-        vals = [float(t.get(r_col) or 0) for t in rows]
-        return (sum(vals) / len(vals)) if vals else None
-
-    # Each factor becomes one table row: {label, verdict, _uplift, _rank}.
-    # _rank orders the table: predicts (2) > inconclusive (1) > noise (0), then
-    # by |uplift| within a band.
-    table_rows: List[Dict[str, Any]] = []
-    _RANK = {"predicts": 2, "inconclusive": 1, "noise": 0}
-
-    def _classify(label: str, with_rows, without_rows):
-        n_w = len(with_rows)
-        exp_w, exp_o = _mean(with_rows), _mean(without_rows)
-        if n_w < _LOW_N_THRESHOLD or exp_w is None or exp_o is None:
-            table_rows.append({"label": label, "verdict": "inconclusive",
-                               "_uplift": None, "_rank": _RANK["inconclusive"]})
-            return
-        uplift = exp_w - exp_o
-        if uplift >= 0.20:
-            verdict = "predicts"
-        elif uplift >= 0.05:
-            verdict = "inconclusive"
-        else:
-            verdict = "noise"
-        table_rows.append({"label": label, "verdict": verdict,
-                           "_uplift": uplift,
-                           "_rank": _RANK[verdict] + min(abs(uplift), 0.99)})
-
-    # Confidence score — uses the monotonic trend verdict, not an uplift split.
-    buckets = _score_buckets(filled, r_col)
-    sv = _score_verdict_text(buckets)
-    score_verdict = ("predicts" if sv.startswith("✓")
-                     else "noise" if sv.startswith("✗") else "inconclusive")
-    table_rows.append({"label": "Confidence score", "verdict": score_verdict,
-                       "_uplift": None, "_rank": _RANK[score_verdict]})
-
-    # Structure tier: Major-tier setups vs the rest.
-    major = [t for t in filled if str(t.get("bos_tier") or "") == "Major"]
-    rest  = [t for t in filled if str(t.get("bos_tier") or "") != "Major"]
-    _classify("Major-tier structure (BOS/CHoCH)", major, rest)
-
-    # Each scored confluence, same predicate set as the uplift table.
-    for name, pred in _CONFLUENCE_DEFS:
-        _classify(name, [t for t in filled if pred(t)],
-                  [t for t in filled if not pred(t)])
-
-    # Table form (2026-07): one row per factor with its uplift and a verdict —
-    # far easier to scan than three prose lines. Rows are collected during the
-    # classify pass above via `table_rows`, sorted strongest-first.
-    table_rows.sort(key=lambda r: (r["_rank"], r["_uplift"] if r["_uplift"] is not None else -9),
-                    reverse=True)
-    if not table_rows:
-        return ("<p style='color:#888;'>No factor cleared the sample-size bar "
-                "this period.</p>")
-    header = _table_row(["Factor", "Uplift (R)", "Verdict"], header=True)
-    body = ""
-    for r in table_rows:
-        v = r["verdict"]
-        if v == "predicts":
-            vc, vlabel, bg = "#27ae60", "Predicts &mdash; earns its place", "#eafaf1"
-        elif v == "noise":
-            vc, vlabel, bg = "#e74c3c", "Noise &mdash; drop candidate", "#fdf2f2"
-        else:
-            vc, vlabel, bg = "#888", "Inconclusive / marginal", ""
-        up = "&mdash;" if r["_uplift"] is None else f"{r['_uplift']:+.2f}R"
-        body += _table_row([
-            r["label"], up,
-            f"<span style='color:{vc};font-weight:600;'>{vlabel}</span>",
-        ], color=bg)
-    note = ("<p style='font-size:12px;color:#666;margin-top:8px;'>"
-            "Derived from THIS run's live (proximal) book only — directional, "
-            "not a rule. A factor <b>predicts</b> when its presence lifts average "
-            "R by &ge;0.20R vs its absence; <b>noise</b> when it adds &le;0.05R; "
-            "the middle band is inconclusive. Confirm across BAU months before "
-            "trusting.</p>")
-    return f"<table><thead>{header}</thead><tbody>{body}</tbody></table>{note}"
-
-
-# Plain-English labels for the exit-lab recipe keys (exit_lab.CONFIGS). The
-# email never shows the raw config name. Anything not mapped falls back to the
-# raw key so a newly-added recipe still renders.
+# Exit-recipe display labels + the LIVE baseline key. Shared by the recipe table,
+# the winner rule, and the leak-table exit-fix join.
 _EXIT_RECIPE_LABELS = {
     "baseline_liqTP_be1.0":  "TP1 + BE@1R (LIVE)",
     "B_be0.5":               "TP1, BE@0.5R",
@@ -1546,229 +771,8 @@ _EXIT_RECIPE_LABELS = {
 }
 _EXIT_BASELINE_KEY = "baseline_liqTP_be1.0"
 
-
-def _exit_recipe_html(exit_lab_sink: List[Dict[str, Any]],
-                      headline_filled_n: Optional[int] = None,
-                      risk_usd: float = 250.0) -> str:
-    """Phase 4 — the rich per-recipe exit table, the POINT of the email now.
-
-    Reads the exit-lab side-channel (every recipe replayed over the same
-    post-fill bars as the live trade) and ranks all recipes by expR with the
-    full 'is it real' read: bootstrap CI + per-quarter sign + a winner flag.
-    This is the run-level exit data the edge engine's Stage 3 consumes to draw
-    per-cluster conclusions over the long history -- the email carries the data,
-    Stage 3 carries the verdict. Proximal book only (the live model).
-    """
-    if not exit_lab_sink:
-        return ("<p style='color:#888;'>Exit-lab side-channel produced no rows "
-                "this run (no fills, or the channel was not armed).</p>")
-
-    # Proximal is the live model. Score the exit table over EXACTLY the headline
-    # population: (1) proximal only, (2) drop hard-blocked fills (IST / weekend)
-    # that could never happen live, (3) drop UNRESOLVED exits (never_filled /
-    # timeout / window_end) — the headline's `_is_real_filled` drops them too, so
-    # keeping them here made the sink and headline count different books and the
-    # invariant below tripped whenever the two drifted (the fill-on-candle-B
-    # change exposed this). All three filters must match `_is_real_filled` + the
-    # block treatment used for headline_filled_n at the call site.
-    prox = [r for r in exit_lab_sink
-            if r.get("entry_zone") == "proximal"
-            and not (r.get("ist_blocked") or r.get("weekend_blocked"))
-            and r.get("exit_reason") not in _EXCLUDE_REASONS]
-    if not prox:
-        return "<p style='color:#888;'>No proximal fills to study exits on.</p>"
-
-    # INVARIANT: the exit table must be scored over the SAME trades the headline
-    # counts. Each filled trade contributes exactly ONE sink row per recipe, so a
-    # single recipe's row count IS the per-recipe N shown in the table. Compare
-    # that to the headline filled-proximal count. (Do NOT use distinct
-    # (pair, alert_ts): two different OBs can alert on the same pair at the same
-    # timestamp, so that key under-counts real trades.) If the two drift, the
-    # sink and the headline are scoring different books -- fail loud rather than
-    # email a contaminated ranking (the 826-vs-668 bug shipped silently before).
-    if headline_filled_n is not None:
-        per_recipe_counts = {}
-        for r in prox:
-            per_recipe_counts[r.get("config")] = per_recipe_counts.get(
-                r.get("config"), 0) + 1
-        # Every recipe should see the same trade set; take the baseline's count
-        # (fall back to the max if the baseline recipe key is absent).
-        recipe_n = per_recipe_counts.get(_EXIT_BASELINE_KEY)
-        if recipe_n is None:
-            recipe_n = max(per_recipe_counts.values()) if per_recipe_counts else 0
-        if recipe_n != headline_filled_n:
-            raise ValueError(
-                f"Exit-table population ({recipe_n} fills per recipe) != headline "
-                f"filled-proximal count ({headline_filled_n}). The exit sink and "
-                f"the headline are scoring different books -- refuse to emit a "
-                f"contaminated exit ranking. Check the hard-block (IST/weekend) "
-                f"filter on the exit sink.")
-
-    # Self-check: the baseline recipe must reproduce committed r_realised on the
-    # same bars. If it drifts, the side-channel is not faithful -- say so loud.
-    base_rows = [r for r in prox if r.get("config") == _EXIT_BASELINE_KEY]
-    selfcheck = ""
-    if base_rows:
-        repl = sum(float(r.get("r") or 0) for r in base_rows) / len(base_rows)
-        comm = sum(float(r.get("committed_r") or 0) for r in base_rows) / len(base_rows)
-        diff = abs(repl - comm)
-        ok = diff <= 0.01
-        selfcheck = (
-            f"<p style='font-size:12px;color:{'#27ae60' if ok else '#e74c3c'};"
-            f"margin-bottom:8px;'>"
-            f"Engine self-check: baseline replay avg {_r(round(repl,3))} vs "
-            f"committed {_r(round(comm,3))} (|diff| {diff:.3f}) — "
-            f"{'PASS' if ok else 'FAIL: side-channel not faithful, do not trust the ranking'}."
-            f"</p>")
-
-    # One stat block per recipe, ranked by expR (the winner is the top row).
-    by_cfg: Dict[str, List[Dict[str, Any]]] = {}
-    for r in prox:
-        by_cfg.setdefault(r.get("config"), []).append(r)
-
-    ranked = []
-    for cfg, rows in by_cfg.items():
-        vals = [float(r.get("r") or 0.0) for r in rows]
-        ts   = [r.get("alert_ts") for r in rows]
-        stat = _stat_block(vals, ts)
-        # WR = wins/(wins+losses); breakevens excluded (project convention). None
-        # when no resolved trade -> em-dash, never 0%.
-        _w = sum(1 for v in vals if v > 0)
-        _l = sum(1 for v in vals if v < 0)
-        wr = (100.0 * _w / (_w + _l)) if (_w + _l) else None
-        ranked.append({"cfg": cfg, "stat": stat, "wr": wr,
-                       "total_r": round(sum(vals), 1)})
-    ranked.sort(key=lambda x: (x["stat"]["expR"] if x["stat"]["expR"] is not None
-                               else -1e9), reverse=True)
-    if not ranked:
-        return "<p style='color:#888;'>No exit recipes to rank.</p>"
-
-    best_cfg = ranked[0]["cfg"]
-    live_exr = next((x["stat"]["expR"] for x in ranked
-                     if x["cfg"] == _EXIT_BASELINE_KEY), None)
-
-    header = ("<tr><th>Exit recipe</th><th>N</th><th>WR</th><th>Avg R</th>"
-              "<th>Total R</th><th>Total P&amp;L</th><th>95% CI</th>"
-              "<th>Per-quarter sign</th><th>vs LIVE</th></tr>")
-    body = ""
-    for x in ranked:
-        cfg, stat = x["cfg"], x["stat"]
-        label = _EXIT_RECIPE_LABELS.get(cfg, cfg)
-        lo, hi = stat["ci"]
-        ci_s = f"[{lo:+.2f}, {hi:+.2f}]" if lo is not None else "—"
-        if stat["pq_total"]:
-            pq_s = f"{stat['pq_agree']}/{stat['pq_total']} q"
-        else:
-            pq_s = "—"
-        # vs LIVE delta in expR (the live policy is the incumbent we'd switch from).
-        if live_exr is not None and stat["expR"] is not None and cfg != _EXIT_BASELINE_KEY:
-            d = stat["expR"] - live_exr
-            vs = f"<span style='color:{'#27ae60' if d > 0 else '#888'};'>{d:+.2f}R</span>"
-        elif cfg == _EXIT_BASELINE_KEY:
-            vs = "<i>incumbent</i>"
-        else:
-            vs = "—"
-        is_best = cfg == best_cfg
-        is_live = cfg == _EXIT_BASELINE_KEY
-        bg = "#eafaf1" if is_best else ("#fff7e0" if is_live else "")
-        flag = " 🏆" if is_best else ""
-        total_pnl = x["total_r"] * risk_usd
-        body += (
-            f"<tr style='background:{bg};'>"
-            f"<td><b>{label}</b>{flag}</td>"
-            f"<td>{stat['n']}</td>"
-            f"<td>{_wr_str(x['wr'])}</td>"
-            f"<td>{_r(stat['expR'])}</td>"
-            f"<td>{x['total_r']:+.1f}R</td>"
-            f"<td>{_m(total_pnl)}</td>"
-            f"<td>{ci_s}</td>"
-            f"<td>{pq_s}</td>"
-            f"<td>{vs}</td>"
-            f"</tr>"
-        )
-
-    note = (
-        f"<p style='font-size:12px;color:#666;margin-top:8px;'>"
-        f"Every recipe is replayed over the <b>same post-fill bars</b> as the "
-        f"live trade, so the ranking is apples-to-apples. <b>Avg R</b> is "
-        f"expectancy per trade; the winner (🏆) has the highest. A recipe only "
-        f"beats LIVE if its CI clears LIVE's and its per-quarter sign holds — "
-        f"a higher pooled average alone is not enough. Same-bar intrabar spikes "
-        f"are uncapturable on H1, so tight-TP recipes flatter here vs reality "
-        f"(the entry stop already carries one spread; TP fills are not spread-"
-        f"adjusted).</p>")
-
-    # One plain-English line so the CI / per-quarter columns are self-explaining.
-    plain = (
-        "<p style='font-size:12px;color:#444;margin:4px 0 8px;'>"
-        "<b>In plain words:</b> the <b>95% CI</b> is the honest range the true "
-        "average result could sit in — if the whole range stays above zero the "
-        "edge is real, not luck; if it crosses zero it might be luck. The "
-        "<b>per-quarter sign</b> counts how many quarters kept the same direction "
-        "— more agreement means a steady edge, not one lucky stretch.</p>")
-
-    return (f"{selfcheck}{plain}<table><thead>{header}</thead><tbody>{body}"
-            f"</tbody></table>{note}")
-
-
-def _winning_recipe_remap(prox_trades: List[Dict[str, Any]],
-                          exit_lab_sink: List[Dict[str, Any]]):
-    """Pick the winning exit recipe (highest avg R over the SAME hard-block-
-    filtered proximal book) and return (winner_label, remapped_trades) where each
-    trade's r_realised is the winner's R for that trade. The driver engine then
-    mines losses/wins concentration on the CHOSEN exit, not the live one.
-
-    Returns (None, []) when there is no usable sink (falls back to live book)."""
-    if not exit_lab_sink:
-        return None, []
-    # Same population as _exit_recipe_html (2026-07-02 fix): drop UNRESOLVED
-    # exits (never_filled / timeout / window_end) too. Previously this remap
-    # kept them, so the "winning recipe" could be picked over a different book
-    # than the exit table ranks — the driver engine then mined a winner the
-    # table never showed.
-    prox_sink = [r for r in exit_lab_sink
-                 if r.get("entry_zone") == "proximal"
-                 and not (r.get("ist_blocked") or r.get("weekend_blocked"))
-                 and r.get("exit_reason") not in _EXCLUDE_REASONS]
-    if not prox_sink:
-        return None, []
-
-    # Rank recipes by pooled avg R (same rule as the exit table's winner flag).
-    by_cfg: Dict[str, List[float]] = {}
-    for r in prox_sink:
-        by_cfg.setdefault(r.get("config"), []).append(float(r.get("r") or 0.0))
-    ranked = sorted(
-        ((cfg, sum(v) / len(v)) for cfg, v in by_cfg.items() if v),
-        key=lambda kv: kv[1], reverse=True)
-    if not ranked:
-        return None, []
-    winner_cfg = ranked[0][0]
-    winner_label = _EXIT_RECIPE_LABELS.get(winner_cfg, winner_cfg)
-
-    # Join key = (pair, ob_timestamp, direction): unique per OB/trade. (pair,
-    # alert_ts) is NOT unique — two OBs can alert on the same pair at the same
-    # time — so keying on it would cross-assign their R.
-    def _join_key(d):
-        return (d.get("pair"), str(d.get("ob_timestamp")), d.get("direction"))
-    win_r = {_join_key(r): float(r.get("r") or 0.0)
-             for r in prox_sink if r.get("config") == winner_cfg}
-
-    remapped = []
-    for t in prox_trades:
-        if not _is_real_filled(t):
-            continue
-        key = _join_key(t)
-        if key not in win_r:
-            continue  # no winner R for this trade -> skip (keeps books aligned)
-        t2 = dict(t)
-        t2["r_realised"] = win_r[key]
-        remapped.append(t2)
-    return winner_label, remapped
-
-
-# Dimensions the driver engine screens. Categorical => value as-is; continuous
-# => tertile buckets (low/mid/high) from this run's distribution. Adding a
-# logged column here is the only step to give the engine a new lever.
+# Dimensions the driver/mined engine screens. Categorical => value as-is;
+# continuous => tertile buckets (low/mid/high) from this run's distribution.
 _DRIVER_CATEGORICAL = [
     ("pair",                "Pair"),
     ("session",             "Alert session"),
@@ -1796,7 +800,6 @@ _DRIVER_CONTINUOUS = [
     ("score",             "Confidence score"),
     ("atr_at_ob",         "ATR at OB (volatility)"),
 ]
-
 _DOW_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
@@ -1936,164 +939,6 @@ def _smc_expected_direction(dim: str, value: str):
     return None
 
 
-def _driver_read_sentence(dim: str, value: str, gap: float, promoted: bool,
-                          kind: str, conflict: bool) -> str:
-    """One plain-English sentence explaining what a driver row means, so the
-    numbers don't have to be decoded. kind = 'win' | 'loss'."""
-    mag = abs(gap)
-    strength = ("far " if mag >= 0.20 else "")
-    direction = "better" if gap >= 0 else "worse"
-    trust = ("a real, repeatable pattern" if promoted
-             else "only a hint here — too few trades or not steady enough to trust")
-    base = (f"{dim} = {value} did {strength}{direction} than a normal trade "
-            f"(by {mag:.2f}R); {trust}.")
-    if conflict:
-        base += (" ⚠ This fights standard SMC — treat it as suspect "
-                 "(likely a thin sample or a detector quirk), not a rule.")
-    return base
-
-
-def _driver_engine_html(trades: List[Dict[str, Any]]) -> str:
-    """Auto-surface where losses and wins concentrate vs the book's base-rate.
-
-    Output = two short ranked lists (losses / wins). Each row carries the
-    bucket, its expR vs base, N, WR, the guard verdict, and a one-line read.
-    Buckets that fail the guard are FLAGGED, not dropped."""
-    filled = [t for t in trades if _is_real_filled(t)]
-    n = len(filled)
-    if n < DRIVER_MIN_N:
-        return ("<p style='color:#888;'>Too few filled trades to mine drivers "
-                f"this period (have {n}, need ≥{DRIVER_MIN_N}).</p>")
-
-    base_vals = [float(t.get("r_realised") or 0.0) for t in filled]
-    base_exr = sum(base_vals) / n
-
-    cands = _driver_buckets(filled) + _driver_two_way(filled)
-
-    scored: List[Dict[str, Any]] = []
-    for c in cands:
-        rows = c["rows"]
-        # Exclude an all-population bucket (a dimension with one value tells us
-        # nothing vs base) and require at least a couple of trades to score.
-        if len(rows) < 2 or len(rows) == n:
-            continue
-        vals = [float(r.get("r_realised") or 0.0) for r in rows]
-        ts   = [r.get("alert_ts") for r in rows]
-        stat = _stat_block(vals, ts)
-        gap = stat["expR"] - base_exr
-        # Guard: promoted only if N, gap, and per-quarter sign all clear.
-        pq_ok = (stat["pq_total"] == 0 or
-                 stat["pq_agree"] / stat["pq_total"] >= DRIVER_PQ_SIGN_FRAC)
-        promoted = (len(rows) >= DRIVER_MIN_N
-                    and abs(gap) >= DRIVER_MIN_EXR_GAP
-                    and pq_ok)
-        scored.append({**c, "stat": stat, "gap": gap, "n": len(rows),
-                       "promoted": promoted,
-                       # rank = how far from base × how much support (sqrt N)
-                       "rank": abs(gap) * (len(rows) ** 0.5)})
-
-    if not scored:
-        return ("<p style='color:#888;'>No bucket diverged from the base-rate "
-                "this period.</p>")
-
-    losers  = sorted([s for s in scored if s["gap"] < 0],
-                     key=lambda s: s["rank"], reverse=True)
-    winners = sorted([s for s in scored if s["gap"] > 0],
-                     key=lambda s: s["rank"], reverse=True)
-
-    def _rows_html(items, kind):
-        if not items:
-            return (f"<p style='color:#888;font-size:13px;'>"
-                    f"No {kind} cluster cleared the screen.</p>")
-        out = ""
-        for s in items[:6]:   # top 6 each side keeps the email tight
-            stat = s["stat"]
-            gap = s["gap"]
-            wins = sum(1 for r in s["rows"] if (r.get("r_realised") or 0) > 0)
-            losses = sum(1 for r in s["rows"] if (r.get("r_realised") or 0) < 0)
-            wr = (f"{wins / (wins + losses) * 100:.0f}%"
-                  if (wins + losses) else "—")
-            if s["promoted"]:
-                tag = ("<span style='color:#27ae60;font-weight:700;'>driver</span>"
-                       if kind == "win"
-                       else "<span style='color:#e74c3c;font-weight:700;'>driver</span>")
-            else:
-                why = []
-                if s["n"] < DRIVER_MIN_N:
-                    why.append(f"N={s['n']}")
-                if abs(gap) < DRIVER_MIN_EXR_GAP:
-                    why.append("small gap")
-                if (stat["pq_total"] and
-                        stat["pq_agree"] / stat["pq_total"] < DRIVER_PQ_SIGN_FRAC):
-                    why.append(f"sign held {stat['pq_agree']}/{stat['pq_total']}q")
-                tag = (f"<span style='color:#999;'>directional, thin "
-                       f"({', '.join(why)})</span>")
-            # SMC conflict: data direction (gap sign) vs the veteran prior.
-            exp = _smc_expected_direction(s["dim"], s["value"])
-            conflict = exp is not None and (exp * gap) < 0
-            if conflict:
-                tag += (" <span style='color:#e67e22;font-weight:700;'>"
-                        "⚠ conflicts with SMC</span>")
-            read = _driver_read_sentence(
-                s["dim"], s["value"], gap, s["promoted"],
-                "win" if kind == "win" else "loss", conflict)
-            out += (
-                f"<tr>"
-                f"<td><b>{s['dim']}:</b> {s['value']}</td>"
-                f"<td>{s['n']}</td>"
-                f"<td>{wr}</td>"
-                f"<td>{_r(stat['expR'])}</td>"
-                f"<td style='color:{'#27ae60' if gap >= 0 else '#e74c3c'};'>"
-                f"{gap:+.2f}R</td>"
-                f"<td>{tag}</td>"
-                f"<td style='font-size:12px;color:#555;'>{read}</td>"
-                f"</tr>"
-            )
-        return (f"<table><thead><tr>"
-                f"<th>Bucket</th><th>N</th><th>WR</th><th>Avg R</th>"
-                f"<th>vs base</th><th>Verdict</th><th>What it means</th>"
-                f"</tr></thead>"
-                f"<tbody>{out}</tbody></table>")
-
-    base_txt = (f"<p style='font-size:13px;color:#555;margin-bottom:10px;'>"
-                f"Book base-rate: <b>{_r(base_exr)}</b> over {n} filled trades. "
-                f"Each row is one slice of the book; <b>vs base</b> is how far its "
-                f"average R sits from that line. A slice is a <b>driver</b> only "
-                f"if it clears the guard (N≥{DRIVER_MIN_N}, gap≥{DRIVER_MIN_EXR_GAP:.2f}R, "
-                f"per-quarter sign holds); otherwise it is flagged "
-                f"<i>directional, thin</i> — shown, not trusted. The "
-                f"<b>What it means</b> column says each row in plain English. Any "
-                f"row marked <b>⚠ conflicts with SMC</b> is doing the opposite of "
-                f"what the method expects — treat it as suspect, not a rule.</p>")
-
-    return (
-        f"{base_txt}"
-        f"<h4 style='margin-top:14px;'>Where losses concentrate</h4>"
-        f"{_rows_html(losers, 'loss')}"
-        f"<h4 style='margin-top:16px;'>Where wins concentrate</h4>"
-        f"{_rows_html(winners, 'win')}"
-    )
-
-
-def _driver_concentrate_section(prox_trades: List[Dict[str, Any]],
-                                exit_lab_sink: List[Dict[str, Any]]) -> str:
-    """Where losses/wins concentrate, scored on the WINNING exit recipe (not the
-    live one). Picks the top recipe from the sink, re-maps each trade's R to that
-    recipe, and runs the driver engine on it. Falls back to the live book when no
-    sink is available so the section never goes blank."""
-    winner_label, remapped = _winning_recipe_remap(prox_trades, exit_lab_sink)
-    if winner_label and remapped:
-        note = (
-            f"<p style='font-size:13px;color:#444;margin-bottom:8px;'>"
-            f"Scored on the <b>winning exit recipe: {winner_label}</b> — the "
-            f"clusters below reflect where that exit wins and loses, so they line "
-            f"up with the exit we would actually pick (not the current live exit)."
-            f"</p>")
-        return note + _driver_engine_html(remapped)
-    # Fallback: no sink -> score on the live book, and say so.
-    note = ("<p style='font-size:13px;color:#888;margin-bottom:8px;'>"
-            "Scored on the live exit (no exit-recipe data available this run).</p>")
-    return note + _driver_engine_html(prox_trades)
 
 
 # ---------------------------------------------------------------------------
@@ -2114,108 +959,6 @@ def _driver_concentrate_section(prox_trades: List[Dict[str, Any]],
 #     partial rule would have rescued real R.
 # ---------------------------------------------------------------------------
 
-def _mfe_mae_stats(rows: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """Excursion summary for a set of filled trades. None if empty."""
-    filled = [t for t in rows if _is_real_filled(t)]
-    if not filled:
-        return None
-    wins   = [t for t in filled if (t.get("r_realised") or 0) > 0]
-    losses = [t for t in filled if (t.get("r_realised") or 0) < 0]
-
-    def _avg(seq, key):
-        vals = [float(t.get(key) or 0.0) for t in seq]
-        return (sum(vals) / len(vals)) if vals else None
-
-    avg_win_r   = _avg(wins, "r_realised")
-    avg_win_mfe = _avg(wins, "mfe_r")
-    giveback = (avg_win_mfe - avg_win_r) if (avg_win_mfe is not None and avg_win_r is not None) else None
-    capture  = (avg_win_r / avg_win_mfe * 100) if (avg_win_mfe and avg_win_mfe > 0) else None
-    avg_loss_mae = _avg(losses, "mae_r")
-    # Losers that ran meaningfully green (>= +0.5R) before reversing to SL — the
-    # SL/BE placement leak: money was on the table and handed back in full.
-    near_miss = [t for t in losses if (t.get("mfe_r") or 0) >= 0.5]
-    near_miss_r = _avg(near_miss, "mfe_r")
-    return {
-        "n": len(filled), "n_win": len(wins), "n_loss": len(losses),
-        "avg_win_r": avg_win_r, "avg_win_mfe": avg_win_mfe,
-        "giveback": giveback, "capture": capture,
-        "avg_loss_mae": avg_loss_mae,
-        "near_miss_n": len(near_miss), "near_miss_r": near_miss_r,
-    }
-
-
-def _mfe_mae_html(trades: List[Dict[str, Any]]) -> str:
-    """System + per-pair excursion read with an explicit SL/exit-tuning insight.
-    This is the section that turns raw MFE/MAE columns into exit decisions."""
-    s = _mfe_mae_stats(trades)
-    if s is None:
-        return "<p style='color:#888;'>No filled trades to measure excursion.</p>"
-
-    def _r_or_dash(v):
-        return _r(v) if v is not None else "&mdash;"
-
-    # System headline sentences — the honest read. MFE/MAE are PATH PEAKS
-    # (in-trade excursion, fill -> exit), never bankable money. Any "what an
-    # exit change would earn" number must come from the exit-recipe table
-    # (real-order replay), not from these peaks (insights.verify_capturable law).
-    parts = []
-    if s["avg_win_mfe"] is not None and s["avg_win_r"] is not None:
-        parts.append(
-            f"<b>Winners</b> booked {_r(s['avg_win_r'])} on average "
-            f"(in-trade peak {_r(s['avg_win_mfe'])}; under the TP1 limit exit the "
-            f"two match by construction). What price did AFTER the exit is not "
-            f"measured here — the exit-recipe table below replays real "
-            f"alternative exits and is the only place to judge a farther target.")
-    if s["avg_loss_mae"] is not None:
-        parts.append(
-            f"<b>Losers</b> sank to {_r(s['avg_loss_mae'])} on average before the stop. "
-            + (f"<b>{s['near_miss_n']}</b> of {s['n_loss']} losers first TOUCHED "
-               f"{_r_or_dash(s['near_miss_r'])} in profit before reversing to a full "
-               f"&minus;1R. A touch is not a bankable exit (same-bar spikes are "
-               f"uncapturable on H1), and break-even at +1R is ALREADY the live "
-               f"policy — read this as a hint only, and judge stop/partial ideas "
-               f"on the exit-recipe table's replayed numbers."
-               if s["near_miss_n"] else
-               "Few losers showed meaningful profit first, so the stop is not the main leak."))
-    headline = "<p style='font-size:13px;line-height:1.6;'>" + " ".join(parts) + "</p>"
-
-    # Per-pair table: give-back (winners) + drawdown (losers) + near-miss count.
-    df = pd.DataFrame([t for t in trades if _is_real_filled(t)])
-    pair_rows = ""
-    if not df.empty and "pair" in df.columns:
-        header = _table_row(
-            ["Pair", "Win peak (MFE)", "Win booked", "Give-back",
-             "Loss drawdown (MAE)", "Losers green first"], header=True)
-        for pair in sorted(df["pair"].unique()):
-            ps = _mfe_mae_stats(df[df["pair"] == pair].to_dict("records"))
-            if ps is None:
-                continue
-            gb = ps["giveback"]
-            gb_color = "#fdf2f2" if (gb or 0) >= 1.0 else ""
-            nm = (f"{ps['near_miss_n']}/{ps['n_loss']} @ {_r_or_dash(ps['near_miss_r'])}"
-                  if ps["n_loss"] else "&mdash;")
-            pair_rows += _table_row([
-                f"<b>{pair}</b>",
-                _r_or_dash(ps["avg_win_mfe"]),
-                _r_or_dash(ps["avg_win_r"]),
-                _r_or_dash(ps["giveback"]),
-                _r_or_dash(ps["avg_loss_mae"]),
-                nm,
-            ], color=gb_color)
-        pair_tbl = (f"<h4 style='margin-top:14px;'>By pair — excursion &amp; leak</h4>"
-                    f"<table><thead>{header}</thead><tbody>{pair_rows}</tbody></table>")
-    else:
-        pair_tbl = ""
-
-    note = ("<p style='font-size:12px;color:#666;margin-top:6px;'>"
-            "All columns here are <b>path peaks</b> (where price touched while "
-            "the trade was open), not money. <b>Give-back</b> = winner peak minus "
-            "booked (&asymp;0 by construction under the TP1 limit exit). "
-            "<b>Loss drawdown</b> = deepest in-trade excursion of the average "
-            "loser. <b>Losers green first</b> = losers that TOUCHED &ge;+0.5R "
-            "before the stop — a hint, not a bankable outcome; capturable "
-            "equivalents live in the exit-recipe table.</p>")
-    return headline + pair_tbl + note
 
 
 def _same_bar_resolution_html(trades: List[Dict[str, Any]]) -> str:
@@ -2251,805 +994,28 @@ def _same_bar_resolution_html(trades: List[Dict[str, Any]]) -> str:
 _SESSION_ORDER = ["Asia", "London", "NY", "Other"]
 
 
-def _flat_breakdown_row(label: str, sub: pd.DataFrame, r_col: str) -> str:
-    """One row in a flat breakdown table. Empty groups still appear (they
-    happened in the data) but with neutral styling. Sample size is shown as
-    a trade count -- the reader judges weight, no automatic fading."""
-    n = len(sub)
-    if n == 0:
-        return (f"<tr style='color:#bbb;'>"
-                f"<td><b>{label}</b></td><td>0</td><td>—</td><td>—</td></tr>")
-    wr = _win_rate(sub, r_col)  # wins/(wins+losses); None if all breakevens
-    exp  = sub[r_col].mean()
-    # Color on WR when defined; neutral when undefined (no resolved trade).
-    if wr is None:
-        bg = "#f4f4f4"
-        wr_str = "—"
-    else:
-        bg = "#eafaf1" if wr >= 50 else "#fef9e7" if wr >= 40 else "#fdf2f2"
-        wr_str = f"{wr:.0f}%"
-    sign = "+" if exp >= 0 else ""
-    return (f"<tr style='background:{bg};'>"
-            f"<td><b>{label}</b></td>"
-            f"<td>{n}</td>"
-            f"<td>{wr_str}</td>"
-            f"<td>{sign}{exp:.2f}R</td></tr>")
 
 
-# Dimensions scanned for a per-pair "key insight". Each is (column, prefix) —
-# the prefix is prepended to the winning value so the sentence reads naturally.
-# ATR-continuous features are handled separately (tertile split within the pair).
-_PAIR_INSIGHT_CATEGORICAL = [
-    ("session",            "in the {v} session"),
-    ("trend_alignment",    "on {v} setups"),
-    ("fvg_state",          "with a {v} FVG"),
-    ("pd_alignment",       "when PD-{v}"),
-    ("bos_tag",            "on {v} breaks"),
-    ("killzone_alignment", "when killzone = {v}"),
-]
-_PAIR_INSIGHT_CONTINUOUS = [
-    ("break_body_atr", "on high-displacement breaks"),
-]
 
 
-def _pair_key_insight(pair_rows: List[Dict[str, Any]], pair_base_exr: float,
-                      book_base_exr: float) -> str:
-    """The single most useful, guarded thing we can say about ONE pair this run.
 
-    Scans the pair's own trades across every measured dimension, ranks every
-    sub-slice through the shared engine (vs the PAIR's own base-rate, so it finds
-    *internal* structure, not just "this pair is good/bad"), and returns the
-    strongest read as one plain sentence. Prefers a slice that clears the guard;
-    if none does, reports the biggest mover and marks it directional. Also always
-    connects the pair to the BOOK (is the pair itself a driver vs the whole run?),
-    so the column carries both the pair-level and within-pair signal."""
-    filled = [t for t in pair_rows if _is_real_filled(t)]
-    if len(filled) < 3:
-        return "<span style='color:#bbb;'>too few trades to read</span>"
-    df = pd.DataFrame(filled)
 
-    candidates: List[Dict[str, Any]] = []
-    for col, tmpl in _PAIR_INSIGHT_CATEGORICAL:
-        if col not in df.columns:
-            continue
-        for val, sub in df.groupby(df[col].astype("object")):
-            if val is None or (isinstance(val, float) and pd.isna(val)):
-                continue
-            if len(sub) == len(df):     # single-value dim tells us nothing
-                continue
-            read = _slice_read(sub.to_dict("records"), pair_base_exr)
-            if read:
-                candidates.append({**read, "phrase": tmpl.format(v=str(val))})
-    # Continuous: top tertile of break displacement within the pair.
-    for col, phrase in _PAIR_INSIGHT_CONTINUOUS:
-        if col not in df.columns:
-            continue
-        ser = pd.to_numeric(df[col], errors="coerce").dropna()
-        if len(ser) < DRIVER_MIN_N or ser.nunique() < 3:
-            continue
-        hi_q = ser.quantile(2 / 3)
-        sub = df[pd.to_numeric(df[col], errors="coerce") > hi_q]
-        if 0 < len(sub) < len(df):
-            read = _slice_read(sub.to_dict("records"), pair_base_exr)
-            if read:
-                candidates.append({**read, "phrase": phrase})
 
-    # MFE give-back as an insight candidate (exit-tuning angle, pair-specific).
-    mm = _mfe_mae_stats(filled)
-    giveback_note = ""
-    if mm and (mm["giveback"] or 0) >= 1.0 and mm["n_win"] >= 3:
-        giveback_note = (f"winners give back {_r(mm['giveback'])} from peak "
-                         f"(exit leaves money)")
 
-    if not candidates and not giveback_note:
-        return "<span style='color:#888;'>no internal split stands out</span>"
 
-    # Pick the strongest by rank; prefer a promoted driver if one exists.
-    candidates.sort(key=lambda c: c["rank"], reverse=True)
-    driver = next((c for c in candidates if c["promoted"]), None)
-    pick = driver or (candidates[0] if candidates else None)
 
-    bits = []
-    if pick:
-        gap = pick["gap"]
-        verb = "wins" if gap >= 0 else "leaks"
-        if pick["promoted"]:
-            bits.append(f"<b>{verb} most {pick['phrase']}</b> ({gap:+.2f}R vs pair, "
-                        f"{pick['n']}t) &mdash; a real edge")
-        else:
-            bits.append(f"{verb} most {pick['phrase']} ({gap:+.2f}R, {pick['n']}t, "
-                        f"{_thin_reason(pick)})")
-    if giveback_note:
-        bits.append(giveback_note)
-    return "; ".join(bits)
 
 
-def _by_pair_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    """Win rate / avg R / trade count, by pair, PLUS a key-insight column that
-    surfaces the strongest guarded signal inside each pair (best/worst session,
-    break displacement, give-back, etc.) — so the table doesn't just say WHICH
-    pair paid, it says WHY and what to do."""
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return "<p style='color:#888;'>No filled trades.</p>"
-    df = pd.DataFrame(filled)
-    if "pair" not in df.columns or r_col not in df.columns:
-        return "<p style='color:#888;'>Pair data missing.</p>"
 
-    book_base = float(pd.to_numeric(df[r_col], errors="coerce").fillna(0).mean())
-    pairs = sorted(df["pair"].unique())
-    header = ("<tr><th>Pair</th><th>Trades</th><th>Win rate</th><th>Avg R</th>"
-              "<th>Key insight</th></tr>")
-    rows = ""
-    for p in pairs:
-        sub = df[df["pair"] == p]
-        pair_base = float(pd.to_numeric(sub[r_col], errors="coerce").fillna(0).mean())
-        base_row = _flat_breakdown_row(p, sub, r_col)
-        insight = _pair_key_insight(sub.to_dict("records"), pair_base, book_base)
-        # Splice the insight cell in before the closing </tr>.
-        rows += base_row.replace(
-            "</tr>", f"<td style='font-size:12px;color:#444;'>{insight}</td></tr>")
-    note = ("<p style='font-size:11px;color:#888;margin-top:6px;'>"
-            "<b>Key insight</b> = the strongest split inside that pair vs the "
-            "pair's own average, ranked and guarded (bold = cleared the guard, a "
-            "real pattern; plain = directional only). 'vs pair' is the R gap "
-            "against that pair's own base-rate.</p>")
-    return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>{note}"
 
 
-def _by_session_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    """Win rate / avg R / trade count, by trading session (all pairs combined)."""
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return "<p style='color:#888;'>No filled trades.</p>"
-    df = pd.DataFrame(filled)
-    if "session" not in df.columns or r_col not in df.columns:
-        return "<p style='color:#888;'>Session data missing.</p>"
 
-    header = "<tr><th>Session</th><th>Trades</th><th>Win rate</th><th>Avg R</th></tr>"
-    rows = "".join(_flat_breakdown_row(s, df[df["session"] == s], r_col)
-                   for s in _SESSION_ORDER if s in df["session"].unique())
-    return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>"
 
 
-def _break_event_type(tag: Optional[str]) -> Optional[str]:
-    """Normalise bos_tag (BOS / BOS_BIRTH / CHoCH / ...) to 'BOS' | 'CHoCH'."""
-    if not tag:
-        return None
-    return "CHoCH" if "CHoCH" in str(tag) else "BOS"
 
 
-def _break_floors():
-    """Live break floors, read straight from the engine constants (NOT hardcoded,
-    NOT from a comment) so the labels can never drift from what actually fires a
-    break. Returns {'BOS': (dist, body), 'CHoCH': (dist, body)}.
 
-    Verified wiring (dealing_range.py): a break fires only when BOTH gates pass —
-      distance:     close beyond the level by >= *_ATR_MULT × ATR
-      displacement: break-candle (or break+1) body >= *_BODY_ATR_MULT × ATR
-    BOS = (BOS_ATR_MULT, BOS_BODY_ATR_MULT); CHoCH = (STRUCTURE_CHOCH_ATR_MULT,
-    STRUCTURE_CHOCH_BODY_ATR_MULT). Falls back to the known live values if the
-    import ever fails (never crash a report over a constant lookup)."""
-    try:
-        import dealing_range as _dr
-        return {
-            "BOS":   (float(_dr.BOS_ATR_MULT), float(_dr.BOS_BODY_ATR_MULT)),
-            "CHoCH": (float(_dr.STRUCTURE_CHOCH_ATR_MULT),
-                      float(_dr.STRUCTURE_CHOCH_BODY_ATR_MULT)),
-        }
-    except Exception:
-        return {"BOS": (0.4, 1.0), "CHoCH": (1.0, 1.5)}
 
-
-def _floor_anchored_buckets(floor: float) -> List[Tuple[str, float, float]]:
-    """Bucket edges anchored to a break's own floor, so positioning is correct:
-    a break can never sit BELOW its floor (the gate would not have fired), so the
-    first bucket starts AT the floor. Four rising bands from the floor let the
-    "is a stronger break better?" gradient show without fragmenting into thin
-    one-trade rows. Widths scale with the floor so BOS (small floor) and CHoCH
-    (large floor) both get a sensible spread."""
-    f = floor
-    return [
-        (f"{f:.1f}–{f*1.5:.1f} ATR (just over floor)", f,       f * 1.5),
-        (f"{f*1.5:.1f}–{f*2.5:.1f} ATR (decisive)",     f * 1.5, f * 2.5),
-        (f"{f*2.5:.1f}–{f*4.0:.1f} ATR (strong)",       f * 2.5, f * 4.0),
-        (f"{f*4.0:.1f}+ ATR (exceptional)",             f * 4.0, float("inf")),
-    ]
-
-
-def _break_measure_table(sub: "pd.DataFrame", col: str, floor: float,
-                         r_col: str, base_exr: float) -> str:
-    """One break table for a single measure (distance OR displacement) of one
-    event type, plus a shared-engine insight line under it.
-
-    `sub` is already filtered to the event. `col` = the ATR-normalised measure
-    column. `floor` = that measure's live gate. The insight ranks the buckets
-    through the shared engine and states which break strength (if any) actually
-    earns its keep, so the reader learns what a GOOD break looks like — not just
-    reads five rows."""
-    vals = pd.to_numeric(sub[col], errors="coerce")
-    valid = sub[vals.notna()].copy()
-    valid["_v"] = vals[vals.notna()]
-    if valid.empty:
-        return "<p style='color:#888;font-size:12px;'>No data for this measure.</p>"
-
-    buckets = _floor_anchored_buckets(floor)
-    body = ""
-    groups: List[Tuple[str, List[Dict[str, Any]]]] = []
-    for label, lo, hi in buckets:
-        bkt = valid[(valid["_v"] >= lo) & (valid["_v"] < hi)]
-        body += _flat_breakdown_row(label, bkt, r_col)
-        if not bkt.empty:
-            groups.append((label, bkt.to_dict("records")))
-    header = ("<tr><th>Break strength (ATR)</th><th>Trades</th>"
-              "<th>Win rate</th><th>Avg R</th></tr>")
-    table = f"<table><thead>{header}</thead><tbody>{body}</tbody></table>"
-
-    # Shared-engine insight: which bucket is the real edge, ranked + guarded.
-    ranked = _rank_slices(groups, base_exr, r_col)
-    mean_v = float(valid["_v"].mean())
-    if not ranked:
-        note = ""
-    else:
-        top = ranked[0]
-        # Prefer the strongest POSITIVE guarded bucket for the "good break" read;
-        # fall back to the biggest mover if none is promoted.
-        driver = next((r for r in ranked if r["promoted"] and r["gap"] > 0), None)
-        if driver:
-            insight = (f"<b>Good break looks like:</b> {driver['label']} "
-                       f"{_insight_sentence('this band', driver, 'lean toward breaks in this band', '')}")
-        else:
-            insight = ("No break-strength band cleared the guard for this measure "
-                       f"— the strongest mover was {top['label']} "
-                       f"({top['gap']:+.2f}R vs base, {_n_trades(top['n'])}) but "
-                       f"{_thin_reason(top)}. Treat break strength as directional "
-                       "only on this measure this period.")
-        note = (f"<p style='font-size:12px;color:#555;margin:6px 0 4px;'>"
-                f"{len(valid)} trades, mean {mean_v:.2f} ATR. Floor {floor:.1f} ATR "
-                f"is the minimum that fires the break, so every bucket starts there. "
-                f"{insight}</p>")
-    return table + note
-
-
-def _break_benchmark_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    """Break quality split into TWO measures per event, each with its own live
-    floor and its own guarded insight:
-
-      • Distance    — how far PAST the level the break candle CLOSED
-                      (col break_close_atr; floor *_ATR_MULT).
-      • Displacement— the break candle BODY, the conviction of the move
-                      (col break_body_atr; floor *_BODY_ATR_MULT).
-
-    Both gates fire every break (verified in dealing_range), but the engine
-    grades the tier on DISPLACEMENT, so seeing the two side by side tells us
-    whether the money follows conviction (body) or just reach (close distance).
-    """
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return "<p style='color:#888;'>No filled trades.</p>"
-    df = pd.DataFrame(filled)
-    if r_col not in df.columns or (
-            "break_close_atr" not in df.columns and "break_body_atr" not in df.columns):
-        return ("<p style='color:#888;'>Break-quality data missing "
-                "(re-run the backtest to populate it).</p>")
-    df = df.copy()
-    df["_evt"] = df["bos_tag"].apply(_break_event_type) if "bos_tag" in df.columns else None
-    base_exr = float(pd.to_numeric(df[r_col], errors="coerce").fillna(0).mean())
-    floors = _break_floors()
-
-    measures = [
-        ("Distance — how far past the level the candle closed", "break_close_atr", 0),
-        ("Displacement — break-candle body (conviction; what the engine grades)",
-         "break_body_atr", 1),
-    ]
-
-    out = []
-    for evt in ("BOS", "CHoCH"):
-        sub = df[df["_evt"] == evt]
-        if sub.empty:
-            continue
-        out.append(f"<h3 style='font-size:14px;color:#2c3e50;margin:18px 0 4px;'>"
-                   f"{evt} breaks</h3>")
-        for mlabel, mcol, fidx in measures:
-            if mcol not in sub.columns:
-                continue
-            floor = floors[evt][fidx]
-            out.append(f"<h4 style='margin:12px 0 4px;'>{mlabel} "
-                       f"&mdash; floor {floor:.1f} ATR</h4>")
-            out.append(_break_measure_table(sub, mcol, floor, r_col, base_exr))
-
-    if not out:
-        return "<p style='color:#888;'>No BOS/CHoCH break data on filled trades.</p>"
-    return "".join(out)
-
-
-def _pair_session_matrix_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    """Pair x Session cross-tab. Pairs are rows, sessions are columns.
-    Each cell shows trade count on top, WR and avg R below.
-
-    Color encodes WR (green >=50, amber 40-50, red <40). Every non-empty cell
-    is shown -- no n-threshold suppression. The user reads the sample size
-    from the cell's trade count and makes the call themselves.
-    Right-most column and bottom row show pair-totals and session-totals.
-    """
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return "<p style='color:#888;'>No filled trades.</p>"
-    df = pd.DataFrame(filled)
-    if "pair" not in df.columns or "session" not in df.columns \
-            or r_col not in df.columns:
-        return "<p style='color:#888;'>Pair/session data missing.</p>"
-
-    pairs = sorted(df["pair"].unique())
-    sessions = [s for s in _SESSION_ORDER if s in df["session"].unique()]
-    if not sessions:
-        return "<p style='color:#888;'>No session data.</p>"
-
-    def _cell(sub: pd.DataFrame) -> str:
-        n = len(sub)
-        if n == 0:
-            return ("<td style='text-align:center;color:#ccc;font-size:11px;'>"
-                    "&mdash;</td>")
-        wr = _win_rate(sub, r_col)  # wins/(wins+losses); None if all breakevens
-        exp = sub[r_col].mean()
-        if wr is None:
-            bg = "#f4f4f4"
-            wr_str = "&mdash;"
-        else:
-            bg = "#eafaf1" if wr >= 50 else "#fef9e7" if wr >= 40 else "#fdf2f2"
-            wr_str = f"{wr:.0f}%"
-        sign = "+" if exp >= 0 else ""
-        return (f"<td style='background:{bg};text-align:center;'>"
-                f"<div style='font-size:11px;color:#888;'>{n}t</div>"
-                f"<div style='font-weight:600;'>{wr_str}</div>"
-                f"<div style='font-size:11px;'>{sign}{exp:.2f}R</div>"
-                f"</td>")
-
-    # Header row.
-    header = "<tr><th>Pair</th>"
-    for s in sessions:
-        header += f"<th style='text-align:center;'>{s}</th>"
-    header += "<th style='text-align:center;background:#34495e;'>All</th></tr>"
-
-    rows_html = ""
-    for pair in pairs:
-        pair_df = df[df["pair"] == pair]
-        row = f"<tr><td><b>{pair}</b></td>"
-        for s in sessions:
-            row += _cell(pair_df[pair_df["session"] == s])
-        row += _cell(pair_df).replace("background:#eafaf1",
-                                       "background:#eafaf1;border-left:2px solid #34495e") \
-                              .replace("background:#fef9e7",
-                                       "background:#fef9e7;border-left:2px solid #34495e") \
-                              .replace("background:#fdf2f2",
-                                       "background:#fdf2f2;border-left:2px solid #34495e")
-        row += "</tr>"
-        rows_html += row
-
-    # Bottom totals row -- session totals across all pairs.
-    totals_row = "<tr><td style='background:#34495e;color:#fff;'><b>All</b></td>"
-    for s in sessions:
-        sess_df = df[df["session"] == s]
-        cell = _cell(sess_df)
-        # Mark the totals row with a darker top border.
-        cell = cell.replace("<td style='",
-                            "<td style='border-top:2px solid #34495e;")
-        totals_row += cell
-    grand = _cell(df).replace("<td style='",
-                              "<td style='border-top:2px solid #34495e;"
-                              "border-left:2px solid #34495e;")
-    totals_row += grand + "</tr>"
-
-    return (f"<table><thead>{header}</thead>"
-            f"<tbody>{rows_html}{totals_row}</tbody></table>"
-            f"<p style='font-size:11px;color:#888;margin-top:6px;'>"
-            f"Each cell: trade count, win rate, average R. "
-            f"Right column and bottom row are roll-ups.</p>"
-            + _pair_session_insight(filled, r_col))
-
-
-def _pair_session_insight(filled: List[Dict[str, Any]], r_col: str) -> str:
-    """Read the pair×session grid for the trader — not a restatement of cells.
-
-    Connects three things the raw grid makes you compute by eye:
-      1. The single best and worst guarded cell (where to lean / where to cut).
-      2. Whether a whole SESSION is uniformly strong/weak across pairs (a session
-         filter beats a per-cell one when the effect is broad).
-      3. Which cell carries the most BOOK P&L (the concentration risk — one cell
-         quietly driving the run).
-    Everything is guarded; nothing thin is asserted as a rule."""
-    df = pd.DataFrame(filled)
-    if df.empty or "pair" not in df.columns or "session" not in df.columns \
-            or r_col not in df.columns:
-        return ""
-    base = float(pd.to_numeric(df[r_col], errors="coerce").fillna(0).mean())
-
-    # 1. Best / worst cell (guarded).
-    cells: List[Tuple[str, List[Dict[str, Any]]]] = []
-    for (pa, se), sub in df.groupby([df["pair"].astype("object"),
-                                     df["session"].astype("object")]):
-        if pa is None or se is None:
-            continue
-        cells.append((f"{pa} / {se}", sub.to_dict("records")))
-    ranked = _rank_slices(cells, base, r_col)
-    if not ranked:
-        return ""
-    best = next((r for r in ranked if r["gap"] > 0 and r["promoted"]), None)
-    worst = next((r for r in ranked if r["gap"] < 0 and r["promoted"]), None)
-
-    # 2. Session-wide effect (each session across all pairs), guarded.
-    sess_groups = [(str(s), sub.to_dict("records"))
-                   for s, sub in df.groupby(df["session"].astype("object"))
-                   if s is not None]
-    sess_ranked = _rank_slices(sess_groups, base, r_col)
-    broad = next((r for r in sess_ranked if r["promoted"]), None)
-
-    # 3. Concentration: cell with the largest |total R| share of the book.
-    conc_label, conc_r = None, 0.0
-    for label, rows in cells:
-        tot = sum(float(x.get(r_col) or 0.0) for x in rows if _is_real_filled(x))
-        if abs(tot) > abs(conc_r):
-            conc_r, conc_label = tot, label
-
-    bits = []
-    if best:
-        bits.append(f"<b>Lean on {best['label']}</b> "
-                    f"({best['gap']:+.2f}R vs book, {best['n']}t) — the strongest "
-                    f"cell that clears the guard")
-    if worst:
-        bits.append(f"<b>cut or de-rate {worst['label']}</b> "
-                    f"({worst['gap']:+.2f}R, {worst['n']}t) — the weakest cell "
-                    f"that clears the guard")
-    if broad:
-        verb = "strong" if broad["gap"] > 0 else "weak"
-        bits.append(f"the <b>{broad['label']} session is broadly {verb}</b> across "
-                    f"pairs ({broad['gap']:+.2f}R, {broad['n']}t) — a session-level "
-                    f"filter, not just one cell")
-    if conc_label:
-        bits.append(f"<b>{conc_label}</b> carries the most book P&amp;L "
-                    f"({conc_r:+.1f}R total) — watch this cell, it is quietly "
-                    f"driving the run")
-    if not bits:
-        bits.append("No pair×session cell cleared the guard this period — read the "
-                    "grid as directional only.")
-    return ("<p style='font-size:13px;color:#333;line-height:1.6;margin-top:10px;'>"
-            "<b>What the grid says:</b> " + "; ".join(bits) + ".</p>")
-
-
-def _killzone_audit_html(kz_blocked_trades: List[Dict[str, Any]],
-                         meta: Dict[str, Any]) -> str:
-    """Audit section for the per-pair killzone gate.
-
-    Killzone-blocked alerts are now SIMULATED for audit (same pattern as IST
-    and news) but excluded from every aggregate metric above. This lets the
-    user see the per-pair would-have R: positive = killzone filter is costing
-    you trades; negative = killzone filter is saving you R.
-
-    Block shows:
-      - per-pair count + would-have R + WR
-      - the configured killzone windows per pair (from meta)
-      - a per-UTC-hour distribution so the user can see if the misses cluster
-        in a particular hour (and consider extending the window)
-    """
-    windows = meta.get("killzone_windows_by_pair") or {}
-    drops_meta = meta.get("killzone_drops_by_pair") or {}
-    total_drops = int(meta.get("killzone_dropped_alerts") or 0)
-
-    # Filter to one row per alert (proximal) to avoid double-counting.
-    rows = [t for t in kz_blocked_trades
-            if t.get("entry_zone") == "proximal"]
-    n = len(rows)
-
-    header = (
-        "<p style='font-size:12px;color:#666;margin-bottom:8px;'>"
-        "Trades whose alert fell outside the pair's killzone window. The "
-        "killzone is <b>no longer a hard filter</b> &mdash; these trades ARE "
-        "included in every aggregate above. This section is informational: it "
-        "shows how off-killzone trades behaved so you can judge whether being "
-        "outside the killzone is a real quality signal. Positive R = "
-        "off-killzone trades made money; negative = they lost."
-        "</p>"
-    )
-
-    if n == 0 and not windows:
-        return header + ("<p style='color:#888;'>"
-                         "No killzone filter active for this run.</p>")
-    if n == 0:
-        # Filter was configured but produced no out-of-window alerts.
-        pair_names_sorted = sorted(windows.keys())
-        win_rows = ""
-        for pair in pair_names_sorted:
-            w = windows.get(pair, "no killzone configured")
-            d = int(drops_meta.get(pair, 0))
-            win_rows += (
-                f"<tr><td><b>{pair}</b></td>"
-                f"<td style='font-family:monospace;font-size:12px;'>{w}</td>"
-                f"<td style='text-align:right;'>{d}</td></tr>"
-            )
-        return header + (
-            f"<p style='color:#27ae60;'>No alerts fell outside the killzone "
-            f"this run across {len(pair_names_sorted)} configured pair(s).</p>"
-            f"<table><thead>"
-            f"<tr><th>Pair</th><th>Killzone window(s) UTC</th><th>Dropped</th></tr>"
-            f"</thead><tbody>{win_rows}</tbody></table>"
-        )
-
-    df = pd.DataFrame(rows)
-
-    # 1. By pair: alerts + filled + WR + would-have R + the configured window.
-    by_pair_rows = ""
-    if "pair" in df.columns and "r_realised" in df.columns:
-        for pair, sub in df.groupby("pair"):
-            n_alerts = len(sub)
-            filled_sub = sub[~sub["exit_reason"].isin(_EXCLUDE_REASONS)]
-            n_filled = len(filled_sub)
-            total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
-            wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
-            wr = _win_rate(filled_sub, "r_realised") if n_filled else None
-            sign = "+" if total_r >= 0 else ""
-            wr_str = f"{wr:.0f}%" if wr is not None else "&mdash;"
-            r_color = "#27ae60" if total_r > 0 else ("#e74c3c" if total_r < 0 else "#888")
-            w = windows.get(pair, "&mdash;")
-            # Informational now (killzone is not a filter). Did off-killzone
-            # trades for this pair make or lose money?
-            verdict = ("off-KZ profitable" if total_r > 0.5
-                       else "off-KZ lost" if total_r < -0.5
-                       else "neutral")
-            verdict_color = ("#27ae60" if total_r > 0.5
-                             else "#e74c3c" if total_r < -0.5
-                             else "#888")
-            by_pair_rows += (
-                f"<tr><td><b>{pair}</b></td>"
-                f"<td style='font-family:monospace;font-size:11px;'>{w}</td>"
-                f"<td>{n_alerts}</td>"
-                f"<td>{n_filled}</td>"
-                f"<td>{wr_str}</td>"
-                f"<td style='color:{r_color};'>{sign}{total_r:.2f}R</td>"
-                f"<td style='color:{verdict_color};font-size:12px;'>{verdict}</td>"
-                f"</tr>"
-            )
-
-    by_pair_table = ""
-    if by_pair_rows:
-        by_pair_table = (
-            f"<h4>Per-pair would-have R</h4>"
-            f"<table><thead>"
-            f"<tr><th>Pair</th><th>Killzone window(s) UTC</th>"
-            f"<th>Alerts</th><th>Filled</th><th>WR</th>"
-            f"<th>Would-have R</th><th>Verdict</th></tr>"
-            f"</thead><tbody>{by_pair_rows}</tbody></table>"
-            f"<p style='font-size:11px;color:#888;margin-top:6px;'>"
-            f"Verdict thresholds: |R| ≥ 0.5R = filter has effect; otherwise "
-            f"neutral. Repeat across multiple runs before drawing conclusions.</p>"
-        )
-
-    # 2. By UTC hour: helps spot whether the misses cluster in one hour
-    # (e.g. London-open extension might recover edge), the same way the
-    # IST gate's hour table does.
-    by_hour_rows = ""
-    if "alert_utc_hour" in df.columns and "r_realised" in df.columns:
-        grouped = df.groupby("alert_utc_hour")
-        hour_data = []
-        for hour, sub in grouped:
-            n_alerts = len(sub)
-            filled_sub = sub[~sub["exit_reason"].isin(_EXCLUDE_REASONS)]
-            n_filled = len(filled_sub)
-            total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
-            wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
-            wr = _win_rate(filled_sub, "r_realised") if n_filled else None
-            hour_data.append((int(hour), n_alerts, n_filled, wins, wr, total_r))
-        hour_data.sort()
-        for hour, n_alerts, n_filled, wins, wr, total_r in hour_data:
-            sign = "+" if total_r >= 0 else ""
-            wr_str = f"{wr:.0f}%" if wr is not None else "&mdash;"
-            r_color = "#27ae60" if total_r > 0 else ("#e74c3c" if total_r < 0 else "#888")
-            by_hour_rows += (
-                f"<tr><td>{hour:02d}:00 UTC</td>"
-                f"<td>{n_alerts}</td>"
-                f"<td>{n_filled}</td>"
-                f"<td>{wr_str}</td>"
-                f"<td style='color:{r_color};'>{sign}{total_r:.2f}R</td></tr>"
-            )
-
-    by_hour_table = ""
-    if by_hour_rows:
-        by_hour_table = (
-            f"<h4>Out-of-window alerts by UTC hour</h4>"
-            f"<table><thead>"
-            f"<tr><th>UTC hour</th><th>Alerts</th><th>Filled</th>"
-            f"<th>WR</th><th>Would-have R</th></tr>"
-            f"</thead><tbody>{by_hour_rows}</tbody></table>"
-        )
-
-    # total_drops counts every alert the killzone gate rejected. `n` counts the
-    # subset that produced a simulatable proximal trade (some rejected alerts
-    # had no valid entry/target, so they have no row to break down). Leading
-    # with total_drops and naming the gap removes the old "8 alert(s) ... records
-    # 9" confusion, which read like an off-by-one bug but was just this subset.
-    no_row = max(0, total_drops - n)
-    gap_note = (f" {no_row} more were rejected but produced no valid entry/target,"
-                f" so they are counted but not broken down below."
-                if no_row else "")
-    return (
-        header
-        + f"<p style='font-size:13px;margin-bottom:8px;'>"
-          f"<b>{total_drops} alert(s)</b> fell outside the configured killzone. "
-          f"{n} produced a simulatable proximal trade (shown below).{gap_note}</p>"
-        + by_pair_table + by_hour_table
-    )
-
-
-def _below_floor_html(below_floor_trades: List[Dict[str, Any]]) -> str:
-    """Small audit list for trades dropped below the live score floor.
-
-    These rows are excluded from EVERYTHING else in the run (no table, metric,
-    score bucket, Excel/CSV row). This is the only place they appear, so the
-    user can see what was skipped and what R it would have produced. One row
-    per alert (proximal is canonical); columns: pair / time / score /
-    would-be R. Never raises -- a render failure must not break the report."""
-    floor = SCORE_FLOOR
-    rows = [t for t in below_floor_trades if t.get("entry_zone") == "proximal"]
-    header = (
-        f"<p style='font-size:12px;color:#666;margin-bottom:8px;'>"
-        f"Setups that scored below the live email floor ({floor:g}). Live would "
-        f"never have emailed these, so they are <b>excluded from every metric, "
-        f"table, score bucket and the Excel/CSV above</b>. Listed here only so "
-        f"you can see what was skipped and its hypothetical R.</p>"
-    )
-    if not rows:
-        return header + ("<p style='color:#27ae60;'>"
-                         "No setups scored below the floor this run.</p>")
-    try:
-        body = ""
-        total_r = 0.0
-        for t in sorted(rows, key=lambda r: r.get("score", 0.0)):
-            real = t.get("exit_reason") not in _EXCLUDE_REASONS
-            r = float(t.get("r_realised", 0.0)) if real else 0.0
-            total_r += r
-            r_str = (f"{'+' if r >= 0 else ''}{r:.2f}R" if real
-                     else f"<span style='color:#888;'>{t.get('exit_reason','')}</span>")
-            r_color = "#27ae60" if r > 0 else ("#e74c3c" if r < 0 else "#888")
-            body += (
-                f"<tr><td>{t.get('pair','')}</td>"
-                f"<td style='color:#888;'>{t.get('alert_ts','')}</td>"
-                f"<td>{float(t.get('score',0.0)):.1f}</td>"
-                f"<td style='color:{r_color};'>{r_str}</td></tr>"
-            )
-        sign = "+" if total_r >= 0 else ""
-        return header + (
-            f"<table><thead><tr><th>Pair</th><th>Alert time (UTC)</th>"
-            f"<th>Score</th><th>Would-have R</th></tr></thead>"
-            f"<tbody>{body}</tbody></table>"
-            f"<p style='font-size:12px;color:#666;margin-top:6px;'>"
-            f"{len(rows)} below-floor setups &middot; total would-have "
-            f"R = {sign}{total_r:.2f}R (informational only).</p>"
-        )
-    except Exception as e:
-        return header + f"<p style='color:#888;'>[audit render error: {e}]</p>"
-
-
-def _ist_blackout_html(ist_blocked_trades: List[Dict[str, Any]],
-                       meta: Dict[str, Any]) -> str:
-    """Audit section for alerts filtered by the IST trading-window gate.
-
-    Shows: count of dropped alerts, distribution by pair and UTC hour, and
-    the R outcomes those alerts *would* have produced if traded. This is
-    the data the user needs to decide whether to shift sleep hours.
-    """
-    # One row per alert (proximal is the only entry zone). Kept as a defensive
-    # filter so a future second entry zone can't double-count alerts here.
-    rows = [t for t in ist_blocked_trades
-            if t.get("entry_zone") == "proximal"]
-    n = len(rows)
-
-    forex_window = meta.get("ist_window_forex", "UTC 03:30-18:30")
-    index_window = meta.get("ist_window_index", "UTC 13:00-20:00")
-
-    header = (
-        f"<p style='font-size:12px;color:#666;margin-bottom:8px;'>"
-        f"Alerts whose timestamp fell outside the user's IST trading window "
-        f"(09:00-24:00 IST). Live does not scan before 09:00 IST, so it could "
-        f"never have alerted on these -- the backtest mirrors that and these "
-        f"rows are <b>excluded from every aggregate metric above</b>. Shown "
-        f"here so you can see how much edge sits in hours you do not trade.</p>"
-        f"<p style='font-size:11px;color:#888;margin-bottom:10px;'>"
-        f"Window: forex/commodity {forex_window} &middot; index {index_window}."
-        f"</p>"
-    )
-
-    if n == 0:
-        return header + (
-            "<p style='color:#27ae60;'>"
-            "No alerts fell outside the IST window this run."
-            "</p>"
-        )
-
-    df = pd.DataFrame(rows)
-
-    # 1. By UTC hour: count of alerts + would-have R sum.
-    by_hour_rows = ""
-    if "alert_utc_hour" in df.columns and "r_realised" in df.columns:
-        grouped = df.groupby("alert_utc_hour")
-        hour_data = []
-        for hour, sub in grouped:
-            n_alerts = len(sub)
-            filled_sub = sub[~sub["exit_reason"].isin(_EXCLUDE_REASONS)]
-            n_filled = len(filled_sub)
-            total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
-            wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
-            wr = _win_rate(filled_sub, "r_realised") if n_filled else None
-            hour_data.append((int(hour), n_alerts, n_filled, wins, wr, total_r))
-        hour_data.sort()
-        for hour, n_alerts, n_filled, wins, wr, total_r in hour_data:
-            sign = "+" if total_r >= 0 else ""
-            wr_str = f"{wr:.0f}%" if wr is not None else "&mdash;"
-            # IST = UTC + 5:30 exactly (India has no DST, so this never shifts).
-            # Add 330 minutes to the whole-hour UTC value and split back out, so
-            # the label is correct rather than relying on a hardcoded :30.
-            _ist_total = (hour * 60 + 330) % (24 * 60)
-            ist_hour, ist_minute = divmod(_ist_total, 60)
-            r_color = "#27ae60" if total_r > 0 else ("#e74c3c" if total_r < 0 else "#888")
-            by_hour_rows += (
-                f"<tr><td>{hour:02d}:00 UTC</td>"
-                f"<td style='color:#888;'>~{ist_hour:02d}:{ist_minute:02d} IST</td>"
-                f"<td>{n_alerts}</td>"
-                f"<td>{n_filled}</td>"
-                f"<td>{wr_str}</td>"
-                f"<td style='color:{r_color};'>{sign}{total_r:.2f}R</td></tr>"
-            )
-
-    by_hour_table = ""
-    if by_hour_rows:
-        by_hour_table = (
-            f"<h4>Alerts by UTC hour (with hypothetical outcome)</h4>"
-            f"<table><thead>"
-            f"<tr><th>UTC hour</th><th>IST (approx)</th>"
-            f"<th>Alerts</th><th>Filled</th><th>WR</th>"
-            f"<th>Would-have R</th></tr>"
-            f"</thead><tbody>{by_hour_rows}</tbody></table>"
-            f"<p style='font-size:11px;color:#888;margin-top:6px;'>"
-            f"Would-have R = sum of r_realised across these dropped alerts "
-            f"if you had been awake to take them. "
-            f"Positive = sleeping cost you R; negative = blackout saved you R.</p>"
-        )
-
-    # 2. By pair: same view, sliced differently.
-    by_pair_rows = ""
-    if "pair" in df.columns and "r_realised" in df.columns:
-        for pair, sub in df.groupby("pair"):
-            n_alerts = len(sub)
-            filled_sub = sub[~sub["exit_reason"].isin(_EXCLUDE_REASONS)]
-            n_filled = len(filled_sub)
-            total_r = float(filled_sub["r_realised"].sum()) if n_filled else 0.0
-            wins = int((filled_sub["r_realised"] > 0).sum()) if n_filled else 0
-            wr = _win_rate(filled_sub, "r_realised") if n_filled else None
-            sign = "+" if total_r >= 0 else ""
-            wr_str = f"{wr:.0f}%" if wr is not None else "&mdash;"
-            r_color = "#27ae60" if total_r > 0 else ("#e74c3c" if total_r < 0 else "#888")
-            by_pair_rows += (
-                f"<tr><td><b>{pair}</b></td>"
-                f"<td>{n_alerts}</td>"
-                f"<td>{n_filled}</td>"
-                f"<td>{wr_str}</td>"
-                f"<td style='color:{r_color};'>{sign}{total_r:.2f}R</td></tr>"
-            )
-
-    by_pair_table = ""
-    if by_pair_rows:
-        by_pair_table = (
-            f"<h4>Alerts by pair</h4>"
-            f"<table><thead>"
-            f"<tr><th>Pair</th><th>Alerts</th><th>Filled</th>"
-            f"<th>WR</th><th>Would-have R</th></tr>"
-            f"</thead><tbody>{by_pair_rows}</tbody></table>"
-        )
-
-    return (
-        header
-        + f"<p style='font-size:13px;margin-bottom:8px;'>"
-          f"<b>{n} alert(s)</b> dropped by IST gate (proximal rows).</p>"
-        + by_hour_table + by_pair_table
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -3064,203 +1030,14 @@ _CONFLUENCE_COLS = {
     "Structure":    ("structure_pts", lambda s: s > 0),
 }
 
-def _confluence_per_pair_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return "<p style='color:#888;'>No data.</p>"
-    df = pd.DataFrame(filled)
-    if "pair" not in df.columns or r_col not in df.columns:
-        return "<p style='color:#888;'>Data missing.</p>"
-
-    pairs  = sorted(df["pair"].unique())
-    confs  = list(_CONFLUENCE_COLS.keys())
-
-    def _mask(df: pd.DataFrame, name: str) -> pd.Series:
-        col, fn = _CONFLUENCE_COLS[name]
-        if col not in df.columns:
-            return pd.Series([False] * len(df), index=df.index)
-        try:
-            return fn(df[col])
-        except Exception:
-            return pd.Series([False] * len(df), index=df.index)
-
-    header = "<tr><th>Pair</th>" + "".join(f"<th>{c}</th>" for c in confs) + "</tr>"
-    rows   = ""
-    for pair in pairs:
-        sub = df[df["pair"] == pair]
-        row = f"<tr><td><b>{pair}</b></td>"
-        for c in confs:
-            mask    = _mask(sub, c)
-            with_c  = sub[mask]
-            wout_c  = sub[~mask]
-            if len(with_c) == 0:
-                # No trades had this confluence -- there's nothing to display.
-                # This is different from "few trades": no data at all.
-                row += "<td style='color:#bbb;text-align:center;'>—</td>"
-                continue
-            wr_with  = (with_c[r_col] > 0).mean() * 100
-            wr_wout  = (wout_c[r_col] > 0).mean() * 100 if len(wout_c) > 0 else None
-            uplift   = (wr_with - wr_wout) if wr_wout is not None else None
-            bg = "#eafaf1" if (uplift is not None and uplift > 5) else \
-                 "#fdf2f2" if (uplift is not None and uplift < -5) else "#f9f9f9"
-            arrow = " ↑" if (uplift and uplift > 5) else " ↓" if (uplift and uplift < -5) else ""
-            row += (f"<td style='background:{bg};text-align:center;'>"
-                    f"{wr_with:.0f}%{arrow}<br>"
-                    f"<small>{len(with_c)}t</small></td>")
-        row += "</tr>"
-        rows += row
-
-    note = ("<p style='font-size:11px;color:#888;margin-top:6px;'>"
-            "Win rate when that confluence was present. ↑ = helped vs without it, "
-            "↓ = hurt. — = the confluence was never present for this pair. "
-            "Small number under each cell is the trade count — read sample "
-            "size from there, no minimum threshold applied.</p>")
-    insight = _confluence_pair_insight(filled, confs, r_col)
-    return f"<table><thead>{header}</thead><tbody>{rows}</tbody></table>{note}{insight}"
 
 
-def _confluence_pair_insight(filled: List[Dict[str, Any]], confs: List[str],
-                             r_col: str) -> str:
-    """Read the confluence×pair grid on AVG R (decision-grade), not just WR.
-
-    The grid shows win rate; but a confluence earns its weight only if it lifts
-    EXPECTANCY. This scans every confluence's present-vs-absent avg-R uplift both
-    system-wide and per pair, guards it, and reports:
-      • which confluence is the single best/worst edge overall this run;
-      • the standout pair×confluence combo (a confluence that only pays on a
-        specific pair — the real cross-connection the grid hides).
-    Nothing thin is asserted as a rule."""
-    df = pd.DataFrame(filled)
-    if df.empty:
-        return ""
-    base = float(pd.to_numeric(df[r_col], errors="coerce").fillna(0).mean())
-
-    def _mask(frame, name):
-        col, fn = _CONFLUENCE_COLS[name]
-        if col not in frame.columns:
-            return pd.Series([False] * len(frame), index=frame.index)
-        try:
-            return fn(frame[col])
-        except Exception:
-            return pd.Series([False] * len(frame), index=frame.index)
-
-    # System-wide: rank confluences by present-slice gap vs book base.
-    sys_groups = []
-    for c in confs:
-        present = df[_mask(df, c)]
-        if not present.empty:
-            sys_groups.append((c, present.to_dict("records")))
-    sys_ranked = _rank_slices(sys_groups, base, r_col)
-    best = next((r for r in sys_ranked if r["gap"] > 0 and r["promoted"]), None)
-    worst = next((r for r in sys_ranked if r["gap"] < 0 and r["promoted"]), None)
-
-    # Cross-connection: best guarded pair×confluence combo (only pays on X).
-    combo_groups = []
-    if "pair" in df.columns:
-        for c in confs:
-            for pair, psub in df.groupby(df["pair"].astype("object")):
-                if pair is None:
-                    continue
-                present = psub[_mask(psub, c)]
-                if len(present) >= DRIVER_MIN_N:
-                    combo_groups.append((f"{c} on {pair}",
-                                         present.to_dict("records")))
-    combo_ranked = _rank_slices(combo_groups, base, r_col)
-    combo = next((r for r in combo_ranked if r["gap"] > 0 and r["promoted"]), None)
-
-    bits = []
-    if best:
-        bits.append(f"<b>{best['label']}</b> is the strongest confluence this run "
-                    f"({best['gap']:+.2f}R vs book, {best['n']}t)")
-    if worst:
-        bits.append(f"<b>{worst['label']}</b> actively hurts "
-                    f"({worst['gap']:+.2f}R, {worst['n']}t) — a drop candidate")
-    if combo and (not best or combo["label"].split(" on ")[0] != best["label"]):
-        bits.append(f"the standout combo is <b>{combo['label']}</b> "
-                    f"({combo['gap']:+.2f}R, {combo['n']}t) — this confluence pays "
-                    f"mainly on that pair, not everywhere")
-    if not bits:
-        bits.append("no confluence cleared the guard on expectancy this period — "
-                    "the win-rate arrows above are directional only")
-    return ("<p style='font-size:13px;color:#333;line-height:1.6;margin-top:8px;'>"
-            "<b>What earns its weight:</b> " + "; ".join(bits) + ".</p>")
 
 
 # ---------------------------------------------------------------------------
 # News blackout report section
 # ---------------------------------------------------------------------------
 
-def _news_blackout_html(blocked_trades: List[Dict[str, Any]],
-                        meta: Dict[str, Any]) -> str:
-    """Renders the news-blackout audit section: how many rows were dropped,
-    which events caused each, coverage of the upstream feeds.
-
-    These trades do NOT appear in any aggregate metric above this section --
-    they are listed here only so the user can verify the filter is acting
-    correctly. Every entry shows the source event so blocks are auditable.
-    """
-    n = len(blocked_trades)
-    coverage = meta.get("news_coverage", {}) or {}
-    coverage_str = ", ".join(
-        f"{src}: {'ok' if ok else 'PARTIAL — fetch failed'}"
-        for src, ok in coverage.items()
-    ) if coverage else "not run"
-    n_events = meta.get("news_events_fetched", 0)
-    window   = meta.get("news_window_minutes", 30)
-
-    header = (
-        f"<p style='font-size:12px;color:#666;margin-bottom:8px;'>"
-        f"Trades whose alert timestamp fell within &plusmn;{window} min of a "
-        f"High-impact news event. News is <b>no longer a hard filter</b> "
-        f"(the ForexFactory feed proved unreliable &mdash; it fails to fetch "
-        f"and catches nothing), so these trades <b>ARE included</b> in the "
-        f"aggregates above. This section is informational only."
-        f"</p>"
-        f"<p style='font-size:11px;color:#888;margin-bottom:10px;'>"
-        f"Feed coverage: {coverage_str}. Events fetched: {n_events}. "
-        f"<b>Feed unreliable &mdash; treat any news flags as best-effort.</b>"
-        f"</p>"
-    )
-
-    if n == 0:
-        return header + (
-            "<p style='color:#27ae60;'>"
-            "No trades were filtered this week."
-            "</p>"
-        )
-
-    # Deduplicate by (pair, alert_ts, event_ts) so we show one entry per alert.
-    seen = set()
-    unique_rows = []
-    for t in blocked_trades:
-        key = (t.get("pair"), t.get("alert_ts"), t.get("news_event_ts"))
-        if key in seen:
-            continue
-        seen.add(key)
-        unique_rows.append(t)
-
-    rows_html = ""
-    for t in unique_rows:
-        rows_html += (
-            f"<tr>"
-            f"<td>{t.get('pair', '?')}</td>"
-            f"<td>{t.get('alert_ts', '?')}</td>"
-            f"<td>{t.get('news_event_currency', '?')}</td>"
-            f"<td>{t.get('news_event_title', '?')}</td>"
-            f"<td>{t.get('news_event_source', '?')}</td>"
-            f"<td style='font-family:monospace;font-size:11px;'>{t.get('news_event_ts', '?')}</td>"
-            f"</tr>"
-        )
-
-    return header + (
-        f"<p style='font-size:13px;margin-bottom:8px;'>"
-        f"<b>{n} trade row(s) filtered</b> across {len(unique_rows)} unique alert(s)."
-        f"</p>"
-        f"<table><thead>"
-        f"<tr><th>Pair</th><th>Alert ts (UTC)</th><th>Ccy</th>"
-        f"<th>Event</th><th>Source</th><th>Event ts (UTC)</th></tr>"
-        f"</thead><tbody>{rows_html}</tbody></table>"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -3271,81 +1048,6 @@ def _news_blackout_html(blocked_trades: List[Dict[str, Any]],
 # ---------------------------------------------------------------------------
 # Structure event performance breakdown (Major vs Minor, BOS vs CHoCH)
 # ---------------------------------------------------------------------------
-
-def _structure_event_breakdown_html(trades: List[Dict[str, Any]], r_col: str) -> str:
-    """Show trades grouped by structure event type. Helps verify Major vs Minor
-    detection reliability before live trading."""
-    filled = [t for t in trades if _is_real_filled(t)]
-    if not filled:
-        return "<p style='color:#888;'>No filled trades.</p>"
-    df = pd.DataFrame(filled)
-    if "bos_tier" not in df.columns or "bos_tag" not in df.columns or r_col not in df.columns:
-        return "<p style='color:#888;'>Structure event data missing.</p>"
-
-    rows = "<tr><th>Event Type</th><th>Trades</th><th>Win rate</th><th>Avg R</th><th>Total P&L</th></tr>"
-    seen = []
-    for (tier, tag), sub in df.groupby(["bos_tier", "bos_tag"]):
-        n = len(sub)
-        wr = _win_rate(sub, r_col)  # wins/(wins+losses); None if all breakevens
-        exp = float(sub[r_col].mean()) if n else 0
-        total = float(sub[r_col].sum()) * 250  # default 1R = $250 for display
-        bg = "#eafaf1" if exp >= 0 else "#fdf2f2"
-        seen.append((tier, tag, n, wr, exp))
-        wr_str = "—" if wr is None else f"{wr:.0f}%"
-        # tier 'Confirm' + tag 'BOS' = Confirmation BOS (post-CHoCH reversal
-        # confirmation). Labelled in full so it reads clearly in the breakdown.
-        _ev_lbl = "Confirmation BOS" if (tag == "BOS" and tier == "Confirm") else f"{tier} {tag}"
-        rows += (f"<tr style='background:{bg};'>"
-                 f"<td><b>{_ev_lbl}</b></td>"
-                 f"<td>{n}</td>"
-                 f"<td>{wr_str}</td>"
-                 f"<td>{_r(exp)}</td>"
-                 f"<td>{_m(total)}</td></tr>")
-
-    # Headline verdict comparing Major vs Minor.
-    major_n = sum(n for tier, _, n, _, _ in seen if tier == "Major")
-    minor_n = sum(n for tier, _, n, _, _ in seen if tier == "Minor")
-    major_exp = (sum(n * e for tier, _, n, _, e in seen if tier == "Major") / major_n) if major_n else None
-    minor_exp = (sum(n * e for tier, _, n, _, e in seen if tier == "Minor") / minor_n) if minor_n else None
-
-    # Sample-size discipline: a verdict is only meaningful when BOTH tiers
-    # have a non-trivial sample. Below the threshold, the diff can flip
-    # period to period (and was flipping between proximal/50% in the same
-    # email). Suppress the verdict in that case rather than asserting it.
-    note = ""
-    if major_exp is not None and minor_exp is not None:
-        diff = major_exp - minor_exp
-        if major_n < MIN_N_FOR_VERDICT or minor_n < MIN_N_FOR_VERDICT:
-            note = (f"<p style='font-size:12px;color:#888;margin-top:8px;'>"
-                    f"Sample too small for a Major-vs-Minor verdict "
-                    f"(Major: {major_n}t, Minor: {minor_n}t; need ≥{MIN_N_FOR_VERDICT} each). "
-                    f"Diff this period: {diff:+.2f}R — re-check across runs.</p>")
-        elif diff > 0.15:
-            note = (f"<p style='font-size:13px;color:#27ae60;margin-top:8px;'>"
-                    f"✓ Major events outperformed Minor by {diff:.2f}R per trade. "
-                    f"This is the expected behaviour — Major detection is working as designed.</p>")
-        elif diff < -0.15:
-            note = (f"<p style='font-size:13px;color:#e74c3c;margin-top:8px;'>"
-                    f"⚠ Minor events outperformed Major by {abs(diff):.2f}R — unexpected. "
-                    f"Major event detection may be misclassifying setups. Verify before trading live.</p>")
-        else:
-            note = (f"<p style='font-size:13px;color:#888;margin-top:8px;'>"
-                    f"Major and Minor performance is similar (difference: {diff:+.2f}R).</p>")
-    elif major_n == 0 and minor_n == 0:
-        note = ("<p style='font-size:12px;color:#888;margin-top:8px;'>"
-                "No structure-event data this period.</p>")
-    else:
-        note = (f"<p style='font-size:12px;color:#888;margin-top:8px;'>"
-                f"Only one tier present this period "
-                f"(Major: {major_n}, Minor: {minor_n}). No comparison possible.</p>")
-
-    legend = ("<p style='font-size:11px;color:#aaa;margin-top:4px;'>"
-              "<b>BOS</b> = Break of Structure (trend continuation). "
-              "<b>CHoCH</b> = Change of Character (trend reversal). "
-              "<b>Major</b> = larger swing, more institutional weight. "
-              "<b>Minor</b> = smaller internal swing, less weight.</p>")
-    return f"<table>{rows}</table>{note}{legend}"
-
 
 # ---------------------------------------------------------------------------
 # Trade validation
@@ -3543,8 +1245,8 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # Setup-geometry features (ATR-normalized) — edge-discovery engine inputs.
         "break_close_atr", "break_body_atr", "break_excess", "break_tier",
         "ob_range_atr", "fvg_size_atr", "impulse_leg_atr", "atr_at_ob",
-        # News blackout audit columns. news_blocked=True means this row
-        # was excluded from every aggregate metric in summary.json.
+        # News blackout audit columns. INFORMATIONAL ONLY — news never gates
+        # (the one eligibility rule is _headline_exclusion above).
         "news_blocked", "news_event_title", "news_event_currency",
         "news_event_source", "news_event_ts",
         # IST blackout audit columns. ist_blocked=True means this alert
@@ -3675,6 +1377,104 @@ def _to_ist_str(ts_val: Any) -> str:
         return ts.tz_convert("Asia/Kolkata").strftime("%Y-%m-%d %H:%M")
     except Exception:
         return ""
+
+
+# ---------------------------------------------------------------------------
+# Relocated reference tabs (§10) — cut from the email body, live in Excel now.
+# All sourced from backtest.insights (the canonical DataFrame analytics that
+# aggregate_runs.py also uses) so the numbers match across the whole system.
+# ---------------------------------------------------------------------------
+
+def _confluences_tab_df(filled: List[Dict[str, Any]]) -> "pd.DataFrame":
+    """Confluence uplift (overall + per pair). Settled non-predictive — kept as
+    a reference tab per §A2."""
+    if not filled:
+        return pd.DataFrame()
+    df = pd.DataFrame(filled)
+    rows = []
+    overall = _insights.confluence_attribution(df, "r_realised")
+    for name, d in overall.items():
+        rows.append({"Scope": "ALL", "Confluence": name, "N with": d["n_with"],
+                     "N without": d["n_without"], "Exp with": d["exp_with"],
+                     "Exp without": d["exp_without"], "Uplift R": d["uplift_r"],
+                     "Verdict": d["verdict"]})
+    if "pair" in df.columns:
+        for pair, sub in df.groupby("pair"):
+            per = _insights.confluence_attribution(sub, "r_realised")
+            for name, d in per.items():
+                rows.append({"Scope": pair, "Confluence": name, "N with": d["n_with"],
+                             "N without": d["n_without"], "Exp with": d["exp_with"],
+                             "Exp without": d["exp_without"], "Uplift R": d["uplift_r"],
+                             "Verdict": d["verdict"]})
+    return pd.DataFrame(rows)
+
+
+def _setup_badges_tab_df(filled: List[Dict[str, Any]]) -> "pd.DataFrame":
+    """Setup-badge validation buckets (§A3). Data from insights.setup_badge_validation."""
+    if not filled:
+        return pd.DataFrame()
+    df = pd.DataFrame(filled)
+    res = _insights.setup_badge_validation(df, "r_realised")
+    buckets = res.get("buckets") or []
+    if not buckets:
+        return pd.DataFrame()
+    rows = []
+    for b in buckets:
+        rows.append({"Badge": b["badge"], "N": b["n"], "Win Rate %": b["win_rate_pct"],
+                     "Avg R": b["expectancy_r"], "CI lo": b.get("ci_lo_95"),
+                     "CI hi": b.get("ci_hi_95")})
+    df_out = pd.DataFrame(rows)
+    df_out.attrs["verdict"] = res.get("verdict", "")
+    return df_out
+
+
+def _pair_session_tab_df(filled: List[Dict[str, Any]]) -> "pd.DataFrame":
+    """Full pair×session matrix (§A5). Data from insights.pair_session_matrix."""
+    if not filled:
+        return pd.DataFrame()
+    df = pd.DataFrame(filled)
+    cells = _insights.pair_session_matrix(df, "r_realised")
+    if not cells:
+        return pd.DataFrame()
+    rows = [{"Pair": c["pair"], "Session": c["session"], "N": c["n"],
+             "Win Rate %": c["win_rate_pct"], "Avg R": c["expectancy_r"],
+             "CI lo": c["ci_lo_95"], "CI hi": c["ci_hi_95"],
+             "Live-eligible": c["live_eligible"], "Confidence": c["confidence"]}
+            for c in cells]
+    return pd.DataFrame(rows)
+
+
+def _break_ladder_tab_df(filled: List[Dict[str, Any]]) -> "pd.DataFrame":
+    """Break-quality ATR ladder (§6f full ladder → Excel). One row per
+    (event, measure, ATR tercile) with N/WR/avg R. Deterministic terciles."""
+    if not filled:
+        return pd.DataFrame()
+    df = pd.DataFrame(filled)
+    rows = []
+    for measure, mlabel in (("break_close_atr", "Break close (ATR)"),
+                            ("break_body_atr", "Break body (ATR)")):
+        if measure not in df.columns:
+            continue
+        ser = pd.to_numeric(df[measure], errors="coerce")
+        valid = ser.dropna()
+        if len(valid) < 6 or valid.nunique() < 3:
+            continue
+        lo_q, hi_q = valid.quantile([1 / 3, 2 / 3]).tolist()
+        if lo_q == hi_q:
+            continue
+        bands = [(f"low (<={lo_q:.2f})", ser <= lo_q),
+                 (f"mid ({lo_q:.2f}-{hi_q:.2f})", (ser > lo_q) & (ser <= hi_q)),
+                 (f"high (>{hi_q:.2f})", ser > hi_q)]
+        for evt in sorted(df.get("event", pd.Series(dtype=object)).dropna().unique()):
+            for blabel, mask in bands:
+                sub = df[mask.fillna(False) & (df["event"] == evt)]
+                if sub.empty:
+                    continue
+                rows.append({"Event": evt, "Measure": mlabel, "Band": blabel,
+                             "N": len(sub),
+                             "Win Rate %": _win_rate(sub, "r_realised"),
+                             "Avg R": round(float(sub["r_realised"].mean()), 3)})
+    return pd.DataFrame(rows)
 
 
 def _try_excel(trades: List[Dict[str, Any]], path: Path,
@@ -3878,7 +1678,9 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
                     _align_label).fillna(kz_df["Killzone Alignment"])
                 kz_df.to_excel(xw, sheet_name="Killzone Alignment", index=False)
 
-            # What-If counterfactual tab — flat rows matching the email table.
+            # What-If counterfactual tab — now with guard columns (§11.4): CI
+            # lo/hi, quarters-sign, ci_cleared. Cut from the body; its guarded
+            # survivors re-enter only through Act 5.
             cf_df = _counterfactual_dataframe(filled, risk_usd)
             if not cf_df.empty:
                 cf_df.to_excel(xw, sheet_name="What If", index=False)
@@ -3889,6 +1691,20 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
             sl_df = _second_look_df(filled)
             if not sl_df.empty:
                 sl_df.to_excel(xw, sheet_name="Second Look", index=False)
+
+            # Relocated reference tabs (§10) — cut from the email body.
+            conf_df = _confluences_tab_df(filled)
+            if not conf_df.empty:
+                conf_df.to_excel(xw, sheet_name="Confluences", index=False)
+            badge_df = _setup_badges_tab_df(filled)
+            if not badge_df.empty:
+                badge_df.to_excel(xw, sheet_name="Setup Badges", index=False)
+            ladder_df = _break_ladder_tab_df(filled)
+            if not ladder_df.empty:
+                ladder_df.to_excel(xw, sheet_name="Break Ladder", index=False)
+            psm_df = _pair_session_tab_df(filled)
+            if not psm_df.empty:
+                psm_df.to_excel(xw, sheet_name="Pair x Session", index=False)
 
             try:
                 from openpyxl.styles import PatternFill, Font, Alignment
@@ -3905,7 +1721,9 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
                         zws.column_dimensions[col[0].column_letter].width = 18
                     zws.freeze_panes = "A2"
 
-                for extra_sheet in ("Killzone Alignment", "What If", "Second Look"):
+                for extra_sheet in ("Killzone Alignment", "What If", "Second Look",
+                                    "Confluences", "Setup Badges", "Break Ladder",
+                                    "Pair x Session"):
                     if extra_sheet in xw.sheets:
                         ews = xw.sheets[extra_sheet]
                         for cell in ews[1]:
@@ -3945,90 +1763,7 @@ def _wr_str(v: Optional[float]) -> str:
     return "—" if v is None else f"{v:.0f}%"
 
 
-def _table_row(cells: List[str], header: bool = False, color: str = "") -> str:
-    tag = "th" if header else "td"
-    style = f" style='background:{color};'" if color else ""
-    return "<tr>" + "".join(f"<{tag}{style}>{c}</{tag}>" for c in cells) + "</tr>"
 
-
-def _score_verdict_text(buckets: List[Dict]) -> str:
-    if not buckets:
-        return "No score data this period."
-    # Sample-size discipline: buckets with very small n distort the trend check.
-    # Use only buckets with n >= 3 for the verdict, but keep all in the table.
-    robust = [b for b in buckets if b["trades"] >= 3]
-    if len(robust) < 2:
-        total_n = sum(b["trades"] for b in buckets)
-        return (f"Insufficient sample to call score-vs-outcome trend "
-                f"({total_n} trades across {len(buckets)} buckets; "
-                f"need ≥2 buckets with ≥3 trades each).")
-    exp_vals = [b["expectancy_r"] for b in robust]
-    rises = sum(1 for a, b in zip(exp_vals, exp_vals[1:]) if b > a)
-    total = len(exp_vals) - 1
-    ratio = rises / total if total > 0 else 0
-    if ratio >= 0.7:
-        return "✓ Yes — higher score setups consistently produced better outcomes this period."
-    if ratio >= 0.4:
-        return "~ Partial — some relationship, not consistent across all score levels."
-    return "✗ No — score did not predict outcomes this period."
-
-
-def _headline_html(prox_trades: List[Dict[str, Any]], sb_prox: Dict,
-                   group_meta: Dict, group_label: str) -> str:
-    """Phase 2 — the headline. Proximal book only (the live model). Shows P&L,
-    expR, WR AND the 'is it real' read the rest of the project mandates but the
-    old headline skipped: bootstrap 95% CI + per-quarter sign + a plain verdict.
-    """
-    filled = [t for t in prox_trades if _is_real_filled(t)]
-    vals = [float(t.get("r_realised") or 0.0) for t in filled]
-    ts   = [t.get("alert_ts") for t in filled]
-    stat = _stat_block(vals, ts)
-
-    total_pnl = sb_prox.get("total_pnl_usd", 0)
-    n         = sb_prox.get("trades", 0)
-    wr        = _wr_str(sb_prox.get("win_rate_pct"))
-    exp_r     = sb_prox.get("expectancy_r", 0)
-    pnl_color = "#27ae60" if total_pnl >= 0 else "#e74c3c"
-
-    lo, hi = stat["ci"]
-    ci_s = f"[{lo:+.2f}, {hi:+.2f}]R" if lo is not None else "— (thin sample)"
-    if stat["pq_total"]:
-        pq_s = " · ".join(f"{q} {v:+.2f}" for q, v in sorted(stat["pq"].items()))
-        pq_line = (f"<div style='font-size:12px;color:#666;margin-top:6px;'>"
-                   f"Per-quarter avg R: {pq_s} "
-                   f"(<b>sign held {stat['pq_agree']}/{stat['pq_total']}</b>)</div>")
-    else:
-        pq_line = ""
-
-    verdict = _verdict_phrase(stat)
-    vc = {"edge": "#27ae60", "loser": "#e74c3c",
-          "unproven": "#f39c12", "thin": "#6c757d"}[stat["verdict"]]
-
-    # Regime / war caveat (kept from the old banner).
-    regime = str(group_meta.get("regime", "") or "").lower()
-    caveats = []
-    if regime == "war":
-        rl = group_meta.get("regime_label")
-        caveats.append(f"<b>WAR regime{f' ({rl})' if rl else ''}</b> — price "
-                       f"behaviour is abnormal; treat as low confidence.")
-    caveat_html = ("<div class='caveat' style='margin-top:10px;'>"
-                   + "<br>".join(caveats) + "</div>") if caveats else ""
-
-    return (
-        f"<div class='headline'>"
-        f"<div style='font-size:13px;color:#888;text-transform:uppercase;"
-        f"letter-spacing:0.08em;margin-bottom:8px;'>Period summary "
-        f"&mdash; proximal (live) book &mdash; {group_label}</div>"
-        f"<div class='big' style='color:{pnl_color};'>{_m(total_pnl)}</div>"
-        f"<div class='sub'>{n} filled &middot; {wr} won &middot; "
-        f"avg {_r(exp_r)} ({_m(sb_prox.get('expectancy_usd', 0))}/trade) "
-        f"&middot; 95% CI {ci_s}</div>"
-        f"{pq_line}"
-        f"<div class='verdict' style='border-left:4px solid {vc};color:{vc};"
-        f"font-weight:600;'>{verdict}</div>"
-        f"{caveat_html}"
-        f"</div>"
-    )
 
 
 
@@ -4077,97 +1812,6 @@ def _second_look_df(trades: List[Dict[str, Any]]) -> "pd.DataFrame":
     return pd.DataFrame(rows)
 
 
-def _vet_review_html(trades: List[Dict]) -> str:
-    """ANALYSIS, not a list (2026-07). The full per-trade list moved to the Excel
-    'Second Look' tab; here we read that same population and surface what it is
-    actually telling us — quantified, connected, and pointed at a decision.
-
-    Three buckets, each a different lesson:
-      • left_money      — winners cut short (MFE >> booked). Exit / target lesson.
-      • nearly_worked   — losers that ran green first. Stop / break-even lesson.
-      • high_score_loss — high-score setups that still lost. Scoring lesson.
-    For each we report the count, the money at stake (avg give-back / avg peak /
-    total R bled), and where it concentrates (worst pair or session), so the
-    trader knows which lever to pull, not just that something is off."""
-    filled = [t for t in trades if _is_real_filled(t)]
-    flagged = [(t, _vet_review_category(t)) for t in filled]
-    flagged = [(t, c) for t, c in flagged if c is not None]
-    if not flagged:
-        return ("<p>Nothing flagged this period. All wins and losses behaved as "
-                "expected.</p>")
-
-    by_cat: Dict[str, List[Dict[str, Any]]] = {}
-    for t, c in flagged:
-        by_cat.setdefault(c, []).append(t)
-
-    def _worst_group(rows, key, r_col="r_realised"):
-        """(label, avg R) of the group with the lowest avg R on `key`, min 2t."""
-        d: Dict[str, List[float]] = {}
-        for t in rows:
-            k = t.get(key)
-            if k:
-                d.setdefault(str(k), []).append(float(t.get(r_col) or 0.0))
-        cand = [(k, sum(v) / len(v), len(v)) for k, v in d.items() if len(v) >= 2]
-        if not cand:
-            return None
-        k, avg, n = min(cand, key=lambda x: x[1])
-        return f"{k} ({n}t, {avg:+.2f}R avg)"
-
-    blocks = []
-
-    # 1. Left money on table — winners cut short.
-    lm = by_cat.get("left_money", [])
-    if lm:
-        gb = [float(t.get("mfe_r") or 0) - float(t.get("r_realised") or 0) for t in lm]
-        avg_gb = sum(gb) / len(gb)
-        peak = sum(float(t.get("mfe_r") or 0) for t in lm) / len(lm)
-        conc = _worst_group(lm, "pair")
-        blocks.append(
-            f"<li><b>{len(lm)} winners showed a much higher in-trade peak than "
-            f"booked</b> — peak {_r(peak)} avg vs booked, a gap of <b>{_r(avg_gb)}</b> "
-            f"per trade. The peak is a TOUCH, not money a real exit banks — whether "
-            f"a farther target actually earns more is answered ONLY by the "
-            f"exit-recipe table (real-order replay). "
-            + (f"Most concentrated on {conc}." if conc else "") + "</li>")
-
-    # 2. Nearly worked — losers that ran green first.
-    nw = by_cat.get("nearly_worked", [])
-    if nw:
-        peak = sum(float(t.get("mfe_r") or 0) for t in nw) / len(nw)
-        bled = sum(float(t.get("r_realised") or 0) for t in nw)
-        big = [t for t in nw if float(t.get("mfe_r") or 0) >= 1.0]
-        conc = _worst_group(nw, "session")
-        blocks.append(
-            f"<li><b>{len(nw)} losers ran green first</b> — they TOUCHED {_r(peak)} "
-            f"in profit on average before reversing to a full loss, bleeding "
-            f"<b>{bled:+.1f}R</b> in total. <b>{len(big)}</b> of them touched &ge;+1R "
-            f"(should be ~0: break-even at +1R is already live policy, so a clean "
-            f"+1R print arms BE — if this count is high, suspect same-bar spikes "
-            f"or a measurement bug, not a missing rule). Judge stop/partial ideas "
-            f"on the exit-recipe table, not on these touches. "
-            + (f"Worst in the {conc} bucket." if conc else "") + "</li>")
-
-    # 3. High-score losses — scoring didn't protect.
-    hs = by_cat.get("high_score_loss", [])
-    if hs:
-        bled = sum(float(t.get("r_realised") or 0) for t in hs)
-        avg_score = sum(float(t.get("score") or 0) for t in hs) / len(hs)
-        conc = _worst_group(hs, "pair")
-        blocks.append(
-            f"<li><b>{len(hs)} high-score setups still lost</b> (avg score "
-            f"{avg_score:.1f}), bleeding <b>{bled:+.1f}R</b>. The score did not "
-            f"protect these — consistent with the settled finding that the "
-            f"confidence score does not rank outcomes. "
-            + (f"Concentrated on {conc}." if conc else "") + "</li>")
-
-    total = len(flagged)
-    intro = (f"<p style='font-size:13px;color:#333;'>"
-             f"<b>{total} trades flagged for a second look</b> — the full list is "
-             f"in the Excel <b>Second Look</b> tab. The lessons this run:</p>")
-    return (intro + "<ul style='font-size:13px;line-height:1.7;padding-left:18px;'>"
-            + "".join(blocks) + "</ul>")
-
-
 # ---------------------------------------------------------------------------
 # Pair groups for split per-email reports
 # ---------------------------------------------------------------------------
@@ -4198,6 +1842,1130 @@ def _filter_meta_by_pairs(meta: Dict[str, Any], allowed: set) -> Dict[str, Any]:
     return out
 
 
+# ===========================================================================
+# THE SIX-ACT EMAIL (EMAIL_REBUILD_SPEC, 2026-07-02)
+# ---------------------------------------------------------------------------
+# One document, six acts, fixed order. Every act opens with one plain-English
+# sentence and closes with an action line. All numbers route through the shared
+# spine (_stat_block / _slice_read) so "is it real?" is judged identically
+# everywhere. BANKABLE = from r_realised or a replayed order; PATH = a peak/touch
+# (mfe/mae/"reached"), NEVER phrased as money. Row-level detail lives in Excel.
+# ===========================================================================
+
+# --- Design-system tokens (§8.1, locked) -----------------------------------
+_C = {
+    "surface": "#fcfcfb", "page": "#f9f9f7",
+    "ink": "#0b0b0b", "ink2": "#52514e", "muted": "#898781",
+    "hair": "#e1e0d9", "baseline": "#c3c2b7",
+    "blue": "#2a78d6", "red": "#e34948", "neutral": "#f0efec",
+    "good": "#0ca30c", "warn": "#fab219", "serious": "#ec835a", "critical": "#d03b3b",
+}
+
+# Verdict → (icon, word, tint bg, ink). Icon+word+color, never color alone (§8.1).
+_VERDICT_BANNER = {
+    "edge":     ("&#10004;", "EDGE REAL",    "#e3f4e3", _C["good"]),
+    "unproven": ("?",        "UNPROVEN",     "#fef3d9", "#9a7400"),
+    "loser":    ("&#10008;", "LOSING EDGE",  "#f8e0e0", _C["critical"]),
+    "thin":     ("&#8230;",  "TOO THIN",     "#eeeeec", _C["muted"]),
+}
+
+
+def _assert_body_size(html: str, filename: str) -> None:
+    """Hard build-time budget (§8.6): Gmail clips bodies over ~102 KB and hides
+    the trust section exactly when it matters. Fail the build, never silently
+    ship an over-budget email. Row-level detail belongs in Excel."""
+    size = len(html.encode("utf-8"))
+    if size >= 90_000:
+        raise ValueError(
+            f"Email body {filename} is {size:,} bytes (>= 90 KB budget). Gmail "
+            f"clips ~102 KB — move row-level content to Excel and re-render.")
+
+
+def _bankable_badge() -> str:
+    return (f"<span style='display:inline-block;background:{_C['ink']};color:#fff;"
+            f"font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;"
+            f"letter-spacing:0.04em;'>BANKABLE</span>")
+
+
+def _path_badge() -> str:
+    return (f"<span style='display:inline-block;border:1px solid {_C['hair']};"
+            f"color:{_C['muted']};font-size:10px;font-weight:700;padding:0 5px;"
+            f"border-radius:3px;letter-spacing:0.04em;'>PATH</span>")
+
+
+
+
+def _months_between(meta: Dict[str, Any]) -> int:
+    try:
+        s = pd.to_datetime(meta.get("start"), utc=True)
+        e = pd.to_datetime(meta.get("end"), utc=True)
+        return max(1, round((e - s).days / 30.44))
+    except Exception:
+        return 12
+
+
+def _quarter_totals(filled: List[Dict[str, Any]], r_col: str = "r_realised"
+                    ) -> List[Tuple[str, float]]:
+    """[(quarter, total R), ...] chronological, over resolved rows."""
+    by_q: Dict[str, float] = {}
+    for t in filled:
+        if not _is_real_filled(t):
+            continue
+        q = _quarter_of(t.get("alert_ts"))
+        if q is None:
+            continue
+        by_q[q] = by_q.get(q, 0.0) + float(t.get(r_col) or 0.0)
+    return sorted(by_q.items(), key=lambda kv: kv[0])
+
+
+# ---------------------------------------------------------------------------
+# ACT 1 — PULSE
+# ---------------------------------------------------------------------------
+
+def _act1_html(prox_trades: List[Dict[str, Any]], sb_prox: Dict[str, Any],
+               fill_prox: Dict[str, Any], group_meta: Dict[str, Any],
+               risk_usd: float) -> str:
+    filled = [t for t in prox_trades if _is_real_filled(t)]
+    vals = [float(t.get("r_realised") or 0.0) for t in filled]
+    ts = [t.get("alert_ts") for t in filled]
+    stat = _stat_block(vals, ts)
+    lo, hi = stat["ci"]
+    months = _months_between(group_meta)
+
+    icon, word, tint, vink = _VERDICT_BANNER.get(stat["verdict"],
+                                                 _VERDICT_BANNER["thin"])
+    banner_tail = {"edge": "a real edge", "unproven": "could still be luck",
+                   "loser": "a real loser", "thin": "too thin to call"}[stat["verdict"]]
+
+    banner = (
+        f"<div style='background:{tint};padding:14px 18px;border-radius:6px;"
+        f"margin-bottom:14px;'>"
+        f"<span style='font-size:20px;font-weight:800;color:{vink};'>"
+        f"{icon}&nbsp;{word}</span>"
+        f"<span style='font-size:13px;color:{_C['ink2']};margin-left:10px;'>"
+        f"&mdash; {banner_tail}</span></div>"
+    )
+
+    # Deterministic sentence.
+    pnl = sb_prox.get("total_pnl_usd", 0)
+    total_r = sb_prox.get("total_r", 0)
+    n = sb_prox.get("trades", 0)
+    is_phrase = {"edge": "is a real edge", "unproven": "could still be luck",
+                 "loser": "is a real loser",
+                 "thin": "is too thin to call"}[stat["verdict"]]
+    if lo is not None:
+        range_phrase = (f"the honest range is {lo:+.2f}R to {hi:+.2f}R per trade, "
+                        f"so this {is_phrase}")
+    else:
+        range_phrase = (f"there are too few trades for an honest range, so this "
+                        f"{is_phrase}")
+    exp_r = stat["expR"] if stat["expR"] is not None else 0.0
+    sentence = (
+        f"<p style='font-size:14px;color:{_C['ink']};margin-bottom:14px;'>"
+        f"<b>{n}</b> trades over <b>{months}</b> months made "
+        f"<b>{_m(pnl)}</b>. The average trade is <b>{_r(exp_r)}</b> &mdash; "
+        f"{range_phrase}. <b>{stat['pq_agree']}</b> of <b>{stat['pq_total']}</b> "
+        f"quarters pointed the same way.</p>"
+    )
+
+    # 6 KPI tiles (3×2). All BANKABLE.
+    dd_r = _insights.max_drawdown_r(vals) if vals else 0.0
+    streak = _insights.longest_losing_streak(vals) if vals else 0
+    wr = sb_prox.get("win_rate_pct")
+    ci_sub = (f"CI [{lo:+.2f}, {hi:+.2f}]" if lo is not None else "thin sample")
+    tiles = [
+        ("P&amp;L", f"{_m(pnl)}", f"{_r(total_r)} total"),
+        ("Expectancy", f"{_r(exp_r)}", ci_sub),
+        ("Win rate", _wr_str(wr), "breakevens excluded"),
+        ("N filled / fill rate", f"{n}", f"{fill_prox.get('fill_rate_pct', 0):.0f}% of alerts"),
+        ("Max drawdown", f"{dd_r:.1f}R", f"{_m(-dd_r * risk_usd)}"),
+        ("Longest losing streak", f"{streak}", "consecutive losses"),
+    ]
+    tile_cells = ""
+    for i, (label, value, sub) in enumerate(tiles):
+        if i % 3 == 0:
+            tile_cells += "<tr>" if i == 0 else "</tr><tr>"
+        tile_cells += (
+            f"<td width='33%' style='padding:4px;'>"
+            f"<div style='border:1px solid {_C['hair']};border-radius:8px;"
+            f"background:{_C['surface']};padding:10px 12px;'>"
+            f"<div style='font-size:11px;text-transform:uppercase;letter-spacing:0.05em;"
+            f"color:{_C['muted']};'>{label}</div>"
+            f"<div style='font-size:24px;font-weight:700;color:{_C['ink']};"
+            f"font-variant-numeric:tabular-nums;'>{value}</div>"
+            f"<div style='font-size:12px;color:{_C['ink2']};'>{sub}</div>"
+            f"</div></td>"
+        )
+    tile_cells += "</tr>"
+    tiles_html = (f"<div style='margin-bottom:6px;'>{_bankable_badge()} "
+                  f"<span style='font-size:11px;color:{_C['muted']};'>all tiles from "
+                  f"realised P&amp;L</span></div>"
+                  f"<table width='100%' style='border-collapse:separate;"
+                  f"border-spacing:0;'>{tile_cells}</table>")
+
+    # Quarter chips.
+    chips = ""
+    for q, qr in _quarter_totals(filled):
+        # chip shows AVG R sign (matches _stat_block.pq); use total sign for color.
+        avg = stat["pq"].get(q)
+        if avg is None:
+            continue
+        pos = avg >= 0
+        bg = "#e3f0fb" if pos else "#fbe3e3"
+        fg = _C["blue"] if pos else _C["red"]
+        chips += (f"<span style='display:inline-block;background:{bg};color:{fg};"
+                  f"font-size:12px;font-weight:600;padding:3px 9px;border-radius:12px;"
+                  f"margin:0 4px 4px 0;font-variant-numeric:tabular-nums;'>"
+                  f"{q} {avg:+.2f}R</span>")
+    chips_html = (f"<div style='margin-top:12px;'>{chips}"
+                  f"<span style='font-size:12px;color:{_C['muted']};margin-left:4px;'>"
+                  f"sign held {stat['pq_agree']}/{stat['pq_total']}</span></div>")
+
+    action = _act_action(
+        {"edge": "Edge is real this period — Act 5 says where to lean in.",
+         "unproven": "No action on the headline — the edge is unproven; Act 5 shows "
+                     "the only changes that cleared the guard.",
+         "loser": "The book loses over this window — Act 4 shows where the red "
+                  "concentrates; Act 5 the filter tests.",
+         "thin": "Too few trades to act — keep collecting; see Act 5."}[stat["verdict"]])
+
+    return (f'<div class="act">{banner}{sentence}{tiles_html}{chips_html}{action}</div>')
+
+
+def _act_action(text: str) -> str:
+    """The closing action line every act ends with (§6)."""
+    return (f"<p style='margin-top:12px;font-size:13px;color:{_C['ink']};"
+            f"border-left:3px solid {_C['ink']};padding-left:10px;'>"
+            f"<b>Action:</b> {text}</p>")
+
+
+# ---------------------------------------------------------------------------
+# ACT 2 — WHAT THE YEAR LOOKED LIKE
+# ---------------------------------------------------------------------------
+
+# Exit reasons that are real resolutions (not audit-only). friday_flat is a real
+# weekend-flatten exit; timeout/window_end/never_filled are audit-only (§_EXCLUDE).
+def _act2_html(prox_trades: List[Dict[str, Any]], out_dir: Path,
+               chart_prefix: str, risk_usd: float) -> str:
+    filled = [t for t in prox_trades if _is_real_filled(t)]
+    # Order by fill date for the equity curve.
+    def _fill_key(t):
+        try:
+            return pd.to_datetime(t.get("fill_ts") or t.get("alert_ts"), utc=True)
+        except Exception:
+            return pd.Timestamp.min.tz_localize("UTC")
+    ordered = sorted(filled, key=_fill_key)
+    r_seq = [float(t.get("r_realised") or 0.0) for t in ordered]
+
+    # Quarter boundary indices for the equity chart vlines.
+    q_bounds, seen_q, prev_q = [], set(), None
+    for i, t in enumerate(ordered):
+        q = _quarter_of(t.get("alert_ts"))
+        if q != prev_q and q is not None:
+            if prev_q is not None:
+                q_bounds.append(i)
+            prev_q = q
+
+    qtotals = _quarter_totals(filled)
+
+    # Charts (best-effort; alt text carries the numbers if images blocked).
+    equity_img = quarter_img = ""
+    try:
+        from backtest import report_charts as _charts
+        eq_path = out_dir / f"{chart_prefix}_equity.png"
+        qb_path = out_dir / f"{chart_prefix}_quarters.png"
+        total_r = sum(r_seq)
+        if _charts.equity_curve_png(r_seq, eq_path, q_bounds):
+            equity_img = (
+                f"<img src='{eq_path.name}' width='640' "
+                f"alt='Equity curve, cumulative {total_r:+.1f}R over {len(r_seq)} "
+                f"trades' style='width:640px;max-width:100%;height:auto;'>")
+        if _charts.quarter_bars_png(qtotals, qb_path):
+            qtxt = ", ".join(f"{q} {v:+.1f}R" for q, v in qtotals)
+            quarter_img = (
+                f"<img src='{qb_path.name}' width='640' "
+                f"alt='Quarterly totals: {qtxt}' "
+                f"style='width:640px;max-width:100%;height:auto;margin-top:8px;'>")
+    except Exception as e:
+        equity_img = (f"<p style='font-size:12px;color:{_C['muted']};'>"
+                      f"[chart unavailable: {type(e).__name__}]</p>")
+
+    # Exit mix — horizontal stacked HTML bar (real resolutions only).
+    counts = _exit_reason_counts(filled)
+    real = {k: v for k, v in counts.items() if k not in _EXCLUDE_REASONS}
+    total_real = sum(real.values()) or 1
+    # Group into tp1 / sl / breakeven-ish / other.
+    seg_order = [("tp1", _C["good"], "TP1"), ("sl", _C["red"], "SL"),
+                 ("friday_flat", _C["blue"], "Weekend flat")]
+    seg_html = ""
+    legend = ""
+    shown = set()
+    for key, color, name in seg_order:
+        c = real.get(key, 0)
+        if c == 0:
+            continue
+        shown.add(key)
+        pct = c / total_real * 100
+        seg_html += (f"<td width='{pct:.2f}%' style='background:{color};height:22px;'"
+                     f"></td>")
+        legend += (f"<span style='font-size:12px;color:{_C['ink2']};margin-right:12px;'>"
+                   f"<span style='display:inline-block;width:10px;height:10px;"
+                   f"background:{color};border-radius:2px;'></span> {name}: {c}</span>")
+    other = sum(v for k, v in real.items() if k not in shown)
+    if other:
+        pct = other / total_real * 100
+        seg_html += (f"<td width='{pct:.2f}%' style='background:{_C['neutral']};"
+                     f"height:22px;'></td>")
+        legend += (f"<span style='font-size:12px;color:{_C['ink2']};margin-right:12px;'>"
+                   f"<span style='display:inline-block;width:10px;height:10px;"
+                   f"background:{_C['neutral']};border-radius:2px;'></span> other: {other}</span>")
+    exit_mix = (
+        f"<h4 style='margin:16px 0 6px;'>How trades ended</h4>"
+        f"<table width='100%' style='border-collapse:collapse;border-radius:4px;"
+        f"overflow:hidden;'><tr>{seg_html}</tr></table>"
+        f"<div style='margin-top:6px;'>{legend}</div>"
+        f"<p style='font-size:11px;color:{_C['muted']};margin-top:4px;'>"
+        f"Audit-only exits (never filled / timeout / data-window end) are "
+        f"excluded here and never feed P&amp;L.</p>")
+
+    # Tempo line.
+    def _median(xs):
+        xs = sorted(x for x in xs if x is not None)
+        if not xs:
+            return None
+        m = len(xs) // 2
+        return xs[m] if len(xs) % 2 else (xs[m - 1] + xs[m]) / 2
+    win_bars = _median([int(t.get("bars_to_exit") or 0) for t in filled
+                        if (t.get("r_realised") or 0) > 0])
+    loss_bars = _median([int(t.get("bars_to_exit") or 0) for t in filled
+                         if (t.get("r_realised") or 0) < 0])
+    weeks = max(1, len(qtotals) * 13)
+    per_week = len(filled) / weeks
+    tempo = (
+        f"<p style='font-size:13px;color:{_C['ink2']};margin-top:14px;'>"
+        f"<b>Tempo:</b> winners resolve in ~{win_bars if win_bars is not None else '—'} "
+        f"H1 bars, losers ~{loss_bars if loss_bars is not None else '—'}; "
+        f"~{per_week:.1f} trades/week.</p>")
+
+    # Capture tile (PATH-labeled).
+    wins = [t for t in filled if (t.get("r_realised") or 0) > 0]
+    avg_booked = (sum(float(t.get("r_realised") or 0) for t in wins) / len(wins)
+                  if wins else 0.0)
+    avg_mfe = (sum(float(t.get("mfe_r") or 0) for t in wins) / len(wins)
+               if wins else 0.0)
+    capture = (avg_booked / avg_mfe * 100) if avg_mfe > 0 else 0.0
+    capture_tile = (
+        f"<div style='border:1px solid {_C['hair']};border-radius:8px;"
+        f"background:{_C['surface']};padding:10px 12px;margin-top:12px;'>"
+        f"{_path_badge()} "
+        f"<span style='font-size:13px;color:{_C['ink']};'>Winners banked "
+        f"<b>{capture:.0f}%</b> of their best in-trade price on average.</span>"
+        f"<div style='font-size:11px;color:{_C['muted']};margin-top:2px;'>"
+        f"PATH = a peak on the path, not money booked; the bankable exit answer is "
+        f"the recipe table in Act 5.</div></div>")
+
+    intro = (f"<p style='font-size:14px;color:{_C['ink']};margin-bottom:12px;'>"
+             f"How the year actually felt to trade &mdash; the equity path, the "
+             f"quarter-by-quarter swing, and how positions closed.</p>")
+    action = _act_action("Read the drawdown depth and streak against your risk "
+                         "tolerance; the cause of the swings is Acts 3 and 4.")
+    return (f'<div class="act">{intro}{equity_img}{quarter_img}{exit_mix}'
+            f'{tempo}{capture_tile}{action}</div>')
+
+
+# ---------------------------------------------------------------------------
+# ACT 3 / ACT 4 — the shared cause-panel engine
+# ---------------------------------------------------------------------------
+
+# Fixed SMC cause dimensions, ALWAYS shown (thin or not) (§Act 3 Panel A).
+# (column, human label, bucketer). Bucketer None => categorical value as-is.
+def _bucket_seq_depth(v) -> Optional[str]:
+    try:
+        n = int(float(v))
+    except (TypeError, ValueError):
+        return None
+    return "4+" if n >= 4 else str(n)
+
+
+def _clean_event(v) -> Optional[str]:
+    """Display-only: collapse the detector's doubled event labels ('BOS BOS',
+    'CHoCH CHoCH') to a single token. Render-layer fix — the raw `event` value is
+    upstream trade data this task must not touch (§0)."""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return None
+    s = str(v).strip()
+    parts = s.split()
+    if len(parts) == 2 and parts[0] == parts[1]:
+        return parts[0]
+    return s
+
+
+_CAUSE_DIMS = [
+    ("event",              "Event type",         _clean_event),
+    ("bos_sequence_count", "Continuation depth", _bucket_seq_depth),
+    ("bos_tier",           "Break tier",         None),
+    ("killzone_alignment", "Killzone alignment", None),
+    ("pd_alignment",       "PD alignment",       None),
+    ("trend_alignment",    "Trend alignment",    None),
+    ("fill_session",       "Fill session",       None),
+    ("pair",               "Pair",               None),
+]
+
+
+def _cause_rows(filled: List[Dict[str, Any]], base_exr: float,
+                side: str) -> List[Dict[str, Any]]:
+    """Score every value of every fixed cause dimension via the shared engine.
+    `side` = 'win' keeps positive-gap rows, 'loss' keeps negative-gap rows.
+    Returns rows sorted by rank desc, each with dim/value/read."""
+    out = []
+    for col, label, bucketer in _CAUSE_DIMS:
+        groups: Dict[str, List[Dict[str, Any]]] = {}
+        for t in filled:
+            raw = t.get(col)
+            val = bucketer(raw) if bucketer else raw
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                continue
+            groups.setdefault(str(val), []).append(t)
+        for val, rows in groups.items():
+            read = _slice_read(rows, base_exr, "r_realised")
+            if read is None:
+                continue
+            gap = read["gap"]
+            if side == "win" and gap <= 0:
+                continue
+            if side == "loss" and gap >= 0:
+                continue
+            out.append({"dim": label, "value": val, **read})
+    out.sort(key=lambda r: r["rank"], reverse=True)
+    return out
+
+
+def _cause_panel_html(rows: List[Dict[str, Any]], side: str,
+                      limit: int = 8) -> str:
+    """Render the fixed-dimension cause panel (Act 3/4 Panel A)."""
+    if not rows:
+        return (f"<p style='font-size:13px;color:{_C['muted']};'>No "
+                f"{'winning' if side == 'win' else 'leaking'} cause dimension "
+                f"diverged from the book this period.</p>")
+    body = ""
+    for r in rows[:limit]:
+        lo, hi = r["ci"]
+        ci_s = f"[{lo:+.2f},{hi:+.2f}]" if lo is not None else "thin"
+        pq_s = (f"{r['pq_agree']}/{r['pq_total']}q" if r["pq_total"] else "—")
+        if r["promoted"]:
+            verdict = (f"<span style='color:{_C['good'] if side=='win' else _C['critical']};"
+                       f"font-weight:700;'>driver</span>")
+        else:
+            verdict = f"<span style='color:{_C['muted']};'>directional, thin</span>"
+        # SMC-conflict marker.
+        exp = _smc_expected_direction(r["dim"], r["value"])
+        if exp is not None and (exp * r["gap"]) < 0:
+            verdict += (f" <span style='color:{_C['serious']};font-weight:700;'>"
+                        f"&#9888; conflicts SMC</span>")
+        gap_color = _C["good"] if r["gap"] >= 0 else _C["critical"]
+        wr_s = "—" if r["wr"] is None else f"{r['wr']:.0f}%"
+        body += (
+            f"<tr>"
+            f"<td style='text-align:left;'><b>{r['dim']}:</b> {r['value']}</td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;'>{r['n']}</td>"
+            f"<td style='text-align:right;'>{wr_s}</td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;'>{_r(r['expR'])}</td>"
+            f"<td style='text-align:right;color:{gap_color};font-variant-numeric:tabular-nums;'>{r['gap']:+.2f}R</td>"
+            f"<td style='text-align:right;font-size:11px;color:{_C['muted']};'>{ci_s}</td>"
+            f"<td style='text-align:right;font-size:11px;color:{_C['muted']};'>{pq_s}</td>"
+            f"<td style='text-align:left;'>{verdict}</td>"
+            f"</tr>")
+    return (f"<table width='100%'><thead><tr>"
+            f"<th style='text-align:left;'>Cause</th><th style='text-align:right;'>N</th>"
+            f"<th style='text-align:right;'>WR</th><th style='text-align:right;'>Avg R</th>"
+            f"<th style='text-align:right;'>vs base</th><th style='text-align:right;'>CI</th>"
+            f"<th style='text-align:right;'>Qtrs</th><th style='text-align:left;'>Verdict</th>"
+            f"</tr></thead><tbody>{body}</tbody></table>")
+
+
+def _mined_slices(filled: List[Dict[str, Any]], base_exr: float,
+                  side: str) -> List[Dict[str, Any]]:
+    """Panel B — mined patterns incl. 2-ways, reusing the driver bucket builder.
+    Returns ONLY promoted slices on the requested side, top by rank."""
+    cands = _driver_buckets(filled) + _driver_two_way(filled)
+    scored = []
+    for c in cands:
+        rows = c["rows"]
+        if len(rows) < 2 or len(rows) == len(filled):
+            continue
+        read = _slice_read(rows, base_exr, "r_realised")
+        if read is None or not read["promoted"]:
+            continue
+        if side == "win" and read["gap"] <= 0:
+            continue
+        if side == "loss" and read["gap"] >= 0:
+            continue
+        scored.append({"dim": c["dim"], "value": c["value"], **read})
+    scored.sort(key=lambda r: r["rank"], reverse=True)
+    return scored
+
+
+def _mined_panel_html(slices: List[Dict[str, Any]], side: str) -> str:
+    if not slices:
+        return (f"<p style='font-size:13px;color:{_C['muted']};'>No new "
+                f"{'winner' if side == 'win' else 'leak'} pattern cleared the guard "
+                f"this period.</p>")
+    items = ""
+    for s in slices[:3]:
+        lo, hi = s["ci"]
+        ci_s = f"[{lo:+.2f},{hi:+.2f}]" if lo is not None else "thin"
+        items += (f"<li style='margin-bottom:4px;'><b>{s['dim']}: {s['value']}</b> "
+                  f"&mdash; {_r(s['expR'])} ({s['gap']:+.2f}R vs base), N={s['n']}, "
+                  f"CI {ci_s}, {s['pq_agree']}/{s['pq_total']}q</li>")
+    return f"<ul style='padding-left:18px;font-size:13px;'>{items}</ul>"
+
+
+def _act3_html(prox_trades: List[Dict[str, Any]]) -> str:
+    filled = [t for t in prox_trades if _is_real_filled(t)]
+    if not filled:
+        return '<div class="act"><p>No filled trades this period.</p></div>'
+    base_exr = sum(float(t.get("r_realised") or 0.0) for t in filled) / len(filled)
+
+    cause = _cause_rows(filled, base_exr, "win")
+    mined = _mined_slices(filled, base_exr, "win")
+
+    # The stitch (deterministic prose): top promoted win slice × best sub-dim.
+    stitch = ""
+    top = next((r for r in cause if r["promoted"]), None) or (mined[0] if mined else None)
+    if top:
+        sub_txt = ""
+        subrows = [t for t in filled
+                   if str(top.get("value")) == str(_val_for(t, top["dim"]))]
+        if subrows:
+            sub = _best_subslice(subrows, base_exr)
+            if sub:
+                sub_txt = f" &mdash; mostly {sub['dim']}: {sub['value']}"
+        stitch = (
+            f"<p style='font-size:14px;color:{_C['ink']};margin-top:12px;'>"
+            f"<b>The stitch:</b> {top['dim']} = {top['value']} carries the edge: "
+            f"{_r(top['expR'])} over {top['n']} trades, sign held "
+            f"{top['pq_agree']}/{top['pq_total']} quarters{sub_txt}.</p>")
+    elif cause:
+        stitch = (f"<p style='font-size:13px;color:{_C['muted']};margin-top:12px;'>"
+                  f"No win cause cleared the guard &mdash; the strongest tilt is "
+                  f"directional only, not a rule yet.</p>")
+
+    intro = (f"<p style='font-size:14px;color:{_C['ink']};margin-bottom:10px;'>"
+             f"Where the winners come from. Every SMC dimension scored against the "
+             f"book's own average; a <b>driver</b> cleared the guard (enough trades, "
+             f"a real gap, steady across quarters), everything else is a hint.</p>")
+    action = _act_action(
+        "Lean into promoted win drivers via sizing/priority (not a code change); "
+        "see Act 5." if top and top.get("promoted")
+        else "No win driver cleared the guard &mdash; no action, thin.")
+    return (f'<div class="act">{intro}'
+            f'<h4>Cause panel &mdash; fixed SMC dimensions</h4>'
+            f'{_cause_panel_html(cause, "win")}'
+            f'<h4 style="margin-top:16px;">Discovered patterns (mined, promoted only)</h4>'
+            f'{_mined_panel_html(mined, "win")}{stitch}{action}</div>')
+
+
+def _val_for(t: Dict[str, Any], dim_label: str):
+    """Map a cause dim human-label back to the trade's bucketed value."""
+    for col, label, bucketer in _CAUSE_DIMS:
+        if label == dim_label:
+            raw = t.get(col)
+            return bucketer(raw) if bucketer else raw
+    return None
+
+
+def _best_subslice(rows: List[Dict[str, Any]], base_exr: float
+                   ) -> Optional[Dict[str, Any]]:
+    """Best sub-dimension within a slice (for the stitch). Scans the cause dims
+    and returns the strongest promoted-or-directional sub-value."""
+    best = None
+    for col, label, bucketer in _CAUSE_DIMS:
+        groups: Dict[str, List[Dict[str, Any]]] = {}
+        for t in rows:
+            raw = t.get(col)
+            val = bucketer(raw) if bucketer else raw
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                continue
+            groups.setdefault(str(val), []).append(t)
+        if len(groups) < 2:  # a sub-dimension needs contrast to be interesting
+            continue
+        for val, sub in groups.items():
+            read = _slice_read(sub, base_exr, "r_realised")
+            if read is None:
+                continue
+            if best is None or read["rank"] > best["rank"]:
+                best = {"dim": label, "value": val, **read}
+    return best
+
+
+# ---------------------------------------------------------------------------
+# ACT 4 — WHERE IT LEAKS + the stitched leak table
+# ---------------------------------------------------------------------------
+
+def _sink_by_join(group_sink: List[Dict[str, Any]]) -> Dict[tuple, Dict[str, float]]:
+    """Index the exit-lab sink by (pair, ob_timestamp, direction) → {config: r}.
+    Same unique join key the pipeline uses (pair+alert_ts is NOT unique)."""
+    idx: Dict[tuple, Dict[str, float]] = {}
+    for r in group_sink or []:
+        if r.get("entry_zone") != "proximal":
+            continue
+        if r.get("exit_reason") in _EXCLUDE_REASONS:
+            continue
+        key = (r.get("pair"), str(r.get("ob_timestamp")), r.get("direction"))
+        idx.setdefault(key, {})[r.get("config")] = float(r.get("r") or 0.0)
+    return idx
+
+
+def _leak_buckets(filled: List[Dict[str, Any]], base_exr: float
+                  ) -> List[Dict[str, Any]]:
+    """Rank leak buckets by SHARE OF LEAK (sum of negative R in bucket ÷ total
+    negative R of the book). Returns promoted-or-thin-flagged buckets."""
+    total_neg = sum(float(t.get("r_realised") or 0.0) for t in filled
+                    if (t.get("r_realised") or 0) < 0)
+    if total_neg == 0:
+        return []
+    cands = _cause_rows(filled, base_exr, "loss")
+    # attach share-of-leak + the bucket's rows for the join.
+    for c in cands:
+        rows = [t for t in filled if str(_val_for(t, c["dim"])) == str(c["value"])]
+        c["rows"] = rows
+        neg = sum(float(t.get("r_realised") or 0.0) for t in rows
+                  if (t.get("r_realised") or 0) < 0)
+        c["leak_share"] = (neg / total_neg) if total_neg else 0.0
+    cands.sort(key=lambda c: c["leak_share"], reverse=True)
+    return cands
+
+
+def _best_exit_fix(bucket_rows: List[Dict[str, Any]],
+                   sink_idx: Dict[tuple, Dict[str, float]]
+                   ) -> Optional[Dict[str, Any]]:
+    """Within a leak bucket, replay each recipe (from the sink) and find the best
+    avg-R improvement over LIVE. Paired per-trade delta → _stat_block verdict.
+    BANKABLE (replayed orders). Returns None if the bucket doesn't join."""
+    # Build per-trade paired R: (live_r, {config: r}) for each joinable trade.
+    live_by_cfg: Dict[str, List[float]] = {}
+    deltas_by_cfg: Dict[str, List[float]] = {}
+    ts_by_cfg: Dict[str, List[Any]] = {}
+    for t in bucket_rows:
+        key = (t.get("pair"), str(t.get("ob_timestamp")), t.get("direction"))
+        cfgs = sink_idx.get(key)
+        if not cfgs or _EXIT_BASELINE_KEY not in cfgs:
+            continue
+        live_r = cfgs[_EXIT_BASELINE_KEY]
+        for cfg, rv in cfgs.items():
+            if cfg == _EXIT_BASELINE_KEY:
+                continue
+            live_by_cfg.setdefault(cfg, []).append(live_r)
+            deltas_by_cfg.setdefault(cfg, []).append(rv - live_r)
+            ts_by_cfg.setdefault(cfg, []).append(t.get("alert_ts"))
+    best = None
+    for cfg, deltas in deltas_by_cfg.items():
+        if not deltas:
+            continue
+        stat = _stat_block(deltas, ts_by_cfg[cfg])
+        avg_delta = stat["expR"]
+        if avg_delta is None or avg_delta <= 0:
+            continue
+        lo, hi = stat["ci"]
+        pq_ok = (stat["pq_total"] == 0
+                 or stat["pq_agree"] / stat["pq_total"] >= DRIVER_PQ_SIGN_FRAC)
+        promoted = (lo is not None and lo > 0 and pq_ok)
+        if best is None or avg_delta > best["avg_delta"]:
+            best = {"cfg": cfg, "label": _EXIT_RECIPE_LABELS.get(cfg, cfg),
+                    "avg_delta": avg_delta, "ci": (lo, hi), "n": stat["n"],
+                    "pq_agree": stat["pq_agree"], "pq_total": stat["pq_total"],
+                    "promoted": promoted}
+    return best
+
+
+def _act4_html(prox_trades: List[Dict[str, Any]], group_sink: List[Dict[str, Any]],
+               risk_usd: float) -> Dict[str, Any]:
+    """Returns {'html': str, 'candidates': [...]} — the candidates feed Act 5."""
+    filled = [t for t in prox_trades if _is_real_filled(t)]
+    if not filled:
+        return {"html": '<div class="act"><p>No filled trades.</p></div>',
+                "candidates": []}
+    base_exr = sum(float(t.get("r_realised") or 0.0) for t in filled) / len(filled)
+    sink_idx = _sink_by_join(group_sink)
+
+    cause = _cause_rows(filled, base_exr, "loss")
+    buckets = _leak_buckets(filled, base_exr)
+
+    # The stitched leak table (the centerpiece).
+    def _median(xs):
+        xs = sorted(x for x in xs if x is not None)
+        if not xs:
+            return None
+        m = len(xs) // 2
+        return xs[m] if len(xs) % 2 else (xs[m - 1] + xs[m]) / 2
+
+    rows_html = ""
+    stitch_prose = ""
+    candidates = []
+    for c in buckets[:5]:
+        rows = c["rows"]
+        med_bars = _median([int(t.get("bars_to_exit") or 0) for t in rows])
+        med_mae = _median([float(t.get("mae_r") or 0.0) for t in rows
+                           if t.get("mae_r") is not None])
+        fix = _best_exit_fix(rows, sink_idx)
+        if fix and fix["avg_delta"] is not None:
+            flo, fhi = fix["ci"]
+            fix_verdict = ("driver" if fix["promoted"] else "directional, thin")
+            fix_txt = (f"{fix['label']} +{fix['avg_delta']:.2f}R "
+                       f"<span style='font-size:11px;color:{_C['muted']};'>"
+                       f"({fix_verdict})</span>")
+        else:
+            fix_txt = f"<span style='color:{_C['muted']};'>none</span>"
+        promoted = c["promoted"]
+        verdict = ("driver" if promoted else "directional, thin")
+        vcolor = _C["critical"] if promoted else _C["muted"]
+        rows_html += (
+            f"<tr>"
+            f"<td style='text-align:left;'><b>{c['dim']}:</b> {c['value']}</td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;'>{c['n']}</td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;'>{_r(c['expR'])}</td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;'>{c['leak_share']*100:.0f}%</td>"
+            f"<td style='text-align:right;'>{med_bars if med_bars is not None else '—'}</td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;'>"
+            f"{med_mae:.2f}R" if med_mae is not None else "—"
+            f"</td>"
+            f"<td style='text-align:left;'>{fix_txt}</td>"
+            f"<td style='text-align:left;color:{vcolor};'>{verdict}</td>"
+            f"</tr>")
+        # Connect-the-dots prose for the single worst bucket.
+        if not stitch_prose:
+            if fix and fix["promoted"]:
+                fix_sentence = (f"{fix['label']} rescues it: +{fix['avg_delta']:.2f}R "
+                                f"per trade in this bucket (replayed order, BANKABLE).")
+            else:
+                fix_sentence = ("No exit recipe rescues it &mdash; candidate for a "
+                                "filter test, see Act 5.")
+            stitch_prose = (
+                f"<p style='font-size:14px;color:{_C['ink']};margin-top:12px;'>"
+                f"<b>{c['dim']}: {c['value']}</b> is {c['leak_share']*100:.0f}% of the "
+                f"total leak ({_r(c['expR'])} avg over {c['n']} trades, "
+                f"{c['pq_agree']}/{c['pq_total']} quarters). {fix_sentence}</p>")
+        # Feed Act 5.
+        candidates.append({"bucket": c, "fix": fix})
+
+    leak_table = (
+        f"<h4 style='margin-top:16px;'>The stitched leak table</h4>"
+        f"<div style='margin-bottom:4px;'>{_bankable_badge()} exit fix &nbsp; "
+        f"{_path_badge()} MAE</div>"
+        f"<table width='100%'><thead><tr>"
+        f"<th style='text-align:left;'>Leak bucket</th><th style='text-align:right;'>N</th>"
+        f"<th style='text-align:right;'>Avg R</th><th style='text-align:right;'>Leak share</th>"
+        f"<th style='text-align:right;'>Med bars</th><th style='text-align:right;'>Med MAE</th>"
+        f"<th style='text-align:left;'>Best exit fix</th><th style='text-align:left;'>Verdict</th>"
+        f"</tr></thead><tbody>{rows_html}</tbody></table>"
+        if rows_html else
+        f"<p style='font-size:13px;color:{_C['muted']};'>No losing bucket to stitch "
+        f"this period.</p>")
+
+    # Losers-green touch hint (PATH, one line).
+    green_losers = [t for t in filled
+                    if (t.get("r_realised") or 0) < 0 and (t.get("mfe_r") or 0) >= 0.5]
+    touch_hint = (
+        f"<p style='font-size:12px;color:{_C['ink2']};margin-top:10px;'>"
+        f"{_path_badge()} <b>{len(green_losers)}</b> losers touched &ge;+0.5R "
+        f"in-trade before reversing (PATH &mdash; a touch is not an exit). The "
+        f"bankable answer is the break-even rows of the recipe table in Act 5.</p>")
+
+    intro = (f"<p style='font-size:14px;color:{_C['ink']};margin-bottom:10px;'>"
+             f"Where the red concentrates &mdash; and, next to each leak, the best "
+             f"exit recipe that would have rescued it (a replayed order, not a "
+             f"peak).</p>")
+    action = _act_action(
+        "The stitched table pairs each leak with its bankable fix or flags it for a "
+        "filter test &mdash; Act 5 ranks which to try first.")
+    html = (f'<div class="act">{intro}'
+            f'<h4>Cause panel &mdash; leak side</h4>{_cause_panel_html(cause, "loss")}'
+            f'{leak_table}{stitch_prose}{touch_hint}{action}</div>')
+    return {"html": html, "candidates": candidates}
+
+
+# ---------------------------------------------------------------------------
+# ACT 5 — WHAT TO CHANGE NEXT (max 3 cards)
+# ---------------------------------------------------------------------------
+
+def _act5_html(prox_trades: List[Dict[str, Any]], group_sink: List[Dict[str, Any]],
+               leak_candidates: List[Dict[str, Any]], head_stat: Dict[str, Any],
+               risk_usd: float) -> str:
+    filled = [t for t in prox_trades if _is_real_filled(t)]
+    n_book = len(filled)
+    base_exr = (sum(float(t.get("r_realised") or 0.0) for t in filled) / n_book
+                if n_book else 0.0)
+
+    cards = []          # each: {claim, guard, delta, watch, impact, seen}
+    seen_buckets = set()
+
+    # (1) Any exit recipe that beats LIVE under the strict rule (§11.1).
+    win = _recipe_winner(group_sink)
+    if win and win["promoted"]:
+        lo, hi = win["ci"]
+        dollar = win["avg_delta"] * risk_usd * win["n_book"]
+        cards.append({
+            "claim": f"Switch to {win['label']} &mdash; beats LIVE by "
+                     f"{win['avg_delta']:+.2f}R/trade.",
+            "guard": f"CI [{lo:+.2f}, {hi:+.2f}], sign {win['pq_agree']}/{win['pq_total']}q, "
+                     f"N={win['n']}.",
+            "delta": f"{_m(dollar)} over {win['n_book']} trades if it held "
+                     f"(replayed orders, BANKABLE).",
+            "watch": "Re-check on the 18-yr run; keep only if the paired CI stays "
+                     "clear of zero.",
+            "impact": abs(win["avg_delta"]) * (win["n"] ** 0.5)})
+
+    # (2) & (3) leak-bucket candidates.
+    for cand in leak_candidates:
+        c = cand["bucket"]
+        fix = cand["fix"]
+        bkey = (c["dim"], c["value"])
+        if bkey in seen_buckets or not c["promoted"]:
+            continue
+        seen_buckets.add(bkey)
+        if fix and fix["promoted"]:
+            lo, hi = fix["ci"]
+            dollar = fix["avg_delta"] * risk_usd * fix["n"]
+            cards.append({
+                "claim": f"For {c['dim']}={c['value']}, use {fix['label']} &mdash; "
+                         f"+{fix['avg_delta']:.2f}R/trade in this cluster.",
+                "guard": f"CI [{lo:+.2f}, {hi:+.2f}], sign {fix['pq_agree']}/{fix['pq_total']}q, "
+                         f"N={fix['n']}. Scoped to a cluster &mdash; needs long-history "
+                         f"confirmation before scoping.",
+                "delta": f"{_m(dollar)} over {fix['n']} in-cluster trades (replayed, "
+                         f"BANKABLE).",
+                "watch": "Confirm the cluster holds on the 18-yr run before scoping the "
+                         "recipe to it.",
+                "impact": abs(fix["avg_delta"]) * (fix["n"] ** 0.5)})
+        else:
+            # filter-test candidate: re-aggregate book WITHOUT the bucket.
+            rows = c["rows"]
+            keep = [t for t in filled if t not in rows]
+            kvals = [float(t.get("r_realised") or 0.0) for t in keep]
+            kts = [t.get("alert_ts") for t in keep]
+            kstat = _stat_block(kvals, kts)
+            lo, hi = kstat["ci"]
+            base_dollar = base_exr * risk_usd * n_book
+            new_dollar = (kstat["expR"] or 0.0) * risk_usd * len(keep)
+            cards.append({
+                "claim": f"Filter-test: drop {c['dim']}={c['value']} &mdash; it is "
+                         f"{c['leak_share']*100:.0f}% of the leak with no exit rescue.",
+                "guard": (f"Remainder CI [{lo:+.2f}, {hi:+.2f}], "
+                          f"sign {kstat['pq_agree']}/{kstat['pq_total']}q, N={kstat['n']}."
+                          + ("" if (lo is not None and lo > 0)
+                             else " <b>not CI-cleared</b>")),
+                "delta": f"Book expectancy moves {_r(base_exr)} &rarr; {_r(kstat['expR'] or 0)} "
+                         f"(from {_m(base_dollar)} to {_m(new_dollar)}, fewer trades).",
+                "watch": "A filter is a real trade-count cut &mdash; confirm the remainder "
+                         "CI clears zero on more data before gating.",
+                "impact": abs(c["expR"]) * (c["n"] ** 0.5)})
+
+    # (4) Top promoted win bucket → lean-in (sizing/priority, not code).
+    win_causes = _cause_rows(filled, base_exr, "win")
+    top_win = next((r for r in win_causes if r["promoted"]), None)
+    if top_win and (top_win["dim"], top_win["value"]) not in seen_buckets:
+        lo, hi = top_win["ci"]
+        cards.append({
+            "claim": f"Lean into {top_win['dim']}={top_win['value']} &mdash; "
+                     f"{top_win['gap']:+.2f}R above the book.",
+            "guard": f"CI [{lo:+.2f}, {hi:+.2f}], sign {top_win['pq_agree']}/{top_win['pq_total']}q, "
+                     f"N={top_win['n']}. Sizing/priority only &mdash; not a code change.",
+            "delta": "No replayed delta (this is a weighting call, not an exit change).",
+            "watch": "Confirm the tilt persists next run before changing sizing.",
+            "impact": abs(top_win["gap"]) * (top_win["n"] ** 0.5)})
+
+    cards.sort(key=lambda c: c["impact"], reverse=True)
+    cards = cards[:3]
+
+    intro = (f"<p style='font-size:14px;color:{_C['ink']};margin-bottom:10px;'>"
+             f"The only changes that earned a place this period &mdash; ranked by "
+             f"impact, capped at three. Each shows its guard honestly.</p>")
+
+    if not cards:
+        # Honest no-change card with n_needed estimate.
+        lo, hi = head_stat["ci"]
+        n_needed = ""
+        if lo is not None and head_stat["expR"] is not None:
+            width = hi - lo
+            # CI width ∝ 1/√n; to roughly halve width need ~4× N.
+            target = max(0, int(n_book * 3))
+            n_needed = f" Next checkpoint: ~{target} more trades to tighten this CI."
+        body = (
+            f"<div style='border:1px solid {_C['hair']};border-radius:8px;"
+            f"background:{_C['surface']};padding:14px;'>"
+            f"<b>No change earned a recommendation this period.</b> The edge is "
+            f"<b>{head_stat['verdict']}</b>; keep collecting.{n_needed}</div>")
+        return f'<div class="act">{intro}{body}{_act_action("No action — keep collecting; re-check next run.")}</div>'
+
+    card_html = ""
+    for c in cards:
+        card_html += (
+            f"<div style='border:1px solid {_C['hair']};border-radius:8px;"
+            f"background:{_C['surface']};padding:12px 14px;margin-bottom:10px;'>"
+            f"<div style='font-size:14px;font-weight:700;color:{_C['ink']};"
+            f"margin-bottom:6px;'>{c['claim']}</div>"
+            f"<div style='font-size:12px;color:{_C['ink2']};margin-bottom:3px;'>"
+            f"<b>Guard:</b> {c['guard']}</div>"
+            f"<div style='font-size:12px;color:{_C['ink2']};margin-bottom:3px;'>"
+            f"<b>Replayed delta:</b> {c['delta']}</div>"
+            f"<div style='font-size:12px;color:{_C['ink2']};'>"
+            f"<b>Watch:</b> {c['watch']}</div></div>")
+    action = _act_action("Try the top card first; confirm every guard on the next "
+                         "(longer-history) run before making it live.")
+    return f'<div class="act">{intro}{card_html}{action}</div>'
+
+
+# ---------------------------------------------------------------------------
+# Recipe ranking — the §11.1 fix (paired CI vs LIVE, trophy only when it clears)
+# ---------------------------------------------------------------------------
+
+def _recipe_ranked(group_sink: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """One ranked read per recipe over the headline population, PLUS the paired
+    delta-vs-LIVE _stat_block for each non-LIVE recipe. This is the single source
+    for both the recipe table (Act 5 feed / Act 6) and the winner rule."""
+    prox = [r for r in (group_sink or [])
+            if r.get("entry_zone") == "proximal"
+            and not (r.get("ist_blocked") or r.get("weekend_blocked"))
+            and r.get("exit_reason") not in _EXCLUDE_REASONS]
+    if not prox:
+        return []
+    # Index per-trade R by join key so we can pair against LIVE.
+    by_key: Dict[tuple, Dict[str, float]] = {}
+    ts_by_key: Dict[tuple, Any] = {}
+    for r in prox:
+        key = (r.get("pair"), str(r.get("ob_timestamp")), r.get("direction"))
+        by_key.setdefault(key, {})[r.get("config")] = float(r.get("r") or 0.0)
+        ts_by_key[key] = r.get("alert_ts")
+
+    by_cfg: Dict[str, List[Dict[str, Any]]] = {}
+    for r in prox:
+        by_cfg.setdefault(r.get("config"), []).append(r)
+
+    out = []
+    for cfg, rows in by_cfg.items():
+        vals = [float(r.get("r") or 0.0) for r in rows]
+        ts = [r.get("alert_ts") for r in rows]
+        stat = _stat_block(vals, ts)
+        w = sum(1 for v in vals if v > 0)
+        l = sum(1 for v in vals if v < 0)
+        wr = (100.0 * w / (w + l)) if (w + l) else None
+        # Paired delta vs LIVE (same trades).
+        paired = None
+        if cfg != _EXIT_BASELINE_KEY:
+            deltas, dts = [], []
+            for key, cfgs in by_key.items():
+                if cfg in cfgs and _EXIT_BASELINE_KEY in cfgs:
+                    deltas.append(cfgs[cfg] - cfgs[_EXIT_BASELINE_KEY])
+                    dts.append(ts_by_key[key])
+            if deltas:
+                pstat = _stat_block(deltas, dts)
+                plo, phi = pstat["ci"]
+                pq_ok = (pstat["pq_total"] == 0
+                         or pstat["pq_agree"] / pstat["pq_total"] >= DRIVER_PQ_SIGN_FRAC)
+                paired = {"avg_delta": pstat["expR"], "ci": pstat["ci"],
+                          "n": pstat["n"], "pq_agree": pstat["pq_agree"],
+                          "pq_total": pstat["pq_total"],
+                          "promoted": (plo is not None and plo > 0 and pq_ok)}
+        out.append({"cfg": cfg, "stat": stat, "wr": wr,
+                    "total_r": round(sum(vals), 1), "paired": paired,
+                    "n_book": len(rows)})
+    out.sort(key=lambda x: (x["stat"]["expR"] if x["stat"]["expR"] is not None
+                            else -1e9), reverse=True)
+    return out
+
+
+def _recipe_winner(group_sink: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The recipe that beats LIVE under the STRICT §11.1 rule: paired delta CI
+    clears 0 AND per-quarter sign holds. None if none clears (trophy-less)."""
+    ranked = _recipe_ranked(group_sink)
+    winners = [x for x in ranked
+               if x["paired"] and x["paired"]["promoted"]
+               and x["paired"]["avg_delta"] and x["paired"]["avg_delta"] > 0]
+    if not winners:
+        return None
+    winners.sort(key=lambda x: x["paired"]["avg_delta"], reverse=True)
+    best = winners[0]
+    return {"cfg": best["cfg"], "label": _EXIT_RECIPE_LABELS.get(best["cfg"], best["cfg"]),
+            "avg_delta": best["paired"]["avg_delta"], "ci": best["paired"]["ci"],
+            "n": best["paired"]["n"], "pq_agree": best["paired"]["pq_agree"],
+            "pq_total": best["paired"]["pq_total"], "promoted": True,
+            "n_book": best["n_book"]}
+
+
+def _recipe_table_html(group_sink: List[Dict[str, Any]], risk_usd: float,
+                       sink_exact: bool, headline_filled_n: Optional[int]) -> str:
+    """The exit-recipe ranking table (§2 KEEP+FIX). Trophy ONLY on a recipe whose
+    PAIRED delta-vs-LIVE CI clears 0 (§11.1) — not the pooled-average top row."""
+    if not group_sink:
+        return (f"<p style='color:{_C['muted']};'>No exit-lab rows this run.</p>")
+    ranked = _recipe_ranked(group_sink)
+    if not ranked:
+        return (f"<p style='color:{_C['muted']};'>No proximal fills to study exits.</p>")
+
+    # Count invariant (pipeline only; skipped for reconstructed preview sinks).
+    if sink_exact and headline_filled_n is not None:
+        recipe_n = next((x["n_book"] for x in ranked
+                         if x["cfg"] == _EXIT_BASELINE_KEY), None)
+        if recipe_n is None:
+            recipe_n = max((x["n_book"] for x in ranked), default=0)
+        if recipe_n != headline_filled_n:
+            raise ValueError(
+                f"Exit-table population ({recipe_n} fills per recipe) != headline "
+                f"filled-proximal count ({headline_filled_n}). Sink and headline "
+                f"scoring different books — refuse to emit a contaminated ranking.")
+
+    winner = _recipe_winner(group_sink)
+    win_cfg = winner["cfg"] if winner else None
+    live_exr = next((x["stat"]["expR"] for x in ranked
+                     if x["cfg"] == _EXIT_BASELINE_KEY), None)
+
+    # Self-check line (moved to Act 6 caller; here we render just the table).
+    body = ""
+    for x in ranked:
+        cfg, stat = x["cfg"], x["stat"]
+        label = _EXIT_RECIPE_LABELS.get(cfg, cfg)
+        lo, hi = stat["ci"]
+        ci_s = f"[{lo:+.2f}, {hi:+.2f}]" if lo is not None else "thin"
+        pq_s = f"{stat['pq_agree']}/{stat['pq_total']}q" if stat["pq_total"] else "—"
+        if cfg == _EXIT_BASELINE_KEY:
+            vs = "<i>incumbent</i>"
+        elif x["paired"] and x["paired"]["avg_delta"] is not None:
+            d = x["paired"]["avg_delta"]
+            plo, phi = x["paired"]["ci"]
+            cleared = x["paired"]["promoted"]
+            color = _C["good"] if cleared else _C["muted"]
+            vs = (f"<span style='color:{color};'>{d:+.2f}R</span>"
+                  f"<span style='font-size:11px;color:{_C['muted']};'> "
+                  f"CI[{plo:+.2f},{phi:+.2f}]</span>" if plo is not None
+                  else f"<span style='color:{color};'>{d:+.2f}R</span>")
+        else:
+            vs = "—"
+        is_win = cfg == win_cfg
+        is_live = cfg == _EXIT_BASELINE_KEY
+        bg = "#e3f4e3" if is_win else ("#fef3d9" if is_live else "")
+        flag = " &#127942;" if is_win else ""
+        total_pnl = x["total_r"] * risk_usd
+        body += (
+            f"<tr style='background:{bg};'>"
+            f"<td style='text-align:left;'><b>{label}</b>{flag}</td>"
+            f"<td style='text-align:right;'>{stat['n']}</td>"
+            f"<td style='text-align:right;'>{_wr_str(x['wr'])}</td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;'>{_r(stat['expR'])}</td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;'>{x['total_r']:+.1f}R</td>"
+            f"<td style='text-align:right;font-variant-numeric:tabular-nums;'>{_m(total_pnl)}</td>"
+            f"<td style='text-align:right;font-size:11px;color:{_C['muted']};'>{ci_s}</td>"
+            f"<td style='text-align:right;font-size:11px;color:{_C['muted']};'>{pq_s}</td>"
+            f"<td style='text-align:left;'>{vs}</td></tr>")
+
+    if winner:
+        header_note = (f"<b>{winner['label']}</b> beats LIVE with confidence "
+                       f"(paired CI clears zero).")
+    else:
+        header_note = "No recipe beats LIVE with confidence this period."
+    note = (f"<p style='font-size:12px;color:{_C['muted']};margin-top:6px;'>"
+            f"{header_note} <b>vs LIVE</b> is the paired per-trade delta (same "
+            f"trades) with its own CI &mdash; a higher pooled average alone is not "
+            f"a winner. Same-bar spikes are uncapturable on H1, so tight-TP recipes "
+            f"flatter here vs reality.</p>")
+    return (f"<div style='margin-bottom:4px;'>{_bankable_badge()} "
+            f"<span style='font-size:11px;color:{_C['muted']};'>replayed orders "
+            f"over the same post-fill bars</span></div>"
+            f"<table width='100%'><thead><tr>"
+            f"<th style='text-align:left;'>Exit recipe</th><th style='text-align:right;'>N</th>"
+            f"<th style='text-align:right;'>WR</th><th style='text-align:right;'>Avg R</th>"
+            f"<th style='text-align:right;'>Total R</th><th style='text-align:right;'>P&amp;L</th>"
+            f"<th style='text-align:right;'>CI</th><th style='text-align:right;'>Qtrs</th>"
+            f"<th style='text-align:left;'>vs LIVE</th>"
+            f"</tr></thead><tbody>{body}</tbody></table>{note}")
+
+
+def _recipe_selfcheck(group_sink: List[Dict[str, Any]]) -> str:
+    """Baseline replay vs committed r_realised — the engine self-check (moved to
+    Act 6 per §Act 6)."""
+    prox = [r for r in (group_sink or [])
+            if r.get("entry_zone") == "proximal"
+            and not (r.get("ist_blocked") or r.get("weekend_blocked"))
+            and r.get("exit_reason") not in _EXCLUDE_REASONS]
+    base_rows = [r for r in prox if r.get("config") == _EXIT_BASELINE_KEY]
+    if not base_rows:
+        return ""
+    repl = sum(float(r.get("r") or 0) for r in base_rows) / len(base_rows)
+    comm = sum(float(r.get("committed_r") or 0) for r in base_rows) / len(base_rows)
+    diff = abs(repl - comm)
+    ok = diff <= 0.01
+    color = _C["good"] if ok else _C["critical"]
+    return (f"<li><b>Engine self-check:</b> baseline replay avg {_r(round(repl,3))} "
+            f"vs committed {_r(round(comm,3))} (|diff| {diff:.3f}) &mdash; "
+            f"<span style='color:{color};font-weight:700;'>"
+            f"{'PASS' if ok else 'FAIL — side-channel not faithful'}</span>.</li>")
+
+
+# ---------------------------------------------------------------------------
+# ACT 6 — CAN I TRUST THIS RUN
+# ---------------------------------------------------------------------------
+
+# Placeholder token replaced post-gate-eval by run_backtest.py (§Act 6). Gates
+# read the report's own headline (circular otherwise), so they run AFTER render.
+_GATES_TOKEN = "<!--GATES-->"
+
+
+def _act6_html(prox_trades: List[Dict[str, Any]], group_sink: List[Dict[str, Any]],
+               group_meta: Dict[str, Any], raw_alert_n: int, filter_line: str,
+               any_asserted: bool, preview: bool) -> str:
+    filled = [t for t in prox_trades if _is_real_filled(t)]
+
+    gates = (f"<p style='font-size:12px;color:{_C['muted']};'>"
+             f"Gates not evaluated (preview).</p>" if preview else _GATES_TOKEN)
+
+    # Funnel.
+    ist_blocked = sum(1 for t in prox_trades if t.get("ist_blocked"))
+    never_filled = sum(1 for t in prox_trades
+                       if t.get("exit_reason") == "never_filled")
+    resolved = len(filled)
+    n_sim = len(prox_trades)
+    funnel = (
+        f"<p style='font-size:13px;color:{_C['ink2']};'>"
+        f"<b>Funnel:</b> {raw_alert_n} raw alerts &rarr; {n_sim} simulated "
+        f"&rarr; {n_sim - never_filled} filled &rarr; {resolved} resolved.</p>")
+
+    # Exclusions.
+    timeout = sum(1 for t in prox_trades if t.get("exit_reason") == "timeout")
+    window_end = sum(1 for t in prox_trades if t.get("exit_reason") == "window_end")
+    excl = (
+        f"<p style='font-size:12px;color:{_C['muted']};'>"
+        f"Audit-only (never in P&amp;L): never-filled {never_filled}, timeout "
+        f"{timeout}, data-window-end {window_end}, IST-blocked {ist_blocked}. "
+        f"Standing policy: unresolved positions never feed expectancy.</p>")
+
+    same_bar = _same_bar_resolution_html(filled)
+    selfcheck = _recipe_selfcheck(group_sink)
+    validation = _validation_html(filled)
+
+    settled = (
+        f"<ul style='padding-left:18px;font-size:12px;color:{_C['ink2']};'>"
+        f"<li>Confidence score: settled noise (Spearman ~0.05) &mdash; logged, not gated.</li>"
+        f"<li>Confluences: settled non-predictive &mdash; see Excel.</li>"
+        f"{selfcheck}</ul>")
+
+    thin_warn = ""
+    if not any_asserted:
+        thin_warn = (f"<p style='font-size:13px;color:{_C['serious']};font-weight:600;"
+                     f"margin-top:8px;'>&#9888; Nothing cleared the guard this period "
+                     f"&mdash; the book is thin, not clean. Treat every number as "
+                     f"directional.</p>")
+
+    intro = (f"<p style='font-size:14px;color:{_C['ink']};margin-bottom:10px;'>"
+             f"The honesty checks: did the gates pass, where did trades drop out, and "
+             f"what the H1 resolution can and can't tell you.</p>")
+    action = _act_action("If a gate failed above, the run is not trusted &mdash; "
+                         "fix and re-run before acting on any number in this email.")
+    return (f'<div class="act">{intro}'
+            f'<h4>Gates</h4>{gates}{funnel}{excl}'
+            f'<h4 style="margin-top:12px;">Backtest fidelity</h4>{same_bar}'
+            f'<p style="font-size:13px;color:{_C["ink2"]};margin-top:8px;">{filter_line}</p>'
+            f'{validation}{settled}{thin_warn}{action}</div>')
+
+
 def _build_group_html(
     group_label: str,
     group_trades_all: List[Dict[str, Any]],
@@ -4207,6 +2975,9 @@ def _build_group_html(
     html_filename: str,
     excel_filename: str,
     exit_lab_sink: List[Dict[str, Any]] = None,
+    preview: bool = False,
+    write_excel: bool = True,
+    sink_exact: bool = True,
 ) -> Dict[str, Any]:
     """Build one HTML email + one Excel for a single pair group.
 
@@ -4250,9 +3021,11 @@ def _build_group_html(
             f"scoreboard={from_scoreboard} vs per-trade-sum={from_trades}.")
 
     # Excel: this group's filled+blocked rows (audit rows preserved). The Excel
-    # still carries BOTH entry zones side by side as reference data.
-    excel_ok = _try_excel(group_trades_all, out_dir / excel_filename,
-                          risk_usd=risk_usd) is not None
+    # still carries BOTH entry zones side by side as reference data. Skipped when
+    # write_excel is False (fast preview iteration); the "attached" footer then
+    # reflects that the workbook was not rebuilt for this render.
+    excel_ok = (write_excel and _try_excel(
+        group_trades_all, out_dir / excel_filename, risk_usd=risk_usd) is not None)
 
     # Exit-lab sink scoped to this group's pairs (the sink rows carry `pair`).
     allowed_pairs = set(group_meta.get("pairs", []))
@@ -4286,39 +3059,71 @@ def _build_group_html(
     pairs_str  = ", ".join(group_meta.get("pairs", []))
     regime_str = group_meta.get("regime", "")
 
+    # Chart file prefix per book (report_forex.html -> chart_forex).
+    chart_prefix = "chart_" + html_filename.replace("report_", "").replace(".html", "")
+    raw_alert_n = int(group_meta.get("raw_alert_n") or 0)
+    # Real run-id for the run-log footer (out_dir is .../<run_id>/preview in
+    # preview mode, .../<run_id> in pipeline mode).
+    run_id_str = out_dir.parent.name if preview else out_dir.name
+
+    # --- Assemble the six acts (deterministic Python) ----------------------
+    # Headline stat drives the Act 1 banner + Act 5's no-change fallback.
+    _hfilled = [t for t in prox_trades if _is_real_filled(t)]
+    _hvals = [float(t.get("r_realised") or 0.0) for t in _hfilled]
+    _hts = [t.get("alert_ts") for t in _hfilled]
+    head_stat = _stat_block(_hvals, _hts)
+
+    act1 = _act1_html(prox_trades, sb_prox, fill_prox, group_meta, risk_usd)
+    act2 = _act2_html(prox_trades, out_dir, chart_prefix, risk_usd)
+    act3 = _act3_html(prox_trades)
+    act4 = _act4_html(prox_trades, group_sink, risk_usd)
+    act5 = _act5_html(prox_trades, group_sink, act4["candidates"], head_stat, risk_usd)
+    recipe_tbl = _recipe_table_html(
+        group_sink, risk_usd, sink_exact,
+        headline_filled_n=len([t for t in prox_trades if _is_real_filled(t)
+                               and not (t.get("ist_blocked") or t.get("weekend_blocked"))]))
+
+    # "Anything asserted?" = did any act promote a driver / recipe winner? Drives
+    # the Act 6 thin-warning.
+    _base_exr = (sum(_hvals) / len(_hvals)) if _hvals else 0.0
+    any_asserted = bool(
+        [r for r in _cause_rows(_hfilled, _base_exr, "win") if r["promoted"]]
+        or [r for r in _cause_rows(_hfilled, _base_exr, "loss") if r["promoted"]]
+        or _recipe_winner(group_sink)
+        or head_stat["verdict"] in ("edge", "loser"))
+    act6 = _act6_html(prox_trades, group_sink, group_meta, raw_alert_n,
+                      filter_line, any_asserted, preview)
+
+    excel_note = ("workbook not rebuilt for this preview render"
+                  if not write_excel else
+                  ("every filled trade for this group, plain-English headers."
+                   if excel_ok else
+                   "<span style='color:#d03b3b;'>FAILED — openpyxl not installed.</span>"))
+
     html = f"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-          background: #f8f9fa; color: #212529; font-size: 14px; line-height: 1.6; }}
-  .wrap {{ max-width: 680px; margin: 0 auto; background: #fff; }}
-  .top-band {{ background: #2c3e50; color: #fff; padding: 20px 28px; }}
-  .top-band h1 {{ font-size: 18px; font-weight: 700; margin-bottom: 4px; }}
-  .top-band .meta {{ font-size: 12px; color: #bdc3c7; }}
-  .headline {{ padding: 24px 28px; border-bottom: 1px solid #eee; }}
-  .headline .big {{ font-size: 32px; font-weight: 700; }}
-  .headline .sub {{ font-size: 14px; color: #555; margin-top: 4px; }}
-  .headline .verdict {{ font-size: 13px; margin-top: 12px; background: #f8f9fa;
-                        padding: 10px 14px; border-radius: 0 4px 4px 0; }}
-  .section {{ padding: 22px 28px; border-bottom: 1px solid #eee; }}
-  .section h2 {{ font-size: 13px; font-weight: 700; text-transform: uppercase;
-                 letter-spacing: 0.06em; color: #888; margin-bottom: 14px; }}
-  .section p {{ margin-bottom: 10px; font-size: 14px; }}
-  table {{ width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }}
-  th {{ background: #2c3e50; color: #fff; padding: 8px 10px; text-align: left;
-        font-weight: 600; font-size: 12px; }}
-  td {{ padding: 7px 10px; border-bottom: 1px solid #eee; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+          background: {_C['page']}; color: {_C['ink']}; font-size: 14px; line-height: 1.55; }}
+  .wrap {{ max-width: 680px; margin: 0 auto; background: {_C['surface']}; }}
+  .top-band {{ background: {_C['ink']}; color: #fff; padding: 18px 24px; }}
+  .top-band h1 {{ font-size: 17px; font-weight: 700; margin-bottom: 4px; }}
+  .top-band .meta {{ font-size: 12px; color: #c9c8c2; }}
+  .act {{ padding: 22px 24px; border-bottom: 1px solid {_C['hair']}; }}
+  .act-head {{ font-size: 12px; font-weight: 800; text-transform: uppercase;
+               letter-spacing: 0.08em; color: {_C['muted']}; margin-bottom: 12px; }}
+  h4 {{ font-size: 12px; font-weight: 700; color: {_C['ink2']}; margin: 14px 0 6px;
+        text-transform: uppercase; letter-spacing: 0.04em; }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }}
+  th {{ background: {_C['neutral']}; color: {_C['ink2']}; padding: 6px 8px;
+        font-weight: 700; font-size: 11px; border-bottom: 1px solid {_C['baseline']}; }}
+  td {{ padding: 6px 8px; border-bottom: 1px solid {_C['hair']}; color: {_C['ink']}; }}
   tr:last-child td {{ border-bottom: none; }}
-  h4 {{ font-size: 12px; font-weight: 700; color: #666; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }}
-  .caveat {{ background: #fffbea; border-left: 3px solid #f59e0b; padding: 10px 14px;
-             border-radius: 0 4px 4px 0; font-size: 12px; color: #555; margin-top: 8px; }}
-  .appendix-divider {{ margin: 0; padding: 12px 28px; background: #f4f4f4;
-             border-left: 4px solid #bbb; font-size: 12px; color: #666;
-             text-transform: uppercase; letter-spacing: 0.06em; }}
-  .footer {{ padding: 16px 28px; background: #f8f9fa; font-size: 11px; color: #999; }}
+  a {{ color: {_C['blue']}; }}
+  .footer {{ padding: 16px 24px; background: {_C['page']}; font-size: 11px; color: {_C['muted']}; }}
 </style>
 </head>
 <body>
@@ -4332,178 +3137,38 @@ def _build_group_html(
   </div>
 </div>
 
-<!-- 1. HEADLINE: P&L + CI + per-quarter + verdict (proximal/live book) -->
-{_headline_html(prox_trades, sb_prox, group_meta, group_label)}
-
-<!-- 2. EXIT RECIPE RANKING — the point of the email now -->
-<div class="section">
-  <h2>Exit recipe ranking &mdash; which exit pays most</h2>
-  <p style="font-size:13px;color:#555;margin-bottom:6px;">
-    Every recipe replayed over the same post-fill bars as the live trade.
-    This is the run-level exit data; the edge engine reads it to draw
-    per-cluster conclusions over the long history.
-  </p>
-  {_exit_recipe_html(group_sink, headline_filled_n=len([t for t in prox_trades if _is_real_filled(t) and not (t.get("ist_blocked") or t.get("weekend_blocked"))]), risk_usd=risk_usd)}
+<div class="act"><div class="act-head">Act 1 &middot; Pulse</div>{act1}</div>
+<div class="act"><div class="act-head">Act 2 &middot; What the year looked like</div>{act2}</div>
+<div class="act"><div class="act-head">Act 3 &middot; Where the edge comes from</div>{act3}</div>
+<div class="act"><div class="act-head">Act 4 &middot; Where it leaks</div>{act4['html']}</div>
+<div class="act"><div class="act-head">Act 5 &middot; What to change next</div>
+  <div style="margin-bottom:12px;">{act5}</div>
+  <h4>Exit recipe ranking &mdash; which exit pays most</h4>
+  <p style="font-size:12px;color:{_C['ink2']};margin-bottom:4px;">Every recipe replayed
+  over the same post-fill bars as the live trade &mdash; the bankable menu the cards draw from.</p>
+  {recipe_tbl}
 </div>
-
-<!-- 3. WHERE LOSSES / WINS CONCENTRATE — the dynamic driver engine -->
-<div class="section">
-  <h2>Where losses &amp; wins concentrate</h2>
-  {_driver_concentrate_section(prox_trades, group_sink)}
-</div>
-
-<!-- 4. BACKTEST FIDELITY — H1 same-bar honesty -->
-<div class="section">
-  <h2>Backtest fidelity &mdash; same-bar resolutions</h2>
-  {_same_bar_resolution_html(prox_trades)}
-</div>
-
-<!-- 4b. MFE / MAE — excursion book: what it says about SL + exits -->
-<div class="section">
-  <h2>Excursion &mdash; MFE / MAE (stop &amp; exit tuning)</h2>
-  <p style="font-size:13px;color:#555;">How far every trade ran in your favour
-  (MFE) and against you (MAE) before it resolved. This is the direct read on
-  whether the stop is too tight, the target too near, or a break-even rule is
-  overdue.</p>
-  {_mfe_mae_html(prox_trades)}
-</div>
-
-<!-- 5. BY PAIR -->
-<div class="section">
-  <h2>By pair</h2>
-  {_by_pair_html(prox_trades, "r_realised")}
-</div>
-
-<!-- 6. STRUCTURE / TREND / KILLZONE / BREAK QUALITY -->
-<div class="section">
-  <h2>Structure event performance</h2>
-  {_structure_event_breakdown_html(prox_trades, "r_realised")}
-</div>
-
-<div class="section">
-  <h2>Trend alignment &mdash; with vs against the H1 trend</h2>
-  <p style="font-size:13px;color:#555;">The label flips on a confirmation BOS,
-  so against-trend is a real, populated bucket — the signal for whether to
-  filter counter-trend zones out.</p>
-  {_trend_alignment_html(prox_trades, "r_realised")}
-</div>
-
-<div class="section">
-  <h2>Continuation depth &mdash; win rate by BOS count since last CHoCH</h2>
-  <p style="font-size:13px;color:#555;">Each BOS after a CHoCH is one step deeper
-  into a continuation. A high count = a late, potentially exhausted trend. This
-  answers directly: does win rate fall as the count climbs? If it does, deep
-  continuations are worth de-rating.</p>
-  {_bos_sequence_html(prox_trades, "r_realised")}
-  <h4 style="margin-top:16px;">Drive verdict &mdash; holding vs fading</h4>
-  <p style="font-size:13px;color:#555;">'fading' = the leg's recent break bodies
-  decayed vs how it started (the live scorer down-rates it). Does the read
-  actually separate winners from losers? Read alongside the count above &mdash; a
-  deep <b>and</b> fading leg is the real late-trend trap.</p>
-  {_bos_verdict_html(prox_trades, "r_realised")}
-</div>
-
-<div class="section">
-  <h2>Killzone alignment &mdash; OB candle vs fill candle</h2>
-  <p style="font-size:13px;color:#555;">Scored on two different moments — the
-  <b>OB-candle</b> session and the <b>fill</b> session — not the alert time the
-  filter gates on. Answers: given we only alert in-killzone, does it also matter
-  when the OB formed and when the order filled?</p>
-  {_killzone_alignment_html(prox_trades, "r_realised")}
-  <h4 style="margin-top:16px;">Losing trades by alignment bucket</h4>
-  {_killzone_alignment_losses_html(prox_trades)}
-</div>
-
-<div class="section">
-  <h2>Break quality &mdash; distance vs displacement, BOS &amp; CHoCH</h2>
-  <p style="font-size:13px;color:#555;margin-bottom:10px;">
-    Every break must clear <b>two</b> live gates: <b>distance</b> (how far past
-    the level it closed) and <b>displacement</b> (the break-candle body — the
-    conviction). Both are shown per event, each bucketed from its own live floor.
-    The engine grades the tier on displacement, so watch which measure the money
-    actually follows. Per-trade numbers are in the Excel.
-  </p>
-  {_break_benchmark_html(prox_trades, "r_realised")}
-</div>
-
-<!-- 7. FILTERS + VALIDATION -->
-<div class="section">
-  <h2>Filters &amp; validation</h2>
-  <p style="font-size:13px;color:#555;">{filter_line}</p>
-  {_validation_html(prox_trades)}
-</div>
-
-<!-- 8. APPENDIX — reference tables, settled questions -->
-<div class="appendix-divider">Appendix &mdash; reference (verdict is above)</div>
-
-<div class="section">
-  <h2>What predicted outcomes &mdash; signal vs noise (settled)</h2>
-  <p style="font-size:13px;color:#555;">The confidence score is settled noise
-  (Spearman ~0.05): it does not rank outcomes, so it stays a logged number, not
-  a gate. The systematic per-factor read is the driver engine above; this line
-  records the settled finding.</p>
-  {_signal_vs_noise_html(prox_trades, "r_realised")}
-</div>
-
-<div class="section">
-  <h2>Confluences &mdash; does each earn its weight?</h2>
-  <p style="font-size:12px;color:#666;">Expectancy with the confluence present
-  vs absent. Settled non-predictive; kept for reference.</p>
-  {_confluence_uplift_html(prox_trades, "r_realised")}
-  <h4 style="margin-top:16px;">Confluences by pair</h4>
-  {_confluence_per_pair_html(prox_trades, "r_realised")}
-</div>
-
-<div class="section">
-  <h2>Setup badges &mdash; does the banner earn its name?</h2>
-  <p style="font-size:12px;color:#666;">A+ Reversal at the Wall / A First
-  Pullback / Caution: Late-Trend Chase &mdash; win rate and expectancy per
-  badge, this run.</p>
-  {_setup_badge_html(prox_trades, "r_realised")}
-</div>
-
-<div class="section">
-  <h2>By session</h2>
-  {_by_session_html(prox_trades, "r_realised")}
-</div>
-
-<div class="section">
-  <h2>Pair &times; session</h2>
-  {_pair_session_matrix_html(prox_trades, "r_realised")}
-</div>
-
-<div class="section">
-  <h2>"What if" &mdash; counterfactual filter analysis</h2>
-  {_counterfactual_html(prox_trades, risk_usd)}
-</div>
-
-<div class="section">
-  <h2>Trades worth a second look &mdash; what the flags mean</h2>
-  {_vet_review_html(prox_trades)}
-</div>
-
-<div class="section">
-  <h2>What's attached</h2>
-  <ul style="padding-left:18px;font-size:13px;">
-    <li><b>{excel_filename} — Trades tab:</b>
-      {"every filled trade for this group, plain-English headers." if excel_ok else "<span style='color:#e74c3c;'>FAILED — openpyxl not installed.</span>"}</li>
-    <li><b>{excel_filename} — Zone Register tab:</b> one row per OB (both entry zones side by side, reference).</li>
-    <li><b>{excel_filename} — Second Look tab:</b> every flagged trade (winners cut short, losers that ran green, high-score losses) with the columns to investigate it.</li>
-  </ul>
-</div>
+<div class="act"><div class="act-head">Act 6 &middot; Can I trust this run</div>{act6}</div>
 
 <div class="footer">
-  <b>Limitations:</b>
-  Spread modelled: the stop-loss is widened by one configured spread (worst-case
-  fill). Slippage and swap are not modelled. Exits simulated at H1 bar boundaries.
-  Same-bar SL+TP collision resolves SL-first (pessimistic).
+  <b>Attached ({excel_filename}):</b>
+  Trades tab &mdash; {excel_note}
+  Zone Register (one row per OB), Second Look (flagged trades), and the relocated
+  reference tabs: Counterfactual (with CI/quarters/ci_cleared guard columns),
+  Confluences, Setup badges, Break-quality ATR ladder, Pair&times;session matrix.
   <br><br>
-  <b>Run log:</b> <code>backtest/results/{out_dir.name}/</code> &middot;
-  verify with <code>git log --grep="Backtest logs: {out_dir.name}"</code>
+  <b>Limitations:</b> spread modelled on the stop (worst-case fill); slippage and
+  swap not modelled; exits at H1 bar boundaries; same-bar SL+TP collision resolves
+  SL-first (pessimistic).
+  <br><br>
+  <b>Run log:</b> <code>backtest/results/{run_id_str}/</code> &middot;
+  verify with <code>git log --grep="Backtest logs: {run_id_str}"</code>
 </div>
 
 </div></body></html>"""
 
+    if not preview:
+        _assert_body_size(html, html_filename)
     (out_dir / html_filename).write_text(html, encoding="utf-8")
 
     return {
@@ -4539,9 +3204,22 @@ def write_h1_only_report(
     risk_usd: float = 250.0,
     out_root: Path = None,
     exit_lab_sink: List[Dict[str, Any]] = None,
+    preview: bool = False,
+    write_excel: bool = True,
+    sink_exact: bool = True,
 ) -> Path:
+    """Build the per-group HTML reports (+ summary/CSV/Excel in pipeline mode).
+
+    `preview=True` (used by render_report.py): rows already carry `setup_id`, so
+    trade IDs are NOT re-claimed (never burn IDs on a preview); HTML is written to
+    a `preview/` subdir so the committed reports are never overwritten; the on-disk
+    summary.json / trades.csv are NOT rewritten. Nothing in this path commits,
+    pushes, or emails. `write_excel=False` additionally skips the (slow) Excel
+    rebuild during fast design iteration.
+    """
     base = out_root if out_root is not None else (Path(__file__).parent / "results")
-    out_dir = Path(base) / run_id
+    run_dir = Path(base) / run_id
+    out_dir = (run_dir / "preview") if preview else run_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # HARD EXCLUSION (one only, as of 2026-06-30): a trade is pulled out of the
@@ -4562,7 +3240,10 @@ def write_h1_only_report(
     # so IDs are unique across every run forever (A0001…Z9999, 260 000 slots).
     # Stamped before any consumer reads the dicts; every output (CSV, Excel,
     # HTML, email vet-review) sees the same ID for the same trade.
-    if trades_all:
+    # Preview mode: rows already carry setup_id (read from trades.csv); claiming
+    # here would permanently burn IDs for a throwaway render. Only the pipeline
+    # path stamps IDs.
+    if trades_all and not preview:
         _first_id = _claim_trade_ids(len(trades_all))
         for _i, _t in enumerate(trades_all):
             _t["setup_id"] = _int_to_trade_id(_first_id + _i)
@@ -4686,15 +3367,17 @@ def write_h1_only_report(
     # Files. Use trades_all for CSV and Excel so blocked rows appear in
     # the audit outputs (column news_blocked + event metadata). Metrics
     # were computed above on the filtered `trades`, so summary stats are
-    # unaffected by this.
-    _trades_csv(trades_all, out_dir / "trades.csv")
-    excel_ok = _try_excel(trades_all, out_dir / "trades.xlsx",
-                          risk_usd=risk_usd) is not None
-    with open(out_dir / "raw_alerts.jsonl", "w") as f:
-        for a in raw_alerts:
-            f.write(json.dumps(a, default=str) + "\n")
-    with open(out_dir / "summary.json", "w") as f:
-        json.dump(summary, f, indent=2, default=str)
+    # unaffected by this. Preview mode NEVER rewrites the committed run
+    # artifacts (trades.csv / raw_alerts.jsonl / summary.json) — the harness
+    # reads them, it does not regenerate them.
+    if not preview:
+        _trades_csv(trades_all, out_dir / "trades.csv")
+        _try_excel(trades_all, out_dir / "trades.xlsx", risk_usd=risk_usd)
+        with open(out_dir / "raw_alerts.jsonl", "w") as f:
+            for a in raw_alerts:
+                f.write(json.dumps(a, default=str) + "\n")
+        with open(out_dir / "summary.json", "w") as f:
+            json.dump(summary, f, indent=2, default=str)
 
     # NOTE (2026-06-30 overhaul): the combined `report.html` is GONE. It was
     # never emailed (reporting_email.py sends only the two per-group HTMLs) and
@@ -4709,26 +3392,35 @@ def write_h1_only_report(
     forex_trades_all = [t for t in trades_all if t.get("pair") in FOREX_PAIRS]
     indcom_trades_all = [t for t in trades_all if t.get("pair") in INDEX_COMMODITY_PAIRS]
 
+    # Raw-alert counts per book for the Act 6 funnel (raw alerts -> simulated).
+    def _raw_n(allowed):
+        return sum(1 for a in (raw_alerts or []) if a.get("pair") in allowed)
+
     forex_meta  = _filter_meta_by_pairs(meta, FOREX_PAIRS)
     indcom_meta = _filter_meta_by_pairs(meta, INDEX_COMMODITY_PAIRS)
+    forex_meta["raw_alert_n"]  = _raw_n(FOREX_PAIRS)
+    indcom_meta["raw_alert_n"] = _raw_n(INDEX_COMMODITY_PAIRS)
 
     by_group = {}
     if forex_trades_all:
         by_group["forex"] = _build_group_html(
             "Original (FX majors + Gold)", forex_trades_all, forex_meta, risk_usd,
             out_dir, "report_forex.html", "forex_trades.xlsx",
-            exit_lab_sink=exit_lab_sink,
+            exit_lab_sink=exit_lab_sink, preview=preview, write_excel=write_excel,
+            sink_exact=sink_exact,
         )
     if indcom_trades_all:
         by_group["gold_nas"] = _build_group_html(
             "New (new FX + BTC)", indcom_trades_all, indcom_meta, risk_usd,
             out_dir, "report_gold_nas.html", "nas_xau_trades.xlsx",
-            exit_lab_sink=exit_lab_sink,
+            exit_lab_sink=exit_lab_sink, preview=preview, write_excel=write_excel,
+            sink_exact=sink_exact,
         )
 
-    if by_group:
+    if by_group and not preview:
         # Fold per-group summaries into the combined summary.json so future
         # tooling can read the partitioned numbers without re-running anything.
+        # Preview never touches the committed summary.json.
         summary["by_group"] = by_group
         with open(out_dir / "summary.json", "w") as f:
             json.dump(summary, f, indent=2, default=str)
