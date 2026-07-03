@@ -1,4 +1,4 @@
-[INFO] run_start regime=bau regime_label=None mode=h1_only start=2008-01-02 end=2008-12-31 pairs=['EURUSD', 'NZDUSD', 'USDJPY', 'USDCHF', 'GOLD', 'GBPUSD', 'AUDUSD', 'USDCAD', 'EURJPY', 'BTCUSD'] risk_usd=250.0 send_email=False
+[INFO] run_start regime=bau regime_label=None mode=h1_only start=2008-01-02 end=2008-12-31 pairs=['EURUSD', 'NZDUSD', 'USDJPY', 'USDCHF', 'GOLD', 'GBPUSD', 'AUDUSD', 'USDCAD', 'EURJPY', 'BTCUSD'] risk_usd=250.0 send_email=True
 [INFO] backtest_atr_cap pair=EURUSD pair_type=forex live=2.5 backtest=2.5
 [INFO] backtest_atr_cap pair=USDJPY pair_type=forex live=2.5 backtest=2.5
 [INFO] backtest_atr_cap pair=NZDUSD pair_type=forex live=2.5 backtest=2.5
@@ -34,7 +34,7 @@
   [partial coverage] EURJPY=X 1h: requested 2007-11-28..2008-12-31 runs beyond cache 2008-01-02..2026-06-26 — returning available slice
 [WARN] data_partial_coverage symbol=BTCUSD=X interval=1h requested=2007-11-28T00:00:00+00:00..2008-12-31T00:00:00+00:00 available=2011-03-23T22:00:00+00:00..2026-06-26T04:00:00+00:00
   [partial coverage] BTCUSD=X 1h: requested 2007-11-28..2008-12-31 runs beyond cache 2011-03-23..2026-06-26 — returning available slice
-  [scanlog] manifest written -> C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\out\scanlog\h1only_20080102_20081231
+  [scanlog] manifest written -> /home/runner/work/trading-alerts/trading-alerts/backtest/out/scanlog/h1only_20080102_20081231
 [INFO] pair_data_loaded pair=EURUSD h1_rows=6145 h1_first=2008-01-02 07:00:00+00:00 h1_last=2008-12-31 00:00:00+00:00
 [INFO] pair_data_loaded pair=USDJPY h1_rows=6143 h1_first=2008-01-02 07:00:00+00:00 h1_last=2008-12-31 00:00:00+00:00
 [INFO] pair_data_loaded pair=NZDUSD h1_rows=6139 h1_first=2008-01-01 22:00:00+00:00 h1_last=2008-12-31 00:00:00+00:00
@@ -47,58 +47,31 @@
 [WARN] pair_skip pair=BTCUSD reason=h1_unavailable
   [SKIP] H1 unavailable for BTCUSD
 
-  [parallel] launching 9 pairs across 8 workers
-[INFO] pair_alerts_collected pair=EURUSD alerts=541 mode=h1_only
-[INFO] pair_trades_simulated pair=EURUSD trades=255 news_blocked=0 ist_blocked=50 killzone_dropped_alerts=141
-[INFO] pair_alerts_collected pair=USDJPY alerts=564 mode=h1_only
-[INFO] pair_trades_simulated pair=USDJPY trades=242 news_blocked=0 ist_blocked=57 killzone_dropped_alerts=164
-[INFO] pair_alerts_collected pair=NZDUSD alerts=374 mode=h1_only
-[INFO] pair_trades_simulated pair=NZDUSD trades=186 news_blocked=0 ist_blocked=62 killzone_dropped_alerts=123
-[INFO] pair_alerts_collected pair=USDCHF alerts=515 mode=h1_only
-[INFO] pair_trades_simulated pair=USDCHF trades=237 news_blocked=0 ist_blocked=38 killzone_dropped_alerts=118
-[INFO] pair_alerts_collected pair=GOLD alerts=605 mode=h1_only
-[INFO] pair_trades_simulated pair=GOLD trades=261 news_blocked=0 ist_blocked=24 killzone_dropped_alerts=115
-[INFO] pair_alerts_collected pair=GBPUSD alerts=546 mode=h1_only
-[INFO] pair_trades_simulated pair=GBPUSD trades=248 news_blocked=0 ist_blocked=47 killzone_dropped_alerts=158
-[INFO] pair_alerts_collected pair=AUDUSD alerts=464 mode=h1_only
-[INFO] pair_trades_simulated pair=AUDUSD trades=239 news_blocked=0 ist_blocked=81 killzone_dropped_alerts=147
-[INFO] pair_alerts_collected pair=USDCAD alerts=599 mode=h1_only
-[INFO] pair_trades_simulated pair=USDCAD trades=261 news_blocked=0 ist_blocked=32 killzone_dropped_alerts=145
-[INFO] pair_alerts_collected pair=EURJPY alerts=454 mode=h1_only
-[INFO] pair_trades_simulated pair=EURJPY trades=211 news_blocked=0 ist_blocked=54 killzone_dropped_alerts=139
-[INFO] report_written path=C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20080102_20081231 total_alerts=4662 total_trades=2140
-
-H1-only report written to C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20080102_20081231
-[INFO] exit_lab_sink_persisted path=C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20080102_20081231\exit_lab_sink.jsonl rows=11840
-================================================================
-SCAN-LOG RUN HEALTH
-================================================================
-GATE  VERDICT DESCRIPTION
-G1    PASS    Sum pnl_usd == Sum r_realised*risk, and equals reporting headline
-G2    PASS    scan records == expected (pair x walk bars); zero HEARTBEAT_GAP; never vacuous (0 declared bars with trades present = blind run)
-G3    PASS    ob<=bos<alert<=fill on every filled trade (fill on the alert candle allowed)
-G4    PASS    every FAIL-severity condition counter is 0
-G5    PASS    every knob re-read at END equals manifest (no drift)
-G6    PASS    headline recomputed from r_realised only; tp1/tp2 excluded
-G7    PASS    content hash of scan_log + events recorded for re-run compare
-G8    PASS    NAN_ATR_SKIP <= 1% post-warmup per pair (WARN >1%, FAIL >5%)
-G9    PASS    every record validated against SCHEMA.md (ts/tz/outcome)
-G10   PASS    per-trade metrics physically possible (no fake excursions)
-----------------------------------------------------------------
-CONDITION COUNTERS (nonzero):
-  INFO  WARMUP_SKIP                1349
-  WARN  YF_CLAMP                   8
-----------------------------------------------------------------
-headline (from r_realised): $-23,784.75
-warnings_present: TRUE
-OVERALL: PASS (exit code 0)
-================================================================
-  [scanlog] compressed artifacts in C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\out\scanlog\h1only_20080102_20081231
-  [registry] processed h1only_20080102_20081231 — 1178 filled trades, expectancy -0.08R
-  [registry] registry.json written (38 runs)
-  [registry] BACKTEST_LOG.md written (38 runs)
-[commit_logs] committed 6b38d353 -- 6 files for h1only_20080102_20081231
-  [log commit OK — LOCAL ONLY, not pushed] h1only_20080102_20081231 -> 6b38d353
-    To publish to GitHub when ready: git push origin main
-[INFO] logs_committed_local_only run_id=h1only_20080102_20081231 sha=6b38d353
-[INFO] run_end
+  [parallel] launching 9 pairs across 2 workers
+  [DIAG EURUSD] walked=6145 warmup_skip=150 dr_err=0 radar_err=0 bars_with_events=5995 bars_with_obs=4752 new_obs=323 prox_checks=25949 closest=0.00×ATR (cap=2.5×ATR) alerts=541 resuppressed=0 rearmed=311 aged_out=84
+  EURUSD: 541 OB-touch alerts
+  EURUSD: 255 simulated trade rows (0 news-blocked, 50 IST-blocked, 141 killzone-dropped alerts)
+  [DIAG USDCHF] walked=6144 warmup_skip=150 dr_err=0 radar_err=0 bars_with_events=5994 bars_with_obs=4423 new_obs=319 prox_checks=20124 closest=0.00×ATR (cap=2.5×ATR) alerts=515 resuppressed=0 rearmed=268 aged_out=60
+  USDCHF: 515 OB-touch alerts
+  USDCHF: 237 simulated trade rows (0 news-blocked, 38 IST-blocked, 118 killzone-dropped alerts)
+  [DIAG GBPUSD] walked=6144 warmup_skip=150 dr_err=0 radar_err=0 bars_with_events=5994 bars_with_obs=4417 new_obs=321 prox_checks=22597 closest=0.00×ATR (cap=2.5×ATR) alerts=546 resuppressed=0 rearmed=299 aged_out=68
+  GBPUSD: 546 OB-touch alerts
+  GBPUSD: 248 simulated trade rows (0 news-blocked, 47 IST-blocked, 158 killzone-dropped alerts)
+  [DIAG USDCAD] walked=6144 warmup_skip=150 dr_err=0 radar_err=0 bars_with_events=5994 bars_with_obs=4723 new_obs=353 prox_checks=24648 closest=0.00×ATR (cap=2.5×ATR) alerts=599 resuppressed=0 rearmed=327 aged_out=71
+  USDCAD: 599 OB-touch alerts
+  USDCAD: 261 simulated trade rows (0 news-blocked, 32 IST-blocked, 145 killzone-dropped alerts)
+  [DIAG USDJPY] walked=6143 warmup_skip=150 dr_err=0 radar_err=0 bars_with_events=5993 bars_with_obs=4526 new_obs=351 prox_checks=19215 closest=0.00×ATR (cap=2.5×ATR) alerts=564 resuppressed=0 rearmed=291 aged_out=64
+  USDJPY: 564 OB-touch alerts
+  USDJPY: 242 simulated trade rows (0 news-blocked, 57 IST-blocked, 164 killzone-dropped alerts)
+  [DIAG NZDUSD] walked=6138 warmup_skip=149 dr_err=0 radar_err=0 bars_with_events=5989 bars_with_obs=3892 new_obs=238 prox_checks=14338 closest=0.00×ATR (cap=2.5×ATR) alerts=374 resuppressed=0 rearmed=205 aged_out=45
+  NZDUSD: 374 OB-touch alerts
+  NZDUSD: 186 simulated trade rows (0 news-blocked, 62 IST-blocked, 123 killzone-dropped alerts)
+  [DIAG GOLD] walked=5831 warmup_skip=150 dr_err=0 radar_err=0 bars_with_events=5681 bars_with_obs=4387 new_obs=333 prox_checks=21566 closest=0.00×ATR (cap=3.0×ATR) alerts=605 resuppressed=0 rearmed=342 aged_out=64
+  GOLD: 605 OB-touch alerts
+  GOLD: 261 simulated trade rows (0 news-blocked, 24 IST-blocked, 115 killzone-dropped alerts)
+  [DIAG AUDUSD] walked=6143 warmup_skip=150 dr_err=0 radar_err=0 bars_with_events=5993 bars_with_obs=4443 new_obs=296 prox_checks=21442 closest=0.00×ATR (cap=2.5×ATR) alerts=464 resuppressed=0 rearmed=240 aged_out=64
+  AUDUSD: 464 OB-touch alerts
+  AUDUSD: 239 simulated trade rows (0 news-blocked, 81 IST-blocked, 147 killzone-dropped alerts)
+  [DIAG EURJPY] walked=6144 warmup_skip=150 dr_err=0 radar_err=0 bars_with_events=5994 bars_with_obs=4239 new_obs=273 prox_checks=18370 closest=0.00×ATR (cap=2.5×ATR) alerts=454 resuppressed=0 rearmed=248 aged_out=63
+  EURJPY: 454 OB-touch alerts
+  EURJPY: 211 simulated trade rows (0 news-blocked, 54 IST-blocked, 139 killzone-dropped alerts)
