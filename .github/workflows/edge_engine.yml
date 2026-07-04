@@ -89,9 +89,21 @@ jobs:
           if [ -n "$RUN_ID" ]; then
             RD="backtest/results/$RUN_ID"
           else
-            # latest-wins: newest by name under results/ that holds a trades.csv
-            RD=$(ls -d backtest/results/*/ 2>/dev/null | sort | while read d; do
-                   [ -f "${d}trades.csv" ] && echo "${d%/}"; done | tail -n1)
+            # latest-wins by COMMIT RECENCY, not folder name. Folder names are
+            # h1only_<start>_<end>; an 18-yr run starts "2008" and would sort
+            # BEFORE small recent runs under a name sort, so the newest run lost.
+            # git log --diff-filter walks commits newest-first; the first
+            # trades.csv path it prints is the most recently committed run. Fall
+            # back to the old name sort only if git yields nothing (shallow
+            # checkout / fresh tree).
+            RD=$(git log --pretty=format: --name-only --diff-filter=d main \
+                   -- 'backtest/results/*/trades.csv' 2>/dev/null \
+                 | grep -m1 'backtest/results/.*/trades.csv' \
+                 | sed 's#/trades.csv##')
+            if [ -z "$RD" ] || [ ! -f "$RD/trades.csv" ]; then
+              RD=$(ls -d backtest/results/*/ 2>/dev/null | sort | while read d; do
+                     [ -f "${d}trades.csv" ] && echo "${d%/}"; done | tail -n1)
+            fi
           fi
           if [ -z "$RD" ] || [ ! -d "$RD" ]; then
             echo "::error::could not resolve a run dir (run_id='$RUN_ID')."
