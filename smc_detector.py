@@ -55,6 +55,14 @@ from datetime import datetime, timedelta, timezone
 # ============================================================================
 
 
+# SHARED P2 (backtest parity) — Live Phase 2 fetches this many H1 bars
+# (feed_adapter.fetch_h1 outputsize) and computes run_scorecard +
+# compute_phase2_levels from that frame. The backtest MUST feed the same
+# functions the same window — TP selection and depth-sensitive score inputs
+# break parity silently otherwise (TRUTH_FIXES_SPEC_2 T5).
+LIVE_P2_H1_BARS = 200
+
+
 # INTERNAL — decimal places helper, used inside this file for price rounding.
 def _dp(pair_conf):
     return pair_conf.get("decimal_places", 5)

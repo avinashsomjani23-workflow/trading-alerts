@@ -357,7 +357,8 @@ def fetch_with_retry(symbol, period, interval, retries=2):
     most-recent window (200 H1 bars ≈ 30 days, the live window the engine needs).
     Logs staleness skips to yfinance_stale_log.json (kept name) for weekly review.
     """
-    df = feed_adapter.fetch_h1(symbol, outputsize=200, retries=retries)
+    df = feed_adapter.fetch_h1(symbol, outputsize=smc_detector.LIVE_P2_H1_BARS,
+                               retries=retries)
     if df is None:
         # Adapter already retried and logged the cause; record the skip for review.
         _log_stale_skip(symbol, interval, "feed fetch failed", None)

@@ -613,6 +613,13 @@ def replay_pair(
                 # ALERT-TIME verdict as a payload scalar so a multi-fire zone's
                 # traded row never logs a later fire's verdict.
                 "bos_verdict": ob["bos_verdict"],
+                # T4 (TRUTH_FIXES_SPEC_2): same rationale as T1's payload verdict —
+                # the dict stamps at :572-573 are overwritten by every re-fire; rows
+                # are built post-walk. Carry alert-time touches/fvg as payload
+                # scalars. Fresh dict() copy is mandatory — the per-bar loop mutates
+                # ob["fvg"] in place.
+                "touches_at_alert": int(ob.get("touches") or 0),
+                "fvg_at_alert": dict(ob.get("fvg") or {}),
                 # Just-closed bar's high/low — simulator uses these to do the
                 # SAME-BAR fill check (alert and limit order are
                 # instantaneous; if the bar that triggered the alert already

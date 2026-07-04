@@ -346,6 +346,24 @@ def _ob_age_h1_bars(ob: Dict[str, Any], df_h1: pd.DataFrame,
         return -1
 
 
+def _closed_bars_at_alert(df_h1: pd.DataFrame,
+                          alert_ts: pd.Timestamp) -> pd.DataFrame:
+    """Live-parity input frame: the last LIVE_P2_H1_BARS bars CLOSED before
+    alert_ts — exactly what live P2 hands run_scorecard/compute_phase2_levels
+    (feed_adapter.fetch_h1 outputsize=200). tail() cannot add future bars, so
+    the lookahead guarantee is unchanged (TRUTH_FIXES_SPEC_2 T5). Replaces the
+    two separate unbounded closed-bar slices (scoring + levels) — one concept,
+    one implementation.
+    """
+    s = df_h1.loc[df_h1.index < alert_ts]
+    if s.empty:
+        s = df_h1.loc[:alert_ts]  # degenerate guard, never empty in practice
+    s = s.tail(smc_detector.LIVE_P2_H1_BARS)
+    # FIX 1 pattern — cheap, loud runtime tripwire that the clamp holds.
+    assert len(s) <= smc_detector.LIVE_P2_H1_BARS
+    return s
+
+
 def _score_h1_only(alert: Dict[str, Any], pair_conf: Dict[str, Any],
                    df_h1: pd.DataFrame, alert_ts: pd.Timestamp
                    ) -> Tuple[float, Dict[str, float]]:
@@ -354,16 +372,14 @@ def _score_h1_only(alert: Dict[str, Any], pair_conf: Dict[str, Any],
     """
     ob = alert["ob"]
     bias = "LONG" if ob.get("direction") == "bullish" else "SHORT"
-    # Lookahead guard (2026-06-21): score from ONLY the bars a live trader could
-    # see at the alert -- bars that had already CLOSED. The alert fires at
-    # alert_ts (the bar opening then is still forming), so closed bars are those
-    # indexed strictly before alert_ts. The previous `df_h1.loc[:alert_ts]`
-    # INCLUDED the forming bar, feeding run_scorecard one bar of future the live
-    # path never has. This mirrors the slice the levels path already uses
-    # (df_h1_at_alert in _simulate_single_entry) and live behaviour.
-    h1_slice = df_h1.loc[df_h1.index < alert_ts]
-    if h1_slice.empty:
-        h1_slice = df_h1.loc[:alert_ts]  # degenerate guard, never empty in practice
+    # Lookahead + live-parity guard: score from ONLY the last LIVE_P2_H1_BARS
+    # bars a live trader could see at the alert -- bars that had already CLOSED.
+    # The alert fires at alert_ts (the bar opening then is still forming), so
+    # closed bars are those indexed strictly before alert_ts; the 200-bar tail
+    # matches live P2's fetch window (TRUTH_FIXES_SPEC_2 T5). Previously this fed
+    # run_scorecard UNBOUNDED history (up to 15 yrs), so depth-sensitive score
+    # inputs drifted with run start date instead of matching live.
+    h1_slice = _closed_bars_at_alert(df_h1, alert_ts)
     fvg_h1 = ob.get("fvg", {"exists": False, "was_detected": False,
                             "mitigation": "none"})
     fvg_data = {"h1": fvg_h1}
@@ -477,16 +493,15 @@ def _simulate_single_entry(
     # Lookahead guard (2026-06): TP/SL levels must be computed from ONLY the
     # bars a live trader could see at the alert -- bars that had already CLOSED.
     # The alert fires at alert_ts (the bar opening then is still forming), so
-    # closed bars are those indexed strictly before alert_ts. Passing the full
-    # df_h1 let compute_phase2_levels.get_swing_points pick opposing swings that
-    # formed AFTER the alert (future liquidity), biasing both TP selection and
-    # the 1.5R validity gate optimistically. This mirrors the slice the scoring
-    # path already uses (_score_h1_only) and live behaviour. The forward
+    # closed bars are those indexed strictly before alert_ts, clamped to live
+    # P2's 200-bar fetch window (TRUTH_FIXES_SPEC_2 T5). Passing the full df_h1
+    # let compute_phase2_levels.get_swing_points pick opposing swings that formed
+    # AFTER the alert (future liquidity), biasing both TP selection and the 1.5R
+    # validity gate optimistically; passing UNBOUNDED past history made TP
+    # selection depend on run start date instead of matching live. The forward
     # fill-walk below intentionally keeps the FULL df_h1 -- it must see the
     # future to simulate how the trade plays out.
-    df_h1_at_alert = df_h1.loc[df_h1.index < alert_ts]
-    if df_h1_at_alert.empty:
-        df_h1_at_alert = df_h1.loc[:alert_ts]  # degenerate guard, never empty
+    df_h1_at_alert = _closed_bars_at_alert(df_h1, alert_ts)
 
     try:
         levels = smc_detector.compute_phase2_levels(
@@ -1336,20 +1351,29 @@ def simulate_h1_only_dual(
     if alert_ts.tzinfo is None:
         alert_ts = alert_ts.tz_localize("UTC")
 
-    # T1 (TRUTH_FIXES_SPEC): ALERT-TIME view of the OB. The replay mutates the
-    # shared OB dict after this alert fired (re-fires re-stamp bos_verdict; the
-    # per-bar loop updates touches/status/fvg), and rows are built after the
-    # whole walk. Everything row-facing (scorecard, badge, row sources) must
-    # read alert-time values: payload scalars + the *_at_alert stamps (Fix 3d).
+    # T1 + T4 (TRUTH_FIXES_SPEC / _2): ALERT-TIME view of the OB. The replay
+    # mutates the shared OB dict after this alert fired (re-fires re-stamp
+    # bos_verdict AND the touches_at_alert/fvg_at_alert dict keys; the per-bar
+    # loop updates touches/status/fvg), and rows are built after the whole walk.
+    # The ALERT PAYLOAD is the one source — bos_verdict (T1), touches_at_alert /
+    # fvg_at_alert (T4) all travel as payload scalars snapshotted at the yield.
+    # The dict stamps remain only as a legacy fallback for old alerts.
+    # TRAP: dict(_ob_live) copies the (possibly re-stamped) *_at_alert KEYS into
+    # the view, and _build_row PREFERS those keys — so both key spellings
+    # (touches / touches_at_alert, fvg / fvg_at_alert) must be overwritten.
     # One view, built once — never patch individual fields inline downstream.
     _ob_live = alert["ob"]
     ob_view = dict(_ob_live)
     if alert.get("bos_verdict") is not None:
         ob_view["bos_verdict"] = alert["bos_verdict"]
-    if _ob_live.get("touches_at_alert") is not None:
-        ob_view["touches"] = _ob_live["touches_at_alert"]
-    if _ob_live.get("fvg_at_alert") is not None:
-        ob_view["fvg"] = _ob_live["fvg_at_alert"]
+    _touches = alert.get("touches_at_alert", _ob_live.get("touches_at_alert"))
+    if _touches is not None:
+        ob_view["touches"] = _touches
+        ob_view["touches_at_alert"] = _touches
+    _fvg = alert.get("fvg_at_alert") or _ob_live.get("fvg_at_alert")
+    if _fvg is not None:
+        ob_view["fvg"] = _fvg
+        ob_view["fvg_at_alert"] = _fvg
     alert = dict(alert)
     alert["ob"] = ob_view
 

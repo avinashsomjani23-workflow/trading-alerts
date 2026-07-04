@@ -35,6 +35,7 @@ BLIND-SPOT GUARD: no number leaves this engine without N + window + scope attach
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -441,6 +442,28 @@ def pooled_fx_gold(df: pd.DataFrame) -> pd.DataFrame:
 # evidence. Everything downstream is blind if Stage 0 is not green.
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _gates_off_proof(filled: pd.DataFrame) -> Dict[str, Any]:
+    """SPEC §4.3 check 3. Proves the run was executed with the score gate OFF:
+    a gated run holds ZERO sub-floor trades. We test PRESENCE of the sub-floor
+    tail (>= MIN_BELOW_FLOOR_N filled below the live floor), NOT its share —
+    scores are not proportional to performance, so the size of the tail is not a
+    trust signal, only its existence is (a fraction test wrongly failed detectors
+    that emit few sub-floor setups). Pure predicate so the guard is testable
+    without a bar cache — see tests/test_gates_off_proof.py."""
+    if "score" not in filled.columns or not len(filled):
+        return {"pass": False, "below_floor": 0, "n": len(filled),
+                "note": "no score column / no filled rows"}
+    below = int((filled["score"] < SCORE_FLOOR_LIVE).sum())
+    ok = below >= MIN_BELOW_FLOOR_N
+    return {
+        "pass": ok, "below_floor": below, "n": len(filled),
+        "frac": round(below / max(len(filled), 1), 4),
+        "floor": SCORE_FLOOR_LIVE, "min_below": MIN_BELOW_FLOOR_N,
+        "note": ("gates confirmed off" if ok else
+                 "input is a GATED run — engine is blind to half the answer"),
+    }
+
+
 def stage0(run_dir: str, engine_dir: str, forced: bool) -> Dict[str, Any]:
     checks: List[Dict[str, Any]] = []
 
@@ -485,20 +508,8 @@ def stage0(run_dir: str, engine_dir: str, forced: bool) -> Dict[str, Any]:
     filled = df[df["fill_ts"].notna()].copy()
 
     # ── Check 3: gates-off proof (>= MIN_BELOW_FLOOR_N eligible filled below floor) ─
-    # Proves the run was executed with the score gate OFF: a gated run holds ZERO
-    # sub-floor trades. We test PRESENCE of the sub-floor tail (absolute count), not
-    # its SHARE — scores are not proportional to performance, so a fraction threshold
-    # wrongly failed detectors that simply emit few sub-floor setups (SPEC §4.3).
-    if "score" in filled.columns and len(filled):
-        below = int((filled["score"] < SCORE_FLOOR_LIVE).sum())
-        frac = below / max(len(filled), 1)
-        _check("gates_off_proof", below >= MIN_BELOW_FLOOR_N,
-               below_floor=below, n=len(filled), frac=round(frac, 4),
-               floor=SCORE_FLOOR_LIVE, min_below=MIN_BELOW_FLOOR_N,
-               note=("input is a GATED run — engine is blind to half the answer"
-                     if below < MIN_BELOW_FLOOR_N else "gates confirmed off"))
-    else:
-        _check("gates_off_proof", False, note="no score column / no filled rows")
+    gp = _gates_off_proof(filled)
+    _check("gates_off_proof", gp.pop("pass"), **gp)
 
     # ── Check 4: population census (per split / book) + MIN_SPLIT_N ─────────
     census: Dict[str, Any] = {"by_split": {}, "by_book": {}, "war": 0}
@@ -807,11 +818,17 @@ def _merge_rare_levels(df: pd.DataFrame, feat: str, disc: pd.DataFrame) -> pd.Se
     return df[feat].map(lambda v: v if v in keep else "other")
 
 
-def _continuous_screen(disc: pd.DataFrame, val: pd.DataFrame, feat: str,
+def _continuous_screen(disc: pd.DataFrame, val: Optional[pd.DataFrame], feat: str,
                        buckets_out: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Screen one continuous feature. Returns the feature-level record (pre-verdict)
     with discovery/validation top-vs-bottom ΔexpR, CIs, Spearman, and the p-value
-    that enters the BH-FDR family."""
+    that enters the BH-FDR family.
+
+    `val is None` = DISCOVERY-ONLY mode (SPEC_STAGED §3): emit DISCOVERY bucket rows
+    only, compute discovery-side stats only, and NEVER add any `*_val` key (tests
+    assert their ABSENCE). The `val is not None` path is byte-identical to before —
+    this is pure addition of the None branch."""
+    disc_only = val is None
     edges = _discovery_quintile_edges(disc, feat)
     rec: Dict[str, Any] = {"feature": feat, "type": "continuous",
                            "timing": _classify_timing(feat), "edges": edges}
@@ -820,13 +837,15 @@ def _continuous_screen(disc: pd.DataFrame, val: pd.DataFrame, feat: str,
         return rec
 
     disc_s = _feature_subpop(disc, feat).copy()
-    val_s = _feature_subpop(val, feat).copy()
     disc_s["_q"] = _assign_quintile(disc_s, feat, edges)
-    val_s["_q"] = _assign_quintile(val_s, feat, edges)
     n_buckets = len(edges) - 1
     lo_b, hi_b = 0, n_buckets - 1
 
-    for split_name, s in (("DISCOVERY", disc_s), ("VALIDATION", val_s)):
+    splits = (("DISCOVERY", disc_s),) if disc_only else (
+        ("DISCOVERY", disc_s), ("VALIDATION", _feature_subpop(val, feat).copy()))
+    if not disc_only:
+        splits[1][1]["_q"] = _assign_quintile(splits[1][1], feat, edges)
+    for split_name, s in splits:
         for b in range(n_buckets):
             cell = s[s["_q"] == b]
             st = _cell_stats(cell)
@@ -843,38 +862,47 @@ def _continuous_screen(disc: pd.DataFrame, val: pd.DataFrame, feat: str,
                 len(top), len(bot))
 
     d_disc, dlo, dhi, nt_d, nb_d = _delta(disc_s)
-    d_val, vlo, vhi, nt_v, nb_v = _delta(val_s)
     rho_d, p_d = _spearman(disc, feat)
-    rho_v, p_v = _spearman(val, feat)
-
-    # per-quarter of the FAVOURED bucket in validation (favoured = discovery's
-    # higher-expR extreme). SPEC §5.4 criterion 2.
     fav_b = hi_b if (d_disc is not None and d_disc >= 0) else lo_b
-    fav_pos, fav_counted = _pos_quarters(val_s[val_s["_q"] == fav_b])
 
     rec.update({
         "n_buckets": n_buckets,
         "delta_disc": d_disc, "delta_disc_ci": [dlo, dhi],
-        "delta_val": d_val, "delta_val_ci": [vlo, vhi],
         "spearman_disc": rho_d, "spearman_p_disc": p_d,
-        "spearman_val": rho_v, "spearman_p_val": p_v,
-        "top_bottom_n_disc": [nt_d, nb_d], "top_bottom_n_val": [nt_v, nb_v],
+        "top_bottom_n_disc": [nt_d, nb_d],
         "favoured_bucket": fav_b,
-        "val_favoured_pos_quarters": f"{fav_pos}/{fav_counted}",
         "_fdr_p": p_d,  # discovery Spearman p enters the BH-FDR family
+    })
+    if disc_only:
+        return rec
+
+    val_s = splits[1][1]
+    d_val, vlo, vhi, nt_v, nb_v = _delta(val_s)
+    rho_v, p_v = _spearman(val, feat)
+    # per-quarter of the FAVOURED bucket in validation (favoured = discovery's
+    # higher-expR extreme). SPEC §5.4 criterion 2.
+    fav_pos, fav_counted = _pos_quarters(val_s[val_s["_q"] == fav_b])
+    rec.update({
+        "delta_val": d_val, "delta_val_ci": [vlo, vhi],
+        "spearman_val": rho_v, "spearman_p_val": p_v,
+        "top_bottom_n_val": [nt_v, nb_v],
+        "val_favoured_pos_quarters": f"{fav_pos}/{fav_counted}",
     })
     return rec
 
 
-def _categorical_screen(disc: pd.DataFrame, val: pd.DataFrame, feat: str,
+def _categorical_screen(disc: pd.DataFrame, val: Optional[pd.DataFrame], feat: str,
                         buckets_out: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Screen one categorical. Levels as-is (rare→other). Top-vs-bottom = best vs
-    worst discovery level (each N≥150). BH-FDR p = discovery Kruskal-Wallis."""
+    worst discovery level (each N≥150). BH-FDR p = discovery Kruskal-Wallis.
+
+    `val is None` = DISCOVERY-ONLY mode (SPEC_STAGED §3): discovery bucket rows +
+    discovery stats only, no `*_val` keys. `val is not None` path byte-identical."""
+    disc_only = val is None
     rec: Dict[str, Any] = {"feature": feat, "type": "categorical",
                            "timing": _classify_timing(feat)}
-    d = disc.copy(); v = val.copy()
+    d = disc.copy()
     d[feat] = _merge_rare_levels(d, feat, disc)
-    v[feat] = _merge_rare_levels(v, feat, disc)
 
     disc_levels = {}
     for lvl, g in sorted(d.groupby(feat), key=lambda kv: str(kv[0])):
@@ -882,10 +910,13 @@ def _categorical_screen(disc: pd.DataFrame, val: pd.DataFrame, feat: str,
         disc_levels[str(lvl)] = st
         buckets_out.append({"feature": feat, "split": "DISCOVERY",
                             "level": str(lvl), **st})
-    for lvl, g in sorted(v.groupby(feat), key=lambda kv: str(kv[0])):
-        st = _cell_stats(g)
-        buckets_out.append({"feature": feat, "split": "VALIDATION",
-                            "level": str(lvl), **st})
+    if not disc_only:
+        v = val.copy()
+        v[feat] = _merge_rare_levels(v, feat, disc)
+        for lvl, g in sorted(v.groupby(feat), key=lambda kv: str(kv[0])):
+            st = _cell_stats(g)
+            buckets_out.append({"feature": feat, "split": "VALIDATION",
+                                "level": str(lvl), **st})
 
     # best vs worst discovery level among those with N≥150.
     testable = {k: s for k, s in disc_levels.items()
@@ -903,20 +934,25 @@ def _categorical_screen(disc: pd.DataFrame, val: pd.DataFrame, feat: str,
 
     d_disc = round(testable[best]["expR"] - testable[worst]["expR"], 4)
     dlo, dhi = bootstrap_diff_ci(_lvl_vals(d, best), _lvl_vals(d, worst), paired=False)
-    vb, vw = _lvl_vals(v, best), _lvl_vals(v, worst)
-    d_val = round((np.mean(vb) - np.mean(vw)), 4) if (len(vb) and len(vw)) else None
-    vlo, vhi = bootstrap_diff_ci(vb, vw, paired=False)
     p_d = _kruskal_p(d, feat)
-    fav_pos, fav_counted = _pos_quarters(v[v[feat] == best])
 
     rec.update({
         "best_level": best, "worst_level": worst,
         "delta_disc": d_disc, "delta_disc_ci": [dlo, dhi],
-        "delta_val": d_val, "delta_val_ci": [vlo, vhi],
         "best_worst_n_disc": [testable[best]["n"], testable[worst]["n"]],
+        "_fdr_p": p_d,
+    })
+    if disc_only:
+        return rec
+
+    vb, vw = _lvl_vals(v, best), _lvl_vals(v, worst)
+    d_val = round((np.mean(vb) - np.mean(vw)), 4) if (len(vb) and len(vw)) else None
+    vlo, vhi = bootstrap_diff_ci(vb, vw, paired=False)
+    fav_pos, fav_counted = _pos_quarters(v[v[feat] == best])
+    rec.update({
+        "delta_val": d_val, "delta_val_ci": [vlo, vhi],
         "best_worst_n_val": [len(vb), len(vw)],
         "val_favoured_pos_quarters": f"{fav_pos}/{fav_counted}",
-        "_fdr_p": p_d,
     })
     return rec
 
@@ -1002,23 +1038,24 @@ def _snapback_screen(pooled: pd.DataFrame) -> List[Dict[str, Any]]:
     return out
 
 
-def _sl_anatomy_screen(disc: pd.DataFrame, val: pd.DataFrame) -> Dict[str, Any]:
+def _sl_anatomy_screen(disc: pd.DataFrame, val: Optional[pd.DataFrame]) -> Dict[str, Any]:
     """SPEC §5.5 stop-out anatomy. Population = eligible SL exits. For every
     feature, compare clean-break rate P(sl_bar_was_sweep==False) across buckets.
     Clean-break predictors = ENTRY-fault markers (auto-promote to Stage-2
     candidates, tag anatomy_promoted). Sweep-stop predictors = EXIT-fault markers
-    (tag only, candidate Stage-3 cluster axis)."""
+    (tag only, candidate Stage-3 cluster axis).
+
+    `val is None` = DISCOVERY-ONLY mode (SPEC_STAGED §3): discovery stats only, no
+    promotions — promotion is a validation concept, so `anatomy_promoted` is always
+    `[]` here. Computed on the discovery SL frame; no validation frame is read."""
     disc_sl = disc[(disc["exit_reason"] == "sl") &
                    disc["sl_bar_was_sweep"].notna()].copy()
-    val_sl = val[(val["exit_reason"] == "sl") &
-                 val["sl_bar_was_sweep"].notna()].copy()
     rows: List[Dict[str, Any]] = []
     promoted: List[str] = []
     if disc_sl.empty:
         return {"rows": rows, "anatomy_promoted": promoted,
                 "note": "no eligible SL-anatomy rows"}
     disc_sl["_clean"] = (disc_sl["sl_bar_was_sweep"] == False).astype(int)  # noqa: E712
-    val_sl["_clean"] = (val_sl["sl_bar_was_sweep"] == False).astype(int)    # noqa: E712
 
     for feat in ALL_FEATURES:
         if feat not in disc_sl.columns:
@@ -1055,7 +1092,8 @@ def _sl_anatomy_screen(disc: pd.DataFrame, val: pd.DataFrame) -> Dict[str, Any]:
                      "n_hi": len(top), "n_lo": len(bot),
                      "robust_clean_break_predictor": robust})
         # A robust clean-break predictor = ENTRY-fault → auto-promote to Stage 2.
-        if robust and rate_diff > 0 and _classify_timing(feat) == "alert_time":
+        # Discovery-only mode (val is None) never promotes (SPEC_STAGED §3).
+        if val is not None and robust and rate_diff > 0 and _classify_timing(feat) == "alert_time":
             promoted.append(feat)
     return {"rows": rows, "anatomy_promoted": sorted(set(promoted))}
 
@@ -1104,11 +1142,290 @@ def _interaction_screen(disc: pd.DataFrame, val: pd.DataFrame) -> List[Dict[str,
     return out
 
 
-def stage1(run_dir: str, engine_dir: str, forced: bool) -> Dict[str, Any]:
+# ═══════════════════════════════════════════════════════════════════════════
+# STAGED HUMAN REVIEW (SPEC §18 / SPEC_STAGED) — the discovery→approve→confirm
+# lock. Discovery is read freely; validation runs only behind a single-use token,
+# and every spend is stamped forever in an append-only ledger + git history.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# NOTE the wording: SPEC_STAGED §4.4 sketches this stamp with the word "survivor",
+# but §4.5 + the §11.3 test forbid the literal words "survivor" / "edge" anywhere in
+# Phase A output. §4.5/§11.3 is the binding rule (the point of the phase is to NOT
+# claim survival yet), so the stamp keeps the meaning without the forbidden words:
+# a candidate is only confirmed if it REPEATS on unseen validation years.
+DISCOVERY_LANGUAGE_STAMP = (
+    "CANDIDATE ONLY — discovery split only. Luck is NOT ruled out. A candidate is "
+    "confirmed only if it REPEATS on validation years it has never seen.")
+
+
+def _discovery_path(engine_dir: str) -> str:
+    return os.path.join(engine_dir, "stage1_discovery.json")
+
+
+def _approval_path(engine_dir: str) -> str:
+    return os.path.join(engine_dir, "approval.json")
+
+
+def _ledger_path(engine_dir: str) -> str:
+    return os.path.join(engine_dir, "validation_ledger.jsonl")
+
+
+def _sha256_bytes(b: bytes) -> str:
+    return hashlib.sha256(b).hexdigest()
+
+
+def _discovery_serialise(obj: Dict[str, Any]) -> bytes:
+    """Serialise the discovery record the SAME way _write_json does (indent=2,
+    default=str) so a hash taken here matches what lands on disk byte-for-byte."""
+    return json.dumps(obj, indent=2, default=str).encode("utf-8")
+
+
+def _compute_token(engine_dir: str) -> Optional[Dict[str, str]]:
+    """SPEC_STAGED §5.1. token = sha256(discovery_sha + code_sha)[:12], where
+    discovery_sha is the sha256 of the TOKEN-LESS serialisation of
+    stage1_discovery.json and code_sha is the sha256 of edge_engine.py on disk.
+    Returns None if the discovery file is absent."""
+    disc = _read_json(_discovery_path(engine_dir))
+    if disc is None:
+        return None
+    tokenless = {k: v for k, v in disc.items() if k != "token"}
+    discovery_sha = _sha256_bytes(_discovery_serialise(tokenless))
+    with open(os.path.abspath(__file__), "rb") as f:
+        code_sha = _sha256_bytes(f.read())
+    token = _sha256_bytes((discovery_sha + code_sha).encode("utf-8"))[:12]
+    return {"token": token, "discovery_sha": discovery_sha, "code_sha": code_sha}
+
+
+def approve(engine_dir: str, supplied_token: str) -> Dict[str, Any]:
+    """SPEC_STAGED §5.2 — sign the discovery token. Recompute; refuse if it drifted.
+    Writes approval.json (consumed:false) and returns a result dict for the CLI."""
+    comp = _compute_token(engine_dir)
+    if comp is None:
+        return {"approved": False,
+                "note": "no stage1_discovery.json — run --phase discovery first"}
+    if comp["token"] != supplied_token:
+        return {"approved": False, "refused": "token_mismatch",
+                "note": ("REFUSED: discovery output or engine code changed since this "
+                         "token was issued — re-run --phase discovery")}
+    approval = {"token": comp["token"], "discovery_sha": comp["discovery_sha"],
+                "code_sha": comp["code_sha"], "approved_utc": _now_utc(),
+                "consumed": False}
+    _write_json(_approval_path(engine_dir), approval)
+    return {"approved": True,
+            "note": "Approved. Validation is now armed for ONE confirmation run "
+                    "(--phase confirm)."}
+
+
+def _check_approval_gate(engine_dir: str) -> Tuple[bool, Dict[str, Any]]:
+    """SPEC_STAGED §5.3.1 — gate passes iff approval.json exists, its token/
+    discovery_sha/code_sha all match a fresh _compute_token, and consumed==false.
+    Returns (passed, detail) — detail names which check failed for the refusal block.
+    Reads only metadata; never touches any trade frame."""
+    comp = _compute_token(engine_dir)
+    if comp is None:
+        return False, {"reason": "no_discovery", "note": "no stage1_discovery.json"}
+    appr = _read_json(_approval_path(engine_dir))
+    if appr is None:
+        return False, {"reason": "no_approval", "note": "no approval.json"}
+    if appr.get("consumed") is True:
+        return False, {"reason": "consumed",
+                       "note": "approval token already consumed (single-use)"}
+    for k in ("token", "discovery_sha", "code_sha"):
+        if appr.get(k) != comp[k]:
+            return False, {"reason": f"{k}_mismatch",
+                           "note": f"approval.json {k} != recomputed {k}"}
+    return True, {"reason": "ok", "token": comp["token"], "code_sha": comp["code_sha"]}
+
+
+def _append_ledger(engine_dir: str, via: str, token: Optional[str],
+                   code_sha: str, burn_reason: Optional[str]) -> int:
+    """SPEC_STAGED §5.3.4 — append ONE line to the append-only ledger; return the
+    new line count (== validation_runs)."""
+    line = {"run_utc": _now_utc(), "token": token, "code_sha": code_sha,
+            "via": via, "burn_reason": burn_reason}
+    os.makedirs(engine_dir, exist_ok=True)
+    with open(_ledger_path(engine_dir), "a", encoding="utf-8") as f:
+        f.write(json.dumps(line, default=str) + "\n")
+    return _ledger_summary(engine_dir)["validation_runs"]
+
+
+def _ledger_summary(engine_dir: str) -> Dict[str, Any]:
+    """Read the append-only ledger: N runs, whether any was a burn, the via list."""
+    path = _ledger_path(engine_dir)
+    runs = 0
+    burned = False
+    vias: List[str] = []
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            for ln in f:
+                ln = ln.strip()
+                if not ln:
+                    continue
+                runs += 1
+                try:
+                    rec = json.loads(ln)
+                except json.JSONDecodeError:
+                    continue
+                vias.append(rec.get("via", "?"))
+                if rec.get("via") == "burn":
+                    burned = True
+    burned = burned or runs > 1
+    return {"validation_runs": runs, "validation_burned": burned, "vias": vias}
+
+
+def _refusal_block(engine_dir: str, detail: Dict[str, Any]) -> str:
+    """The loud, human-readable refusal printed when the gate blocks validation."""
+    comp = _compute_token(engine_dir)
+    tok = comp["token"] if comp else "<run --phase discovery first>"
+    return (
+        "\033[31m╔══ VALIDATION REFUSED — approval gate (SPEC §18 / D5) ══╗\033[0m\n"
+        f"  failed check: {detail.get('reason')} — {detail.get('note')}\n"
+        "  Validation is a ONE-SHOT confirmation. It does not run until you\n"
+        "  approve the discovery token. The staged workflow:\n"
+        f"    1)  python -m backtest.diagnostics.edge_engine --phase discovery\n"
+        f"    2)  python -m backtest.diagnostics.edge_engine --approve {tok}\n"
+        f"    3)  python -m backtest.diagnostics.edge_engine --phase confirm\n"
+        "  To deliberately re-open validation (stamped forever):\n"
+        "    --burn-validation \"<written reason>\"\n")
+
+
+def _apply_candidate_criteria(rec: Dict[str, Any], fdr_reject: bool) -> str:
+    """SPEC_STAGED §4.3 — DISCOVERY-ONLY verdict ladder. Parallel to
+    _apply_survivor_criteria but criterion 2 (validation persistence) does NOT
+    exist here. Possible outputs: candidate, candidate_thin, noise, thin. The
+    strings survivor / hypothesis / inverted are IMPOSSIBLE by construction."""
+    if rec.get("verdict") == "thin":
+        return "thin"
+    d_disc = rec.get("delta_disc")
+    if d_disc is None:
+        return "thin"
+    dlo, dhi = rec.get("delta_disc_ci", [None, None])
+    nd = rec.get("top_bottom_n_disc") or rec.get("best_worst_n_disc") or [0, 0]
+    disc_signal = fdr_reject and _ci_excludes_zero(dlo, dhi)
+    substance_n = min(nd) >= MIN_BUCKET_N
+    substance_eff = abs(d_disc) >= MIN_EFFECT_R
+    if not substance_n:
+        return "candidate_thin" if disc_signal else "noise"
+    if not disc_signal:
+        return "noise"
+    if not substance_eff:
+        return "candidate_thin"
+    return "candidate"
+
+
+def stage1_discovery(run_dir: str, engine_dir: str, forced: bool) -> Dict[str, Any]:
+    """PHASE A (SPEC_STAGED §4). Discovery-only preview of Stage 1. NEVER
+    materialises the validation frame — the frame it would need is simply never
+    built, so this function cannot leak. Output = CANDIDATES + an approval token.
+    Verdict-scope only."""
+    gate = _read_json(_stage_path(engine_dir, 0)) or {}
+    scope = gate.get("scope", "exploratory")
+    if scope != "verdict":
+        raise SystemExit("staged review requires verdict scope; use the short-range "
+                         "workflow (SPEC §15)")
+    sl_anatomy_usable = gate.get("sl_anatomy_usable", False)
+    news_usable = gate.get("news_usable", False)
+
+    df = load_population(run_dir)
+    sl_anatomy_usable = sl_anatomy_usable and all(c in df.columns for c in SL_ANATOMY_COLS)
+    pooled = pooled_fx_gold(df)
+    disc = split_frame(pooled, "DISCOVERY")
+    # The validation / holdout frames are NEVER built past this line (SPEC_STAGED §4.2).
+
+    buckets: List[Dict[str, Any]] = []
+    feature_recs: List[Dict[str, Any]] = []
+    for feat in CONTINUOUS_FEATURES:
+        if feat in DECREED_OUT or feat not in disc.columns:
+            continue
+        feature_recs.append(_continuous_screen(disc, None, feat, buckets))
+    for feat in CATEGORICAL_FEATURES:
+        if feat in DECREED_OUT or feat not in disc.columns:
+            continue
+        feature_recs.append(_categorical_screen(disc, None, feat, buckets))
+
+    fam_p = [r.get("_fdr_p") for r in feature_recs]
+    reject = benjamini_hochberg(fam_p, FDR_Q)
+    for r, rej in zip(feature_recs, reject):
+        r["fdr_reject"] = bool(rej)
+        r["verdict"] = _apply_candidate_criteria(r, rej)
+
+    candidates = [r for r in feature_recs if r["verdict"] == "candidate"]
+    # Rank by |delta_disc| (no delta_val exists yet — SPEC_STAGED §4.2).
+    ranked = sorted(
+        [r for r in feature_recs if r["verdict"] in ("candidate", "candidate_thin")],
+        key=lambda r: -(abs(r.get("delta_disc") or 0.0)))
+
+    snapback = _snapback_screen(pooled)
+    anatomy = ({"note": "SL-anatomy columns absent (stale run)"}
+               if not sl_anatomy_usable else _sl_anatomy_screen(disc, None))
+    news = ({"note": "news unusable"} if not news_usable else _news_confounder(
+        disc[(disc["exit_reason"] == "sl") &
+             (disc.get("sl_bar_was_sweep") == False)]  # noqa: E712
+        if sl_anatomy_usable else disc.iloc[0:0], disc))
+
+    pd.DataFrame(buckets).to_csv(
+        os.path.join(engine_dir, "stage1_discovery_features.csv"), index=False)
+
+    result: Dict[str, Any] = {
+        "phase": "discovery", "pass": True, "forced": forced,
+        "run_id": os.path.basename(run_dir), "generated_utc": _now_utc(),
+        "scope": "verdict", "window": _window_label(disc),
+        "n_discovery": int(len(disc)),
+        "validation_untouched": True,
+        "features": feature_recs,
+        "candidates": [r["feature"] for r in candidates],
+        "ranked_candidates": [{"feature": r["feature"], "verdict": r["verdict"],
+                               "delta_disc": r.get("delta_disc"),
+                               "timing": r["timing"]} for r in ranked],
+        "snapback": snapback,
+        "sl_anatomy": anatomy if isinstance(anatomy, dict) else {},
+        "news_confounder": news,
+        "interactions": "deferred_to_confirm",
+        "language_stamp": DISCOVERY_LANGUAGE_STAMP,
+    }
+    # Token is computed on the TOKEN-LESS serialisation, then embedded (SPEC_STAGED
+    # §5.1): write without token → hash → rewrite with token.
+    _write_json(_discovery_path(engine_dir), result)
+    comp = _compute_token(engine_dir)
+    result["token"] = comp["token"]
+    _write_json(_discovery_path(engine_dir), result)
+    return result
+
+
+def stage1(run_dir: str, engine_dir: str, forced: bool,
+           burn_reason: Optional[str] = None) -> Dict[str, Any]:
     gate = _read_json(_stage_path(engine_dir, 0)) or {}
     scope = gate.get("scope", "exploratory")
     news_usable = gate.get("news_usable", False)
     sl_anatomy_usable = gate.get("sl_anatomy_usable", False)
+
+    # ── APPROVAL GATE (SPEC §18 / SPEC_STAGED §5.3) — verdict scope only. This
+    # runs BEFORE any validation frame is built. In verdict scope, validation is a
+    # one-shot confirmation armed by a single-use token; --burn-validation is the
+    # only sanctioned re-open and is stamped forever. Exploratory scope never hits
+    # the gate (§15 has no validation to protect). ──
+    if scope == "verdict":
+        gate_ok, gdetail = _check_approval_gate(engine_dir)
+        burning = burn_reason is not None and burn_reason.strip() != ""
+        if not gate_ok and not burning:
+            print(_refusal_block(engine_dir, gdetail))
+            result = {"stage": 1, "pass": False, "refused": "approval_gate",
+                      "gate_detail": gdetail, "run_id": os.path.basename(run_dir),
+                      "generated_utc": _now_utc(), "scope": scope}
+            # Deliberately NOT written to _stage_path(1) — the canonical artefact
+            # must stay absent so Stage 2 cannot chain off a refused Stage 1.
+            return result
+        code_sha = _compute_token(engine_dir)
+        code_sha = code_sha["code_sha"] if code_sha else _sha256_bytes(
+            open(os.path.abspath(__file__), "rb").read())
+        if gate_ok:
+            appr = _read_json(_approval_path(engine_dir)) or {}
+            appr["consumed"] = True  # single-use
+            _write_json(_approval_path(engine_dir), appr)
+            _append_ledger(engine_dir, "approval", gdetail.get("token"),
+                           code_sha, None)
+        else:  # burning
+            _append_ledger(engine_dir, "burn", None, code_sha, burn_reason.strip())
 
     df = load_population(run_dir)
     # Re-derive column availability from the DATA WE ACTUALLY LOADED, never trust
@@ -1202,6 +1519,10 @@ def stage1(run_dir: str, engine_dir: str, forced: bool) -> Dict[str, Any]:
         "news_confounder": news,
         "interactions": interactions,
     }
+    # Validation-spend stamps (SPEC §18 §5.4) — loud like holdout_reopened. In
+    # exploratory scope the gate never ran, so there is no ledger and no spend.
+    if not exploratory:
+        result.update(_ledger_summary(engine_dir))
     _write_json(_stage_path(engine_dir, 1), result)
     return result
 
@@ -2114,7 +2435,9 @@ def stage4(run_dir: str, engine_dir: str, forced: bool) -> Dict[str, Any]:
         **recipe,
         "holdout": holdout, "walk_forward": walk_forward,
         "war_2026": war_block, "btc": btc,
-        "caveats": _collect_caveats(order_rules, holdout_reopened, holdout),
+        **_ledger_summary(engine_dir),
+        "caveats": _collect_caveats(order_rules, holdout_reopened, holdout,
+                                    _ledger_summary(engine_dir)),
     }
     _write_json(_stage_path(engine_dir, 4), result)
     _write_report(engine_dir, run_dir, gate, s1, s2, s3, result)
@@ -2340,8 +2663,13 @@ def _verdict_tree(holdout: Dict[str, Any]) -> str:
     return "NO_EDGE"
 
 
-def _collect_caveats(order_rules, reopened, holdout) -> List[str]:
+def _collect_caveats(order_rules, reopened, holdout,
+                     ledger: Optional[Dict[str, Any]] = None) -> List[str]:
     c = []
+    if ledger and ledger.get("validation_burned"):
+        c.append(f"VALIDATION RE-OPENED (runs: {ledger.get('validation_runs')}) — "
+                 "survivor list is no longer a one-shot confirmation; treat the "
+                 "verdict as exploratory (D4).")
     if reopened:
         c.append("HOLDOUT REOPENED — a prior Stage 4 already spent this holdout "
                  "window; this verdict is contaminated by earlier looks (SPEC §9.6).")
@@ -2377,6 +2705,21 @@ def _write_report(engine_dir, run_dir, gate, s1, s2, s3, s4) -> None:
     L.append(f"- **Every number below carries N + window + scope.** A number "
              f"without a verdict-scope stamp is a hypothesis, not an edge.")
     L.append("")
+
+    # Staged-review header (SPEC §18 / SPEC_STAGED §7.2) — pure additional lines.
+    if scope == "verdict":
+        disc = _read_json(_discovery_path(engine_dir)) or {}
+        appr = _read_json(_approval_path(engine_dir)) or {}
+        led = _ledger_summary(engine_dir)
+        L.append("## Staged Review")
+        L.append(f"- discovery token: `{disc.get('token', '—')}`  ·  "
+                 f"approved: `{appr.get('approved_utc', '—')}`")
+        L.append(f"- validation_runs: **{led['validation_runs']}**  ·  "
+                 f"ledger via: {led['vias'] or '—'}")
+        if led["validation_burned"]:
+            L.append(f"- ⚠️ **VALIDATION RE-OPENED (runs: {led['validation_runs']})** "
+                     f"— verdict is no longer a one-shot confirmation (D4).")
+        L.append("")
 
     # Stage 0
     L.append("## Stage 0 — Trust Gate")
@@ -2480,13 +2823,40 @@ def main():
                     help="run a single stage (0-4). Default: all stages in order.")
     ap.add_argument("--force", action="store_true",
                     help="run a stage even if the prior stage did not pass")
+    ap.add_argument("--phase", choices=["discovery", "confirm", "final"], default=None,
+                    help="staged review phase (SPEC §18 / SPEC_STAGED §2)")
+    ap.add_argument("--approve", metavar="TOKEN", default=None,
+                    help="sign the discovery approval token; writes approval.json "
+                         "and exits")
+    ap.add_argument("--burn-validation", metavar="REASON", default=None,
+                    help="explicitly re-open validation with a written reason. "
+                         "Appends to validation_ledger.jsonl and stamps everything "
+                         "downstream.")
     args = ap.parse_args()
+
+    # Mutual-exclusion (SPEC_STAGED §2.1).
+    if args.approve is not None and (args.phase is not None or args.stage is not None):
+        raise SystemExit("--approve is mutually exclusive with --phase and --stage")
+    if args.phase is not None and args.stage is not None:
+        raise SystemExit("--phase and --stage are mutually exclusive")
 
     run_dir = resolve_run_dir(args.run_dir, args.start, args.end)
     engine_dir = os.path.join(run_dir, "edge_engine")
     os.makedirs(engine_dir, exist_ok=True)
     print(f"Edge Engine — run: {os.path.basename(run_dir)}")
     print(f"  engine outputs -> {engine_dir}")
+
+    # ── --approve: sign the token and exit (SPEC_STAGED §5.2) ────────────────
+    if args.approve is not None:
+        res = approve(engine_dir, args.approve)
+        col = "\033[32m" if res.get("approved") else "\033[31m"
+        print(f"{col}{res['note']}\033[0m")
+        sys.exit(0 if res.get("approved") else 1)
+
+    # ── --phase: staged review dispatch (SPEC_STAGED §2.1) ───────────────────
+    if args.phase is not None:
+        _run_phase(args.phase, run_dir, engine_dir, args.force, args.burn_validation)
+        return
 
     stages = [args.stage] if args.stage is not None else [0, 1, 2, 3, 4]
     for st in stages:
@@ -2502,7 +2872,9 @@ def main():
                       "Stopping.\033[0m")
                 break
         elif st == 1:
-            res = stage1(run_dir, engine_dir, args.force)
+            res = stage1(run_dir, engine_dir, args.force, args.burn_validation)
+            if res.get("refused"):
+                break  # gate refused — the refusal block already printed
             _print_stage1(res)
         elif st == 2:
             res = stage2(run_dir, engine_dir, args.force)
@@ -2513,6 +2885,56 @@ def main():
         elif st == 4:
             res = stage4(run_dir, engine_dir, args.force)
             _print_stage4(res)
+
+
+def _run_phase(phase: str, run_dir: str, engine_dir: str, forced: bool,
+               burn_reason: Optional[str]) -> None:
+    """Staged-review dispatch (SPEC_STAGED §2.1). Each phase stops on completion."""
+    from backtest.diagnostics import edge_email
+
+    if phase == "discovery":
+        # Stage 0 fresh, then discovery-only preview (§4.1).
+        g = stage0(run_dir, engine_dir, forced)
+        _print_stage0(g)
+        if not g["pass"] and not forced:
+            print("\033[31mStage 0 FAILED — cannot stage a run that fails trust.\033[0m")
+            return
+        res = stage1_discovery(run_dir, engine_dir, forced)
+        _print_stage1_discovery(res)
+        edge_email.send_discovery(engine_dir, res)
+        return
+
+    if phase == "confirm":
+        # Require an existing Stage 0 with pass:true (do NOT re-run it — §2.1).
+        g = _read_json(_stage_path(engine_dir, 0))
+        if not (g and g.get("pass") is True):
+            raise SystemExit("--phase confirm requires a passed Stage 0 "
+                             "(run --phase discovery first)")
+        if g.get("scope") != "verdict":
+            raise SystemExit("staged review requires verdict scope (SPEC §15)")
+        res = stage1(run_dir, engine_dir, forced, burn_reason)
+        if res.get("refused"):
+            return  # gate refused — refusal block already printed
+        _print_stage1(res)
+        edge_email.send_confirm(engine_dir, res)
+        return
+
+    if phase == "final":
+        # Require a passed canonical Stage 1 (via _prior_passed), then 2,3,4.
+        for st in (2, 3, 4):
+            if not _prior_passed(engine_dir, st, forced):
+                print(f"\033[31mStage {st}: prior stage did not pass — stopping "
+                      f"(use --force to override).\033[0m")
+                return
+            if st == 2:
+                _print_stage2(stage2(run_dir, engine_dir, forced))
+            elif st == 3:
+                _print_stage3(stage3(run_dir, engine_dir, forced))
+            elif st == 4:
+                res = stage4(run_dir, engine_dir, forced)
+                _print_stage4(res)
+                edge_email.send_verdict(engine_dir, res)
+        return
 
 
 def _print_stage0(res: Dict[str, Any]) -> None:
@@ -2550,6 +2972,27 @@ def _print_stage1(res: Dict[str, Any]) -> None:
     if res.get("anatomy_promoted"):
         print("  anatomy-promoted (entry-fault markers): "
               + ", ".join(res["anatomy_promoted"]))
+
+
+def _print_stage1_discovery(res: Dict[str, Any]) -> None:
+    print(f"\n==== PHASE A — DISCOVERY (candidates only) ====  "
+          f"window={res['window']}  N={res['n_discovery']}")
+    print(f"  \033[33m{res['language_stamp']}\033[0m")
+    verdicts: Dict[str, int] = {}
+    for r in res["features"]:
+        verdicts[r["verdict"]] = verdicts.get(r["verdict"], 0) + 1
+    print("  verdicts: " + "  ".join(f"{k}={v}" for k, v in sorted(verdicts.items())))
+    if res["ranked_candidates"]:
+        print("  ranked candidates (by |Δdisc|)  — CANDIDATE, luck not ruled out:")
+        for r in res["ranked_candidates"][:15]:
+            print(f"    {r['feature']:24} {r['verdict']:16} "
+                  f"Δdisc={r['delta_disc']}  [{r['timing']}]")
+    else:
+        print("  no candidates — a valid null on discovery.")
+    print(f"\n  \033[1mAPPROVAL TOKEN: {res['token']}\033[0m")
+    print("  To confirm on validation (ONE shot):")
+    print(f"    python -m backtest.diagnostics.edge_engine --approve {res['token']}")
+    print("    python -m backtest.diagnostics.edge_engine --phase confirm")
 
 
 def _print_stage2(res: Dict[str, Any]) -> None:

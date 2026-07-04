@@ -49,8 +49,8 @@ Row build: h1_only_simulator.py:1141-1274. "src" = the line the value is read/wr
 | entry | :1157 | alert | verified | truth-chain audit (fills) |
 | sl_raw | :1161 | alert | verified | 2026-07-02 truth-chain audit |
 | sl_initial | :1162 | alert | verified | 2026-07-02 truth-chain audit |
-| tp1 / tp2 | :1163-1164 | alert | verified | 2026-07-02 truth-chain audit |
-| tp1_rr / tp2_rr | :1165-1166 | alert | verified | 2026-07-02 truth-chain audit |
+| tp1 / tp2 | :1163-1164 | alert (levels on 200-bar window) | **fixed** | T5: compute_phase2_levels now fed the last LIVE_P2_H1_BARS=200 closed bars via _closed_bars_at_alert (h1_only_simulator.py), matching live P2's fetch depth; was unbounded history (TP selection drifted with run start). Guard tests/test_p2_window_clamp.py PASS |
+| tp1_rr / tp2_rr | :1165-1166 | alert (levels on 200-bar window) | **fixed** | T5: same 200-bar clamp as tp1/tp2 (RR derived from the clamped-window TP pick) |
 | exit_price | :1167 | exit | verified | 2026-07-02 truth-chain audit |
 | exit_reason | :1168 | exit | verified | 2026-07-02 truth-chain audit |
 | r_realised | :1169 | exit | verified | 2026-07-02 truth-chain audit; P&L source of truth |
@@ -70,11 +70,11 @@ Row build: h1_only_simulator.py:1141-1274. "src" = the line the value is read/wr
 | pd_pct | :1200 (calc :1055-1064) | row build, entry vs frozen DR | verified | deterministic; None when DR invalid |
 | reversal_pct | :1204 (src :1073) | structure event (frozen) | verified | detection audit 3e: immutable; epoch-drift PARKED per spec (near-zero after Fix 1) |
 | reversed_from_extreme | :1205 (calc :1082-1086) | row build, derived | verified | deterministic; 0.0 ambiguity documented at :1077-1081 |
-| score | :1206 (calc :349-385) | simulate time, on alert-time ob_view | **fixed** | T1 view feeds run_scorecard alert-time bos_verdict/touches/fvg; closed-bar slice guard (:364) |
+| score | :1206 (calc :349-385) | simulate time, on alert-time ob_view (payload) | **fixed** | T1+T4 view feeds run_scorecard alert-time bos_verdict + payload touches_at_alert/fvg_at_alert; T5 clamps the scoring slice to LIVE_P2_H1_BARS=200 via _closed_bars_at_alert. Guards test_ob_alert_freeze.py + test_p2_window_clamp.py PASS |
 | structure_pts | :1207 | simulate time, on alert-time ob_view | **fixed** | smc_detector.py:2090 now reads the alert-time verdict via ob_view (T1) |
 | sweep_pts | :1208 | alert | out-of-scope | sweep rebuild workstream |
-| fvg_pts | :1209 | simulate time, on alert-time ob_view | **fixed** | Fix 3c/3d landed + T1 view routes fvg_at_alert into scoring |
-| freshness_pts | :1210 | simulate time, on alert-time ob_view | **fixed** | Fix 3a/3d landed + T1 view routes touches_at_alert into scoring |
+| fvg_pts | :1209 | simulate time, on alert-time ob_view (payload) | **fixed** | Fix 3c/3d + T4: fvg_at_alert now travels in the alert PAYLOAD (not the re-stamped dict), routed into scoring via ob_view. Guard test_ob_alert_freeze.py T4 cases PASS |
+| freshness_pts | :1210 | simulate time, on alert-time ob_view (payload) | **fixed** | Fix 3a/3d + T4: touches_at_alert now travels in the alert PAYLOAD, routed into scoring via ob_view. Guard test_ob_alert_freeze.py T4 cases PASS |
 | killzone_pts | :1211 | simulate time | verified | scored on immutable ob_timestamp via shared DST-aware ts_in_killzone (smc_detector.py:2238-2239); max 1 |
 | confluences_present | :1212 (calc :246-257) | simulate time | **fixed** | derived from breakdown, now computed on alert-time ob_view (T1 + Fix 3) |
 | session | :1213 (calc :82-90) | alert | verified | fixed UTC-hour buckets. CAVEAT: UTC-fixed, NOT DST-aware — session edges shift 1h half the year (killzone columns ARE DST-aware; known asymmetry) |
@@ -90,10 +90,10 @@ Row build: h1_only_simulator.py:1141-1274. "src" = the line the value is read/wr
 | atr_at_ob | :1242 (calc :1127) | OB build (frozen by design) | verified | formation ATR, frozen BY DESIGN (detection audit 3e) |
 | ob_body_ratio | h1_only_simulator.py:1144 (read) / :1286 (emit), stamped smc_radar.py:1117 | OB build (frozen by design) | verified | chosen OB candle's own body/range, walk-back loop smc_radar.py:883-901; range>0 guarded (is_valid_ob_candle already rejects range==0); None for legacy zones (pre-change); observe-only per DECISION_GUARDRAILS.md A3, no gate |
 | ob_walkback_depth | h1_only_simulator.py:1145 (read) / :1287 (emit), stamped smc_radar.py:1124 | OB build (frozen by design) | verified | oversized_count + undersized_count + doji_count at acceptance (smc_radar.py:878-901); 0 = first candidate passed; sums ALL three skip reasons so knob-sweep (MIN_OB_RANGE_ATR_MULT>0) is counted; None for legacy zones; observe-only per DECISION_GUARDRAILS.md A3, no gate |
-| fvg_present | :1243 | alert (fvg_at_alert) | **fixed** | Fix 3c/3d LANDED; guard tests/test_ob_alert_freeze.py PASS |
-| fvg_state | :1246 (helper) | row build | fixed (verify at review) | Fix 3d instructed re-pointing the helper; spot-check at Opus-work review |
-| fvg_mitigation | :1250 | alert (fvg_at_alert) | **fixed** | guard tests/test_ob_alert_freeze.py PASS (alert-time snapshot proven) |
-| ob_touches | :1255 | alert (touches_at_alert stamp) | **fixed** | Fix 3a/3d LANDED 2026-07-03; guard tests/test_ob_alert_freeze.py (mutation-after-alert test) PASS. New meaning: touches between structural event and ALERT |
+| fvg_present | :1243 | alert (fvg_at_alert, payload) | **fixed** | Fix 3c/3d + T4: stamped at the yield as a PAYLOAD scalar (survives re-fire re-stamping of the shared dict); ob_view overwrites both fvg + fvg_at_alert keys. Guard test_ob_alert_freeze.py T4 cases PASS |
+| fvg_state | :1246 (helper) | row build (payload fvg via ob_view) | **fixed** | Fix 3d + T4: helper classifies against the payload fvg_at_alert carried on ob_view; guard test_ob_alert_freeze.py PASS |
+| fvg_mitigation | :1250 | alert (fvg_at_alert, payload) | **fixed** | Fix 3c/3d + T4: payload scalar via ob_view. Guard test_ob_alert_freeze.py T4 cases PASS |
+| ob_touches | :1255 | alert (touches_at_alert, payload) | **fixed** | Fix 3a/3d + T4: stamped at the yield as a PAYLOAD scalar (survives re-fire re-stamping); ob_view overwrites both touches + touches_at_alert keys. Guard test_ob_alert_freeze.py T4 cases PASS. Meaning: touches between structural event and ALERT |
 | sweep_present | :1256 | frozen snapshot | out-of-scope | sweep rebuild workstream |
 | ob_session | :1263 (calc :108-112) | OB build ts | verified | deterministic from immutable ob_timestamp; UTC-fixed caveat as session |
 | fill_session | :1264 (calc :115-121) | fill | verified | CAVEAT: never_filled rows fall back to ALERT hour (:118-120) — population mixes fill-time and alert-time labels; never_filled rows are audit-only |

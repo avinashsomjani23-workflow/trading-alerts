@@ -103,33 +103,113 @@ def test_legacy_ob_fallback():
 # alert must read the payload scalar, not the drifted dict.
 
 def _ob_view(alert):
-    """Mirror of simulate_h1_only_dual's alert-time view construction."""
+    """Mirror of simulate_h1_only_dual's alert-time view construction
+    (TRUTH_FIXES_SPEC T1 + _2 T4). The alert PAYLOAD is the one source:
+    bos_verdict, touches_at_alert, fvg_at_alert all travel as payload scalars.
+    Both key spellings in the view are overwritten (touches / touches_at_alert,
+    fvg / fvg_at_alert) because _build_row PREFERS the *_at_alert keys, which
+    dict(ob_live) copied over already-re-stamped."""
     ob_live = alert["ob"]
     view = dict(ob_live)
     if alert.get("bos_verdict") is not None:
         view["bos_verdict"] = alert["bos_verdict"]
-    if ob_live.get("touches_at_alert") is not None:
-        view["touches"] = ob_live["touches_at_alert"]
-    if ob_live.get("fvg_at_alert") is not None:
-        view["fvg"] = ob_live["fvg_at_alert"]
+    _touches = alert.get("touches_at_alert", ob_live.get("touches_at_alert"))
+    if _touches is not None:
+        view["touches"] = _touches
+        view["touches_at_alert"] = _touches
+    _fvg = alert.get("fvg_at_alert") or ob_live.get("fvg_at_alert")
+    if _fvg is not None:
+        view["fvg"] = _fvg
+        view["fvg_at_alert"] = _fvg
     return view
 
 
 def test_bos_verdict_from_payload():
     alert = {
         "bos_verdict": "holding",                  # frozen at THIS fire
+        "touches_at_alert": 1,                     # T4 payload scalar (this fire)
+        "fvg_at_alert": {"exists": True},          # T4 payload scalar (this fire)
         "ob": {"bos_verdict": "fading",            # re-stamped by a LATER fire
-               "touches_at_alert": 1, "touches": 3,
-               "fvg_at_alert": {"exists": True}, "fvg": {"exists": False}},
+               "touches_at_alert": 3, "touches": 3,
+               "fvg_at_alert": {"exists": False}, "fvg": {"exists": False}},
     }
     v = _ob_view(alert)
     if (v["bos_verdict"] == "holding" and v["touches"] == 1
             and v["fvg"] == {"exists": True}):
         _ok("ob_view: payload verdict 'holding' beats re-stamped 'fading'; "
-            "touches/fvg snapshot applied")
+            "touches/fvg payload snapshot applied")
     else:
         _bad(f"ob_view read drifted state: {v.get('bos_verdict')!r}, "
              f"touches={v.get('touches')}, fvg={v.get('fvg')}")
+
+
+# --- T4) touches/fvg: alert payload beats the re-stamped *_at_alert dict keys -
+# TRUTH_FIXES_SPEC_2 T4: a re-fire re-stamps ob["touches_at_alert"] /
+# ob["fvg_at_alert"] on the SHARED dict; the traded first-fire row must read the
+# PAYLOAD scalars, not the drifted dict keys. This is the class T1 left behind.
+# _build_row PREFERS the *_at_alert keys, so the view must overwrite BOTH the
+# live keys AND the *_at_alert keys — this test drives the full row expressions
+# through the built view to prove the payload wins end to end.
+
+def test_touches_fvg_from_payload_not_restamped_dict():
+    # First fire: 1 touch, fresh FVG. A later fire re-stamped the shared dict's
+    # touches_at_alert -> 4 and fvg_at_alert -> discharged. Payload holds first.
+    alert = {
+        "bos_verdict": "holding",
+        "touches_at_alert": 1,
+        "fvg_at_alert": {"exists": True, "mitigation": "pristine"},
+        "ob": {
+            "touches_at_alert": 4,                       # re-stamped by re-fire
+            "touches": 6,                                # live, walked on further
+            "fvg_at_alert": {"exists": False, "mitigation": "full"},  # re-stamped
+            "fvg": {"exists": False, "mitigation": "full"},
+        },
+    }
+    v = _ob_view(alert)
+    # Now push the view through _build_row's actual row-source expressions.
+    row_touches = _row_touches(v)
+    row_present = _row_fvg_present(v)
+    row_mit = _row_fvg_mitigation(v)
+    if row_touches == 1 and row_present is True and row_mit == "pristine":
+        _ok("row sources read the payload first-fire snapshot (1/True/pristine), "
+            "not the re-stamped dict keys (4/False/full)")
+    else:
+        _bad(f"re-stamped *_at_alert dict keys poisoned the row: "
+             f"touches={row_touches}, present={row_present}, mit={row_mit!r} "
+             f"(want 1/True/'pristine')")
+
+
+def test_touches_fvg_legacy_payload_missing():
+    # Old alert with no T4 payload: fall back to the ob's *_at_alert dict keys.
+    alert = {"ob": {"touches_at_alert": 2, "touches": 5,
+                    "fvg_at_alert": {"exists": True, "mitigation": "partial"},
+                    "fvg": {"exists": False}}}
+    v = _ob_view(alert)
+    if (_row_touches(v) == 2 and _row_fvg_present(v) is True
+            and _row_fvg_mitigation(v) == "partial"):
+        _ok("legacy alert (no T4 payload) falls back to ob *_at_alert keys")
+    else:
+        _bad("T4 legacy fallback broken")
+
+
+def test_source_carries_touches_fvg_payload():
+    """Tripwire: the replay yield must carry touches_at_alert / fvg_at_alert as
+    PAYLOAD scalars, and the simulator view must read them from the payload.
+    Reverting either re-opens the T4 class."""
+    yield_src = (_ROOT / "backtest" / "replay_engine.py").read_text(encoding="utf-8")
+    sim_src = (_ROOT / "backtest" / "h1_only_simulator.py").read_text(encoding="utf-8")
+    # payload must be built at the yield next to the T1 bos_verdict scalar
+    y_ok = ('"touches_at_alert": int(ob.get("touches") or 0)' in yield_src
+            and '"fvg_at_alert": dict(ob.get("fvg") or {})' in yield_src)
+    # simulator view must prefer the payload (alert.get) over the dict stamp
+    v_ok = ('alert.get("touches_at_alert"' in sim_src
+            and 'alert.get("fvg_at_alert")' in sim_src
+            and 'ob_view["touches_at_alert"] = _touches' in sim_src
+            and 'ob_view["fvg_at_alert"] = _fvg' in sim_src)
+    if y_ok and v_ok:
+        _ok("replay yields touches/fvg payload scalars; view reads payload first")
+    else:
+        _bad(f"T4 payload plumbing missing — yield_ok={y_ok}, view_ok={v_ok}")
 
 
 def test_bos_verdict_legacy_payload_missing():
@@ -202,6 +282,10 @@ def main():
     test_bos_verdict_from_payload()
     test_bos_verdict_legacy_payload_missing()
     test_source_builds_view_before_scoring()
+    print("\n== T4: touches/fvg alert payload beats re-stamped dict ==")
+    test_touches_fvg_from_payload_not_restamped_dict()
+    test_touches_fvg_legacy_payload_missing()
+    test_source_carries_touches_fvg_payload()
     print("\n== A3: walk-back geometry frozen at formation ==")
     test_walkback_fields_read_directly_no_snapshot()
     test_walkback_fields_stamped_once_in_radar()

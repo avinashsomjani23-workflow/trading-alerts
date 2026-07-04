@@ -96,6 +96,8 @@ output dir: backtest/results/<run_id>/edge_engine/
   later, unseen regimes" — interleaved years leak regime information both ways.
 - Per-quarter stats: a quarter counts only if it has ≥ 30 trades in the subset being measured;
   report `pos_quarters / counted_quarters`.
+- Stages 1–3 consume discovery+validation as specified; **ACTIVATION of Stage 1's validation
+  half is gated by the §18 approval token** — see §18 (staged human review).
 
 ### 3.3 Books
 
@@ -675,7 +677,68 @@ runs of the same years. This is a bug, not a feature.
   is where the ship/don't-ship judgment happens over that file (handoff §7: script computes,
   human decides).
 
+## 18. STAGED HUMAN REVIEW (discovery → approve → confirm → holdout)
+
+Full implementer spec: `EDGE_ENGINE_STAGED_REVIEW_SPEC.md`. Summary:
+
+**The three phases** (verdict scope only; exploratory/short-range is exempt — see below):
+
+- **PHASE A — `--phase discovery`.** Runs Stage 0, then a **discovery-only** preview of Stage 1
+  (`stage1_discovery`). The validation frame is NEVER built in this function, so it cannot leak.
+  Output = **CANDIDATES** (verdicts: `candidate`, `candidate_thin`, `noise`, `thin` — the words
+  `survivor` / `hypothesis` / `inverted` are impossible here). Prints + emails an **approval
+  token** and stops. The human reads for as long as they want.
+- **PHASE B — `--phase confirm`.** Canonical Stage 1, unchanged math (discovery + real validation,
+  same `_apply_survivor_criteria`, same FDR), behind the **approval gate**. Output = **SURVIVORS**
+  plus a **died-in-validation table** (candidates that did not repeat — the system working, not a
+  bug). Logs the validation spend to the ledger and stamps it.
+- **PHASE C — `--phase final`.** Stages 2, 3, 4. Holdout opens once, exactly as today.
+
+**The token mechanism (the lock).** `token = sha256(discovery_sha + code_sha)[:12]`, where
+`discovery_sha` is the sha256 of the token-less `stage1_discovery.json` and `code_sha` is the
+sha256 of `edge_engine.py` on disk. Every discovery run mints a fresh token bound to that exact
+output + that exact engine code. `--approve <token>` recomputes and, on a match, writes
+`approval.json` (`consumed: false`). The gate at the top of canonical `stage1()` passes iff
+`approval.json` exists, all three hashes match a fresh recompute, and `consumed == false`; on
+pass it sets `consumed: true` (single-use). The refusal happens **before** the validation frame is
+built.
+
+**The ledger + stamps (the loud part).** Every validation activation appends one line to
+`validation_ledger.jsonl` (append-only in code, committed by the Action → git preserves every
+spend even if the file is later hand-edited). `stage1()` and `stage4()` gain `validation_runs: N`
+and `validation_burned: bool` (true iff any line is a burn OR N > 1). When burned, `stage4()`
+prepends a caveat and the report header shows a RE-OPENED block; confirm/final email subjects are
+prefixed `[VALIDATION RE-RUN N]`.
+
+**Re-opening.** `--force` does **not** bypass the gate. The only sanctioned re-open is
+`--burn-validation "<non-empty reason>"`, which is by construction loud and permanently stamped.
+
+**Honest limitation (§5.6).** The trader owns the machine: they can delete `approval.json` / the
+ledger or edit the code. The mechanism makes silent burning **impossible to do accidentally and
+impossible to hide from git history** — it does not make it physically impossible. Same trust
+model as C5 (holdout) and D4 today.
+
+**Exploratory / short-range exemption.** When Stage 0 stamps `scope: exploratory` (a split below
+`MIN_SPLIT_N`), NONE of this applies: no gate, no token, no phases (`--phase` errors out). §15's
+hypothesis language stays its own thing. The legacy full-run loop works exactly as before.
+
+Structural guard: `tests/test_staged_review.py` (kills the class "validation spent without a ledger
+line / stamp"). No new `trades.csv` columns; no live / simulator / exit changes.
+
 ## 17. CHANGE LOG
+
+- **2026-07-04 — Staged human review (discovery → approve → confirm → holdout).** New §18. Splits
+  the one-shot run into three human-gated phases so the trader is accustomed to the discovery data
+  BEFORE validation runs, and a full participant before holdout. Discovery is read freely;
+  validation activates only behind a single-use approval token and every spend is stamped forever
+  (`validation_runs`, `validation_burned`) in an append-only ledger + git history. **Canonical
+  Stage 1–4 math is untouched** — the only additions are the gate, the ledger, and the stamp
+  fields; a passed gate yields byte-identical stage outputs (plus stamps). Why: trader
+  participation + catching bugs before Stage 2 consumes survivors, without re-opening the
+  iterate-until-it-passes door (D4). New files: `edge_email.py`, `.github/workflows/edge_engine.yml`,
+  `tests/test_staged_review.py`. Guardrail impact: enforces D4; a **D5 draft** ("validation is
+  opened by token, once") is prepared but NOT committed to `DECISION_GUARDRAILS.md` in this sitting
+  (per that file's own change procedure — a rule may not be added in the sitting it first gates).
 
 - **2026-07-04 — Gates-off proof: fraction → absolute count.** Check 3 (§4.3) changed from
   "≥10% of eligible filled rows below the live floor" to "≥`MIN_BELOW_FLOOR_N` (50) below the

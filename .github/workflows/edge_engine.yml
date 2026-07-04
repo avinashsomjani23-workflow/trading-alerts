@@ -1,0 +1,175 @@
+name: Edge Engine (Staged Review)
+
+# THREE BUTTONS, one per staged phase (SPEC §18 / SPEC_STAGED §10). ENGINE-ONLY,
+# always — this workflow NEVER launches a backtest; it reads a committed run
+# folder. The §16.2 FULL-RUN button stays future work.
+#
+#   discovery  — Stage 0 + discovery-only preview. Prints + emails the approval
+#                token. Reads nothing from validation.
+#   confirm    — --approve <token>  then  --phase confirm. Requires the token
+#                (fails fast if empty). Spends validation ONCE; stamped forever.
+#   final      — Stages 2,3,4. Opens the holdout once.
+#
+# Ordering rule (§10): engine step fails => no email, no commit. Engine succeeds
+# => commit attempt, then email regardless of push outcome. Email is deferred
+# out of the engine (EDGE_EMAIL_DEFER=1) and sent by a dedicated step after the
+# commit so it can reference the committed file and survive a failed push.
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: "Staged review phase"
+        required: true
+        type: choice
+        options:
+          - discovery
+          - confirm
+          - final
+      run_id:
+        description: "Run folder under backtest/results/ (empty = latest-wins)"
+        required: false
+        default: ""
+      approve_token:
+        description: "Approval token (REQUIRED for confirm; ignored otherwise)"
+        required: false
+        default: ""
+
+jobs:
+  edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    concurrency:
+      group: edge-engine-commit
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Pre-flight remote check (read-only, never a canary push)
+        run: |
+          if ! git ls-remote --exit-code origin main >/dev/null 2>&1; then
+            echo "::error::Cannot reach origin/main with this token."
+            exit 1
+          fi
+          echo "origin/main reachable."
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy scipy
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Validate inputs
+        env:
+          PHASE: ${{ inputs.phase }}
+          TOKEN: ${{ inputs.approve_token }}
+        run: |
+          if [ "$PHASE" = "confirm" ] && [ -z "$TOKEN" ]; then
+            echo "::error::phase=confirm requires a non-empty approve_token."
+            exit 1
+          fi
+
+      - name: Resolve engine dir
+        id: resolve
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          if [ -n "$RUN_ID" ]; then
+            RD="backtest/results/$RUN_ID"
+          else
+            # latest-wins: newest by name under results/ that holds a trades.csv
+            RD=$(ls -d backtest/results/*/ 2>/dev/null | sort | while read d; do
+                   [ -f "${d}trades.csv" ] && echo "${d%/}"; done | tail -n1)
+          fi
+          if [ -z "$RD" ] || [ ! -d "$RD" ]; then
+            echo "::error::could not resolve a run dir (run_id='$RUN_ID')."
+            exit 1
+          fi
+          echo "run_dir=$RD" >> "$GITHUB_OUTPUT"
+          echo "engine_dir=$RD/edge_engine" >> "$GITHUB_OUTPUT"
+          echo "Resolved run dir: $RD"
+
+      - name: Run edge engine phase
+        # continue-on-error stays false: a failed ENGINE step skips both the
+        # commit and the email (the precise §10 rule).
+        env:
+          EDGE_EMAIL_DEFER: "1"          # email is sent by the post-commit step
+          PHASE: ${{ inputs.phase }}
+          TOKEN: ${{ inputs.approve_token }}
+          RUN_DIR: ${{ steps.resolve.outputs.run_dir }}
+        run: |
+          set -e
+          BASE="python -m backtest.diagnostics.edge_engine --run-dir $RUN_DIR"
+          if [ "$PHASE" = "discovery" ]; then
+            $BASE --phase discovery
+          elif [ "$PHASE" = "confirm" ]; then
+            $BASE --approve "$TOKEN"
+            $BASE --phase confirm
+          else
+            $BASE --phase final
+          fi
+
+      - name: Commit engine outputs to main
+        id: commit
+        if: success()
+        env:
+          RUN_DIR: ${{ steps.resolve.outputs.run_dir }}
+          PHASE: ${{ inputs.phase }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          # results/ is gitignored — force-add just this run's edge_engine dir.
+          git add -f "$RUN_DIR/edge_engine/" || true
+          if git diff --cached --quiet; then
+            echo "No engine output to commit."
+            exit 0
+          fi
+          LABEL="${RUN_ID:-$(basename "$RUN_DIR")}"
+          git commit -m "Edge engine $PHASE: $LABEL [skip ci]"
+          git stash push --include-untracked -m edge-throwaway || true
+          pushed=0
+          for i in 1 2 3 4 5; do
+            if git pull --rebase origin main; then
+              if git push origin HEAD:main; then pushed=1; break; fi
+              echo "push rejected on attempt $i — retrying ..."
+            else
+              echo "rebase failed on attempt $i — aborting ..."
+              git rebase --abort || true
+            fi
+            sleep $((RANDOM % 5 + 2))
+          done
+          if [ "$pushed" != "1" ]; then
+            echo "::error::engine output committed locally but PUSH FAILED after 5 tries."
+            # Do NOT exit non-zero here: the email must still fire (§10).
+          fi
+
+      - name: Send phase email (fires even if the push failed)
+        if: success()
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          BACKTEST_EMAIL: ${{ secrets.BACKTEST_EMAIL }}
+          ENGINE_DIR: ${{ steps.resolve.outputs.engine_dir }}
+          PHASE: ${{ inputs.phase }}
+        run: |
+          python -m backtest.diagnostics.edge_email \
+            --engine-dir "$ENGINE_DIR" --phase "$PHASE"
+
+      - name: Upload engine outputs (belt & braces)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-engine-${{ inputs.phase }}
+          path: ${{ steps.resolve.outputs.engine_dir }}
+          retention-days: 30

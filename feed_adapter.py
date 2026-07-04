@@ -69,6 +69,11 @@ def fetch_h1(config_symbol, outputsize=200, retries=2):
     Returns a UTC-DatetimeIndexed OHLCV DataFrame (newest last), or None on persistent
     failure. outputsize is the number of most-recent hourly bars (max 5000 on free tier);
     200 comfortably covers the ~30-day H1 window the live engines need.
+
+    The live caller (Phase2_Alert_Engine.fetch_with_retry) passes
+    smc_detector.LIVE_P2_H1_BARS (=200) explicitly so the backtest can clamp its
+    scorecard/levels input to the SAME window — see TRUTH_FIXES_SPEC_2 T5. This
+    literal default is a fallback only; the parity source of truth is that constant.
     """
     return _fetch(config_symbol, "1h", outputsize, retries)
 
