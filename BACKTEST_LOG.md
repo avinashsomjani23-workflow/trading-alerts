@@ -1,13 +1,13 @@
 # Backtest Registry
 
-*Last updated: 2026-07-04 10:46 UTC*
+*Last updated: 2026-07-04 10:52 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **42** of 42
-- Total filled trades across all runs: **26121**
+- Runs completed: **43** of 43
+- Total filled trades across all runs: **26719**
 - Average expectancy across runs: **-0.12R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
@@ -146,6 +146,56 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | 5-6 | 92 | 25.3% | -0.28R |
 | 6-7 | 70 | 25.9% | -0.19R |
 | 7+ | 113 | 24.2% | -0.27R |
+
+---
+
+### h1only_20080102_20080630
+
+**Unclassified** | 2008-01-02 to 2008-06-30 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 598 (of 846 rows) |
+| Win rate | 28.2% |
+| Expectancy | -0.16R |
+| Max drawdown | +97.94R |
+| Longest losing streak | 12 trades |
+| Proximal fill rate | 70.7% |
+| Score verdict | WEAK — partial relationship |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| EURUSD | 73 | 33.3% | -0.03R |
+| USDJPY | 70 | 34.6% | -0.05R |
+| AUDUSD | 58 | 33.3% | -0.12R |
+| USDCAD | 71 | 32.7% | -0.12R |
+| EURJPY | 55 | 25.0% | -0.18R |
+| USDCHF | 84 | 26.3% | -0.14R |
+| GBPUSD | 71 | 27.4% | -0.18R |
+| NZDUSD | 39 | 17.6% | -0.44R |
+| GOLD | 77 | 21.2% | -0.32R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 103 | 36.5% | +0.06R |
+| London | 292 | 26.3% | -0.18R |
+| NY | 204 | 27.1% | -0.21R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 0-2 | 1 | 0.0% | -1.00R |
+| 2-3 | 1 | 0.0% | -1.00R |
+| 3-4 | 20 | 40.0% | +0.04R |
+| 4-5 | 77 | 33.3% | -0.11R |
+| 5-6 | 158 | 20.8% | -0.38R |
+| 6-7 | 132 | 28.1% | -0.12R |
+| 7+ | 209 | 31.2% | -0.06R |
 
 ---
 
