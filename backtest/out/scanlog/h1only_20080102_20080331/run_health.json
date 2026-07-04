@@ -3,38 +3,51 @@
   "overall": "PASS",
   "exit_code": 0,
   "warnings_present": true,
-  "headline_pnl_usd": -1976.0,
-  "live_proximal_headline_usd": -1976.0,
+  "headline_pnl_usd": -2721.25,
+  "live_proximal_headline_usd": -2721.25,
   "study_fifty_pct_headline_usd": 0.0,
-  "content_hash": "aae45d1f12828533a48d00ed414827b26121cb399d3a6c939dde166b44e2ab2c",
+  "content_hash": "95c49b3b076b08080081e2b7098e1105b81a74d32a60419ae9b9bbd5b2262bef",
   "condition_counts": {
-    "YF_CLAMP": 3
+    "YF_CLAMP": 3,
+    "WARMUP_SKIP": 450
   },
   "event_counts": {
-    "trade_fill": 127,
-    "trade_exit": 189
+    "ob_seen": 216,
+    "alert": 370,
+    "re_arm": 209,
+    "ob_mitigated": 165,
+    "ob_aged_out": 40,
+    "trade_exit": 176,
+    "trade_fill": 115
   },
-  "outcome_counts": {},
+  "outcome_counts": {
+    "WARMUP_SKIP": 450,
+    "ALERT": 297,
+    "RE_ARM_WAIT": 2144,
+    "OUT_OF_RANGE": 470,
+    "NO_ZONE": 1045
+  },
   "gates": [
     {
       "id": "G1",
       "description": "Sum pnl_usd == Sum r_realised*risk, and equals reporting headline",
       "threshold": "rel_tol 1e-09",
       "observed": {
-        "headline_usd": -1976.0,
-        "reported": -1976.0,
+        "headline_usd": -2721.25,
+        "reported": -2721.25,
         "row_mismatches": 0
       },
       "verdict": "PASS"
     },
     {
       "id": "G2",
-      "description": "scan records == expected (pair x walk bars); zero HEARTBEAT_GAP",
-      "threshold": "exact",
+      "description": "scan records == expected (pair x walk bars); zero HEARTBEAT_GAP; never vacuous (0 declared bars with trades present = blind run)",
+      "threshold": "exact, non-vacuous",
       "observed": {
-        "expected": 0,
-        "actual": 0,
-        "missing_by_pair": {}
+        "expected": 4406,
+        "actual": 4406,
+        "missing_by_pair": {},
+        "vacuous": false
       },
       "verdict": "PASS"
     },
@@ -67,8 +80,8 @@
       "description": "headline recomputed from r_realised only; tp1/tp2 excluded",
       "threshold": "independent recompute",
       "observed": {
-        "realised_headline": -1976.0,
-        "tp2_headline_for_contrast": -2149.5
+        "realised_headline": -2721.25,
+        "tp2_headline_for_contrast": -2331.25
       },
       "verdict": "PASS"
     },
@@ -76,14 +89,18 @@
       "id": "G7",
       "description": "content hash of scan_log + events recorded for re-run compare",
       "threshold": "recorded",
-      "observed": "aae45d1f12828533a48d00ed414827b26121cb399d3a6c939dde166b44e2ab2c",
+      "observed": "95c49b3b076b08080081e2b7098e1105b81a74d32a60419ae9b9bbd5b2262bef",
       "verdict": "PASS"
     },
     {
       "id": "G8",
       "description": "NAN_ATR_SKIP <= 1% post-warmup per pair (WARN >1%, FAIL >5%)",
       "threshold": "<=1% warn, >5% fail",
-      "observed": {},
+      "observed": {
+        "EURUSD": 0.0,
+        "USDJPY": 0.0,
+        "GOLD": 0.0
+      },
       "verdict": "PASS"
     },
     {
@@ -91,6 +108,16 @@
       "description": "every record validated against SCHEMA.md (ts/tz/outcome)",
       "threshold": "0 schema FAILs",
       "observed": 0,
+      "verdict": "PASS"
+    },
+    {
+      "id": "G10",
+      "description": "per-trade metrics physically possible (no fake excursions)",
+      "threshold": "0 violations",
+      "observed": {
+        "violations": 0,
+        "sample": []
+      },
       "verdict": "PASS"
     }
   ]
