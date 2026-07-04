@@ -87,6 +87,12 @@ QUARTER_SIGN_FRAC = 0.60
 RIDGE_LAMBDAS = [0.01, 0.1, 1, 10, 100]
 VIF_MAX = 5.0
 SCORE_FLOOR_LIVE = 4   # the live score floor (SPEC §4.3 gates-off proof)
+MIN_BELOW_FLOOR_N = 50 # gates-off proof: >= this many eligible filled rows must be
+                       # BELOW the live floor (SPEC §4.3). Proves the run is gates-OFF
+                       # (the sub-floor tail is present at all), not a fraction of the
+                       # population — scores are NOT proportional to performance, so a
+                       # fraction test punished a detector that simply emits few sub-floor
+                       # setups. Absolute presence is the honest on/off proof.
 MIN_SPLIT_N = 500      # a split must hold >= this many eligible trades (SPEC §4.4)
 CLUSTER_MIN_N = 300    # fallback-cluster minimum discovery N (SPEC §7.4)
 
@@ -478,15 +484,19 @@ def stage0(run_dir: str, engine_dir: str, forced: bool) -> Dict[str, Any]:
     df = load_population(run_dir)
     filled = df[df["fill_ts"].notna()].copy()
 
-    # ── Check 3: gates-off proof (>= 10% of eligible filled below live floor) ─
+    # ── Check 3: gates-off proof (>= MIN_BELOW_FLOOR_N eligible filled below floor) ─
+    # Proves the run was executed with the score gate OFF: a gated run holds ZERO
+    # sub-floor trades. We test PRESENCE of the sub-floor tail (absolute count), not
+    # its SHARE — scores are not proportional to performance, so a fraction threshold
+    # wrongly failed detectors that simply emit few sub-floor setups (SPEC §4.3).
     if "score" in filled.columns and len(filled):
         below = int((filled["score"] < SCORE_FLOOR_LIVE).sum())
         frac = below / max(len(filled), 1)
-        _check("gates_off_proof", frac >= 0.10,
+        _check("gates_off_proof", below >= MIN_BELOW_FLOOR_N,
                below_floor=below, n=len(filled), frac=round(frac, 4),
-               floor=SCORE_FLOOR_LIVE,
+               floor=SCORE_FLOOR_LIVE, min_below=MIN_BELOW_FLOOR_N,
                note=("input is a GATED run — engine is blind to half the answer"
-                     if frac < 0.10 else "gates confirmed off"))
+                     if below < MIN_BELOW_FLOOR_N else "gates confirmed off"))
     else:
         _check("gates_off_proof", False, note="no score column / no filled rows")
 

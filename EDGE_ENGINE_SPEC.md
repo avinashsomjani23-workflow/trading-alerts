@@ -125,9 +125,14 @@ output dir: backtest/results/<run_id>/edge_engine/
    with the list (means the logging workstream isn't done — stop, don't improvise).
 2. **Ledger trust:** hardcode the §5.1 feature list (it encodes TRUTH_LEDGER verified/fixed
    status as of 2026-07-03). `sweep_present` must NOT appear in it (audit-only).
-3. **Gates-off proof:** ≥ 10% of eligible filled rows have `score` below the live floor
-   (floor read from the same constant the run used; default 4). Fewer → the run was censored
-   → FAIL "input is a gated run, engine is blind to half the answer".
+3. **Gates-off proof:** ≥ `MIN_BELOW_FLOOR_N` (default 50) eligible filled rows have `score`
+   below the live floor (floor read from the same constant the run used; default 4). This
+   tests PRESENCE of the sub-floor tail, not its share: a gated run holds ZERO sub-floor
+   trades, so an absolute count proves the gate was off. A *fraction* threshold (the old
+   ≥10%) wrongly failed detectors that emit few sub-floor setups — scores are not
+   proportional to performance, so the size of the tail is not a trust signal, only its
+   existence is. Fewer than the floor → the run was censored → FAIL "input is a gated run,
+   engine is blind to half the answer". (Changed 2026-07-04 — see §17 change log.)
 4. **Population census:** N by pair × year, per book, per split; war count. Emitted to the gate
    file. FAIL if any of DISCOVERY/VALIDATION/HOLDOUT has < 500 eligible trades total.
 5. **Baseline exit self-check (the exit_lab pattern):** replay
@@ -488,7 +493,8 @@ output dir: backtest/results/<run_id>/edge_engine/
 - SPLITS as in §3.2 · MIN_BUCKET_N=150 · MIN_CELL_N=100 · MIN_QUARTER_N=30 ·
   MIN_EFFECT_R=0.10 · FDR_Q=0.10 · EV_SPEARMAN_FLOOR=0.10 · QUARTER_SIGN_FRAC=0.60 ·
   BOOT_N=10000 · SEED=42 · RIDGE_LAMBDAS=[0.01,0.1,1,10,100] · VIF_MAX=5.0 ·
-  SCORE_FLOOR_LIVE=4 · MIN_SPLIT_N=500 · CLUSTER_MIN_N=300 · WF_FOLDS as §8.2.
+  SCORE_FLOOR_LIVE=4 · MIN_BELOW_FLOOR_N=50 · MIN_SPLIT_N=500 · CLUSTER_MIN_N=300 ·
+  WF_FOLDS as §8.2.
 
 ## 11. WHAT THE ENGINE MUST NOT DO
 
@@ -668,3 +674,17 @@ runs of the same years. This is a bug, not a feature.
 - **Division of labour:** email carries the summary, the committed file carries the detail, chat
   is where the ship/don't-ship judgment happens over that file (handoff §7: script computes,
   human decides).
+
+## 17. CHANGE LOG
+
+- **2026-07-04 — Gates-off proof: fraction → absolute count.** Check 3 (§4.3) changed from
+  "≥10% of eligible filled rows below the live floor" to "≥`MIN_BELOW_FLOOR_N` (50) below the
+  floor". Reason: the check exists to prove the run was executed gates-OFF (a gated run holds
+  ZERO sub-floor trades). It was mis-specified as a *share* of the population. Scores are not
+  proportional to performance, so the SIZE of the sub-floor tail is not a trust signal — only
+  its EXISTENCE is. The 2010-2025 baseline run (`h1only_20100101_20251231`) has 2,023 sub-floor
+  setups (6.7% overall, 8% of filled) — genuinely gates-off, but failed the old 10% fraction.
+  Constant `MIN_BELOW_FLOOR_N=50` added to §10. Approved by the trader, who chose to make the
+  fix in the same sitting the check was blocking (an explicit override of the "next-sitting"
+  timing rule in DECISION_GUARDRAILS E6; the fix direction — presence not share — was decided
+  before re-running).
