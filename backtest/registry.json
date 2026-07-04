@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-04T10:56:07.484705+00:00",
+  "updated_at": "2026-07-04T11:01:00.399194+00:00",
   "runs": [
     {
       "run_id": "h1only_20080102_20080215",
@@ -290,45 +290,45 @@
         "score_buckets": [
           {
             "score_bucket": "2-3",
-            "trades": 2,
-            "win_rate_pct": 50.0,
-            "expectancy_r": 0.1
+            "trades": 1,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
           },
           {
             "score_bucket": "3-4",
-            "trades": 25,
-            "win_rate_pct": 52.6,
-            "expectancy_r": 0.411
+            "trades": 13,
+            "win_rate_pct": 55.6,
+            "expectancy_r": 0.333
           },
           {
             "score_bucket": "4-5",
-            "trades": 47,
-            "win_rate_pct": 33.3,
-            "expectancy_r": -0.175
+            "trades": 41,
+            "win_rate_pct": 32.4,
+            "expectancy_r": -0.18
           },
           {
             "score_bucket": "5-6",
-            "trades": 93,
-            "win_rate_pct": 29.9,
-            "expectancy_r": -0.207
+            "trades": 94,
+            "win_rate_pct": 24.7,
+            "expectancy_r": -0.314
           },
           {
             "score_bucket": "6-7",
-            "trades": 70,
-            "win_rate_pct": 25.9,
-            "expectancy_r": -0.229
+            "trades": 71,
+            "win_rate_pct": 25.4,
+            "expectancy_r": -0.206
           },
           {
             "score_bucket": "7+",
-            "trades": 96,
-            "win_rate_pct": 17.9,
-            "expectancy_r": -0.444
+            "trades": 113,
+            "win_rate_pct": 27.3,
+            "expectancy_r": -0.243
           }
         ],
-        "score_verdict": "BROKEN \u2014 score does not predict outcome"
+        "score_verdict": "WEAK \u2014 partial relationship"
       },
       "notes": "",
-      "recorded_at": "2026-07-04T10:56:07.480734+00:00"
+      "recorded_at": "2026-07-04T11:01:00.393877+00:00"
     },
     {
       "run_id": "h1only_20080102_20080630",

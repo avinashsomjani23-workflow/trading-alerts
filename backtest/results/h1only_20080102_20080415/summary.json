@@ -18,7 +18,7 @@
       "EURJPY",
       "BTCUSD"
     ],
-    "generated_utc": "2026-07-04T10:55:28.041124+00:00",
+    "generated_utc": "2026-07-04T11:00:24.679713+00:00",
     "news_coverage": {
       "ff": false
     },
@@ -224,39 +224,39 @@
   "score_buckets_proximal_realised": [
     {
       "score_bucket": "2-3",
-      "trades": 2,
-      "win_rate_pct": 50.0,
-      "expectancy_r": 0.1
+      "trades": 1,
+      "win_rate_pct": 0.0,
+      "expectancy_r": -1.0
     },
     {
       "score_bucket": "3-4",
-      "trades": 25,
-      "win_rate_pct": 52.6,
-      "expectancy_r": 0.411
+      "trades": 13,
+      "win_rate_pct": 55.6,
+      "expectancy_r": 0.333
     },
     {
       "score_bucket": "4-5",
-      "trades": 47,
-      "win_rate_pct": 33.3,
-      "expectancy_r": -0.175
+      "trades": 41,
+      "win_rate_pct": 32.4,
+      "expectancy_r": -0.18
     },
     {
       "score_bucket": "5-6",
-      "trades": 93,
-      "win_rate_pct": 29.9,
-      "expectancy_r": -0.207
+      "trades": 94,
+      "win_rate_pct": 24.7,
+      "expectancy_r": -0.314
     },
     {
       "score_bucket": "6-7",
-      "trades": 70,
-      "win_rate_pct": 25.9,
-      "expectancy_r": -0.229
+      "trades": 71,
+      "win_rate_pct": 25.4,
+      "expectancy_r": -0.206
     },
     {
       "score_bucket": "7+",
-      "trades": 96,
-      "win_rate_pct": 17.9,
-      "expectancy_r": -0.444
+      "trades": 113,
+      "win_rate_pct": 27.3,
+      "expectancy_r": -0.243
     }
   ],
   "news_blocked_trade_rows": 0,
@@ -343,14 +343,14 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2008-03-18T19:00:00+00:00",
-      "score": 5.0,
+      "score": 8.0,
       "exit_reason": "tp1",
       "would_have_r": 1.912
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2008-03-20T00:00:00+00:00",
-      "score": 7.0,
+      "score": 6.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -371,7 +371,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2008-03-25T20:00:00+00:00",
-      "score": 4.0,
+      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": 0.0
     },
@@ -385,7 +385,7 @@
     {
       "pair": "USDJPY",
       "alert_ts": "2008-02-04T03:00:00+00:00",
-      "score": 6.5,
+      "score": 7.0,
       "exit_reason": "tp1",
       "would_have_r": 2.0
     },
@@ -455,7 +455,7 @@
     {
       "pair": "USDJPY",
       "alert_ts": "2008-03-24T00:00:00+00:00",
-      "score": 8.0,
+      "score": 6.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -504,7 +504,7 @@
     {
       "pair": "NZDUSD",
       "alert_ts": "2008-01-17T23:00:00+00:00",
-      "score": 4.0,
+      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": 0.0
     },
@@ -532,7 +532,7 @@
     {
       "pair": "NZDUSD",
       "alert_ts": "2008-01-23T20:00:00+00:00",
-      "score": 7.0,
+      "score": 6.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -553,7 +553,7 @@
     {
       "pair": "NZDUSD",
       "alert_ts": "2008-02-26T21:00:00+00:00",
-      "score": 5.0,
+      "score": 7.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -567,21 +567,21 @@
     {
       "pair": "NZDUSD",
       "alert_ts": "2008-03-04T19:00:00+00:00",
-      "score": 4.0,
+      "score": 7.0,
       "exit_reason": "tp1",
       "would_have_r": 1.536
     },
     {
       "pair": "NZDUSD",
       "alert_ts": "2008-03-12T21:00:00+00:00",
-      "score": 3.0,
+      "score": 6.0,
       "exit_reason": "tp1",
       "would_have_r": 1.324
     },
     {
       "pair": "NZDUSD",
       "alert_ts": "2008-03-17T02:00:00+00:00",
-      "score": 5.0,
+      "score": 6.0,
       "exit_reason": "tp1",
       "would_have_r": 1.442
     },
@@ -595,7 +595,7 @@
     {
       "pair": "NZDUSD",
       "alert_ts": "2008-03-20T19:00:00+00:00",
-      "score": 6.0,
+      "score": 7.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -616,14 +616,14 @@
     {
       "pair": "USDCHF",
       "alert_ts": "2008-01-23T03:00:00+00:00",
-      "score": 5.0,
+      "score": 6.0,
       "exit_reason": "tp1",
       "would_have_r": 1.4
     },
     {
       "pair": "USDCHF",
       "alert_ts": "2008-01-30T19:00:00+00:00",
-      "score": 9.0,
+      "score": 7.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -644,7 +644,7 @@
     {
       "pair": "USDCHF",
       "alert_ts": "2008-03-13T03:00:00+00:00",
-      "score": 3.0,
+      "score": 5.0,
       "exit_reason": "tp1",
       "would_have_r": 2.2
     },
@@ -665,7 +665,7 @@
     {
       "pair": "USDCHF",
       "alert_ts": "2008-04-08T01:00:00+00:00",
-      "score": 4.0,
+      "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": 0.0
     },
@@ -693,7 +693,7 @@
     {
       "pair": "GOLD",
       "alert_ts": "2008-01-30T19:00:00+00:00",
-      "score": 3.0,
+      "score": 4.0,
       "exit_reason": "sl",
       "would_have_r": 0.0
     },
@@ -714,7 +714,7 @@
     {
       "pair": "GOLD",
       "alert_ts": "2008-03-20T00:00:00+00:00",
-      "score": 3.5,
+      "score": 4.0,
       "exit_reason": "tp1",
       "would_have_r": 2.121
     },
@@ -728,7 +728,7 @@
     {
       "pair": "GOLD",
       "alert_ts": "2008-04-06T23:00:00+00:00",
-      "score": 7.2,
+      "score": 8.2,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -742,7 +742,7 @@
     {
       "pair": "GBPUSD",
       "alert_ts": "2008-01-10T20:00:00+00:00",
-      "score": 3.0,
+      "score": 7.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -777,14 +777,14 @@
     {
       "pair": "GBPUSD",
       "alert_ts": "2008-02-26T19:00:00+00:00",
-      "score": 8.0,
+      "score": 9.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
     {
       "pair": "GBPUSD",
       "alert_ts": "2008-03-17T20:00:00+00:00",
-      "score": 6.0,
+      "score": 7.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -819,7 +819,7 @@
     {
       "pair": "GBPUSD",
       "alert_ts": "2008-04-03T00:00:00+00:00",
-      "score": 7.0,
+      "score": 10.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -847,7 +847,7 @@
     {
       "pair": "AUDUSD",
       "alert_ts": "2008-01-15T21:00:00+00:00",
-      "score": 7.0,
+      "score": 8.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -861,7 +861,7 @@
     {
       "pair": "AUDUSD",
       "alert_ts": "2008-01-17T20:00:00+00:00",
-      "score": 7.0,
+      "score": 8.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -889,7 +889,7 @@
     {
       "pair": "AUDUSD",
       "alert_ts": "2008-01-29T03:00:00+00:00",
-      "score": 6.0,
+      "score": 8.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -903,7 +903,7 @@
     {
       "pair": "AUDUSD",
       "alert_ts": "2008-02-11T00:00:00+00:00",
-      "score": 7.0,
+      "score": 8.0,
       "exit_reason": "sl",
       "would_have_r": 0.0
     },
@@ -917,7 +917,7 @@
     {
       "pair": "AUDUSD",
       "alert_ts": "2008-02-18T22:00:00+00:00",
-      "score": 7.0,
+      "score": 5.0,
       "exit_reason": "tp1",
       "would_have_r": 1.385
     },
@@ -1001,7 +1001,7 @@
     {
       "pair": "USDCAD",
       "alert_ts": "2008-03-07T20:00:00+00:00",
-      "score": 4.0,
+      "score": 7.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -1057,14 +1057,14 @@
     {
       "pair": "EURJPY",
       "alert_ts": "2008-02-05T01:00:00+00:00",
-      "score": 5.0,
+      "score": 4.5,
       "exit_reason": "tp1",
       "would_have_r": 1.462
     },
     {
       "pair": "EURJPY",
       "alert_ts": "2008-02-05T23:00:00+00:00",
-      "score": 4.5,
+      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": 0.0
     },
@@ -1085,7 +1085,7 @@
     {
       "pair": "EURJPY",
       "alert_ts": "2008-02-21T03:00:00+00:00",
-      "score": 4.9,
+      "score": 6.4,
       "exit_reason": "friday_flat",
       "would_have_r": 0.016
     },
@@ -1099,7 +1099,7 @@
     {
       "pair": "EURJPY",
       "alert_ts": "2008-03-12T21:00:00+00:00",
-      "score": 5.0,
+      "score": 4.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -1120,7 +1120,7 @@
     {
       "pair": "EURJPY",
       "alert_ts": "2008-04-10T01:00:00+00:00",
-      "score": 4.5,
+      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": 0.0
     },

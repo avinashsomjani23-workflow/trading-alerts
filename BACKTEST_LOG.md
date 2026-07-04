@@ -1,6 +1,6 @@
 # Backtest Registry
 
-*Last updated: 2026-07-04 10:56 UTC*
+*Last updated: 2026-07-04 11:01 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
@@ -112,7 +112,7 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | Max drawdown | +78.71R |
 | Longest losing streak | 12 trades |
 | Proximal fill rate | 70.1% |
-| Score verdict | BROKEN — score does not predict outcome |
+| Score verdict | WEAK — partial relationship |
 
 **By pair (proximal entry, TP2 exit):**
 
@@ -140,12 +140,12 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 | Score bucket | Trades | Win rate | Expectancy |
 |-------------|--------|----------|------------|
-| 2-3 | 2 | 50.0% | +0.10R |
-| 3-4 | 25 | 52.6% | +0.41R |
-| 4-5 | 47 | 33.3% | -0.17R |
-| 5-6 | 93 | 29.9% | -0.21R |
-| 6-7 | 70 | 25.9% | -0.23R |
-| 7+ | 96 | 17.9% | -0.44R |
+| 2-3 | 1 | 0.0% | -1.00R |
+| 3-4 | 13 | 55.6% | +0.33R |
+| 4-5 | 41 | 32.4% | -0.18R |
+| 5-6 | 94 | 24.7% | -0.31R |
+| 6-7 | 71 | 25.4% | -0.21R |
+| 7+ | 113 | 27.3% | -0.24R |
 
 ---
 
