@@ -1,13 +1,13 @@
 # Backtest Registry
 
-*Last updated: 2026-07-04 10:07 UTC*
+*Last updated: 2026-07-04 10:13 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **41** of 41
-- Total filled trades across all runs: **25868**
+- Runs completed: **42** of 42
+- Total filled trades across all runs: **26125**
 - Average expectancy across runs: **-0.12R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
@@ -196,6 +196,55 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | 5-6 | 323 | 33.6% | -0.10R |
 | 6-7 | 262 | 33.6% | -0.09R |
 | 7+ | 331 | 29.4% | -0.21R |
+
+---
+
+### h1only_20080215_20080430
+
+**Unclassified** | 2008-02-15 to 2008-04-30 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 257 (of 381 rows) |
+| Win rate | 22.4% |
+| Expectancy | -0.37R |
+| Max drawdown | +99.21R |
+| Longest losing streak | 18 trades |
+| Proximal fill rate | 67.5% |
+| Score verdict | BROKEN — score does not predict outcome |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| USDJPY | 25 | 33.3% | -0.11R |
+| EURUSD | 29 | 26.1% | -0.19R |
+| EURJPY | 23 | 21.1% | -0.38R |
+| AUDUSD | 29 | 29.6% | -0.32R |
+| USDCAD | 29 | 18.2% | -0.40R |
+| USDCHF | 35 | 23.3% | -0.38R |
+| NZDUSD | 20 | 6.2% | -0.68R |
+| GOLD | 34 | 20.0% | -0.41R |
+| GBPUSD | 33 | 20.7% | -0.48R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 41 | 30.3% | -0.12R |
+| London | 122 | 22.3% | -0.38R |
+| NY | 96 | 20.0% | -0.44R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 2-3 | 2 | 50.0% | +0.10R |
+| 3-4 | 20 | 28.6% | -0.15R |
+| 4-5 | 41 | 41.2% | -0.06R |
+| 5-6 | 58 | 21.3% | -0.38R |
+| 6-7 | 48 | 22.0% | -0.41R |
+| 7+ | 88 | 13.2% | -0.54R |
 
 ---
 
