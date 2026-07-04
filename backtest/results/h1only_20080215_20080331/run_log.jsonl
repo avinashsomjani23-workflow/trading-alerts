@@ -96,3 +96,5 @@
 {"ts": "2026-07-04T20:37:23.499121+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "EURJPY", "trades": 31, "news_blocked": 0, "ist_blocked": 6, "killzone_dropped_alerts": 16}
 {"ts": "2026-07-04T20:37:49.644314+00:00", "level": "info", "event": "report_written", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20080215_20080331", "total_alerts": 558, "total_trades": 269}
 {"ts": "2026-07-04T20:37:49.660474+00:00", "level": "info", "event": "exit_lab_sink_persisted", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20080215_20080331\\exit_lab_sink.jsonl", "rows": 1440}
+{"ts": "2026-07-04T20:37:50.922347+00:00", "level": "info", "event": "logs_committed_local_only", "run_id": "h1only_20080215_20080331", "sha": "2ae4b987"}
+{"ts": "2026-07-04T20:37:50.926233+00:00", "level": "info", "event": "run_end", "wall_s": 99.6, "active_s": 99.6, "idle_s": 0.0, "max_gap_s": 71.0, "wall_min": 1.66, "active_min": 1.66}
