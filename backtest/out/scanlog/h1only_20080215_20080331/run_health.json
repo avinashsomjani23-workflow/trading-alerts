@@ -6,7 +6,7 @@
   "headline_pnl_usd": -13567.5,
   "live_proximal_headline_usd": -13567.5,
   "study_fifty_pct_headline_usd": 0.0,
-  "content_hash": "20c864239260c1b887ab68ad7229515cc3ababa34c88446a516ae0c52339efdc",
+  "content_hash": "8a888a5906e97aff98d52f030a26786f8f6810d832cec3b0468e301b6d5c516f",
   "condition_counts": {},
   "event_counts": {
     "ob_seen": 345,
@@ -85,7 +85,7 @@
       "id": "G7",
       "description": "content hash of scan_log + events recorded for re-run compare",
       "threshold": "recorded",
-      "observed": "20c864239260c1b887ab68ad7229515cc3ababa34c88446a516ae0c52339efdc",
+      "observed": "8a888a5906e97aff98d52f030a26786f8f6810d832cec3b0468e301b6d5c516f",
       "verdict": "PASS"
     },
     {
