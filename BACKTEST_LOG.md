@@ -1,14 +1,14 @@
 # Backtest Registry
 
-*Last updated: 2026-07-04 20:13 UTC*
+*Last updated: 2026-07-04 20:24 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
-- Runs completed: **43** of 43
-- Total filled trades across all runs: **26709**
-- Average expectancy across runs: **-0.12R**
+- Runs completed: **44** of 44
+- Total filled trades across all runs: **26854**
+- Average expectancy across runs: **-0.13R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
 - **Group 3 (Live-era):** 1 runs, 9 trades, avg expectancy -0.20R
@@ -246,6 +246,55 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 | 5-6 | 323 | 33.6% | -0.10R |
 | 6-7 | 262 | 33.6% | -0.09R |
 | 7+ | 331 | 29.4% | -0.21R |
+
+---
+
+### h1only_20080215_20080331
+
+**Unclassified** | 2008-02-15 to 2008-03-31 | Regime: `bau`
+
+| Metric | Value |
+|--------|-------|
+| Filled trades | 145 (of 214 rows) |
+| Win rate | 22.3% |
+| Expectancy | -0.37R |
+| Max drawdown | +49.70R |
+| Longest losing streak | 11 trades |
+| Proximal fill rate | 67.8% |
+| Score verdict | WEAK — partial relationship |
+
+**By pair (proximal entry, TP2 exit):**
+
+| Pair | Trades | Win rate | Expectancy |
+|------|--------|----------|------------|
+| EURUSD | 12 | 40.0% | +0.19R |
+| USDJPY | 17 | 36.4% | -0.04R |
+| USDCHF | 18 | 33.3% | -0.14R |
+| AUDUSD | 17 | 31.2% | -0.29R |
+| NZDUSD | 10 | 11.1% | -0.75R |
+| GBPUSD | 18 | 25.0% | -0.46R |
+| EURJPY | 19 | 13.3% | -0.51R |
+| USDCAD | 16 | 7.7% | -0.62R |
+| GOLD | 18 | 6.2% | -0.73R |
+
+**By session:**
+
+| Session | Trades | Win rate | Expectancy |
+|---------|--------|----------|------------|
+| Asia | 17 | 45.5% | +0.34R |
+| London | 70 | 19.0% | -0.39R |
+| NY | 61 | 24.0% | -0.39R |
+
+**Score vs outcome:**
+
+| Score bucket | Trades | Win rate | Expectancy |
+|-------------|--------|----------|------------|
+| 2-3 | 1 | 0.0% | -1.00R |
+| 3-4 | 6 | 33.3% | -0.13R |
+| 4-5 | 20 | 37.5% | -0.25R |
+| 5-6 | 36 | 16.7% | -0.47R |
+| 6-7 | 27 | 29.2% | -0.32R |
+| 7+ | 55 | 17.0% | -0.39R |
 
 ---
 
