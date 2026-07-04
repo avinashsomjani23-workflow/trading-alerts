@@ -10,7 +10,7 @@
   "coverage": {
     "state": "down",
     "flip_unconfirmed": false,
-    "ranging": true,
+    "ranging": false,
     "n_events": 16,
     "n_choch": 5,
     "n_range_bos": 0,
@@ -4822,7 +4822,7 @@
   ],
   "golden_output": {
     "state": "down",
-    "ranging": true,
+    "ranging": false,
     "prior_trend": null,
     "choch_pending_dir": null,
     "flip_unconfirmed": false,
@@ -4839,7 +4839,7 @@
       "ts": "2016-02-07T21:00:00+00:00",
       "tier": "Confirm"
     },
-    "label": "H1 trend DOWN (ranging)",
+    "label": "H1 trend DOWN",
     "events": [
       {
         "type": "BOS",

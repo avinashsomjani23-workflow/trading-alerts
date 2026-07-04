@@ -596,6 +596,53 @@ def replay_pair(
                              direction=direction, alert_seq=ob_state["fire_count"],
                              trend=_bt_trend, trend_alignment=_bt_align)
             _bt_fired = True
+
+            # S2 (STRUCTURE_SIGNALS_SPEC) — snapshot the v2 structure state AS OF
+            # THIS ALERT as payload scalars. structure_v2 rides `walls`; read it
+            # here at fire time (the OB dict is shared + re-stamped on re-fire, so
+            # these must NOT live on `ob`). None only when structure_v2 is missing
+            # (degraded walls). Pending dir up/down -> bullish/bearish (same map as
+            # smc_detector.py:695).
+            _sv2 = walls.get("structure_v2") or {}
+            _pend_dir_raw = _sv2.get("choch_pending_dir")
+            _pend_dir_map = {"up": "bullish", "down": "bearish"}
+            if _sv2:
+                _structure_ranging_at_alert = bool(_sv2.get("ranging"))
+                _flip_pending_at_alert = bool(_sv2.get("flip_unconfirmed"))
+                _flip_pending_dir_at_alert = _pend_dir_map.get(_pend_dir_raw)
+            else:
+                _structure_ranging_at_alert = None
+                _flip_pending_at_alert = None
+                _flip_pending_dir_at_alert = None
+
+            # S3 (STRUCTURE_SIGNALS_SPEC) — leg extreme reached SINCE OB formation,
+            # measured over closed bars in the point-in-time slice with ts >= the
+            # OB timestamp. The retrace % itself is derived in _build_row (which
+            # knows the placed entry price); here we only carry the a-priori extreme
+            # as a payload scalar. `leg_extreme_clipped` = True when the OB predates
+            # the slice window start (extreme may be understated).
+            _leg_extreme_at_alert = None
+            _leg_extreme_clipped = None
+            _ob_ts_raw = ob.get("ob_timestamp")
+            if _ob_ts_raw is not None and len(h1_slice) > 0:
+                try:
+                    _ob_ts = pd.Timestamp(_ob_ts_raw)
+                    if _ob_ts.tzinfo is None:
+                        _ob_ts = _ob_ts.tz_localize("UTC")
+                    _slice_start = h1_slice.index[0]
+                    _leg_extreme_clipped = bool(_ob_ts < _slice_start)
+                    _leg_bars = h1_slice[h1_slice.index >= _ob_ts]
+                    if len(_leg_bars) > 0:
+                        if direction == "bullish":
+                            _leg_extreme_at_alert = float(_leg_bars["High"].max())
+                        else:
+                            _leg_extreme_at_alert = float(_leg_bars["Low"].min())
+                except Exception:
+                    # Never crash the walk for a leg-extreme measurement — leave
+                    # None (retrace becomes None downstream, honestly).
+                    _leg_extreme_at_alert = None
+                    _leg_extreme_clipped = None
+
             yield {
                 "kind": "alert",
                 "pair": pair_name,
@@ -608,6 +655,17 @@ def replay_pair(
                 "zone_id": zone_id,
                 "h1_trend": _bt_trend,
                 "trend_alignment": _bt_align,
+                # S2 (STRUCTURE_SIGNALS_SPEC): v2 structure state snapshotted at
+                # THIS fire as payload scalars (T1 pattern — never stamped on the
+                # shared ob dict, which the next re-fire would overwrite).
+                "structure_ranging_at_alert": _structure_ranging_at_alert,
+                "flip_pending_at_alert": _flip_pending_at_alert,
+                "flip_pending_dir_at_alert": _flip_pending_dir_at_alert,
+                # S3 (STRUCTURE_SIGNALS_SPEC): a-priori leg extreme since OB
+                # formation, payload scalar (same re-fire rationale). retrace_pct
+                # is derived in _build_row from this + the placed entry.
+                "leg_extreme_at_alert": _leg_extreme_at_alert,
+                "leg_extreme_clipped": _leg_extreme_clipped,
                 # T1 (TRUTH_FIXES_SPEC): the OB dict is shared and re-stamped on
                 # every re-fire; rows are built after the whole walk. Carry the
                 # ALERT-TIME verdict as a payload scalar so a multi-fire zone's

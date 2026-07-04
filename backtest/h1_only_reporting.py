@@ -1266,6 +1266,14 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # from aggregates (live system would have suppressed it).
         "ist_blocked", "alert_utc_hour",
         "h1_trend", "trend_alignment",
+        # Structure signals (STRUCTURE_SIGNALS_SPEC) — edge-discovery inputs, no
+        # gate/email change yet. S2 ranging/pending-flip state at alert; S3 leg
+        # retracement (extreme + clipped are audit support, retrace is screened);
+        # S4 broken-wall PD flags at OB formation. None per each column's rule.
+        "structure_ranging_at_alert", "flip_pending_at_alert",
+        "flip_pending_dir_at_alert",
+        "leg_extreme_at_alert", "leg_retrace_pct_at_alert", "leg_extreme_clipped",
+        "dr_ceiling_broken_at_ob", "dr_floor_broken_at_ob",
     ]
     df = pd.DataFrame(trades)
     cols_present = [c for c in front_cols if c in df.columns]

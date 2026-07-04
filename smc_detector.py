@@ -412,7 +412,15 @@ def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None, wal
                 "tentative":   tentative,
                 "chop_flag":   chop_flag,
                 "last_event_type": last_event_type,
-                "source":      source
+                "source":      source,
+                # S4 (STRUCTURE_SIGNALS_SPEC): per-wall broken flags, additive.
+                # `tentative` above already ORs these two; expose them separately
+                # so the OB snapshot can log which wall is riding the live extreme
+                # (a long cares about the floor, a short the ceiling). No existing
+                # key changes; no consumer changes. From compute_pd_position's
+                # *_is_placeholder (h4_live: h4_range ceiling_broken/floor_broken).
+                "ceiling_broken": bool(pd_info.get("ceiling_is_placeholder", False)),
+                "floor_broken":   bool(pd_info.get("floor_is_placeholder", False)),
             }
         # Walls present but degenerate / incomplete — return geometry-only block.
         return {
@@ -447,7 +455,11 @@ def get_dealing_range(ob, df_h1, h1_atr, pair_conf=None, current_price=None, wal
         "tentative": False,
         "chop_flag": False,
         "last_event_type": None,
-        "source": f"legacy_window_{lookback}h"
+        "source": f"legacy_window_{lookback}h",
+        # S4: the legacy fixed-lookback range has no broken-wall concept — the
+        # flags are unknown here, not False. None keeps the logged column honest.
+        "ceiling_broken": None,
+        "floor_broken":   None,
     }
 # PHASE 1 ONLY — extracts swing highs/lows for context tagging in smc_radar.py.
 # Default lookback was changed 4->3 in commit 8300876 (2026-05-18).

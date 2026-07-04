@@ -974,6 +974,11 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     defended_swing = None  # raw leg extreme until next HL confirms
                     leg_extreme_high = hi_i; leg_extreme_low = lo_i
                     leg_start = ci
+                    # S1: a trend flip starts a fresh leg — the ranging counter
+                    # belongs to the OLD trend and must not carry across the flip,
+                    # or the new (up) trend is born labelled "ranging" until its
+                    # first HL confirms. Re-seed to 0 alongside the leg extremes.
+                    trend_dir_swings_since_extend = 0
                     impulse_start_ts = choch_impulse_ts or ts_now
                     rearm_block_dir = _DOWN
                     bos_break_high = None; bos_break_low = None
@@ -1022,6 +1027,10 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     defended_swing = None  # raw leg extreme until next LH confirms
                     leg_extreme_high = hi_i; leg_extreme_low = lo_i
                     leg_start = ci
+                    # S1: fresh leg on the flip — reset the ranging counter (see the
+                    # matching UP-flip branch). The stale OLD-trend count must not
+                    # brand the new (down) trend "ranging" before its first LH.
+                    trend_dir_swings_since_extend = 0
                     impulse_start_ts = choch_impulse_ts or ts_now
                     rearm_block_dir = _UP
                     bos_break_high = None; bos_break_low = None
@@ -1274,6 +1283,13 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         if _trace is not None:
             _trace.append(state)
 
+    # `ranging` = trend defined AND >= STRUCTURE_RANGING_STALE consecutive
+    # counter-trend swings have confirmed WITHOUT a trend extension. The counter
+    # (`trend_dir_swings_since_extend`) starts at 0 and is reset to 0 on: birth,
+    # a trend extension (new HL/LH `defended` reset), a continuation BOS, and
+    # (S1) a Confirmation-BOS trend flip. It increments only on a confirmed
+    # counter-trend swing that did not extend the trend. Informational only —
+    # never gates detection, alerts, or trades.
     ranging = (state in (_UP, _DOWN)
                and trend_dir_swings_since_extend >= STRUCTURE_RANGING_STALE)
 

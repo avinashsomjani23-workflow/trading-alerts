@@ -1058,9 +1058,15 @@ def _simulate_single_entry(
 #     low, proximal_line, distal_line, median_leg_body, ob_body, h1_atr
 #     (formation ATR, frozen by design), reversal_pct, broken_was_wall,
 #     bos_sequence_count, last_choch_idx.
-#   FROZEN-BY-DESIGN, LIVE DOES THE SAME: dealing_range, sweep_observed.
+#   FROZEN-BY-DESIGN, LIVE DOES THE SAME: dealing_range (incl. S4
+#     dr_ceiling_broken_at_ob / dr_floor_broken_at_ob, read off the frozen
+#     snapshot), sweep_observed.
 #   STAMPED AT ALERT (correct source): bos_verdict, touches_at_alert +
-#     fvg_at_alert, h1_trend / trend_alignment / alert_bar_*.
+#     fvg_at_alert, h1_trend / trend_alignment / alert_bar_*, and the S2/S3
+#     structure signals (structure_ranging_at_alert, flip_pending_at_alert,
+#     flip_pending_dir_at_alert, leg_extreme_at_alert, leg_extreme_clipped —
+#     all payload scalars from the replay yield; leg_retrace_pct_at_alert is
+#     derived here from leg_extreme_at_alert + the placed entry).
 #   MUTABLE STATE, fixed by this spec: touches/status (3a), break_quality (3b),
 #     fvg (3c/3d).
 # RULE: mutable state is stamped `*_at_alert` at the replay yield and read from
@@ -1114,6 +1120,21 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
             pd_pct = None
     else:
         pd_pct = None
+    # ── S4 (STRUCTURE_SIGNALS_SPEC): broken-wall PD flags at OB formation ───────
+    # Was the dealing-range ceiling / floor riding the LIVE extreme (broken, not a
+    # confirmed swing) when this OB formed? Read straight off the FROZEN
+    # ob["dealing_range"] snapshot (immutable after OB build, same bucket as the
+    # existing dealing_range fields — no *_at_alert needed). get_dealing_range now
+    # carries these additive keys on its valid branch; None when the snapshot is
+    # invalid / legacy (the flag was never resolvable).
+    if isinstance(dr, dict) and dr.get("valid"):
+        _dr_ceiling_broken = dr.get("ceiling_broken")
+        _dr_floor_broken = dr.get("floor_broken")
+        dr_ceiling_broken_at_ob = bool(_dr_ceiling_broken) if _dr_ceiling_broken is not None else None
+        dr_floor_broken_at_ob = bool(_dr_floor_broken) if _dr_floor_broken is not None else None
+    else:
+        dr_ceiling_broken_at_ob = None
+        dr_floor_broken_at_ob = None
     # reversal_pct: the CHoCH-origin-in-extreme flag, computed ONCE in
     # dealing_range.compute_structure (_reversed_from_premium / _discount) and
     # carried on the OB by smc_radar. 1.0 = the swing the CHoCH reversed FROM sat
@@ -1182,6 +1203,37 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     # comparable raw; the engine normalizes it within-pair (vs the pair's typical
     # ATR) for a regime read. Logged because it's free and frozen.
     atr_at_ob = round(float(_h1_atr), 6) if _h1_atr else None
+
+    # ── S3 (STRUCTURE_SIGNALS_SPEC): leg retracement at alert ──────────────────
+    # How much of the displacement leg price has given back by the time the OB
+    # fills. Stamped at alert: `leg_extreme_at_alert` (the a-priori extreme since
+    # OB formation) is a payload scalar frozen at the replay yield; `entry` is the
+    # limit the simulator placed. impulse_start_price is the leg origin (frozen at
+    # OB build). retrace_pct is derived HERE because only _build_row knows `entry`.
+    #   bullish OB: (leg_extreme - entry) / (leg_extreme - impulse_start) * 100
+    #   bearish OB: (entry - leg_extreme) / (impulse_start - leg_extreme) * 100
+    # None (never a crash) when: extreme not stamped, impulse_start missing, or a
+    # degenerate denominator (extreme not beyond the leg origin). >100 is VALID
+    # (price ran past the leg origin) and is NOT clamped. `leg_extreme_clipped`
+    # (payload) flags an OB older than the point-in-time slice — extreme may be
+    # understated; the flag keeps the column honest.
+    leg_extreme_at_alert = alert.get("leg_extreme_at_alert")
+    leg_extreme_clipped = alert.get("leg_extreme_clipped")
+    leg_retrace_pct_at_alert = None
+    if leg_extreme_at_alert is not None and _isp is not None:
+        try:
+            _lex = float(leg_extreme_at_alert)
+            _leg_origin = float(_isp)
+            if direction == "bullish":
+                _denom = _lex - _leg_origin
+                if _denom > 0:
+                    leg_retrace_pct_at_alert = round((_lex - entry) / _denom * 100, 1)
+            else:
+                _denom = _leg_origin - _lex
+                if _denom > 0:
+                    leg_retrace_pct_at_alert = round((entry - _lex) / _denom * 100, 1)
+        except (TypeError, ValueError):
+            leg_retrace_pct_at_alert = None
 
     pnl_usd = round(r_realised * risk_usd, 2)
 
@@ -1326,6 +1378,26 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "killzone_alignment":  _killzone_alignment(ob, fill_ts, alert_ts, pair_conf),
         "h1_trend":            alert.get("h1_trend"),
         "trend_alignment":     alert.get("trend_alignment"),
+        # ── STRUCTURE SIGNALS (STRUCTURE_SIGNALS_SPEC) ─────────────────────────
+        # S2: v2 structure state at THIS alert (payload scalars, frozen at the
+        # replay yield — never re-read off the shared ob dict). None only when
+        # structure_v2 was missing (degraded walls).
+        "structure_ranging_at_alert":   alert.get("structure_ranging_at_alert"),
+        "flip_pending_at_alert":        alert.get("flip_pending_at_alert"),
+        "flip_pending_dir_at_alert":    alert.get("flip_pending_dir_at_alert"),
+        # S3: leg retracement at alert. leg_extreme_at_alert + leg_extreme_clipped
+        # are payload scalars (a-priori extreme since OB formation); retrace_pct is
+        # derived above from those + the placed entry. Support columns (extreme /
+        # clipped) exist for audit + derivation; only retrace_pct is a screen
+        # candidate. None per the edge cases documented at the computation.
+        "leg_extreme_at_alert":         leg_extreme_at_alert,
+        "leg_retrace_pct_at_alert":     leg_retrace_pct_at_alert,
+        "leg_extreme_clipped":          leg_extreme_clipped,
+        # S4: broken-wall PD flags read off the FROZEN ob["dealing_range"]
+        # snapshot (immutable after OB build). None when the snapshot is
+        # invalid / legacy.
+        "dr_ceiling_broken_at_ob":      dr_ceiling_broken_at_ob,
+        "dr_floor_broken_at_ob":        dr_floor_broken_at_ob,
         # Setup badge (email banner) — see build comment above. None = no
         # named pattern matched. kind is 'premium' or 'caution'; None otherwise.
         "setup_badge":         setup_badge,

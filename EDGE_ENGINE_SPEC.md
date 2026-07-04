@@ -519,6 +519,8 @@ surviving confluence — that IS the "best recipe from the data points".
 | group | columns | disposition |
 |---|---|---|
 | Features | the §5.1 lists (37 fields: FVG size, break distance+displacement, OB age/freshness/range, OB walk-back geometry (`ob_body_ratio`/`ob_walkback_depth`, A3), fill timing, PD, sessions, killzones, structure tags, …) | Stage 1 screen → Stage 2 model → Stage 4 gate |
+| Structure signals (STRUCTURE_SIGNALS_SPEC) | `structure_ranging_at_alert`, `flip_pending_at_alert`, `flip_pending_dir_at_alert`, `leg_retrace_pct_at_alert`, `dr_ceiling_broken_at_ob`, `dr_floor_broken_at_ob` | Stage 1 screen candidates (added to §5.1 manifest, edge_engine.py). No email/gate change until Stage 1 validates (SIGNAL_CANDIDATES rule) |
+| Structure-signal support | `leg_extreme_at_alert`, `leg_extreme_clipped` | audit / derivation support for `leg_retrace_pct_at_alert`; NOT screened (kept out of the §5.1 manifest) |
 | Outcomes | `r_realised`, `pnl_usd`, `exit_reason/price/ts`, `mfe_r`/`mae_r`, `bars_to_exit/tp1/tp2`, `sl_bar_was_sweep`, `sl_swept_then_tp1`, `be_arm_bar_touched_entry`, `r_if_exit_*`, `sl_collision` | targets + diagnostics (§5.5 anatomy, §7.6 time table); NEVER entry features (look-ahead) |
 | Trade geometry | `entry`, `sl_raw/sl_initial`, `tp1/tp2`, `tp1_rr/tp2_rr` | define R and the replay; not features (§5.1 tp_rr note) |
 | Identity / bookkeeping | `setup_id`, `alert_ts/alert_bar_ts/bos_timestamp/ob_timestamp`, `model`, `entry_zone` | keys; time fields enter as derived features (`session`, `ob_age_h1_bars`, …) |

@@ -126,6 +126,9 @@ CONTINUOUS_FEATURES = [
     "ob_range_atr", "atr_at_ob", "pd_pct", "reversal_pct", "ob_age_h1_bars",
     "ob_to_fill_hours", "bars_break_to_pullback", "bos_sequence_count",
     "score", "alert_utc_hour", "ob_body_ratio",
+    # STRUCTURE_SIGNALS_SPEC S3 screen candidate (support cols leg_extreme_at_alert /
+    # leg_extreme_clipped are NOT screened — they are audit/derivation support).
+    "leg_retrace_pct_at_alert",
 ]
 
 CATEGORICAL_FEATURES = [
@@ -134,6 +137,9 @@ CATEGORICAL_FEATURES = [
     "session", "ob_session", "fill_session", "killzone_alignment",
     "ob_in_killzone", "fill_in_killzone", "trend_alignment", "setup_badge",
     "ob_touches", "bias", "pair", "ob_walkback_depth",
+    # STRUCTURE_SIGNALS_SPEC S2/S4 screen candidates (booleans + pending dir).
+    "structure_ranging_at_alert", "flip_pending_at_alert",
+    "flip_pending_dir_at_alert", "dr_ceiling_broken_at_ob", "dr_floor_broken_at_ob",
 ]
 
 ALL_FEATURES = CONTINUOUS_FEATURES + CATEGORICAL_FEATURES
