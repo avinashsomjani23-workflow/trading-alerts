@@ -2453,6 +2453,40 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     return rows
 
 
+# SHARED — trend-alignment derivation. ONE implementation, called by BOTH the
+# live Phase 2 engine (Phase2_Alert_Engine.py) and the backtest replay
+# (backtest/replay_engine.py). A zone's alignment vs the H1 trend is a feature
+# the edge engine screens, so it MUST mean the same thing live and in backtest;
+# before this helper existed the two paths used different branch logic AND a
+# different vocabulary (backtest: with/against/no_trend; live: with/counter/
+# ambiguous), so the edge engine trained on labels live would never emit.
+#
+# Branch order is the live rule (Fix A, 2026-06-30). A CHoCH ARMS a flip but does
+# NOT flip `trend` until a Confirmation BOS prints, so while a flip is pending the
+# raw `trend` field still reads the OLD direction and cannot be trusted for a
+# with-trend badge:
+#   1. flip pending AND zone opposes it  -> counter_trend (zone is old-trend)
+#   2. flip pending AND zone matches it  -> ambiguous     (unconfirmed, no credit)
+#   3. trend unknown                     -> ambiguous
+#   4. trend == zone direction           -> with_trend
+#   5. else                              -> counter_trend
+def derive_trend_alignment(zone_dir, trend, flip_pending, flip_pending_dir):
+    """Return 'with_trend' | 'counter_trend' | 'ambiguous' for a zone.
+
+    zone_dir / trend / flip_pending_dir are on the 'bullish' | 'bearish' axis
+    (or None). flip_pending is a bool. Pure — no I/O, no state reads.
+    """
+    if flip_pending and zone_dir != flip_pending_dir:
+        return "counter_trend"
+    if flip_pending:
+        return "ambiguous"
+    if trend is None:
+        return "ambiguous"
+    if trend == zone_dir:
+        return "with_trend"
+    return "counter_trend"
+
+
 # PHASE 2 ONLY — setup classifier. A thin layer over fields ALREADY computed:
 # recognises when the confluences line up into a named, textbook SMC pattern and
 # returns a badge + a one-line mentor note. No detection, no new data. The score

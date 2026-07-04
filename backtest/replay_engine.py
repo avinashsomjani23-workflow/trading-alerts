@@ -575,34 +575,13 @@ def replay_pair(
             ob_state["state"] = "cooling"
             ob_state["fire_count"] += 1
             ob_state["last_fire_ts"] = h1_ts
-            # scanlog: record the alert with its causality chain + trend
-            # context. trend_alignment is derived (bullish OB + bullish trend =
-            # with_trend). The backtest fires counter-trend by design, so a
-            # with/against label is NOT a contradiction. A real contradiction
-            # would be an unparseable trend value or a missing direction while
-            # an alignment is asserted - those raise TREND_CONTRADICTION.
-            _bt_align = (
-                "with_trend" if (_bt_trend and (
-                    (_bt_trend == "bullish" and direction == "bullish") or
-                    (_bt_trend == "bearish" and direction == "bearish")))
-                else "against_trend" if _bt_trend else "no_trend")
-            if _bt_trend not in (None, "bullish", "bearish"):
-                _scanlog().condition("TREND_CONTRADICTION", pair=pair_name,
-                                     ts=str(h1_ts), trend=str(_bt_trend),
-                                     direction=direction)
-            _scanlog().event("alert", pair=pair_name, alert_ts=str(h1_ts),
-                             ob_timestamp=ob.get("ob_timestamp"),
-                             bos_timestamp=ob.get("bos_timestamp"),
-                             direction=direction, alert_seq=ob_state["fire_count"],
-                             trend=_bt_trend, trend_alignment=_bt_align)
-            _bt_fired = True
-
             # S2 (STRUCTURE_SIGNALS_SPEC) — snapshot the v2 structure state AS OF
             # THIS ALERT as payload scalars. structure_v2 rides `walls`; read it
             # here at fire time (the OB dict is shared + re-stamped on re-fire, so
             # these must NOT live on `ob`). None only when structure_v2 is missing
             # (degraded walls). Pending dir up/down -> bullish/bearish (same map as
-            # smc_detector.py:695).
+            # smc_detector.py:695). Read BEFORE _bt_align because the alignment
+            # derivation now consumes the flip-pending state (Task 1 parity fix).
             _sv2 = walls.get("structure_v2") or {}
             _pend_dir_raw = _sv2.get("choch_pending_dir")
             _pend_dir_map = {"up": "bullish", "down": "bearish"}
@@ -614,6 +593,30 @@ def replay_pair(
                 _structure_ranging_at_alert = None
                 _flip_pending_at_alert = None
                 _flip_pending_dir_at_alert = None
+
+            # scanlog: record the alert with its causality chain + trend context.
+            # trend_alignment comes from the SHARED helper (smc_detector.
+            # derive_trend_alignment) — the SAME implementation live Phase 2 uses,
+            # so the edge-engine feature means the same thing in both paths. It now
+            # DEMOTES a with-trend read to counter_trend/ambiguous while a CHoCH
+            # flip is pending (raw `trend` still reads the old direction then). The
+            # backtest fires counter-trend by design, so a with/against label is
+            # NOT a contradiction. A real contradiction would be an unparseable
+            # trend value or a missing direction while an alignment is asserted —
+            # those raise TREND_CONTRADICTION (guards the raw trend, not the label).
+            _bt_align = smc_detector.derive_trend_alignment(
+                direction, _bt_trend,
+                bool(_flip_pending_at_alert), _flip_pending_dir_at_alert)
+            if _bt_trend not in (None, "bullish", "bearish"):
+                _scanlog().condition("TREND_CONTRADICTION", pair=pair_name,
+                                     ts=str(h1_ts), trend=str(_bt_trend),
+                                     direction=direction)
+            _scanlog().event("alert", pair=pair_name, alert_ts=str(h1_ts),
+                             ob_timestamp=ob.get("ob_timestamp"),
+                             bos_timestamp=ob.get("bos_timestamp"),
+                             direction=direction, alert_seq=ob_state["fire_count"],
+                             trend=_bt_trend, trend_alignment=_bt_align)
+            _bt_fired = True
 
             # S3 (STRUCTURE_SIGNALS_SPEC) — leg extreme reached SINCE OB formation,
             # measured over closed bars in the point-in-time slice with ts >= the

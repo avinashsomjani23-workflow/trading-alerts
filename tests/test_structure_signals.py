@@ -302,6 +302,100 @@ def test_source_yield_carries_payload_scalars():
         _bad(f"S2/S3 payload plumbing missing — yield_ok={y_ok}, row_ok={r_ok}")
 
 
+# ── TREND-ALIGNMENT PARITY (LIVE_BUGS_FIX_SPEC Task 1) ─────────────────────────
+# derive_trend_alignment is the ONE implementation both the live Phase 2 engine
+# and the backtest replay call. Before it existed the two paths used different
+# branch logic AND a different vocabulary, so the edge engine trained on a label
+# live would never emit. These guards pin the branch table and forbid a silent
+# re-fork of the logic in either caller.
+
+import smc_detector as _smc  # noqa: E402
+
+
+def test_trend_alignment_branch_table():
+    B, R = "bullish", "bearish"
+    # (zone_dir, trend, flip_pending, flip_pending_dir) -> expected
+    cases = [
+        # 1. flip pending, zone opposes the pending flip -> counter_trend
+        #    (the EURUSD 2026-06-29 bug: SHORT zone, bullish CHoCH pending)
+        ((R, B, True, B), "counter_trend"),
+        ((B, R, True, R), "counter_trend"),
+        # 2. flip pending, zone matches the pending flip -> ambiguous (unconfirmed,
+        #    no with-trend credit even though raw trend still reads the old dir)
+        ((B, R, True, B), "ambiguous"),
+        ((R, B, True, R), "ambiguous"),
+        # flip pending but dir unknown (None) still demotes: zone != None -> counter
+        ((B, B, True, None), "counter_trend"),
+        # 3. no flip pending, trend unknown -> ambiguous
+        ((B, None, False, None), "ambiguous"),
+        ((R, None, False, None), "ambiguous"),
+        # 4. no flip pending, trend == zone -> with_trend
+        ((B, B, False, None), "with_trend"),
+        ((R, R, False, None), "with_trend"),
+        # 5. no flip pending, trend != zone -> counter_trend
+        ((B, R, False, None), "counter_trend"),
+        ((R, B, False, None), "counter_trend"),
+    ]
+    bad = []
+    for (zone_dir, trend, fp, fpd), want in cases:
+        got = _smc.derive_trend_alignment(zone_dir, trend, fp, fpd)
+        if got != want:
+            bad.append(f"({zone_dir},{trend},fp={fp},{fpd}) -> {got!r} != {want!r}")
+    if bad:
+        _bad("derive_trend_alignment branch table: " + "; ".join(bad))
+    else:
+        _ok(f"derive_trend_alignment branch table ({len(cases)} cases, incl. both "
+            "flip-pending demotions)")
+
+
+def test_trend_alignment_matches_live_phase2_branches():
+    # Independent re-implementation of the live Phase2 branch ORDER (the exact
+    # if/elif chain at Phase2_Alert_Engine.py) — asserts the helper reproduces it
+    # for every combination, so a future edit to either can't drift apart silently.
+    def live_rule(zone_dir, trend, fp, fpd):
+        if fp and zone_dir != fpd:
+            return "counter_trend"
+        if fp:
+            return "ambiguous"
+        if trend is None:
+            return "ambiguous"
+        if trend == zone_dir:
+            return "with_trend"
+        return "counter_trend"
+    dirs = ["bullish", "bearish"]
+    mism = []
+    for zd in dirs:
+        for tr in dirs + [None]:
+            for fp in (True, False):
+                for fpd in dirs + [None]:
+                    a = _smc.derive_trend_alignment(zd, tr, fp, fpd)
+                    b = live_rule(zd, tr, fp, fpd)
+                    if a != b:
+                        mism.append(f"({zd},{tr},{fp},{fpd}): {a}!={b}")
+    if mism:
+        _bad("helper diverges from live branch order: " + "; ".join(mism))
+    else:
+        _ok("helper == live Phase2 branch order across all combinations")
+
+
+def test_single_implementation_of_trend_alignment():
+    # SINGLE SOURCE OF TRUTH guard. Both callers must call the shared helper, and
+    # neither may re-derive the label locally (the old backtest fork emitted
+    # against_trend/no_trend — those value strings must be gone from code).
+    p2  = (_ROOT / "Phase2_Alert_Engine.py").read_text(encoding="utf-8")
+    rep = (_ROOT / "backtest" / "replay_engine.py").read_text(encoding="utf-8")
+    calls_ok = ("smc_detector.derive_trend_alignment(" in p2
+                and "smc_detector.derive_trend_alignment(" in rep)
+    # The old backtest vocabulary must not appear as emitted values anywhere in
+    # code (comments/markdown are out of the .py surface these tests read).
+    no_old_vocab = ('"against_trend"' not in rep and '"no_trend"' not in rep
+                    and "'against_trend'" not in rep and "'no_trend'" not in rep)
+    if calls_ok and no_old_vocab:
+        _ok("both callers use derive_trend_alignment; old backtest vocabulary gone")
+    else:
+        _bad(f"single-impl guard — calls_ok={calls_ok}, no_old_vocab={no_old_vocab}")
+
+
 def main():
     print("== S1: ranging counter resets on trend flip ==")
     test_s1_ranging_resets_on_flip()
@@ -316,6 +410,10 @@ def main():
     test_s4_source_chain_emits_flags()
     print("\n== source tripwires ==")
     test_source_yield_carries_payload_scalars()
+    print("\n== trend-alignment parity (LIVE_BUGS_FIX_SPEC Task 1) ==")
+    test_trend_alignment_branch_table()
+    test_trend_alignment_matches_live_phase2_branches()
+    test_single_implementation_of_trend_alignment()
     print()
     if _FAILS:
         print(f"FAILED: {len(_FAILS)} problem(s)")

@@ -2489,11 +2489,15 @@ if __name__ == "__main__":
                     _choch_day = " (" + str(_choch_ts)[:10] + ")"
                 except Exception:
                     _choch_day = ""
+            # Alignment VALUE comes from the shared helper (one implementation,
+            # backtest calls the same one). The label TEXT is presentation and
+            # stays local to each branch below.
+            trend_alignment = smc_detector.derive_trend_alignment(
+                zone_dir, current_trend, flip_pending, flip_pending_dir)
             if flip_pending and zone_dir != flip_pending_dir:
                 # Zone is in the OLD trend direction while a reversal AGAINST it is
                 # pending. This is NOT with-trend — it is counter to the forming
                 # reversal. Drop the with-trend badge and warn.
-                trend_alignment = "counter_trend"
                 trend_label = (f"AGAINST pending H1 reversal — {flip_pending_dir} "
                                f"CHoCH printed{_choch_day}, Confirmation BOS pending "
                                f"(zone is {zone_dir})")
@@ -2501,17 +2505,13 @@ if __name__ == "__main__":
                 # Zone direction matches the pending reversal. The trend is contested
                 # and UNCONFIRMED, so do not credit it as with-trend (no score
                 # inflation on an unconfirmed flip) — surface it as forming.
-                trend_alignment = "ambiguous"
                 trend_label = (f"Pending H1 reversal in zone's favour — {flip_pending_dir} "
                                f"CHoCH printed{_choch_day}, Confirmation BOS pending")
             elif current_trend is None:
-                trend_alignment = "ambiguous"
                 trend_label = "H1 trend ambiguous — no clear BOS sequence"
             elif current_trend == zone_dir:
-                trend_alignment = "with_trend"
                 trend_label = f"WITH H1 trend (H1 is {current_trend})"
             else:
-                trend_alignment = "counter_trend"
                 trend_label = f"AGAINST H1 trend (H1 is {current_trend}, zone is {zone_dir})"
 
             scan_record["trend_alignment"] = trend_alignment

@@ -578,19 +578,18 @@ def _killzone_alignment_table(trades: List[Dict[str, Any]], r_col: str
 # filter out? trend_alignment is stamped per trade (h1_only_simulator) from the
 # alert's h1_trend vs zone direction.
 #
-# Two label dialects exist for the same concept:
-#   backtest path (replay_engine): with_trend / against_trend / no_trend
-#   live path     (Phase2):        with_trend / counter_trend / ambiguous
-# We normalise both so a report built from either source fills the same buckets.
+# One vocabulary now — the live path's. The backtest replay used to emit a
+# separate dialect (with_trend / against_trend / no_trend); as of the Task 1
+# parity fix (2026-07-05) both paths call smc_detector.derive_trend_alignment
+# and emit with_trend / counter_trend / ambiguous. The old backtest keys are
+# gone; this map only turns the shared values into display text.
 # ---------------------------------------------------------------------------
 
 _TREND_ORDER = ["With trend", "Against trend", "No trend"]
 
 _TREND_LABEL_MAP = {
     "with_trend":    "With trend",
-    "against_trend": "Against trend",
     "counter_trend": "Against trend",
-    "no_trend":      "No trend",
     "ambiguous":     "No trend",
 }
 
