@@ -3,11 +3,159 @@
   "pass": true,
   "forced": false,
   "run_id": "h1only_20080102_20251231",
-  "generated_utc": "2026-07-05T06:02:20.094390+00:00",
+  "generated_utc": "2026-07-05T07:54:49.726318+00:00",
   "scope": "verdict",
   "window": "2008-01-10..2016-12-30",
   "n_discovery": 11329,
   "validation_untouched": true,
+  "population_stats": {
+    "overall": {
+      "n": 11329,
+      "expR": -0.0561,
+      "ci_lo": -0.079,
+      "ci_hi": -0.034,
+      "ci_excludes_0": true,
+      "wr_pct": 34.7,
+      "totR": -635.13,
+      "pos_quarters": "9/36"
+    },
+    "per_pair": [
+      {
+        "pair": "AUDUSD",
+        "n": 1017,
+        "expR": -0.0437,
+        "ci_lo": -0.121,
+        "ci_hi": 0.034,
+        "ci_excludes_0": false,
+        "wr_pct": 35.1,
+        "totR": -44.43,
+        "pos_quarters": "2/10"
+      },
+      {
+        "pair": "EURJPY",
+        "n": 1150,
+        "expR": -0.0618,
+        "ci_lo": -0.135,
+        "ci_hi": 0.01,
+        "ci_excludes_0": false,
+        "wr_pct": 33.9,
+        "totR": -71.03,
+        "pos_quarters": "10/24"
+      },
+      {
+        "pair": "EURUSD",
+        "n": 1433,
+        "expR": -0.0722,
+        "ci_lo": -0.135,
+        "ci_hi": -0.007,
+        "ci_excludes_0": true,
+        "wr_pct": 34.2,
+        "totR": -103.39,
+        "pos_quarters": "15/34"
+      },
+      {
+        "pair": "GBPUSD",
+        "n": 1450,
+        "expR": -0.0697,
+        "ci_lo": -0.133,
+        "ci_hi": -0.005,
+        "ci_excludes_0": true,
+        "wr_pct": 33.3,
+        "totR": -101.05,
+        "pos_quarters": "9/36"
+      },
+      {
+        "pair": "GOLD",
+        "n": 1370,
+        "expR": -0.0497,
+        "ci_lo": -0.119,
+        "ci_hi": 0.019,
+        "ci_excludes_0": false,
+        "wr_pct": 32.6,
+        "totR": -68.12,
+        "pos_quarters": "11/33"
+      },
+      {
+        "pair": "NZDUSD",
+        "n": 990,
+        "expR": -0.1,
+        "ci_lo": -0.166,
+        "ci_hi": -0.033,
+        "ci_excludes_0": true,
+        "wr_pct": 37.2,
+        "totR": -98.96,
+        "pos_quarters": "4/15"
+      },
+      {
+        "pair": "USDCAD",
+        "n": 1442,
+        "expR": -0.0034,
+        "ci_lo": -0.069,
+        "ci_hi": 0.063,
+        "ci_excludes_0": false,
+        "wr_pct": 36.7,
+        "totR": -4.95,
+        "pos_quarters": "18/34"
+      },
+      {
+        "pair": "USDCHF",
+        "n": 1344,
+        "expR": -0.0519,
+        "ci_lo": -0.118,
+        "ci_hi": 0.016,
+        "ci_excludes_0": false,
+        "wr_pct": 35.1,
+        "totR": -69.74,
+        "pos_quarters": "9/31"
+      },
+      {
+        "pair": "USDJPY",
+        "n": 1133,
+        "expR": -0.0648,
+        "ci_lo": -0.138,
+        "ci_hi": 0.01,
+        "ci_excludes_0": false,
+        "wr_pct": 34.5,
+        "totR": -73.46,
+        "pos_quarters": "9/25"
+      }
+    ],
+    "per_session": [
+      {
+        "session": "Asia",
+        "n": 2047,
+        "expR": -0.079,
+        "ci_lo": -0.134,
+        "ci_hi": -0.024,
+        "ci_excludes_0": true,
+        "wr_pct": 32.9,
+        "totR": -161.69,
+        "pos_quarters": "9/36"
+      },
+      {
+        "session": "London",
+        "n": 5091,
+        "expR": -0.0669,
+        "ci_lo": -0.101,
+        "ci_hi": -0.032,
+        "ci_excludes_0": true,
+        "wr_pct": 33.9,
+        "totR": -340.35,
+        "pos_quarters": "9/36"
+      },
+      {
+        "session": "NY",
+        "n": 4191,
+        "expR": -0.0318,
+        "ci_lo": -0.069,
+        "ci_hi": 0.006,
+        "ci_excludes_0": false,
+        "wr_pct": 36.4,
+        "totR": -133.09,
+        "pos_quarters": "15/36"
+      }
+    ]
+  },
   "features": [
     {
       "feature": "break_close_atr",
@@ -36,6 +184,12 @@
       "favoured_bucket": 0,
       "_fdr_p": 0.033180565113232925,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -65,6 +219,12 @@
       "favoured_bucket": 0,
       "_fdr_p": 0.242277121752474,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -94,6 +254,12 @@
       "favoured_bucket": 0,
       "_fdr_p": 0.20230213338035713,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -123,6 +289,12 @@
       "favoured_bucket": 4,
       "_fdr_p": 0.3764824803241055,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -152,6 +324,12 @@
       "favoured_bucket": 0,
       "_fdr_p": 0.00018150748137426922,
       "fdr_reject": true,
+      "criteria": {
+        "fdr_reject": true,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -181,6 +359,12 @@
       "favoured_bucket": 0,
       "_fdr_p": 0.7707907051638514,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -210,6 +394,12 @@
       "favoured_bucket": 0,
       "_fdr_p": 0.7552706456305984,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -248,6 +438,12 @@
       "favoured_bucket": 0,
       "_fdr_p": 0.46112029823743894,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -277,6 +473,12 @@
       "favoured_bucket": 4,
       "_fdr_p": 0.6178639630517015,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -306,6 +508,12 @@
       "favoured_bucket": 4,
       "_fdr_p": 0.7304450243931854,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -333,6 +541,12 @@
       "favoured_bucket": 2,
       "_fdr_p": 0.03221904815650345,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -362,6 +576,12 @@
       "favoured_bucket": 0,
       "_fdr_p": 0.31161106172885145,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -391,6 +611,12 @@
       "favoured_bucket": 4,
       "_fdr_p": 0.00028756302757402077,
       "fdr_reject": true,
+      "criteria": {
+        "fdr_reject": true,
+        "ci_excludes_0": true,
+        "substance_n": true,
+        "substance_effect": true
+      },
       "verdict": "candidate"
     },
     {
@@ -420,6 +646,12 @@
       "favoured_bucket": 4,
       "_fdr_p": 0.39715249071931547,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -449,6 +681,12 @@
       "favoured_bucket": 0,
       "_fdr_p": 0.17021357347644414,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -468,6 +706,12 @@
       ],
       "_fdr_p": 0.20173263462560861,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -487,6 +731,12 @@
       ],
       "_fdr_p": 0.05645296929997247,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -506,6 +756,12 @@
       ],
       "_fdr_p": 0.788903871275432,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -525,6 +781,12 @@
       ],
       "_fdr_p": 0.05645296929997247,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -535,8 +797,8 @@
       "worst_level": "True",
       "delta_disc": 0.0604,
       "delta_disc_ci": [
-        null,
-        null
+        -0.0397,
+        0.1633
       ],
       "best_worst_n_disc": [
         854,
@@ -544,6 +806,12 @@
       ],
       "_fdr_p": 0.27982194689895873,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -554,8 +822,8 @@
       "worst_level": "False",
       "delta_disc": 0.019,
       "delta_disc_ci": [
-        null,
-        null
+        -0.0277,
+        0.067
       ],
       "best_worst_n_disc": [
         4439,
@@ -563,6 +831,12 @@
       ],
       "_fdr_p": 0.4193500323110658,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -582,6 +856,12 @@
       ],
       "_fdr_p": 0.17766922268007126,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -601,6 +881,12 @@
       ],
       "_fdr_p": 0.1617599151216159,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -620,6 +906,12 @@
       ],
       "_fdr_p": 0.467864772593919,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -639,6 +931,12 @@
       ],
       "_fdr_p": 0.6954089404803929,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -658,6 +956,12 @@
       ],
       "_fdr_p": 0.02138116190012589,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -677,6 +981,12 @@
       ],
       "_fdr_p": 0.14287069856161103,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -696,6 +1006,12 @@
       ],
       "_fdr_p": 0.0816469054141254,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": true,
+        "substance_n": true,
+        "substance_effect": true
+      },
       "verdict": "noise"
     },
     {
@@ -715,6 +1031,12 @@
       ],
       "_fdr_p": 0.022634304557614348,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -725,8 +1047,8 @@
       "worst_level": "False",
       "delta_disc": 0.0122,
       "delta_disc_ci": [
-        null,
-        null
+        -0.0338,
+        0.0577
       ],
       "best_worst_n_disc": [
         4702,
@@ -734,6 +1056,12 @@
       ],
       "_fdr_p": 0.026566617616657393,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -744,8 +1072,8 @@
       "worst_level": "True",
       "delta_disc": 0.0427,
       "delta_disc_ci": [
-        null,
-        null
+        -0.0036,
+        0.0891
       ],
       "best_worst_n_disc": [
         4656,
@@ -753,6 +1081,12 @@
       ],
       "_fdr_p": 0.05671020361628567,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -772,6 +1106,12 @@
       ],
       "_fdr_p": 0.16593908644746788,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -791,6 +1131,12 @@
       ],
       "_fdr_p": 0.5339252037820471,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -801,8 +1147,8 @@
       "worst_level": "2",
       "delta_disc": 0.08,
       "delta_disc_ci": [
-        null,
-        null
+        -0.0485,
+        0.2082
       ],
       "best_worst_n_disc": [
         2189,
@@ -810,6 +1156,12 @@
       ],
       "_fdr_p": 0.18166574472467648,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -829,6 +1181,12 @@
       ],
       "_fdr_p": 0.9624551293795462,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -848,6 +1206,12 @@
       ],
       "_fdr_p": 0.9485782006609792,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": true,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -858,8 +1222,8 @@
       "worst_level": "3",
       "delta_disc": 0.194,
       "delta_disc_ci": [
-        null,
-        null
+        0.0456,
+        0.338
       ],
       "best_worst_n_disc": [
         7802,
@@ -867,6 +1231,12 @@
       ],
       "_fdr_p": 0.030161838417967102,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": true,
+        "substance_n": true,
+        "substance_effect": true
+      },
       "verdict": "noise"
     },
     {
@@ -877,8 +1247,8 @@
       "worst_level": "False",
       "delta_disc": 0.0409,
       "delta_disc_ci": [
-        null,
-        null
+        -0.0598,
+        0.1414
       ],
       "best_worst_n_disc": [
         713,
@@ -886,6 +1256,12 @@
       ],
       "_fdr_p": 0.770219444537629,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -896,8 +1272,8 @@
       "worst_level": "True",
       "delta_disc": 0.0115,
       "delta_disc_ci": [
-        null,
-        null
+        -0.0409,
+        0.064
       ],
       "best_worst_n_disc": [
         8201,
@@ -905,6 +1281,12 @@
       ],
       "_fdr_p": 0.2944817541181006,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -924,6 +1306,12 @@
       ],
       "_fdr_p": 0.5385169358209829,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -934,8 +1322,8 @@
       "worst_level": "False",
       "delta_disc": 0.0053,
       "delta_disc_ci": [
-        null,
-        null
+        -0.0503,
+        0.0627
       ],
       "best_worst_n_disc": [
         2456,
@@ -943,6 +1331,12 @@
       ],
       "_fdr_p": 0.8529470116610077,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     },
     {
@@ -953,8 +1347,8 @@
       "worst_level": "True",
       "delta_disc": 0.0043,
       "delta_disc_ci": [
-        null,
-        null
+        -0.0534,
+        0.06
       ],
       "best_worst_n_disc": [
         8863,
@@ -962,6 +1356,12 @@
       ],
       "_fdr_p": 0.9547200188538455,
       "fdr_reject": false,
+      "criteria": {
+        "fdr_reject": false,
+        "ci_excludes_0": false,
+        "substance_n": true,
+        "substance_effect": false
+      },
       "verdict": "noise"
     }
   ],
@@ -1670,5 +2070,5 @@
   },
   "interactions": "deferred_to_confirm",
   "language_stamp": "CANDIDATE ONLY \u2014 discovery split only. Luck is NOT ruled out. A candidate is confirmed only if it REPEATS on validation years it has never seen.",
-  "token": "60f10397592f"
+  "token": "20ddd2883cbc"
 }
