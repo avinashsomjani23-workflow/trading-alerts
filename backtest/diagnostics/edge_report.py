@@ -211,9 +211,10 @@ def _candidate_deep_dives(disc: Dict[str, Any], buckets: List[Dict[str, str]]
         L.append("")
         fav = (f"favoured bucket: {r.get('favoured_bucket')}" if is_cont
                else f"best level: {r.get('best_level')!r}  worst level: {r.get('worst_level')!r}")
+        fdr_p = r.get("_fdr_p")
         L.append(f"- Δdisc **{_f(r.get('delta_disc'))}** CI {_ci(r)}, "
                  f"N(top/bot) {_n_pair(r)}, screen p "
-                 f"{'—' if r.get('_fdr_p') is None else f'{float(r['_fdr_p']):.4g}'}")
+                 f"{'—' if fdr_p is None else f'{float(fdr_p):.4g}'}")
         L.append(f"- {fav}")
         L.append("- CANDIDATE — luck not ruled out. The confirm phase re-computes this same "
                  "Δ on validation years and requires the same sign + ≥60% positive quarters.")
