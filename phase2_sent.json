@@ -1,5 +1,5 @@
 {
-  "day_id": "2026-07-03",
+  "day_id": "2026-07-05",
   "zones": {
     "NZDUSD_SHORT_BOS_0.5665_2026-06-24T00": {
       "score_int": 4,
@@ -3960,9 +3960,9 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-02T18:35:44.585371",
-      "last_seen_ist": "2026-07-03T23:35:50.310075",
+      "last_seen_ist": "2026-07-06T00:36:00.293376",
       "last_email_day": "2026-07-03",
-      "reentry_armed": false,
+      "reentry_armed": true,
       "max_exit_distance": 0.0025300000000001432,
       "bias": "LONG",
       "pair": "EURUSD",
