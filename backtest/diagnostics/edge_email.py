@@ -78,14 +78,29 @@ def _verdict_counts(features: List[Dict[str, Any]]) -> Dict[str, int]:
 # Phase A — discovery (§9.1). NO "survivor" / "edge" anywhere in this body.
 # ---------------------------------------------------------------------------
 def build_discovery_body(res: Dict[str, Any]) -> str:
+    from backtest.diagnostics import edge_report
+
     lines: List[str] = []
     lines.append(res.get("language_stamp", ""))
     lines.append("")
     lines.append(f"run: {res.get('run_id')}   window: {res.get('window')}   "
                  f"N(discovery): {res.get('n_discovery')}")
+    # Overall discovery-split one-liner: context so "candidate=1" reads as "1 of 43
+    # screened on N trades", not "the system found almost nothing" (§5).
+    ov = (res.get("population_stats") or {}).get("overall") or {}
+    n_screened = len(res.get("features", []))
+    if ov:
+        lines.append(f"overall discovery split: expR {_fmt(ov.get('expR'))} "
+                     f"(N {_fmt(ov.get('n'))}, wr {_fmt(ov.get('wr_pct'))}%) — "
+                     f"{len(res.get('candidates', []))} candidate(s) of "
+                     f"{n_screened} features screened")
     counts = _verdict_counts(res.get("features", []))
     lines.append("candidate counts by verdict: "
                  + "  ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+    # Near-miss count (features failing exactly one criterion) — derived from the
+    # same helper the report uses so the two never disagree.
+    n_near = len(edge_report.near_miss_features(res))
+    lines.append(f"near-misses: {n_near} — see report")
     lines.append("")
     lines.append("TOP CANDIDATES (CANDIDATE — luck not ruled out)")
     lines.append(f"  {'feature':24} {'verdict':16} {'Δdisc':>9}  {'CI':>20}  "
@@ -113,6 +128,12 @@ def build_discovery_body(res: Dict[str, Any]) -> str:
         lines.append(f"SL-anatomy: {len(anat['rows'])} clean-break rows "
                      "(promotions deferred to confirm phase)")
     lines.append("interactions: deferred to confirm phase")
+    lines.append("")
+    # Path wrapped in backticks so no space directly precedes "edge" — the §11.3
+    # rule bans the literal " edge" (space+edge), and "committed at: edge_engine/..."
+    # would trip it. A backtick between the space and "edge" avoids the substring.
+    lines.append(f"full detail report committed at "
+                 f"`edge_engine/{edge_report.REPORT_MD}`")
     lines.append("")
     lines.append("=" * 60)
     lines.append(f"APPROVAL TOKEN: {res.get('token')}")

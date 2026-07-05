@@ -897,6 +897,21 @@ def _continuous_screen(disc: pd.DataFrame, val: Optional[pd.DataFrame], feat: st
     return rec
 
 
+def _norm_cat_levels(s: pd.Series) -> pd.Series:
+    """Normalise a categorical column to STRING levels, preserving NaN as NaN.
+
+    Fixes the dtype bug (EDGE_DISCOVERY_REPORT_SPEC F3): level keys are stored as
+    `str(lvl)` but the raw column keeps its native dtype (bool / int64 / mixed
+    object), so `frame[frame[feat] == "True"]` matched ZERO rows and every such
+    feature's CI collapsed to (None, None) → verdict capped at noise forever. We
+    stringify ONCE at the top of the screen so keys, groupby levels, `_lvl_vals`
+    comparisons and `_pos_quarters` filters all compare string-to-string. NaN is
+    preserved (never coerced to a "nan" level) so rare-level merging and Kruskal
+    grouping still drop missing rows exactly as before."""
+    return s.map(lambda v: v if (isinstance(v, float) and math.isnan(v)) or v is None
+                 else str(v))
+
+
 def _categorical_screen(disc: pd.DataFrame, val: Optional[pd.DataFrame], feat: str,
                         buckets_out: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Screen one categorical. Levels as-is (rare→other). Top-vs-bottom = best vs
@@ -907,8 +922,14 @@ def _categorical_screen(disc: pd.DataFrame, val: Optional[pd.DataFrame], feat: s
     disc_only = val is None
     rec: Dict[str, Any] = {"feature": feat, "type": "categorical",
                            "timing": _classify_timing(feat)}
-    d = disc.copy()
-    d[feat] = _merge_rare_levels(d, feat, disc)
+    # Normalise level values to strings ONCE (both frames), BEFORE rare-level
+    # merging, so every downstream comparison ('best' key vs the column) matches.
+    # `disc_s` is the stringified discovery frame the keep-set is derived from,
+    # so `_merge_rare_levels` and the `frame[feat] == lvl` filters agree.
+    disc_s = disc.copy()
+    disc_s[feat] = _norm_cat_levels(disc_s[feat])
+    d = disc_s.copy()
+    d[feat] = _merge_rare_levels(d, feat, disc_s)
 
     disc_levels = {}
     for lvl, g in sorted(d.groupby(feat), key=lambda kv: str(kv[0])):
@@ -918,7 +939,8 @@ def _categorical_screen(disc: pd.DataFrame, val: Optional[pd.DataFrame], feat: s
                             "level": str(lvl), **st})
     if not disc_only:
         v = val.copy()
-        v[feat] = _merge_rare_levels(v, feat, disc)
+        v[feat] = _norm_cat_levels(v[feat])
+        v[feat] = _merge_rare_levels(v, feat, disc_s)
         for lvl, g in sorted(v.groupby(feat), key=lambda kv: str(kv[0])):
             st = _cell_stats(g)
             buckets_out.append({"feature": feat, "split": "VALIDATION",
@@ -1299,7 +1321,13 @@ def _apply_candidate_criteria(rec: Dict[str, Any], fdr_reject: bool) -> str:
     """SPEC_STAGED §4.3 — DISCOVERY-ONLY verdict ladder. Parallel to
     _apply_survivor_criteria but criterion 2 (validation persistence) does NOT
     exist here. Possible outputs: candidate, candidate_thin, noise, thin. The
-    strings survivor / hypothesis / inverted are IMPOSSIBLE by construction."""
+    strings survivor / hypothesis / inverted are IMPOSSIBLE by construction.
+
+    SIDE-EFFECT: stamps `rec["criteria"]` = the four pass/fail flags
+    {fdr_reject, ci_excludes_0, substance_n, substance_effect} so the report's
+    near-miss section reads them off the record instead of re-deriving thresholds
+    (EDGE_DISCOVERY_REPORT_SPEC §4). A `candidate` passes all four; a near-miss
+    fails exactly one. `thin`/None-Δ records carry no criteria (nothing to score)."""
     if rec.get("verdict") == "thin":
         return "thin"
     d_disc = rec.get("delta_disc")
@@ -1307,9 +1335,16 @@ def _apply_candidate_criteria(rec: Dict[str, Any], fdr_reject: bool) -> str:
         return "thin"
     dlo, dhi = rec.get("delta_disc_ci", [None, None])
     nd = rec.get("top_bottom_n_disc") or rec.get("best_worst_n_disc") or [0, 0]
-    disc_signal = fdr_reject and _ci_excludes_zero(dlo, dhi)
+    ci_ok = _ci_excludes_zero(dlo, dhi)
     substance_n = min(nd) >= MIN_BUCKET_N
     substance_eff = abs(d_disc) >= MIN_EFFECT_R
+    rec["criteria"] = {
+        "fdr_reject": bool(fdr_reject),
+        "ci_excludes_0": bool(ci_ok),
+        "substance_n": bool(substance_n),
+        "substance_effect": bool(substance_eff),
+    }
+    disc_signal = fdr_reject and ci_ok
     if not substance_n:
         return "candidate_thin" if disc_signal else "noise"
     if not disc_signal:
@@ -1317,6 +1352,26 @@ def _apply_candidate_criteria(rec: Dict[str, Any], fdr_reject: bool) -> str:
     if not substance_eff:
         return "candidate_thin"
     return "candidate"
+
+
+def _population_stats(disc: pd.DataFrame) -> Dict[str, Any]:
+    """Overall + per-pair + per-session discovery-split stats for the report's
+    baseline-context section (EDGE_DISCOVERY_REPORT_SPEC §4/§5). Pure aggregation
+    of the SAME discovery frame the screens use — reads no validation frame, adds
+    no trades.csv column. Every row carries N so the report never prints a naked
+    expR (blind-spot guard). The `overall`/`per_pair`/`per_session` rows are the
+    gates-off, all-scores population — NOT what live (score≥4) trading produces;
+    the report stamps that caveat, not this helper."""
+    overall = _cell_stats(disc)
+    per_pair = []
+    if "pair" in disc.columns:
+        for lvl, g in sorted(disc.groupby("pair"), key=lambda kv: str(kv[0])):
+            per_pair.append({"pair": str(lvl), **_cell_stats(g)})
+    per_session = []
+    if "session" in disc.columns:
+        for lvl, g in sorted(disc.groupby("session"), key=lambda kv: str(kv[0])):
+            per_session.append({"session": str(lvl), **_cell_stats(g)})
+    return {"overall": overall, "per_pair": per_pair, "per_session": per_session}
 
 
 def stage1_discovery(run_dir: str, engine_dir: str, forced: bool) -> Dict[str, Any]:
@@ -1372,12 +1427,15 @@ def stage1_discovery(run_dir: str, engine_dir: str, forced: bool) -> Dict[str, A
     pd.DataFrame(buckets).to_csv(
         os.path.join(engine_dir, "stage1_discovery_features.csv"), index=False)
 
+    pop_stats = _population_stats(disc)
+
     result: Dict[str, Any] = {
         "phase": "discovery", "pass": True, "forced": forced,
         "run_id": os.path.basename(run_dir), "generated_utc": _now_utc(),
         "scope": "verdict", "window": _window_label(disc),
         "n_discovery": int(len(disc)),
         "validation_untouched": True,
+        "population_stats": pop_stats,
         "features": feature_recs,
         "candidates": [r["feature"] for r in candidates],
         "ranked_candidates": [{"feature": r["feature"], "verdict": r["verdict"],
@@ -1395,6 +1453,13 @@ def stage1_discovery(run_dir: str, engine_dir: str, forced: bool) -> Dict[str, A
     comp = _compute_token(engine_dir)
     result["token"] = comp["token"]
     _write_json(_discovery_path(engine_dir), result)
+    # Render the full-detail companion report (SPEC_STAGED §7/§9.1) AFTER the final
+    # JSON (with token) lands, so it reads the committed bytes. Pure rendering — it
+    # reads engine_dir only and builds no validation frame. The Action commits any
+    # file in engine_dir (edge_engine.yml `git add -f "$RUN_DIR/edge_engine/"`), so
+    # no workflow change is needed (F6).
+    from backtest.diagnostics import edge_report
+    edge_report.render_discovery_report(engine_dir)
     return result
 
 
@@ -2838,6 +2903,10 @@ def main():
                     help="explicitly re-open validation with a written reason. "
                          "Appends to validation_ledger.jsonl and stamps everything "
                          "downstream.")
+    ap.add_argument("--render-discovery-report", action="store_true",
+                    help="re-render edge_engine_discovery.md from the committed "
+                         "discovery JSON/CSV alone (no recomputation, no validation "
+                         "frame). Backfill for past runs; writes and exits.")
     args = ap.parse_args()
 
     # Mutual-exclusion (SPEC_STAGED §2.1).
@@ -2851,6 +2920,17 @@ def main():
     os.makedirs(engine_dir, exist_ok=True)
     print(f"Edge Engine — run: {os.path.basename(run_dir)}")
     print(f"  engine outputs -> {engine_dir}")
+
+    # ── --render-discovery-report: re-render the .md from committed JSON/CSV ──
+    if args.render_discovery_report:
+        from backtest.diagnostics import edge_report
+        p = edge_report.render_discovery_report(engine_dir)
+        if p:
+            print(f"\033[32mrendered {p}\033[0m")
+            sys.exit(0)
+        print("\033[31mno stage1_discovery.json in engine_dir — run --phase "
+              "discovery first\033[0m")
+        sys.exit(1)
 
     # ── --approve: sign the token and exit (SPEC_STAGED §5.2) ────────────────
     if args.approve is not None:

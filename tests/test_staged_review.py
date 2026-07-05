@@ -159,6 +159,74 @@ def _step_candidate_ladder():
         _ok("survivor/hypothesis/inverted impossible over 400 fuzzed inputs")
 
 
+def _dtype_frame(level_a, level_b, dtype: str, n: int = 200, seed: int = 7):
+    """Two-level categorical frame with a STRONG expR separation. `level_a` carries
+    high r (~+0.5), `level_b` low r (~-0.5). Column dtype is forced to the target
+    so the screen sees exactly the native dtype the real trades.csv has."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for lvl, mu in ((level_a, 0.5), (level_b, -0.5)):
+        for i in range(n):
+            ts = pd.Timestamp("2010-06-01", tz="UTC") + pd.Timedelta(hours=len(rows))
+            rows.append({"feat": lvl, "alert_ts": ts.isoformat(),
+                         "r_realised": round(float(rng.normal(mu, 0.3)), 4)})
+    df = pd.DataFrame(rows)
+    if dtype == "bool":
+        df["feat"] = df["feat"].astype(bool)
+    elif dtype == "int64":
+        df["feat"] = df["feat"].astype("int64")
+    elif dtype == "mixed":
+        df["feat"] = df["feat"].astype(object)  # bools held in an object column
+    else:  # str
+        df["feat"] = df["feat"].astype(str)
+    return df
+
+
+def _step_dtype_regression():
+    """EDGE_DISCOVERY_REPORT_SPEC §3 — the categorical dtype bug (F3) is dead across
+    every level dtype. Before the fix, bool/int64/mixed columns matched ZERO rows on
+    the str level key → CI (None, None) → verdict capped at noise. This asserts a
+    real CI that excludes 0 in BOTH discovery and confirm mode, and a non-zero
+    val-side N for the native (non-str) dtypes."""
+    cases = {
+        "bool": (True, False),
+        "int64": (1, 0),
+        "mixed": (True, False),
+        "str": ("hi", "lo"),
+    }
+    for dtype, (a, b) in cases.items():
+        disc = _dtype_frame(a, b, dtype, seed=11)
+        val = _dtype_frame(a, b, dtype, seed=99)
+        # discovery-only mode
+        buckets: list = []
+        rec_d = ee._categorical_screen(disc, None, "feat", buckets)
+        lo, hi = rec_d.get("delta_disc_ci", [None, None])
+        _true(lo is not None and hi is not None,
+              f"[{dtype}] discovery CI is non-null (was (None,None) pre-fix)")
+        _true(ee._ci_excludes_zero(lo, hi),
+              f"[{dtype}] discovery CI excludes 0 (strong separation)")
+        _true(min(rec_d.get("best_worst_n_disc", [0, 0])) >= ee.MIN_BUCKET_N,
+              f"[{dtype}] both discovery levels N>=150")
+        # confirm mode (val is not None) — val-side stats must be on real rows
+        buckets2: list = []
+        rec_c = ee._categorical_screen(disc, val, "feat", buckets2)
+        _true(min(rec_c.get("best_worst_n_val", [0, 0])) > 0,
+              f"[{dtype}] val-side N non-zero (native compare matched rows)")
+        _true(rec_c.get("delta_val") is not None,
+              f"[{dtype}] delta_val computed (not None)")
+        # the confirm-mode CSV must carry both DISCOVERY and VALIDATION level rows
+        splits = {row["split"] for row in buckets2}
+        _true("VALIDATION" in splits, f"[{dtype}] VALIDATION rows emitted in confirm mode")
+
+    # Ladder sees a real CI from a bool feature -> candidate (not noise).
+    disc = _dtype_frame(True, False, "bool", seed=3)
+    rec = ee._categorical_screen(disc, None, "feat", [])
+    v = ee._apply_candidate_criteria(rec, fdr_reject=True)
+    _eq(v, "candidate", "bool feature with real CI + FDR reject => candidate (not noise)")
+    _true(rec.get("criteria", {}).get("ci_excludes_0") is True,
+          "criteria flags stamped: ci_excludes_0 True for the bool candidate")
+
+
 def _step_no_leak(run_dir):
     """§11.1 — discovery JSON has no *_val keys, CSV has no VALIDATION rows,
     validation_untouched is true."""
@@ -176,13 +244,42 @@ def _step_no_leak(run_dir):
 
 
 def _step_language(run_dir):
-    """§11.3 — discovery email body carries the stamp, never 'survivor'/' edge'."""
+    """§11.3 — discovery email body AND the rendered .md carry the stamp and never
+    the banned strings 'survivor'/' edge'. Also asserts the report structure: one
+    table per feature record (no silent truncation) and every rendered expR cell
+    carries its n (blind-spot guard)."""
+    from backtest.diagnostics import edge_report
     ed = os.path.join(run_dir, "edge_engine")
     res = ee._read_json(ee._discovery_path(ed))
     body = edge_email.build_discovery_body(res).lower()
     _true(ee.DISCOVERY_LANGUAGE_STAMP.lower() in body, "language stamp present in email")
     _true("survivor" not in body, "'survivor' absent from discovery email")
     _true(" edge" not in body, "' edge' absent from discovery email")
+    # the email carries the new summary lines (§5).
+    _true("near-misses:" in body, "email carries near-miss count line")
+    _true(edge_report.REPORT_MD in body, "email points at the committed report")
+
+    # render + scan the .md (F7 / §4).
+    p = edge_report.render_discovery_report(ed)
+    _true(p is not None, "report rendered")
+    md = open(p, encoding="utf-8").read()
+    mlow = md.lower()
+    _true(ee.DISCOVERY_LANGUAGE_STAMP.lower() in mlow, "language stamp present in .md")
+    _true("survivor" not in mlow, "'survivor' absent from report .md")
+    _true(" edge" not in mlow, "' edge' absent from report .md")
+
+    # ── report structure (§7): the APPENDIX renders one section per feature
+    # record, and every expR table in it carries an n column (blind-spot guard).
+    appendix = md.split("## 6. Appendix")[-1]
+    feats = res.get("features", [])
+    # every appendix feature heading is "### `<feat>`  (...)".
+    appendix_headings = [ln for ln in appendix.splitlines() if ln.startswith("### `")]
+    _eq(len(appendix_headings), len(feats),
+        "appendix has exactly one table section per feature record (no truncation)")
+    # every appendix table that shows an expR column also shows an n column.
+    naked = [ln for ln in appendix.splitlines()
+             if ln.startswith("| ") and "expR" in ln and "| n |" not in ln]
+    _eq(naked, [], "every appendix expR table header also carries an n column")
 
 
 def _step_gate_refusal(run_dir):
@@ -303,6 +400,7 @@ def _run_all_steps():
     exercise byte-identical logic — no path is green in one and untested in the
     other."""
     _step_candidate_ladder()
+    _step_dtype_regression()
     _step_exploratory_bypass()
     _run_sequence()
 
