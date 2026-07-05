@@ -386,9 +386,10 @@ def _observations(disc: Dict[str, Any]) -> List[str]:
     ev, bt = feats.get("event"), feats.get("bos_tier")
     if ev and bt and ev.get("delta_disc") == bt.get("delta_disc") \
             and ev.get("_fdr_p") == bt.get("_fdr_p"):
+        ev_fdr_p = ev.get("_fdr_p")
         L.append("- `event` and `bos_tier` produced identical screen stats "
                  f"(Δdisc {_f(ev.get('delta_disc'))}, p "
-                 f"{'—' if ev.get('_fdr_p') is None else f'{float(ev['_fdr_p']):.4g}'}) — "
+                 f"{'—' if ev_fdr_p is None else f'{float(ev_fdr_p):.4g}'}) — "
                  "likely a 1:1 level mapping in this population. Observation only; "
                  "neither feature is dropped (manifest is frozen, B6).")
     else:
