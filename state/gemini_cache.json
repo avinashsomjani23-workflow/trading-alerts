@@ -1,5 +1,8 @@
 {
-  "EURUSD|2026-07-03": {
-    "macro_summary": "The only scheduled high-impact event is ECB President Lagarde Speaks at 17:30 IST; hawkish commentary would help this EURUSD long, while dovish remarks would hurt it."
+  "EURUSD|2026-07-06": {
+    "macro_summary": "The only high-impact event today is the US ISM Services PMI at 23:30 IST. A PMI reading above expectations would hurt this EURUSD long, while a reading below expectations would help it."
+  },
+  "NZDUSD|2026-07-06": {
+    "macro_summary": "The only high-impact event today is the US ISM Services PMI at 23:30 IST. A stronger than expected PMI would hurt this LONG NZDUSD trade, while a weaker print would help. This event is still upcoming."
   }
 }
