@@ -1,17 +1,5 @@
 [
   {
-    "ts": "2026-07-03T19:35:40.310216",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDJPY",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-03T19:35:40.405183",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDJPY",
-    "source": "legacy_window_120h"
-  },
-  {
     "ts": "2026-07-03T19:35:40.490622",
     "kind": "dealing_range_legacy_fallback",
     "pair": "USDJPY",
@@ -1195,6 +1183,18 @@
   },
   {
     "ts": "2026-07-06T12:33:52.341339",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-07-06T13:33:51.858822",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "EURUSD",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-07-06T13:33:51.863335",
     "kind": "dealing_range_legacy_fallback",
     "pair": "EURUSD",
     "source": "legacy_window_120h"
