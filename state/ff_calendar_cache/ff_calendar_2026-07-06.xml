@@ -156,7 +156,7 @@
 		<date><![CDATA[07-06-2026]]></date>
 		<time><![CDATA[11:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-2.2%]]></forecast>
+		<forecast><![CDATA[-2.3%]]></forecast>
 		<previous><![CDATA[-0.5%]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/359-jn-household-spending-yy]]></url>
 	</event>
@@ -186,7 +186,7 @@
 		<date><![CDATA[07-07-2026]]></date>
 		<time><![CDATA[6:00am]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[0.4%]]></forecast>
+		<forecast><![CDATA[0.1%]]></forecast>
 		<previous><![CDATA[0.4%]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/221-ge-industrial-production-mm]]></url>
 	</event>
@@ -196,7 +196,7 @@
 		<date><![CDATA[07-07-2026]]></date>
 		<time><![CDATA[6:00am]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[0.2%]]></forecast>
+		<forecast><![CDATA[0.1%]]></forecast>
 		<previous><![CDATA[-0.1%]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/151-uk-halifax-hpi-mm]]></url>
 	</event>
@@ -206,7 +206,7 @@
 		<date><![CDATA[07-07-2026]]></date>
 		<time><![CDATA[6:45am]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-5.2B]]></forecast>
+		<forecast><![CDATA[-5.9B]]></forecast>
 		<previous><![CDATA[-5.6B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/126-fr-trade-balance]]></url>
 	</event>
@@ -261,6 +261,16 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/838-uk-boe-gov-bailey-speaks]]></url>
 	</event>
 	<event>
+		<title>FOMC Member Bowman Speaks</title>
+		<country>USD</country>
+		<date><![CDATA[07-07-2026]]></date>
+		<time><![CDATA[11:00am]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast />
+		<previous />
+		<url><![CDATA[https://www.forexfactory.com/calendar/812-us-fomc-member-bowman-speaks]]></url>
+	</event>
+	<event>
 		<title>ADP Weekly Employment Change</title>
 		<country>USD</country>
 		<date><![CDATA[07-07-2026]]></date>
@@ -286,7 +296,7 @@
 		<date><![CDATA[07-07-2026]]></date>
 		<time><![CDATA[12:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[2.4B]]></forecast>
+		<forecast><![CDATA[2.8B]]></forecast>
 		<previous><![CDATA[2.7B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/118-ca-trade-balance]]></url>
 	</event>
@@ -296,7 +306,7 @@
 		<date><![CDATA[07-07-2026]]></date>
 		<time><![CDATA[12:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-78.5B]]></forecast>
+		<forecast><![CDATA[-78.3B]]></forecast>
 		<previous><![CDATA[-55.9B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/117-us-trade-balance]]></url>
 	</event>
