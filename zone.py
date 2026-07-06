@@ -65,6 +65,7 @@ _FIELD_ORDER = [
     "is_new_this_scan", "ob_timestamp", "direction", "bos_tag", "bos_tier",
     "broken_was_wall", "reversal_pct", "bos_timestamp",
     "proximal_line", "distal_line", "high", "low", "ob_body", "median_leg_body",
+    "body_ratio", "walkback_depth",
     "bos_idx", "ob_idx", "impulse_start_idx", "impulse_start_price",
     "bos_swing_price", "bos_sequence_count", "break_quality", "touches",
     "status_label", "h1_atr", "current_price_at_scan",
@@ -103,6 +104,15 @@ class Zone:
     low: float = 0.0
     ob_body: float = 0.0
     median_leg_body: float = 0.0
+
+    # OB-candle setup geometry (DECISION_GUARDRAILS.md A3, observe-only).
+    # Frozen at OB formation, NEVER re-stamped on refresh — the OB candle's
+    # identity does not change once the zone exists. body_ratio = chosen OB
+    # candle's body/range; walkback_depth = opposing candles skipped (doji /
+    # oversized / undersized) before this one was accepted (0 = first opposing
+    # candle took). Nullable for zones created before this logging shipped.
+    body_ratio: Optional[float] = None
+    walkback_depth: Optional[int] = None
 
     # df-frame indices (roll each scan; refreshed together)
     bos_idx: Optional[int] = None
@@ -164,6 +174,9 @@ class Zone:
             low=fresh["low"],
             ob_body=fresh["ob_body"],
             median_leg_body=fresh["median_leg_body"],
+            # Formation-time setup geometry — stamped once here, frozen (A3).
+            body_ratio=fresh.get("body_ratio"),
+            walkback_depth=fresh.get("walkback_depth"),
             bos_idx=fresh["bos_idx"],
             ob_idx=fresh["ob_idx"],
             impulse_start_idx=fresh["impulse_start_idx"],
@@ -223,6 +236,15 @@ class Zone:
         self.low = fresh["low"]
         self.ob_body = fresh["ob_body"]
         self.median_leg_body = fresh["median_leg_body"]
+
+        # Setup geometry is FORMATION-FROZEN (A3): keep the value stamped when
+        # the zone was created; never overwrite from a re-scan. The only time we
+        # adopt from fresh is back-fill — a zone created before this logging
+        # shipped carries None, so a later scan may fill it in once.
+        if self.body_ratio is None:
+            self.body_ratio = fresh.get("body_ratio")
+        if self.walkback_depth is None:
+            self.walkback_depth = fresh.get("walkback_depth")
 
         # idx-bearing fields refreshed together (same df frame).
         self.bos_idx = fresh["bos_idx"]

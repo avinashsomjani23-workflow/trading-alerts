@@ -1,9 +1,9 @@
 {
   "stage": 0,
   "pass": true,
-  "run_dir": "/home/runner/work/trading-alerts/trading-alerts/backtest/results/h1only_20080102_20251231",
+  "run_dir": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest/results/h1only_20080102_20251231",
   "run_id": "h1only_20080102_20251231",
-  "generated_utc": "2026-07-05T05:58:08.626838+00:00",
+  "generated_utc": "2026-07-05T07:10:40.767581+00:00",
   "forced": false,
   "verdict_capable": true,
   "scope": "verdict",

@@ -3,6 +3,64 @@ import pandas as pd
 from datetime import datetime, timedelta, timezone
 
 
+def _iso_for_idx(df, k):
+    """Resolve a candle's absolute ISO timestamp from positional index k.
+
+    SHARED P1+P2+P3 helper. Phase 1 (smc_radar) does `reset_index()` WITHOUT
+    drop=True, which moves the DatetimeIndex into a 'Datetime' column and leaves
+    a plain integer RangeIndex behind. Reading `df.index[k]` on that df returns
+    the ROW NUMBER (e.g. 122), not a timestamp — poisoning every downstream ISO
+    stamp (sweep, swept-swing, FVG) with an integer that Phase 2 then fails to
+    resolve when overlaying on its own separately-fetched df.
+
+    The 'Datetime'/'Date' COLUMN is the only reliable anchor after reset_index.
+    Read it first, fall back to the index only when no such column exists (the
+    Phase 2/3 dfs that keep a true DatetimeIndex). Mirrors smc_radar._ts_for_idx
+    so both files resolve timestamps the same way.
+    """
+    raw = _ts_for_idx(df, k)
+    if raw is None:
+        return None
+    return raw.isoformat() if hasattr(raw, 'isoformat') else str(raw)
+
+
+def _ts_for_idx(df, k):
+    """Resolve a candle's absolute timestamp OBJECT from positional index k.
+
+    Same 'Datetime'/'Date' column-first resolution as _iso_for_idx, but returns
+    the raw Timestamp (not its ISO string) so callers doing date math — prior-day
+    H/L, session H/L, trading-hours gaps — get a real datetime, not a poisoned
+    integer row number. See _iso_for_idx for the reset_index root cause.
+    """
+    try:
+        k = int(k)
+        if k < 0 or k >= len(df):
+            return None
+        if 'Datetime' in df.columns:
+            return df['Datetime'].iloc[k]
+        if 'Date' in df.columns:
+            return df['Date'].iloc[k]
+        return df.index[k]
+    except Exception:
+        return None
+
+
+def _row_timestamps(df):
+    """Iterable of per-row timestamps, 'Datetime'/'Date' COLUMN first.
+
+    Date-filtering helpers (prior-day H/L, session H/L) iterate this instead of
+    `df.index` directly. On Phase 1's reset_index df the index is integer row
+    numbers; iterating it makes every `.date()` call throw and the helper silently
+    returns (None, None) — killing all prior-day / session context tags. Reading
+    the 'Datetime' column restores real timestamps. See _iso_for_idx.
+    """
+    if 'Datetime' in df.columns:
+        return df['Datetime']
+    if 'Date' in df.columns:
+        return df['Date']
+    return df.index
+
+
 # ============================================================================
 # PHASE SCOPE MAP — read this before editing any function or constant below.
 # ============================================================================
@@ -986,9 +1044,12 @@ def _prior_trading_day_hl(df, anchor_ts):
         while cursor.weekday() >= 5:
             cursor = cursor - timedelta(days=1)
         target_date = cursor.date()
-        # Slice df rows whose index falls on target_date
+        # Slice df rows whose timestamp falls on target_date. Iterate the
+        # 'Datetime' column (not df.index) — Phase 1's reset_index df has an
+        # integer index that would make every .date() below throw. See
+        # _row_timestamps.
         prior_mask = []
-        for ts in df.index:
+        for ts in _row_timestamps(df):
             t = ts.to_pydatetime() if hasattr(ts, 'to_pydatetime') else ts
             if hasattr(t, 'tzinfo') and t.tzinfo is not None:
                 t = t.replace(tzinfo=None)
@@ -1033,8 +1094,10 @@ def _session_hl_until(df, anchor_ts, session_key):
         sess_end = min(sess_end, anchor_dt)
         if sess_end <= sess_start:
             return None, None
+        # Iterate the 'Datetime' column, not df.index — Phase 1's reset_index
+        # df has an integer index. See _row_timestamps.
         mask = []
-        for ts in df.index:
+        for ts in _row_timestamps(df):
             t = ts.to_pydatetime() if hasattr(ts, 'to_pydatetime') else ts
             if hasattr(t, 'tzinfo') and t.tzinfo is not None:
                 t = t.replace(tzinfo=None)
@@ -1335,19 +1398,15 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
             raw_distance = H[i] - level
         wick_distance_pips = round(max(raw_distance, 0.0) / pip_unit, 2)
 
-        sweep_ts = df.index[i]
-        try:
-            sweep_ts_iso = sweep_ts.isoformat() if hasattr(sweep_ts, 'isoformat') else str(sweep_ts)
-        except Exception:
-            sweep_ts_iso = str(sweep_ts)
-        try:
-            swept_swing_ts = df.index[int(winning_swing['idx'])]
-            swept_swing_ts_iso = (
-                swept_swing_ts.isoformat() if hasattr(swept_swing_ts, 'isoformat')
-                else str(swept_swing_ts)
-            )
-        except Exception:
-            swept_swing_ts_iso = None
+        # Resolve timestamps from the 'Datetime' COLUMN (Phase 1 passes a
+        # reset_index df whose .index is an integer RangeIndex — reading it
+        # would stamp row numbers, poisoning every downstream overlay). See
+        # _ts_for_idx / _iso_for_idx.
+        sweep_ts = _ts_for_idx(df, i)
+        if sweep_ts is None:
+            sweep_ts = df.index[i]
+        sweep_ts_iso = _iso_for_idx(df, i) or str(sweep_ts)
+        swept_swing_ts_iso = _iso_for_idx(df, int(winning_swing['idx']))
 
         context_tags = _compute_context_tags(
             level, swept_type, df, sweep_ts, pair_name, pair_type, tf_atr
@@ -1357,7 +1416,9 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
         # (Mon-Fri) so weekends don't inflate the gap. Used by Phase 2 to
         # narrate sweep recency in the email.
         try:
-            ob_ts_for_hours = df.index[int(ob_idx)]
+            ob_ts_for_hours = _ts_for_idx(df, int(ob_idx))
+            if ob_ts_for_hours is None:
+                ob_ts_for_hours = df.index[int(ob_idx)]
             if hasattr(ob_ts_for_hours, 'to_pydatetime'):
                 ob_dt_for_hours = ob_ts_for_hours.to_pydatetime()
             else:
@@ -1481,11 +1542,9 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
     # callers (Phase 2 / Phase 3) cannot rely on c1_idx because their df is a
     # different fetch than Phase 1's; the timestamp is the only stable anchor.
     def _idx_to_iso(k):
-        try:
-            ts = df.index[int(k)]
-            return ts.isoformat() if hasattr(ts, 'isoformat') else str(ts)
-        except Exception:
-            return None
+        # 'Datetime' column first — Phase 1's reset_index df has an integer
+        # index that would stamp row numbers. See module _iso_for_idx.
+        return _iso_for_idx(df, k)
 
     # Close-based full mit for index (NAS), commodity (Gold) and crypto (BTC) —
     # all wick through levels on news/thin liquidity without genuine fills.

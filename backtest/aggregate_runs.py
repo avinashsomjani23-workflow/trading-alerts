@@ -336,9 +336,9 @@ def _build_verdict_md(
         lines += [
             "## OB freshness (win/loss by touch count)",
             "",
-            "Touch number of the OB at fire time. Fresh = 1st approach. The engine "
-            "kills a zone on the 3rd touch, so 3 is the deepest a trade can fire on. "
-            "Empty buckets mean the system does not trade re-touched OBs.",
+            "Prior proximal touches on the OB at fire time (ob_touches). Fresh = this "
+            "alert is the first tap. The engine kills a zone on the 3rd touch, so 2 "
+            "prior touches is the deepest a trade can fire on.",
             "",
             "| Touch | Trades | Wins | Losses | BE | Win rate | Expectancy |",
             "|-------|--------|------|--------|----|----------|------------|",

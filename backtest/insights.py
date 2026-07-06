@@ -513,29 +513,36 @@ def entry_zone_comparison(df: pd.DataFrame, r_col: str = "r_realised") -> Dict[s
 # OB freshness by touch count
 # ---------------------------------------------------------------------------
 
-# alert_seq is the OB's touch number at fire time (excursion-based, same re-arm
-# rule as live mitigation): 1 = fresh OB, 2 = touched once before, 3 = touched
-# twice before. The engine kills a zone on the 3rd proximal touch, so 3 is the
-# deepest a trade can fire on.
+# ob_touches = the OB's PROXIMAL touch count at the moment the alert fired,
+# frozen at the replay yield (touches_at_alert; smc_detector.is_ob_mitigated_phase1,
+# excursion-based with the OB_TOUCH_REARM_ATR re-arm). 0 = fresh OB (this alert IS
+# the first tap), 1 = tapped once before, 2 = tapped twice before. The engine kills
+# a zone on the 3rd proximal touch, so 2 is the deepest a trade can fire on.
+#
+# HISTORY: this was keyed on `alert_seq` (the re-fire counter), which is ALWAYS 1
+# because run_backtest.py dedupes to the first alert per OB — so buckets never
+# varied and the table was structurally inert (TRUTH_LEDGER.md). ob_touches is the
+# correct column: it carries real 0/1/2 variance independent of re-fire dedup.
 _FRESHNESS_BUCKETS = [
-    (1, "Fresh (1st touch)"),
-    (2, "Touched once (2nd)"),
-    (3, "Touched twice (3rd)"),
+    (0, "Fresh (0 prior touches)"),
+    (1, "Tapped once before"),
+    (2, "Tapped twice before"),
 ]
 
 
 def ob_freshness_comparison(df: pd.DataFrame, r_col: str = "r_realised") -> List[Dict[str, Any]]:
-    """Win/loss by OB touch count at fire time.
+    """Win/loss by OB proximal-touch count at fire time (ob_touches).
 
-    One row per touch bucket (fresh / touched-once / touched-twice), ALWAYS all
-    three — an empty bucket reports zeros, which is itself the finding: the
-    system almost never trades a re-touched OB. Filled+resolved trades only
+    One row per touch bucket (0 / 1 / 2 prior touches), ALWAYS all three so a
+    thin/empty bucket still reports its zeros. Keyed on `ob_touches` — the
+    alert-time proximal touch count frozen at the replay yield — NOT `alert_seq`
+    (which the first-fire dedup pins to 1). Filled+resolved trades only
     (win_rate convention: wins/(wins+losses), breakevens excluded).
     """
     f = _filled(df)
     rows: List[Dict[str, Any]] = []
     for seq, label in _FRESHNESS_BUCKETS:
-        sub = f[f["alert_seq"] == seq] if ("alert_seq" in f.columns and not f.empty) else f.iloc[0:0]
+        sub = f[f["ob_touches"] == seq] if ("ob_touches" in f.columns and not f.empty) else f.iloc[0:0]
         wins = int((sub[r_col] > 0).sum()) if not sub.empty else 0
         losses = int((sub[r_col] < 0).sum()) if not sub.empty else 0
         be = int((sub[r_col] == 0).sum()) if not sub.empty else 0

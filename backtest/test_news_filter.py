@@ -115,6 +115,45 @@ def test_audit_event_returned():
     return ok
 
 
+def test_ff_xml_time_is_utc():
+    """REGRESSION GUARD (2026-07-06): the FairEconomy XML <time> is UTC, NOT
+    US Eastern. A prior bug treated it as America/New_York and shifted every
+    event +4h (EDT), so a 10am-ET / 14:00-UTC / 19:30-IST release (ISM) was
+    rendered as 23:30 IST. Anchor the parse to known real-world release times.
+
+    ISM at 2:00pm feed-time must become 14:00 UTC (= 10:00 ET = 19:30 IST).
+    Spanish Flash CPI at 7:00am feed-time must become 07:00 UTC (= 09:00 CEST).
+    """
+    print("\n== test_ff_xml_time_is_utc ==")
+    xml = (
+        b'<?xml version="1.0"?><weeklyevents>'
+        b'<event><title>ISM Services PMI</title><country>USD</country>'
+        b'<date><![CDATA[07-06-2026]]></date><time><![CDATA[2:00pm]]></time>'
+        b'<impact><![CDATA[High]]></impact></event>'
+        b'<event><title>Spanish Flash CPI y/y</title><country>EUR</country>'
+        b'<date><![CDATA[07-06-2026]]></date><time><![CDATA[7:00am]]></time>'
+        b'<impact><![CDATA[Medium]]></impact></event>'
+        b'</weeklyevents>'
+    )
+    events = {e["title"]: e for e in nf._parse_ff_xml(xml)}
+    ok = True
+    ism = events.get("ISM Services PMI")
+    ok &= check(ism is not None, "ISM event parsed")
+    if ism:
+        ok &= check(
+            ism["ts_utc"] == datetime(2026, 7, 6, 14, 0, tzinfo=timezone.utc),
+            "ISM 2:00pm feed-time -> 14:00 UTC (10:00 ET, 19:30 IST)")
+        ist = ism["ts_utc"] + timedelta(hours=5, minutes=30)
+        ok &= check(ist.strftime("%H:%M") == "19:30",
+                    "ISM renders as 19:30 IST (not 23:30)")
+    cpi = events.get("Spanish Flash CPI y/y")
+    if cpi:
+        ok &= check(
+            cpi["ts_utc"] == datetime(2026, 7, 6, 7, 0, tzinfo=timezone.utc),
+            "Spanish CPI 7:00am feed-time -> 07:00 UTC (09:00 CEST)")
+    return ok
+
+
 def test_naive_datetime_rejected():
     print("\n== test_naive_datetime_rejected ==")
     ev = {"ts_utc": datetime(2026, 5, 7, 13, 30, tzinfo=timezone.utc),
@@ -385,6 +424,7 @@ def main():
         ("test_window_edges",              test_window_edges()),
         ("test_currency_filter",           test_currency_filter()),
         ("test_audit_event_returned",      test_audit_event_returned()),
+        ("test_ff_xml_time_is_utc",        test_ff_xml_time_is_utc()),
         ("test_naive_datetime_rejected",   test_naive_datetime_rejected()),
         ("test_tz_pad_helper_accepts_both", test_tz_pad_helper_accepts_both()),
         ("test_metric_exclusion_invariant", test_metric_exclusion_invariant()),

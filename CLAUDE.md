@@ -116,10 +116,28 @@ FVG, liquidity sweep, kill zone, macro news, PD array alignment, OB and FVG fres
 - If a value can be measured, LOG IT. Storage is free; a missing column is a blind spot the edge engine can never recover.
 - Every new metric / feature / verdict MUST ship with its logging wired in the same change — into the per-trade row (trades.csv) at minimum, and the email breakdown when it's a win-rate lever.
 - Always FLAG in the response what you logged and where (e.g. "logged `bos_verdict` to trades.csv + email"). If a new metric is NOT being logged, say so and why.
-- **Truth ledger gate:** no new trades.csv column or emitted insight ships without (1) a row in `TRUTH_LEDGER.md` (source file:line, when stamped, population) and (2) a structural guard (regression test / gate) that kills its bug CLASS — pattern: DETECTION_FIXES_SPEC.md item 3e. Mutable OB state must be stamped `*_at_alert` at the yield, never read live at row-build time.
+- **Truth ledger gate:** no new trades.csv column or emitted insight ships without a row in `TRUTH_LEDGER.md` (source file:line, when stamped, population). Add a structural guard (regression test / gate) when the column has a real, silent bug class worth killing — not as a reflex for every field (see the judgment rule below). Mutable OB state must be stamped `*_at_alert` at the yield, never read live at row-build time.
 
 **Dual perspective by question type**
 - Trading logic: think like a vet who has placed thousands of trades. "Would a vet respect this signal?"
 - Architecture: think like a senior Python architect. "Is this clean, observable, maintainable?"
 - Many decisions touch both. Surface where they disagree.
 - Methodology is open to evolution. Raise better detection / scoring approaches.
+
+---
+
+## DEFENSIVE CODING & REGRESSION GUARDS — JUDGMENT, NOT REFLEX
+
+A guard is worth adding only when a change can **silently** fail, be skipped, or regress in a way that would corrupt alerts or P&L without anyone noticing. Assess that honestly for each change. If the failure mode is real and silent, add a guard. If it isn't, don't — a guard nobody needs is dead weight and one more thing to break.
+
+**The guard must never be able to break the thing it protects.**
+- Guards belong OUT of the live trade path: offline tests, CI gates, standalone check scripts. That is where they can go red without touching a real alert.
+- Do NOT put a new assertion / fail-loud raise INSIDE live alert generation or the row build unless the alternative is a silent WRONG alert. A guard that throws mid-scan can kill a real, correct alert — that is a worse failure than the bug it guards. When in doubt, log-and-continue, and catch it in a test instead.
+- Prefer the cheapest guard that actually bites: usually one focused regression test that fails when the bug returns. Reach for assertion gates / bounds clamps in live code only when a silent wrong value would otherwise reach the user.
+
+**When a guard IS warranted, say so briefly:**
+1. **Failure mode:** what can go wrong silently?
+2. **Guard:** the check/test that catches it — and confirm it lives out-of-band, not in the live path.
+3. **Why it matters:** the trading/alert impact if unguarded.
+
+Skip all three when no silent failure mode exists. Don't manufacture one to satisfy the ritual.

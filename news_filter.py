@@ -149,16 +149,13 @@ def _parse_ff_xml(xml_bytes: bytes) -> List[Dict[str, Any]]:
             # "All Day" / "Tentative" / "Day 1" entries have no precise
             # time. Skip — we can't apply a ±30min window without one.
             continue
-        # US Eastern -> UTC. Use zoneinfo for DST correctness.
-        try:
-            from zoneinfo import ZoneInfo
-            local = local.replace(tzinfo=ZoneInfo("America/New_York"))
-            ts_utc = local.astimezone(timezone.utc)
-        except Exception:
-            # Fallback: assume EST (UTC-5) if zoneinfo unavailable.
-            # Logged so the gap is visible.
-            logger.warning("zoneinfo unavailable; assuming EST offset")
-            ts_utc = (local - timedelta(hours=-5)).replace(tzinfo=timezone.utc)
+        # The FairEconomy weekly XML publishes <time> in UTC (NOT US Eastern).
+        # Verified against release anchors: ISM 2:00pm = 14:00 UTC = 10am EDT;
+        # Spanish Flash CPI 7:00am = 07:00 UTC = 09:00 CEST; JP data 11:30pm =
+        # 23:30 UTC = 08:30 JST. The old code treated it as America/New_York
+        # and shifted +4h (EDT), pushing every US event 4h late (a 7:30pm IST
+        # release rendered as 11:30pm IST). Stamp UTC directly — no shift.
+        ts_utc = local.replace(tzinfo=timezone.utc)
         out.append({
             "ts_utc":   ts_utc,
             "currency": currency.upper(),
