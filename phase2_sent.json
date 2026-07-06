@@ -3496,7 +3496,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-02T18:35:44.585371",
-      "last_seen_ist": "2026-07-06T22:35:58.438494",
+      "last_seen_ist": "2026-07-06T23:36:01.494622",
       "last_email_day": "2026-07-06",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -3612,10 +3612,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-02T18:35:44.585371",
-      "last_seen_ist": "2026-07-06T22:35:58.438494",
+      "last_seen_ist": "2026-07-06T23:36:01.494622",
       "last_email_day": "2026-07-06",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.0016199999999999548,
       "bias": "LONG",
       "pair": "NZDUSD",
       "ob_snapshot": {
@@ -3964,10 +3964,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-06T11:35:53.305558",
-      "last_seen_ist": "2026-07-06T22:35:58.438494",
+      "last_seen_ist": "2026-07-06T23:36:01.494622",
       "last_email_day": "2026-07-06",
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.3081499999999835,
       "bias": "SHORT",
       "pair": "USDJPY",
       "ob_snapshot": {
@@ -4082,10 +4082,10 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-06T12:35:51.098878",
-      "last_seen_ist": "2026-07-06T22:35:58.438494",
+      "last_seen_ist": "2026-07-06T23:36:01.494622",
       "last_email_day": "2026-07-06",
-      "reentry_armed": false,
-      "max_exit_distance": 0.4279200000000003,
+      "reentry_armed": true,
+      "max_exit_distance": 0.5068499999999858,
       "bias": "SHORT",
       "pair": "USDJPY",
       "ob_snapshot": {
@@ -4200,7 +4200,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-06T15:35:55.950196",
-      "last_seen_ist": "2026-07-06T22:35:58.438494",
+      "last_seen_ist": "2026-07-06T23:36:01.494622",
       "last_email_day": "2026-07-06",
       "reentry_armed": false,
       "max_exit_distance": 0.0024399999999999977,
@@ -4318,7 +4318,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-06T22:35:58.438494",
-      "last_seen_ist": "2026-07-06T22:35:58.438494",
+      "last_seen_ist": "2026-07-06T23:36:01.494622",
       "last_email_day": "2026-07-06",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
