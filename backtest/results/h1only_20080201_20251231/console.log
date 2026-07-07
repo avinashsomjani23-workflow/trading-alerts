@@ -1,0 +1,79 @@
+[INFO] run_start regime=bau regime_label=None mode=h1_only start=2008-02-01 end=2025-12-31 pairs=['EURUSD', 'NZDUSD', 'USDJPY', 'USDCHF', 'GOLD', 'GBPUSD', 'AUDUSD', 'USDCAD', 'EURJPY', 'BTCUSD'] risk_usd=250.0 send_email=True
+[INFO] backtest_atr_cap pair=EURUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDJPY pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=NZDUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDCHF pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=GOLD pair_type=commodity live=3.0 backtest=3.0
+[INFO] backtest_atr_cap pair=GBPUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=AUDUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDCAD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=EURJPY pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=BTCUSD pair_type=crypto live=3.0 backtest=3.0
+
+[H1-ONLY MODE] start=2008-02-01 end=2025-12-31 pairs=['EURUSD', 'NZDUSD', 'USDJPY', 'USDCHF', 'GOLD', 'GBPUSD', 'AUDUSD', 'USDCAD', 'EURJPY', 'BTCUSD'] risk_per_trade=$250
+  No M15/M5 fetches. No scoring gate. Dual entry per OB.
+  News: SKIPPED (BACKTEST_SKIP_NEWS set)
+[INFO] news_fetched events=0 coverage={'ff': False} range=2008-01-31T00:00:00+00:00..2026-01-01T00:00:00+00:00
+[WARN] data_partial_coverage symbol=EURUSD=X interval=1h requested=2007-12-28T00:00:00+00:00..2025-12-31T00:00:00+00:00 available=2008-01-02T07:00:00+00:00..2026-06-26T04:00:00+00:00
+  [partial coverage] EURUSD=X 1h: requested 2007-12-28..2025-12-31 runs beyond cache 2008-01-02..2026-06-26 — returning available slice
+[WARN] data_partial_coverage symbol=JPY=X interval=1h requested=2007-12-28T00:00:00+00:00..2025-12-31T00:00:00+00:00 available=2008-01-02T07:00:00+00:00..2026-06-26T04:00:00+00:00
+  [partial coverage] JPY=X 1h: requested 2007-12-28..2025-12-31 runs beyond cache 2008-01-02..2026-06-26 — returning available slice
+[WARN] data_partial_coverage symbol=NZDUSD=X interval=1h requested=2007-12-28T00:00:00+00:00..2025-12-31T00:00:00+00:00 available=2008-01-01T22:00:00+00:00..2026-06-26T04:00:00+00:00
+  [partial coverage] NZDUSD=X 1h: requested 2007-12-28..2025-12-31 runs beyond cache 2008-01-01..2026-06-26 — returning available slice
+[WARN] data_partial_coverage symbol=CHF=X interval=1h requested=2007-12-28T00:00:00+00:00..2025-12-31T00:00:00+00:00 available=2008-01-02T07:00:00+00:00..2026-06-26T04:00:00+00:00
+  [partial coverage] CHF=X 1h: requested 2007-12-28..2025-12-31 runs beyond cache 2008-01-02..2026-06-26 — returning available slice
+[WARN] data_partial_coverage symbol=GC=F interval=1h requested=2007-12-28T00:00:00+00:00..2025-12-31T00:00:00+00:00 available=2008-01-02T08:00:00+00:00..2026-06-26T04:00:00+00:00
+  [partial coverage] GC=F 1h: requested 2007-12-28..2025-12-31 runs beyond cache 2008-01-02..2026-06-26 — returning available slice
+[WARN] data_partial_coverage symbol=GBPUSD=X interval=1h requested=2007-12-28T00:00:00+00:00..2025-12-31T00:00:00+00:00 available=2008-01-02T07:00:00+00:00..2026-06-26T04:00:00+00:00
+  [partial coverage] GBPUSD=X 1h: requested 2007-12-28..2025-12-31 runs beyond cache 2008-01-02..2026-06-26 — returning available slice
+[WARN] data_partial_coverage symbol=AUDUSD=X interval=1h requested=2007-12-28T00:00:00+00:00..2025-12-31T00:00:00+00:00 available=2008-01-02T07:00:00+00:00..2026-06-26T04:00:00+00:00
+  [partial coverage] AUDUSD=X 1h: requested 2007-12-28..2025-12-31 runs beyond cache 2008-01-02..2026-06-26 — returning available slice
+[WARN] data_partial_coverage symbol=USDCAD=X interval=1h requested=2007-12-28T00:00:00+00:00..2025-12-31T00:00:00+00:00 available=2008-01-02T07:00:00+00:00..2026-06-26T04:00:00+00:00
+  [partial coverage] USDCAD=X 1h: requested 2007-12-28..2025-12-31 runs beyond cache 2008-01-02..2026-06-26 — returning available slice
+[WARN] data_partial_coverage symbol=EURJPY=X interval=1h requested=2007-12-28T00:00:00+00:00..2025-12-31T00:00:00+00:00 available=2008-01-02T07:00:00+00:00..2026-06-26T04:00:00+00:00
+  [partial coverage] EURJPY=X 1h: requested 2007-12-28..2025-12-31 runs beyond cache 2008-01-02..2026-06-26 — returning available slice
+[WARN] data_partial_coverage symbol=BTCUSD=X interval=1h requested=2007-12-28T00:00:00+00:00..2025-12-31T00:00:00+00:00 available=2011-03-23T22:00:00+00:00..2026-06-26T04:00:00+00:00
+  [partial coverage] BTCUSD=X 1h: requested 2007-12-28..2025-12-31 runs beyond cache 2011-03-23..2026-06-26 — returning available slice
+  [scanlog] manifest written -> /home/runner/work/trading-alerts/trading-alerts/backtest/out/scanlog/h1only_20080201_20251231
+[INFO] pair_data_loaded pair=EURUSD h1_rows=111585 h1_first=2008-01-02 07:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=USDJPY h1_rows=111551 h1_first=2008-01-02 07:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=NZDUSD h1_rows=111552 h1_first=2008-01-01 22:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=USDCHF h1_rows=111532 h1_first=2008-01-02 07:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=GOLD h1_rows=105412 h1_first=2008-01-02 08:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=GBPUSD h1_rows=111547 h1_first=2008-01-02 07:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=AUDUSD h1_rows=111570 h1_first=2008-01-02 07:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=USDCAD h1_rows=111577 h1_first=2008-01-02 07:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=EURJPY h1_rows=111570 h1_first=2008-01-02 07:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+[INFO] pair_data_loaded pair=BTCUSD h1_rows=74268 h1_first=2011-03-23 22:00:00+00:00 h1_last=2025-12-31 00:00:00+00:00
+
+  [parallel] launching 10 pairs across 2 workers
+  [DIAG EURUSD] walked=111068 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=111068 bars_with_obs=87119 new_obs=6477 prox_checks=436802 closest=0.00×ATR (cap=2.5×ATR) alerts=10947 resuppressed=0 rearmed=5922 aged_out=1292
+  EURUSD: 10947 OB-touch alerts
+  EURUSD: 4816 simulated trade rows (0 news-blocked, 785 IST-blocked, 2870 killzone-dropped alerts)
+  [DIAG USDCHF] walked=111015 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=111015 bars_with_obs=84767 new_obs=6101 prox_checks=407671 closest=0.00×ATR (cap=2.5×ATR) alerts=10275 resuppressed=0 rearmed=5550 aged_out=1249
+  USDCHF: 10275 OB-touch alerts
+  USDCHF: 4532 simulated trade rows (0 news-blocked, 688 IST-blocked, 2578 killzone-dropped alerts)
+  [DIAG GBPUSD] walked=111030 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=111030 bars_with_obs=86024 new_obs=6615 prox_checks=445843 closest=0.00×ATR (cap=2.5×ATR) alerts=11348 resuppressed=0 rearmed=6206 aged_out=1344
+  GBPUSD: 11348 OB-touch alerts
+  GBPUSD: 4934 simulated trade rows (0 news-blocked, 761 IST-blocked, 2859 killzone-dropped alerts)
+  [DIAG USDCAD] walked=111060 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=111060 bars_with_obs=83679 new_obs=6117 prox_checks=389406 closest=0.00×ATR (cap=2.5×ATR) alerts=10276 resuppressed=0 rearmed=5429 aged_out=1154
+  USDCAD: 10276 OB-touch alerts
+  USDCAD: 4609 simulated trade rows (0 news-blocked, 662 IST-blocked, 2522 killzone-dropped alerts)
+  [DIAG BTCUSD] walked=74268 warmup_skip=150 dr_err=0 radar_err=0 bars_with_events=74118 bars_with_obs=57538 new_obs=4781 prox_checks=312285 closest=0.00×ATR (cap=3.0×ATR) alerts=6877 resuppressed=0 rearmed=3485 aged_out=1760
+  BTCUSD: 6877 OB-touch alerts
+  BTCUSD: 2934 simulated trade rows (0 news-blocked, 1002 IST-blocked, 2543 killzone-dropped alerts)
+  [DIAG USDJPY] walked=111034 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=111034 bars_with_obs=85421 new_obs=5956 prox_checks=385531 closest=0.00×ATR (cap=2.5×ATR) alerts=9612 resuppressed=0 rearmed=5096 aged_out=1186
+  USDJPY: 9612 OB-touch alerts
+  USDJPY: 4357 simulated trade rows (0 news-blocked, 1183 IST-blocked, 2821 killzone-dropped alerts)
+  [DIAG NZDUSD] walked=111035 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=111035 bars_with_obs=80904 new_obs=5225 prox_checks=332257 closest=0.00×ATR (cap=2.5×ATR) alerts=8512 resuppressed=0 rearmed=4454 aged_out=1043
+  NZDUSD: 8512 OB-touch alerts
+  NZDUSD: 3976 simulated trade rows (0 news-blocked, 1171 IST-blocked, 2687 killzone-dropped alerts)
+  [DIAG GOLD] walked=104918 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=104918 bars_with_obs=82869 new_obs=5832 prox_checks=387224 closest=0.00×ATR (cap=3.0×ATR) alerts=9975 resuppressed=0 rearmed=5435 aged_out=1252
+  GOLD: 9975 OB-touch alerts
+  GOLD: 4408 simulated trade rows (0 news-blocked, 685 IST-blocked, 2366 killzone-dropped alerts)
+  [DIAG AUDUSD] walked=111053 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=111053 bars_with_obs=82189 new_obs=5737 prox_checks=362328 closest=0.00×ATR (cap=2.5×ATR) alerts=9101 resuppressed=0 rearmed=4745 aged_out=1120
+  AUDUSD: 9101 OB-touch alerts
+  AUDUSD: 4148 simulated trade rows (0 news-blocked, 1251 IST-blocked, 2668 killzone-dropped alerts)
+  [DIAG EURJPY] walked=111053 warmup_skip=0 dr_err=0 radar_err=0 bars_with_events=111053 bars_with_obs=82510 new_obs=5667 prox_checks=378212 closest=0.00×ATR (cap=2.5×ATR) alerts=9372 resuppressed=0 rearmed=4990 aged_out=1196
+  EURJPY: 9372 OB-touch alerts
+  EURJPY: 4310 simulated trade rows (0 news-blocked, 1068 IST-blocked, 2867 killzone-dropped alerts)
