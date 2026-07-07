@@ -3148,7 +3148,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-02T18:35:44.585371",
-      "last_seen_ist": "2026-07-07T12:36:00.787434",
+      "last_seen_ist": "2026-07-07T13:35:56.852370",
       "last_email_day": "2026-07-07",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -3268,7 +3268,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-02T18:35:44.585371",
-      "last_seen_ist": "2026-07-07T12:36:00.787434",
+      "last_seen_ist": "2026-07-07T13:35:56.852370",
       "last_email_day": "2026-07-07",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -3974,10 +3974,10 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-06T22:35:58.438494",
-      "last_seen_ist": "2026-07-07T12:36:00.787434",
+      "last_seen_ist": "2026-07-07T13:35:56.852370",
       "last_email_day": "2026-07-06",
       "reentry_armed": false,
-      "max_exit_distance": 0.0017500000000000293,
+      "max_exit_distance": 0.0020600000000000618,
       "bias": "SHORT",
       "pair": "NZDUSD",
       "ob_snapshot": {
@@ -4084,7 +4084,7 @@
       "score_int": 5,
       "score_raw": 5.0,
       "score_high_water": 5.0,
-      "score_low_water": 5.0,
+      "score_low_water": 4.5,
       "breakdown": {
         "structure": 3,
         "sweep": 0.0,
@@ -4093,7 +4093,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-07T09:36:06.308971",
-      "last_seen_ist": "2026-07-07T11:35:57.129143",
+      "last_seen_ist": "2026-07-07T13:35:56.852370",
       "last_email_day": "2026-07-07",
       "reentry_armed": false,
       "max_exit_distance": 0.0,
