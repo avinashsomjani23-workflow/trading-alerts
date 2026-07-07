@@ -60,6 +60,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 RESULTS = os.path.join(ROOT, "backtest", "results")
 
+# Run folders that must never be auto-selected by resolve_run_dir, even though
+# they still exist on disk or in git history (e.g. a wrong-start rerun).
+REJECTED_RUN_IDS = {
+    "h1only_20080201_20251231",  # 2026-07-07: wrong start (should be 20080102)
+}
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONSTANTS (single block — SPEC §10)
@@ -370,6 +376,10 @@ def resolve_run_dir(run_dir: Optional[str], start: Optional[str],
     # format-agnostic (h1only_<s>_<e>, <s>_<e>__<stamp>, …). Latest by name.
     cands = [d for d in os.listdir(RESULTS)
              if os.path.isdir(os.path.join(RESULTS, d)) and s in d and e in d]
+    # Reject known-bad/superseded run folders outright, even if present on disk
+    # or in git history — a wrong-start rerun (e.g. 2026-07-07 Feb-01-start
+    # mistake, should have been Jan-02) must never be selectable again.
+    cands = [d for d in cands if d not in REJECTED_RUN_IDS]
     if not cands:
         raise SystemExit(f"no run folder matches {start}..{end} under {RESULTS}")
     return os.path.join(RESULTS, sorted(cands)[-1])
