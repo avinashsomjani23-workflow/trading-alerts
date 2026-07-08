@@ -177,6 +177,16 @@ def _strip_market_closed(df, td_symbol=""):
       year; FX prints all 24 hours). Twelve Data pads that hour, so Gold needs its
       weekday 00:00 UTC bar stripped too, else Gold drifts one bar per day vs MT5.
 
+    - HOLIDAY EARLY-CLOSE (all instruments), the general safety net so this class
+      of bug can never recur without a code change: markets close early on some
+      holidays (e.g. Gold on the pre-Juneteenth / pre-July-4 Friday closes ~20:00
+      UTC). MT5 simply omits those hours; Twelve Data pads them with FLAT filler
+      candles (high == low). We can't hardcode holiday dates (they move yearly), so
+      we strip any RUN of >= 2 consecutive flat bars. Verified against MT5 (2yr,
+      all 5 pairs): real flat bars never occur consecutively — the longest real
+      flat run is 1 (a lone one-tick New-Year blip on NZDUSD). Requiring a run of
+      >= 2 therefore drops holiday filler blocks while NEVER dropping a real bar.
+
     Friday (<= 23:00) and Monday (00:00+) FX bars are legit and untouched.
     """
     idx = df.index
@@ -185,7 +195,24 @@ def _strip_market_closed(df, td_symbol=""):
     if _is_gold(td_symbol):
         # Gold's daily maintenance break: no 00:00 UTC bar on trading days.
         closed = closed | ((dow < 5) & (idx.hour == 0))
+    closed = closed | _flat_filler_run_mask(df)
     return df[~closed]
+
+
+def _flat_filler_run_mask(df):
+    """Boolean mask (index-aligned) for synthetic FLAT filler bars that pad
+    holiday early-closes. A bar is flat when high == low. Real MT5 flat bars are
+    always isolated (verified 2yr/5 pairs: longest real flat run == 1), so we only
+    strip a flat bar when it belongs to a run of >= 2 consecutive flat bars —
+    never dropping a genuine one-tick blip.
+    """
+    flat = (df["High"] == df["Low"])
+    if not flat.any():
+        return flat  # all-False, index-aligned
+    # A flat bar is filler iff its neighbour (prev OR next) is also flat.
+    prev_flat = flat.shift(1, fill_value=False)
+    next_flat = flat.shift(-1, fill_value=False)
+    return flat & (prev_flat | next_flat)
 
 
 def _is_gold(td_symbol):

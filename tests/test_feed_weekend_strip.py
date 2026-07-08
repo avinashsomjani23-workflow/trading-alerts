@@ -51,14 +51,22 @@ def _fail(msg):
 def _make_frame():
     """Continuous hourly UTC frame spanning a full Fri->Mon weekend, as Twelve
     Data would deliver it WITH weekend filler. Covers Fri 20:00 UTC through
-    Mon 02:00 UTC so every edge of the closed window is exercised."""
+    Mon 02:00 UTC so every edge of the closed window is exercised.
+
+    Bars carry NON-FLAT prices (high != low) so they exercise only the weekend /
+    Gold-midnight rules — the separate flat-filler-run rule is tested in
+    _check_flat_filler_run() with its own frame."""
     # 2026-07-03 is a Friday.
     idx = pd.date_range("2026-07-03 20:00", "2026-07-06 02:00", freq="h", tz="UTC")
     n = len(idx)
+    base = [1.0 + i * 0.001 for i in range(n)]           # gently rising, all distinct
     df = pd.DataFrame(
         {
-            "Open": [1.0] * n, "High": [1.0] * n,
-            "Low": [1.0] * n, "Close": [1.0] * n, "Volume": [0.0] * n,
+            "Open":  base,
+            "High":  [b + 0.0005 for b in base],           # high != low -> not flat
+            "Low":   [b - 0.0005 for b in base],
+            "Close": base,
+            "Volume": [0.0] * n,
         },
         index=idx,
     )
@@ -128,15 +136,58 @@ def main():
     if not fx_midnight_kept:
         _fail("FX default wrongly stripped weekday 00:00 — Gold rule leaked to FX")
 
+    # --- HOLIDAY early-close flat-filler-run rule ------------------------------
+    _check_flat_filler_run()
+
     # 3) the strip is actually wired into the network path.
     src = inspect.getsource(feed_adapter._to_dataframe)
     if "_strip_market_closed" not in src:
         _fail("_to_dataframe does not call _strip_market_closed — strip is dead code")
 
     print(f"PASS: FX stripped {len(df) - len(out)} weekend bars (gap {max_gap_h:.0f}h "
-          f"restored); Gold additionally strips weekday 00:00 UTC; FX untouched; "
-          f"wired into _to_dataframe.")
+          f"restored); Gold additionally strips weekday 00:00 UTC; holiday flat-filler "
+          f"runs stripped while lone flat bars survive; FX untouched; wired into "
+          f"_to_dataframe.")
     sys.exit(0)
+
+
+def _check_flat_filler_run():
+    """Holiday early-close: Twelve Data pads with FLAT filler candles (high==low)
+    that MT5 omits. We strip a flat bar ONLY when it sits in a run of >= 2
+    consecutive flat bars (real MT5 flat bars are always isolated — longest real
+    run is 1, verified 2yr/5 pairs). Assert BOTH directions:
+      - a run of >= 2 flat bars is fully stripped;
+      - a LONE flat bar (real one-tick blip) is KEPT.
+    All bars here are placed on a WEEKDAY away from 00:00 UTC so the weekend /
+    Gold-midnight rules don't interfere — this isolates the flat-run rule.
+    """
+    # 2026-06-17 is a Wednesday; use daytime hours (no 00:00) on a single weekday.
+    idx = pd.date_range("2026-06-17 10:00", periods=8, freq="h", tz="UTC")
+    # Real (non-flat) bars, except: a 3-bar flat RUN at 12:00-14:00 (holiday filler)
+    # and a LONE flat bar at 17:00 (real one-tick blip).
+    highs = [1.0010, 1.0011, 1.0000, 1.0000, 1.0000, 1.0015, 1.0016, 1.0000]
+    lows  = [1.0000, 1.0001, 1.0000, 1.0000, 1.0000, 1.0005, 1.0006, 1.0000]
+    #                         ^^^^^^^^^ flat run (idx 2,3,4)              ^^^ lone flat (idx 7)
+    df = pd.DataFrame(
+        {"Open": highs, "High": highs, "Low": lows, "Close": lows, "Volume": [0.0] * 8},
+        index=idx,
+    )
+    df.index.name = "datetime"
+    out = feed_adapter._strip_market_closed(df, td_symbol="")
+
+    # the 3-bar flat run must be gone.
+    run_ts = list(idx[2:5])
+    surv_run = [t for t in run_ts if t in out.index]
+    if surv_run:
+        _fail(f"flat filler run not stripped — survivors: {surv_run}")
+    # the lone flat bar must survive (it's a real one-tick blip).
+    lone_ts = idx[7]
+    if lone_ts not in out.index:
+        _fail(f"lone flat bar {lone_ts} wrongly stripped — real one-tick bars must survive")
+    # non-flat real bars must all survive.
+    for t in (idx[0], idx[1], idx[5], idx[6]):
+        if t not in out.index:
+            _fail(f"non-flat real bar {t} wrongly stripped")
 
 
 if __name__ == "__main__":
