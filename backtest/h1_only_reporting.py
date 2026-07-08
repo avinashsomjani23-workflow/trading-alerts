@@ -1240,8 +1240,12 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # headline_exclusion names why (unresolved:*, below_score_floor,
         # ist_blocked). Stamped from the single _headline_exclusion rule.
         "eligible_for_headline", "headline_exclusion",
-        "mfe_r", "mae_r", "sl_bar_was_sweep", "sl_swept_then_tp1",
+        "mfe_r", "mae_r", "r_capture_ratio",
+        "sl_bar_was_sweep", "sl_swept_then_tp1",
         "sl_wick_depth_atr",
+        # Outcome-time exit-track columns (2026-07-08; NEVER entry features).
+        "sl_max_adverse_after_sweep_atr", "bars_sl_to_tp1_touch",
+        "sl_recovered_to_entry", "sl_distance_atr",
         "bars_to_exit", "bars_to_tp1", "bars_to_tp2",
         "ob_to_fill_hours", "bars_break_to_pullback",
         "ob_age_h1_bars", "pd_zone",
@@ -1265,7 +1269,7 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # fell outside the user's IST trading window and was excluded
         # from aggregates (live system would have suppressed it).
         "ist_blocked", "alert_utc_hour",
-        "h1_trend", "trend_alignment",
+        "h1_trend", "trend_alignment", "trend_pd_agree",
         # Structure signals (STRUCTURE_SIGNALS_SPEC) — edge-discovery inputs, no
         # gate/email change yet. S2 ranging/pending-flip state at alert; S3 leg
         # retracement (extreme + clipped are audit support, retrace is screened);

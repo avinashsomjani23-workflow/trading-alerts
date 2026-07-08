@@ -952,6 +952,27 @@ def _simulate_single_entry(
     # 0.0 = the wick closed exactly at the stop (no overshoot). None for non-SL exits
     # or when h1_atr is unavailable (legacy zone). NOT a gate — logging only.
     sl_wick_depth_atr = None
+    # ── Exit-lab outcome-time columns (2026-07-08; EXIT TRACK ONLY — leakage as
+    # entry features). All three describe what happened AFTER the stop fired, so a
+    # wider-stop replay can be designed and sanity-checked from data. None for
+    # non-SL exits. C6: these are TOUCH-based HINTS, never bankable — only a real
+    # -order replay counts. The sweep-conditioned ones (max_adverse, recovered)
+    # are only set when the stop bar was a sweep (a clean close-through has no
+    # "would a wider stop have survived" question to answer).
+    #   sl_max_adverse_after_sweep_atr : furthest price ran AGAINST us BEYOND the
+    #     fired stop, over SL_SWEEP_LOOKBACK_BARS after the stop bar, in OB-formation
+    #     ATR. Distinguishes "shallow wick, recovered" (small) from "wick was the
+    #     start of a bigger move" (large) — the recovered-vs-kept-losing question.
+    #     0.0 = never traded further against us past the stop. None = non-sweep/no ATR.
+    #   bars_sl_to_tp1_touch : H1 bars from the stop bar to the FIRST bar that
+    #     touched TP1 in our direction (None if TP1 never touched in the lookback).
+    #     Sizes how long a wider stop would have had to endure to reach target.
+    #   sl_recovered_to_entry : after a sweep, did price trade back to ENTRY
+    #     (breakeven) within the lookback, even if TP1 was never reached? Catches
+    #     the "a wider stop would have SCRATCHED, not won" middle case (BE-sweep).
+    sl_max_adverse_after_sweep_atr = None
+    bars_sl_to_tp1_touch = None
+    sl_recovered_to_entry = None
     if exit_reason == "sl" and exit_ts is not None:
         try:
             sl_bar = future.loc[exit_ts]
@@ -971,23 +992,60 @@ def _simulate_single_entry(
                     _overshoot = sl_bar_hi - cur_sl
                 sl_wick_depth_atr = round(max(0.0, _overshoot) / _h1_atr_sl, 3)
 
-            # Later-reversal check only matters when the stop bar was a sweep.
+            post_sl = future.loc[future.index > exit_ts]
+            horizon = post_sl.iloc[:SL_SWEEP_LOOKBACK_BARS]
+
+            # bars_sl_to_tp1_touch: applies to EVERY sl exit (not just sweeps) —
+            # tells us if/when a target was reachable after the stop. 1-indexed
+            # bars from the stop bar (the first post-stop bar = 1).
+            if len(horizon):
+                if bias == "LONG":
+                    _tp1_hits = horizon.index[horizon["High"] >= tp1]
+                else:
+                    _tp1_hits = horizon.index[horizon["Low"] <= tp1]
+                if len(_tp1_hits):
+                    bars_sl_to_tp1_touch = int(
+                        horizon.index.get_loc(_tp1_hits[0])) + 1
+
+            # Later-reversal checks only matter when the stop bar was a sweep.
             if sl_bar_was_sweep:
-                post_sl = future.loc[future.index > exit_ts]
-                horizon = post_sl.iloc[:SL_SWEEP_LOOKBACK_BARS]
                 if len(horizon):
                     if bias == "LONG":
                         sl_swept_then_tp1 = bool((horizon["High"] >= tp1).any())
                     else:
                         sl_swept_then_tp1 = bool((horizon["Low"] <= tp1).any())
+
+                    # Max adverse excursion BEYOND the fired stop, after the stop
+                    # bar (how much further it ran against us). LONG stop is below,
+                    # so "against" = further DOWN (lower Low); SHORT = further UP.
+                    if _h1_atr_sl:
+                        if bias == "LONG":
+                            _worst = float(horizon["Low"].min())
+                            _adverse = cur_sl - _worst
+                        else:
+                            _worst = float(horizon["High"].max())
+                            _adverse = _worst - cur_sl
+                        sl_max_adverse_after_sweep_atr = round(
+                            max(0.0, _adverse) / _h1_atr_sl, 3)
+
+                    # Did price return to ENTRY (breakeven) within the lookback?
+                    if bias == "LONG":
+                        sl_recovered_to_entry = bool((horizon["High"] >= entry).any())
+                    else:
+                        sl_recovered_to_entry = bool((horizon["Low"] <= entry).any())
                 else:
                     sl_swept_then_tp1 = False
+                    sl_max_adverse_after_sweep_atr = None
+                    sl_recovered_to_entry = False
             else:
                 sl_swept_then_tp1 = False
         except Exception:
             sl_bar_was_sweep = None
             sl_swept_then_tp1 = None
             sl_wick_depth_atr = None
+            sl_max_adverse_after_sweep_atr = None
+            bars_sl_to_tp1_touch = None
+            sl_recovered_to_entry = None
 
     # ── ob_to_fill_hours: OB formation -> fill gap (diagnostic; NOT a gate) ──
     # corr with r ~0 both years, not monotonic — logged only for the edge engine
@@ -1065,6 +1123,9 @@ def _simulate_single_entry(
         sl_bar_was_sweep=sl_bar_was_sweep,
         sl_swept_then_tp1=sl_swept_then_tp1,
         sl_wick_depth_atr=sl_wick_depth_atr,
+        sl_max_adverse_after_sweep_atr=sl_max_adverse_after_sweep_atr,
+        bars_sl_to_tp1_touch=bars_sl_to_tp1_touch,
+        sl_recovered_to_entry=sl_recovered_to_entry,
         ob_to_fill_hours=ob_to_fill_hours,
         bars_break_to_pullback=bars_break_to_pullback,
         be_arm_bar_touched_entry=be_arm_bar_touched_entry,
@@ -1100,7 +1161,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                mfe_r, mae_r, bars_to_exit, bars_to_tp1, bars_to_tp2,
                sl_collision, risk_usd, sl_raw=None,
                sl_bar_was_sweep=None, sl_swept_then_tp1=None,
-               sl_wick_depth_atr=None, ob_to_fill_hours=None,
+               sl_wick_depth_atr=None, sl_max_adverse_after_sweep_atr=None,
+               bars_sl_to_tp1_touch=None, sl_recovered_to_entry=None,
+               ob_to_fill_hours=None,
                bars_break_to_pullback=None,
                be_arm_bar_touched_entry=None) -> Dict[str, Any]:
     """Assemble the final trade row dict in stable column order."""
@@ -1226,6 +1289,42 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     # ATR) for a regime read. Logged because it's free and frozen.
     atr_at_ob = round(float(_h1_atr), 6) if _h1_atr else None
 
+    # ── Derived columns (2026-07-08): encoded in CODE (were previously pasted into
+    # the CSV from a sheet and got column-shift corrupted). All three are computed
+    # from real, frozen source columns so every run reproduces them deterministically.
+    #
+    #   sl_distance_atr : |entry - sl_initial| / OB-formation ATR. Risk width in
+    #     ATR. Uses sl_initial (the stop actually traded, spread-widened), NOT
+    #     sl_raw. This is ~1 for most trades (the "one H1 bar" instant-death axis).
+    #     Point-in-time clean: entry + sl + ATR are all known at fill. `sl` here is
+    #     the traded initial stop (sl_initial in the row).
+    sl_distance_atr = round(abs(entry - sl) / _h1_atr, 3) \
+        if (_h1_atr and entry is not None and sl is not None) else None
+
+    #   r_capture_ratio : r_realised / mfe_r. How much of the best favorable move
+    #     we actually kept. 1.0 = rode the full excursion to exit; 0.0 = gave the
+    #     whole move back (the BE-sweep signature); can be negative on a loser that
+    #     had a favorable poke first. None when mfe_r <= 0 (no favorable move to
+    #     capture — ratio undefined, never 0/0). OUTCOME-time (uses r_realised) →
+    #     exit/description only, NEVER an entry feature.
+    r_capture_ratio = round(r_realised / mfe_r, 3) \
+        if (mfe_r is not None and mfe_r > 0 and r_realised is not None) else None
+
+    #   trend_pd_agree : do the two directional confluences agree — is the trade
+    #     WITH the H1 trend AND PD-aligned? True only when both point the same way.
+    #     h1_trend is absolute (bullish/bearish); pd_alignment is already relative
+    #     to direction (aligned/counter). Point-in-time clean (both frozen at alert).
+    #     None when either input is missing (legacy/degraded row).
+    _h1_trend_val = alert.get("h1_trend")
+    if _h1_trend_val is None or pd_alignment is None:
+        trend_pd_agree = None
+    else:
+        _with_trend = (
+            (direction == "bullish" and _h1_trend_val == "bullish")
+            or (direction == "bearish" and _h1_trend_val == "bearish")
+        )
+        trend_pd_agree = bool(_with_trend and pd_alignment == "aligned")
+
     # ── S3 (STRUCTURE_SIGNALS_SPEC): leg retracement at alert ──────────────────
     # How much of the displacement leg price has given back by the time the OB
     # fills. Stamped at alert: `leg_extreme_at_alert` (the a-priori extreme since
@@ -1316,6 +1415,14 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "sl_bar_was_sweep":  sl_bar_was_sweep,
         "sl_swept_then_tp1": sl_swept_then_tp1,
         "sl_wick_depth_atr": sl_wick_depth_atr,
+        # Outcome-time exit-track columns (2026-07-08; NEVER entry features).
+        #   sl_max_adverse_after_sweep_atr : furthest run against us BEYOND the
+        #     stop after a sweep, in ATR — recovered (small) vs kept-losing (large).
+        #   bars_sl_to_tp1_touch : bars from stop bar to first TP1 touch (None=never).
+        #   sl_recovered_to_entry : after a sweep, did price return to entry (BE)?
+        "sl_max_adverse_after_sweep_atr": sl_max_adverse_after_sweep_atr,
+        "bars_sl_to_tp1_touch":           bars_sl_to_tp1_touch,
+        "sl_recovered_to_entry":          sl_recovered_to_entry,
         # Measurement only, no behavior change (2026-07-02). True when the bar
         # that armed break-even (+1R touch) ALSO traded back to entry within the
         # same bar -- the intra-bar order (arm-then-pullback vs pullback-then-arm)
@@ -1376,6 +1483,12 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "fvg_size_atr":      fvg_size_atr,
         "impulse_leg_atr":   impulse_leg_atr,
         "atr_at_ob":         atr_at_ob,
+        # Derived-in-code columns (2026-07-08). Replaces the previously PASTED
+        # sheet columns (sl_distance_atr / r_capture_ratio / trend_pd_agree) that
+        # were CSV-corrupted. r_capture_ratio is OUTCOME-time (exit track only).
+        "sl_distance_atr":   sl_distance_atr,
+        "r_capture_ratio":   r_capture_ratio,
+        "trend_pd_agree":    trend_pd_agree,
         # Walk-back geometry (A3) — None for legacy zones built before this change.
         "ob_body_ratio":     ob_body_ratio,
         "ob_walkback_depth": ob_walkback_depth,

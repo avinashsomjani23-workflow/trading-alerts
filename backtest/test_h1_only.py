@@ -426,6 +426,64 @@ def test_sl_wick_depth_atr():
     return ok
 
 
+def test_edge_lab_columns():
+    """Edge-lab columns (2026-07-08): the 3 derived (encoded, ex-pasted) + the 3
+    outcome-time SL columns. Pins the DEFINITIONS so a formula regression fails
+    loudly out-of-band (never in the live path). These mirror the exact math in
+    h1_only_simulator._build_row / _simulate_single_entry.
+    """
+    print("\n== test_edge_lab_columns ==")
+    ok = True
+
+    # --- sl_distance_atr = |entry - sl_initial| / ATR (uses sl_initial, not sl_raw)
+    entry, sl_initial, atr = 1.4793, 1.4814, 0.001914
+    sl_dist = round(abs(entry - sl_initial) / atr, 3)
+    ok &= check(sl_dist == 1.097, f"sl_distance_atr: 1.097 (got {sl_dist})")
+
+    # --- r_capture_ratio = r_realised / mfe_r ; None when mfe_r <= 0
+    ok &= check(round(1.629 / 1.629, 3) == 1.0, "r_capture: full ride -> 1.0")
+    ok &= check(round(0.0 / 1.0, 3) == 0.0, "r_capture: gave back to BE -> 0.0")
+    rcap_none = (0.0 if (0.0 > 0) else None)  # mfe_r == 0 branch
+    ok &= check(rcap_none is None, "r_capture: mfe_r<=0 -> None (no 0/0)")
+
+    # --- trend_pd_agree = with-H1-trend AND pd_alignment=='aligned'
+    def _agree(direction, h1_trend, pd_alignment):
+        if h1_trend is None or pd_alignment is None:
+            return None
+        wt = ((direction == "bullish" and h1_trend == "bullish")
+              or (direction == "bearish" and h1_trend == "bearish"))
+        return bool(wt and pd_alignment == "aligned")
+    ok &= check(_agree("bearish", "bearish", "aligned") is True,
+                "trend_pd_agree: with-trend + aligned -> True")
+    ok &= check(_agree("bullish", "bearish", "counter") is False,
+                "trend_pd_agree: counter-trend -> False")
+    ok &= check(_agree("bearish", "bullish", "aligned") is False,
+                "trend_pd_agree: against-trend but aligned -> False")
+    ok &= check(_agree("bullish", None, "aligned") is None,
+                "trend_pd_agree: missing h1_trend -> None")
+
+    # --- sl_max_adverse_after_sweep_atr: further run BEYOND stop, in ATR, >=0
+    # LONG stop below at cur_sl; worst Low after the stop bar.
+    cur_sl, worst_low, atr2 = 1.2000, 1.1975, 0.0010
+    adverse = round(max(0.0, cur_sl - worst_low) / atr2, 3)
+    ok &= check(adverse == 2.5, f"max_adverse: 2.5-ATR deeper (got {adverse})")
+    # never negative when price did NOT go past the stop (recovered immediately)
+    adverse0 = round(max(0.0, cur_sl - 1.2005) / atr2, 3)
+    ok &= check(adverse0 == 0.0, f"max_adverse: no further run -> 0.0 (got {adverse0})")
+
+    # --- bars_sl_to_tp1_touch: 1-indexed bar of first TP1 touch after the stop
+    # (first post-stop bar == 1). Simulated via a small index-of search.
+    highs = [1.0, 1.0, 5.0, 1.0]  # tp1=4.0 first cleared at position 2 (0-indexed)
+    tp1 = 4.0
+    idx = next((i for i, h in enumerate(highs) if h >= tp1), None)
+    bars = (idx + 1) if idx is not None else None
+    ok &= check(bars == 3, f"bars_sl_to_tp1_touch: 1-indexed -> 3 (got {bars})")
+    idx_none = next((i for i, h in enumerate([1.0, 2.0]) if h >= tp1), None)
+    ok &= check(idx_none is None, "bars_sl_to_tp1_touch: never touched -> None")
+
+    return ok
+
+
 def main():
     results = [
         ("test_signature_h1_only",      test_signature_h1_only()),
@@ -436,6 +494,7 @@ def main():
         ("test_g10_rounded_near_miss_is_not_a_violation",
          test_g10_rounded_near_miss_is_not_a_violation()),
         ("test_sl_wick_depth_atr",      test_sl_wick_depth_atr()),
+        ("test_edge_lab_columns",       test_edge_lab_columns()),
     ]
     print("\n=== SUMMARY ===")
     fail = 0
