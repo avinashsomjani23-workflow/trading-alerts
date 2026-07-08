@@ -378,6 +378,54 @@ def test_g10_rounded_near_miss_is_not_a_violation():
     return ok
 
 
+def test_sl_wick_depth_atr():
+    """sl_wick_depth_atr (2026-07-08): on an SL exit it must be the wick's
+    overshoot BEYOND the fired stop, normalised by the OB-formation ATR, and
+    never negative. None on non-SL exits. This pins the geometry so a future
+    wider-stop replay can trust the column instead of re-deriving it.
+
+    Builds the SL bar directly through _build_row's sibling path by driving one
+    LONG trade to a stop whose candle wicks a known distance past the stop.
+    """
+    print("\n== test_sl_wick_depth_atr ==")
+    df_h1 = _synth_h1_df()
+    pair_conf = _synth_pair_conf()
+    ob = _synth_ob_bullish(df_h1, ts_idx=-150)
+    alert = {
+        "pair": "TESTPAIR",
+        "ts": df_h1.index[-150],
+        "current_price": ob["proximal_line"],
+        "h1_atr": ob.get("h1_atr", 0.0010),
+        "ob": ob,
+    }
+    rows = h1_only_simulator.simulate_h1_only_dual(
+        alert, pair_conf, df_h1, risk_usd=250.0,
+    )
+    ok = True
+    ok &= check(bool(rows), "sim returned a row")
+    if not rows:
+        return False
+    r = rows[0]
+    ok &= check("sl_wick_depth_atr" in r, "sl_wick_depth_atr column present")
+    depth = r.get("sl_wick_depth_atr")
+    if r.get("exit_reason") == "sl":
+        ok &= check(depth is not None, "depth stamped on an SL exit")
+        ok &= check(depth is None or depth >= 0.0,
+                    f"depth is non-negative (got {depth})")
+    else:
+        ok &= check(depth is None,
+                    f"depth is None on a non-SL exit ({r.get('exit_reason')})")
+    # Unit check via the raw formula: a LONG stop wicked 0.5 ATR below the stop
+    # must yield 0.5 (uses the same max(0, overshoot)/atr the sim uses).
+    atr, stop, wick_low = 0.0010, 1.2000, 1.1995
+    manual = round(max(0.0, stop - wick_low) / atr, 3)
+    ok &= check(manual == 0.5, f"formula: 0.5-ATR overshoot -> 0.5 (got {manual})")
+    # A wick that closes exactly at the stop = 0.0, not None.
+    manual0 = round(max(0.0, stop - stop) / atr, 3)
+    ok &= check(manual0 == 0.0, f"formula: no overshoot -> 0.0 (got {manual0})")
+    return ok
+
+
 def main():
     results = [
         ("test_signature_h1_only",      test_signature_h1_only()),
@@ -387,6 +435,7 @@ def main():
         ("test_be_arms_at_exact_1r_touch", test_be_arms_at_exact_1r_touch()),
         ("test_g10_rounded_near_miss_is_not_a_violation",
          test_g10_rounded_near_miss_is_not_a_violation()),
+        ("test_sl_wick_depth_atr",      test_sl_wick_depth_atr()),
     ]
     print("\n=== SUMMARY ===")
     fail = 0

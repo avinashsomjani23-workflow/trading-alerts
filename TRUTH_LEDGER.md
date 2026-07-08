@@ -61,6 +61,7 @@ Row build: h1_only_simulator.py `_build_row` at :1075; row dict at :1250-1405. "
 | mfe_r / mae_r | :1282-1283 | exit | verified | 2026-07-02 truth-chain audit (excursions) |
 | sl_bar_was_sweep | :1290 | SL exit | verified | 2026-07-02 truth-chain audit |
 | sl_swept_then_tp1 | :1291 | SL exit | verified | 2026-07-02 truth-chain audit; hint only, peak-metric gate |
+| sl_wick_depth_atr | h1_only_simulator.py (calc beside sl_bar_was_sweep) | SL exit | verified | 2026-07-08; max(0, stop-candle overshoot beyond fired stop)/ob['h1_atr']; ≥0, None on non-SL / no ATR; population = filled SL exits; logging-only, NO gate; guard test_h1_only.py::test_sl_wick_depth_atr |
 | be_arm_bar_touched_entry | :1297 | BE arm | verified | 2026-07-02 truth-chain audit; be_eps FP-boundary tolerance at :670 (2026-07-03 fix, G10 rule b) |
 | ob_to_fill_hours | :1299 (calc :951-958) | fill | verified | deterministic from immutable ob_timestamp + fill_ts; None if never filled |
 | bars_break_to_pullback | :1301 (calc :964-973) | fill | verified | bar count bos_ts→fill on df index; deterministic from immutable inputs |

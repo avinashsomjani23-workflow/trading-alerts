@@ -1241,6 +1241,7 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # ist_blocked). Stamped from the single _headline_exclusion rule.
         "eligible_for_headline", "headline_exclusion",
         "mfe_r", "mae_r", "sl_bar_was_sweep", "sl_swept_then_tp1",
+        "sl_wick_depth_atr",
         "bars_to_exit", "bars_to_tp1", "bars_to_tp2",
         "ob_to_fill_hours", "bars_break_to_pullback",
         "ob_age_h1_bars", "pd_zone",

@@ -941,6 +941,17 @@ def _simulate_single_entry(
     # cur_sl at this point is the level that actually stopped the trade (BE-aware).
     sl_bar_was_sweep = None
     sl_swept_then_tp1 = None
+    # sl_wick_depth_atr (2026-07-08): how far the STOP CANDLE's wick pierced BEYOND
+    # the stop that fired (cur_sl — initial SL, or entry once BE armed), normalised
+    # by the OB-formation ATR (ob['h1_atr'], the same denominator every *_atr
+    # feature uses). This is the missing input for sizing a wider stop: a sweep
+    # tells us the wick crossed the stop, this tells us HOW FAR, so a "distal + X·ATR"
+    # replay grid can be chosen from data instead of guessed.
+    #   LONG  (stop below): depth = (cur_sl - sl_bar_low)  / h1_atr   [>=0]
+    #   SHORT (stop above): depth = (sl_bar_high - cur_sl) / h1_atr   [>=0]
+    # 0.0 = the wick closed exactly at the stop (no overshoot). None for non-SL exits
+    # or when h1_atr is unavailable (legacy zone). NOT a gate — logging only.
+    sl_wick_depth_atr = None
     if exit_reason == "sl" and exit_ts is not None:
         try:
             sl_bar = future.loc[exit_ts]
@@ -951,6 +962,14 @@ def _simulate_single_entry(
                 sl_bar_was_sweep = bool(sl_bar_lo <= cur_sl and sl_bar_cl > cur_sl)
             else:
                 sl_bar_was_sweep = bool(sl_bar_hi >= cur_sl and sl_bar_cl < cur_sl)
+
+            _h1_atr_sl = ob.get("h1_atr")
+            if _h1_atr_sl:
+                if bias == "LONG":
+                    _overshoot = cur_sl - sl_bar_lo
+                else:
+                    _overshoot = sl_bar_hi - cur_sl
+                sl_wick_depth_atr = round(max(0.0, _overshoot) / _h1_atr_sl, 3)
 
             # Later-reversal check only matters when the stop bar was a sweep.
             if sl_bar_was_sweep:
@@ -968,6 +987,7 @@ def _simulate_single_entry(
         except Exception:
             sl_bar_was_sweep = None
             sl_swept_then_tp1 = None
+            sl_wick_depth_atr = None
 
     # ── ob_to_fill_hours: OB formation -> fill gap (diagnostic; NOT a gate) ──
     # corr with r ~0 both years, not monotonic — logged only for the edge engine
@@ -1044,6 +1064,7 @@ def _simulate_single_entry(
         sl_collision=sl_collision, risk_usd=risk_usd,
         sl_bar_was_sweep=sl_bar_was_sweep,
         sl_swept_then_tp1=sl_swept_then_tp1,
+        sl_wick_depth_atr=sl_wick_depth_atr,
         ob_to_fill_hours=ob_to_fill_hours,
         bars_break_to_pullback=bars_break_to_pullback,
         be_arm_bar_touched_entry=be_arm_bar_touched_entry,
@@ -1078,7 +1099,8 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                r_realised, r_if_exit_tp1, r_if_exit_tp2,
                mfe_r, mae_r, bars_to_exit, bars_to_tp1, bars_to_tp2,
                sl_collision, risk_usd, sl_raw=None,
-               sl_bar_was_sweep=None, sl_swept_then_tp1=None, ob_to_fill_hours=None,
+               sl_bar_was_sweep=None, sl_swept_then_tp1=None,
+               sl_wick_depth_atr=None, ob_to_fill_hours=None,
                bars_break_to_pullback=None,
                be_arm_bar_touched_entry=None) -> Dict[str, Any]:
     """Assemble the final trade row dict in stable column order."""
@@ -1287,8 +1309,13 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         #   sl_swept_then_tp1 : sweep bar AND price later reached TP1 — the honest
         #                       "wider stop plausibly wins" HINT (still a touch
         #                       check, not a real-order replay; never free money).
+        #   sl_wick_depth_atr : how far the stop candle's wick pierced BEYOND the
+        #                       fired stop, in OB-formation ATR. The missing input
+        #                       for sizing a "distal + X·ATR" wider-stop replay.
+        #                       0.0 = closed at the stop; None = non-SL / no ATR.
         "sl_bar_was_sweep":  sl_bar_was_sweep,
         "sl_swept_then_tp1": sl_swept_then_tp1,
+        "sl_wick_depth_atr": sl_wick_depth_atr,
         # Measurement only, no behavior change (2026-07-02). True when the bar
         # that armed break-even (+1R touch) ALSO traded back to entry within the
         # same bar -- the intra-bar order (arm-then-pullback vs pullback-then-arm)
