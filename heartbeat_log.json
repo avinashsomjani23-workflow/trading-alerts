@@ -1,30 +1,5 @@
 [
   {
-    "ts": "2026-06-24T20:35:49.058903",
-    "ts_human": "20:35 IST, 24 Jun 2026",
-    "ob_count_total": 4,
-    "ob_count_per_pair": {
-      "EURUSD": 1,
-      "USDJPY": 0,
-      "NZDUSD": 1,
-      "USDCHF": 0,
-      "NAS100": 1,
-      "GOLD": 1
-    },
-    "ob_age_hrs": 0.007002666388888889,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 1,
-    "issues": [
-      {
-        "title": "3 silent Phase-1 degrade(s) in last 3h (dealing_range_legacy_fallback\u00d73)",
-        "action": "Check p1_degrade_log.json + P1 Actions tab. p1_email_fail=a digest was lost; walls_*_error=a pair degraded to a placeholder (no structure/OBs)."
-      }
-    ]
-  },
-  {
     "ts": "2026-06-25T00:35:48.648875",
     "ts_human": "00:35 IST, 25 Jun 2026",
     "ob_count_total": 4,
@@ -1155,6 +1130,30 @@
       "BTCUSD": 0
     },
     "ob_age_hrs": 0.008766871666666667,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
+  },
+  {
+    "ts": "2026-07-08T17:35:57.684571",
+    "ts_human": "17:35 IST, 08 Jul 2026",
+    "ob_count_total": 10,
+    "ob_count_per_pair": {
+      "EURUSD": 1,
+      "USDJPY": 3,
+      "NZDUSD": 2,
+      "USDCHF": 3,
+      "GOLD": 1,
+      "GBPUSD": 0,
+      "AUDUSD": 0,
+      "USDCAD": 0,
+      "EURJPY": 0,
+      "BTCUSD": 0
+    },
+    "ob_age_hrs": 0.007970443055555556,
     "gemini_fails_3h": 0,
     "yfinance_stale_3h": 0,
     "chart_fails_3h": 0,
