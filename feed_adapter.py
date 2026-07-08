@@ -140,4 +140,31 @@ def _to_dataframe(values):
     else:
         df["Volume"] = 0.0
 
+    df = _strip_market_closed(df)
     return df[["Open", "High", "Low", "Close", "Volume"]]
+
+
+def _strip_market_closed(df):
+    """Drop synthetic weekend bars so the live H1 frame matches MT5's gapped shape.
+
+    WHY: Twelve Data's free tier pads the FX-closed weekend with ~40 low-range
+    filler bars. The whole system was built on MT5 data, which OMITS closed-market
+    hours (real gaps). Those filler bars break two things at once:
+      1) charts render a band of ~40 dead micro-candles (verified impossible in
+         18yr of real MT5 H1: longest sub-0.5-ATR run is ~10 bars, never 40);
+      2) resync_slate_zone_indices (smc_radar) shifts every leg sub-index by ONE
+         uniform delta, which is only correct when bar spacing is constant —
+         filler bars inserted mid-leg push FVG/BOS/OB boxes off their candles.
+    Stripping here (the single network path) fixes both for Phase 1 and Phase 2.
+
+    RULE (DST-proof, no server-offset math): FX is closed Fri ~21:00 UTC through
+    Sun ~21:00 UTC. Validated against MT5: ZERO real bars fall in
+    'Saturday (any hour) OR Sunday before 21:00 UTC' under either DST offset,
+    while all Fri-through-21:00-UTC bars are legit. Twelve Data returns UTC
+    (timezone=UTC in the request), so weekday/hour are read directly off the index.
+    """
+    idx = df.index
+    dow = idx.dayofweek   # Mon=0 .. Sat=5, Sun=6
+    hour = idx.hour
+    closed = (dow == 5) | ((dow == 6) & (hour < 21))
+    return df[~closed]

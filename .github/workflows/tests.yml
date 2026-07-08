@@ -50,3 +50,10 @@ jobs:
         # treated as v1 (deploy-safe), and a MISMATCHED version fails loud
         # instead of silently mis-parsing.
         run: python test_schema_version.py
+
+      - name: Live feed strips synthetic weekend bars
+        # Twelve Data pads the FX-closed weekend with ~40 filler bars; the system
+        # is built on MT5's gapped shape. Fillers break charts AND the uniform-
+        # delta resync (boxes drift off candles). This gate fails if the strip
+        # regresses so both bug classes can't return silently.
+        run: python tests/test_feed_weekend_strip.py
