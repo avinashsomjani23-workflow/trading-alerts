@@ -2191,6 +2191,7 @@ if __name__ == "__main__":
     #              "zones": { zone_id: {"score_int": ..., "score_raw": ...,
     #                                    "alert_ist": ..., "last_seen_ist": ...,
     #                                    "last_email_day": "YYYY-MM-DD",
+    #                                    "still_valid_count": int,
     #                                    "reentry_armed": bool,
     #                                    "max_exit_distance": float,
     #                                    "breakdown": ..., ...} } }
@@ -2198,9 +2199,10 @@ if __name__ == "__main__":
     # A zone's dedup entry lives as long as the zone itself lives in P1's
     # active_obs slate. Re-emails fire on FOUR triggers (see the scoring loop):
     #   - fresh:       first ever sighting
-    #   - still_valid: first sighting of a NEW trading day, still in proximity
-    #                  (re-sends regardless of score — a zone valid across days
-    #                   re-emails once per day)
+    #   - still_valid: new trading day, still in proximity, fires on
+    #                  ALTERNATE trading days only (day 2, 4, 6... of the
+    #                  zone's life — zone-relative, not calendar-relative;
+    #                  the in-between day goes silent but still tracks state)
     #   - reentry:     price left proximity (>1.5x cap) and returned, any day
     #   - updated:     same-day score crosses +0.7 / -0.5
     # Same-day, in-proximity, in-band re-sightings stay silent.
@@ -2637,7 +2639,9 @@ if __name__ == "__main__":
             #   2. reentry     — left proximity (>1.5x cap) and returned, any
             #                    day → TRADE READY (plain; price has come back)
             #   3. still_valid — new trading day, still in proximity, ONLY on
-            #                    the 11:35 IST scan → TRADE READY (STILL VALID)
+            #                    the 11:35 IST scan, and ONLY on alternate
+            #                    trading days (zone-relative) → TRADE READY
+            #                    (STILL VALID)
             #   - silent       — same trading day, already emailed (intraday
             #                    score moves NEVER re-email — one email per day)
             current_score_raw = float(score_res['total'])
@@ -2714,6 +2718,28 @@ if __name__ == "__main__":
                             )
                             append_scan_log(scan_record)
                             continue
+
+                        # Alternate-day throttle (zone-relative, not calendar).
+                        # still_valid_count tracks how many new trading days
+                        # have passed since the zone was last emailed (fresh
+                        # or still_valid), incrementing every day regardless
+                        # of whether this day's email actually sends. Odd
+                        # count (1, 3, 5...) = send; even count = stay silent
+                        # but persist the day so tomorrow's count is correct.
+                        prior_count = int(prior.get("still_valid_count", 0))
+                        this_count = prior_count + 1
+                        if this_count % 2 == 0:
+                            prior["still_valid_count"] = this_count
+                            prior["last_email_day"] = today_id
+                            prior["last_seen_ist"] = ist_now.isoformat()
+                            save_json("phase2_sent.json", phase2_state)
+                            scan_record["final_action"] = (
+                                f"still_valid_alternate_day_silent "
+                                f"(day {this_count} of zone life)"
+                            )
+                            append_scan_log(scan_record)
+                            continue
+
                         email_kind = "still_valid"
                 else:
                     # Same trading day, already emailed → always silent.
@@ -2753,6 +2779,10 @@ if __name__ == "__main__":
                 # suppresses a second daily reminder; clearing the re-entry flag
                 # and exit watermark re-arms the flicker guard from zero.
                 "last_email_day": today_id,
+                # Zone-relative day counter driving the still_valid alternate-
+                # day throttle. Carries forward on a still_valid send; resets
+                # to 0 on fresh/reentry since those start a new approach.
+                "still_valid_count": this_count if email_kind == "still_valid" else 0,
                 "reentry_armed": False,
                 "max_exit_distance": 0.0,
                 "bias": bias,
