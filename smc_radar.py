@@ -134,6 +134,41 @@ def get_ist_now():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
 
+def drop_forming_bar(df):
+    """Return df without the still-forming (not-yet-closed) final H1 bar.
+
+    WHY: Twelve Data returns the CURRENT hour's bar (open, still moving) as the
+    newest row. Structure detection must see CLOSED bars only — an H1 bar opened
+    at 16:00 is only KNOWN at 17:00 when it closes. Feeding the forming bar into
+    compute_structure makes the newest swing geometry (lookback=3) change on
+    every intra-hour scan, so trend/CHoCH/defended flip-flop hour to hour
+    (EURUSD 2026-07-08: UP->DOWN->UP across 3 scans, false CHoCH-DOWN email).
+
+    This mirrors the backtest's invariant exactly (replay_engine._slice_closed_before:
+    `df.index < wall_clock_ts`). Proximity / current_price still read the FULL df
+    (forming bar) — only structure is closed-bars-only, matching the backtest,
+    which reads its just-closed bar for P2 proximity but computes structure on
+    the closed slice.
+
+    Drops the last row iff its bar-open hour == the current wall-clock UTC hour
+    (i.e. it has not closed yet). A weekend/stale last bar from an earlier hour
+    is already closed and is kept.
+    """
+    if df is None or 'Datetime' not in df.columns or len(df) == 0:
+        return df
+    last_ts = df['Datetime'].iloc[-1]
+    try:
+        last_open = last_ts.tz_convert('UTC').tz_localize(None).to_pydatetime()
+    except (AttributeError, TypeError):
+        last_open = last_ts.to_pydatetime() if hasattr(last_ts, 'to_pydatetime') else last_ts
+        if getattr(last_open, 'tzinfo', None) is not None:
+            last_open = last_open.replace(tzinfo=None)
+    now_hour = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    if last_open.replace(minute=0, second=0, microsecond=0) >= now_hour:
+        return df.iloc[:-1].copy()
+    return df
+
+
 # ---------------------------------------------------------------------------
 # ATOMIC SAVE (A3) + LOGGING HELPERS (B3)
 # ---------------------------------------------------------------------------
@@ -660,6 +695,17 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     h1_atr_for_leg = smc_detector.compute_atr(df)
     current_price_now = float(C[-1]) if n > 0 else 0.0
 
+    # FVG geometry MUST be closed-bars-only, same invariant as structure.
+    # `df` here still carries the forming (current-hour) bar so current_price_now
+    # (= C[-1]) and proximity read the live price. But FVG detection reads c1/c2/
+    # c3 highs+lows AND scans forward for mitigation — a forming bar's mid-flight
+    # wick fabricates an imbalance that vanishes once the bar closes (the bug the
+    # user caught: c3 forming -> FVG detected -> gone on close). The events/walls
+    # that produced ob_idx/bos_idx were built on drop_forming_bar(df) at the call
+    # site, so those indices already align to this closed frame. Everything below
+    # that needs the live bar (current_price_now, proximity) keeps using `df`.
+    df_fvg = drop_forming_bar(df)
+
     # OB BUILD LEDGER — load-bearing (NOT temporary). Per-event record of how
     # each event was handled (built / dropped + gate). Surfaced via the result
     # dict, persisted in the Phase 1 scan log, AND read by
@@ -951,13 +997,17 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         h1_atr_for_fvg = h1_atr_for_leg if h1_atr_for_leg else 0.0
         fvg_floor_mult = smc_detector.FVG_NOISE_FLOOR_MULT.get(pair_type, 0.20)
         atr_floor_h1   = fvg_floor_mult * h1_atr_for_fvg
+        # Clamp to the CLOSED frame (df_fvg), not `df`: df_fvg is one row shorter
+        # when a forming bar was dropped, so `n - 1` (full-df length) would point
+        # one bar past the closed end. The detector re-clamps internally too, but
+        # keep the window in the frame it will actually scan.
         leg_window_end = min(
             bos_idx + 1,
             ob_idx + smc_detector.FVG_WINDOW_H1_CANDLES,
-            n - 1
+            len(df_fvg) - 1
         )
         fvg_result = smc_detector.detect_fvg_in_zone(
-            df, bias_label, ob_high, ob_low, atr_floor_h1,
+            df_fvg, bias_label, ob_high, ob_low, atr_floor_h1,
             leg_start_idx=ob_idx, leg_end_idx=leg_window_end,
             pair_type=pair_type
         )
@@ -3578,6 +3628,70 @@ def determine_drop_reason(slate_zone, current_price, df, h1_atr, fresh_zones_in_
     return None
 
 
+# Retirement rule (2026-07-08): a CHoCH-born zone is retired once the trend it
+# called has CONFIRMED and CONTINUED past it. SMC lifecycle: a CHoCH is only a
+# CLAIM of a flip; the first same-direction BOS after it is CONFIRMATION, the
+# second BOS is CONTINUATION. After two same-direction BOS the CHoCH OB is the
+# origin of a leg that already ran — waiting for price to return to it is a deep
+# counter-trend retrace, not a live setup. Verified against veteran SMC and the
+# 2026-07-08 NZDUSD case (June-30 bullish CHoCH superseded by 3 bullish BOS but
+# still surfaced as an 8.0 alert because it sat far below current structure, so
+# structure_supplanted / out_of_proximity never fired).
+#
+# Threshold = 2 (not >=1): a single BOS is only confirmation — the CHoCH OB is
+# then the freshest valid zone and a vet still wants it. Two BOS is the clean
+# boundary where the OB becomes history. Direction MUST match the CHoCH; an
+# opposite flip is a different lifecycle handled by distal-break / opposite
+# structure, not this rule.
+CHOCH_SUPERSEDE_BOS_COUNT = 2
+
+
+def is_choch_superseded(slate_zone, structure_events):
+    """True if a CHoCH-born slate zone has been superseded by >= 2 later,
+    same-direction BOS events in the live structure ring.
+
+    slate_zone: an active slate OB dict (needs bos_tag, direction, bos_timestamp).
+    structure_events: the live event ring for this pair (new_walls['events']),
+                      each event a dict with type / direction / candle_ts.
+
+    Returns False (keep the zone) on any missing/unparseable field — a lookup
+    failure must never retire a live zone. Same defensive posture as
+    determine_drop_reason's individual checks.
+    """
+    if slate_zone.get("bos_tag") != "CHoCH":
+        return False
+    zone_dir = slate_zone.get("direction")
+    zone_bos_ts_str = slate_zone.get("bos_timestamp")
+    if not zone_dir or not zone_bos_ts_str:
+        return False
+    try:
+        zone_bos_ts = datetime.fromisoformat(str(zone_bos_ts_str))
+        if zone_bos_ts.tzinfo is not None:
+            zone_bos_ts = zone_bos_ts.replace(tzinfo=None)
+    except (TypeError, ValueError):
+        return False
+
+    later_same_dir_bos = 0
+    for ev in structure_events or []:
+        if ev.get("type") != "BOS":
+            continue
+        if ev.get("direction") != zone_dir:
+            continue
+        ev_ts_str = ev.get("candle_ts")
+        if not ev_ts_str:
+            continue
+        try:
+            ev_ts = datetime.fromisoformat(str(ev_ts_str))
+            if ev_ts.tzinfo is not None:
+                ev_ts = ev_ts.replace(tzinfo=None)
+        except (TypeError, ValueError):
+            continue
+        if ev_ts > zone_bos_ts:
+            later_same_dir_bos += 1
+
+    return later_same_dir_bos >= CHOCH_SUPERSEDE_BOS_COUNT
+
+
 def select_relevant_zone_for_pair(active_zones, current_price, dp):
     """
     Phase 1 highlights ONE primary zone + optionally ONE alternative zone
@@ -3775,7 +3889,10 @@ def run_radar():
             # Single source: H4 range + v2 structure engine + walls assembly,
             # extracted to compute_pair_walls so live Phase 1 and the backtest
             # replay engine build identical state.
-            new_walls = compute_pair_walls(df, name)
+            # CLOSED-BARS-ONLY for structure: drop the still-forming current-hour
+            # bar so swing/CHoCH/trend detection matches the backtest invariant
+            # (replay feeds closed bars only). Proximity below keeps the full df.
+            new_walls = compute_pair_walls(drop_forming_bar(df), name)
 
             structure_state_all[name] = new_walls
             dealing_range.save_state(structure_state_all)
@@ -3848,10 +3965,42 @@ def run_radar():
                 # and Phase 2/3 consumers don't walk stale positions. Without
                 # this, every new H1 candle silently shifts ob_idx away from
                 # the real OB candle while the zone sits unrefreshed in slate.
+                _resynced = False
                 try:
-                    resync_slate_zone_indices(sz, df, pair_name=name)
+                    _resynced = resync_slate_zone_indices(sz, df, pair_name=name)
                 except Exception as _resync_err:
                     logging.warning(f"[resync] {name} {sz.get('zone_id')} failed: {_resync_err}")
+                # Recompute touches + status for a HELD zone (2026-07-08). A zone
+                # kept alive without a fresh match freezes its touch count from the
+                # scan that created it — resync re-anchors INDICES but never re-runs
+                # mitigation, so a later dip into the proximal was never registered
+                # (root of the false "Pristine" on the 2026-07-08 NZDUSD CHoCH).
+                # Use the SAME window as the build-loop mitigation (bos_idx+1) so
+                # the impulse leg that built the zone is excluded — scanning from 0
+                # would let that leg trigger a false distal break. bos_idx is fresh
+                # here because resync just re-anchored it against this df frame.
+                # Only run when resync succeeded (indices trustworthy); a distal
+                # break / 3-touch now converts the HOLD into a proper mitigated drop.
+                if _resynced and sz.get("bos_idx") is not None:
+                    try:
+                        _mit, _rsn, _tch = is_ob_mitigated_phase1(
+                            sz["direction"], sz["distal_line"], sz["proximal_line"],
+                            df, start_idx=int(sz["bos_idx"]) + 1, end_idx=len(df),
+                            distal_mode=smc_detector.resolve_distal_mode(
+                                _pair_conf_for_name(name)),
+                            atr=h1_atr,
+                        )
+                        if _mit and _rsn:
+                            sz["status"] = "dropped"
+                            sz["drop_reason"] = _rsn
+                            drops_this_pair.append({"id": sz["zone_id"], "reason": _rsn})
+                            print(f"  [DROP] {name} {sz['zone_id']} dropped — {_rsn} (held-zone recheck).")
+                            continue
+                        sz["touches"] = int(_tch)
+                        sz["status_label"] = (
+                            "Pristine" if _tch == 0 else f"Tested ({_tch}x proximal)")
+                    except Exception as _mit_err:
+                        logging.warning(f"[held-recheck] {name} {sz.get('zone_id')} failed: {_mit_err}")
                 print(f"  [HOLD] {name} {sz['zone_id']} missing from scan but no concrete drop reason — kept in slate, logged.")
                 continue
             sz["status"] = "dropped"
@@ -3860,6 +4009,29 @@ def run_radar():
             sz["last_seen_label"] = ist_now.strftime('%H:%M IST')
             drops_this_pair.append({"id": sz["zone_id"], "reason": reason})
             print(f"  [DROP] {name} {sz['zone_id']} dropped — {reason}.")
+
+        # 3. CHoCH-supersession retirement (2026-07-08). Runs over EVERY still-
+        # active slate zone — matched OR unmatched — because a superseded CHoCH
+        # zone keeps MATCHING a fresh detection by proximity and so never reaches
+        # determine_drop_reason (which only runs for unmatched zones). A CHoCH OB
+        # whose flip has been confirmed AND continued (>= 2 later same-direction
+        # BOS) is dead history, not a live setup. See is_choch_superseded.
+        # Evaluated against the live structure ring (new_walls['events']).
+        _structure_events = new_walls.get("events", []) if isinstance(new_walls, dict) else []
+        for sz in slate_zones:
+            if sz.get("status") != "active":
+                continue
+            try:
+                if is_choch_superseded(sz, _structure_events):
+                    sz["status"] = "dropped"
+                    sz["drop_reason"] = "choch_superseded_2bos"
+                    sz["last_seen_iso"] = ist_now.isoformat()
+                    sz["last_seen_label"] = ist_now.strftime('%H:%M IST')
+                    drops_this_pair.append({"id": sz["zone_id"], "reason": "choch_superseded_2bos"})
+                    print(f"  [DROP] {name} {sz['zone_id']} dropped — choch_superseded_2bos.")
+            except Exception as _retire_err:
+                # Never let a retirement lookup failure kill the scan or a live zone.
+                logging.warning(f"[retire] {name} {sz.get('zone_id')} check failed: {_retire_err}")
 
         # Phase 1 scan log — one record per pair per scan (forensic trail).
         phase1_scan_records.append(_build_phase1_scan_record(
