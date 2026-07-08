@@ -1254,6 +1254,10 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "score", "structure_pts", "sweep_pts", "fvg_pts",
         "freshness_pts", "killzone_pts", "confluences_present",
         "sl_collision", "model", "ob_timestamp", "bos_tag", "bos_tier",
+        # Bars the true break candle sits before the confirmation candle (event-
+        # candle fix, 2026-07-09). 0 = clean single-candle break. Immutable event
+        # fact; audits the candle shift the fix introduced.
+        "event_candle_delta",
         "bos_verdict", "fvg_present", "fvg_mitigation", "sweep_present", "ob_touches",
         # Setup-geometry features (ATR-normalized) — edge-discovery engine inputs.
         "break_close_atr", "break_body_atr", "break_excess", "break_tier",

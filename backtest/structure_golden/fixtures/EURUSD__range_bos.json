@@ -4846,6 +4846,7 @@
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2018-06-22T06:00:00+00:00",
+        "confirm_ts": "2018-06-22T06:00:00+00:00",
         "impulse_start_ts": "2018-06-21T22:00:00+00:00",
         "broken_swing_price": 1.16177,
         "broken_swing_ts": "2018-06-22T01:00:00+00:00",
@@ -4853,13 +4854,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.04
+        "break_body_atr": 1.04,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2018-06-25T12:00:00+00:00",
+        "confirm_ts": "2018-06-25T12:00:00+00:00",
         "impulse_start_ts": "2018-06-22T11:00:00+00:00",
         "broken_swing_price": 1.16726,
         "broken_swing_ts": "2018-06-25T00:00:00+00:00",
@@ -4867,13 +4870,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.94
+        "break_body_atr": 1.94,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
         "candle_ts": "2018-06-27T13:00:00+00:00",
+        "confirm_ts": "2018-06-27T13:00:00+00:00",
         "impulse_start_ts": "2018-06-27T01:00:00+00:00",
         "broken_swing_price": 1.16438,
         "broken_swing_ts": "2018-06-27T01:00:00+00:00",
@@ -4881,13 +4886,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.73
+        "break_body_atr": 1.73,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
-        "candle_ts": "2018-06-28T12:00:00+00:00",
+        "candle_ts": "2018-06-28T11:00:00+00:00",
+        "confirm_ts": "2018-06-28T12:00:00+00:00",
         "impulse_start_ts": "2018-06-27T01:00:00+00:00",
         "broken_swing_price": 1.1573,
         "broken_swing_ts": "2018-06-28T04:00:00+00:00",
@@ -4895,13 +4902,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.16
+        "break_body_atr": 1.16,
+        "event_candle_delta": 1
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2018-06-29T03:00:00+00:00",
+        "confirm_ts": "2018-06-29T03:00:00+00:00",
         "impulse_start_ts": "2018-06-28T14:00:00+00:00",
         "broken_swing_price": 1.16006,
         "broken_swing_ts": "2018-06-28T13:00:00+00:00",
@@ -4909,13 +4918,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 4.0
+        "break_body_atr": 4.0,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2018-06-29T15:00:00+00:00",
+        "confirm_ts": "2018-06-29T15:00:00+00:00",
         "impulse_start_ts": "2018-06-29T09:00:00+00:00",
         "broken_swing_price": 1.16662,
         "broken_swing_ts": "2018-06-29T05:00:00+00:00",
@@ -4923,13 +4934,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.8
+        "break_body_atr": 1.8,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2018-07-03T08:00:00+00:00",
+        "confirm_ts": "2018-07-03T08:00:00+00:00",
         "impulse_start_ts": "2018-06-29T14:00:00+00:00",
         "broken_swing_price": 1.16436,
         "broken_swing_ts": "2018-07-03T01:00:00+00:00",
@@ -4937,13 +4950,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.33
+        "break_body_atr": 1.33,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2018-07-05T06:00:00+00:00",
+        "confirm_ts": "2018-07-05T06:00:00+00:00",
         "impulse_start_ts": "2018-07-05T01:00:00+00:00",
         "broken_swing_price": 1.16747,
         "broken_swing_ts": "2018-07-04T17:00:00+00:00",
@@ -4951,13 +4966,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.0
+        "break_body_atr": 2.0,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2018-07-06T07:00:00+00:00",
+        "confirm_ts": "2018-07-06T07:00:00+00:00",
         "impulse_start_ts": "2018-07-06T03:00:00+00:00",
         "broken_swing_price": 1.16972,
         "broken_swing_ts": "2018-07-06T01:00:00+00:00",
@@ -4965,13 +4982,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.11
+        "break_body_atr": 1.11,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2018-07-06T13:00:00+00:00",
+        "confirm_ts": "2018-07-06T13:00:00+00:00",
         "impulse_start_ts": "2018-07-06T03:00:00+00:00",
         "broken_swing_price": 1.17267,
         "broken_swing_ts": "2018-07-06T07:00:00+00:00",
@@ -4979,13 +4998,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.64
+        "break_body_atr": 1.64,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
-        "candle_ts": "2018-07-09T13:00:00+00:00",
+        "candle_ts": "2018-07-09T12:00:00+00:00",
+        "confirm_ts": "2018-07-09T13:00:00+00:00",
         "impulse_start_ts": "2018-07-08T22:00:00+00:00",
         "broken_swing_price": 1.17674,
         "broken_swing_ts": "2018-07-09T02:00:00+00:00",
@@ -4993,13 +5014,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.01
+        "break_body_atr": 1.01,
+        "event_candle_delta": 1
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
-        "candle_ts": "2018-07-11T12:00:00+00:00",
+        "candle_ts": "2018-07-11T09:00:00+00:00",
+        "confirm_ts": "2018-07-11T12:00:00+00:00",
         "impulse_start_ts": "2018-07-08T22:00:00+00:00",
         "broken_swing_price": 1.17354,
         "broken_swing_ts": "2018-07-08T22:00:00+00:00",
@@ -5007,13 +5030,15 @@
         "reversal_pct": 1.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.49
+        "break_body_atr": 2.49,
+        "event_candle_delta": 3
       },
       {
         "type": "BOS",
         "tier": "Range",
         "direction": "bullish",
         "candle_ts": "2018-07-11T13:00:00+00:00",
+        "confirm_ts": "2018-07-11T13:00:00+00:00",
         "impulse_start_ts": "2018-07-08T22:00:00+00:00",
         "broken_swing_price": 1.17406,
         "broken_swing_ts": "2018-07-11T09:00:00+00:00",
@@ -5021,13 +5046,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.49
+        "break_body_atr": 2.49,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2018-07-17T07:00:00+00:00",
+        "confirm_ts": "2018-07-17T07:00:00+00:00",
         "impulse_start_ts": "2018-07-17T02:00:00+00:00",
         "broken_swing_price": 1.17182,
         "broken_swing_ts": "2018-07-16T19:00:00+00:00",
@@ -5035,13 +5062,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.13
+        "break_body_atr": 1.13,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
-        "candle_ts": "2018-07-19T17:00:00+00:00",
+        "candle_ts": "2018-07-19T08:00:00+00:00",
+        "confirm_ts": "2018-07-19T17:00:00+00:00",
         "impulse_start_ts": "2018-07-18T22:00:00+00:00",
         "broken_swing_price": 1.1636,
         "broken_swing_ts": "2018-07-18T22:00:00+00:00",
@@ -5049,13 +5078,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.57
+        "break_body_atr": 2.57,
+        "event_candle_delta": 9
       },
       {
         "type": "CHoCH_FAILED",
         "tier": "CHoCH_FAILED",
         "direction": "bullish",
         "candle_ts": "2018-07-20T05:00:00+00:00",
+        "confirm_ts": null,
         "impulse_start_ts": "2018-07-18T22:00:00+00:00",
         "broken_swing_price": 1.1636,
         "broken_swing_ts": null,
@@ -5063,13 +5094,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 0.75
+        "break_body_atr": 0.75,
+        "event_candle_delta": null
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2018-07-20T13:00:00+00:00",
+        "confirm_ts": "2018-07-20T13:00:00+00:00",
         "impulse_start_ts": "2018-07-20T08:00:00+00:00",
         "broken_swing_price": 1.16736,
         "broken_swing_ts": "2018-07-20T07:00:00+00:00",
@@ -5077,13 +5110,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.71
+        "break_body_atr": 2.71,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
         "candle_ts": "2018-07-24T07:00:00+00:00",
+        "confirm_ts": "2018-07-24T07:00:00+00:00",
         "impulse_start_ts": "2018-07-20T17:00:00+00:00",
         "broken_swing_price": 1.17012,
         "broken_swing_ts": "2018-07-20T17:00:00+00:00",
@@ -5091,13 +5126,15 @@
         "reversal_pct": 1.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.0
+        "break_body_atr": 2.0,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2018-07-24T11:00:00+00:00",
+        "confirm_ts": "2018-07-24T11:00:00+00:00",
         "impulse_start_ts": "2018-07-20T17:00:00+00:00",
         "broken_swing_price": 1.17014,
         "broken_swing_ts": "2018-07-24T03:00:00+00:00",
@@ -5105,13 +5142,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.16
+        "break_body_atr": 1.16,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2018-07-25T20:00:00+00:00",
+        "confirm_ts": "2018-07-25T20:00:00+00:00",
         "impulse_start_ts": "2018-07-25T04:00:00+00:00",
         "broken_swing_price": 1.17116,
         "broken_swing_ts": "2018-07-25T14:00:00+00:00",
@@ -5119,7 +5158,8 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.64
+        "break_body_atr": 1.64,
+        "event_candle_delta": 0
       }
     ],
     "trend": "bullish",

@@ -4846,6 +4846,7 @@
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2017-09-24T22:00:00+00:00",
+        "confirm_ts": "2017-09-24T22:00:00+00:00",
         "impulse_start_ts": "2017-09-22T15:00:00+00:00",
         "broken_swing_price": 1.1937,
         "broken_swing_ts": "2017-09-22T17:00:00+00:00",
@@ -4853,13 +4854,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.66
+        "break_body_atr": 0.66,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2017-09-26T08:00:00+00:00",
+        "confirm_ts": "2017-09-26T08:00:00+00:00",
         "impulse_start_ts": "2017-09-26T04:00:00+00:00",
         "broken_swing_price": 1.18321,
         "broken_swing_ts": "2017-09-25T17:00:00+00:00",
@@ -4867,13 +4870,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.38
+        "break_body_atr": 1.38,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bullish",
-        "candle_ts": "2017-10-26T11:00:00+00:00",
+        "candle_ts": "2017-10-25T14:00:00+00:00",
+        "confirm_ts": "2017-10-26T11:00:00+00:00",
         "impulse_start_ts": "2017-10-23T17:00:00+00:00",
         "broken_swing_price": 1.17634,
         "broken_swing_ts": "2017-10-23T17:00:00+00:00",
@@ -4881,13 +4886,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.81
+        "break_body_atr": 1.81,
+        "event_candle_delta": 21
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2017-10-26T12:00:00+00:00",
+        "confirm_ts": "2017-10-26T12:00:00+00:00",
         "impulse_start_ts": "2017-10-23T17:00:00+00:00",
         "broken_swing_price": 1.17999,
         "broken_swing_ts": "2017-10-25T21:00:00+00:00",
@@ -4895,7 +4902,8 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.81
+        "break_body_atr": 1.81,
+        "event_candle_delta": 0
       }
     ],
     "trend": "bearish",

@@ -4845,7 +4845,8 @@
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
-        "candle_ts": "2019-10-15T09:00:00+00:00",
+        "candle_ts": "2019-10-15T06:00:00+00:00",
+        "confirm_ts": "2019-10-15T09:00:00+00:00",
         "impulse_start_ts": "2019-10-14T20:00:00+00:00",
         "broken_swing_price": 7870.4,
         "broken_swing_ts": "2019-10-15T01:00:00+00:00",
@@ -4853,13 +4854,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.03
+        "break_body_atr": 1.03,
+        "event_candle_delta": 3
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-10-15T14:00:00+00:00",
+        "confirm_ts": "2019-10-15T14:00:00+00:00",
         "impulse_start_ts": "2019-10-14T20:00:00+00:00",
         "broken_swing_price": 7896.9,
         "broken_swing_ts": "2019-10-15T07:00:00+00:00",
@@ -4867,13 +4870,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 3.84
+        "break_body_atr": 3.84,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-10-17T09:00:00+00:00",
+        "confirm_ts": "2019-10-17T09:00:00+00:00",
         "impulse_start_ts": "2019-10-16T04:00:00+00:00",
         "broken_swing_price": 7943.4,
         "broken_swing_ts": "2019-10-16T12:00:00+00:00",
@@ -4881,13 +4886,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.84
+        "break_body_atr": 1.84,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
         "candle_ts": "2019-10-18T14:00:00+00:00",
+        "confirm_ts": "2019-10-18T14:00:00+00:00",
         "impulse_start_ts": "2019-10-16T04:00:00+00:00",
         "broken_swing_price": 7921.0,
         "broken_swing_ts": "2019-10-16T04:00:00+00:00",
@@ -4895,13 +4902,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 3.06
+        "break_body_atr": 3.06,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-10-21T14:00:00+00:00",
+        "confirm_ts": "2019-10-21T14:00:00+00:00",
         "impulse_start_ts": "2019-10-21T06:00:00+00:00",
         "broken_swing_price": 7899.1,
         "broken_swing_ts": "2019-10-21T02:00:00+00:00",
@@ -4909,13 +4918,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.27
+        "break_body_atr": 1.27,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-10-22T00:00:00+00:00",
+        "confirm_ts": "2019-10-22T00:00:00+00:00",
         "impulse_start_ts": "2019-10-21T06:00:00+00:00",
         "broken_swing_price": 7940.8,
         "broken_swing_ts": "2019-10-21T19:00:00+00:00",
@@ -4923,13 +4934,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.52
+        "break_body_atr": 1.52,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
-        "candle_ts": "2019-10-22T19:00:00+00:00",
+        "candle_ts": "2019-10-22T18:00:00+00:00",
+        "confirm_ts": "2019-10-22T19:00:00+00:00",
         "impulse_start_ts": "2019-10-22T08:00:00+00:00",
         "broken_swing_price": 7925.9,
         "broken_swing_ts": "2019-10-22T08:00:00+00:00",
@@ -4937,13 +4950,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.83
+        "break_body_atr": 2.83,
+        "event_candle_delta": 1
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-10-23T20:00:00+00:00",
+        "confirm_ts": "2019-10-23T20:00:00+00:00",
         "impulse_start_ts": "2019-10-23T11:00:00+00:00",
         "broken_swing_price": 7890.7,
         "broken_swing_ts": "2019-10-23T15:00:00+00:00",
@@ -4951,13 +4966,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.35
+        "break_body_atr": 1.35,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
-        "candle_ts": "2019-10-24T12:00:00+00:00",
+        "candle_ts": "2019-10-24T11:00:00+00:00",
+        "confirm_ts": "2019-10-24T12:00:00+00:00",
         "impulse_start_ts": "2019-10-24T01:00:00+00:00",
         "broken_swing_price": 7932.1,
         "broken_swing_ts": "2019-10-24T07:00:00+00:00",
@@ -4965,13 +4982,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.01
+        "break_body_atr": 1.01,
+        "event_candle_delta": 1
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-10-25T13:00:00+00:00",
+        "confirm_ts": "2019-10-25T13:00:00+00:00",
         "impulse_start_ts": "2019-10-24T23:00:00+00:00",
         "broken_swing_price": 7939.4,
         "broken_swing_ts": "2019-10-25T07:00:00+00:00",
@@ -4979,13 +4998,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.73
+        "break_body_atr": 2.73,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-10-28T12:00:00+00:00",
+        "confirm_ts": "2019-10-28T12:00:00+00:00",
         "impulse_start_ts": "2019-10-28T07:00:00+00:00",
         "broken_swing_price": 8056.9,
         "broken_swing_ts": "2019-10-28T00:00:00+00:00",
@@ -4993,13 +5014,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.03
+        "break_body_atr": 1.03,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-10-30T19:00:00+00:00",
+        "confirm_ts": "2019-10-30T19:00:00+00:00",
         "impulse_start_ts": "2019-10-30T07:00:00+00:00",
         "broken_swing_price": 8067.4,
         "broken_swing_ts": "2019-10-30T12:00:00+00:00",
@@ -5007,13 +5030,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.88
+        "break_body_atr": 1.88,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
         "candle_ts": "2019-10-31T09:00:00+00:00",
+        "confirm_ts": "2019-10-31T09:00:00+00:00",
         "impulse_start_ts": "2019-10-31T02:00:00+00:00",
         "broken_swing_price": 8101.7,
         "broken_swing_ts": "2019-10-31T02:00:00+00:00",
@@ -5021,13 +5046,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.44
+        "break_body_atr": 2.44,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-11-01T01:00:00+00:00",
+        "confirm_ts": "2019-11-01T01:00:00+00:00",
         "impulse_start_ts": "2019-10-31T18:00:00+00:00",
         "broken_swing_price": 8092.7,
         "broken_swing_ts": "2019-10-31T20:00:00+00:00",
@@ -5035,13 +5062,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.21
+        "break_body_atr": 1.21,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-11-01T13:00:00+00:00",
+        "confirm_ts": "2019-11-01T13:00:00+00:00",
         "impulse_start_ts": "2019-10-31T18:00:00+00:00",
         "broken_swing_price": 8118.4,
         "broken_swing_ts": "2019-11-01T05:00:00+00:00",
@@ -5049,13 +5078,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.05
+        "break_body_atr": 1.05,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-11-04T22:00:00+00:00",
+        "confirm_ts": "2019-11-04T22:00:00+00:00",
         "impulse_start_ts": "2019-11-04T15:00:00+00:00",
         "broken_swing_price": 8227.7,
         "broken_swing_ts": "2019-11-04T13:00:00+00:00",
@@ -5063,13 +5094,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.34
+        "break_body_atr": 1.34,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-11-07T06:00:00+00:00",
+        "confirm_ts": "2019-11-07T06:00:00+00:00",
         "impulse_start_ts": "2019-11-06T00:00:00+00:00",
         "broken_swing_price": 8207.2,
         "broken_swing_ts": "2019-11-06T20:00:00+00:00",
@@ -5077,13 +5110,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.64
+        "break_body_atr": 2.64,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "Range",
         "direction": "bullish",
         "candle_ts": "2019-11-07T14:00:00+00:00",
+        "confirm_ts": "2019-11-07T14:00:00+00:00",
         "impulse_start_ts": "2019-11-06T00:00:00+00:00",
         "broken_swing_price": 8253.8,
         "broken_swing_ts": "2019-11-07T06:00:00+00:00",
@@ -5091,13 +5126,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.0
+        "break_body_atr": 1.0,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
-        "candle_ts": "2019-11-08T13:00:00+00:00",
+        "candle_ts": "2019-11-08T11:00:00+00:00",
+        "confirm_ts": "2019-11-08T13:00:00+00:00",
         "impulse_start_ts": "2019-11-07T13:00:00+00:00",
         "broken_swing_price": 8224.7,
         "broken_swing_ts": "2019-11-07T13:00:00+00:00",
@@ -5105,13 +5142,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.95
+        "break_body_atr": 1.95,
+        "event_candle_delta": 2
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2019-11-08T19:00:00+00:00",
+        "confirm_ts": "2019-11-08T19:00:00+00:00",
         "impulse_start_ts": "2019-11-07T13:00:00+00:00",
         "broken_swing_price": 8240.8,
         "broken_swing_ts": "2019-11-07T23:00:00+00:00",
@@ -5119,7 +5158,8 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.75
+        "break_body_atr": 1.75,
+        "event_candle_delta": 0
       }
     ],
     "trend": "bullish",

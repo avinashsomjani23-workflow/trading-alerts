@@ -847,12 +847,64 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         # numpy-free.
         return round(float(max(b0, b1)) / float(atr), 2)
 
+    def _true_break_idx(confirm_idx: int, broken_price: float, direction: str,
+                        floor_idx: int, disp: float) -> int:
+        """Return the TRUE break candle index for an event that fired on
+        `confirm_idx`.
+
+        THE SPLIT (2026-07-09, trader-approved): the displacement buffer + body
+        gate STILL decide WHETHER the event fires (unchanged — callers only reach
+        here after both passed on `confirm_idx`). But once fired, the event candle
+        is NOT the confirmation candle — it is the FIRST candle of the contiguous
+        run of closes past the displacement buffer that ends AT the confirmation
+        candle. That is the moment price closed through the buffer and never
+        closed back inside before confirming.
+
+        `direction`: the EVENT direction — 'bullish'/'up' (broke a high upward) or
+        'bearish'/'down' (broke a low downward). `broken_price` is the swing/level
+        broken; the buffer is `broken_price ± disp`. `disp` MUST be the SAME
+        displacement the caller fired on: `bos_disp` (BOS_ATR_MULT*atr) for a BOS /
+        Confirmation BOS, `choch_disp` (STRUCTURE_CHOCH_ATR_MULT*atr) for a CHoCH
+        arm — otherwise the run boundary would not match the gate that fired.
+
+        Bound: walk back from `confirm_idx`; STOP at the first earlier candle whose
+        close is NOT past the buffer, OR at `floor_idx` (the start of the current
+        leg — a hard floor so the search can never cross into a prior leg's
+        candles). The stop-at-first-close-inside rule is what actually bounds it:
+        any pullback that closed back inside the buffer ends the run, so an earlier
+        same-side excursion in the same leg cannot be reached.
+
+        Gap ruling (option A, trader-approved): a candle that OPENED already past
+        the buffer over a weekend gap and held is a valid true break — a
+        hold-through-the-gap is a stronger break, not a weaker one. `_traded_through`
+        gates whether the event FIRES (on the confirmation candle); it does not
+        veto which candle a real, already-fired break is anchored to. So the
+        walk-back does NOT re-check `_traded_through` — gap-open candles qualify.
+
+        Returns `confirm_idx` itself when no earlier candle is in the run (a clean
+        single-candle break — the common case: median gap is 0 bars)."""
+        if atr is None or atr <= 0:
+            return confirm_idx
+        up = direction in ("bullish", "up")
+        thr = broken_price + disp if up else broken_price - disp
+        lo = max(0, int(floor_idx))
+        tbi = int(confirm_idx)
+        j = int(confirm_idx) - 1
+        while j >= lo:
+            past = closes[j] > thr if up else closes[j] < thr
+            if not past:
+                break
+            tbi = j
+            j -= 1
+        return tbi
+
     def _push_event(ev_type: str, direction: str, candle_ts: Optional[str],
                     broken_price: Optional[float], imp_start_ts: Optional[str],
                     from_zone: bool, trend_after: Optional[str],
                     tier: str = "BOS",
                     broken_swing_ts_arg: Optional[str] = None,
-                    break_idx: Optional[int] = None) -> None:
+                    break_idx: Optional[int] = None,
+                    confirm_idx: Optional[int] = None) -> None:
         # Tier is a BOS sub-type only: 'BOS' (internal swing break) or 'Range'
         # (H4 dealing-range wall break). A CHoCH has NO BOS sub-tier — its tier
         # mirrors its type ('CHoCH'). The dead legacy value 'Major'/'Minor' must
@@ -872,6 +924,14 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             "tier":               tier,
             "direction":          direction,
             "candle_ts":          candle_ts,
+            # ISO ts of the CONFIRMATION candle (where buffer+body both passed).
+            # candle_ts is the TRUE break (first close past the buffer); this is
+            # where the event actually fired. Kept so consumers that grade
+            # DISPLACEMENT CONVICTION (compute_break_quality) measure the forceful
+            # candle, not the possibly-weak true-break candle — the anchor moves,
+            # the conviction reading does not. Equals candle_ts on a clean break
+            # (delta 0). None only when confirm_idx was not passed (CHoCH_FAILED).
+            "confirm_ts":         _ts_iso(df, confirm_idx) if confirm_idx is not None else None,
             "impulse_start_ts":   imp_start_ts,
             "broken_swing_price": float(broken_price) if broken_price is not None else None,
             # ISO ts of the EXACT swing object that was broken, captured at
@@ -890,7 +950,28 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             # as the body gate and compute_break_quality. Consumed by
             # compute_bos_sequence_count to judge continuation drive decay. None
             # when ATR/idx unavailable (treated as 'cannot measure', never 'fading').
-            "break_body_atr":     _break_body_atr(break_idx),
+            #
+            # Graded on the CONFIRMATION candle (`confirm_idx`), NOT the true-break
+            # candle (`break_idx`). The event-candle fix (2026-07-09) moved the
+            # anchor/OB to the true break (first close past the buffer), but
+            # DISPLACEMENT CONVICTION is the force of the move — measured where the
+            # body gate actually fired. On a grind the true-break candle has a weak
+            # body (that is WHY it was not the confirmation), so grading it would
+            # break compute_break_quality's excess>=1.0 invariant and mislabel a
+            # decisive break as marginal. Falls back to break_idx only if no
+            # confirm_idx was passed (CHoCH_FAILED / legacy call).
+            "break_body_atr":     _break_body_atr(confirm_idx if confirm_idx is not None
+                                                  else break_idx),
+            # Event-candle delta (2026-07-09): how many bars the true break candle
+            # (`break_idx`, now the FIRST close past the buffer) sits BEFORE the
+            # confirmation candle (`confirm_idx`, where buffer+body finally both
+            # passed). 0 = clean single-candle break (the common case). >0 = a
+            # multi-bar grind where the body gate lagged the actual break. Logged
+            # so the candle shift this fix introduces is auditable per event.
+            # None when either index is unavailable.
+            "event_candle_delta": (int(confirm_idx) - int(break_idx)
+                                   if confirm_idx is not None and break_idx is not None
+                                   else None),
         }
         events_ring.append(ev)
         while len(events_ring) > EVENT_RING_MAX:
@@ -965,7 +1046,14 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     # breaks the post-CHoCH swing high.
                     broken_price = confirm_break_swing["price"]
                     broken_ts    = confirm_break_swing["ts"]
-                    ts_now = _ts_iso(df, ci)
+                    # True break = first close past the buffer in the run ending at
+                    # ci. Floor = the CHoCH arm candle (the confirming leg cannot
+                    # start before the CHoCH armed); capture before choch_arm_idx
+                    # is cleared below.
+                    _tbi = _true_break_idx(ci, broken_price, "bullish",
+                                           choch_arm_idx if choch_arm_idx is not None else leg_start,
+                                           bos_disp)
+                    ts_now = _ts_iso(df, _tbi)
                     state = _UP; prior_trend = None; choch = False
                     choch_origin = None; choch_level = None; choch_from_zone = False
                     choch_pending_dir = None; confirm_break_swing = None
@@ -986,7 +1074,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                                 "ts": ts_now, "tier": "Confirm"}
                     _push_event("BOS", "bullish", ts_now, broken_price,
                                 impulse_start_ts, False, "bullish", "Confirm",
-                                broken_swing_ts_arg=broken_ts, break_idx=ci)
+                                broken_swing_ts_arg=broken_ts, break_idx=_tbi,
+                                confirm_idx=ci)
                     if _trace is not None:
                         _trace.append(state)
                     continue
@@ -1018,7 +1107,12 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     # BOS that breaks the post-CHoCH swing low.
                     broken_price = confirm_break_swing["price"]
                     broken_ts    = confirm_break_swing["ts"]
-                    ts_now = _ts_iso(df, ci)
+                    # True break = first close past the buffer in the run ending at
+                    # ci; floor = the CHoCH arm candle (capture before it clears).
+                    _tbi = _true_break_idx(ci, broken_price, "bearish",
+                                           choch_arm_idx if choch_arm_idx is not None else leg_start,
+                                           bos_disp)
+                    ts_now = _ts_iso(df, _tbi)
                     state = _DOWN; prior_trend = None; choch = False
                     choch_origin = None; choch_level = None; choch_from_zone = False
                     choch_pending_dir = None; confirm_break_swing = None
@@ -1038,7 +1132,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                                 "ts": ts_now, "tier": "Confirm"}
                     _push_event("BOS", "bearish", ts_now, broken_price,
                                 impulse_start_ts, False, "bearish", "Confirm",
-                                broken_swing_ts_arg=broken_ts, break_idx=ci)
+                                broken_swing_ts_arg=broken_ts, break_idx=_tbi,
+                                confirm_idx=ci)
                     if _trace is not None:
                         _trace.append(state)
                     continue
@@ -1060,7 +1155,11 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     and _body_gate_ok(ci, STRUCTURE_CHOCH_BODY_ATR_MULT):
                 rev_idx = recent_high["idx"] if recent_high else leg_start
                 choch = True
-                ts_now = _ts_iso(df, ci)
+                # True break = first close past the CHoCH buffer (defended-choch_disp)
+                # in the run ending at ci; floor = leg_start (the counter-move that
+                # broke `defended` cannot start before the current leg began).
+                _tbi = _true_break_idx(ci, defended, "bearish", leg_start, choch_disp)
+                ts_now = _ts_iso(df, _tbi)
                 choch_ts = ts_now
                 broken_defended_ts = defended_swing["ts"] if defended_swing else None
                 broken_swing_ts = broken_defended_ts
@@ -1081,7 +1180,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             "ts": ts_now, "from_zone": choch_from_zone}
                 _push_event("CHoCH", "bearish", ts_now, choch_level,
                             impulse_start_ts, choch_from_zone, "bearish",
-                            broken_swing_ts_arg=broken_defended_ts, break_idx=ci)
+                            broken_swing_ts_arg=broken_defended_ts, break_idx=_tbi,
+                            confirm_idx=ci)
         elif state == _DOWN and defended is not None and rearm_block_dir != _UP \
                 and choch_pending_dir is None:
             # Gap guard via _traded_through: an up-break of defended only counts
@@ -1091,7 +1191,10 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     and _body_gate_ok(ci, STRUCTURE_CHOCH_BODY_ATR_MULT):
                 rev_idx = recent_low["idx"] if recent_low else leg_start
                 choch = True
-                ts_now = _ts_iso(df, ci)
+                # True break = first close past the CHoCH buffer (defended+choch_disp)
+                # in the run ending at ci; floor = leg_start.
+                _tbi = _true_break_idx(ci, defended, "bullish", leg_start, choch_disp)
+                ts_now = _ts_iso(df, _tbi)
                 choch_ts = ts_now
                 broken_defended_ts = defended_swing["ts"] if defended_swing else None
                 broken_swing_ts = broken_defended_ts
@@ -1112,7 +1215,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             "ts": ts_now, "from_zone": choch_from_zone}
                 _push_event("CHoCH", "bullish", ts_now, choch_level,
                             impulse_start_ts, choch_from_zone, "bullish",
-                            broken_swing_ts_arg=broken_defended_ts, break_idx=ci)
+                            broken_swing_ts_arg=broken_defended_ts, break_idx=_tbi,
+                            confirm_idx=ci)
 
         # ---- 2b. BOS (continuation, fire ON-CLOSE) -----------------------------
         # Symmetric to the CHoCH check above: fire the instant a close clears the
@@ -1131,7 +1235,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             # traded through the level (continuous candle), not a weekend gap.
             if c < broken_price - bos_disp and _traded_through(ci, broken_price, 'down') \
                     and _body_gate_ok(ci, BOS_BODY_ATR_MULT):
-                ts_now = _ts_iso(df, ci)
+                _tbi = _true_break_idx(ci, broken_price, "bearish", leg_start, bos_disp)
+                ts_now = _ts_iso(df, _tbi)
                 bos_tier = ("Range" if h4_floor is not None
                             and abs(broken_price - h4_floor) <= bos_disp
                             else "BOS")
@@ -1139,7 +1244,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             "ts": ts_now, "tier": bos_tier}
                 _push_event("BOS", "bearish", ts_now, broken_price,
                             impulse_start_ts, False, "bearish", bos_tier,
-                            broken_swing_ts_arg=bos_break_low["ts"], break_idx=ci)
+                            broken_swing_ts_arg=bos_break_low["ts"], break_idx=_tbi,
+                            confirm_idx=ci)
                 trend_dir_swings_since_extend = 0
                 bos_break_low = None  # spent — re-seeds on next confirmed low
                 # A continuation BOS DOWN = the down-trend extended = any pending
@@ -1158,7 +1264,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             # traded through the level (continuous candle), not a weekend gap.
             if c > broken_price + bos_disp and _traded_through(ci, broken_price, 'up') \
                     and _body_gate_ok(ci, BOS_BODY_ATR_MULT):
-                ts_now = _ts_iso(df, ci)
+                _tbi = _true_break_idx(ci, broken_price, "bullish", leg_start, bos_disp)
+                ts_now = _ts_iso(df, _tbi)
                 bos_tier = ("Range" if h4_ceiling is not None
                             and abs(broken_price - h4_ceiling) <= bos_disp
                             else "BOS")
@@ -1166,7 +1273,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             "ts": ts_now, "tier": bos_tier}
                 _push_event("BOS", "bullish", ts_now, broken_price,
                             impulse_start_ts, False, "bullish", bos_tier,
-                            broken_swing_ts_arg=bos_break_high["ts"], break_idx=ci)
+                            broken_swing_ts_arg=bos_break_high["ts"], break_idx=_tbi,
+                            confirm_idx=ci)
                 trend_dir_swings_since_extend = 0
                 # A continuation BOS UP = the up-trend extended = any pending
                 # CHoCH-DOWN failed (price resumed up instead of confirming down).
@@ -1192,9 +1300,13 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                                     else ts_now)
                 last_bos = {"kind": "BOS_BIRTH", "direction": _UP, "ts": ts_now}
                 # Birth BOS breaks recent_high (the high price just exceeded).
+                # No true-break walk-back: birth fires on the RAW swing close-through
+                # (no displacement buffer / body gate to lag behind), so the
+                # confirmation candle already IS the break candle (delta = 0).
                 _push_event("BOS", "bullish", ts_now, recent_high["price"],
                             impulse_start_ts, False, "bullish", "BOS",
-                            broken_swing_ts_arg=recent_high["ts"], break_idx=ci)
+                            broken_swing_ts_arg=recent_high["ts"], break_idx=ci,
+                            confirm_idx=ci)
                 # recent_high is now spent (just broken). Next BOS-up target is
                 # the next confirmed swing high; cleared until it forms.
                 bos_break_high = None; bos_break_low = None
@@ -1208,10 +1320,13 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                                     else recent_low["ts"] if recent_low
                                     else ts_now)
                 last_bos = {"kind": "BOS_BIRTH", "direction": _DOWN, "ts": ts_now}
-                # Birth BOS breaks recent_low (the low price just broken).
+                # Birth BOS breaks recent_low (the low price just broken). No
+                # true-break walk-back (raw close-through, no buffer lag) — the
+                # confirmation candle is the break candle (delta = 0).
                 _push_event("BOS", "bearish", ts_now, recent_low["price"],
                             impulse_start_ts, False, "bearish", "BOS",
-                            broken_swing_ts_arg=recent_low["ts"], break_idx=ci)
+                            broken_swing_ts_arg=recent_low["ts"], break_idx=ci,
+                            confirm_idx=ci)
                 # recent_low is now spent (just broken). Next BOS-down target is
                 # the next confirmed swing low; cleared until it forms.
                 bos_break_low = None; bos_break_high = None

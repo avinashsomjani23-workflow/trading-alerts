@@ -516,7 +516,7 @@
     "last_bos": {
       "kind": "BOS",
       "direction": "up",
-      "ts": "2013-04-30T21:00:00+00:00",
+      "ts": "2013-04-29T21:00:00+00:00",
       "tier": "BOS"
     },
     "label": "H1 trend UP",
@@ -526,6 +526,7 @@
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2013-03-27T21:00:00+00:00",
+        "confirm_ts": "2013-03-27T21:00:00+00:00",
         "impulse_start_ts": "2013-03-17T21:00:00+00:00",
         "broken_swing_price": 2811.0,
         "broken_swing_ts": "2013-03-13T21:00:00+00:00",
@@ -533,13 +534,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 0.92
+        "break_body_atr": 0.92,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2013-04-09T21:00:00+00:00",
+        "confirm_ts": "2013-04-09T21:00:00+00:00",
         "impulse_start_ts": "2013-03-17T21:00:00+00:00",
         "broken_swing_price": 2829.0,
         "broken_swing_ts": "2013-04-01T21:00:00+00:00",
@@ -547,13 +550,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.88
+        "break_body_atr": 1.88,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
-        "candle_ts": "2013-04-30T21:00:00+00:00",
+        "candle_ts": "2013-04-29T21:00:00+00:00",
+        "confirm_ts": "2013-04-30T21:00:00+00:00",
         "impulse_start_ts": "2013-03-17T21:00:00+00:00",
         "broken_swing_price": 2862.0,
         "broken_swing_ts": "2013-04-10T21:00:00+00:00",
@@ -561,7 +566,8 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.15
+        "break_body_atr": 1.15,
+        "event_candle_delta": 1
       }
     ],
     "trend": "bullish",

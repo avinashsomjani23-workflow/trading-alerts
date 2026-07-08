@@ -4836,7 +4836,7 @@
     "last_bos": {
       "kind": "BOS",
       "direction": "up",
-      "ts": "2010-06-21T00:00:00+00:00",
+      "ts": "2010-06-20T22:00:00+00:00",
       "tier": "BOS"
     },
     "label": "H1 trend UP (ranging)",
@@ -4846,6 +4846,7 @@
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2010-05-19T12:00:00+00:00",
+        "confirm_ts": "2010-05-19T12:00:00+00:00",
         "impulse_start_ts": "2010-05-18T23:00:00+00:00",
         "broken_swing_price": 1.22276,
         "broken_swing_ts": "2010-05-19T07:00:00+00:00",
@@ -4853,13 +4854,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 3.95
+        "break_body_atr": 3.95,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2010-05-20T17:00:00+00:00",
+        "confirm_ts": "2010-05-20T17:00:00+00:00",
         "impulse_start_ts": "2010-05-20T01:00:00+00:00",
         "broken_swing_price": 1.2436,
         "broken_swing_ts": "2010-05-20T06:00:00+00:00",
@@ -4867,13 +4870,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 5.83
+        "break_body_atr": 5.83,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2010-05-21T04:00:00+00:00",
+        "confirm_ts": "2010-05-21T04:00:00+00:00",
         "impulse_start_ts": "2010-05-20T21:00:00+00:00",
         "broken_swing_price": 1.25969,
         "broken_swing_ts": "2010-05-20T18:00:00+00:00",
@@ -4881,13 +4886,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.3
+        "break_body_atr": 1.3,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
         "candle_ts": "2010-05-26T14:00:00+00:00",
+        "confirm_ts": "2010-05-26T14:00:00+00:00",
         "impulse_start_ts": "2010-05-26T01:00:00+00:00",
         "broken_swing_price": 1.22708,
         "broken_swing_ts": "2010-05-26T01:00:00+00:00",
@@ -4895,13 +4902,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.95
+        "break_body_atr": 1.95,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH_FAILED",
         "tier": "CHoCH_FAILED",
         "direction": "bullish",
         "candle_ts": "2010-05-27T15:00:00+00:00",
+        "confirm_ts": null,
         "impulse_start_ts": "2010-05-27T08:00:00+00:00",
         "broken_swing_price": 1.22708,
         "broken_swing_ts": null,
@@ -4909,13 +4918,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 4.0
+        "break_body_atr": 4.0,
+        "event_candle_delta": null
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2010-05-28T08:00:00+00:00",
+        "confirm_ts": "2010-05-28T08:00:00+00:00",
         "impulse_start_ts": "2010-05-28T03:00:00+00:00",
         "broken_swing_price": 1.23801,
         "broken_swing_ts": "2010-05-27T23:00:00+00:00",
@@ -4923,13 +4934,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 3.23
+        "break_body_atr": 3.23,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
         "candle_ts": "2010-06-01T06:00:00+00:00",
+        "confirm_ts": "2010-06-01T06:00:00+00:00",
         "impulse_start_ts": "2010-05-31T06:00:00+00:00",
         "broken_swing_price": 1.2282,
         "broken_swing_ts": "2010-05-31T06:00:00+00:00",
@@ -4937,13 +4950,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.6
+        "break_body_atr": 1.6,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2010-06-03T00:00:00+00:00",
+        "confirm_ts": "2010-06-03T00:00:00+00:00",
         "impulse_start_ts": "2010-06-02T05:00:00+00:00",
         "broken_swing_price": 1.22634,
         "broken_swing_ts": "2010-06-02T17:00:00+00:00",
@@ -4951,13 +4966,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.01
+        "break_body_atr": 1.01,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
         "candle_ts": "2010-06-04T11:00:00+00:00",
+        "confirm_ts": "2010-06-04T11:00:00+00:00",
         "impulse_start_ts": "2010-06-03T20:00:00+00:00",
         "broken_swing_price": 1.21521,
         "broken_swing_ts": "2010-06-03T20:00:00+00:00",
@@ -4965,13 +4982,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 4.42
+        "break_body_atr": 4.42,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2010-06-08T15:00:00+00:00",
+        "confirm_ts": "2010-06-08T15:00:00+00:00",
         "impulse_start_ts": "2010-06-07T13:00:00+00:00",
         "broken_swing_price": 1.19816,
         "broken_swing_ts": "2010-06-08T03:00:00+00:00",
@@ -4979,13 +4998,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.72
+        "break_body_atr": 1.72,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2010-06-09T11:00:00+00:00",
+        "confirm_ts": "2010-06-09T11:00:00+00:00",
         "impulse_start_ts": "2010-06-09T00:00:00+00:00",
         "broken_swing_price": 1.19776,
         "broken_swing_ts": "2010-06-08T21:00:00+00:00",
@@ -4993,13 +5014,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.07
+        "break_body_atr": 1.07,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2010-06-10T13:00:00+00:00",
+        "confirm_ts": "2010-06-10T13:00:00+00:00",
         "impulse_start_ts": "2010-06-10T07:00:00+00:00",
         "broken_swing_price": 1.20872,
         "broken_swing_ts": "2010-06-10T09:00:00+00:00",
@@ -5007,13 +5030,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.04
+        "break_body_atr": 2.04,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2010-06-13T23:00:00+00:00",
+        "confirm_ts": "2010-06-13T23:00:00+00:00",
         "impulse_start_ts": "2010-06-11T02:00:00+00:00",
         "broken_swing_price": 1.21521,
         "broken_swing_ts": "2010-06-11T12:00:00+00:00",
@@ -5021,13 +5046,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.39
+        "break_body_atr": 2.39,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2010-06-14T08:00:00+00:00",
+        "confirm_ts": "2010-06-14T08:00:00+00:00",
         "impulse_start_ts": "2010-06-11T02:00:00+00:00",
         "broken_swing_price": 1.22073,
         "broken_swing_ts": "2010-06-14T00:00:00+00:00",
@@ -5035,13 +5062,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.88
+        "break_body_atr": 1.88,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2010-06-15T09:00:00+00:00",
+        "confirm_ts": "2010-06-15T09:00:00+00:00",
         "impulse_start_ts": "2010-06-14T07:00:00+00:00",
         "broken_swing_price": 1.22319,
         "broken_swing_ts": "2010-06-15T00:00:00+00:00",
@@ -5049,13 +5078,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.46
+        "break_body_atr": 1.46,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2010-06-17T09:00:00+00:00",
+        "confirm_ts": "2010-06-17T09:00:00+00:00",
         "impulse_start_ts": "2010-06-17T01:00:00+00:00",
         "broken_swing_price": 1.23525,
         "broken_swing_ts": "2010-06-16T06:00:00+00:00",
@@ -5063,13 +5094,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.19
+        "break_body_atr": 2.19,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
-        "candle_ts": "2010-06-21T00:00:00+00:00",
+        "candle_ts": "2010-06-20T22:00:00+00:00",
+        "confirm_ts": "2010-06-21T00:00:00+00:00",
         "impulse_start_ts": "2010-06-18T06:00:00+00:00",
         "broken_swing_price": 1.2394,
         "broken_swing_ts": "2010-06-18T14:00:00+00:00",
@@ -5077,7 +5110,8 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.32
+        "break_body_atr": 1.32,
+        "event_candle_delta": 2
       }
     ],
     "trend": "bullish",

@@ -4846,6 +4846,7 @@
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2022-02-23T23:00:00+00:00",
+        "confirm_ts": "2022-02-23T23:00:00+00:00",
         "impulse_start_ts": "2022-02-23T18:00:00+00:00",
         "broken_swing_price": 114.924,
         "broken_swing_ts": "2022-02-23T18:00:00+00:00",
@@ -4853,13 +4854,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.18
+        "break_body_atr": 0.18,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bullish",
         "candle_ts": "2022-03-28T02:00:00+00:00",
+        "confirm_ts": "2022-03-28T02:00:00+00:00",
         "impulse_start_ts": "2022-03-25T06:00:00+00:00",
         "broken_swing_price": 121.951,
         "broken_swing_ts": "2022-03-25T06:00:00+00:00",
@@ -4867,13 +4870,15 @@
         "reversal_pct": 1.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.79
+        "break_body_atr": 1.79,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2022-03-29T13:00:00+00:00",
+        "confirm_ts": "2022-03-29T13:00:00+00:00",
         "impulse_start_ts": "2022-03-29T01:00:00+00:00",
         "broken_swing_price": 123.101,
         "broken_swing_ts": "2022-03-29T04:00:00+00:00",
@@ -4881,7 +4886,8 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.75
+        "break_body_atr": 1.75,
+        "event_candle_delta": 0
       }
     ],
     "trend": "bearish",

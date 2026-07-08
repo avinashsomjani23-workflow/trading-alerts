@@ -525,6 +525,7 @@
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2008-01-03T13:00:00+00:00",
+        "confirm_ts": "2008-01-03T13:00:00+00:00",
         "impulse_start_ts": "2008-01-03T07:00:00+00:00",
         "broken_swing_price": 0.7763,
         "broken_swing_ts": "2008-01-03T07:00:00+00:00",
@@ -532,7 +533,8 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.74
+        "break_body_atr": 1.74,
+        "event_candle_delta": 0
       }
     ],
     "trend": "bullish",

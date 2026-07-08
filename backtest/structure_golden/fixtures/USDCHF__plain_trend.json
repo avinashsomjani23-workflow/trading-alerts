@@ -4846,6 +4846,7 @@
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2020-02-06T03:00:00+00:00",
+        "confirm_ts": "2020-02-06T03:00:00+00:00",
         "impulse_start_ts": "2020-02-05T23:00:00+00:00",
         "broken_swing_price": 0.97393,
         "broken_swing_ts": "2020-02-05T19:00:00+00:00",
@@ -4853,13 +4854,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 0.13
+        "break_body_atr": 0.13,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
-        "candle_ts": "2020-03-06T14:00:00+00:00",
+        "candle_ts": "2020-03-05T13:00:00+00:00",
+        "confirm_ts": "2020-03-06T14:00:00+00:00",
         "impulse_start_ts": "2020-03-04T22:00:00+00:00",
         "broken_swing_price": 0.95547,
         "broken_swing_ts": "2020-03-04T22:00:00+00:00",
@@ -4867,13 +4870,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.89
+        "break_body_atr": 1.89,
+        "event_candle_delta": 25
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2020-03-10T04:00:00+00:00",
+        "confirm_ts": "2020-03-10T04:00:00+00:00",
         "impulse_start_ts": "2020-03-09T20:00:00+00:00",
         "broken_swing_price": 0.93101,
         "broken_swing_ts": "2020-03-09T14:00:00+00:00",
@@ -4881,7 +4886,8 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.02
+        "break_body_atr": 1.02,
+        "event_candle_delta": 0
       }
     ],
     "trend": "bullish",

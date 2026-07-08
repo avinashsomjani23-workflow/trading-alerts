@@ -4846,6 +4846,7 @@
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2008-08-27T00:00:00+00:00",
+        "confirm_ts": "2008-08-27T00:00:00+00:00",
         "impulse_start_ts": "2008-08-26T08:00:00+00:00",
         "broken_swing_price": 109.52,
         "broken_swing_ts": "2008-08-26T18:00:00+00:00",
@@ -4853,13 +4854,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.79
+        "break_body_atr": 0.79,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2008-08-29T07:00:00+00:00",
+        "confirm_ts": "2008-08-29T07:00:00+00:00",
         "impulse_start_ts": "2008-08-28T17:00:00+00:00",
         "broken_swing_price": 108.96,
         "broken_swing_ts": "2008-08-29T01:00:00+00:00",
@@ -4867,13 +4870,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.05
+        "break_body_atr": 1.05,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2008-09-01T07:00:00+00:00",
+        "confirm_ts": "2008-09-01T07:00:00+00:00",
         "impulse_start_ts": "2008-08-29T20:00:00+00:00",
         "broken_swing_price": 108.24,
         "broken_swing_ts": "2008-09-01T02:00:00+00:00",
@@ -4881,13 +4886,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.93
+        "break_body_atr": 1.93,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
-        "candle_ts": "2008-09-04T17:00:00+00:00",
+        "candle_ts": "2008-09-04T16:00:00+00:00",
+        "confirm_ts": "2008-09-04T17:00:00+00:00",
         "impulse_start_ts": "2008-09-03T23:00:00+00:00",
         "broken_swing_price": 107.86,
         "broken_swing_ts": "2008-09-04T06:00:00+00:00",
@@ -4895,13 +4902,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.13
+        "break_body_atr": 1.13,
+        "event_candle_delta": 1
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bullish",
         "candle_ts": "2008-09-05T20:00:00+00:00",
+        "confirm_ts": "2008-09-05T20:00:00+00:00",
         "impulse_start_ts": "2008-09-05T06:00:00+00:00",
         "broken_swing_price": 107.01,
         "broken_swing_ts": "2008-09-05T06:00:00+00:00",
@@ -4909,13 +4918,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.59
+        "break_body_atr": 1.59,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2008-09-09T15:00:00+00:00",
+        "confirm_ts": "2008-09-09T15:00:00+00:00",
         "impulse_start_ts": "2008-09-09T10:00:00+00:00",
         "broken_swing_price": 107.25,
         "broken_swing_ts": "2008-09-09T05:00:00+00:00",
@@ -4923,13 +4934,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.16
+        "break_body_atr": 1.16,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
-        "candle_ts": "2008-09-15T01:00:00+00:00",
+        "candle_ts": "2008-09-14T22:00:00+00:00",
+        "confirm_ts": "2008-09-15T01:00:00+00:00",
         "impulse_start_ts": "2008-09-11T21:00:00+00:00",
         "broken_swing_price": 106.72,
         "broken_swing_ts": "2008-09-12T13:00:00+00:00",
@@ -4937,13 +4950,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.47
+        "break_body_atr": 1.47,
+        "event_candle_delta": 3
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2008-09-15T08:00:00+00:00",
+        "confirm_ts": "2008-09-15T08:00:00+00:00",
         "impulse_start_ts": "2008-09-11T21:00:00+00:00",
         "broken_swing_price": 105.27,
         "broken_swing_ts": "2008-09-15T03:00:00+00:00",
@@ -4951,13 +4966,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.76
+        "break_body_atr": 1.76,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
-        "candle_ts": "2008-09-16T08:00:00+00:00",
+        "candle_ts": "2008-09-16T07:00:00+00:00",
+        "confirm_ts": "2008-09-16T08:00:00+00:00",
         "impulse_start_ts": "2008-09-16T04:00:00+00:00",
         "broken_swing_price": 104.03,
         "broken_swing_ts": "2008-09-16T00:00:00+00:00",
@@ -4965,13 +4982,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.3
+        "break_body_atr": 2.3,
+        "event_candle_delta": 1
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bullish",
         "candle_ts": "2008-09-16T14:00:00+00:00",
+        "confirm_ts": "2008-09-16T14:00:00+00:00",
         "impulse_start_ts": "2008-09-16T04:00:00+00:00",
         "broken_swing_price": 104.49,
         "broken_swing_ts": "2008-09-16T04:00:00+00:00",
@@ -4979,13 +4998,15 @@
         "reversal_pct": 1.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 3.32
+        "break_body_atr": 3.32,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "Range",
         "direction": "bearish",
         "candle_ts": "2008-09-17T14:00:00+00:00",
+        "confirm_ts": "2008-09-17T14:00:00+00:00",
         "impulse_start_ts": "2008-09-16T04:00:00+00:00",
         "broken_swing_price": 105.15,
         "broken_swing_ts": "2008-09-17T07:00:00+00:00",
@@ -4993,13 +5014,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.33
+        "break_body_atr": 1.33,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2008-09-18T16:00:00+00:00",
+        "confirm_ts": "2008-09-18T16:00:00+00:00",
         "impulse_start_ts": "2008-09-17T19:00:00+00:00",
         "broken_swing_price": 104.17,
         "broken_swing_ts": "2008-09-18T10:00:00+00:00",
@@ -5007,13 +5030,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.47
+        "break_body_atr": 2.47,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bullish",
-        "candle_ts": "2008-09-19T13:00:00+00:00",
+        "candle_ts": "2008-09-18T23:00:00+00:00",
+        "confirm_ts": "2008-09-19T13:00:00+00:00",
         "impulse_start_ts": "2008-09-18T14:00:00+00:00",
         "broken_swing_price": 105.37,
         "broken_swing_ts": "2008-09-18T14:00:00+00:00",
@@ -5021,13 +5046,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 2.49
+        "break_body_atr": 2.49,
+        "event_candle_delta": 14
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2008-09-22T18:00:00+00:00",
+        "confirm_ts": "2008-09-22T18:00:00+00:00",
         "impulse_start_ts": "2008-09-22T14:00:00+00:00",
         "broken_swing_price": 105.93,
         "broken_swing_ts": "2008-09-22T08:00:00+00:00",
@@ -5035,13 +5062,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.25
+        "break_body_atr": 1.25,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2008-09-26T07:00:00+00:00",
+        "confirm_ts": "2008-09-26T07:00:00+00:00",
         "impulse_start_ts": "2008-09-24T16:00:00+00:00",
         "broken_swing_price": 105.6,
         "broken_swing_ts": "2008-09-25T12:00:00+00:00",
@@ -5049,13 +5078,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.16
+        "break_body_atr": 1.16,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2008-09-29T12:00:00+00:00",
+        "confirm_ts": "2008-09-29T12:00:00+00:00",
         "impulse_start_ts": "2008-09-29T07:00:00+00:00",
         "broken_swing_price": 106.04,
         "broken_swing_ts": "2008-09-29T08:00:00+00:00",
@@ -5063,7 +5094,8 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.13
+        "break_body_atr": 1.13,
+        "event_candle_delta": 0
       }
     ],
     "trend": "bearish",

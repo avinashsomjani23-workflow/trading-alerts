@@ -79,28 +79,43 @@ WEEKEND_FLAT_HOUR_UTC = 18
 EXIT_LAB_CONFIGS = None
 EXIT_LAB_SINK = None
 
-def _session_from_utc_hour(h: int) -> str:
-    """Map UTC hour -> trading session label. Matches reporting._classify_session_utc."""
-    if 0 <= h < 7:
-        return "Asia"
-    if 7 <= h < 13:
+# Session windows in NY-LOCAL time (America/New_York), DST-resolved per candle
+# date — the SAME tz the killzones use (config.json killzones all key off
+# America/New_York, resolved via smc_detector.ts_in_killzone). Fixed-UTC buckets
+# were WRONG half the year: London/NY session edges shift 1h across the EDT/EST
+# change, so a boundary trade got the wrong session label. NY-local bucketing
+# self-corrects because the zone conversion carries the DST offset.
+#
+# NY-local equivalents of the old UTC intent (Asia 0-7, London 7-13, NY 13-21
+# UTC ~= EST): Asia 19:00->02:00, London 02:00->08:00, NY 08:00->16:00, else
+# Other. These are the SAME session blocks, now DST-honest.
+_NY_TZ = "America/New_York"
+
+
+def _session_from_ny_hour(h: int) -> str:
+    """Map NY-LOCAL hour -> trading session label. DST is already baked into `h`
+    by the caller's tz conversion, so the boundaries are constant in NY-local
+    time and correct in both EDT and EST."""
+    if 2 <= h < 8:
         return "London"
-    if 13 <= h < 21:
+    if 8 <= h < 16:
         return "NY"
+    # Asia wraps past NY-midnight: 19:00 -> 02:00 (next day).
+    if h >= 19 or h < 2:
+        return "Asia"
     return "Other"
 
 
-def _ts_hour_utc(ts_val) -> Optional[int]:
-    """Coerce ts (str / pd.Timestamp / None) to UTC hour, or None if unparseable."""
+def _ts_hour_ny(ts_val) -> Optional[int]:
+    """Coerce ts (str / pd.Timestamp / None) to America/New_York local hour,
+    DST-resolved for that timestamp's date, or None if unparseable. Naive
+    timestamps are treated as UTC (matches the rest of this module)."""
     if ts_val is None or ts_val == "":
         return None
     try:
         ts = pd.Timestamp(ts_val)
-        if ts.tzinfo is None:
-            ts = ts.tz_localize("UTC")
-        else:
-            ts = ts.tz_convert("UTC")
-        return int(ts.hour)
+        ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
+        return int(ts.tz_convert(_NY_TZ).hour)
     except Exception:
         return None
 
@@ -108,17 +123,17 @@ def _ts_hour_utc(ts_val) -> Optional[int]:
 def _ob_session(ob: Dict[str, Any]) -> str:
     """Session label for the OB candle itself (when the institutional move
     that created the zone happened). 'unknown' if ob_timestamp missing."""
-    h = _ts_hour_utc(ob.get("ob_timestamp"))
-    return _session_from_utc_hour(h) if h is not None else "unknown"
+    h = _ts_hour_ny(ob.get("ob_timestamp"))
+    return _session_from_ny_hour(h) if h is not None else "unknown"
 
 
 def _fill_session(fill_ts, alert_ts) -> str:
     """Session at fill (when capital was at work). Falls back to alert hour
     for never_filled rows so the column is never empty."""
-    h = _ts_hour_utc(fill_ts) if fill_ts is not None else None
+    h = _ts_hour_ny(fill_ts) if fill_ts is not None else None
     if h is None:
-        h = _ts_hour_utc(alert_ts)
-    return _session_from_utc_hour(h) if h is not None else "unknown"
+        h = _ts_hour_ny(alert_ts)
+    return _session_from_ny_hour(h) if h is not None else "unknown"
 
 
 def _ts_in_killzone(ts_val, pair_conf: Dict[str, Any]) -> bool:
@@ -1139,7 +1154,7 @@ def _simulate_single_entry(
 #     direction, bos_tag, bos_tier, bos_swing_price, impulse_start_price, high,
 #     low, proximal_line, distal_line, median_leg_body, ob_body, h1_atr
 #     (formation ATR, frozen by design), reversal_pct, broken_was_wall,
-#     bos_sequence_count, last_choch_idx.
+#     bos_sequence_count, last_choch_idx, event_candle_delta.
 #   FROZEN-BY-DESIGN, LIVE DOES THE SAME: dealing_range (incl. S4
 #     dr_ceiling_broken_at_ob / dr_floor_broken_at_ob, read off the frozen
 #     snapshot), sweep_observed.
@@ -1438,6 +1453,11 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "bars_to_tp2":   bars_to_tp2,
         "ob_age_h1_bars": _ob_age_h1_bars(ob, df_h1, alert_ts),
         "ob_timestamp":  ob.get("ob_timestamp"),
+        # Event-candle delta (2026-07-09): bars the true break candle sits before
+        # the confirmation candle. 0 = clean single-candle break. Frozen event
+        # fact, carried through from the zone (never recomputed here). Audits the
+        # candle shift from the event-candle fix.
+        "event_candle_delta": ob.get("event_candle_delta"),
         "pd_zone":       pd_zone,
         "pd_alignment":  pd_alignment,
         "pd_pct":        pd_pct,
@@ -1453,7 +1473,7 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "freshness_pts": round(float(breakdown.get("freshness", 0.0)), 2),
         "killzone_pts":  round(float(breakdown.get("killzone", 0.0)), 2),
         "confluences_present": _confluences_present(breakdown),
-        "session":       _session_from_utc_hour(alert_ts.hour),
+        "session":       _fill_session(alert_ts, alert_ts),
         # Crypto weekend no-trade window (BTC: Sat 00:00 -> Mon 09:00 IST). When
         # the FILL lands in that window the trade is audit-only — the reporting
         # layer's _headline_exclusion drops it from P&L. False/absent for every

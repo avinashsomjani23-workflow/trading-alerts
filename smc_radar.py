@@ -865,6 +865,15 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         # Locate the break candle and impulse-leg start in CURRENT df.
         bos_idx = _idx_from_ts(ev.get('candle_ts'))
         impulse_start_idx = _idx_from_ts(ev.get('impulse_start_ts'))
+        # Confirmation candle (where the displacement/body gate fired) — used only
+        # to grade DISPLACEMENT CONVICTION (break_quality). candle_ts/bos_idx is
+        # the true-break anchor the OB walks back from; the confirmation candle is
+        # the forceful one the body gate approved. They differ only on multi-bar
+        # grinds (event_candle_delta>0). Falls back to bos_idx when confirm_ts is
+        # absent (CHoCH_FAILED / legacy events) or outside the current window.
+        _confirm_idx_bq = _idx_from_ts(ev.get('confirm_ts'))
+        if _confirm_idx_bq is None:
+            _confirm_idx_bq = bos_idx
         if bos_idx is None or impulse_start_idx is None:
             # Event references a candle outside the current df window. Common
             # for older events in the ring — they have no fresh OB to build.
@@ -1149,10 +1158,20 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'bos_tier':           ev_tier,
             'broken_was_wall':    bool(ev.get('broken_was_wall', False)),
             'reversal_pct':       ev.get('reversal_pct'),
+            # Event-candle delta (2026-07-09): bars between the true break candle
+            # (candle_ts, first close past the displacement buffer — where this OB
+            # walked back from) and the confirmation candle (where buffer+body
+            # both finally passed). 0 = clean single-candle break. Frozen from the
+            # producer event; never recomputed. Makes the candle shift this fix
+            # introduced auditable per zone/trade.
+            'event_candle_delta': ev.get('event_candle_delta'),
             # Pair-aware displacement quality of the break candle (frozen here,
-            # consumed by Phase 2 for the email — never recomputed).
+            # consumed by Phase 2 for the email — never recomputed). Graded on the
+            # CONFIRMATION candle (_confirm_idx_bq), where the body gate fired —
+            # NOT the true-break anchor (bos_idx). See _confirm_idx_bq comment: the
+            # anchor moved with the event-candle fix, conviction grading did not.
             'break_quality':      smc_detector.compute_break_quality(
-                                      df, bos_idx, bos_swing_price, ev_dir,
+                                      df, _confirm_idx_bq, bos_swing_price, ev_dir,
                                       h1_atr_for_leg, event_type=ev_type),
             'high':               ob_high,
             'low':                ob_low,
@@ -3663,6 +3682,15 @@ def is_choch_superseded(slate_zone, structure_events):
     zone_dir = slate_zone.get("direction")
     zone_bos_ts_str = slate_zone.get("bos_timestamp")
     if not zone_dir or not zone_bos_ts_str:
+        # A CHoCH zone with no bos_timestamp can never be evaluated for
+        # supersession — it will live forever regardless of later BOS. That is a
+        # silent miss (a legacy zone from before the field existed), so surface it
+        # rather than swallow it. Log-and-return: never raise in the live scan.
+        logging.warning(
+            "[choch_supersede] %s missing %s — cannot evaluate supersession, kept",
+            slate_zone.get("zone_id", "?"),
+            "direction" if not zone_dir else "bos_timestamp",
+        )
         return False
     try:
         zone_bos_ts = datetime.fromisoformat(str(zone_bos_ts_str))

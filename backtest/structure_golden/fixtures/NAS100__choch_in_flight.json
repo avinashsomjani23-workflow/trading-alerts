@@ -4846,6 +4846,7 @@
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2014-10-09T21:00:00+00:00",
+        "confirm_ts": "2014-10-09T21:00:00+00:00",
         "impulse_start_ts": "2014-09-18T21:00:00+00:00",
         "broken_swing_price": 3934.0,
         "broken_swing_ts": "2014-10-01T21:00:00+00:00",
@@ -4853,13 +4854,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.06
+        "break_body_atr": 1.06,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bullish",
-        "candle_ts": "2014-12-08T21:00:00+00:00",
+        "candle_ts": "2014-10-29T21:00:00+00:00",
+        "confirm_ts": "2014-12-08T21:00:00+00:00",
         "impulse_start_ts": "2014-10-08T21:00:00+00:00",
         "broken_swing_price": 4054.0,
         "broken_swing_ts": "2014-10-08T21:00:00+00:00",
@@ -4867,13 +4870,15 @@
         "reversal_pct": 1.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.51
+        "break_body_atr": 1.51,
+        "event_candle_delta": 28
       },
       {
         "type": "BOS",
         "tier": "Confirm",
         "direction": "bullish",
-        "candle_ts": "2015-03-04T21:00:00+00:00",
+        "candle_ts": "2015-02-11T21:00:00+00:00",
+        "confirm_ts": "2015-03-04T21:00:00+00:00",
         "impulse_start_ts": "2014-10-08T21:00:00+00:00",
         "broken_swing_price": 4321.0,
         "broken_swing_ts": "2014-12-25T21:00:00+00:00",
@@ -4881,13 +4886,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.24
+        "break_body_atr": 1.24,
+        "event_candle_delta": 15
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2015-04-22T21:00:00+00:00",
+        "confirm_ts": "2015-04-22T21:00:00+00:00",
         "impulse_start_ts": "2015-04-16T21:00:00+00:00",
         "broken_swing_price": 4449.0,
         "broken_swing_ts": "2015-04-12T21:00:00+00:00",
@@ -4895,13 +4902,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.31
+        "break_body_atr": 1.31,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2015-06-17T21:00:00+00:00",
+        "confirm_ts": "2015-06-17T21:00:00+00:00",
         "impulse_start_ts": "2015-05-25T21:00:00+00:00",
         "broken_swing_price": 4511.0,
         "broken_swing_ts": "2015-06-10T21:00:00+00:00",
@@ -4909,13 +4918,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.77
+        "break_body_atr": 1.77,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
         "candle_ts": "2015-07-08T21:00:00+00:00",
+        "confirm_ts": "2015-07-08T21:00:00+00:00",
         "impulse_start_ts": "2015-06-14T21:00:00+00:00",
         "broken_swing_price": 4393.0,
         "broken_swing_ts": "2015-06-14T21:00:00+00:00",
@@ -4923,13 +4934,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.61
+        "break_body_atr": 1.61,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH_FAILED",
         "tier": "CHoCH_FAILED",
         "direction": "bullish",
         "candle_ts": "2015-07-15T21:00:00+00:00",
+        "confirm_ts": null,
         "impulse_start_ts": "2015-06-14T21:00:00+00:00",
         "broken_swing_price": 4393.0,
         "broken_swing_ts": null,
@@ -4937,13 +4950,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.56
+        "break_body_atr": 1.56,
+        "event_candle_delta": null
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
-        "candle_ts": "2015-07-16T21:00:00+00:00",
+        "candle_ts": "2015-07-15T21:00:00+00:00",
+        "confirm_ts": "2015-07-16T21:00:00+00:00",
         "impulse_start_ts": "2015-06-14T21:00:00+00:00",
         "broken_swing_price": 4560.0,
         "broken_swing_ts": "2015-06-23T21:00:00+00:00",
@@ -4951,13 +4966,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.01
+        "break_body_atr": 1.01,
+        "event_candle_delta": 1
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
         "candle_ts": "2015-08-19T21:00:00+00:00",
+        "confirm_ts": "2015-08-19T21:00:00+00:00",
         "impulse_start_ts": "2015-07-27T21:00:00+00:00",
         "broken_swing_price": 4504.0,
         "broken_swing_ts": "2015-07-27T21:00:00+00:00",
@@ -4965,13 +4982,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 3.72
+        "break_body_atr": 3.72,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
         "candle_ts": "2015-10-21T23:00:00+00:00",
+        "confirm_ts": "2015-10-21T23:00:00+00:00",
         "impulse_start_ts": "2015-08-31T21:00:00+00:00",
         "broken_swing_price": 4450.0,
         "broken_swing_ts": "2015-09-16T21:00:00+00:00",
@@ -4979,13 +4998,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 3.67
+        "break_body_atr": 3.67,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bearish",
         "candle_ts": "2016-01-05T21:00:00+00:00",
+        "confirm_ts": "2016-01-05T21:00:00+00:00",
         "impulse_start_ts": "2015-12-17T21:00:00+00:00",
         "broken_swing_price": 4509.0,
         "broken_swing_ts": "2015-12-17T21:00:00+00:00",
@@ -4993,13 +5014,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 3.58
+        "break_body_atr": 3.58,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "Confirm",
         "direction": "bearish",
         "candle_ts": "2016-02-07T21:00:00+00:00",
+        "confirm_ts": "2016-02-07T21:00:00+00:00",
         "impulse_start_ts": "2015-12-17T21:00:00+00:00",
         "broken_swing_price": 3991.0,
         "broken_swing_ts": "2016-01-19T21:00:00+00:00",
@@ -5007,13 +5030,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.68
+        "break_body_atr": 1.68,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bullish",
         "candle_ts": "2016-06-22T21:00:00+00:00",
+        "confirm_ts": "2016-06-22T21:00:00+00:00",
         "impulse_start_ts": "2016-05-10T21:00:00+00:00",
         "broken_swing_price": 4408.0,
         "broken_swing_ts": "2016-05-10T21:00:00+00:00",
@@ -5021,13 +5046,15 @@
         "reversal_pct": 1.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 4.48
+        "break_body_atr": 4.48,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH_FAILED",
         "tier": "CHoCH_FAILED",
         "direction": "bearish",
         "candle_ts": "2016-06-26T21:00:00+00:00",
+        "confirm_ts": null,
         "impulse_start_ts": "2016-05-10T21:00:00+00:00",
         "broken_swing_price": 4408.0,
         "broken_swing_ts": null,
@@ -5035,13 +5062,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.07
+        "break_body_atr": 2.07,
+        "event_candle_delta": null
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2016-09-08T21:00:00+00:00",
+        "confirm_ts": "2016-09-08T21:00:00+00:00",
         "impulse_start_ts": "2016-08-22T21:00:00+00:00",
         "broken_swing_price": 4748.0,
         "broken_swing_ts": "2016-08-31T21:00:00+00:00",
@@ -5049,13 +5078,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.69
+        "break_body_atr": 2.69,
+        "event_candle_delta": 0
       },
       {
         "type": "BOS",
         "tier": "BOS",
         "direction": "bearish",
         "candle_ts": "2016-11-01T21:00:00+00:00",
+        "confirm_ts": "2016-11-01T21:00:00+00:00",
         "impulse_start_ts": "2016-10-17T21:00:00+00:00",
         "broken_swing_price": 4759.0,
         "broken_swing_ts": "2016-10-12T21:00:00+00:00",
@@ -5063,13 +5094,15 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.17
+        "break_body_atr": 1.17,
+        "event_candle_delta": 0
       },
       {
         "type": "CHoCH",
         "tier": "CHoCH",
         "direction": "bullish",
         "candle_ts": "2016-12-12T21:00:00+00:00",
+        "confirm_ts": "2016-12-12T21:00:00+00:00",
         "impulse_start_ts": "2016-11-09T21:00:00+00:00",
         "broken_swing_price": 4884.0,
         "broken_swing_ts": "2016-11-09T21:00:00+00:00",
@@ -5077,7 +5110,8 @@
         "reversal_pct": 1.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.7
+        "break_body_atr": 1.7,
+        "event_candle_delta": 0
       }
     ],
     "trend": "bearish",
