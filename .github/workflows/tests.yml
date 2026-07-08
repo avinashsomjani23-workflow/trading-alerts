@@ -57,3 +57,17 @@ jobs:
         # delta resync (boxes drift off candles). This gate fails if the strip
         # regresses so both bug classes can't return silently.
         run: python tests/test_feed_weekend_strip.py
+
+      - name: Event-candle fix guard (true-break anchor)
+        # 2026-07-09 EVENT-CANDLE FIX. Asserts events stamp the TRUE break candle
+        # (first close past the displacement buffer), not the confirmation candle,
+        # and that break_quality is still graded on the confirmation candle. A
+        # revert re-corrupts the OB on ~15% of events (34% of CHoCHs) with no
+        # error — this goes red instead. Standalone script (no pytest).
+        run: python tests/test_event_candle_fix.py
+
+      - name: Offline pytest suite (session DST, choch supersession, ...)
+        # The pytest-style offline guards were never run in CI (this job listed
+        # scripts by name and invoked no pytest). Wires them in so a regression in
+        # session DST-awareness or choch supersession can't ship silently.
+        run: python -m pytest tests/ -q
