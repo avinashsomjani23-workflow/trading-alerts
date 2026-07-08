@@ -108,7 +108,7 @@ def _fetch(config_symbol, interval, outputsize, retries):
                 continue
 
             if data.get("status") == "ok" and data.get("values"):
-                return _to_dataframe(data["values"])
+                return _to_dataframe(data["values"], td_symbol=td_symbol)
 
             last_error = message or data.get("status", "unknown error")
         except Exception as e:
@@ -124,8 +124,12 @@ def _fetch(config_symbol, interval, outputsize, retries):
     return None
 
 
-def _to_dataframe(values):
-    """Twelve Data 'values' list -> UTC-indexed OHLCV DataFrame, newest row last."""
+def _to_dataframe(values, td_symbol=""):
+    """Twelve Data 'values' list -> UTC-indexed OHLCV DataFrame, newest row last.
+
+    td_symbol (Twelve Data symbol, e.g. 'XAU/USD') selects the closed-market rule
+    in _strip_market_closed — Gold has a daily maintenance break FX does not.
+    """
     df = pd.DataFrame(values)
     df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
     df = df.set_index("datetime").sort_index()
@@ -140,31 +144,50 @@ def _to_dataframe(values):
     else:
         df["Volume"] = 0.0
 
-    df = _strip_market_closed(df)
+    df = _strip_market_closed(df, td_symbol=td_symbol)
     return df[["Open", "High", "Low", "Close", "Volume"]]
 
 
-def _strip_market_closed(df):
-    """Drop synthetic weekend bars so the live H1 frame matches MT5's gapped shape.
+def _strip_market_closed(df, td_symbol=""):
+    """Drop synthetic closed-market bars so the live H1 frame matches MT5's gapped shape.
 
-    WHY: Twelve Data's free tier pads the FX-closed weekend with ~40 low-range
-    filler bars. The whole system was built on MT5 data, which OMITS closed-market
-    hours (real gaps). Those filler bars break two things at once:
-      1) charts render a band of ~40 dead micro-candles (verified impossible in
-         18yr of real MT5 H1: longest sub-0.5-ATR run is ~10 bars, never 40);
+    WHY: Twelve Data's free tier pads FX-closed hours with filler bars. The whole
+    system was built on MT5 data, which OMITS closed-market hours (real gaps).
+    Those filler bars break two things at once:
+      1) charts render a band of dead micro-candles that MT5 never had, and —
+         because both renderers plot on POSITIONAL x (bar index, not timestamp) —
+         every candle after a gap is shoved sideways vs the real MT5 shape;
       2) resync_slate_zone_indices (smc_radar) shifts every leg sub-index by ONE
          uniform delta, which is only correct when bar spacing is constant —
          filler bars inserted mid-leg push FVG/BOS/OB boxes off their candles.
     Stripping here (the single network path) fixes both for Phase 1 and Phase 2.
 
-    RULE (DST-proof, no server-offset math): FX is closed Fri ~21:00 UTC through
-    Sun ~21:00 UTC. Validated against MT5: ZERO real bars fall in
-    'Saturday (any hour) OR Sunday before 21:00 UTC' under either DST offset,
-    while all Fri-through-21:00-UTC bars are legit. Twelve Data returns UTC
-    (timezone=UTC in the request), so weekday/hour are read directly off the index.
+    RULE (DST-proof, no server-offset math). Verified against MT5 directly (1 full
+    year, all 5 live pairs), reading weekday/hour straight off the UTC index
+    (Twelve Data returns UTC; timezone=UTC in the request):
+
+    - WEEKEND (all instruments): the broker week is strictly Monday 00:00 UTC ->
+      Friday 23:00 UTC. MT5 prints ZERO Saturday and ZERO Sunday bars — INCLUDING
+      Sunday >= 21:00 UTC. (A prior version kept Sunday >= 21:00 on a generic-FX
+      reopen assumption; our broker's MT5 does not print until Monday 00:00, so it
+      leaked 3 phantom Sunday-evening bars every weekend.)
+
+    - GOLD DAILY BREAK (XAU/USD only): MT5 Gold has a daily maintenance gap — the
+      00:00 UTC hour is ABSENT on every weekday (missing 264/264 weekdays over the
+      year; FX prints all 24 hours). Twelve Data pads that hour, so Gold needs its
+      weekday 00:00 UTC bar stripped too, else Gold drifts one bar per day vs MT5.
+
+    Friday (<= 23:00) and Monday (00:00+) FX bars are legit and untouched.
     """
     idx = df.index
     dow = idx.dayofweek   # Mon=0 .. Sat=5, Sun=6
-    hour = idx.hour
-    closed = (dow == 5) | ((dow == 6) & (hour < 21))
+    closed = (dow == 5) | (dow == 6)
+    if _is_gold(td_symbol):
+        # Gold's daily maintenance break: no 00:00 UTC bar on trading days.
+        closed = closed | ((dow < 5) & (idx.hour == 0))
     return df[~closed]
+
+
+def _is_gold(td_symbol):
+    """True for the Gold instrument (Twelve Data 'XAU/USD'). Case-insensitive."""
+    return "XAU" in (td_symbol or "").upper()
