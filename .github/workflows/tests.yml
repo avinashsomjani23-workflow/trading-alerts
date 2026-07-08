@@ -70,4 +70,8 @@ jobs:
         # The pytest-style offline guards were never run in CI (this job listed
         # scripts by name and invoked no pytest). Wires them in so a regression in
         # session DST-awareness or choch supersession can't ship silently.
-        run: python -m pytest tests/ -q
+        # pytest is a test-only tool — installed here, NOT in requirements.txt, so
+        # the runtime dependency list stays free of test tooling.
+        run: |
+          pip install pytest
+          python -m pytest tests/ -q
