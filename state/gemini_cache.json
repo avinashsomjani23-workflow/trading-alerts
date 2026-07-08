@@ -1,14 +1,14 @@
 {
-  "USDJPY|2026-07-07": {
-    "macro_summary": "There are no scheduled high-impact events for JPY or USD today. Therefore, no scheduled events will directly influence the USDJPY pair's direction today."
+  "EURUSD|2026-07-08": {
+    "macro_summary": "The only high-impact event today is the FOMC Meeting Minutes at 23:30 IST. Hawkish minutes would hurt this EURUSD long trade, while dovish minutes would help. The minutes are yet to be released."
   },
-  "NZDUSD|2026-07-07": {
-    "macro_summary": "The Official Cash Rate, RBNZ Rate Statement, and RBNZ Press Conference are scheduled for 07:30 IST and 08:30 IST. A hawkish tone from the RBNZ would help this short trade, while a dovish tone would hurt it. All events are upcoming."
+  "USDJPY|2026-07-08": {
+    "macro_summary": "The only high-impact event today is the FOMC Meeting Minutes at 23:30 IST. Hawkish minutes would hurt this short USDJPY trade, while dovish minutes would help. The market will react to the tone regarding future rate hikes."
   },
-  "USDCHF|2026-07-07": {
-    "macro_summary": "There are no scheduled high-impact events for CHF or USD today. Therefore, no external macro factors are expected to directly influence the USDCHF pair's direction today. The trade setup will rely solely on technical analysis and intraday price action."
+  "NZDUSD|2026-07-08": {
+    "macro_summary": "The only high-impact event today is the FOMC Meeting Minutes at 23:30 IST. Hawkish minutes would help this SHORT trade, while dovish minutes would hurt it. This event is still to come."
   },
-  "EURUSD|2026-07-07": {
-    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no external macro factors are expected to directly influence this EURUSD setup. The trade will likely be driven by technicals and sentiment alone."
+  "USDCHF|2026-07-08": {
+    "macro_summary": "SNB Chairman Schlegel Speaks at 22:10 IST; hawkish comments would hurt this short USDCHF trade, dovish comments would help. FOMC Meeting Minutes at 23:30 IST; a hawkish tone would hurt this short USDCHF trade, a dovish tone would help."
   }
 }
