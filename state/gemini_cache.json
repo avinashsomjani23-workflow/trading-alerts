@@ -1,17 +1,11 @@
 {
-  "EURUSD|2026-07-08": {
-    "macro_summary": "The only high-impact event today is the FOMC Meeting Minutes at 23:30 IST. Hawkish minutes would hurt this EURUSD long trade, while dovish minutes would help. The minutes are yet to be released."
+  "USDJPY|2026-07-09": {
+    "macro_summary": "The only scheduled high-impact event is US Unemployment Claims at 18:00 IST. Higher claims would help this short USDJPY trade, while lower claims would hurt it. No other high-impact events are scheduled for today."
   },
-  "USDJPY|2026-07-08": {
-    "macro_summary": "The only high-impact event today is the FOMC Meeting Minutes at 23:30 IST. Hawkish minutes would hurt this short USDJPY trade, while dovish minutes would help. The market will react to the tone regarding future rate hikes."
+  "NZDUSD|2026-07-09": {
+    "macro_summary": "The only high-impact event today is US Unemployment Claims at 18:00 IST. Better-than-expected claims would hurt this LONG NZDUSD trade, while worse-than-expected claims would help it."
   },
-  "NZDUSD|2026-07-08": {
-    "macro_summary": "The only high-impact event today is the FOMC Meeting Minutes at 23:30 IST. Hawkish minutes would help this SHORT trade, while dovish minutes would hurt it. This event is still to come."
-  },
-  "USDCHF|2026-07-08": {
-    "macro_summary": "SNB Chairman Schlegel Speaks at 22:10 IST; hawkish comments would hurt this short USDCHF trade, dovish comments would help. FOMC Meeting Minutes at 23:30 IST; a hawkish tone would hurt this short USDCHF trade, a dovish tone would help."
-  },
-  "GOLD|2026-07-08": {
-    "macro_summary": "The FOMC Meeting Minutes at 23:30 IST are the only high-impact event. Hawkish minutes would HELP this short GOLD trade, while dovish minutes would HURT it. This event is scheduled for later today."
+  "GOLD|2026-07-09": {
+    "macro_summary": "The only scheduled high-impact event today is US Unemployment Claims at 18:00 IST. Higher claims would help this short Gold trade, while lower claims would hurt it. This event is still upcoming."
   }
 }
