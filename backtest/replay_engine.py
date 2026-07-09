@@ -461,8 +461,11 @@ def replay_pair(
         #     armed only after price clears (cap + REARM_EXTRA_ATR) × ATR.
         #     Each fire emits exactly one alert event => one limit-order
         #     pair (proximal + 50% midpoint). No double-counting.
-        #   * exhausted=True: an alert that produced a fill exhausts the
-        #     OB permanently. Set by run_backtest after the simulator runs.
+        #   * A fill does NOT exhaust the OB. A clean, un-mitigated zone
+        #     re-arms and can fire again on a legitimate re-approach, so one
+        #     OB yields multiple trades at rising touch counts. The OB dies
+        #     only on mitigation (distal wick-touch OR 3rd proximal touch);
+        #     see OBReplayState. There is no exhausted-after-fill flag.
         h1_atr = smc_detector.compute_atr(h1_slice)
         _scanlog().note_post_warmup_bar(pair_name, atr_is_nan=not h1_atr)
         if not h1_atr:

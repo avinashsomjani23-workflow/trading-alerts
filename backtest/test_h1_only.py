@@ -133,7 +133,7 @@ def test_levels_dual_entry():
     if not ok:
         print(f"    lv_prox = {lv_prox}")
         print(f"    lv_mid  = {lv_mid}")
-        return False
+        assert False, "levels not valid (see lv_prox/lv_mid above)"
 
     ok &= check(abs(lv_prox["entry"] - proximal_expected) < 1e-6,
                 f"proximal entry == OB proximal ({lv_prox['entry']} vs {proximal_expected})")
@@ -179,7 +179,7 @@ def test_levels_dual_entry():
                         f"shared TP: 50pct RR > proximal RR "
                         f"({lv_mid['rr']} > {lv_prox['rr']})")
 
-    return ok
+    assert ok, "levels dual-entry checks failed (see output above)"
 
 
 def test_signature_h1_only():
@@ -197,10 +197,9 @@ def test_signature_h1_only():
         ok = check(isinstance(lv, dict), "compute_phase2_levels returns dict")
         ok &= check("m15_ob" not in lv,
                     "result no longer carries m15_ob payload")
-        return ok
     except Exception as e:
-        print(f"  FAIL: crashed: {type(e).__name__}: {e}")
-        return False
+        raise AssertionError(f"compute_phase2_levels crashed: {type(e).__name__}: {e}")
+    assert ok, "signature h1-only checks failed (see output above)"
 
 
 def test_dual_simulator_columns():
@@ -288,7 +287,7 @@ def test_tp2_ordering_invariant():
                 ok &= check(tp2 > tp1, f"LONG/{zone}: tp2 ({tp2}) > tp1 ({tp1})")
             else:
                 ok &= check(tp2 < tp1, f"SHORT/{zone}: tp2 ({tp2}) < tp1 ({tp1})")
-    return ok
+    assert ok, "tp2 ordering invariant checks failed (see output above)"
 
 
 def test_be_arms_at_exact_1r_touch():
@@ -333,7 +332,7 @@ def test_be_arms_at_exact_1r_touch():
     ok &= check(not impossible,
                 f"no full_sl_loser_with_1R_mfe (exit={res['exit_reason']}, "
                 f"r={res['r_realised']}, mfe_r={res['mfe_r']})")
-    return ok
+    assert ok, "be-arms-at-exact-1R checks failed (see output above)"
 
 
 def test_wider_stop_replay_and_pre_payment():
@@ -417,7 +416,115 @@ def test_wider_stop_replay_and_pre_payment():
     ok &= check(abs(net_tp - (1.0 - cost_r)) < 1e-9,
                 f"(c) a non-stop exit IS charged the spread "
                 f"(got {net_tp}, want {1.0 - cost_r})")
-    return ok
+    assert ok, "wider-stop replay/pre-payment guard failed"
+
+
+def test_trailing_stop_lever():
+    """Guard (2026-07-09, Edge Lab Step B): the trailing-stop lever (exit_engine
+    step 7b), out-of-band. Four things a silent trail bug would corrupt, pinned
+    here (never in the live path):
+
+      (RATCHET)  the stop tightens as price runs favourable and NEVER loosens on a
+                 later pullback (a loosen = look-ahead give-back, corrupts every R).
+      (ARM)      trail_arm_r gates trailing: below the arm level the stop stays put.
+      (FILL-BAR) the fill bar's extreme does NOT seed the trail (it is pre-fill
+                 price — the same exclusion MFE uses). Pinning this stops a future
+                 "fix" from turning it into a look-ahead bug.
+      (CONTROL)  trail_r=None => no early trail exit; the trade rides to window_end.
+
+    Reference geometry (hand-verified, reused from the handoff): LONG entry 1.1000,
+    sl 1.0960 -> r_distance 0.0040, tp1 far. trail_r=1.0, arm=0.0. The fill bar
+    (bar0) high is 1.1080 but is EXCLUDED, so the first trail seed is bar1's high
+    1.1075 -> trailed stop 1.1035 (=+0.875R). A later bar whose low is 1.1035 hits
+    that trailed stop -> exit +0.875R.
+    """
+    print("\n== test_trailing_stop_lever ==")
+    from backtest.exit_engine import walk_multileg
+    ok = True
+
+    entry, sl = 1.1000, 1.0960
+    r_distance = abs(entry - sl)          # 0.0040
+    tp1 = 1.1200                          # far; never hit in these windows
+
+    # ── TRAIL SEED + FILL-BAR EXCLUDED ───────────────────────────────────────
+    # bar0 (fill): high 1.1080 (must NOT seed the trail), low 1.0995 fills the entry.
+    # bar1: high 1.1075 -> trail_best 1.1075, trailed stop 1.1035 (+0.875R). low
+    #        stays above 1.1035 so no exit yet.
+    # bar2: PULLBACK — high only 1.1050 (lower than bar1), low 1.1040 (above the
+    #        1.1035 trailed stop). trail_best stays 1.1075; no exit.
+    # bar3: low 1.1035 -> hits the trailed stop -> exit +0.875R.
+    idx = pd.date_range("2020-01-06 09:00", periods=4, freq="h", tz="UTC")
+    fut = pd.DataFrame({
+        "Open":  [1.1000, 1.1010, 1.1045, 1.1042],
+        "High":  [1.1080, 1.1075, 1.1050, 1.1044],   # bar0 high must be ignored
+        "Low":   [1.0995, 1.1040, 1.1040, 1.1035],   # bar3 low hits trailed stop
+        "Close": [1.1010, 1.1045, 1.1042, 1.1036],
+    }, index=idx)
+    cfg_trail = {"legs": [(1.0, "tp1")], "be_trigger_r": None,
+                 "trail_r": 1.0, "trail_arm_r": 0.0}
+    res = walk_multileg(fut, "LONG", entry, sl, r_distance, tp1, cfg_trail,
+                        weekend_flat=False)
+    ok &= check(res["exit_reason"] == "sl",
+                f"(trail) exit is the trailed stop (got {res['exit_reason']})")
+    ok &= check(abs(res["r_realised"] - 0.875) < 1e-9,
+                f"(trail+fillbar) trailed exit = +0.875R, fill-bar high 1.1080 "
+                f"excluded (got {res['r_realised']})")
+    # Fill-bar-seed counter-check: if the fill bar's 1.1080 HAD seeded the trail,
+    # the stop would be 1.1040 by bar0, and bar1's low 1.1040 would exit at +1.0R.
+    # The +0.875R above already proves that did NOT happen; assert the negative too.
+    ok &= check(abs(res["r_realised"] - 1.0) > 1e-6,
+                "(fillbar) trail did NOT seed off the fill bar (would give +1.0R)")
+
+    # ── RATCHET: the trail must NEVER loosen an already-tighter stop ──────────
+    # This is the sub-test that bites the `cand > cur_sl` guard. trail_best is
+    # monotonic on its own, so a loosening bug only shows when BE has already moved
+    # the stop TIGHTER than a later trail candidate. Setup: BE arms at +1R -> stop to
+    # entry 1.1000; then trail_r=2.0 computes a candidate at 1.0960 (LOOSER than BE).
+    # Ratchet keeps 1.1000. bar2 low 1.0980 hits the BE stop -> exit exactly 0.0R.
+    # If the ratchet were removed the stop would drop to 1.0960, 1.0980 would miss it,
+    # and the trade would ride to window_end at -0.375R (verified: this bites).
+    idx_r = pd.date_range("2020-02-03 09:00", periods=5, freq="h", tz="UTC")
+    fut_ratchet = pd.DataFrame({
+        "Open":  [1.1000, 1.1020, 1.0990, 1.0990, 1.0990],
+        "High":  [1.1010, 1.1040, 1.0995, 1.0995, 1.0995],  # bar1 high 1.1040 = +1R
+        "Low":   [1.0995, 1.1015, 1.0980, 1.0980, 1.0980],  # bar2 low hits BE stop
+        "Close": [1.1020, 1.1035, 1.0985, 1.0985, 1.0985],
+    }, index=idx_r)
+    cfg_ratchet = {"legs": [(1.0, "tp1")], "be_trigger_r": 1.0, "be_to_r": 0.0,
+                   "trail_r": 2.0, "trail_arm_r": 0.0}
+    res_ratchet = walk_multileg(fut_ratchet, "LONG", entry, sl, r_distance,
+                                1.1300, cfg_ratchet, weekend_flat=False)
+    ok &= check(res_ratchet["exit_reason"] == "sl",
+                f"(ratchet) BE stop holds, is not loosened by a looser trail "
+                f"(got {res_ratchet['exit_reason']})")
+    ok &= check(abs(res_ratchet["r_realised"] - 0.0) < 1e-9,
+                f"(ratchet) exit at the tighter BE stop = 0.0R, trail did NOT loosen "
+                f"it (got {res_ratchet['r_realised']})")
+
+    # ── ARM: trailing suppressed below trail_arm_r ───────────────────────────
+    # Same trail-seed bars, but arm at +2.0R. Best excursion is bar1 high 1.1075 =
+    # +1.875R, never reaches +2R, so the trail NEVER arms -> the stop stays at 1.0960
+    # and the trade rides to window_end (no early trailed exit).
+    cfg_arm = {"legs": [(1.0, "tp1")], "be_trigger_r": None,
+               "trail_r": 1.0, "trail_arm_r": 2.0}
+    res_arm = walk_multileg(fut, "LONG", entry, sl, r_distance, tp1, cfg_arm,
+                            weekend_flat=False)
+    ok &= check(res_arm["exit_reason"] == "window_end",
+                f"(arm) below the arm level the stop never trails "
+                f"(got {res_arm['exit_reason']})")
+
+    # ── CONTROL: trail_r=None -> no trailing at all, rides to window_end ──────
+    cfg_none = {"legs": [(1.0, "tp1")], "be_trigger_r": None, "trail_r": None}
+    res_none = walk_multileg(fut, "LONG", entry, sl, r_distance, tp1, cfg_none,
+                             weekend_flat=False)
+    ok &= check(res_none["exit_reason"] == "window_end",
+                f"(control) trail_r=None does not stop early "
+                f"(got {res_none['exit_reason']})")
+    ok &= check(res_none["r_realised"] != res["r_realised"],
+                f"(control) no-trail R differs from trailed R "
+                f"({res_none['r_realised']} vs {res['r_realised']})")
+
+    assert ok, "trailing-stop lever checks failed (see output above)"
 
 
 def test_g10_rounded_near_miss_is_not_a_violation():
@@ -457,7 +564,7 @@ def test_g10_rounded_near_miss_is_not_a_violation():
                     {"exit_reason": "tp1", "r_realised": 1.0, "mfe_r": 1.5,
                      "mae_r": -0.2}),
                 "mfe past TP1 exit still trips mfe_beyond_tp1_exit")
-    return ok
+    assert ok, "g10 rounded-near-miss checks failed (see output above)"
 
 
 def test_sl_wick_depth_atr():
@@ -585,6 +692,7 @@ def main():
         ("test_be_arms_at_exact_1r_touch", test_be_arms_at_exact_1r_touch),
         ("test_wider_stop_replay_and_pre_payment",
          test_wider_stop_replay_and_pre_payment),
+        ("test_trailing_stop_lever",     test_trailing_stop_lever),
         ("test_g10_rounded_near_miss_is_not_a_violation",
          test_g10_rounded_near_miss_is_not_a_violation),
         ("test_sl_wick_depth_atr",      test_sl_wick_depth_atr),
