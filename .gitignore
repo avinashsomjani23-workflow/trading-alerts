@@ -41,3 +41,6 @@ debug/
 # committed audit trail); the loose .jsonl are intermediate scratch that churns
 # every run and must never be hand-committed. The .gz.zip is NOT matched here.
 backtest/out/scanlog/**/*.jsonl
+
+# Local secrets (never committed)
+.env

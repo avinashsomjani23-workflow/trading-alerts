@@ -113,6 +113,15 @@ never loses center during the edge-engine phase.**
 - The exact numbers are judgment calls; the protection is that they were frozen before
   looking. **Renegotiating a threshold after seeing a result is self-deception by
   definition** — the number was chosen when there was nothing to flatter.
+- **F-BUCKET — Never judge a feature on one summary number.** Every feature screened in
+  discovery MUST print its full per-bucket curve — each bucket's N, win rate, mean R, and
+  **straight-to-SL rate** — with the BEST and WORST buckets named. A single top-vs-bottom
+  number, a correlation, or an MI value alone may NEVER be the verdict: a death cliff in
+  one tail (small OBs) or an edge living in only one bucket both hide inside one number.
+  The per-bucket SL rate is mandatory so an entry feature is always crossed against loser
+  behaviour — a descriptive lens, never an entry input (the look-ahead wall stands).
+  Enforced in code + test in the discovery module, out-of-band. (Full rule: EDGE LAB spec
+  §3 "Bucket-reporting rule". Added 2026-07-09 after the Step-2 small-OB cliff miss.)
 
 ## G — EMOTIONAL RULES
 
@@ -145,3 +154,7 @@ never loses center during the edge-engine phase.**
 ## CHANGE LOG
 
 - 2026-07-03 — file created. No rules changed yet.
+- 2026-07-09 — added **F-BUCKET** (full per-bucket curve + named best/worst + per-bucket
+  straight-to-SL rate mandatory in discovery). New rule, not a change to an existing one;
+  motivated by the Step-2 miss where a single top-vs-bottom number hid the small-OB death
+  cliff. Enforced in code + test, out-of-band. Full text in EDGE LAB spec §3.
