@@ -251,7 +251,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-01T19:35:51.194253",
-      "last_seen_ist": "2026-07-09T12:36:06.198108",
+      "last_seen_ist": "2026-07-09T13:36:12.542686",
       "last_email_day": "2026-07-09",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -3608,11 +3608,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-09T09:35:56.345691",
-      "last_seen_ist": "2026-07-09T12:36:06.198108",
+      "last_seen_ist": "2026-07-09T13:36:12.542686",
       "last_email_day": "2026-07-09",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.0024199999999999777,
       "bias": "LONG",
       "pair": "NZDUSD",
       "ob_snapshot": {
@@ -3850,7 +3850,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-09T11:36:01.796785",
-      "last_seen_ist": "2026-07-09T12:36:06.198108",
+      "last_seen_ist": "2026-07-09T13:36:12.542686",
       "last_email_day": "2026-07-09",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -3971,11 +3971,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-09T12:36:06.198108",
-      "last_seen_ist": "2026-07-09T12:36:06.198108",
+      "last_seen_ist": "2026-07-09T13:36:12.542686",
       "last_email_day": "2026-07-09",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.0021499999999999853,
       "bias": "LONG",
       "pair": "USDCHF",
       "ob_snapshot": {
@@ -4092,7 +4092,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-09T12:36:06.198108",
-      "last_seen_ist": "2026-07-09T12:36:06.198108",
+      "last_seen_ist": "2026-07-09T13:36:12.542686",
       "last_email_day": "2026-07-09",
       "still_valid_count": 0,
       "reentry_armed": false,
