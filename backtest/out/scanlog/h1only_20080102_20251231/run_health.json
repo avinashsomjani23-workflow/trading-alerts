@@ -3,29 +3,29 @@
   "overall": "PASS",
   "exit_code": 0,
   "warnings_present": true,
-  "headline_pnl_usd": -274987.0,
-  "live_proximal_headline_usd": -274987.0,
+  "headline_pnl_usd": -271467.0,
+  "live_proximal_headline_usd": -271467.0,
   "study_fifty_pct_headline_usd": 0.0,
-  "content_hash": "7a92a237b86f3ba3618addcc63c2e4041c4352ccd9c29b90044c13acaf2e836f",
+  "content_hash": "de2e7b6429474d19dbedbc6459f12550544b6df3c6f59f1658cc6436a808ac6b",
   "condition_counts": {
     "YF_CLAMP": 9,
     "WARMUP_SKIP": 1499
   },
   "event_counts": {
-    "ob_seen": 58662,
-    "alert": 96573,
-    "re_arm": 51460,
-    "ob_mitigated": 46009,
-    "ob_aged_out": 12620,
-    "trade_exit": 43148,
-    "trade_fill": 30229
+    "ob_seen": 58987,
+    "alert": 97152,
+    "re_arm": 52287,
+    "ob_mitigated": 45774,
+    "ob_aged_out": 13182,
+    "trade_exit": 43550,
+    "trade_fill": 30270
   },
   "outcome_counts": {
     "WARMUP_SKIP": 1499,
-    "ALERT": 80987,
-    "RE_ARM_WAIT": 603001,
-    "OUT_OF_RANGE": 131529,
-    "NO_ZONE": 255147
+    "ALERT": 81376,
+    "RE_ARM_WAIT": 608763,
+    "OUT_OF_RANGE": 141899,
+    "NO_ZONE": 238626
   },
   "gates": [
     {
@@ -33,8 +33,8 @@
       "description": "Sum pnl_usd == Sum r_realised*risk, and equals reporting headline",
       "threshold": "rel_tol 1e-09",
       "observed": {
-        "headline_usd": -274987.0,
-        "reported": -274987.0,
+        "headline_usd": -271467.0,
+        "reported": -271467.0,
         "row_mismatches": 0
       },
       "verdict": "PASS"
@@ -80,8 +80,8 @@
       "description": "headline recomputed from r_realised only; tp1/tp2 excluded",
       "threshold": "independent recompute",
       "observed": {
-        "realised_headline": -274987.0,
-        "tp2_headline_for_contrast": -1335.75
+        "realised_headline": -271467.0,
+        "tp2_headline_for_contrast": 50418.0
       },
       "verdict": "PASS"
     },
@@ -89,7 +89,7 @@
       "id": "G7",
       "description": "content hash of scan_log + events recorded for re-run compare",
       "threshold": "recorded",
-      "observed": "7a92a237b86f3ba3618addcc63c2e4041c4352ccd9c29b90044c13acaf2e836f",
+      "observed": "de2e7b6429474d19dbedbc6459f12550544b6df3c6f59f1658cc6436a808ac6b",
       "verdict": "PASS"
     },
     {
