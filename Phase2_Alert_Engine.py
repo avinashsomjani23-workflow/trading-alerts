@@ -20,6 +20,10 @@ import xml.etree.ElementTree as ET
 import smc_detector
 import news_filter
 import charts  # shared H1 chart style engine (Wave 2 item 2C)
+# Direction-aware structural-event label. One implementation lives in smc_radar
+# (chart uses it too); the email reuses it so every CHoCH/BOS mention shows
+# bullish/bearish — the trader must never verify direction off the candles.
+from smc_radar import _event_label_dir
 
 with open("config.json") as f:
     config = json.load(f)
@@ -1444,7 +1448,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
 
     context_html = f"""
     <div style="margin-bottom:12px;font-size:11px;color:#888;">
-        <b style="color:#aaa;">Zone:</b> {bos_tag}
+        <b style="color:#aaa;">Zone:</b> {_event_label_dir(bos_tag, bos_tier, ob.get('direction'))}
         &nbsp;&middot;&nbsp; Proximal {ob.get('proximal_line', 0):.{dp}f}
         / Distal {ob.get('distal_line', 0):.{dp}f}
         &nbsp;&middot;&nbsp; <b style="color:#aaa;">OB candle:</b> {ob_in_kz_label}
