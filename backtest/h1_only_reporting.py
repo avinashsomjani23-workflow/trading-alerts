@@ -1464,7 +1464,7 @@ def _pair_session_tab_df(filled: List[Dict[str, Any]]) -> "pd.DataFrame":
     cells = _insights.pair_session_matrix(df, "r_realised")
     if not cells:
         return pd.DataFrame()
-    rows = [{"Pair": c["pair"], "Session": c["session"], "N": c["n"],
+    rows = [{"Pair": c["pair"], "Alert session": c["session"], "N": c["n"],
              "Win Rate %": c["win_rate_pct"], "Avg R": c["expectancy_r"],
              "CI lo": c["ci_lo_95"], "CI hi": c["ci_hi_95"],
              "Live-eligible": c["live_eligible"], "Confidence": c["confidence"]}
@@ -1830,7 +1830,7 @@ def _second_look_df(trades: List[Dict[str, Any]]) -> "pd.DataFrame":
             "Setup ID":       t.get("setup_id", ""),
             "Pair":           t.get("pair", ""),
             "Direction":      "Long" if t.get("direction") == "bullish" else "Short",
-            "Session":        t.get("session", ""),
+            "Alert session":  t.get("session", ""),
             "Category":       {"left_money": "Left money on table",
                                "nearly_worked": "Nearly worked",
                                "high_score_loss": "High-score loss"}[cat],
