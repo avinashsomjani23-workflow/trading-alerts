@@ -24,4 +24,5 @@ matplotlib
 requests
 openpyxl
 pyarrow
+scikit-learn
 google-genai==2.8.0
