@@ -1,13 +1,13 @@
 # Backtest Registry
 
-*Last updated: 2026-07-08 11:12 UTC*
+*Last updated: 2026-07-09 00:05 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
 ## Cross-run snapshot
 
 - Runs completed: **48** of 48
-- Total filled trades across all runs: **73709**
+- Total filled trades across all runs: **73794**
 - Average expectancy across runs: **-0.13R**
 
 - **Group 1 (Study):** 1 runs, 8 trades, avg expectancy -0.60R
@@ -255,48 +255,48 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 | Metric | Value |
 |--------|-------|
-| Filled trades | 23319 (of 33494 rows) |
-| Win rate | 35.6% |
+| Filled trades | 23404 (of 33838 rows) |
+| Win rate | 35.5% |
 | Expectancy | -0.05R |
-| Max drawdown | +1052.65R |
-| Longest losing streak | 16 trades |
-| Proximal fill rate | 69.6% |
+| Max drawdown | +1031.95R |
+| Longest losing streak | 17 trades |
+| Proximal fill rate | 69.2% |
 | Score verdict | BROKEN — score does not predict outcome |
 
 **By pair (proximal entry, TP2 exit):**
 
 | Pair | Trades | Win rate | Expectancy |
 |------|--------|----------|------------|
-| BTCUSD | 914 | 36.7% | -0.04R |
-| USDCHF | 2733 | 37.1% | -0.02R |
-| USDCAD | 2867 | 36.8% | -0.03R |
-| EURJPY | 2246 | 34.7% | -0.04R |
-| AUDUSD | 2053 | 36.2% | -0.04R |
-| USDJPY | 2206 | 35.1% | -0.05R |
-| GOLD | 2551 | 32.4% | -0.06R |
-| NZDUSD | 1955 | 39.3% | -0.08R |
-| GBPUSD | 2931 | 33.7% | -0.06R |
-| EURUSD | 2863 | 35.0% | -0.06R |
+| USDCAD | 2886 | 36.9% | -0.02R |
+| BTCUSD | 904 | 36.0% | -0.07R |
+| USDCHF | 2740 | 37.0% | -0.03R |
+| AUDUSD | 2082 | 36.5% | -0.04R |
+| USDJPY | 2215 | 35.2% | -0.04R |
+| EURJPY | 2252 | 34.4% | -0.05R |
+| GOLD | 2566 | 32.7% | -0.04R |
+| NZDUSD | 1976 | 39.6% | -0.07R |
+| GBPUSD | 2924 | 33.6% | -0.06R |
+| EURUSD | 2859 | 34.8% | -0.07R |
 
 **By session:**
 
 | Session | Trades | Win rate | Expectancy |
 |---------|--------|----------|------------|
-| Asia | 4101 | 34.0% | -0.08R |
-| London | 10335 | 35.4% | -0.04R |
-| NY | 8935 | 36.8% | -0.03R |
+| Asia | 3002 | 34.6% | -0.06R |
+| London | 10600 | 35.1% | -0.05R |
+| NY | 9853 | 36.6% | -0.03R |
 
 **Score vs outcome:**
 
 | Score bucket | Trades | Win rate | Expectancy |
 |-------------|--------|----------|------------|
-| 0-2 | 52 | 37.2% | -0.02R |
-| 2-3 | 220 | 36.1% | -0.06R |
-| 3-4 | 1027 | 35.0% | -0.07R |
-| 4-5 | 3103 | 36.8% | -0.03R |
-| 5-6 | 5356 | 36.0% | -0.05R |
-| 6-7 | 5667 | 36.3% | -0.04R |
-| 7+ | 7894 | 34.3% | -0.05R |
+| 0-2 | 48 | 37.5% | +0.03R |
+| 2-3 | 231 | 36.9% | -0.04R |
+| 3-4 | 1052 | 34.9% | -0.08R |
+| 4-5 | 3127 | 36.3% | -0.03R |
+| 5-6 | 5331 | 36.3% | -0.04R |
+| 6-7 | 5643 | 36.1% | -0.05R |
+| 7+ | 7972 | 34.4% | -0.05R |
 
 ---
 
