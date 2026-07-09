@@ -223,9 +223,7 @@ def test_dual_simulator_columns():
         alert, pair_conf, df_h1, risk_usd=250.0,
     )
     print(f"  rows returned: {len(rows)}")
-    if not rows:
-        print("  FAIL: dual simulator returned 0 rows for valid setup")
-        return False
+    assert rows, "dual simulator returned 0 rows for valid setup"
     expected_cols = {
         "pair", "alert_ts", "entry_zone", "entry", "sl_raw", "sl_initial",
         "tp1", "tp2", "tp1_rr", "tp2_rr", "exit_reason",
@@ -247,7 +245,7 @@ def test_dual_simulator_columns():
     # one proximal row per valid alert, and no 50pct row ever.
     ok &= check(zones == {"proximal"}, f"only proximal rows emitted ({zones})")
     ok &= check(len(rows) == 1, f"exactly one row per alert ({len(rows)})")
-    return ok
+    assert ok, "one or more column checks failed (see output above)"
 
 
 def test_tp2_ordering_invariant():
@@ -338,6 +336,90 @@ def test_be_arms_at_exact_1r_touch():
     return ok
 
 
+def test_wider_stop_replay_and_pre_payment():
+    """Guard (2026-07-09, Edge Lab Step B): the wider-stop lever, out-of-band.
+
+    Three things a silent bug would corrupt, pinned here (never in the live path):
+      (a) SURVIVAL — a wider stop must NOT fire on a bar that hit the baseline stop
+          (else the whole lever is a no-op and the ceiling is a lie).
+      (b) EXACT −1R OF THE NEW RISK — a clean stop-through of the wider stop loses
+          exactly −1.0R measured against the WIDER r_distance (the walker's R math
+          must rescale to the stop the caller passed, not the original).
+      (c) SPREAD NOT DOUBLE-CHARGED — _net_r_of_legs pre-pays spread on a stop-out
+          at the TRADED (widened) stop; the old `== sl_initial` check wrongly charged
+          it because a widened-stop exit price != sl_initial (SPEC §7.2).
+    """
+    print("\n== test_wider_stop_replay_and_pre_payment ==")
+    from backtest.exit_engine import walk_multileg
+    from backtest.diagnostics.edge_engine import _net_r_of_legs
+    ok = True
+
+    # LONG. entry 1.1000, baseline sl 1.0960 -> baseline r_distance 0.0040. ATR 0.0020.
+    # Wider stop k=1.0 ATR -> sl 1.0940, wider r_distance 0.0060.
+    entry = 1.1000
+    base_sl = 1.0960
+    atr = 0.0020
+    k = 1.0
+    wider_sl = base_sl - k * atr           # 1.0940
+    base_r = abs(entry - base_sl)          # 0.0040
+    wider_r = abs(entry - wider_sl)        # 0.0060
+    tp1 = 1.1200                            # far away; not hit in these windows
+    cfg = {"legs": [(1.0, "tp1")], "be_trigger_r": None}
+
+    # ── (a) SURVIVAL: a bar dips to 1.0945 (below baseline 1.0960, ABOVE wider
+    # 1.0940), then recovers. Baseline stop = hit (-1R). Wider stop = survives.
+    idx = pd.date_range("2020-01-06 09:00", periods=3, freq="h", tz="UTC")
+    fut_survive = pd.DataFrame({
+        "Open":  [1.1000, 1.0990, 1.0990],
+        "High":  [1.1000, 1.0995, 1.1010],
+        "Low":   [1.0975, 1.0945, 1.0985],   # bar1 low 1.0945: kills baseline, spares wider
+        "Close": [1.0990, 1.0990, 1.1005],
+    }, index=idx)
+    base_res = walk_multileg(fut_survive, "LONG", entry, base_sl, base_r, tp1, cfg,
+                             weekend_flat=False)
+    wide_res = walk_multileg(fut_survive, "LONG", entry, wider_sl, wider_r, tp1, cfg,
+                             weekend_flat=False)
+    ok &= check(base_res["exit_reason"] == "sl",
+                f"(a) baseline stop fires on the 1.0945 dip (got {base_res['exit_reason']})")
+    ok &= check(wide_res["exit_reason"] != "sl",
+                f"(a) wider stop SURVIVES the same bar (got {wide_res['exit_reason']}, "
+                f"r={wide_res['r_realised']})")
+
+    # ── (b) EXACT -1R OF NEW RISK: a bar cleanly trades through the wider stop
+    # (low 1.0930 < 1.0940). r_realised must be exactly -1.0 against the WIDER r.
+    idx2 = pd.date_range("2020-01-07 09:00", periods=2, freq="h", tz="UTC")
+    fut_through = pd.DataFrame({
+        "Open":  [1.1000, 1.0990],
+        "High":  [1.1000, 1.0992],
+        "Low":   [1.0975, 1.0930],   # bar1 low 1.0930: through the wider stop 1.0940
+        "Close": [1.0990, 1.0935],
+    }, index=idx2)
+    wide_through = walk_multileg(fut_through, "LONG", entry, wider_sl, wider_r, tp1, cfg,
+                                 weekend_flat=False)
+    ok &= check(wide_through["exit_reason"] == "sl",
+                f"(b) wider stop fires on the clean stop-through "
+                f"(got {wide_through['exit_reason']})")
+    ok &= check(abs(wide_through["r_realised"] - (-1.0)) < 1e-9,
+                f"(b) loss is exactly -1.0R of the NEW risk "
+                f"(got r={wide_through['r_realised']})")
+
+    # ── (c) SPREAD PRE-PAYMENT at the traded (widened) stop, not sl_initial.
+    # One leg exiting at the widened stop must be charged ZERO cost; the SAME leg
+    # exited at any non-stop price must be charged the cost. cost_r arbitrary 0.02.
+    cost_r = 0.02
+    stop_leg = [{"frac": 1.0, "reason": "sl", "exit_price": wider_sl}]
+    net_stop = _net_r_of_legs(stop_leg, "LONG", entry, wider_sl, wider_r, cost_r)
+    ok &= check(abs(net_stop - (-1.0)) < 1e-9,
+                f"(c) widened-stop loser pre-pays spread -> net exactly -1.0R "
+                f"(got {net_stop}, NOT -1.02)")
+    tp_leg = [{"frac": 1.0, "reason": "tp1", "exit_price": entry + wider_r}]  # +1R at TP
+    net_tp = _net_r_of_legs(tp_leg, "LONG", entry, wider_sl, wider_r, cost_r)
+    ok &= check(abs(net_tp - (1.0 - cost_r)) < 1e-9,
+                f"(c) a non-stop exit IS charged the spread "
+                f"(got {net_tp}, want {1.0 - cost_r})")
+    return ok
+
+
 def test_g10_rounded_near_miss_is_not_a_violation():
     """Regression (2026-07-03): G10 rule (b) must NOT fire on a genuine full-SL
     loser whose raw MFE (0.9995-0.99999R) rounds UP to exactly 1.000R.
@@ -403,8 +485,7 @@ def test_sl_wick_depth_atr():
     )
     ok = True
     ok &= check(bool(rows), "sim returned a row")
-    if not rows:
-        return False
+    assert rows, "sim returned no rows"
     r = rows[0]
     ok &= check("sl_wick_depth_atr" in r, "sl_wick_depth_atr column present")
     depth = r.get("sl_wick_depth_atr")
@@ -423,7 +504,7 @@ def test_sl_wick_depth_atr():
     # A wick that closes exactly at the stop = 0.0, not None.
     manual0 = round(max(0.0, stop - stop) / atr, 3)
     ok &= check(manual0 == 0.0, f"formula: no overshoot -> 0.0 (got {manual0})")
-    return ok
+    assert ok, "one or more sl_wick_depth_atr checks failed (see output above)"
 
 
 def test_edge_lab_columns():
@@ -481,21 +562,35 @@ def test_edge_lab_columns():
     idx_none = next((i for i, h in enumerate([1.0, 2.0]) if h >= tp1), None)
     ok &= check(idx_none is None, "bars_sl_to_tp1_touch: never touched -> None")
 
-    return ok
+    assert ok, "one or more edge-lab column checks failed (see output above)"
 
 
 def main():
-    results = [
-        ("test_signature_h1_only",      test_signature_h1_only()),
-        ("test_levels_dual_entry",      test_levels_dual_entry()),
-        ("test_dual_simulator_columns", test_dual_simulator_columns()),
-        ("test_tp2_ordering_invariant", test_tp2_ordering_invariant()),
-        ("test_be_arms_at_exact_1r_touch", test_be_arms_at_exact_1r_touch()),
+    # Robust to BOTH styles: assert-based tests (return None on pass, raise on
+    # fail — the pytest-visible ones) and legacy bool-returning tests. A raised
+    # AssertionError counts as a fail; a None return counts as a pass.
+    def _run(label, fn):
+        try:
+            r = fn()
+        except AssertionError as e:
+            print(f"  FAIL (assert): {label}: {e}")
+            return False
+        return True if r is None else bool(r)
+
+    tests = [
+        ("test_signature_h1_only",      test_signature_h1_only),
+        ("test_levels_dual_entry",      test_levels_dual_entry),
+        ("test_dual_simulator_columns", test_dual_simulator_columns),
+        ("test_tp2_ordering_invariant", test_tp2_ordering_invariant),
+        ("test_be_arms_at_exact_1r_touch", test_be_arms_at_exact_1r_touch),
+        ("test_wider_stop_replay_and_pre_payment",
+         test_wider_stop_replay_and_pre_payment),
         ("test_g10_rounded_near_miss_is_not_a_violation",
-         test_g10_rounded_near_miss_is_not_a_violation()),
-        ("test_sl_wick_depth_atr",      test_sl_wick_depth_atr()),
-        ("test_edge_lab_columns",       test_edge_lab_columns()),
+         test_g10_rounded_near_miss_is_not_a_violation),
+        ("test_sl_wick_depth_atr",      test_sl_wick_depth_atr),
+        ("test_edge_lab_columns",       test_edge_lab_columns),
     ]
+    results = [(name, _run(name, fn)) for name, fn in tests]
     print("\n=== SUMMARY ===")
     fail = 0
     for name, ok in results:

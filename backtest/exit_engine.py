@@ -40,7 +40,19 @@ walk_multileg(future, bias, entry, sl, r_distance, tp1, config, ...)
                  target_spec = float R-multiple (e.g. 1.0) OR "tp1" (liquidity).
       "be_trigger_r": float | None,            # arm BE at +X R; None = no BE.
       "be_to_r": float,                        # move stop to this R (default 0.0).
+      "trail_r": float | None,                 # trailing stop distance in R; None
+                                               #   = no trail. The stop stays this
+                                               #   many R behind the best FINISHED
+                                               #   (closed) bar extreme since fill,
+                                               #   ratchet-only (never loosens).
+      "trail_arm_r": float,                    # only start trailing once the trade
+                                               #   is +X R (default 0.0 = immediate).
     }
+
+  WIDER STOP: the caller widens the stop by passing the already-widened `sl` AND the
+  matching `r_distance = abs(entry - sl_widened)`. Every R multiple (TP targets, BE,
+  trail) then rescales to the new risk automatically — the walker needs no change for
+  the stop-widening lever; only the trailing lever is new here.
 
 Returns a dict: r_realised, exit_reason, exit_price, exit_ts, mfe_r, mae_r,
 bars_to_exit, n_legs, legs (per-leg detail).
@@ -112,6 +124,17 @@ def walk_multileg(
               else entry - be_trigger_r * r_distance)
     )
     be_to_price = entry + be_to_r * r_distance if long else entry - be_to_r * r_distance
+
+    # ── Trailing stop (lever #5) ──────────────────────────────────────────────
+    # Stay `trail_r` R behind the best FINISHED-bar extreme since fill; ratchet
+    # only (the stop can tighten, never loosen). Optional arming: don't trail until
+    # +trail_arm_r R. Only closed non-SL, non-fill bars feed the trail (same
+    # pessimism as MFE — an intrabar wick is unknowable, so we never trail off it).
+    # BE and trail coexist by taking the TIGHTER (more protective) stop.
+    trail_r = config.get("trail_r")
+    trail_arm_r = float(config.get("trail_arm_r", 0.0))
+    trail_best = entry  # best finished-bar extreme seen (favourable direction)
+
     # FP-boundary tolerance: be_trigger_price = entry +/- be_trigger_r * r_distance
     # carries accumulated float error, so a bar that touches the trigger EXACTLY can
     # fail `hi >= be_trigger_price` by ~2e-16 while MFE credits the raw high -- the
@@ -202,6 +225,28 @@ def walk_multileg(
             if reached:
                 be_armed = True
                 cur_sl = be_to_price
+
+        # 7b. Trail the stop off the best FINISHED-bar extreme (this bar is closed,
+        # not the fill bar, and did not hit the stop — the same gate MFE uses). The
+        # candidate trailed stop is `trail_r` R behind the running best extreme,
+        # applied only once the trade is +trail_arm_r R. Ratchet: move the stop only
+        # when the candidate is TIGHTER (protective) than the current stop, so trail
+        # and BE never loosen each other.
+        if trail_r is not None:
+            if long:
+                trail_best = max(trail_best, hi)
+                best_r = (trail_best - entry) / r_distance
+                if best_r >= trail_arm_r:
+                    cand = trail_best - trail_r * r_distance
+                    if cand > cur_sl:
+                        cur_sl = cand
+            else:
+                trail_best = min(trail_best, lo)
+                best_r = (entry - trail_best) / r_distance
+                if best_r >= trail_arm_r:
+                    cand = trail_best + trail_r * r_distance
+                    if cand < cur_sl:
+                        cur_sl = cand
 
         # 8. All legs closed -> done.
         if all(lg["closed"] for lg in legs):

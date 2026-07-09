@@ -1943,9 +1943,44 @@ def _decile_calibration(ev: np.ndarray, y: np.ndarray, val: pd.DataFrame
 BASELINE_RECIPE = {"legs": [(1.0, "tp1")], "be_trigger_r": 1.0, "be_to_r": 0.0}
 
 
-def _build_recipe_grid() -> Dict[str, Dict[str, Any]]:
-    """SPEC §7.3 — the frozen grid. Full-position TP×BE (skip BE≥numeric-TP),
-    four partial families, plus the baseline. ~40 recipes."""
+# Wider-stop k fallback (ATR multiples added to sl_initial) when the run's CSV lacks
+# sl_wick_depth_atr — a stamped default set, NOT a data read (flagged in the recipe
+# grid meta). The live path derives k from the wick-depth distribution instead (§7).
+WIDEN_K_FALLBACK = [0.25, 0.5, 0.75, 1.0]
+# Trailing candidates (distance kept behind best closed-bar extreme, in R) × arm point.
+TRAIL_RS = [1.0, 1.5, 2.0]
+TRAIL_ARMS = [0.0, 1.0]
+
+
+def _widen_k_candidates(df: Optional[pd.DataFrame]) -> Tuple[List[float], str]:
+    """k·ATR wider-stop candidates, SIZED FROM DATA (SPEC §7/§15): the k set is
+    anchored to the sl_wick_depth_atr distribution so the replay sweeps the range
+    wicks actually pierce, then PICKS the winner. Returns (k_list, source_note).
+
+    Uses the p25/p50/p75/p90 wick-depth percentiles (rounded to 0.05R) as the k
+    candidates — 'how far do losers' stop wicks actually poke through?'. Falls back
+    to WIDEN_K_FALLBACK, stamped, when the column is absent (old CSV) or too thin."""
+    if df is None or "sl_wick_depth_atr" not in getattr(df, "columns", []):
+        return list(WIDEN_K_FALLBACK), "fallback (sl_wick_depth_atr absent)"
+    w = pd.to_numeric(df["sl_wick_depth_atr"], errors="coerce").dropna()
+    w = w[w > 0]
+    if len(w) < MIN_BUCKET_N:
+        return list(WIDEN_K_FALLBACK), f"fallback (only {len(w)} wick-depth values)"
+    ks = sorted({round(round(float(np.percentile(w, p)) / 0.05) * 0.05, 2)
+                 for p in (25, 50, 75, 90)})
+    ks = [k for k in ks if k >= 0.05]  # drop a degenerate ~0 candidate
+    if not ks:
+        return list(WIDEN_K_FALLBACK), "fallback (wick-depth percentiles ~0)"
+    return ks, f"data-derived from sl_wick_depth_atr p25/50/75/90 (n={len(w)})"
+
+
+def _build_recipe_grid(widen_ks: Optional[List[float]] = None,
+                       trail: bool = True) -> Dict[str, Dict[str, Any]]:
+    """SPEC §7.3/§7 — the frozen grid. Full-position TP×BE (skip BE≥numeric-TP),
+    four partial families, baseline, PLUS the exit-track levers: wider-stop variants
+    (sl_widen_atr = k·ATR, k sized from data by the caller) and trailing-stop
+    variants. `widen_ks` None = no wider-stop recipes; `trail` False = no trail
+    recipes (keeps the original ~40-recipe grid for callers that don't want them)."""
     grid: Dict[str, Dict[str, Any]] = {}
     tps = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, "tp1"]
     bes = [None, 0.3, 0.5, 0.7, 1.0]
@@ -1967,6 +2002,28 @@ def _build_recipe_grid() -> Dict[str, Dict[str, Any]]:
         for be in be_set:
             grid[f"{pfx}_be{be}"] = {"legs": legs, "be_trigger_r": be,
                                      "be_to_r": 0.0 if be is not None else None}
+
+    # ── WIDER-STOP variants (exit-track lever, SPEC §7). Take the liquidity-TP
+    # full-position leg and re-run it on a k·ATR-wider stop, both no-BE and BE@1R
+    # (BE is the OTHER live sweep-killer; pair them so the replay can separate them).
+    for k in (widen_ks or []):
+        ks = f"{k:g}"
+        grid[f"widen{ks}_tp1_beNone"] = {
+            "legs": [(1.0, "tp1")], "be_trigger_r": None, "be_to_r": None,
+            "sl_widen_atr": k}
+        grid[f"widen{ks}_tp1_be1.0"] = {
+            "legs": [(1.0, "tp1")], "be_trigger_r": 1.0, "be_to_r": 0.0,
+            "sl_widen_atr": k}
+
+    # ── TRAILING-STOP variants (exit-track lever #5). Liquidity-TP leg, no fixed
+    # BE (the trail IS the dynamic stop), swept over trail distance × arm point.
+    if trail:
+        for tr in TRAIL_RS:
+            for arm in TRAIL_ARMS:
+                grid[f"trail{tr:g}_arm{arm:g}"] = {
+                    "legs": [(1.0, "tp1")], "be_trigger_r": None, "be_to_r": None,
+                    "trail_r": tr, "trail_arm_r": arm}
+
     grid["baseline"] = dict(BASELINE_RECIPE)
     return grid
 
@@ -1989,16 +2046,24 @@ def _cost_r_for_trade(t: pd.Series, pair_conf_map: Dict[str, Dict[str, Any]]) ->
 
 
 def _net_r_of_legs(legs: List[Dict[str, Any]], bias: str, entry: float,
-                   sl_initial: float, r_distance: float, cost_r: float) -> float:
-    """Frac-weighted net R. Charge cost_r on every leg EXCEPT one that exited at
-    the ORIGINAL sl_initial (reason 'sl', exit_price == sl_initial) — that fill
-    pre-paid its spread via the widened stop (SPEC §7.2)."""
+                   traded_sl: float, r_distance: float, cost_r: float) -> float:
+    """Frac-weighted net R. Charge cost_r on every leg EXCEPT one that exited at the
+    TRADED stop (reason 'sl', exit_price == traded_sl) — that fill pre-paid its spread
+    because every stop the simulator hands us is already spread-widened by one spread
+    in the adverse direction (h1_only_simulator sl_initial = sl_raw ∓ spread). A
+    wider-stop replay stops out at `traded_sl` (sl_initial pushed a further k·ATR out,
+    STILL carrying that one baked-in spread) → still pre-paid, still no double-charge.
+
+    SPEC §7.2 (corrected): the pre-payment predicate is the STOP ACTUALLY TRADED in
+    this replay, NOT the original sl_initial. The old `== sl_initial` check wrongly
+    charged spread on a widened-stop loser (its exit price ≠ sl_initial). BE / trail
+    stops land at a computed R-level, not a spread-widened price → they ARE charged."""
     net = 0.0
     for lg in legs:
         r = ((lg["exit_price"] - entry) if bias == "LONG"
              else (entry - lg["exit_price"])) / r_distance
         pre_paid = (lg.get("reason") == "sl"
-                    and abs(float(lg["exit_price"]) - sl_initial) < 1e-9)
+                    and abs(float(lg["exit_price"]) - traded_sl) < 1e-9)
         leg_net = r - (0.0 if pre_paid else cost_r)
         net += lg["frac"] * leg_net
     return net
@@ -2033,13 +2098,30 @@ def _replay_grid(trades: pd.DataFrame, grid: Dict[str, Dict[str, Any]],
         r_distance = abs(entry - sl)
         if r_distance <= 0:
             continue
-        cost_r = _cost_r_for_trade(t, pair_conf_map)
+        try:
+            atr_at_ob = float(t["atr_at_ob"])
+        except (TypeError, ValueError, KeyError):
+            atr_at_ob = None
+        cost_r = _cost_r_for_trade(t, pair_conf_map)  # spread as a fraction of the ORIGINAL 1R
         for name, recipe in grid.items():
             rec = {k: v for k, v in recipe.items() if v is not None or k != "be_to_r"}
-            res = walk_multileg(future, bias, entry, sl, r_distance, tp1, rec,
+            # WIDER STOP (SPEC §7): push sl_initial a further k·ATR into the loss and
+            # rescale 1R to the new risk. sl_initial already carries one baked-in
+            # spread; widening only moves it further out, so it stays spread-inclusive
+            # (pre-paid on a stop-out). A recipe with no sl_widen_atr (or a trade
+            # missing atr_at_ob) trades the original stop unchanged.
+            k = rec.pop("sl_widen_atr", None)
+            traded_sl, traded_r = sl, r_distance
+            if k and atr_at_ob and atr_at_ob > 0:
+                traded_sl = (sl - k * atr_at_ob) if bias == "LONG" else (sl + k * atr_at_ob)
+                traded_r = abs(entry - traded_sl)
+            # Spread is a FIXED price; net R is in units of traded_r, so the cost in
+            # those units shrinks as the stop widens: cost_r_traded = cost_r · (R/traded_r).
+            cost_r_traded = cost_r * (r_distance / traded_r) if traded_r > 0 else cost_r
+            res = walk_multileg(future, bias, entry, traded_sl, traded_r, tp1, rec,
                                 weekend_flat=wk_flat, weekend_hour_utc=wk_hour,
                                 max_hold=max_hold)
-            net = _net_r_of_legs(res["legs"], bias, entry, sl, r_distance, cost_r)
+            net = _net_r_of_legs(res["legs"], bias, entry, traded_sl, traded_r, cost_r_traded)
             forced = res["exit_reason"] in ("timeout", "window_end", "friday_flat")
             rows.append({
                 "setup_id": t.get("setup_id"), "pair": t["pair"],
@@ -2207,7 +2289,11 @@ def stage3(run_dir: str, engine_dir: str, forced: bool) -> Dict[str, Any]:
     df = load_population(run_dir)
     pooled = pooled_fx_gold(df)
     filled = pooled[pooled["fill_ts"].notna()].copy()
-    grid = _build_recipe_grid()
+    # k·ATR wider-stop candidates sized from THIS run's wick-depth distribution
+    # (SPEC §7/§15) — measured on DISCOVERY only so sizing never sees validation.
+    disc_filled = filled[filled["_split"] == "DISCOVERY"]
+    widen_ks, widen_src = _widen_k_candidates(disc_filled)
+    grid = _build_recipe_grid(widen_ks=widen_ks, trail=True)
     pcm = _pair_conf_map()
     rep = _replay_grid(filled, grid, pcm)
 
@@ -2215,6 +2301,7 @@ def stage3(run_dir: str, engine_dir: str, forced: bool) -> Dict[str, Any]:
             "run_id": os.path.basename(run_dir), "generated_utc": _now_utc(),
             "scope": scope, "exploratory": exploratory,
             "window": _window_label(filled), "n_trades": int(len(filled)),
+            "widen_ks": widen_ks, "widen_ks_source": widen_src,
             "n_recipes": len(grid)}
     if rep.empty:
         base.update({"note": "no replayable trades", "clusters": []})
@@ -2442,6 +2529,12 @@ def _recipe_dict(r: Dict[str, Any]) -> Dict[str, Any]:
     out = {"legs": legs, "be_trigger_r": r.get("be_trigger_r")}
     if r.get("be_trigger_r") is not None:
         out["be_to_r"] = r.get("be_to_r", 0.0)
+    # Preserve the exit-track knobs so a widen/trail winner replays as itself on the
+    # holdout — dropping them would silently downgrade it to a plain liquidity-TP
+    # recipe and produce a WRONG verdict (the recipe replayed != the recipe chosen).
+    for knob in ("sl_widen_atr", "trail_r", "trail_arm_r"):
+        if r.get(knob) is not None:
+            out[knob] = r[knob]
     return out
 
 
@@ -2629,17 +2722,20 @@ def _build_exit_policy(s3: Dict[str, Any], pooled: pd.DataFrame) -> Dict[str, An
     every per_cluster holdout). Fallback (event_pdzone) membership is recomputed
     from the bos_tag×pd_zone cell definition parsed back out of the cluster id."""
     mode = s3.get("exit_mode", "global")
+    # The k·ATR set Stage 3 actually swept — needed to rebuild a widen recipe by name
+    # with the SAME (data-derived) k, so the holdout replays the chosen recipe exactly.
+    widen_ks = s3.get("widen_ks")
     if mode == "global" and s3.get("global_recipe"):
         gr = s3["global_recipe"]["recipe"]
         return {"mode": "global",
                 "clusters": [{"id": "global", "definition": "all trades",
-                              "recipe": _recipe_from_name(gr)}]}
+                              "recipe": _recipe_from_name(gr, widen_ks)}]}
     if mode == "per_cluster":
         clusters = []
         for c in s3.get("clusters", []):
             if c["ships"] != "baseline":
                 clusters.append({"id": c["cluster"], "definition": c["cluster"],
-                                 "recipe": _recipe_from_name(c["ships"])})
+                                 "recipe": _recipe_from_name(c["ships"], widen_ks)})
         if clusters:
             return {"mode": "per_cluster",
                     "cluster_mode": s3.get("cluster_mode"),
@@ -2652,13 +2748,21 @@ def _build_exit_policy(s3: Dict[str, Any], pooled: pd.DataFrame) -> Dict[str, An
                                      "be_to_r": 0.0}}]}
 
 
-def _recipe_from_name(name: str) -> Dict[str, Any]:
-    """Reconstruct a recipe dict from a grid name (for the JSON schema)."""
-    grid = _build_recipe_grid()
+def _recipe_from_name(name: str,
+                      widen_ks: Optional[List[float]] = None) -> Dict[str, Any]:
+    """Reconstruct a recipe dict from a grid name (for the JSON schema). `widen_ks`
+    must be the SAME set Stage 3 swept so a `widen<k>_…` name rebuilds with the exact
+    data-derived k — otherwise a widen winner would fall back to baseline and the
+    holdout would replay the wrong recipe (silent wrong verdict)."""
+    grid = _build_recipe_grid(widen_ks=widen_ks, trail=True)
     r = grid.get(name, dict(BASELINE_RECIPE))
-    return {"legs": [list(l) for l in r["legs"]],
-            "be_trigger_r": r.get("be_trigger_r"),
-            "be_to_r": r.get("be_to_r", 0.0)}
+    out = {"legs": [list(l) for l in r["legs"]],
+           "be_trigger_r": r.get("be_trigger_r"),
+           "be_to_r": r.get("be_to_r", 0.0)}
+    for knob in ("sl_widen_atr", "trail_r", "trail_arm_r"):
+        if r.get(knob) is not None:
+            out[knob] = r[knob]
+    return out
 
 
 def _holdout_report(hrep, brep, hold, recipe, pcm) -> Dict[str, Any]:
