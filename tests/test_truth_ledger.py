@@ -467,6 +467,74 @@ def test_area_c_sl_distance_atr_reachable_via_atr_rounding_band():
         f"(would be a real formula bug): {unreachable}")
 
 
+# ── AREA B — ATR normalisation (Deep Value Pass, 2026-07-10) ────────────────
+# Every *_atr column divides by the ONE frozen ob['h1_atr'] (stored as atr_at_ob
+# at 6dp). sl_distance_atr is the only one whose numerator is fully in the CSV
+# (|entry - sl_initial|), so it is the CANONICAL-DATA anchor for "the denominator
+# is atr_at_ob and nothing else". The live-code proof that all SIX *_atr columns
+# share that denominator (scaling test + source tripwire) lives in
+# backtest/test_h1_only.py::test_area_b_*. This test proves the anchor on the file
+# AND bites a wrong denominator.
+
+
+def _reachable_via_atr_band(num, atr, csvv, half_width=0.5e-6, steps=201):
+    """True if round(num / a, 3) == csvv for SOME true atr in the 6dp round-band
+    [atr - 0.5ulp, atr + 0.5ulp]. The CSV stores atr_at_ob at 6dp but the live
+    divide uses full-precision _h1_atr, so an exact match is not guaranteed near a
+    rounding boundary — reachability inside the band is the correct proof."""
+    import numpy as np
+    if str(round(num / atr, 3)) == str(csvv):
+        return True
+    grid = np.linspace(atr - half_width, atr + half_width, steps)
+    return any(str(round(num / a, 3)) == str(csvv) for a in grid)
+
+
+def test_area_b_sl_distance_atr_divides_atr_at_ob_on_canonical():
+    """AREA B anchor: on the canonical file, sl_distance_atr must be reproducible
+    as |entry - sl_initial| / atr_at_ob (within the 6dp round-band) — proving it
+    divides by atr_at_ob. Bite: dividing the SAME numerator by a WRONG atr
+    (atr_at_ob * 1.5) must make the CSV value unreachable for essentially every
+    row, so a real denominator swap turns this red.
+
+    Sampled (seeded) for speed — the grid search is O(rows * steps); a 600-row
+    seeded sample is a stable, representative slice per CLAUDE.md smart-sampling.
+    """
+    import random
+    path = _canonical_csv()
+    with path.open(newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    usable = [r for r in rows
+              if r["sl_distance_atr"] not in ("", None)
+              and r["atr_at_ob"] not in ("", None)
+              and r["entry"] not in ("", None)
+              and r["sl_initial"] not in ("", None)]
+    assert len(usable) > 1000, f"too few usable sl_distance_atr rows ({len(usable)})"
+    random.seed(0)
+    sample = random.sample(usable, 600)
+
+    correct_unreachable = []
+    wrong_reachable = 0
+    for i, r in enumerate(sample):
+        num = abs(_c_float(r["entry"]) - _c_float(r["sl_initial"]))
+        atr = _c_float(r["atr_at_ob"])
+        csvv = r["sl_distance_atr"]
+        # CORRECT denominator: must be reachable within the atr round-band.
+        if not _reachable_via_atr_band(num, atr, csvv):
+            correct_unreachable.append((i, csvv, atr))
+        # WRONG denominator: atr * 1.5 must NOT reach the CSV value (bite).
+        if _reachable_via_atr_band(num, atr * 1.5, csvv):
+            wrong_reachable += 1
+
+    assert not correct_unreachable, (
+        "sl_distance_atr NOT reachable dividing by atr_at_ob (denominator drifted "
+        f"from ob['h1_atr']): {correct_unreachable[:5]}")
+    # A correct-denominator file makes the wrong (1.5x) denominator essentially
+    # always unreachable; allow a tiny tail for small-value 3dp rounding collisions.
+    assert wrong_reachable <= 6, (
+        f"{wrong_reachable}/600 rows still reachable under a 1.5x wrong denominator "
+        "— the anchor is not actually pinning atr_at_ob as the divisor (bite too weak)")
+
+
 def test_every_csv_column_has_a_ledger_row():
     ledger = (_ROOT / "TRUTH_LEDGER.md").read_text(encoding="utf-8")
     src = (_ROOT / "backtest" / "h1_only_reporting.py").read_text(encoding="utf-8")

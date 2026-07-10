@@ -672,6 +672,133 @@ def test_edge_lab_columns():
     assert ok, "one or more edge-lab column checks failed (see output above)"
 
 
+def _atr_sweep_scenario(atr):
+    """Drive the LIVE simulator to a bullish SL-SWEEP exit with a known ATR, so
+    ALL SIX *_atr columns are populated on one row (the four row-build ones plus
+    the two SL-outcome ones). Returns the single trade row.
+
+    Geometry: a Monday-open bullish OB; price fills the proximal, then bar 4 wicks
+    deep below the stop but CLOSES back above it (sweep), then crashes further —
+    guaranteeing sl_bar_was_sweep, sl_wick_depth_atr and
+    sl_max_adverse_after_sweep_atr are all set. Everything before Friday so the
+    weekend-flat force-close cannot pre-empt the SL.
+    """
+    base = pd.Timestamp("2026-04-06 00:00", tz="UTC")   # Monday (dayofweek==0)
+    n = 60
+    idx = pd.date_range(base, periods=n, freq="h")
+    top = 1.0800
+    bot = top - 0.0018          # 18-pip OB
+    spread = 0.0002             # 2 pips (matches _synth_pair_conf spread_pips=2)
+    sl = bot - spread
+    ob = {
+        "direction": "bullish", "bos_tag": "BOS", "bos_tier": "Major",
+        "high": top, "low": bot, "proximal_line": top, "distal_line": bot,
+        "ob_timestamp": idx[0].isoformat(), "touches": 0, "h1_atr": atr,
+        # Give impulse + FVG real geometry so impulse_leg_atr / fvg_size_atr are
+        # non-None too (they read ob internals not present in the CSV).
+        "impulse_start_price": bot - 0.0050,
+        "bos_swing_price": top + 0.0030,
+        "fvg": {"exists": True, "fvg_top": top + 0.0009, "fvg_bottom": top + 0.0003},
+        "dealing_range": {"valid": True, "range_low": bot - 0.02,
+                          "range_high": top + 0.05},
+    }
+    closes = []
+    for i in range(n):
+        if i < 2:
+            closes.append(top + 0.0010)     # above the zone
+        elif i < 4:
+            closes.append(top - 0.0002)     # dip in -> fill at proximal
+        elif i == 4:
+            closes.append(sl + 0.0001)      # close back above the stop (sweep)
+        else:
+            closes.append(sl - 0.0030)      # then crash further (adverse run)
+    highs = [c + 0.0005 for c in closes]
+    lows = [c - 0.0005 for c in closes]
+    lows[4] = sl - 0.0020                    # bar 4 wick pierces DEEP below the stop
+    df = pd.DataFrame({"Open": closes, "High": highs, "Low": lows,
+                       "Close": closes, "Volume": [100] * n}, index=idx)
+    alert = {"pair": "TESTPAIR", "ts": idx[0], "current_price": top,
+             "h1_atr": atr, "ob": ob}
+    rows = h1_only_simulator.simulate_h1_only_dual(
+        alert, _synth_pair_conf(), df, risk_usd=250.0)
+    assert rows, "atr-scenario produced no trade row"
+    return rows[0]
+
+
+# The six *_atr columns Area B covers (break_* are Batch 1, sweep_* out-of-scope).
+_AREA_B_ATR_COLS = [
+    "ob_range_atr", "fvg_size_atr", "impulse_leg_atr", "sl_distance_atr",
+    "sl_wick_depth_atr", "sl_max_adverse_after_sweep_atr",
+]
+
+
+def test_area_b_all_atr_cols_share_the_one_h1_atr_denominator():
+    """AREA B (Deep Value Pass): prove EVERY *_atr column divides by the single
+    frozen ob['h1_atr'] (== atr_at_ob), not a per-scan or hard-coded ATR.
+
+    Method drives LIVE code (simulate_h1_only_dual): run the SAME sweep scenario
+    twice, changing ONLY ob['h1_atr'] (0.0010 -> 0.0020). If a column truly
+    divides by that one denominator, doubling the ATR must HALVE the column (the
+    numerator is denominator-free). atr_at_ob itself must DOUBLE (it IS the
+    denominator, stored at 6dp). A column reading a different ATR would not scale.
+
+    Bite check baked in: the same scenario is re-run with a source tripwire (see
+    test_area_b_atr_source_uses_h1_atr) — here the value bite is the exact 2x/0.5x
+    ratio, which fails the moment any *_atr divides by something that isn't the
+    doubled h1_atr.
+    """
+    print("\n== test_area_b_all_atr_cols_share_the_one_h1_atr_denominator ==")
+    r1 = _atr_sweep_scenario(0.0010)
+    r2 = _atr_sweep_scenario(0.0020)   # exactly 2x the ATR
+    ok = True
+    # atr_at_ob is the denominator; it must DOUBLE with h1_atr (and be non-None).
+    a1, a2 = r1.get("atr_at_ob"), r2.get("atr_at_ob")
+    ok &= check(a1 is not None and a2 is not None, "atr_at_ob populated both runs")
+    ok &= check(a1 is not None and abs(a2 - 2 * a1) < 1e-9,
+                f"atr_at_ob doubled with h1_atr ({a1} -> {a2})")
+    for c in _AREA_B_ATR_COLS:
+        v1, v2 = r1.get(c), r2.get(c)
+        ok &= check(v1 is not None and v2 is not None,
+                    f"{c} populated on the sweep row (v1={v1}, v2={v2})")
+        if v1 is None or v2 is None:
+            continue
+        ok &= check(v1 != 0.0, f"{c} non-zero so the ratio is meaningful (v1={v1})")
+        # Doubling the denominator halves the value: v1 / v2 == 2 (within round(,3)).
+        ok &= check(abs(v1 - 2 * v2) <= 0.0015,
+                    f"{c} halves when h1_atr doubles ({v1} -> {v2}; "
+                    f"expected ~{round(v1/2,3)})")
+    assert ok, "one or more Area B ATR-denominator checks failed (see output above)"
+
+
+def test_area_b_atr_source_uses_h1_atr():
+    """AREA B source tripwire: the *_atr divisors in h1_only_simulator must read
+    ob['h1_atr'], never a per-scan alert ATR. This bites a denominator swap that
+    the value test could miss if a fixture happened to make two ATRs equal.
+
+    Row-build columns divide via `_atr_norm` / `_h1_atr`, and both `_h1_atr` and
+    the SL-path `_h1_atr_sl` are assigned `ob.get("h1_atr")`. Assert those exact
+    bindings are present, and that atr_at_ob rounds the SAME `_h1_atr`.
+    """
+    print("\n== test_area_b_atr_source_uses_h1_atr ==")
+    src = (Path(h1_only_simulator.__file__).read_text(encoding="utf-8"))
+    ok = True
+    ok &= check('_h1_atr = ob.get("h1_atr")' in src,
+                "_h1_atr bound to ob['h1_atr'] (row-build denominator)")
+    ok &= check('_h1_atr_sl = ob.get("h1_atr")' in src,
+                "_h1_atr_sl bound to ob['h1_atr'] (SL-outcome denominator)")
+    ok &= check("return round(v / _h1_atr, 3)" in src,
+                "_atr_norm divides by _h1_atr (ob_range/fvg_size/impulse_leg)")
+    ok &= check("abs(entry - sl) / _h1_atr" in src,
+                "sl_distance_atr divides by _h1_atr")
+    ok &= check("_overshoot) / _h1_atr_sl" in src,
+                "sl_wick_depth_atr divides by _h1_atr_sl")
+    ok &= check("_adverse) / _h1_atr_sl" in src,
+                "sl_max_adverse_after_sweep_atr divides by _h1_atr_sl")
+    ok &= check("atr_at_ob = round(float(_h1_atr), 6)" in src,
+                "atr_at_ob is the SAME _h1_atr rounded to 6dp (the CSV denominator)")
+    assert ok, "Area B source tripwire failed (see output above)"
+
+
 def main():
     # Robust to BOTH styles: assert-based tests (return None on pass, raise on
     # fail — the pytest-visible ones) and legacy bool-returning tests. A raised
@@ -697,6 +824,10 @@ def main():
          test_g10_rounded_near_miss_is_not_a_violation),
         ("test_sl_wick_depth_atr",      test_sl_wick_depth_atr),
         ("test_edge_lab_columns",       test_edge_lab_columns),
+        ("test_area_b_all_atr_cols_share_the_one_h1_atr_denominator",
+         test_area_b_all_atr_cols_share_the_one_h1_atr_denominator),
+        ("test_area_b_atr_source_uses_h1_atr",
+         test_area_b_atr_source_uses_h1_atr),
     ]
     results = [(name, _run(name, fn)) for name, fn in tests]
     print("\n=== SUMMARY ===")
