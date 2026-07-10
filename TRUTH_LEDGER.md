@@ -10,19 +10,38 @@ when its row here says **verified** or **fixed** — anything else is unproven.
 - **pending-fix** — defect known (spec written), fix NOT yet in code.
 - **out-of-scope** — owned by another workstream (sweep rebuild).
 
-Status date: 2026-07-04 (line refs refreshed to HEAD after T4/T5 landed).
+Status date: 2026-07-09 (canonical baseline run `1feb2db`).
 DETECTION_FIXES_SPEC.md Fixes 1/2/3 **LANDED**; TRUTH_FIXES_SPEC.md T1/T2/T3
 **SHIPPED**; TRUTH_FIXES_SPEC_2.md T4/T5 **SHIPPED**. Guards green
 (tests/test_dedupe.py, test_ob_alert_freeze.py, test_aggregate_eligibility.py,
 test_truth_ledger.py, test_p2_window_clamp.py, test_structure_signals.py — full
-suite 77 passed 2026-07-04). Voided insights stay VOID until the first post-fix
-baseline run.
+suite 77 passed 2026-07-04).
+
+**2026-07-10 SYSTEM AUDIT — Batch 0 (ledger hygiene) DONE.** The 07-09 canonical
+run (`1feb2db`) IS the first post-fix baseline: every T1-T5 / Fix 1-3 / D1-D5 fix
+landed before it. So the 6 previously-voided insights are UN-VOIDED to
+`verified (population)` — their source columns are populated and varied in the
+baseline CSV (sampled all 33,838 rows). "verified (population)" = the corruption
+era is over and the feeding columns are real; it does NOT yet re-audit each
+insight's own aggregation math (that is Batch 3). The sweep leg stays
+out-of-scope (sweep-rebuild workstream) — un-voided only the fvg / freshness /
+structure legs. Baseline integrity is now guarded by
+tests/test_truth_ledger.py::test_baseline_ex_corrupted_columns_are_real (fails if
+the canonical CSV's ex-corrupted columns ever regress to null/constant).
+
+**Stamp bump scope:** this bump records that the void condition is cleared. It
+does NOT blanket re-verify the `verified` column rows — those line-refs are
+re-confirmed against HEAD only in the batch that audits them (Batch 2 row-build,
+Batch 3 insights). Batch 1 (detection columns) is DEFERRED: the break gates were
+removed 2026-07-10 AFTER this run, so every detection-derived VALUE here is stale
+until the user triggers a fresh canonical run. Plumbing (col X derives from Y) is
+still auditable; detection VALUES are not.
 
 ## Layer map (where numbers are born)
 
 1. **Detection** — smc_radar.py / smc_detector.py / dealing_range.py (shared with live).
 2. **Replay** — backtest/replay_engine.py walks bars, holds OB state, yields alerts.
-3. **Simulation + row build** — backtest/h1_only_simulator.py; `_build_row` at :1075, row dict at :1250-1405.
+3. **Simulation + row build** — backtest/h1_only_simulator.py; `_build_row` at :1172, row dict at :1386-1565.
 4. **Insights** — backtest/insights.py (stats) + backtest/h1_only_reporting.py (sections, Excel tabs, trades.csv writer `_trades_csv` at :1217).
 5. **Email/report** — backtest/reporting_email.py + backtest/render_report.py.
 
@@ -32,35 +51,35 @@ baseline run.
 
 ## trades.csv columns
 
-Row build: h1_only_simulator.py `_build_row` at :1075; row dict at :1250-1405. "src" = the line the value is read/written in the row dict.
+Row build: h1_only_simulator.py `_build_row` at :1172; row dict at :1386-1565. "src" = the line the value is read/written in the row dict. Line-refs re-mapped 2026-07-10 (Batch 2) and guarded by tests/test_truth_ledger.py::test_row_build_ledger_line_refs_point_at_the_column.
 
 | column | src (h1_only_simulator.py) | stamped when | status | note |
 |---|---|---|---|---|
-| pair | :1251 | alert | verified | yield payload scalar (replay_engine.py:648) |
-| alert_ts | :1252 | alert | verified | = h1_ts of the closed-bar scan (replay_engine.py:649); alert>bos guard at replay_engine.py:529-554 |
-| alert_bar_ts | :1253 | alert | verified | yield payload scalar (replay_engine.py:687) — just-closed bar's ts |
-| alert_seq | :1257 | alert | verified | yield payload scalar from fire_count (replay_engine.py:654); traded row is always first fire per zone (dedupe run_backtest.py:161-169) |
+| pair | :1387 | alert | verified | yield payload scalar (replay_engine.py:648) |
+| alert_ts | :1388 | alert | verified | = h1_ts of the closed-bar scan (replay_engine.py:649); alert>bos guard at replay_engine.py:529-554 |
+| alert_bar_ts | :1389 | alert | verified | yield payload scalar (replay_engine.py:687) — just-closed bar's ts |
+| alert_seq | :1393 | alert | verified | yield payload scalar from fire_count (replay_engine.py:654); traded row is always first fire per zone (dedupe run_backtest.py:161-169) |
 | bos_timestamp | h1_only_simulator.py `_build_row` (`ob.get("bos_timestamp")`) | OB build (immutable fact) | verified | 2026-07-02 detection audit 3e classification; alert>bos guard replay_engine.py:529-554. 2026-07-09 EVENT-CANDLE FIX: derives from the TRUE break candle, not the confirmation candle. **2026-07-10 GATES REMOVED**: with the distance buffer now 0, the true-break candle == the fire candle on every continuous break (differs only across a weekend gap), so bos_timestamp = the bar the close first crossed the level. bos_idx=_idx_from_ts(candle_ts) (smc_radar.py:866) inherits it. See event_candle_delta row |
-| fill_ts | :1259 | fill | verified | 2026-07-02 truth-chain audit |
-| exit_ts | :1260 | exit | verified | 2026-07-02 truth-chain audit |
-| direction | :1261 | OB build (immutable) | verified | detection audit 3e: immutable event fact |
-| bias | :1262 | derived from direction | verified | deterministic at :1262 |
-| model | :1263 | constant | verified | literal "h1_only" |
-| event | :1264 | OB build | verified | deterministic label from immutable bos_tag/bos_tier |
-| entry_zone | :1265 | alert | verified | proximal only (run_backtest.py:345); truth-chain audit (fills) |
-| entry | :1266 | alert | verified | truth-chain audit (fills) |
-| sl_raw | :1270 | alert | verified | 2026-07-02 truth-chain audit |
-| sl_initial | :1271 | alert | verified | 2026-07-02 truth-chain audit |
-| tp1 / tp2 | :1272-1273 | alert (levels on 200-bar window) | **fixed** | T5: compute_phase2_levels now fed the last LIVE_P2_H1_BARS=200 closed bars via _closed_bars_at_alert (h1_only_simulator.py:349, used at :504), matching live P2's fetch depth; was unbounded history (TP selection drifted with run start). Guard tests/test_p2_window_clamp.py PASS |
-| tp1_rr / tp2_rr | :1274-1275 | alert (levels on 200-bar window) | **fixed** | T5: same 200-bar clamp as tp1/tp2 (RR derived from the clamped-window TP pick) |
-| exit_price | :1276 | exit | verified | 2026-07-02 truth-chain audit |
-| exit_reason | :1277 | exit | verified | 2026-07-02 truth-chain audit |
-| r_realised | :1278 | exit | verified | 2026-07-02 truth-chain audit; P&L source of truth |
-| r_if_exit_tp1 / r_if_exit_tp2 | :1279-1280 | exit | verified | 2026-07-02 truth-chain audit |
-| pnl_usd | :1281 | exit | verified | r_realised × risk_usd |
-| mfe_r / mae_r | :1282-1283 | exit | verified | 2026-07-02 truth-chain audit (excursions) |
-| sl_bar_was_sweep | :1290 | SL exit | verified | 2026-07-02 truth-chain audit |
-| sl_swept_then_tp1 | :1291 | SL exit | verified | 2026-07-02 truth-chain audit; hint only, peak-metric gate |
+| fill_ts | :1395 | fill | verified | 2026-07-02 truth-chain audit |
+| exit_ts | :1396 | exit | verified | 2026-07-02 truth-chain audit |
+| direction | :1397 | OB build (immutable) | verified | detection audit 3e: immutable event fact |
+| bias | :1398 | derived from direction | verified | deterministic at :1398 (LONG if bullish else SHORT) |
+| model | :1399 | constant | verified | literal "h1_only" |
+| event | :1400 | OB build | verified | deterministic label from immutable bos_tag/bos_tier |
+| entry_zone | :1401 | alert | verified | proximal only (run_backtest.py:345); truth-chain audit (fills) |
+| entry | :1402 | alert | verified | truth-chain audit (fills) |
+| sl_raw | :1406 | alert | verified | 2026-07-02 truth-chain audit |
+| sl_initial | :1407 | alert | verified | 2026-07-02 truth-chain audit |
+| tp1 / tp2 | :1408-1409 | alert (levels on 200-bar window) | **fixed** | T5: compute_phase2_levels now fed the last LIVE_P2_H1_BARS=200 closed bars via _closed_bars_at_alert (h1_only_simulator.py:349, used at :504), matching live P2's fetch depth; was unbounded history (TP selection drifted with run start). Guard tests/test_p2_window_clamp.py PASS |
+| tp1_rr / tp2_rr | :1410-1411 | alert (levels on 200-bar window) | **fixed** | T5: same 200-bar clamp as tp1/tp2 (RR derived from the clamped-window TP pick) |
+| exit_price | :1412 | exit | verified | 2026-07-02 truth-chain audit |
+| exit_reason | :1413 | exit | verified | 2026-07-02 truth-chain audit |
+| r_realised | :1414 | exit | verified | 2026-07-02 truth-chain audit; P&L source of truth |
+| r_if_exit_tp1 / r_if_exit_tp2 | :1415-1416 | exit | verified | 2026-07-02 truth-chain audit |
+| pnl_usd | :1417 | exit | verified | r_realised × risk_usd |
+| mfe_r / mae_r | :1418-1419 | exit | verified | 2026-07-02 truth-chain audit (excursions) |
+| sl_bar_was_sweep | :1430 | SL exit | verified | 2026-07-02 truth-chain audit |
+| sl_swept_then_tp1 | :1431 | SL exit | verified | 2026-07-02 truth-chain audit; hint only, peak-metric gate |
 | sl_wick_depth_atr | h1_only_simulator.py (calc beside sl_bar_was_sweep) | SL exit | verified | 2026-07-08; max(0, stop-candle overshoot beyond fired stop)/ob['h1_atr']; ≥0, None on non-SL / no ATR; population = filled SL exits; logging-only, NO gate; guard test_h1_only.py::test_sl_wick_depth_atr |
 | sl_max_adverse_after_sweep_atr | h1_only_simulator.py (calc beside sl_wick_depth_atr) | OUTCOME-time (SL sweep) | verified | 2026-07-08; max(0, further run beyond fired stop over SL_SWEEP_LOOKBACK_BARS after stop bar)/ob['h1_atr']; ≥0; None on non-SL / non-sweep / no ATR; EXIT-TRACK ONLY (leakage as entry feature); C6 hint; guard test_h1_only.py::test_edge_lab_columns |
 | bars_sl_to_tp1_touch | h1_only_simulator.py (calc beside sl_wick_depth_atr) | OUTCOME-time (SL exit) | verified | 2026-07-08; 1-indexed H1 bars from stop bar to first TP1 touch in-direction within lookback; None if never touched; EXIT-TRACK ONLY; C6 touch-hint not a fill; guard test_h1_only.py::test_edge_lab_columns |
@@ -68,58 +87,58 @@ Row build: h1_only_simulator.py `_build_row` at :1075; row dict at :1250-1405. "
 | sl_distance_atr | h1_only_simulator.py (calc in _build_row beside atr_at_ob) | fill | verified | 2026-07-08; abs(entry - sl_initial)/ob['h1_atr']; risk width in ATR; uses sl_initial (traded stop) NOT sl_raw; point-in-time clean; None if no ATR; ENCODED (replaces ex-pasted corrupted CSV col); guard test_h1_only.py::test_edge_lab_columns |
 | r_capture_ratio | h1_only_simulator.py (calc in _build_row beside atr_at_ob) | OUTCOME-time (exit) | verified | 2026-07-08; r_realised/mfe_r; fraction of best favorable move kept; None when mfe_r<=0 (no 0/0); EXIT-TRACK ONLY (uses r_realised); ENCODED (replaces ex-pasted corrupted CSV col); guard test_h1_only.py::test_edge_lab_columns |
 | trend_pd_agree | h1_only_simulator.py (calc in _build_row beside atr_at_ob) | alert | verified | 2026-07-08; bool — trade WITH h1_trend AND pd_alignment=='aligned'; both confluences same way; None if either missing; point-in-time clean; ENCODED (replaces ex-pasted corrupted CSV col); guard test_h1_only.py::test_edge_lab_columns |
-| be_arm_bar_touched_entry | :1297 | BE arm | verified | 2026-07-02 truth-chain audit; be_eps FP-boundary tolerance at :670 (2026-07-03 fix, G10 rule b) |
-| ob_to_fill_hours | :1299 (calc :951-958) | fill | verified | deterministic from immutable ob_timestamp + fill_ts; None if never filled |
-| bars_break_to_pullback | :1301 (calc :964-973) | fill | verified | bar count bos_ts→fill on df index; deterministic from immutable inputs |
+| be_arm_bar_touched_entry | :1446 | BE arm | verified | 2026-07-02 truth-chain audit; be_eps FP-boundary tolerance at :670 (2026-07-03 fix, G10 rule b) |
+| ob_to_fill_hours | :1448 (calc :1068-1075) | fill | verified | deterministic from immutable ob_timestamp + fill_ts; None if never filled |
+| bars_break_to_pullback | :1450 (calc :1081-1090) | fill | verified | bar count bos_ts→fill on df index; deterministic from immutable inputs |
 | bars_to_exit / bars_to_tp1 / bars_to_tp2 | :1302-1304 | exit | verified | 2026-07-02 truth-chain audit |
-| ob_age_h1_bars | :1305 (calc :330-346) | alert | verified | bar count on df index ob_ts→alert_ts; deterministic, weekend-gap-safe |
+| ob_age_h1_bars | :1454 (calc :345) | alert | verified | bar count on df index ob_ts→alert_ts; deterministic, weekend-gap-safe |
 | ob_timestamp | h1_only_simulator.py `_build_row` (`ob.get("ob_timestamp")`) | OB build (immutable) | verified | detection audit 3e: immutable event fact. 2026-07-09 EVENT-CANDLE FIX: OB walkback (smc_radar.py:929) now starts from the corrected true-break candle, so ob_timestamp moves for the ~15% of events whose OB candle changed (34% of CHoCHs). "verified" always meant the freezing/plumbing, not "right candle" — the candle is now right. LIVE dedupe caveat: find_matching_slate_zone (smc_radar.py:3305) keys on ob_timestamp — see event_candle_delta note |
 | event_candle_delta | h1_only_simulator.py `_build_row` (`ob.get("event_candle_delta")`); produced dealing_range.py `_push_event` `event_candle_delta` field; wired smc_radar.py active_obs.append | OB build (immutable event fact, frozen at formation) | verified | int bars = confirm_idx − true_break_idx. **2026-07-10 GATES REMOVED**: the distance (bos_disp/choch_disp) AND body gates are gone — a break fires on a bare close through the level, so bos_disp=choch_disp=0. Consequence: delta is 0 on EVERY continuous break (fire candle == true-break candle), and >0 ONLY across a session/weekend gap where `_traded_through` delays the fire past the true weekend-open break (walk-back re-anchors to it). None for CHoCH_FAILED (not a break). Population = all BOS/CHoCH-derived zones. Logging-only, NO gate. Guard: tests/test_event_candle_fix.py (rewritten for the gates-removed invariant) |
-| pd_zone | :1307 (calc :205-223) | row build, entry vs frozen DR | verified | 0.5 split, deterministic; dealing_range frozen-by-design (live same, smc_radar.py:1042-1052) |
-| pd_alignment | :1308 (calc :226-243) | row build | verified | deterministic from bias + pd_zone |
-| pd_pct | :1309 (calc :1055-1064) | row build, entry vs frozen DR | verified | deterministic; None when DR invalid |
-| reversal_pct | :1313 (src :1073) | structure event (frozen) | verified | detection audit 3e: immutable; epoch-drift PARKED per spec (near-zero after Fix 1) |
-| reversed_from_extreme | :1314 (calc :1082-1086) | row build, derived | verified | deterministic; 0.0 ambiguity documented at :1077-1081 |
-| score | :1315 (calc :367-385, slice :382) | simulate time, on alert-time ob_view (payload) | **fixed** | T1+T4 view feeds run_scorecard alert-time bos_verdict + payload touches_at_alert/fvg_at_alert; T5 clamps the scoring slice to LIVE_P2_H1_BARS=200 via _closed_bars_at_alert (:382). Guards test_ob_alert_freeze.py + test_p2_window_clamp.py PASS |
-| structure_pts | :1316 | simulate time, on alert-time ob_view | **fixed** | smc_detector.py:2110 now reads the alert-time verdict via ob_view (T1) |
-| sweep_pts | :1317 | alert | out-of-scope | sweep rebuild workstream |
-| fvg_pts | :1318 | simulate time, on alert-time ob_view (payload) | **fixed** | Fix 3c/3d + T4: fvg_at_alert now travels in the alert PAYLOAD (not the re-stamped dict), routed into scoring via ob_view. Guard test_ob_alert_freeze.py T4 cases PASS |
-| freshness_pts | :1319 | simulate time, on alert-time ob_view (payload) | **fixed** | Fix 3a/3d + T4: touches_at_alert now travels in the alert PAYLOAD, routed into scoring via ob_view. Guard test_ob_alert_freeze.py T4 cases PASS |
-| killzone_pts | :1320 | simulate time | verified | scored on immutable ob_timestamp via shared DST-aware ts_in_killzone (smc_detector.py:1937); max 1 |
-| confluences_present | :1321 (calc :246-257) | simulate time | **fixed** | derived from breakdown, now computed on alert-time ob_view (T1 + Fix 3) |
-| session | :1322 (calc :82-90) | alert | verified | fixed UTC-hour buckets. CAVEAT: UTC-fixed, NOT DST-aware — session edges shift 1h half the year (killzone columns ARE DST-aware; known asymmetry) |
-| weekend_blocked | :1327 (calc :142-172) | fill | verified | deterministic IST calc from fill_ts + config; False for non-crypto |
-| sl_collision | :1328 (stamp :674, :829) | exit | verified | SL-first collision rule; truth-chain audit (exits) |
+| pd_zone | :1461 (calc :220) | row build, entry vs frozen DR | verified | 0.5 split, deterministic; dealing_range frozen-by-design (live same, smc_radar.py:1042-1052) |
+| pd_alignment | :1462 (calc :241) | row build | verified | deterministic from bias + pd_zone |
+| pd_pct | :1463 (calc :1218) | row build, entry vs frozen DR | verified | deterministic; None when DR invalid |
+| reversal_pct | :1467 (src :1073) | structure event (frozen) | verified | detection audit 3e: immutable; epoch-drift PARKED per spec (near-zero after Fix 1) |
+| reversed_from_extreme | :1468 (calc :1257) | row build, derived | verified | deterministic; 0.0 ambiguity documented at :1077-1081 |
+| score | :1469 (calc :367-385, slice :382) | simulate time, on alert-time ob_view (payload) | **fixed** | T1+T4 view feeds run_scorecard alert-time bos_verdict + payload touches_at_alert/fvg_at_alert; T5 clamps the scoring slice to LIVE_P2_H1_BARS=200 via _closed_bars_at_alert (:382). Guards test_ob_alert_freeze.py + test_p2_window_clamp.py PASS |
+| structure_pts | :1470 | simulate time, on alert-time ob_view | **fixed** | smc_detector.py:2110 now reads the alert-time verdict via ob_view (T1) |
+| sweep_pts | :1471 | alert | out-of-scope | sweep rebuild workstream |
+| fvg_pts | :1472 | simulate time, on alert-time ob_view (payload) | **fixed** | Fix 3c/3d + T4: fvg_at_alert now travels in the alert PAYLOAD (not the re-stamped dict), routed into scoring via ob_view. Guard test_ob_alert_freeze.py T4 cases PASS |
+| freshness_pts | :1473 | simulate time, on alert-time ob_view (payload) | **fixed** | Fix 3a/3d + T4: touches_at_alert now travels in the alert PAYLOAD, routed into scoring via ob_view. Guard test_ob_alert_freeze.py T4 cases PASS |
+| killzone_pts | :1474 | simulate time | verified | scored on immutable ob_timestamp via shared DST-aware ts_in_killzone (smc_detector.py:1937); max 1 |
+| confluences_present | :1475 (calc :261) | simulate time | **fixed** | derived from breakdown, now computed on alert-time ob_view (T1 + Fix 3) |
+| session | :1476 (calc :130) | alert | verified | fixed UTC-hour buckets. CAVEAT: UTC-fixed, NOT DST-aware — session edges shift 1h half the year (killzone columns ARE DST-aware; known asymmetry) |
+| weekend_blocked | :1481 (calc :157) | fill | verified | deterministic IST calc from fill_ts + config; False for non-crypto |
+| sl_collision | :1482 (stamp :674, :829) | exit | verified | SL-first collision rule; truth-chain audit (exits) |
 | bos_tag / bos_tier | :1329-1330 | OB build (immutable) | verified | detection audit 3e: immutable event facts |
-| bos_verdict | :1336 | alert (payload scalar via ob_view) | **fixed** | T1 SHIPPED 2026-07-03; payload scalar at replay_engine.py:673; guard tests/test_ob_alert_freeze.py T1 cases + source tripwire PASS |
-| bos_sequence_count | :1342 | OB build (immutable) | verified | detection audit 3e: immutable event fact |
-| break_tier / break_close_atr / break_excess / break_body_atr | :1343-1346 | one-time re-grade when window complete | **fixed** | Fix 3b LANDED (_bq_regraded in replay_engine.py:373-381); verify distribution shift at baseline review. **2026-07-10 GATES REMOVED**: break_body_atr (dealing_range `_break_body_atr`) is now a PURE OBSERVATION — the body gate that used it is gone; every close-through break is logged regardless of body. The value is the raw signal a future DATA-DERIVED body/distance gate would read (BOS_BODY_ATR_MULT / STRUCTURE_CHOCH_*_ATR_MULT retained only as grading references / re-arm placeholders, gate nothing). compute_break_quality still normalises against those floors for the score |
-| ob_range_atr | :1348 (calc :1102) | row build from frozen high/low | verified | deterministic from immutable high/low + frozen h1_atr |
-| fvg_size_atr | :1349 (calc :1107-1111) | row build from refreshed fvg | **fixed** | Fix 3c LANDED (fvg refresh on re-surface, replay_engine.py:424); alert-time snapshot guard PASS |
-| impulse_leg_atr | :1350 (calc :1119-1122) | row build from frozen prices | verified | deterministic from immutable impulse_start_price + bos_swing_price |
-| atr_at_ob | :1351 (calc :1127) | OB build (frozen by design) | verified | formation ATR, frozen BY DESIGN (detection audit 3e) |
-| ob_body_ratio | h1_only_simulator.py:1180 (read) / :1353 (emit), stamped smc_radar.py:1117; LIVE persist zone.py `body_ratio` (_FIELD_ORDER:67, from_fresh:166, frozen in refresh) | OB build (frozen by design) | fixed | chosen OB candle's own body/range, walk-back loop smc_radar.py:880-901; range>0 guarded (is_valid_ob_candle already rejects range==0); observe-only per DECISION_GUARDRAILS.md A3, no gate. FIX 2026-07-06: zone.py `_FIELD_ORDER`+`from_fresh` did NOT carry it → dropped to null on active_obs.json (backtest read raw OB dict, was fine; LIVE was blind). Now persisted + frozen on refresh (never re-stamped) + back-filled once for legacy zones. Guard: test_zone_roundtrip.py test_walkback_fields_persist_and_freeze. None only for zones written before this fix, until they re-fire. |
-| ob_walkback_depth | h1_only_simulator.py:1181 (read) / :1354 (emit), stamped smc_radar.py:1124; LIVE persist zone.py `walkback_depth` (_FIELD_ORDER:67, from_fresh:167, frozen in refresh) | OB build (frozen by design) | fixed | oversized_count + undersized_count + doji_count at acceptance (smc_radar.py:880-901); 0 = first candidate passed; sums ALL three skip reasons so knob-sweep (MIN_OB_RANGE_ATR_MULT>0) is counted; observe-only per DECISION_GUARDRAILS.md A3, no gate. FIX 2026-07-06: same zone.py drop bug as ob_body_ratio → was null on active_obs.json live. Now persisted + frozen + back-filled once. Guard: test_zone_roundtrip.py test_walkback_fields_persist_and_freeze. |
-| fvg_present | :1355 | alert (fvg_at_alert, payload) | **fixed** | Fix 3c/3d + T4: stamped at the yield as a PAYLOAD scalar (replay_engine.py:680, survives re-fire re-stamping of the shared dict); ob_view overwrites both fvg + fvg_at_alert keys. Guard test_ob_alert_freeze.py T4 cases PASS |
-| fvg_state | :1358 (helper) | row build (payload fvg via ob_view) | **fixed** | Fix 3d + T4: helper classifies against the payload fvg_at_alert carried on ob_view; guard test_ob_alert_freeze.py PASS |
-| fvg_mitigation | :1362 | alert (fvg_at_alert, payload) | **fixed** | Fix 3c/3d + T4: payload scalar via ob_view. Guard test_ob_alert_freeze.py T4 cases PASS |
-| ob_touches | :1366 | alert (touches_at_alert, payload) | **fixed** | Fix 3a/3d + T4: stamped at the yield as a PAYLOAD scalar (replay_engine.py:679, survives re-fire re-stamping); ob_view overwrites both touches + touches_at_alert keys. Guard test_ob_alert_freeze.py T4 cases PASS. Meaning: touches between structural event and ALERT |
-| sweep_present | :1367 | frozen snapshot | out-of-scope | sweep rebuild workstream |
-| ob_session | :1374 (calc :108-112) | OB build ts | verified | deterministic from immutable ob_timestamp; UTC-fixed caveat as session |
-| fill_session | :1375 (calc :115-121) | fill | verified | CAVEAT: never_filled rows fall back to ALERT hour (:118-120) — population mixes fill-time and alert-time labels; never_filled rows are audit-only |
-| ob_in_killzone | :1376 (calc :124-139, :175-176) | OB build ts | verified | DST-aware via shared live engine smc_detector.ts_in_killzone (:137) |
-| fill_in_killzone | :1377 (calc :179-180) | fill | verified | same shared DST-aware engine |
-| killzone_alignment | :1378 (calc :183-202) | derived | verified | deterministic 4-way bucket + never_filled |
-| h1_trend | :1379 | alert | verified | yield payload scalar (replay_engine.py:656) — immune to post-alert OB mutation |
-| trend_alignment | :1380 | alert | **fixed** | 2026-07-05 parity fix: now derived at fire via the SHARED helper smc_detector.derive_trend_alignment (replay_engine.py:607) — SAME implementation live Phase 2 uses (Phase2_Alert_Engine.py:2492), fed the flip-pending state so a with-trend read is demoted to counter_trend/ambiguous while a CHoCH flip is pending. Vocabulary unified on live's values (with_trend/counter_trend/ambiguous); the old backtest dialect (against_trend/no_trend) is GONE. Passed as payload scalar (:660). Guards: tests/test_structure_signals.py (branch table + live-parity + single-implementation source-assert). Pre-fix runs' values non-comparable |
-| structure_ranging_at_alert | :1385 (payload) | alert (payload scalar) | verified | S2: `walls["structure_v2"]["ranging"]` snapshotted at the replay yield (replay_engine.py:661, `_sv2.get("ranging")` at :610); every row, None only if structure_v2 missing (degraded walls). Ranging counter now flip-reset (S1). Guard test_structure_signals.py + freeze case |
-| flip_pending_at_alert | :1386 (payload) | alert (payload scalar) | verified | S2: `structure_v2["flip_unconfirmed"]` at yield (replay_engine.py:662, :611); a CHoCH armed but not yet Confirmation-BOS. Every row, None if structure_v2 missing. Guard test_structure_signals.py + freeze case |
-| flip_pending_dir_at_alert | :1387 (payload) | alert (payload scalar) | verified | S2: `structure_v2["choch_pending_dir"]` mapped up→bullish/down→bearish (replay_engine.py:663, :607-612); None when no pending flip OR structure_v2 missing. Guard test_structure_signals.py |
-| leg_extreme_at_alert | :1393 (payload) | alert (payload scalar) | verified | S3 SUPPORT (not screened): a-priori leg extreme (max High / min Low) over closed slice bars ts>=ob_timestamp, computed in replay fire block (has h1_slice) + carried as payload scalar (replay_engine.py:667). None if ob_timestamp missing or slice empty. Guard test_structure_signals.py + freeze case |
-| leg_retrace_pct_at_alert | :1394 (calc in _build_row) | alert-derived (payload extreme + placed entry) | verified | S3: (leg_extreme−entry)/(leg_extreme−impulse_start)×100 for bullish, mirrored bearish; from leg_extreme_at_alert (payload) + entry (placed limit) + frozen impulse_start_price. None when extreme unstamped / impulse_start missing / denominator≤0. >100 VALID, not clamped. Guard test_structure_signals.py math cases + freeze case |
-| leg_extreme_clipped | :1395 (payload) | alert (payload scalar) | verified | S3 SUPPORT (not screened): True when ob_timestamp predates the point-in-time slice start (extreme may be understated); keeps leg_retrace honest (replay_engine.py:668). None on measurement failure. Guard test_structure_signals.py |
-| dr_ceiling_broken_at_ob | :1399 (read from frozen dr) | OB build (frozen snapshot) | verified | S4: read off frozen ob["dealing_range"]["ceiling_broken"], sourced get_dealing_range valid branch (smc_detector.py) ← compute_pd_position ceiling_is_placeholder ← h4_range ceiling_broken (h4_range.py:233). None when snapshot invalid/legacy. Frozen at OB build (no re-stamp). Guard test_structure_signals.py snapshot case |
-| dr_floor_broken_at_ob | :1400 (read from frozen dr) | OB build (frozen snapshot) | verified | S4: read off frozen ob["dealing_range"]["floor_broken"], same chain as dr_ceiling_broken_at_ob (h4_range floor_broken, h4_range.py:234). None when snapshot invalid/legacy. Guard test_structure_signals.py snapshot case |
+| bos_verdict | :1490 | alert (payload scalar via ob_view) | **fixed** | T1 SHIPPED 2026-07-03; payload scalar at replay_engine.py:673; guard tests/test_ob_alert_freeze.py T1 cases + source tripwire PASS |
+| bos_sequence_count | :1496 | OB build (immutable) | verified | detection audit 3e: immutable event fact |
+| break_tier / break_close_atr / break_excess / break_body_atr | :1497-1500 | one-time re-grade when window complete | **fixed** | 2026-07-10 NOTE: `break_dist_atr` named in SYSTEM_AUDIT_HANDOFF is NOT a separate column — it == break_close_atr (owner-confirmed). No new column; CANONICAL.md's "→109" bump is void. compute_break_quality returns exactly {tier, close_beyond_atr, body_atr, excess} (smc_detector.py:2861-2864); no distance field exists or is needed. | Fix 3b LANDED (_bq_regraded in replay_engine.py:373-381); verify distribution shift at baseline review. **2026-07-10 GATES REMOVED**: break_body_atr (dealing_range `_break_body_atr`) is now a PURE OBSERVATION — the body gate that used it is gone; every close-through break is logged regardless of body. The value is the raw signal a future DATA-DERIVED body/distance gate would read (BOS_BODY_ATR_MULT / STRUCTURE_CHOCH_*_ATR_MULT retained only as grading references / re-arm placeholders, gate nothing). compute_break_quality still normalises against those floors for the score |
+| ob_range_atr | :1502 (calc :1275) | row build from frozen high/low | verified | deterministic from immutable high/low + frozen h1_atr |
+| fvg_size_atr | :1503 (calc :1287) | row build from refreshed fvg | **fixed** | Fix 3c LANDED (fvg refresh on re-surface, replay_engine.py:424); alert-time snapshot guard PASS |
+| impulse_leg_atr | :1504 (calc :1299) | row build from frozen prices | verified | deterministic from immutable impulse_start_price + bos_swing_price |
+| atr_at_ob | :1505 (calc :1305) | OB build (frozen by design) | verified | formation ATR, frozen BY DESIGN (detection audit 3e) |
+| ob_body_ratio | h1_only_simulator.py:1513 (read) / :1353 (emit), stamped smc_radar.py:1117; LIVE persist zone.py `body_ratio` (_FIELD_ORDER:67, from_fresh:166, frozen in refresh) | OB build (frozen by design) | fixed | chosen OB candle's own body/range, walk-back loop smc_radar.py:880-901; range>0 guarded (is_valid_ob_candle already rejects range==0); observe-only per DECISION_GUARDRAILS.md A3, no gate. FIX 2026-07-06: zone.py `_FIELD_ORDER`+`from_fresh` did NOT carry it → dropped to null on active_obs.json (backtest read raw OB dict, was fine; LIVE was blind). Now persisted + frozen on refresh (never re-stamped) + back-filled once for legacy zones. Guard: test_zone_roundtrip.py test_walkback_fields_persist_and_freeze. None only for zones written before this fix, until they re-fire. |
+| ob_walkback_depth | h1_only_simulator.py:1514 (read) / :1354 (emit), stamped smc_radar.py:1124; LIVE persist zone.py `walkback_depth` (_FIELD_ORDER:67, from_fresh:167, frozen in refresh) | OB build (frozen by design) | fixed | oversized_count + undersized_count + doji_count at acceptance (smc_radar.py:880-901); 0 = first candidate passed; sums ALL three skip reasons so knob-sweep (MIN_OB_RANGE_ATR_MULT>0) is counted; observe-only per DECISION_GUARDRAILS.md A3, no gate. FIX 2026-07-06: same zone.py drop bug as ob_body_ratio → was null on active_obs.json live. Now persisted + frozen + back-filled once. Guard: test_zone_roundtrip.py test_walkback_fields_persist_and_freeze. |
+| fvg_present | :1515 | alert (fvg_at_alert, payload) | **fixed** | Fix 3c/3d + T4: stamped at the yield as a PAYLOAD scalar (replay_engine.py:680, survives re-fire re-stamping of the shared dict); ob_view overwrites both fvg + fvg_at_alert keys. Guard test_ob_alert_freeze.py T4 cases PASS |
+| fvg_state | :1518 (helper) | row build (payload fvg via ob_view) | **fixed** | Fix 3d + T4: helper classifies against the payload fvg_at_alert carried on ob_view; guard test_ob_alert_freeze.py PASS |
+| fvg_mitigation | :1522 | alert (fvg_at_alert, payload) | **fixed** | Fix 3c/3d + T4: payload scalar via ob_view. Guard test_ob_alert_freeze.py T4 cases PASS |
+| ob_touches | :1526 | alert (touches_at_alert, payload) | **fixed** | Fix 3a/3d + T4: stamped at the yield as a PAYLOAD scalar (replay_engine.py:679, survives re-fire re-stamping); ob_view overwrites both touches + touches_at_alert keys. Guard test_ob_alert_freeze.py T4 cases PASS. Meaning: touches between structural event and ALERT |
+| sweep_present | :1527 | frozen snapshot | out-of-scope | sweep rebuild workstream |
+| ob_session | :1534 (calc :123) | OB build ts | verified | deterministic from immutable ob_timestamp; UTC-fixed caveat as session |
+| fill_session | :1535 (calc :130) | fill | verified | CAVEAT: never_filled rows fall back to ALERT hour (:118-120) — population mixes fill-time and alert-time labels; never_filled rows are audit-only |
+| ob_in_killzone | :1536 (calc :190, :175-176) | OB build ts | verified | DST-aware via shared live engine smc_detector.ts_in_killzone (:137) |
+| fill_in_killzone | :1537 (calc :194) | fill | verified | same shared DST-aware engine |
+| killzone_alignment | :1538 (calc :198) | derived | verified | deterministic 4-way bucket + never_filled |
+| h1_trend | :1539 | alert | verified | yield payload scalar (replay_engine.py:656) — immune to post-alert OB mutation |
+| trend_alignment | :1540 | alert | **fixed** | 2026-07-05 parity fix: now derived at fire via the SHARED helper smc_detector.derive_trend_alignment (replay_engine.py:607) — SAME implementation live Phase 2 uses (Phase2_Alert_Engine.py:2492), fed the flip-pending state so a with-trend read is demoted to counter_trend/ambiguous while a CHoCH flip is pending. Vocabulary unified on live's values (with_trend/counter_trend/ambiguous); the old backtest dialect (against_trend/no_trend) is GONE. Passed as payload scalar (:660). Guards: tests/test_structure_signals.py (branch table + live-parity + single-implementation source-assert). Pre-fix runs' values non-comparable |
+| structure_ranging_at_alert | :1545 (payload) | alert (payload scalar) | verified | S2: `walls["structure_v2"]["ranging"]` snapshotted at the replay yield (replay_engine.py:667, `_sv2.get("ranging")` at :592); every row, None only if structure_v2 missing (degraded walls). Ranging counter now flip-reset (S1). Guard test_structure_signals.py + freeze case |
+| flip_pending_at_alert | :1546 (payload) | alert (payload scalar) | verified | S2: `structure_v2["flip_unconfirmed"]` at yield (replay_engine.py:668, read :593); a CHoCH armed but not yet Confirmation-BOS. Every row, None if structure_v2 missing. Guard test_structure_signals.py + freeze case |
+| flip_pending_dir_at_alert | :1547 (payload) | alert (payload scalar) | verified | S2: `structure_v2["choch_pending_dir"]` mapped up→bullish/down→bearish (replay_engine.py:669, map :590 read :594); None when no pending flip OR structure_v2 missing. Guard test_structure_signals.py |
+| leg_extreme_at_alert | :1553 (payload) | alert (payload scalar) | verified | S3 SUPPORT (not screened): a-priori leg extreme (max High / min Low) over closed slice bars ts>=ob_timestamp, computed in replay fire block (has h1_slice) + carried as payload scalar (replay_engine.py:667). None if ob_timestamp missing or slice empty. Guard test_structure_signals.py + freeze case |
+| leg_retrace_pct_at_alert | :1554 (calc in _build_row) | alert-derived (payload extreme + placed entry) | verified | S3: (leg_extreme−entry)/(leg_extreme−impulse_start)×100 for bullish, mirrored bearish; from leg_extreme_at_alert (payload) + entry (placed limit) + frozen impulse_start_price. None when extreme unstamped / impulse_start missing / denominator≤0. >100 VALID, not clamped. Guard test_structure_signals.py math cases + freeze case |
+| leg_extreme_clipped | :1555 (payload) | alert (payload scalar) | verified | S3 SUPPORT (not screened): True when ob_timestamp predates the point-in-time slice start (extreme may be understated); keeps leg_retrace honest (replay_engine.py:668). None on measurement failure. Guard test_structure_signals.py |
+| dr_ceiling_broken_at_ob | :1559 (read from frozen dr) | OB build (frozen snapshot) | verified | S4: read off frozen ob["dealing_range"]["ceiling_broken"], sourced get_dealing_range valid branch (smc_detector.py) ← compute_pd_position ceiling_is_placeholder ← h4_range ceiling_broken (h4_range.py:233). None when snapshot invalid/legacy. Frozen at OB build (no re-stamp). Guard test_structure_signals.py snapshot case |
+| dr_floor_broken_at_ob | :1560 (read from frozen dr) | OB build (frozen snapshot) | verified | S4: read off frozen ob["dealing_range"]["floor_broken"], same chain as dr_ceiling_broken_at_ob (h4_range floor_broken, h4_range.py:234). None when snapshot invalid/legacy. Guard test_structure_signals.py snapshot case |
 | setup_badge / setup_badge_kind | :1403-1404 (calc via ob_view) | row build, live classifier on alert-time view | **fixed** | classify_setup (smc_detector.py:2462, reads touches/fvg :2479-2484) now receives alert-time touches/fvg via ob_view (T1); sweep input stays sweep-workstream-owned. 2026-07-05: its trend_alignment input (:2510 keys off `== 'with_trend'`) now comes from the shared derive_trend_alignment, so the badge no longer diverges from live when a CHoCH flip is pending. Guard: tests/test_structure_signals.py trend-alignment parity. Pre-fix runs' values non-comparable |
 | news_blocked / news_event_title / news_event_currency / news_event_source / news_event_ts | run_backtest.py:205-209 | post-walk, from frozen alert_ts | verified (stamping) | class-safe (deterministic fn of frozen alert_ts). INFORMATIONAL — does NOT gate headline (h1_only_reporting.py:142-176). **Event `ts_utc` was +4h wrong pre-2026-07-06 (D4): FF feed time is UTC, was mis-stamped as US Eastern — news_filter.py:152-158 now stamps UTC directly, guard test_ff_xml_time_is_utc. Pre-fix news_blocked is on wrong rows.** |
 | ist_blocked | run_backtest.py:210 (calc :193) | post-walk, from frozen alert_ts | verified (stamping) | HARD gate — rows dropped from everything except audit (:201, h1_only_reporting.py _headline_exclusion :142-176) |
@@ -188,24 +207,24 @@ Two consumers, two populations — this matters:
 | compute_overall | insights.py:128-156 | _filled(eligible) | **fixed** | T2 landed: eligibility mask + hard assert; guard tests/test_aggregate_eligibility.py PASS |
 | pair_session_matrix | insights.py:163-194 | _filled(eligible) | **fixed** | T2; per-run tab was already clean; uses UTC-fixed `session` (parked caveat) |
 | instrument_verdicts | insights.py:216-255 | _filled(eligible) | **fixed** | T2. PREMIUM_PAIRS still lists NAS100 (dropped pair — harmless, stale) |
-| confluence_attribution | insights.py:286-323 | _filled(caller) | voided | fvg/freshness legs read corrupted-era columns (Fix 3); sweep leg out-of-scope; also D3 in aggregate |
-| score_validation | insights.py:330-378 | _filled(caller) | voided | score embeds fvg/freshness pts (corrupted) + D1 structure taint; also D3 |
-| setup_badge_validation | insights.py:387-454 | _filled(caller) | voided | badge from frozen touches/fvg/sweep (smc_detector.py:2459-2466); also D3 |
+| confluence_attribution | insights.py:286-323 | _filled(caller) | verified (population) | 2026-07-10 un-voided: fvg_pts/freshness_pts real & varied in 07-09 baseline (Fix 3 landed pre-run); D3 closed by T2. Population clean. SWEEP LEG STILL out-of-scope (sweep-rebuild) — un-voided only the fvg/freshness/structure legs. Aggregation math itself re-audited in Batch 3 |
+| score_validation | insights.py:330-378 | _filled(caller) | verified (population) | 2026-07-10 un-voided: score (4-9, varied) built on alert-time view (T1) with fvg/freshness un-corrupted (Fix 3); D1 structure taint fixed by T1; D3 by T2. Population clean; score's own validation math re-audited in Batch 3 |
+| setup_badge_validation | insights.py:387-454 | _filled(caller) | verified (population) | 2026-07-10 un-voided: setup_badge/_kind populated (2,823 badges, 3 kinds) via alert-time ob_view (T1); D3 by T2. Sweep input stays sweep-workstream-owned. Badge validation math re-audited in Batch 3 |
 | group_comparison | insights.py:456-476 | _filled(eligible) | **fixed** | T2 |
 | entry_zone_comparison | insights.py:483-509 | eligible + never_filled (fill-rate denominator) | **fixed** | T2; single proximal bucket now (degenerate, harmless) |
 | ob_freshness_comparison | insights.py:527-559 | _filled, keyed on ob_touches | **fixed** | 2026-07-07: re-keyed from the DEAD alert_seq (pinned to 1 by the first-fire dedup, run_backtest.py:161-169) onto ob_touches — the alert-time proximal touch count (touches_at_alert, real 0/1/2 variance). Buckets are now 0/1/2 prior touches and populate for real. No re-run needed: ob_touches already in trades.csv. Guard: tests/test_ob_freshness_column.py (fails if it ever re-keys on a constant column) |
 | regime_verification | insights.py:559-598 | _filled(eligible) per run_id | **fixed** | T2 |
-| generate_verdict | insights.py:605-672 | upstream dicts | **fixed** (population) | T2; its score-issue line inherits voided score_v until baseline re-derive |
+| generate_verdict | insights.py:605-672 | upstream dicts | **fixed** (population) | T2; 2026-07-10: its score-issue line no longer inherits a voided score_v — score_validation un-voided against the 07-09 baseline |
 | verify_capturable / is_peak_metric | insights.py:708-716 | gate | verified | 2026-07-02 truth-chain audit (peak-vs-fill gate); law block at :675-705 |
 | G1-G10 gates | backtest/scanlog/gates.py (evaluate) + g10_violations :105 | headline | verified | 2026-07-02 truth-chain audit; G10 rule set extracted to pure g10_violations() predicate 2026-07-03 (gate + test bind to one threshold; be_eps FP fix, rule b at +1.001R) |
 | headline exclusions (_headline_exclusion) | h1_only_reporting.py:142-176 | audit-only rows out of P&L | verified | 2026-07-02 truth-chain audit + G1 blocked-rows fix |
 | killzone alignment table | h1_only_reporting.py:546 (_killzone_alignment_table) | prox_trades (verified population) | verified | aggregates verified killzone_alignment column over headline population |
-| driver buckets / two-way | h1_only_reporting.py:815 (_driver_buckets), :870 (_driver_two_way) | prox_trades | voided (partial) | fvg/freshness/badge/bos_verdict dims read corrupted columns; clean dims (session/killzone/pd) fine — re-derive whole section post-baseline |
+| driver buckets / two-way | h1_only_reporting.py:815 (_driver_buckets), :870 (_driver_two_way) | prox_trades | verified (population) | 2026-07-10 un-voided: fvg/freshness/badge/bos_verdict dims all populated & varied in 07-09 baseline (Fix 3 + T1 pre-run). Section math re-audited in Batch 3. SWEEP dim (if present) stays out-of-scope |
 | counterfactual exits | h1_only_reporting.py:628 (_counterfactual_dataframe) | prox_trades | verified | population verified; exit replay = truth-chain audit scope |
-| Act 1-6 sections | h1_only_reporting.py (report body) | prox_trades (verified) | verified (population) | aggregation of audited columns over headline population; sections quoting score/badge/fvg slices are void until baseline rerun |
+| Act 1-6 sections | h1_only_reporting.py (report body) | prox_trades (verified) | verified (population) | aggregation of audited columns over headline population; 2026-07-10: the score/badge/fvg slices are un-voided against the 07-09 baseline (their source columns are clean). Detection-sourced slices (break_*) remain values-stale until the fresh run |
 | recipe ranking | h1_only_reporting.py (recipe table) | exit-lab sink (block-stamped, run_backtest.py) | verified (population) | sink rows carry ist/weekend flags so the table drops what the headline drops (826-vs-668 RCA fix) |
 | zone register | h1_only_reporting.py:1126 | trades_all | verified (population) | |
-| Excel tabs (confluences/badges/pair-session/break-ladder) | h1_only_reporting.py:1403 (reference tabs), :1468 (break ladder) | filled(trades_all) = headline population (:3458 write) | voided (partial) | population CLEAN; confluence/badge/break-ladder tabs read corrupted-era columns → void until baseline rerun; pair-session tab verified |
+| Excel tabs (confluences/badges/pair-session/break-ladder) | h1_only_reporting.py:1403 (reference tabs), :1468 (break ladder) | filled(trades_all) = headline population (:3458 write) | verified (population) | 2026-07-10 un-voided: confluence/badge/break-ladder tabs' source columns all populated in 07-09 baseline. NOTE: break-ladder reads break_* which are DETECTION-sourced — the break gates were removed 07-10, so break-ladder VALUES are stale until the fresh run (population/plumbing clean, values pending Batch 1). Tab construction re-audited in Batch 3 |
 
 ## Rules
 
