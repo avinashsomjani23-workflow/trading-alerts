@@ -202,6 +202,68 @@ def test_walkback_fields_persist_and_freeze():
         _ok("walk-back fields persist on create, freeze on refresh, back-fill once")
 
 
+# --- 6) OB event-identity fields: which freeze vs re-stamp on refresh --------
+# Deep Value Pass Area A (2026-07-10). The 6 OB-build "frozen-by-design" fields
+# split into TWO groups in the LIVE persistence layer (zone.py refresh):
+#
+#   TRULY FROZEN (refresh never touches them):  ob_timestamp, direction, bos_tag
+#   RE-STAMPED on refresh from the fresh scan:  bos_timestamp, bos_tier, h1_atr
+#
+# This is a REAL divergence from TRUTH_LEDGER.md, which calls bos_timestamp /
+# bos_tier / atr_at_ob "immutable event fact / frozen BY DESIGN". On LIVE a
+# proximity-fallback match (find_matching_slate_zone branch b, smc_radar.py:3328
+# — same price, DIFFERENT break) runs refresh() and overwrites those three
+# (zone.py:261/268/271). The canonical BACKTEST CSV is UNAFFECTED (its replay
+# merge keys on exact ob_timestamp and refreshes only fvg) — this is a LIVE-only
+# read-meaning drift, flagged as a DISCUSSION POINT, not fixed here.
+#
+# This test LOCKS the real behaviour so any future change in EITHER direction
+# (a frozen field starting to move, or a re-stamped one being frozen) fails
+# loudly. It is the guard the ledger note points at.
+
+def test_ob_identity_fields_freeze_split_on_refresh():
+    fresh = {
+        "ob_timestamp": "2026-07-01T00:00:00+00:00", "direction": "bullish",
+        "bos_tag": "BOS", "bos_tier": "BOS",
+        "bos_timestamp": "2026-07-01T00:00:00+00:00", "h1_atr": 0.0010,
+        "proximal_line": 1.10, "distal_line": 1.09, "high": 1.105, "low": 1.085,
+        "ob_body": 0.01, "median_leg_body": 0.02, "bos_idx": 10, "ob_idx": 5,
+        "impulse_start_idx": 3, "impulse_start_price": 1.08,
+        "bos_swing_price": 1.10, "fvg": {},
+    }
+    ist = datetime(2026, 7, 1, 12, 0, 0)
+    z = Zone.from_fresh(fresh, "EUR01", ist, 1.0999, 5)
+
+    # A proximity-matched re-fire: SAME zone identity kept, but a LATER break was
+    # re-detected carrying drifted event fields.
+    drift = dict(fresh, bos_timestamp="2026-07-05T09:00:00+00:00",
+                 bos_tier="Range", h1_atr=0.0025)
+    z.refresh(drift, datetime(2026, 7, 5, 10, 0, 0), 1.0999, 5)
+    d = z.to_dict()
+
+    # Plain asserts (NOT _bad): this file's _bad only prints+appends, so a bare
+    # _bad is fake-green under `pytest test_zone_roundtrip.py`. asserts bite under
+    # BOTH the script path (main) AND pytest.
+    # Group 1 — TRULY FROZEN. These MUST keep the formation value.
+    assert d["ob_timestamp"] == "2026-07-01T00:00:00+00:00", \
+        f"ob_timestamp moved on refresh (must be frozen): {d['ob_timestamp']}"
+    assert d["direction"] == "bullish", \
+        f"direction moved on refresh (must be frozen): {d['direction']}"
+    assert d["bos_tag"] == "BOS", \
+        f"bos_tag moved on refresh (must be frozen): {d['bos_tag']}"
+    # Group 2 — RE-STAMPED (documented live behaviour, diverges from the ledger's
+    # "immutable" note). If any starts freezing, the ledger claim would become
+    # TRUE and this must be revisited — fail loudly to force that conversation.
+    assert d["bos_timestamp"] == "2026-07-05T09:00:00+00:00", \
+        f"bos_timestamp did NOT re-stamp on refresh — live behaviour changed: {d['bos_timestamp']}"
+    assert d["bos_tier"] == "Range", \
+        f"bos_tier did NOT re-stamp on refresh — behaviour changed: {d['bos_tier']}"
+    assert d["h1_atr"] == 0.0025, \
+        f"h1_atr did NOT re-stamp on refresh — behaviour changed: {d['h1_atr']}"
+    _ok("refresh freezes ob_timestamp/direction/bos_tag; re-stamps "
+        "bos_timestamp/bos_tier/h1_atr (live divergence from ledger, locked)")
+
+
 def main():
     print("== live round-trip ==")
     test_live_roundtrip()
@@ -212,6 +274,8 @@ def main():
     test_from_fresh_shape()
     print("\n== walk-back geometry persistence ==")
     test_walkback_fields_persist_and_freeze()
+    print("\n== OB identity fields: freeze vs re-stamp split on refresh ==")
+    test_ob_identity_fields_freeze_split_on_refresh()
     print()
     if _FAILS:
         print(f"FAILED: {len(_FAILS)} problem(s)")

@@ -239,6 +239,234 @@ def test_baseline_ex_corrupted_columns_are_real():
         )
 
 
+# ── AREA C — derivation recompute (Deep Value Pass, 2026-07-10) ─────────────
+# Every column that is a PURE function of other (already-frozen) csv columns is
+# recomputed here from its inputs, using the EXACT live formula (file:line in
+# each rule), and asserted to reproduce the CSV value for the FULL canonical
+# population. Batch 2 did this for only 2 columns; this does it for all 15 that
+# are CSV-recomputable. Columns needing row-build internals not in the CSV
+# (frozen DR object -> pd_zone/pd_pct, df H1 index -> ob_age_h1_bars/
+# bars_break_to_pullback, impulse_start_price -> leg_retrace_pct, exit-engine TP
+# replay -> r_if_exit_tp1/2) are NOT here — their FORMULAS are unit-tested on
+# synthetic OBs in backtest/test_h1_only.py::test_edge_lab_columns (drives live
+# _build_row); population recompute needs a re-run and is out of this pass.
+#
+# sl_distance_atr is special: it divides by the FULL-precision _h1_atr
+# (h1_only_simulator.py:1407) but the CSV only stores atr_at_ob rounded to 6dp
+# (:1396), so a bit-exact recompute is impossible near a rounding boundary. We
+# assert the CSV value is REACHABLE by some true atr inside the stored 6dp
+# round-band — proving the formula is right, not that the float round-trips.
+
+import pandas as pd  # noqa: E402
+
+_NY_TZ = "America/New_York"
+_EXCLUDE_REASONS = {"never_filled", "timeout", "window_end"}
+
+
+def _c_utc(v):
+    if v in (None, ""):
+        return None
+    try:
+        ts = pd.Timestamp(v)
+        return ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
+    except Exception:
+        return None
+
+
+def _c_hour_ny(v):
+    ts = _c_utc(v)
+    return None if ts is None else int(ts.tz_convert(_NY_TZ).hour)
+
+
+def _c_session_from_ny(h):
+    if h is None:
+        return "unknown"
+    if 2 <= h < 8:
+        return "London"
+    if 8 <= h < 16:
+        return "NY"
+    if h >= 19 or h < 2:
+        return "Asia"
+    return "Other"
+
+
+def _c_fill_session(fill_ts, alert_ts):
+    h = _c_hour_ny(fill_ts) if fill_ts not in (None, "") else None
+    if h is None:
+        h = _c_hour_ny(alert_ts)
+    return _c_session_from_ny(h) if h is not None else "unknown"
+
+
+def _c_bias(r):
+    return "LONG" if r["direction"] == "bullish" else "SHORT"
+
+
+def _c_pd_alignment(r):
+    bias = _c_bias(r)
+    z = r["pd_zone"]
+    if z in ("", "unknown"):
+        return "unknown"
+    if bias == "LONG":
+        return "aligned" if z == "discount" else "counter"
+    return "aligned" if z == "premium" else "counter"
+
+
+def _c_float(v):
+    return float(v) if v not in (None, "") else None
+
+
+# col -> (fn(row) -> expected csv string). SKIP sentinel for edge-only rows.
+_SKIP = object()
+
+
+def _area_c_rules():
+    def bias(r):
+        return _c_bias(r)
+
+    def alert_utc_hour(r):
+        ts = _c_utc(r["alert_ts"])
+        return _SKIP if ts is None else str(int(ts.hour))
+
+    def session(r):                       # :1555 _fill_session(alert, alert)
+        return _c_fill_session(r["alert_ts"], r["alert_ts"])
+
+    def ob_session(r):                    # :1613 / :123-127
+        h = _c_hour_ny(r["ob_timestamp"]) if r["ob_timestamp"] not in (None, "") else None
+        return _c_session_from_ny(h) if h is not None else "unknown"
+
+    def fill_session(r):                  # :1614
+        return _c_fill_session(r["fill_ts"], r["alert_ts"])
+
+    def pd_alignment(r):                  # :241-258
+        return _c_pd_alignment(r)
+
+    def event(r):                         # :276-288
+        tag = r["bos_tag"] or "BOS"
+        tier = r["bos_tier"] or "Major"
+        return "Confirmation BOS" if (tag == "BOS" and tier == "Confirm") else f"{tier} {tag}"
+
+    def reversed_from_extreme(r):         # :1346-1350
+        rp = r["reversal_pct"]
+        if "CHoCH" not in str(r["bos_tag"]) or rp in (None, ""):
+            return ""
+        return str(bool(float(rp) >= 1.0))
+
+    def trend_pd_agree(r):                # :1424-1432
+        h1t = r["h1_trend"] or None
+        pda = _c_pd_alignment(r)
+        if h1t in (None, "") or pda == "unknown":
+            return ""
+        wt = ((r["direction"] == "bullish" and h1t == "bullish")
+              or (r["direction"] == "bearish" and h1t == "bearish"))
+        return str(bool(wt and pda == "aligned"))
+
+    def r_capture_ratio(r):               # :1416-1417
+        mfe = _c_float(r["mfe_r"]); rr = _c_float(r["r_realised"])
+        if mfe is None or mfe <= 0 or rr is None:
+            return ""
+        return str(round(rr / mfe, 3))
+
+    def ob_to_fill_hours(r):              # :1068-1075
+        ob = _c_utc(r["ob_timestamp"]); fl = _c_utc(r["fill_ts"])
+        if ob is None or fl is None:
+            return ""
+        return str(round((fl - ob).total_seconds() / 3600.0, 2))
+
+    def killzone_alignment(r):            # :198-217
+        if r["fill_ts"] in (None, ""):
+            return "never_filled"
+        ob_kz = r["ob_in_killzone"] == "True"
+        fl_kz = r["fill_in_killzone"] == "True"
+        if ob_kz and fl_kz:
+            return "Both"
+        if ob_kz:
+            return "OB only"
+        if fl_kz:
+            return "Fill only"
+        return "Neither"
+
+    def headline_exclusion(r):            # :142-173
+        er = r["exit_reason"]
+        if er in _EXCLUDE_REASONS:
+            return f"unresolved:{er}" if er in ("timeout", "window_end") else str(er)
+        if r["ist_blocked"] == "True":
+            return "ist_blocked"
+        if r["weekend_blocked"] == "True":
+            return "weekend_blocked"
+        return ""
+
+    def eligible_for_headline(r):         # :1230
+        return str(headline_exclusion(r) == "")
+
+    return {
+        "bias": bias, "alert_utc_hour": alert_utc_hour, "session": session,
+        "ob_session": ob_session, "fill_session": fill_session,
+        "pd_alignment": pd_alignment, "event": event,
+        "reversed_from_extreme": reversed_from_extreme,
+        "trend_pd_agree": trend_pd_agree, "r_capture_ratio": r_capture_ratio,
+        "ob_to_fill_hours": ob_to_fill_hours,
+        "killzone_alignment": killzone_alignment,
+        "headline_exclusion": headline_exclusion,
+        "eligible_for_headline": eligible_for_headline,
+    }
+
+
+def test_area_c_derivations_recompute_on_canonical_csv():
+    """Recompute every CSV-derivable column from its inputs; 0 mismatches over
+    the full canonical population. Bites if any live derivation formula drifts
+    from what produced the file (or the file is rebuilt with a broken formula)."""
+    path = _canonical_csv()
+    with path.open(newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) > 1000, f"canonical CSV suspiciously small ({len(rows)})"
+
+    rules = _area_c_rules()
+    failures = {}
+    for col, fn in rules.items():
+        bad = []
+        for i, r in enumerate(rows):
+            exp = fn(r)
+            if exp is _SKIP:
+                continue
+            if str(exp) != str(r.get(col, "")):
+                bad.append((i, r.get(col), exp))
+                if len(bad) >= 5:
+                    break
+        if bad:
+            failures[col] = bad
+    assert not failures, f"Area C derivation mismatches: {failures}"
+
+
+def test_area_c_sl_distance_atr_reachable_via_atr_rounding_band():
+    """sl_distance_atr = |entry - sl_initial| / _h1_atr, but the CSV stores
+    atr_at_ob rounded to 6dp — so recomputing from the CSV cannot be bit-exact
+    near a rounding boundary. Assert every value is reachable by SOME true atr
+    inside the stored 6dp round-band (formula correct, precision-limited).
+    A truly wrong value (e.g. dividing by the wrong quantity) would land far
+    outside that ~1-ULP band and be flagged UNREACHABLE."""
+    import numpy as np
+    path = _canonical_csv()
+    with path.open(newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    unreachable = []
+    for i, r in enumerate(rows):
+        entry = _c_float(r["entry"]); sl = _c_float(r["sl_initial"])
+        atr = _c_float(r["atr_at_ob"]); csvv = r["sl_distance_atr"]
+        if not atr or entry is None or sl is None or csvv in ("", None):
+            continue
+        if str(round(abs(entry - sl) / atr, 3)) == str(csvv):
+            continue
+        num = abs(entry - sl)
+        grid = np.linspace(atr - 0.5e-6, atr + 0.5e-6, 2001)
+        if not any(str(round(num / a, 3)) == str(csvv) for a in grid):
+            unreachable.append((i, csvv, atr))
+            if len(unreachable) >= 5:
+                break
+    assert not unreachable, (
+        "sl_distance_atr values NOT reachable within the 6dp atr round-band "
+        f"(would be a real formula bug): {unreachable}")
+
+
 def test_every_csv_column_has_a_ledger_row():
     ledger = (_ROOT / "TRUTH_LEDGER.md").read_text(encoding="utf-8")
     src = (_ROOT / "backtest" / "h1_only_reporting.py").read_text(encoding="utf-8")

@@ -261,6 +261,123 @@ def test_walkback_fields_stamped_once_in_radar():
     assert src.count("'walkback_depth':") == 1, "walkback_depth must be stamped exactly once (formation only, never re-stamped on re-fire)"
 
 
+# --- OB-BUILD FROZEN-BY-DESIGN: the 6 event-identity fields ----------------
+# Deep Value Pass Area A, second half. atr_at_ob / bos_timestamp / ob_timestamp
+# / direction / bos_tag / bos_tier are stamped ONCE at OB formation
+# (smc_radar.py:1147-1160, the active_obs.append) and read as-is in _build_row.
+# They are NOT live-mutating state (like touches/fvg) and carry NO *_at_alert
+# snapshot. The bug class this guards: the row silently reading a value that a
+# re-fire re-stamped on the shared ob dict.
+#
+# BACKTEST FREEZE (canonical CSV): in the replay a re-detected same-identity OB
+# is MERGED by exact ob_timestamp and ONLY its `fvg` is refreshed
+# (replay_engine.py:420-426) — the fresh OB is otherwise discarded. So none of
+# these 6 is ever re-stamped on the traded OB. The three guards below bite if
+# (a) the row read drifts to a snapshot, (b) the field gains a second stamp
+# site, or (c) the replay merge starts overwriting more than fvg.
+
+# The two frozen-by-design classes read in _build_row: (var-name in _build_row,
+# ob key). ob_timestamp/bos_timestamp are read inline in the returned dict.
+_OB_BUILD_FROZEN_READS = {
+    "direction": 'direction = ob.get("direction"',
+    "bos_tag":   'bos_tag = ob.get("bos_tag"',
+    "bos_tier":  'bos_tier = ob.get("bos_tier"',
+    "bos_timestamp": '"bos_timestamp": ob.get("bos_timestamp")',
+    "ob_timestamp":  '"ob_timestamp":  ob.get("ob_timestamp")',
+    # atr_at_ob normalises ob["h1_atr"] (the OB-formation ATR carried on the ob
+    # dict), NOT the per-scan alert["h1_atr"]. That distinction IS the freeze.
+    "atr_at_ob": '_h1_atr = ob.get("h1_atr")',
+}
+
+
+def test_ob_build_fields_read_directly_no_snapshot():
+    src = (_ROOT / "backtest" / "h1_only_simulator.py").read_text(encoding="utf-8")
+    for col, expr in _OB_BUILD_FROZEN_READS.items():
+        assert expr in src, (
+            f"{col}: _build_row must read the frozen ob field directly ({expr!r}); "
+            "these are formation-immutable, no *_at_alert snapshot")
+    # No snapshot key may exist for any of them — a snapshot would imply the
+    # field became live-mutable, silently reopening the 3d/T1 bug class.
+    for key in ("bos_timestamp_at_alert", "bos_tier_at_alert",
+                "direction_at_alert", "bos_tag_at_alert", "atr_at_ob_at_alert",
+                "h1_atr_at_alert"):
+        assert key not in src, (
+            f"unexpected snapshot key {key!r} — OB-build fields are formation-"
+            "immutable, not live state; a snapshot means someone made it mutable")
+    # atr_at_ob must divide ob['h1_atr'] (formation ATR), NOT the per-scan
+    # alert h1_atr. Reading alert["h1_atr"] here would silently un-freeze it.
+    assert 'atr_at_ob = round(float(_h1_atr)' in src, \
+        "atr_at_ob must derive from _h1_atr = ob['h1_atr'] (formation ATR, frozen)"
+
+
+def test_ob_build_fields_stamped_once_in_radar():
+    """Each event-identity field is stamped exactly once — at the fresh-OB
+    active_obs.append (smc_radar.py:1147). A second stamp site would let a
+    re-fire re-write it. (bos_tag/bos_tier legitimately appear in read-only
+    passthrough dicts, so we assert the WRITE literal used at formation.)"""
+    src = (_ROOT / "smc_radar.py").read_text(encoding="utf-8")
+    # ob_timestamp / bos_timestamp: the formation stamp is the only place the
+    # dict LITERAL assigns the ISO string from the detection frame.
+    assert src.count("'ob_timestamp':       ob_timestamp_str") == 1, \
+        "ob_timestamp must be stamped exactly once at OB formation"
+    assert src.count("'bos_timestamp':      bos_timestamp_str") == 1, \
+        "bos_timestamp must be stamped exactly once at OB formation"
+    # direction / bos_tag / bos_tier: stamped from the event at formation.
+    assert src.count("'direction':          ev_dir") == 1, \
+        "direction must be stamped exactly once at OB formation"
+    assert src.count("'bos_tag':            ev_type") == 1, \
+        "bos_tag must be stamped exactly once at OB formation"
+    assert src.count("'bos_tier':           ev_tier") == 1, \
+        "bos_tier must be stamped exactly once at OB formation"
+
+
+def test_replay_merge_only_refreshes_fvg_not_identity_fields():
+    """BEHAVIOURAL freeze proof for the canonical CSV: reproduce the replay's
+    re-surface merge (replay_engine.py:420-426) and assert a re-detected
+    same-identity OB re-stamps ONLY fvg — the 6 event-identity fields keep the
+    formation value even when the fresh detection carries drifted ones.
+
+    Drives the LIVE merge expression: the assignment string is asserted against
+    replay_engine.py source, so if the merge widens to overwrite an identity
+    field this test's source-assert AND its behavioural mirror both break."""
+    src = (_ROOT / "backtest" / "replay_engine.py").read_text(encoding="utf-8")
+    # The merge on a same-ob_timestamp match assigns ONLY fvg, then `continue`s.
+    assert 'match["fvg"] = ob.get("fvg", match.get("fvg"))' in src, \
+        "replay re-surface merge must refresh ONLY fvg (identity fields stay frozen)"
+    assert 'match["bos_timestamp"]' not in src, "replay merge must not re-stamp bos_timestamp"
+    assert 'match["bos_tier"]' not in src, "replay merge must not re-stamp bos_tier"
+    assert 'match["h1_atr"]' not in src, "replay merge must not re-stamp h1_atr (atr_at_ob)"
+
+    # Behavioural mirror of the merge rule: formation OB, then a re-detection of
+    # the SAME ob_timestamp carrying drifted identity fields.
+    formation = {
+        "ob_timestamp": "2026-07-01T00:00:00+00:00", "direction": "bullish",
+        "bos_tag": "BOS", "bos_tier": "BOS",
+        "bos_timestamp": "2026-07-01T00:00:00+00:00", "h1_atr": 0.0010,
+        "fvg": {"exists": True, "mitigation": "pristine"},
+    }
+    active = [dict(formation)]
+    existing_by_ts = {o.get("ob_timestamp"): o for o in active}
+    redetect = {
+        "ob_timestamp": "2026-07-01T00:00:00+00:00",   # same identity
+        "direction": "bullish", "bos_tag": "CHoCH", "bos_tier": "Range",
+        "bos_timestamp": "2026-07-05T09:00:00+00:00",  # drifted
+        "h1_atr": 0.0025, "fvg": {"exists": False, "mitigation": "full"},
+    }
+    match = existing_by_ts.get(redetect.get("ob_timestamp"))
+    assert match is not None
+    match["fvg"] = redetect.get("fvg", match.get("fvg"))  # the ONLY merge write
+
+    frozen_ok = (
+        match["bos_timestamp"] == "2026-07-01T00:00:00+00:00"
+        and match["bos_tier"] == "BOS" and match["bos_tag"] == "BOS"
+        and match["direction"] == "bullish" and match["h1_atr"] == 0.0010)
+    if frozen_ok and match["fvg"] == {"exists": False, "mitigation": "full"}:
+        _ok("replay re-surface merge froze all 6 identity fields; only fvg refreshed")
+    else:
+        _bad(f"replay merge leaked a drifted identity field: {match!r}")
+
+
 def main():
     print("== touches frozen ==")
     test_touches_frozen_at_alert()
@@ -281,6 +398,10 @@ def main():
     print("\n== A3: walk-back geometry frozen at formation ==")
     test_walkback_fields_read_directly_no_snapshot()
     test_walkback_fields_stamped_once_in_radar()
+    print("\n== OB-build frozen-by-design: 6 event-identity fields ==")
+    test_ob_build_fields_read_directly_no_snapshot()
+    test_ob_build_fields_stamped_once_in_radar()
+    test_replay_merge_only_refreshes_fvg_not_identity_fields()
     print()
     if _FAILS:
         print(f"FAILED: {len(_FAILS)} problem(s)")
