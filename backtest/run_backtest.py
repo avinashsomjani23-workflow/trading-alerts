@@ -37,13 +37,26 @@ SCANLOG_ROOT = _REPO_ROOT / "backtest" / "out" / "scanlog"
 
 
 def _git_sha() -> str:
-    """Short git SHA of the repo, for the manifest. Empty string on failure."""
+    """Short git SHA of the repo at run time, with a '-dirty' suffix when the
+    working tree has uncommitted changes. The dirty flag matters for provenance:
+    a clean SHA on a dirty tree is a FALSE alibi — it would say the run used
+    committed code when it actually ran with edits on top (the exact ambiguity
+    that made the pre-gate-removal 18-yr run un-attributable). Empty string on
+    failure. Stamped into BOTH the scanlog manifest and summary.json (single
+    source — one _git_sha() call feeds meta['code_sha'])."""
     import subprocess
     try:
-        return subprocess.run(
+        sha = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
             cwd=str(_REPO_ROOT), capture_output=True, text=True, timeout=10,
         ).stdout.strip()
+        if not sha:
+            return ""
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(_REPO_ROOT), capture_output=True, text=True, timeout=10,
+        ).stdout.strip()
+        return f"{sha}-dirty" if dirty else sha
     except Exception:
         return ""
 
@@ -583,6 +596,11 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
         "mode": "h1_only",
         "pairs": pair_names,
         "generated_utc": datetime.now(timezone.utc).isoformat(),
+        # Code provenance: short HEAD SHA (+ '-dirty' if the tree had uncommitted
+        # edits at run time). Flows into summary.json so any results file can be
+        # traced to the exact code that produced it WITHOUT reverse-engineering it
+        # from row data. Single source: same _git_sha() the scanlog manifest uses.
+        "code_sha": _git_sha(),
         # News filter metadata. Coverage is per-source. Blocked trades are
         # excluded from every aggregate metric in the report but kept in
         # Excel for audit.

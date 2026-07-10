@@ -1,29 +1,32 @@
-"""Guard for the EVENT-CANDLE FIX (2026-07-09).
+"""Guard for the GATES-REMOVED break model (2026-07-10).
 
-Root bug (fixed): BOS/CHoCH events stamped `candle_ts` on the CONFIRMATION candle
-(where the displacement buffer AND the body gate both finally passed), not on the
-TRUE break candle (the first candle whose close cleared the displacement buffer).
-Every downstream anchor — the OB especially — inherited the wrong candle.
+History:
+- 2026-07-09: the "event-candle fix" split the fire candle from the true-break
+  candle. A distance buffer + body gate decided WHETHER an event fired; once
+  fired, `_true_break_idx` walked back to the first candle of the past-buffer run.
+- 2026-07-10: break-quality (body/distance) was never a proven outcome predictor,
+  so BOTH gates were REMOVED. A BOS / CHoCH / Confirmation BOS now fires on a bare
+  close through the level (any amount past, on close not wick). `break_body_atr`
+  and `event_candle_delta` are still LOGGED as pure observations (the raw signal a
+  future data-derived gate would read) — they gate nothing.
 
-The fix (dealing_range.py `_true_break_idx`, called in all 6 event branches):
-keep both gates as the fire/don't-fire decision, but once fired, stamp the FIRST
-candle of the contiguous run of past-buffer closes that ends at the confirmation
-candle. Logged per event as `event_candle_delta` (= confirm_idx − true_break_idx).
+New invariant this guards (the thing that must not silently regress):
+  1. Every BOS/CHoCH fires on close-through with NO body/distance floor — a break
+     whose body is tiny must STILL appear (the old bug silently dropped it).
+  2. `break_body_atr` is logged on every BOS/CHoCH event (observation intact).
+  3. `event_candle_delta` == 0 for a CONTINUOUS break (fire candle == true-break
+     candle). It may be > 0 ONLY when a SESSION GAP separates the true break from
+     the gated fire (weekend-open close-through delayed by `_traded_through`); in
+     that case candle_ts must be a close already past the BARE level.
+  4. SOURCE TRIPWIRE: no `_body_gate_ok` anywhere, no `± *_disp` distance buffer in
+     any break condition, and `_true_break_idx` still wired into all six branches
+     (kept for the gap walk-back and for re-arming a data-derived gate later).
 
-Silent-failure mode this guards: someone re-welds the candle choice back onto the
-confirmation candle (the original bug), or drops the walk-back on one branch. That
-would corrupt the OB on ~15% of events (34% of CHoCHs) with NO error — a wrong
-alert, not a crash. This test lives OUT of the live path (offline, on frozen
-cached data) so it can go red without touching a real alert.
-
-Two guards:
-  1. BEHAVIORAL — on a frozen real USDCHF window that is known to contain a
-     multi-bar-confirmed CHoCH, assert the emitted event_candle_delta > 0 and that
-     candle_ts is EXACTLY the first close past the displacement buffer (and the bar
-     before it is NOT past — i.e. the true start of the run).
-  2. SOURCE TRIPWIRE — `_true_break_idx` is defined and called from every one of
-     the six event branches. A revert that inlines `ts_now = _ts_iso(df, ci)` back
-     into a branch turns this red.
+Silent-failure mode guarded: someone re-adds a body/distance floor (dropping real
+small-body breaks with no error — a MISSING alert, not a crash), or drops the
+break_body_atr/delta logging (blinding the future data-gate study). Lives OUT of
+the live path (offline, frozen cached data) so it can go red without touching a
+real alert.
 
 Run:  python tests/test_event_candle_fix.py
 Exit 0 iff every guard passes. No pytest dependency (mirrors test_structure_signals).
@@ -55,14 +58,17 @@ def _bad(m):
 
 
 # Frozen cached window: the last 150 closed bars up to 2026-05-28 14:00 UTC on
-# USDCHF. Verified (2026-07-09) to emit a CHoCH-bearish whose true break is
-# 2026-05-24 21:00 and whose confirmation is 15 bars later — a textbook grind
-# where the body gate lagged the actual break. The cache is immutable history
+# USDCHF. This window contains (verified 2026-07-10) a bearish BOS whose true
+# break is the Sunday-open bar 2026-05-24 21:00 and whose gated fire is 3 bars
+# later (a weekend-gap walk-back — delta 3), plus several continuous breaks with
+# delta 0 and small bodies (e.g. body 0.65-0.68 ATR, well under the OLD 1.0 gate)
+# that the removed gate would have dropped. The cache is immutable history
 # (backtest/cache/*.parquet, sliced never fetched), so this window is stable.
 _CACHE = _ROOT / "backtest" / "cache" / "CHF_X_1h.parquet"
 _WINDOW_END = "2026-05-28 14:00"
 _PAIR = "USDCHF"
-_STRUCTURE_CHOCH_ATR_MULT = 1.5  # dealing_range.STRUCTURE_CHOCH_ATR_MULT
+_BAR_HOURS = 1.0
+_GAP_HOURS = 1.5 * _BAR_HOURS  # > this between bars == a session gap
 
 
 def _behavioral():
@@ -77,112 +83,118 @@ def _behavioral():
 
     walls = smc_radar.compute_pair_walls(w, _PAIR)
     events = walls.get("events", []) or []
-
-    # Every real structural event must carry the delta field (int or 0). None is
-    # only legal on CHoCH_FAILED (not a break) — which never appears in the ring.
-    for ev in events:
-        if ev.get("type") in ("BOS", "CHoCH"):
-            if "event_candle_delta" not in ev:
-                _bad(f"event {ev.get('type')} @ {ev.get('candle_ts')} missing event_candle_delta")
-    _ok("every BOS/CHoCH event carries event_candle_delta")
-
-    # Find the multi-bar CHoCH (delta > 0) — the whole point of the fix.
-    multi = [e for e in events
-             if e.get("type") == "CHoCH" and (e.get("event_candle_delta") or 0) > 0]
-    if not multi:
-        _bad("frozen window emitted NO multi-bar CHoCH — fixture stale or fix reverted "
-             "(pre-fix code stamps the confirmation candle so delta is always 0)")
+    breaks = [e for e in events if e.get("type") in ("BOS", "CHoCH")]
+    if not breaks:
+        _bad("frozen window emitted NO BOS/CHoCH — fixture stale or engine broken")
         return
-    ev = max(multi, key=lambda e: e["event_candle_delta"])
-    _ok(f"multi-bar CHoCH present: delta={ev['event_candle_delta']} bars "
-        f"(candle_ts={ev['candle_ts'][:16]})")
+    _ok(f"{len(breaks)} BOS/CHoCH events emitted on the frozen window")
 
-    # Reconstruct the buffer and prove candle_ts is the FIRST close past it.
-    atr = smc_detector.compute_atr(w, 14)
-    broken = ev["broken_swing_price"]
-    bearish = ev["direction"] == "bearish"
-    thr = (broken - _STRUCTURE_CHOCH_ATR_MULT * atr) if bearish \
-        else (broken + _STRUCTURE_CHOCH_ATR_MULT * atr)
-
-    i = w.index.get_indexer([pd.Timestamp(ev["candle_ts"])])[0]
-    if i <= 0:
-        _bad(f"candle_ts {ev['candle_ts']} not locatable in window (idx={i})")
-        return
-    c_break = float(w["Close"].iloc[i])
-    c_prev = float(w["Close"].iloc[i - 1])
-    past_break = (c_break < thr) if bearish else (c_break > thr)
-    past_prev = (c_prev < thr) if bearish else (c_prev > thr)
-
-    if past_break and not past_prev:
-        _ok("candle_ts IS the first close past the displacement buffer "
-            "(the bar before it closed inside — true start of the run)")
+    # 1. break_body_atr logged on every break event (observation intact).
+    missing_body = [e for e in breaks if e.get("break_body_atr") is None]
+    if missing_body:
+        _bad(f"{len(missing_body)} break events missing break_body_atr (observation dropped)")
     else:
-        _bad(f"candle_ts is NOT the run start: close@break={c_break} past={past_break}, "
-             f"close@prev={c_prev} past_prev={past_prev}, thr={thr:.5f}")
+        _ok("break_body_atr logged on every BOS/CHoCH event")
 
-    # The whole run [true_break .. confirmation] must be unbroken past-buffer.
-    conf_i = i + int(ev["event_candle_delta"])
-    run = w["Close"].iloc[i:conf_i + 1]
-    all_past = ((run < thr).all()) if bearish else ((run > thr).all())
-    if all_past:
-        _ok(f"contiguous run true_break->confirmation all past buffer ({len(run)} bars)")
+    # 2. GATE REMOVED — at least one kept break has a body BELOW the old floors
+    #    (BOS 1.0 / CHoCH 1.5 ATR). If the smallest body is still >= the old
+    #    floor, a gate may have crept back in and be silently dropping small breaks.
+    small = [e for e in breaks
+             if e.get("break_body_atr") is not None
+             and e["break_body_atr"] < (dr.STRUCTURE_CHOCH_BODY_ATR_MULT
+                                        if e["type"] == "CHoCH" else dr.BOS_BODY_ATR_MULT)]
+    if small:
+        _ok(f"{len(small)} kept break(s) have body below the OLD gate floor "
+            f"(min={min(e['break_body_atr'] for e in small)}) — gate is truly OFF")
     else:
-        _bad("run true_break->confirmation is NOT all past buffer — bound wrong")
+        _bad("NO kept break is below the old body floor — a body gate may have "
+             "regressed and be silently dropping small-body breaks")
 
-    # DISPLACEMENT CONVICTION must be graded on the CONFIRMATION candle, not the
-    # (possibly weak) true-break candle. The event carries confirm_ts for exactly
-    # this; break_body_atr must equal the confirmation-candle window body, and the
-    # break_quality excess invariant (>=1.0) must hold — feeding the true-break
-    # candle here was the bug that silently mislabeled decisive breaks as marginal.
-    if not ev.get("confirm_ts"):
-        _bad("multi-bar event missing confirm_ts — break_quality would grade the wrong candle")
-    else:
-        cf = w.index.get_indexer([pd.Timestamp(ev["confirm_ts"])])[0]
-        bq = smc_detector.compute_break_quality(
-            w, cf, broken, ev["direction"], atr, event_type="CHoCH")
-        if bq["excess"] >= 1.0:
-            _ok(f"break_quality graded on confirmation candle: excess={bq['excess']} (>=1.0 invariant holds)")
+    # 3. event_candle_delta discipline: 0 for continuous breaks; > 0 ONLY across a
+    #    session gap, and then candle_ts must be a close past the BARE level.
+    ts_list = list(w.index)
+    for e in breaks:
+        d = e.get("event_candle_delta")
+        if d is None:
+            _bad(f"{e['type']} @ {e.get('candle_ts')} has event_candle_delta None (should be int)")
+            continue
+        if d == 0:
+            # continuous break: fire candle == true break. confirm_ts must equal candle_ts.
+            if e.get("confirm_ts") != e.get("candle_ts"):
+                _bad(f"delta 0 but confirm_ts != candle_ts ({e['type']} @ {e['candle_ts']})")
+            continue
+        if d < 0:
+            _bad(f"{e['type']} @ {e['candle_ts']} has NEGATIVE delta {d}")
+            continue
+        # d > 0 — the gate that delayed the fire is `_traded_through`, which only
+        # bites on a SESSION-GAP candle. That gap sits at (or just before) the
+        # true-break candle, so check the interval into the true-break bar. The
+        # true-break close must also be past the bare level.
+        tb = pd.Timestamp(e["candle_ts"])
+        pos = ts_list.index(tb)
+        gap_in = ((ts_list[pos] - ts_list[pos - 1]).total_seconds() / 3600.0
+                  if pos > 0 else 0.0)
+        has_gap = gap_in > _GAP_HOURS
+        bp = e["broken_swing_price"]
+        up = e["direction"] in ("bullish", "up")
+        c_tb = float(w.loc[tb, "Close"])
+        past = (c_tb < bp) if not up else (c_tb > bp)
+        if has_gap and past:
+            _ok(f"{e['type']} delta={d} justified by a {gap_in:.0f}h session gap "
+                f"into the true break; close past the bare level "
+                f"(candle_ts={str(tb)[:16]})")
         else:
-            _bad(f"break_quality excess={bq['excess']} < 1.0 — graded on the weak true-break candle (bug regressed)")
-        # break_body_atr on the event must reflect the confirmation window, which
-        # on a grind is strictly stronger than the true-break candle's own body.
-        tb_body = abs(float(w["Close"].iloc[i]) - float(w["Open"].iloc[i])) / atr
-        if ev.get("break_body_atr") is not None and ev["break_body_atr"] > tb_body:
-            _ok(f"break_body_atr={ev['break_body_atr']} reflects confirmation window "
-                f"(> true-break candle body {tb_body:.2f}) — conviction not weakened by the anchor move")
-        else:
-            _bad(f"break_body_atr={ev.get('break_body_atr')} <= true-break body {tb_body:.2f} "
-                 "— displacement graded on the wrong candle")
+            _bad(f"{e['type']} delta={d} but gap-into-true-break={gap_in:.1f}h "
+                 f"(<= {_GAP_HOURS}h) — walk-back should be 0 on a continuous "
+                 "break once the distance buffer is removed")
 
 
-# ── SOURCE TRIPWIRE: _true_break_idx must exist and be called from each of the
-# six event branches. Count the call sites in the producer; a revert that inlines
-# the old confirmation-candle stamp on any branch drops the count. -------------
+# ── SOURCE TRIPWIRE ──────────────────────────────────────────────────────────
 def _source_tripwire():
     src = (_ROOT / "dealing_range.py").read_text(encoding="utf-8")
-    if "def _true_break_idx(" not in src:
-        _bad("_true_break_idx helper is GONE from dealing_range.py — fix reverted")
-        return
-    _ok("_true_break_idx helper present")
 
-    calls = len(re.findall(r"_true_break_idx\(", src))
-    # 1 definition + 6 call sites (2 confirmation-BOS, 2 CHoCH-arm, 2 continuation
-    # BOS). Birth intentionally does NOT call it (raw close-through, delta=0).
-    if calls >= 7:
-        _ok(f"_true_break_idx referenced {calls}x (1 def + >=6 branch calls)")
+    # (a) The body gate helper and every call must be GONE.
+    if "_body_gate_ok" in src:
+        _bad("_body_gate_ok still present in dealing_range.py — body gate regressed")
     else:
-        _bad(f"_true_break_idx referenced only {calls}x — expected >=7 "
-             "(1 def + 6 branches); a branch reverted to stamping the confirmation candle")
+        _ok("_body_gate_ok fully removed (no body gate)")
 
-    # confirm_idx must reach _push_event so the delta is logged.
+    # (b) No break condition may carry a distance buffer term. The buffers are now
+    #     the literal 0.0; a re-added `- bos_disp` / `+ choch_disp` etc. in a
+    #     comparison would re-arm the distance gate.
+    buffer_terms = re.findall(r"[<>]\s*[^\n]*?[+\-]\s*(?:bos_disp|choch_disp)\b", src)
+    if buffer_terms:
+        _bad(f"distance buffer re-added to a break condition: {buffer_terms}")
+    else:
+        _ok("no ± bos_disp / choch_disp term in any break condition (distance gate off)")
+
+    # (c) The buffers must still be defined as 0.0 (kept for _true_break_idx + a
+    #     future re-armed gate), not deleted.
+    if "bos_disp = 0.0" in src and "choch_disp = 0.0" in src:
+        _ok("bos_disp / choch_disp defined as 0.0 (gate off, walk-back symbol intact)")
+    else:
+        _bad("bos_disp / choch_disp are not both defined as 0.0 — buffer plumbing changed")
+
+    # (d) _true_break_idx kept and wired into all six break branches (gap walk-back
+    #     + re-arm readiness). 1 def + >=6 calls.
+    if "def _true_break_idx(" not in src:
+        _bad("_true_break_idx helper is GONE — gap walk-back / re-arm path lost")
+    else:
+        calls = len(re.findall(r"_true_break_idx\(", src))
+        if calls >= 7:
+            _ok(f"_true_break_idx referenced {calls}x (1 def + >=6 branch calls)")
+        else:
+            _bad(f"_true_break_idx referenced only {calls}x — expected >=7 (1 def + 6 branches)")
+
+    # (e) confirm_idx still threaded so the delta is logged.
     if "confirm_idx=ci" in src:
-        _ok("confirm_idx=ci threaded into _push_event (delta logged)")
+        _ok("confirm_idx=ci threaded into _push_event (delta + break_body_atr logged)")
     else:
         _bad("confirm_idx=ci not passed to _push_event — event_candle_delta will be None")
 
 
 def main():
-    print("EVENT-CANDLE FIX guards")
+    print("GATES-REMOVED break-model guards")
     print("- behavioral (frozen USDCHF window):")
     _behavioral()
     print("- source tripwire:")
@@ -190,7 +202,7 @@ def main():
     if _FAILS:
         print(f"\n{len(_FAILS)} FAIL(s)")
         sys.exit(1)
-    print("\nall event-candle-fix guards: OK")
+    print("\nall gates-removed guards: OK")
 
 
 if __name__ == "__main__":

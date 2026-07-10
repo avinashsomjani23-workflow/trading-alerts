@@ -865,12 +865,14 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         # Locate the break candle and impulse-leg start in CURRENT df.
         bos_idx = _idx_from_ts(ev.get('candle_ts'))
         impulse_start_idx = _idx_from_ts(ev.get('impulse_start_ts'))
-        # Confirmation candle (where the displacement/body gate fired) — used only
-        # to grade DISPLACEMENT CONVICTION (break_quality). candle_ts/bos_idx is
-        # the true-break anchor the OB walks back from; the confirmation candle is
-        # the forceful one the body gate approved. They differ only on multi-bar
-        # grinds (event_candle_delta>0). Falls back to bos_idx when confirm_ts is
-        # absent (CHoCH_FAILED / legacy events) or outside the current window.
+        # Confirmation candle (the candle the event fired on) — used only to grade
+        # DISPLACEMENT CONVICTION (break_quality). candle_ts/bos_idx is the true-
+        # break anchor the OB walks back from. 2026-07-10: gates removed, so the
+        # break fires on a bare close-through and confirm == true-break on every
+        # continuous break (they differ only across a weekend gap, delta>0). Kept
+        # separate so a re-armed distance gate (which re-splits the two) needs no
+        # change here. Falls back to bos_idx when confirm_ts is absent
+        # (CHoCH_FAILED / legacy events) or outside the current window.
         _confirm_idx_bq = _idx_from_ts(ev.get('confirm_ts'))
         if _confirm_idx_bq is None:
             _confirm_idx_bq = bos_idx
@@ -1158,18 +1160,16 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'bos_tier':           ev_tier,
             'broken_was_wall':    bool(ev.get('broken_was_wall', False)),
             'reversal_pct':       ev.get('reversal_pct'),
-            # Event-candle delta (2026-07-09): bars between the true break candle
-            # (candle_ts, first close past the displacement buffer — where this OB
-            # walked back from) and the confirmation candle (where buffer+body
-            # both finally passed). 0 = clean single-candle break. Frozen from the
-            # producer event; never recomputed. Makes the candle shift this fix
-            # introduced auditable per zone/trade.
+            # Event-candle delta: bars between the true break candle (candle_ts —
+            # where this OB walked back from) and the confirmation/fire candle.
+            # 2026-07-10 gates removed: 0 on every continuous break; >0 ONLY across
+            # a weekend gap. Frozen from the producer event; never recomputed.
             'event_candle_delta': ev.get('event_candle_delta'),
             # Pair-aware displacement quality of the break candle (frozen here,
             # consumed by Phase 2 for the email — never recomputed). Graded on the
-            # CONFIRMATION candle (_confirm_idx_bq), where the body gate fired —
-            # NOT the true-break anchor (bos_idx). See _confirm_idx_bq comment: the
-            # anchor moved with the event-candle fix, conviction grading did not.
+            # confirmation/fire candle (_confirm_idx_bq), NOT the true-break anchor
+            # (bos_idx). 2026-07-10: gates removed, so the two coincide except
+            # across a weekend gap; grading anchor kept distinct for re-arm safety.
             'break_quality':      smc_detector.compute_break_quality(
                                       df, _confirm_idx_bq, bos_swing_price, ev_dir,
                                       h1_atr_for_leg, event_type=ev_type),

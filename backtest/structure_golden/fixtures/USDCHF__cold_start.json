@@ -11,10 +11,10 @@
     "state": "down",
     "flip_unconfirmed": false,
     "ranging": false,
-    "n_events": 3,
+    "n_events": 4,
     "n_choch": 0,
     "n_range_bos": 0,
-    "n_plain_bos": 3,
+    "n_plain_bos": 4,
     "n_confirm_bos": 0
   },
   "decimals": 5,
@@ -551,6 +551,22 @@
         "trend_after": "bearish",
         "chop": false,
         "break_body_atr": 1.82,
+        "event_candle_delta": 0
+      },
+      {
+        "type": "BOS",
+        "tier": "BOS",
+        "direction": "bearish",
+        "candle_ts": "2008-01-03T17:00:00+00:00",
+        "confirm_ts": "2008-01-03T17:00:00+00:00",
+        "impulse_start_ts": "2008-01-03T12:00:00+00:00",
+        "broken_swing_price": 1.1111,
+        "broken_swing_ts": "2008-01-03T10:00:00+00:00",
+        "broken_was_wall": false,
+        "reversal_pct": 0.0,
+        "trend_after": "bearish",
+        "chop": false,
+        "break_body_atr": 0.58,
         "event_candle_delta": 0
       },
       {

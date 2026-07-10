@@ -33,7 +33,7 @@ not jitter.
 
 CHoCH confirmation (LOCKED): a CHoCH is PENDING when it arms — state stays the
 old trend. It CONFIRMS (flips the trend) only when a Confirmation BOS breaks the
-first post-CHoCH swing in the pending direction by >= bos_disp. It is CANCELLED
+first post-CHoCH swing in the pending direction (close through it). It is CANCELLED
 (reverts, no flip) only if price closes back past the origin extreme (reclaim).
 There is NO timeout and NO lock distance. A reverted direction cannot re-arm a
 CHoCH until a fresh confirmed swing forms in that direction (re-arm guard).
@@ -73,20 +73,31 @@ SWING_LOOKBACK = 3
 # there is exactly one implementation.
 MIN_LEG_ATR_MULT = 1.5
 
-# BOS displacement gate: the break candle's CLOSE must clear the broken swing
-# by >= BOS_ATR_MULT * H1 ATR. (The CHoCH displacement gate is separate —
-# STRUCTURE_CHOCH_ATR_MULT, defined with the v2 engine below.)
+# BOS displacement multiple (2026-07-10: NO LONGER A GATE). Formerly the break
+# close had to clear the broken swing by >= BOS_ATR_MULT * H1 ATR. That distance
+# gate is removed — a BOS fires on a bare close through the swing. Retained ONLY
+# because the diagnostics knob-sweep signature (driver.py) and scratch harnesses
+# import/mutate it; mutating it now changes nothing in the engine (the bos_atr_mult
+# knob is INERT). Its old 0.4 value still seeds the Range-tag proximity band
+# (RANGE_TAG_ATR_MULT) so wall-tagging behaviour is byte-unchanged.
 BOS_ATR_MULT = 0.4
 
-# BODY GATE (replaces distance as the strength test). A break only fires if the
-# CANDLE BODY (|close-open|) of the break candle OR the candle right after it
-# (whichever is larger) is >= the event's body multiple * H1 ATR. Body measures
-# displacement/conviction; distance-past-the-level does not. The close-beyond
-# check (BOS_ATR_MULT / STRUCTURE_CHOCH_ATR_MULT) is RETAINED as the validity
-# trigger (did a body close past the swing at all); the body gate is the added
-# strength filter. Window = [break, break+1]; at the live edge (no break+1 bar
-# yet) the gate uses the break candle alone. See STRUCTURE_CHOCH_BODY_ATR_MULT.
+# BODY multiple (2026-07-10: NO LONGER A GATE — retained as a grading reference
+# only). break-quality strength was NOT a proven outcome predictor, so no body
+# gate is applied: every close-through break fires. This constant is still the
+# floor `smc_detector.compute_break_quality` normalises its body/excess read
+# against (a pure observation for scoring), and is the placeholder a data-derived
+# body gate would re-attach to IF a body bucket is ever shown to fail. It gates
+# nothing in dealing_range. See STRUCTURE_CHOCH_BODY_ATR_MULT (same status).
 BOS_BODY_ATR_MULT = 1.0
+
+# Range-BOS tag band (H1 ATR units). A BOS whose broken swing sits within this
+# distance of the H4 dealing-range wall is tagged tier='Range'. This is a TAG
+# proximity tolerance, NOT a break gate — it survived the 2026-07-10 gate removal
+# on its own constant so zeroing the break distance can never collapse Range
+# tagging. Seeded from the old BOS_ATR_MULT value so tagging behaviour is
+# byte-unchanged (single source — if that value ever moves, the tag band tracks).
+RANGE_TAG_ATR_MULT = BOS_ATR_MULT
 
 # Premium / discount thresholds for the CHoCH zone gate. A CHoCH is valid
 # only if the reversal high (down CHoCH) sits in the top 25% of the dealing
@@ -544,12 +555,17 @@ def compute_pd_position(price: float, walls: Dict[str, Any]) -> Dict[str, Any]:
 #     fresh confirmed swing forms in the reverted trend direction.
 # ---------------------------------------------------------------------------
 
-# CHoCH displacement (H1 ATR units). A close must clear the defended swing
-# by >= this to count as a CHoCH. 1.0 ATR chosen on replay.
+# CHoCH displacement multiple (2026-07-10: NO LONGER A GATE). Formerly a close
+# had to clear the defended swing by >= this ATR distance to count as a CHoCH.
+# Distance-past-the-level was not a proven outcome predictor, so the CHoCH now
+# fires on a bare close through `defended` (any amount past, on close not wick).
+# Retained only as the grading reference for compute_break_quality and the
+# placeholder a data-derived distance gate would re-attach to. Gates nothing.
 STRUCTURE_CHOCH_ATR_MULT  = 1.0
 
-# CHoCH body gate (see BOS_BODY_ATR_MULT). A CHoCH flips the whole bias, so it
-# demands more force than a continuation BOS — 1.5 ATR (ICT displacement default).
+# CHoCH body multiple (2026-07-10: NO LONGER A GATE — see BOS_BODY_ATR_MULT).
+# Retained as the compute_break_quality grading floor for CHoCH events and the
+# placeholder for a future data-derived body gate. Gates nothing in dealing_range.
 STRUCTURE_CHOCH_BODY_ATR_MULT = 1.5
 
 # DEAD knob (retained for signature / golden-test compatibility, intentionally
@@ -714,22 +730,6 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             return opens[break_idx] >= level
         return opens[break_idx] <= level
 
-    def _body_gate_ok(break_idx: int, body_mult: float) -> bool:
-        """Body gate (option B): the break candle OR the candle right after it
-        must have a body (|close-open|) >= body_mult * atr. At the live edge
-        (no break+1 bar) the gate uses the break candle alone. Fails open if
-        atr is missing/non-positive (never silently drop a structural break)."""
-        if atr is None or atr <= 0:
-            return True
-        floor = body_mult * atr
-        b0 = abs(closes[break_idx] - opens[break_idx])
-        if b0 >= floor:
-            return True
-        nxt = break_idx + 1
-        if nxt < n and abs(closes[nxt] - opens[nxt]) >= floor:
-            return True
-        return False
-
     price_now = float(closes[-1])
     pdc = compute_pd_confirmed(price_now, {"h4_range": h4_range or {}})
     gate_valid    = bool(pdc.get("valid"))
@@ -737,13 +737,21 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     discount_ceil = pdc.get("discount_ceil")
 
     # H4 dealing range walls for Range-BOS tagging.
-    # A BOS whose broken swing is within BOS_ATR_MULT * ATR of the H4
+    # A BOS whose broken swing is within RANGE_TAG_ATR_MULT * ATR of the H4
     # ceiling (bullish) or H4 floor (bearish) is tagged tier='Range'.
     _h4 = h4_range or {}
     h4_ceiling: Optional[float] = _h4.get("ceiling")
     h4_floor:   Optional[float] = _h4.get("floor")
 
-    bos_disp = BOS_ATR_MULT * atr
+    # 2026-07-10: break distance gate REMOVED. A break fires on a bare close
+    # through the level (any amount past, on close not wick), so the displacement
+    # buffer is 0. `bos_disp`/`choch_disp` are kept as named 0.0 buffers (not
+    # deleted) so the six break conditions, the `_true_break_idx` walk-back and a
+    # future data-derived distance gate all read one buffer symbol — flip these
+    # to a multiple to re-arm the gate. `range_tag_band` is the SEPARATE, non-zero
+    # H4-wall proximity tolerance for Range tagging (was BOS_ATR_MULT*atr).
+    bos_disp = 0.0
+    range_tag_band = RANGE_TAG_ATR_MULT * atr
 
     by_known: Dict[int, List[Dict[str, Any]]] = {}
     for s in swings:
@@ -780,8 +788,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
 
     # BOS break target (Option B — fire on-close, no swing-confirm lag).
     # In a downtrend `bos_break_low` is the most-recent CONFIRMED swing low; a
-    # close below its price - bos_disp fires a BOS on that candle (mirrors how
-    # CHoCH fires on-close vs `defended`). In an uptrend `bos_break_high` is the
+    # close below its price fires a BOS on that candle (mirrors how CHoCH fires
+    # on-close vs `defended`; no distance buffer). In an uptrend `bos_break_high` is the
     # most-recent confirmed swing high. After a BOS fires the target is cleared
     # (set None) so the same spent swing cannot re-fire; it re-seeds when the
     # next confirmed trend-direction swing forms. None = no valid target yet
@@ -801,7 +809,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     # TO (always the opposite of `state`); kept explicit for readability though it
     # is derivable. `confirm_break_swing` is the FIRST confirmed swing that prints
     # AFTER the CHoCH candle in the pending direction (Option B) — the swing whose
-    # break by >= bos_disp confirms the reversal:
+    # break (close through it) confirms the reversal:
     #   - CHoCH UP  pending (state DOWN) -> confirm on break of a swing HIGH
     #   - CHoCH DOWN pending (state UP)  -> confirm on break of a swing LOW
     # The pending CHoCH is CANCELLED (no flip) only if price closes back past
@@ -826,14 +834,15 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     events_ring: List[Dict[str, Any]] = []
 
     def _break_body_atr(break_idx: Optional[int]) -> Optional[float]:
-        """Window-aware break-candle body in ATR units — the SAME displacement
-        measure the body gate fires on (`_body_gate_ok`) and that
-        smc_detector.compute_break_quality grades. Window = max body of the break
-        candle and the candle right after it (option B), exactly as both. Returns
-        None when ATR or the index is unavailable (callers store None, and the
-        continuation-decay read in compute_bos_sequence_count treats a missing
-        body as 'cannot measure' rather than 'fading'). One body definition,
-        three readers — no duplicated numbers."""
+        """Window-aware break-candle body in ATR units — a PURE OBSERVATION
+        (2026-07-10: no longer a gate; body gates nothing). Still the same window
+        smc_detector.compute_break_quality grades, and the raw signal a future
+        data-derived body gate would read. Window = max body of the break candle
+        and the candle right after it (option B). Returns None when ATR or the
+        index is unavailable (callers store None, and the continuation-decay read
+        in compute_bos_sequence_count treats a missing body as 'cannot measure'
+        rather than 'fading'). One body definition, three readers — no duplicated
+        numbers."""
         if break_idx is None or atr is None or atr <= 0:
             return None
         i = int(break_idx)
@@ -852,20 +861,26 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         """Return the TRUE break candle index for an event that fired on
         `confirm_idx`.
 
-        THE SPLIT (2026-07-09, trader-approved): the displacement buffer + body
-        gate STILL decide WHETHER the event fires (unchanged — callers only reach
-        here after both passed on `confirm_idx`). But once fired, the event candle
-        is NOT the confirmation candle — it is the FIRST candle of the contiguous
-        run of closes past the displacement buffer that ends AT the confirmation
-        candle. That is the moment price closed through the buffer and never
-        closed back inside before confirming.
+        CURRENT STATE (2026-07-10, gates removed): the distance buffer is 0, so
+        callers pass `disp=0.0` and the buffer IS `broken_price`. A break fires the
+        instant a close crosses the level, so the bar before the fire is never
+        already past — the walk-back finds no earlier run member and this returns
+        `confirm_idx` itself on EVERY event (event_candle_delta == 0 always). The
+        function is kept fully wired (not deleted) so that re-arming a data-derived
+        distance gate — flip `disp` back to a multiple*atr — instantly restores the
+        multi-candle walk-back with no other change. The paragraphs below describe
+        that dormant walk-back behaviour, active only when disp > 0.
+
+        WALK-BACK (dormant while disp==0): once fired, the event candle is the FIRST
+        candle of the contiguous run of closes past `broken_price ± disp` ending at
+        `confirm_idx` — the moment price closed through the buffer and never closed
+        back inside before confirming.
 
         `direction`: the EVENT direction — 'bullish'/'up' (broke a high upward) or
         'bearish'/'down' (broke a low downward). `broken_price` is the swing/level
         broken; the buffer is `broken_price ± disp`. `disp` MUST be the SAME
-        displacement the caller fired on: `bos_disp` (BOS_ATR_MULT*atr) for a BOS /
-        Confirmation BOS, `choch_disp` (STRUCTURE_CHOCH_ATR_MULT*atr) for a CHoCH
-        arm — otherwise the run boundary would not match the gate that fired.
+        displacement the caller fired on (currently 0.0 for every caller — no gate),
+        otherwise the run boundary would not match the fire condition.
 
         Bound: walk back from `confirm_idx`; STOP at the first earlier candle whose
         close is NOT past the buffer, OR at `floor_idx` (the start of the current
@@ -874,7 +889,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         any pullback that closed back inside the buffer ends the run, so an earlier
         same-side excursion in the same leg cannot be reached.
 
-        Gap ruling (option A, trader-approved): a candle that OPENED already past
+        Gap ruling (option A): a candle that OPENED already past
         the buffer over a weekend gap and held is a valid true break — a
         hold-through-the-gap is a stronger break, not a weaker one. `_traded_through`
         gates whether the event FIRES (on the confirmation candle); it does not
@@ -924,13 +939,14 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             "tier":               tier,
             "direction":          direction,
             "candle_ts":          candle_ts,
-            # ISO ts of the CONFIRMATION candle (where buffer+body both passed).
-            # candle_ts is the TRUE break (first close past the buffer); this is
-            # where the event actually fired. Kept so consumers that grade
-            # DISPLACEMENT CONVICTION (compute_break_quality) measure the forceful
-            # candle, not the possibly-weak true-break candle — the anchor moves,
-            # the conviction reading does not. Equals candle_ts on a clean break
-            # (delta 0). None only when confirm_idx was not passed (CHoCH_FAILED).
+            # ISO ts of the candle the event FIRED on (close crossed the level).
+            # 2026-07-10: with the distance+body gates removed, the true-break
+            # candle IS the fire candle, so confirm_ts == candle_ts on EVERY event
+            # (event_candle_delta == 0). Kept as a distinct field so consumers that
+            # grade DISPLACEMENT CONVICTION (compute_break_quality) have a stable
+            # confirmation anchor, and so a re-armed distance gate (which re-splits
+            # break vs confirmation) needs no consumer change. None only when
+            # confirm_idx was not passed (CHoCH_FAILED — not a break).
             "confirm_ts":         _ts_iso(df, confirm_idx) if confirm_idx is not None else None,
             "impulse_start_ts":   imp_start_ts,
             "broken_swing_price": float(broken_price) if broken_price is not None else None,
@@ -946,29 +962,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             "reversal_pct":       1.0 if from_zone else 0.0,
             "trend_after":        trend_after,
             "chop":               False,
-            # Displacement (break-candle body in ATR) — same window-aware measure
-            # as the body gate and compute_break_quality. Consumed by
-            # compute_bos_sequence_count to judge continuation drive decay. None
-            # when ATR/idx unavailable (treated as 'cannot measure', never 'fading').
-            #
-            # Graded on the CONFIRMATION candle (`confirm_idx`), NOT the true-break
-            # candle (`break_idx`). The event-candle fix (2026-07-09) moved the
-            # anchor/OB to the true break (first close past the buffer), but
-            # DISPLACEMENT CONVICTION is the force of the move — measured where the
-            # body gate actually fired. On a grind the true-break candle has a weak
-            # body (that is WHY it was not the confirmation), so grading it would
-            # break compute_break_quality's excess>=1.0 invariant and mislabel a
-            # decisive break as marginal. Falls back to break_idx only if no
-            # confirm_idx was passed (CHoCH_FAILED / legacy call).
             "break_body_atr":     _break_body_atr(confirm_idx if confirm_idx is not None
                                                   else break_idx),
-            # Event-candle delta (2026-07-09): how many bars the true break candle
-            # (`break_idx`, now the FIRST close past the buffer) sits BEFORE the
-            # confirmation candle (`confirm_idx`, where buffer+body finally both
-            # passed). 0 = clean single-candle break (the common case). >0 = a
-            # multi-bar grind where the body gate lagged the actual break. Logged
-            # so the candle shift this fix introduces is auditable per event.
-            # None when either index is unavailable.
             "event_candle_delta": (int(confirm_idx) - int(break_idx)
                                    if confirm_idx is not None and break_idx is not None
                                    else None),
@@ -988,7 +983,10 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         return float(L[idx_from:idx_to + 1].min()) <= discount_ceil
 
     _mult     = choch_atr_mult if choch_atr_mult is not None else STRUCTURE_CHOCH_ATR_MULT
-    choch_disp = _mult * atr
+    _ = _mult  # retained for the choch_atr_mult knob-sweep signature; gate removed
+    # 2026-07-10: CHoCH distance gate REMOVED (see bos_disp note). Bare close
+    # through `defended` fires the CHoCH; the buffer is 0.
+    choch_disp = 0.0
     # NOTE: lock_atr_mult / STRUCTURE_LOCK_ATR_MULT are RETAINED only for the
     # diagnostics knob-sweep harness signature. In the Confirmation-BOS model a
     # pending CHoCH has NO timeout/lock — it resolves only by Confirmation BOS or
@@ -1011,8 +1009,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
         #   (1a) RECLAIM cancel — price closes back past choch_origin -> the CHoCH
         #        failed; no flip (state was never changed). No timeout exists.
         #   (1b) CONFIRMATION BOS — a close breaks the first post-CHoCH confirmed
-        #        swing in the pending direction by >= bos_disp -> the reversal is
-        #        confirmed; flip state NOW and emit a 'Confirmation BOS' event.
+        #        swing in the pending direction (close through it) -> the reversal
+        #        is confirmed; flip state NOW and emit a 'Confirmation BOS' event.
         # A continuation BOS in the OLD direction (sec. 2b) is the third exit and
         # is handled there (down/up-trend extended => pending CHoCH failed).
         if choch_pending_dir is not None and choch_origin is not None \
@@ -1020,7 +1018,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             if choch_pending_dir == _UP:
                 # CHoCH UP pending, state is DOWN. Reclaim = close BELOW the
                 # down-leg low (choch_origin). Confirm = close breaks a swing
-                # HIGH upward by bos_disp.
+                # HIGH upward (close through it — no distance buffer).
                 if c < choch_origin:
                     _failed_level = choch_level
                     prior_trend = None; choch = False
@@ -1037,9 +1035,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                         _trace.append(state)
                     continue
                 elif (confirm_break_swing is not None
-                      and c > confirm_break_swing["price"] + bos_disp
-                      and _traded_through(ci, confirm_break_swing["price"], 'up')
-                      and _body_gate_ok(ci, BOS_BODY_ATR_MULT)):
+                      and c > confirm_break_swing["price"]
+                      and _traded_through(ci, confirm_break_swing["price"], 'up')):
                     # CONFIRMATION BOS up — the CHoCH-up is confirmed. Flip to UP
                     # now and seed the new (up) trend exactly as the old CHoCH flip
                     # did. Emit a Confirmation BOS (type BOS, tier 'Confirm') that
@@ -1082,7 +1079,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             elif choch_pending_dir == _DOWN:
                 # CHoCH DOWN pending, state is UP. Reclaim = close ABOVE the
                 # up-leg high (choch_origin). Confirm = close breaks a swing LOW
-                # downward by bos_disp.
+                # downward (close through it — no distance buffer).
                 if c > choch_origin:
                     _failed_level = choch_level
                     prior_trend = None; choch = False
@@ -1099,9 +1096,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                         _trace.append(state)
                     continue
                 elif (confirm_break_swing is not None
-                      and c < confirm_break_swing["price"] - bos_disp
-                      and _traded_through(ci, confirm_break_swing["price"], 'down')
-                      and _body_gate_ok(ci, BOS_BODY_ATR_MULT)):
+                      and c < confirm_break_swing["price"]
+                      and _traded_through(ci, confirm_break_swing["price"], 'down')):
                     # CONFIRMATION BOS down — the CHoCH-down is confirmed. Flip to
                     # DOWN now and seed the new (down) trend. Emit a Confirmation
                     # BOS that breaks the post-CHoCH swing low.
@@ -1151,13 +1147,13 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             # Gap guard via _traded_through: a down-break of defended only counts
             # if price actually traded through it (continuous candle), not a
             # weekend teleport across it.
-            if c < defended - choch_disp and _traded_through(ci, defended, 'down') \
-                    and _body_gate_ok(ci, STRUCTURE_CHOCH_BODY_ATR_MULT):
+            if c < defended and _traded_through(ci, defended, 'down'):
                 rev_idx = recent_high["idx"] if recent_high else leg_start
                 choch = True
-                # True break = first close past the CHoCH buffer (defended-choch_disp)
-                # in the run ending at ci; floor = leg_start (the counter-move that
-                # broke `defended` cannot start before the current leg began).
+                # True break candle. With the distance buffer removed (choch_disp=0)
+                # the buffer IS `defended`, so the run collapses to the single fire
+                # candle: _true_break_idx returns ci (event_candle_delta == 0). Kept
+                # wired so a re-armed distance gate would restore the walk-back.
                 _tbi = _true_break_idx(ci, defended, "bearish", leg_start, choch_disp)
                 ts_now = _ts_iso(df, _tbi)
                 choch_ts = ts_now
@@ -1187,12 +1183,12 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             # Gap guard via _traded_through: an up-break of defended only counts
             # if price actually traded through it (continuous candle), not a
             # weekend teleport across it.
-            if c > defended + choch_disp and _traded_through(ci, defended, 'up') \
-                    and _body_gate_ok(ci, STRUCTURE_CHOCH_BODY_ATR_MULT):
+            if c > defended and _traded_through(ci, defended, 'up'):
                 rev_idx = recent_low["idx"] if recent_low else leg_start
                 choch = True
-                # True break = first close past the CHoCH buffer (defended+choch_disp)
-                # in the run ending at ci; floor = leg_start.
+                # True break candle. Buffer removed (choch_disp=0) -> buffer IS
+                # `defended` -> run collapses to ci (event_candle_delta == 0). Kept
+                # wired for a future re-armed distance gate. See bearish arm above.
                 _tbi = _true_break_idx(ci, defended, "bullish", leg_start, choch_disp)
                 ts_now = _ts_iso(df, _tbi)
                 choch_ts = ts_now
@@ -1220,7 +1216,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
 
         # ---- 2b. BOS (continuation, fire ON-CLOSE) -----------------------------
         # Symmetric to the CHoCH check above: fire the instant a close clears the
-        # most-recent confirmed swing in the trend direction by >= bos_disp. No
+        # most-recent confirmed swing in the trend direction (close through it, no
+        # distance buffer). No
         # swing-confirm lag (the old `made_ll`/`made_hh` path waited for the NEXT
         # swing to confirm, then reported `lows[-2]` — a stale, often already-
         # broken level). Gated by `rearm_block_dir` exactly like CHoCH so a
@@ -1233,12 +1230,11 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             broken_price = bos_break_low["price"]
             # Gap guard via _traded_through: a down-break only counts if price
             # traded through the level (continuous candle), not a weekend gap.
-            if c < broken_price - bos_disp and _traded_through(ci, broken_price, 'down') \
-                    and _body_gate_ok(ci, BOS_BODY_ATR_MULT):
+            if c < broken_price and _traded_through(ci, broken_price, 'down'):
                 _tbi = _true_break_idx(ci, broken_price, "bearish", leg_start, bos_disp)
                 ts_now = _ts_iso(df, _tbi)
                 bos_tier = ("Range" if h4_floor is not None
-                            and abs(broken_price - h4_floor) <= bos_disp
+                            and abs(broken_price - h4_floor) <= range_tag_band
                             else "BOS")
                 last_bos = {"kind": "BOS", "direction": _DOWN,
                             "ts": ts_now, "tier": bos_tier}
@@ -1262,12 +1258,11 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             broken_price = bos_break_high["price"]
             # Gap guard via _traded_through: an up-break only counts if price
             # traded through the level (continuous candle), not a weekend gap.
-            if c > broken_price + bos_disp and _traded_through(ci, broken_price, 'up') \
-                    and _body_gate_ok(ci, BOS_BODY_ATR_MULT):
+            if c > broken_price and _traded_through(ci, broken_price, 'up'):
                 _tbi = _true_break_idx(ci, broken_price, "bullish", leg_start, bos_disp)
                 ts_now = _ts_iso(df, _tbi)
                 bos_tier = ("Range" if h4_ceiling is not None
-                            and abs(broken_price - h4_ceiling) <= bos_disp
+                            and abs(broken_price - h4_ceiling) <= range_tag_band
                             else "BOS")
                 last_bos = {"kind": "BOS", "direction": _UP,
                             "ts": ts_now, "tier": bos_tier}
@@ -1343,7 +1338,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             # CONFIRMATION-BOS: while a CHoCH is pending, capture the FIRST
             # confirmed swing that prints in the PENDING direction AFTER the CHoCH
             # candle (s["idx"] > choch_arm_idx, the pivot's actual bar). This is
-            # the swing whose break (by >= bos_disp) becomes the Confirmation BOS
+            # the swing whose break (close through it) becomes the Confirmation BOS
             # (sec. 1b). Option B: the FIRST such swing only (set once, while
             # None) — a fixed, structurally-meaningful level, not a moving target.
             #   - CHoCH UP  pending -> first post-CHoCH swing HIGH (break upward)

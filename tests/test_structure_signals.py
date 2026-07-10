@@ -5,7 +5,8 @@ Exit 0 iff every guard passes.
 
 Covers:
   S1  ranging counter resets on a Confirmation-BOS trend flip (behavioral proof
-      on a crafted candle sequence + source guard on both flip branches).
+      on REAL MT5 USDCHF candles — both a down→up and an up→down flip — plus a
+      source guard on both flip branches).
   S2  structure state snapshotted at alert as PAYLOAD scalars (re-fire freeze +
       source tripwire) — kills the last-fire-stamp bug class for these columns.
   S3  leg-retracement math (long/short/degenerate/missing/clipped/>100) + the
@@ -39,68 +40,78 @@ def _bad(m):
     _FAILS.append(m)
 
 
-# ── S1 fixture: down-trend that goes RANGING (counter >=2), then a CHoCH-up +
-# Confirmation-BOS-up flip. On the flip bar (end=48) the ranging counter belongs
-# to the OLD down trend and must reset to 0 → ranging False. Pre-fix it leaked
-# True (proven empirically when the fix was built). end=47 is the last down-trend
-# bar, still ranging True. Prices are on a 1000 scale so ATR (~5) makes the
-# CHoCH/BOS displacement + body gates fire deterministically. -------------------
-_S1_ROWS = [
-    (1000.0, 1000.5, 999.5, 1000.0), (1000.0, 1000.5, 999.5, 1000.0),
-    (1000.0, 1000.5, 999.5, 1000.0), (1000.0, 1000.75, 984.25, 985.0),
-    (985.0, 985.75, 969.25, 970.0), (970.0, 970.75, 954.25, 955.0),
-    (955.0, 955.75, 939.25, 940.0), (940.0, 949.1875, 939.5625, 948.75),
-    (948.75, 957.9375, 948.3125, 957.5), (957.5, 966.6875, 957.0625, 966.25),
-    (966.25, 975.4375, 965.8125, 975.0), (975.0, 975.9375, 955.3125, 956.25),
-    (956.25, 957.1875, 936.5625, 937.5), (937.5, 938.4375, 917.8125, 918.75),
-    (918.75, 919.6875, 899.0625, 900.0), (900.0, 910.5, 899.5, 910.0),
-    (910.0, 920.5, 909.5, 920.0), (920.0, 930.5, 919.5, 930.0),
-    (930.0, 940.5, 929.5, 940.0), (940.0, 940.3125, 933.4375, 933.75),
-    (933.75, 934.0625, 927.1875, 927.5), (927.5, 927.8125, 920.9375, 921.25),
-    (921.25, 921.5625, 914.6875, 915.0), (915.0, 924.1875, 914.5625, 923.75),
-    (923.75, 932.9375, 923.3125, 932.5), (932.5, 941.6875, 932.0625, 941.25),
-    (941.25, 950.4375, 940.8125, 950.0), (950.0, 950.4, 941.6, 942.0),
-    (942.0, 942.4, 933.6, 934.0), (934.0, 934.4, 925.6, 926.0),
-    (926.0, 926.4, 917.6, 918.0), (918.0, 926.925, 917.575, 926.5),
-    (926.5, 935.425, 926.075, 935.0), (935.0, 943.925, 934.575, 943.5),
-    (943.5, 952.425, 943.075, 952.0), (952.0, 967.225, 951.275, 966.5),
-    (966.5, 981.725, 965.775, 981.0), (981.0, 996.225, 980.275, 995.5),
-    (995.5, 1010.725, 994.775, 1010.0), (1010.0, 1010.25, 1004.75, 1005.0),
-    (1005.0, 1005.25, 999.75, 1000.0), (1000.0, 1000.25, 994.75, 995.0),
-    (995.0, 995.25, 989.75, 990.0), (990.0, 996.5625, 989.6875, 996.25),
-    (996.25, 1002.8125, 995.9375, 1002.5), (1002.5, 1009.0625, 1002.1875, 1008.75),
-    (1008.75, 1015.3125, 1008.4375, 1015.0), (1015.0, 1026.8125, 1014.4375, 1026.25),
-]
+# ── S1 fixture: REAL MT5 USDCHF H1 candles. This immutable history window
+# (2015-06-01 → 2015-06-29, backtest/mt5_data/USDCHF_H1.csv — the same MT5 feed
+# the backtest runs on) contains, verified 2026-07-10, TWO trend flips whose
+# pre-flip trend was RANGING and whose post-flip trend is NOT:
+#   • down/ranging=True  → up/ranging=False   (down→up Confirmation-BOS flip)
+#   • up/ranging=True    → down/ranging=False (up→down flip — both directions)
+# On the flip bar the ranging counter belongs to the OLD trend and must reset to
+# 0 (ranging False). Pre-fix it leaked True. Real candles (not a crafted chart)
+# so the fixture cannot silently drift with a detector tweak — a genuine flip is
+# a genuine flip. The window is sliced from committed history, never fetched.
+_S1_MT5_CSV = _ROOT / "backtest" / "mt5_data" / "USDCHF_H1.csv"
+_S1_WINDOW_START = "2015-06-01"
+_S1_WINDOW_BARS = 500
 
 
-def _s1_df(n):
-    rows = _S1_ROWS[:n]
-    idx = pd.date_range("2020-01-01", periods=len(rows), freq="1h", tz="UTC")
-    df = pd.DataFrame(rows, columns=["Open", "High", "Low", "Close"], index=idx)
-    df["Volume"] = 100.0
-    return df
+def _s1_window():
+    """Load the frozen real-MT5 USDCHF window as an OHLCV frame the engine reads."""
+    df = pd.read_csv(_S1_MT5_CSV)
+    df.columns = [c.strip() for c in df.columns]
+    df = df.rename(columns={"time_server": "ts", "open": "Open", "high": "High",
+                            "low": "Low", "close": "Close", "tick_volume": "Volume"})
+    df["ts"] = pd.to_datetime(df["ts"], utc=True)
+    df = df.set_index("ts")
+    return df.loc[_S1_WINDOW_START:].head(_S1_WINDOW_BARS)
 
 
 def test_s1_ranging_resets_on_flip():
-    pre = dr.compute_structure(_s1_df(47), None)   # last down-trend bar
-    flip = dr.compute_structure(_s1_df(48), None)  # Confirmation-BOS-up flip bar
-    # Pre-flip: down trend, ranging tripped (counter >= 2).
-    if pre["state"] == "down" and pre["ranging"] is True:
-        _ok("pre-flip bar: down trend is ranging (counter >= 2)")
-    else:
-        _bad(f"pre-flip setup wrong: state={pre['state']} ranging={pre['ranging']} "
-             "(want down/True) — fixture drifted")
-    # The flip itself happened (state is UP).
-    if flip["state"] == "up":
-        _ok("flip bar: state flipped to UP (Confirmation BOS fired)")
-    else:
-        _bad(f"flip did not occur: state={flip['state']} (want up) — fixture drifted")
-    # THE FIX: the new up trend must NOT inherit the old trend's ranging label.
-    if flip["ranging"] is False:
-        _ok("flip bar: ranging reset to False on the fresh trend (S1 fix)")
-    else:
-        _bad("flip bar leaked ranging=True — S1 reset missing (stale counter "
-             "survived the trend flip)")
+    if not _S1_MT5_CSV.exists():
+        _bad(f"MT5 data missing: {_S1_MT5_CSV} (cannot run S1 behavioral guard)")
+        return
+    w = _s1_window()
+    if len(w) < _S1_WINDOW_BARS:
+        _bad(f"S1 window short: {len(w)} bars (want {_S1_WINDOW_BARS})")
+        return
+
+    # Walk the window bar-by-bar; record every trend flip and the (state, ranging)
+    # on the bar just before vs the flip bar. Data-driven — no hardcoded indices to
+    # drift. The engine is pure, so w.iloc[:n] is the state as of bar n.
+    prev = None
+    flips = []
+    for n in range(60, len(w) + 1):
+        s = dr.compute_structure(w.iloc[:n], None)
+        cur = (s["state"], s.get("ranging"))
+        if (prev and prev[0] in ("up", "down") and cur[0] in ("up", "down")
+                and prev[0] != cur[0]):
+            flips.append({"bar": n, "pre_state": prev[0], "pre_ranging": prev[1],
+                          "post_state": cur[0], "post_ranging": cur[1]})
+        prev = cur
+
+    if not flips:
+        _bad("frozen MT5 window emitted NO trend flip — window stale or engine broken")
+        return
+    _ok(f"{len(flips)} trend flip(s) detected on real MT5 candles")
+
+    # THE FIX: on every flip where the OLD trend was ranging, the NEW trend must
+    # NOT inherit ranging=True. At least one such ranging→flip must exist (proving
+    # the reset actually fires, not that no flip was ever ranging).
+    ranging_flips = [f for f in flips if f["pre_ranging"] is True]
+    if not ranging_flips:
+        _bad("no flip in the window had a RANGING pre-flip trend — cannot prove the "
+             "reset fires (window drifted)")
+        return
+    _ok(f"{len(ranging_flips)} flip(s) had a ranging pre-flip trend "
+        f"(directions: {sorted({f['pre_state']+'→'+f['post_state'] for f in ranging_flips})})")
+
+    for f in ranging_flips:
+        tag = f"{f['pre_state']}→{f['post_state']} @ bar {f['bar']}"
+        if f["post_ranging"] is False:
+            _ok(f"ranging reset to False on the fresh trend ({tag})")
+        else:
+            _bad(f"flip leaked ranging=True — S1 reset missing ({tag}); stale "
+                 "counter survived the trend flip")
 
 
 def test_s1_reset_in_both_flip_branches_only():

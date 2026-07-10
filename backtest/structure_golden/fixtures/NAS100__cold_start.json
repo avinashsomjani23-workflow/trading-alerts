@@ -516,7 +516,7 @@
     "last_bos": {
       "kind": "BOS",
       "direction": "up",
-      "ts": "2013-04-29T21:00:00+00:00",
+      "ts": "2013-04-28T21:00:00+00:00",
       "tier": "BOS"
     },
     "label": "H1 trend UP",
@@ -557,8 +557,8 @@
         "type": "BOS",
         "tier": "BOS",
         "direction": "bullish",
-        "candle_ts": "2013-04-29T21:00:00+00:00",
-        "confirm_ts": "2013-04-30T21:00:00+00:00",
+        "candle_ts": "2013-04-28T21:00:00+00:00",
+        "confirm_ts": "2013-04-28T21:00:00+00:00",
         "impulse_start_ts": "2013-03-17T21:00:00+00:00",
         "broken_swing_price": 2862.0,
         "broken_swing_ts": "2013-04-10T21:00:00+00:00",
@@ -566,8 +566,8 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.15,
-        "event_candle_delta": 1
+        "break_body_atr": 0.96,
+        "event_candle_delta": 0
       }
     ],
     "trend": "bullish",
