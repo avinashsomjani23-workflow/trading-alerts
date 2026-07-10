@@ -5,8 +5,8 @@ Exit 0 iff every guard passes.
 
 Covers:
   S1  ranging counter resets on a Confirmation-BOS trend flip (behavioral proof
-      on REAL MT5 USDCHF candles — both a down→up and an up→down flip — plus a
-      source guard on both flip branches).
+      on REAL cached USDCHF H1 candles — a ranging trend that flips — plus a
+      source guard proving the reset lives in both flip branches).
   S2  structure state snapshotted at alert as PAYLOAD scalars (re-fire freeze +
       source tripwire) — kills the last-fire-stamp bug class for these columns.
   S3  leg-retracement math (long/short/degenerate/missing/clipped/>100) + the
@@ -40,35 +40,29 @@ def _bad(m):
     _FAILS.append(m)
 
 
-# ── S1 fixture: REAL MT5 USDCHF H1 candles. This immutable history window
-# (2015-06-01 → 2015-06-29, backtest/mt5_data/USDCHF_H1.csv — the same MT5 feed
-# the backtest runs on) contains, verified 2026-07-10, TWO trend flips whose
-# pre-flip trend was RANGING and whose post-flip trend is NOT:
-#   • down/ranging=True  → up/ranging=False   (down→up Confirmation-BOS flip)
-#   • up/ranging=True    → down/ranging=False (up→down flip — both directions)
-# On the flip bar the ranging counter belongs to the OLD trend and must reset to
-# 0 (ranging False). Pre-fix it leaked True. Real candles (not a crafted chart)
-# so the fixture cannot silently drift with a detector tweak — a genuine flip is
-# a genuine flip. The window is sliced from committed history, never fetched.
-_S1_MT5_CSV = _ROOT / "backtest" / "mt5_data" / "USDCHF_H1.csv"
-_S1_WINDOW_START = "2015-06-01"
+# ── S1 fixture: REAL H1 candles from the committed cache (backtest/cache/
+# CHF_X_1h.parquet — real USDCHF market history, the ONLY real H1 data CI can
+# see; the raw MT5 CSVs under backtest/mt5_data/ are gitignored/local-only and
+# absent in CI, so a CI guard cannot read them). This immutable 500-bar window
+# (the cache tail, verified 2026-07-10) contains trend flips whose pre-flip trend
+# was RANGING and whose post-flip trend is NOT — e.g. down/ranging=True →
+# up/ranging=False. On the flip bar the ranging counter belongs to the OLD trend
+# and must reset to 0 (ranging False). Pre-fix it leaked True. Real candles (not a
+# crafted chart) so the fixture cannot silently drift with a detector tweak — a
+# genuine flip is a genuine flip. The cache is sliced, never fetched.
+_S1_CACHE = _ROOT / "backtest" / "cache" / "CHF_X_1h.parquet"
 _S1_WINDOW_BARS = 500
 
 
 def _s1_window():
-    """Load the frozen real-MT5 USDCHF window as an OHLCV frame the engine reads."""
-    df = pd.read_csv(_S1_MT5_CSV)
-    df.columns = [c.strip() for c in df.columns]
-    df = df.rename(columns={"time_server": "ts", "open": "Open", "high": "High",
-                            "low": "Low", "close": "Close", "tick_volume": "Volume"})
-    df["ts"] = pd.to_datetime(df["ts"], utc=True)
-    df = df.set_index("ts")
-    return df.loc[_S1_WINDOW_START:].head(_S1_WINDOW_BARS)
+    """Load the frozen real-cache USDCHF window as an OHLCV frame the engine reads."""
+    df = pd.read_parquet(_S1_CACHE)
+    return df.tail(_S1_WINDOW_BARS)
 
 
 def test_s1_ranging_resets_on_flip():
-    if not _S1_MT5_CSV.exists():
-        _bad(f"MT5 data missing: {_S1_MT5_CSV} (cannot run S1 behavioral guard)")
+    if not _S1_CACHE.exists():
+        _bad(f"cache missing: {_S1_CACHE} (cannot run S1 behavioral guard)")
         return
     w = _s1_window()
     if len(w) < _S1_WINDOW_BARS:
@@ -90,23 +84,23 @@ def test_s1_ranging_resets_on_flip():
         prev = cur
 
     if not flips:
-        _bad("frozen MT5 window emitted NO trend flip — window stale or engine broken")
+        _bad("frozen cache window emitted NO trend flip — window stale or engine broken")
         return
-    _ok(f"{len(flips)} trend flip(s) detected on real MT5 candles")
+    _ok(f"{len(flips)} trend flip(s) detected on real cached candles")
 
     # THE FIX: on every flip where the OLD trend was ranging, the NEW trend must
-    # NOT inherit ranging=True. At least one such ranging→flip must exist (proving
-    # the reset actually fires, not that no flip was ever ranging).
+    # NOT inherit ranging=True. At least one such ranging-pre flip must exist
+    # (proving the reset actually fires, not that no flip was ever ranging).
     ranging_flips = [f for f in flips if f["pre_ranging"] is True]
     if not ranging_flips:
         _bad("no flip in the window had a RANGING pre-flip trend — cannot prove the "
              "reset fires (window drifted)")
         return
-    _ok(f"{len(ranging_flips)} flip(s) had a ranging pre-flip trend "
-        f"(directions: {sorted({f['pre_state']+'→'+f['post_state'] for f in ranging_flips})})")
+    _dirs = sorted({f["pre_state"] + "->" + f["post_state"] for f in ranging_flips})
+    _ok(f"{len(ranging_flips)} flip(s) had a ranging pre-flip trend (directions: {_dirs})")
 
     for f in ranging_flips:
-        tag = f"{f['pre_state']}→{f['post_state']} @ bar {f['bar']}"
+        tag = f"{f['pre_state']}->{f['post_state']} @ bar {f['bar']}"
         if f["post_ranging"] is False:
             _ok(f"ranging reset to False on the fresh trend ({tag})")
         else:
