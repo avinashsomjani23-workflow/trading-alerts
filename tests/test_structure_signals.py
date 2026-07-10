@@ -30,14 +30,22 @@ if str(_ROOT) not in sys.path:
 
 import pandas as pd  # noqa: E402
 import dealing_range as dr  # noqa: E402
+from backtest.h1_only_simulator import (  # noqa: E402
+    read_s4_broken_flags,
+    leg_retrace_pct,
+)
 
 _FAILS = []
 
 
 def _ok(m): print(f"  OK:   {m}")
 def _bad(m):
+    # RAISE, don't just collect: CI runs these via `pytest tests/ -q`, which
+    # never calls main(). A print-and-append _bad is invisible to pytest -> the
+    # guard is green even when the code is broken (Deep Value A, 2026-07-10).
     print(f"  FAIL: {m}")
     _FAILS.append(m)
+    raise AssertionError(m)
 
 
 # ── S1 fixture: REAL H1 candles from the committed cache (backtest/cache/
@@ -141,26 +149,21 @@ def test_s1_reset_in_both_flip_branches_only():
 # _build_row reads these strictly from alert.get(...) (payload scalars). ----------
 
 def _row_structure_signals(alert):
-    """Mirror of _build_row's S2/S3/S4 row sources (payload + frozen dr)."""
+    """Reads S2/S3/S4 the way _build_row does. The S2/S3 payload passthroughs are
+    the live expression verbatim (alert.get, no logic to rot); the S4 flags go
+    through the LIVE read_s4_broken_flags helper — so an S4-logic drift trips this
+    test, not a private copy."""
     ob = alert["ob"]
-    dr_snap = ob.get("dealing_range")
-    out = {
+    cb, fb = read_s4_broken_flags(ob.get("dealing_range"))
+    return {
         "structure_ranging_at_alert": alert.get("structure_ranging_at_alert"),
         "flip_pending_at_alert": alert.get("flip_pending_at_alert"),
         "flip_pending_dir_at_alert": alert.get("flip_pending_dir_at_alert"),
         "leg_extreme_at_alert": alert.get("leg_extreme_at_alert"),
         "leg_extreme_clipped": alert.get("leg_extreme_clipped"),
+        "dr_ceiling_broken_at_ob": cb,
+        "dr_floor_broken_at_ob": fb,
     }
-    # S4 reads off the frozen snapshot.
-    if isinstance(dr_snap, dict) and dr_snap.get("valid"):
-        cb = dr_snap.get("ceiling_broken")
-        fb = dr_snap.get("floor_broken")
-        out["dr_ceiling_broken_at_ob"] = bool(cb) if cb is not None else None
-        out["dr_floor_broken_at_ob"] = bool(fb) if fb is not None else None
-    else:
-        out["dr_ceiling_broken_at_ob"] = None
-        out["dr_floor_broken_at_ob"] = None
-    return out
 
 
 def test_s2_state_frozen_from_first_fire_payload():
@@ -203,16 +206,9 @@ def test_s3_extreme_higher_on_refire_but_first_wins():
 # clipped flag pass-through, >100 not clamped. Mirrors _build_row's derivation.
 
 def _retrace(direction, leg_extreme, entry, impulse_start):
-    """Exact mirror of _build_row's leg_retrace_pct_at_alert derivation."""
-    if leg_extreme is None or impulse_start is None:
-        return None
-    lex = float(leg_extreme)
-    origin = float(impulse_start)
-    if direction == "bullish":
-        denom = lex - origin
-        return round((lex - entry) / denom * 100, 1) if denom > 0 else None
-    denom = origin - lex
-    return round((entry - lex) / denom * 100, 1) if denom > 0 else None
+    """Drives the LIVE leg_retrace_pct helper — no copy. An S3-math drift in
+    _build_row moves this test with it."""
+    return leg_retrace_pct(direction, leg_extreme, entry, impulse_start)
 
 
 def test_s3_retrace_math():

@@ -2,21 +2,19 @@
 live (DETECTION_FIXES_SPEC Fix 3d/3e — the class-killer test).
 
 Run:  python tests/test_ob_alert_freeze.py
-Exit 0 iff the row-source expressions read touches_at_alert / fvg_at_alert and
+Exit 0 iff the LIVE row-source helpers read touches_at_alert / fvg_at_alert and
 IGNORE post-alert mutation of ob["touches"] / ob["fvg"].
 
-Why this shape: _build_row takes ~35 kwargs and walks df_h1 deeply, so a full
-synthetic call is brittle. The class-kill guarantee lives in three expressions
-at the top of _build_row; this test asserts THOSE resolution rules against a
-post-alert-mutated ob. Any regression that re-reads live ob state fails here.
-
-The asserted expressions mirror h1_only_simulator._build_row exactly:
-    _touches_at_alert = ob.get("touches_at_alert", ob.get("touches"))
-    _fvg_at_alert     = ob.get("fvg_at_alert")
-    fvg_present   = (_fvg_at_alert or ob.get("fvg") or {}).get("exists")
-    fvg_mitigation= (_fvg_at_alert or ob.get("fvg") or {}).get("mitigation")
-If _build_row's source lines drift from these, THIS TEST must be updated in
-lockstep — that is the intended tripwire.
+DEEP VALUE PASS (2026-07-10): this test now DRIVES THE LIVE CODE. It imports the
+two shared helpers from h1_only_simulator and calls them — it does NOT re-type
+the row-source logic. So if the live read drifts to live ob state, THIS TEST
+goes red, not just a private copy of it:
+    build_alert_ob_view(alert)   -> the alert-time OB view (was inline in
+                                    simulate_h1_only_dual)
+    read_frozen_ob_fields(ob)    -> {ob_touches, fvg_present, fvg_mitigation,
+                                    ob_at_alert} (was inline in _build_row)
+These are the ONE implementation of the freeze contract; the live path calls the
+same two functions.
 """
 
 from __future__ import annotations
@@ -29,28 +27,36 @@ _ROOT = _HERE.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from backtest.h1_only_simulator import (  # noqa: E402  (path insert above)
+    build_alert_ob_view,
+    read_frozen_ob_fields,
+)
+
 _FAILS = []
 
 
 def _ok(m): print(f"  OK:   {m}")
 def _bad(m):
+    # RAISE, don't just collect: CI runs these via `pytest tests/ -q`, which never
+    # calls main(). A print-and-append _bad is invisible to pytest -> the guard is
+    # green even when the live code is broken (proven 2026-07-10, Deep Value A).
     print(f"  FAIL: {m}")
     _FAILS.append(m)
+    raise AssertionError(m)
 
 
+# These call the LIVE helpers — no re-implementation. If _build_row's frozen
+# reads drift, read_frozen_ob_fields changes and every case below moves with it.
 def _row_touches(ob):
-    """Mirror of _build_row's ob_touches source."""
-    return ob.get("touches_at_alert", ob.get("touches"))
+    return read_frozen_ob_fields(ob)["ob_touches"]
 
 
 def _row_fvg_present(ob):
-    fvg_at_alert = ob.get("fvg_at_alert")
-    return bool((fvg_at_alert or ob.get("fvg") or {}).get("exists"))
+    return read_frozen_ob_fields(ob)["fvg_present"]
 
 
 def _row_fvg_mitigation(ob):
-    fvg_at_alert = ob.get("fvg_at_alert")
-    return (fvg_at_alert or ob.get("fvg") or {}).get("mitigation")
+    return read_frozen_ob_fields(ob)["fvg_mitigation"]
 
 
 # --- 1) touches: snapshot beats post-alert mutation ------------------------
@@ -103,25 +109,9 @@ def test_legacy_ob_fallback():
 # alert must read the payload scalar, not the drifted dict.
 
 def _ob_view(alert):
-    """Mirror of simulate_h1_only_dual's alert-time view construction
-    (TRUTH_FIXES_SPEC T1 + _2 T4). The alert PAYLOAD is the one source:
-    bos_verdict, touches_at_alert, fvg_at_alert all travel as payload scalars.
-    Both key spellings in the view are overwritten (touches / touches_at_alert,
-    fvg / fvg_at_alert) because _build_row PREFERS the *_at_alert keys, which
-    dict(ob_live) copied over already-re-stamped."""
-    ob_live = alert["ob"]
-    view = dict(ob_live)
-    if alert.get("bos_verdict") is not None:
-        view["bos_verdict"] = alert["bos_verdict"]
-    _touches = alert.get("touches_at_alert", ob_live.get("touches_at_alert"))
-    if _touches is not None:
-        view["touches"] = _touches
-        view["touches_at_alert"] = _touches
-    _fvg = alert.get("fvg_at_alert") or ob_live.get("fvg_at_alert")
-    if _fvg is not None:
-        view["fvg"] = _fvg
-        view["fvg_at_alert"] = _fvg
-    return view
+    """Drives the LIVE alert-time view builder (build_alert_ob_view). No copy —
+    if simulate_h1_only_dual's view construction drifts, this moves with it."""
+    return build_alert_ob_view(alert)
 
 
 def test_bos_verdict_from_payload():
@@ -221,11 +211,13 @@ def test_bos_verdict_legacy_payload_missing():
 
 
 def test_source_builds_view_before_scoring():
-    """Tripwire: the alert-time view must exist in simulate_h1_only_dual and be
-    swapped in BEFORE _score_h1_only runs. Removing it re-opens the class."""
+    """Tripwire: simulate_h1_only_dual must build the alert-time view via the
+    shared helper and swap it in BEFORE _score_h1_only runs. Removing it re-opens
+    the class. (The view-construction body now lives in build_alert_ob_view; this
+    asserts the live entry point calls it, then swaps, then scores — in order.)"""
     src = (_ROOT / "backtest" / "h1_only_simulator.py").read_text(encoding="utf-8")
     entry = src[src.index("def simulate_h1_only_dual"):]
-    view_at = entry.find('ob_view["bos_verdict"] = alert["bos_verdict"]')
+    view_at = entry.find("ob_view = build_alert_ob_view(alert)")
     swap_at = entry.find('alert["ob"] = ob_view')
     score_at = entry.find("_score_h1_only(")
     if 0 <= view_at < score_at and 0 <= swap_at < score_at:

@@ -53,8 +53,12 @@ _FAILS = []
 
 def _ok(m): print(f"  OK:   {m}")
 def _bad(m):
+    # RAISE, don't just collect: CI runs these via `pytest tests/ -q`, which
+    # never calls main(). A print-and-append _bad is invisible to pytest -> the
+    # guard is green even when the code is broken (Deep Value A, 2026-07-10).
     print(f"  FAIL: {m}")
     _FAILS.append(m)
+    raise AssertionError(m)
 
 
 # Frozen cached window: the last 150 closed bars up to 2026-05-28 14:00 UTC on

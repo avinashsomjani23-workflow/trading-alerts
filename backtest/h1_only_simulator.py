@@ -1169,6 +1169,108 @@ def _simulate_single_entry(
 # RULE: mutable state is stamped `*_at_alert` at the replay yield and read from
 # that snapshot here — NEVER read live off the ob dict at row-build time (the
 # replay keeps mutating it after the alert).
+#
+# The two functions below are the SINGLE implementation of the freeze contract
+# (CLAUDE.md "one concept, one implementation"). The live path calls them and
+# tests/test_ob_alert_freeze.py imports and drives the SAME functions — so the
+# freeze test can never pass on a stale copy while the live read rots.
+
+
+def build_alert_ob_view(alert: Dict[str, Any]) -> Dict[str, Any]:
+    """T1+T4: the alert-time view of the OB.
+
+    The replay mutates the shared OB dict after this alert fired (re-fires
+    re-stamp bos_verdict AND the touches_at_alert/fvg_at_alert dict keys; the
+    per-bar loop updates touches/status/fvg), and rows are built after the whole
+    walk. The alert PAYLOAD is the one source — bos_verdict (T1), touches_at_alert
+    / fvg_at_alert (T4) travel as payload scalars snapshotted at the yield. The
+    dict stamps remain only as a legacy fallback for old alerts.
+
+    TRAP: dict(_ob_live) copies the (possibly re-stamped) *_at_alert KEYS into the
+    view, and _build_row PREFERS those keys — so BOTH key spellings (touches /
+    touches_at_alert, fvg / fvg_at_alert) must be overwritten. One view, built
+    once — never patch individual fields inline downstream.
+    """
+    _ob_live = alert["ob"]
+    ob_view = dict(_ob_live)
+    if alert.get("bos_verdict") is not None:
+        ob_view["bos_verdict"] = alert["bos_verdict"]
+    _touches = alert.get("touches_at_alert", _ob_live.get("touches_at_alert"))
+    if _touches is not None:
+        ob_view["touches"] = _touches
+        ob_view["touches_at_alert"] = _touches
+    _fvg = alert.get("fvg_at_alert") or _ob_live.get("fvg_at_alert")
+    if _fvg is not None:
+        ob_view["fvg"] = _fvg
+        ob_view["fvg_at_alert"] = _fvg
+    return ob_view
+
+
+def read_frozen_ob_fields(ob: Dict[str, Any]) -> Dict[str, Any]:
+    """FIX 3d: read the alert-time-frozen mutable OB fields for the trade row.
+
+    `touches`/`fvg` on the live ob keep changing after the alert as the per-bar
+    loop walks on; the frozen values live under touches_at_alert / fvg_at_alert
+    (stamped at the replay yield). This is the ONE place those reads live.
+
+    Returns the scalars the row dict emits plus `ob_at_alert` — a shallow view
+    carrying the alert-time fvg so the fvg_state helper (which reads ob["fvg"]
+    internally) classifies at the alert moment. Legacy OBs with no *_at_alert
+    snapshot fall back to the live read (no crash).
+    """
+    _touches_at_alert = ob.get("touches_at_alert", ob.get("touches"))
+    _fvg_at_alert = ob.get("fvg_at_alert")
+    if _fvg_at_alert is not None:
+        _ob_at_alert = dict(ob)
+        _ob_at_alert["fvg"] = _fvg_at_alert
+    else:
+        _ob_at_alert = ob  # legacy OB with no alert-time snapshot -> live read
+    _fvg_view = _fvg_at_alert or ob.get("fvg") or {}
+    return {
+        "ob_touches": _touches_at_alert,
+        "fvg_present": bool(_fvg_view.get("exists")),
+        "fvg_mitigation": _fvg_view.get("mitigation"),
+        "ob_at_alert": _ob_at_alert,
+    }
+
+
+def read_s4_broken_flags(dr):
+    """S4 (STRUCTURE_SIGNALS_SPEC): the dealing-range ceiling/floor broken flags,
+    read off the FROZEN ob["dealing_range"] snapshot. Returns
+    (dr_ceiling_broken_at_ob, dr_floor_broken_at_ob); both None when the snapshot
+    is invalid / legacy (the flag was never resolvable). Single implementation —
+    the row build and tests/test_structure_signals.py both call this."""
+    if isinstance(dr, dict) and dr.get("valid"):
+        _cb = dr.get("ceiling_broken")
+        _fb = dr.get("floor_broken")
+        return (
+            bool(_cb) if _cb is not None else None,
+            bool(_fb) if _fb is not None else None,
+        )
+    return (None, None)
+
+
+def leg_retrace_pct(direction, leg_extreme, entry, impulse_start):
+    """S3 (STRUCTURE_SIGNALS_SPEC): how much of the displacement leg price gave
+    back by the placed entry.
+      bullish OB: (leg_extreme - entry) / (leg_extreme - impulse_start) * 100
+      bearish OB: (entry - leg_extreme) / (impulse_start - leg_extreme) * 100
+    None (never a crash) when the extreme is unstamped, impulse_start is missing,
+    or the denominator is degenerate (extreme not beyond the leg origin). >100 is
+    VALID (price ran past the leg origin) and is NOT clamped. Single implementation
+    — the row build and tests/test_structure_signals.py both call this."""
+    if leg_extreme is None or impulse_start is None:
+        return None
+    try:
+        _lex = float(leg_extreme)
+        _origin = float(impulse_start)
+    except (TypeError, ValueError):
+        return None
+    if direction == "bullish":
+        _denom = _lex - _origin
+        return round((_lex - entry) / _denom * 100, 1) if _denom > 0 else None
+    _denom = _origin - _lex
+    return round((entry - _lex) / _denom * 100, 1) if _denom > 0 else None
 def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                tp1_rr, tp2_rr, score, breakdown, df_h1, alert_ts,
                fill_ts, exit_ts, exit_reason, exit_price,
@@ -1184,17 +1286,12 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     """Assemble the final trade row dict in stable column order."""
     direction = ob.get("direction", "?")
     # FIX 3d: mutable OB state (touches, fvg) is frozen at the replay yield into
-    # touches_at_alert / fvg_at_alert. Read those here — the live ob["touches"]/
-    # ob["fvg"] keep changing after the alert as the per-bar loop walks on.
-    # `_ob_at_alert` is a shallow view carrying the alert-time fvg so the fvg
-    # helpers (which read ob["fvg"] internally) classify at the alert moment.
-    _touches_at_alert = ob.get("touches_at_alert", ob.get("touches"))
-    _fvg_at_alert = ob.get("fvg_at_alert")
-    if _fvg_at_alert is not None:
-        _ob_at_alert = dict(ob)
-        _ob_at_alert["fvg"] = _fvg_at_alert
-    else:
-        _ob_at_alert = ob  # legacy OB with no alert-time snapshot -> live read
+    # touches_at_alert / fvg_at_alert. read_frozen_ob_fields is the ONE reader —
+    # it returns the row scalars plus `ob_at_alert` (a shallow view carrying the
+    # alert-time fvg so the fvg_state helper classifies at the alert moment).
+    _frozen = read_frozen_ob_fields(ob)
+    _touches_at_alert = _frozen["ob_touches"]
+    _ob_at_alert = _frozen["ob_at_alert"]
     bos_tag = ob.get("bos_tag", "BOS")
     bos_tier = ob.get("bos_tier", "Major")
     # Break quality of the BOS/CHoCH candle — computed ONCE by smc_radar at
@@ -1226,15 +1323,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     # ob["dealing_range"] snapshot (immutable after OB build, same bucket as the
     # existing dealing_range fields — no *_at_alert needed). get_dealing_range now
     # carries these additive keys on its valid branch; None when the snapshot is
-    # invalid / legacy (the flag was never resolvable).
-    if isinstance(dr, dict) and dr.get("valid"):
-        _dr_ceiling_broken = dr.get("ceiling_broken")
-        _dr_floor_broken = dr.get("floor_broken")
-        dr_ceiling_broken_at_ob = bool(_dr_ceiling_broken) if _dr_ceiling_broken is not None else None
-        dr_floor_broken_at_ob = bool(_dr_floor_broken) if _dr_floor_broken is not None else None
-    else:
-        dr_ceiling_broken_at_ob = None
-        dr_floor_broken_at_ob = None
+    # invalid / legacy (the flag was never resolvable). read_s4_broken_flags is
+    # the ONE reader (same fn tests/test_structure_signals.py drives).
+    dr_ceiling_broken_at_ob, dr_floor_broken_at_ob = read_s4_broken_flags(dr)
     # reversal_pct: the CHoCH-origin-in-extreme flag, computed ONCE in
     # dealing_range.compute_structure (_reversed_from_premium / _discount) and
     # carried on the OB by smc_radar. 1.0 = the swing the CHoCH reversed FROM sat
@@ -1355,21 +1446,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     # understated; the flag keeps the column honest.
     leg_extreme_at_alert = alert.get("leg_extreme_at_alert")
     leg_extreme_clipped = alert.get("leg_extreme_clipped")
-    leg_retrace_pct_at_alert = None
-    if leg_extreme_at_alert is not None and _isp is not None:
-        try:
-            _lex = float(leg_extreme_at_alert)
-            _leg_origin = float(_isp)
-            if direction == "bullish":
-                _denom = _lex - _leg_origin
-                if _denom > 0:
-                    leg_retrace_pct_at_alert = round((_lex - entry) / _denom * 100, 1)
-            else:
-                _denom = _leg_origin - _lex
-                if _denom > 0:
-                    leg_retrace_pct_at_alert = round((entry - _lex) / _denom * 100, 1)
-        except (TypeError, ValueError):
-            leg_retrace_pct_at_alert = None
+    # leg_retrace_pct is the ONE reader (same fn test_structure_signals.py drives).
+    leg_retrace_pct_at_alert = leg_retrace_pct(
+        direction, leg_extreme_at_alert, entry, _isp)
 
     pnl_usd = round(r_realised * risk_usd, 2)
 
@@ -1512,14 +1591,14 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # Walk-back geometry (A3) — None for legacy zones built before this change.
         "ob_body_ratio":     ob_body_ratio,
         "ob_walkback_depth": ob_walkback_depth,
-        "fvg_present":   bool((_fvg_at_alert or ob.get("fvg") or {}).get("exists")),
+        "fvg_present":   _frozen["fvg_present"],
         # fresh / stale / no_fvg — was the FVG already discharged on an earlier
         # approach before this trigger? Feeds the FVG-staleness breakdown.
         "fvg_state":     _fvg_state(_ob_at_alert, df_h1, alert_ts),
         # FVG mitigation label (none / pristine / partial / full) — the raw
         # discharge state of the gap, frozen at OB detection. Point-in-time clean.
         # Complements fvg_state (which is approach-relative) + fvg_size_atr (size).
-        "fvg_mitigation": (_fvg_at_alert or ob.get("fvg") or {}).get("mitigation"),
+        "fvg_mitigation": _frozen["fvg_mitigation"],
         # Proximal touch count AS OF THE ALERT (0 = pristine). Frozen at the
         # replay yield (touches_at_alert); the live ob["touches"] keeps updating
         # for the rest of the walk, so it must never be read here (Fix 3d).
@@ -1583,29 +1662,12 @@ def simulate_h1_only_dual(
     if alert_ts.tzinfo is None:
         alert_ts = alert_ts.tz_localize("UTC")
 
-    # T1 + T4 (TRUTH_FIXES_SPEC / _2): ALERT-TIME view of the OB. The replay
-    # mutates the shared OB dict after this alert fired (re-fires re-stamp
-    # bos_verdict AND the touches_at_alert/fvg_at_alert dict keys; the per-bar
-    # loop updates touches/status/fvg), and rows are built after the whole walk.
-    # The ALERT PAYLOAD is the one source — bos_verdict (T1), touches_at_alert /
-    # fvg_at_alert (T4) all travel as payload scalars snapshotted at the yield.
-    # The dict stamps remain only as a legacy fallback for old alerts.
-    # TRAP: dict(_ob_live) copies the (possibly re-stamped) *_at_alert KEYS into
-    # the view, and _build_row PREFERS those keys — so both key spellings
-    # (touches / touches_at_alert, fvg / fvg_at_alert) must be overwritten.
-    # One view, built once — never patch individual fields inline downstream.
-    _ob_live = alert["ob"]
-    ob_view = dict(_ob_live)
-    if alert.get("bos_verdict") is not None:
-        ob_view["bos_verdict"] = alert["bos_verdict"]
-    _touches = alert.get("touches_at_alert", _ob_live.get("touches_at_alert"))
-    if _touches is not None:
-        ob_view["touches"] = _touches
-        ob_view["touches_at_alert"] = _touches
-    _fvg = alert.get("fvg_at_alert") or _ob_live.get("fvg_at_alert")
-    if _fvg is not None:
-        ob_view["fvg"] = _fvg
-        ob_view["fvg_at_alert"] = _fvg
+    # T1 + T4 (TRUTH_FIXES_SPEC / _2): ALERT-TIME view of the OB, built by the
+    # single shared helper build_alert_ob_view (same fn the freeze test drives).
+    # It swaps the alert-time bos_verdict / touches / fvg (both key spellings)
+    # onto a copy of the OB, so scoring/badge/row read the alert moment, never the
+    # post-alert-mutated live dict. One view, built once — never patch inline.
+    ob_view = build_alert_ob_view(alert)
     alert = dict(alert)
     alert["ob"] = ob_view
 

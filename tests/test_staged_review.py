@@ -111,7 +111,9 @@ _FAILS = []
 
 def _ok(m): print(f"  OK:   {m}")
 def _bad(m):
-    _FAILS.append(m); print(f"  FAIL: {m}")
+    # RAISE, don't just collect: CI runs these via `pytest tests/ -q`, which never
+    # calls main(). A print-and-append _bad is invisible to pytest (Deep Value A).
+    _FAILS.append(m); print(f"  FAIL: {m}"); raise AssertionError(m)
 def _eq(a, b, m):
     (_ok if a == b else _bad)(f"{m}  ({a!r} == {b!r})")
 def _true(c, m):
