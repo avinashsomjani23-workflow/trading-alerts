@@ -102,6 +102,102 @@ def test_row_build_ledger_line_refs_point_at_the_column():
     )
 
 
+def _def_name_at(src_lines, lineno):
+    """Return the def/class name on `lineno` (1-indexed), or None if not a def line."""
+    if not (0 < lineno <= len(src_lines)):
+        return None
+    m = re.match(r"\s*(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)", src_lines[lineno - 1])
+    return m.group(1) if m else None
+
+
+def _def_line_map(rel_path):
+    """Map def-name -> its (first) definition line for a source file."""
+    src = (_ROOT / rel_path).read_text(encoding="utf-8").splitlines()
+    out = {}
+    for i, line in enumerate(src, start=1):
+        m = re.match(r"\s*(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)", line)
+        if m and m.group(1) not in out:
+            out[m.group(1)] = i
+    return out, src
+
+
+# Files whose Insights-section ledger rows carry `def`-anchored line-refs.
+_INSIGHT_SRC_FILES = ("insights.py", "h1_only_reporting.py")
+
+
+def test_insight_ledger_line_refs_point_at_their_function():
+    """Every Insights-section ledger ref `<file>.py:NNNN` that names a function must
+    cite that function's real def line.
+
+    Same drift class as the row-build guard, one layer up: insights.py /
+    h1_only_reporting.py grew, every `def` shifted a few lines, and the Insights
+    table's `:NNNN` refs pointed just above/below the real def. For each ref whose
+    src cell also spells a function name that exists in that file, assert the cited
+    line is exactly that function's def. Refs that don't name a resolvable function
+    (prose anchors, data-line refs) are skipped — this guards the def-anchored ones,
+    which are the ones that silently rot.
+    """
+    ledger = (_ROOT / "TRUTH_LEDGER.md").read_text(encoding="utf-8").splitlines()
+
+    # Only scan rows inside the Insights section (has its own header) so row-build
+    # refs (already guarded above) and the layer-map prose don't double-count.
+    in_section = False
+    defmaps = {f: _def_line_map(f"backtest/{f}") for f in _INSIGHT_SRC_FILES}
+
+    wrong = []
+    checked = 0
+    for line in ledger:
+        if line.startswith("## Insights"):
+            in_section = True
+            continue
+        if in_section and line.startswith("## "):
+            break
+        if not in_section:
+            continue
+        if not (line.startswith("| ") and line.count("|") >= 3):
+            continue
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        namecell = cells[0] if len(cells) > 0 else ""
+        srccell = cells[1] if len(cells) > 1 else ""
+        for fname in _INSIGHT_SRC_FILES:
+            defmap, src = defmaps[fname]
+            # A ref is DEF-ANCHORED (and therefore guardable) only when it explicitly
+            # names its function, one of two ways:
+            #   1. parenthetical right after the ref:  "<file>:NNNN (fnname)"
+            #   2. the ref is a "<file>:NNNN..." with NO parenthetical, and the ROW's
+            #      name cell (col 0) is itself a function in this file.
+            # Bare comment/section anchors like ":1411 (reference tabs §10)" name no
+            # real def and are correctly skipped.
+            for m in re.finditer(re.escape(fname) + r":(\d+)(?:-\d+)?\s*(?:\(([^)]*)\))?", srccell):
+                cited = int(m.group(1))
+                paren = m.group(2) or ""
+                # function this specific ref claims to point at:
+                paren_fns = [fn for fn in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", paren) if fn in defmap]
+                if paren_fns:
+                    named = paren_fns
+                else:
+                    # only fall back to the name cell if the src cell names NO def at
+                    # all (single-function rows like ob_freshness_comparison:533-559).
+                    src_fns = [fn for fn in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", srccell) if fn in defmap]
+                    if src_fns:
+                        continue  # some other ref in this cell owns the name; skip
+                    named = [fn for fn in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", namecell) if fn in defmap]
+                if not named:
+                    continue  # not a def-anchored ref — skip (prose/data line)
+                checked += 1
+                if not any(defmap[fn] == cited for fn in named):
+                    wrong.append((fname, cited, _def_name_at(src, cited), named,
+                                  {fn: defmap[fn] for fn in named}))
+
+    assert checked > 0, "insight line-ref guard scanned nothing — Insights section moved?"
+    assert not wrong, (
+        "TRUTH_LEDGER Insights line-refs are stale — cited line is not the named "
+        "function's def:\n" + "\n".join(
+            f"  {f}:{cit} -> def there is {at!r}; row names {names}, real defs {real}"
+            for f, cit, at, names, real in wrong)
+    )
+
+
 def test_baseline_ex_corrupted_columns_are_real():
     """The un-voided columns must be populated AND varied in the canonical run.
 

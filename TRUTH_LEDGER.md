@@ -37,12 +37,30 @@ removed 2026-07-10 AFTER this run, so every detection-derived VALUE here is stal
 until the user triggers a fresh canonical run. Plumbing (col X derives from Y) is
 still auditable; detection VALUES are not.
 
+**2026-07-10 SYSTEM AUDIT — Batch 3 (insights + Excel/email) DONE.** All
+def-anchored Insights line-refs re-mapped to HEAD (6 had drifted a few lines each:
+ob_freshness_comparison :527→:533, regime_verification :559→:566, generate_verdict
+:605→:612, verify_capturable/is_peak_metric :708→:723/:715, driver buckets/two-way
+:815/:870→:814/:869, counterfactual :628→:627, zone register :1126→:1128, Excel
+tabs :1403/:1468→:1411/:1475; plus prose refs _trades_csv :1217→:1216, IST-drop
+:3237→:3329, write :3458→:3480). Guarded by
+tests/test_truth_ledger.py::test_insight_ledger_line_refs_point_at_their_function
+(proven to go RED on a stale def-ref). Aggregation math re-audited on the 07-09
+baseline: score_validation / confluence_attribution / ob_freshness_comparison /
+setup_badge run on real, varied source columns and produce coherent verdicts
+(score = no edge, confluences = NOISE — consistent with prior findings, honestly
+reported, NOT acted on). ob_freshness now keys on ob_touches (0/1/2 real variance);
+alert_seq confirmed dead (all=1). SMC DISCUSSION POINT (flagged, not scored): the
+07-09 baseline is gates-ON — the score/confluence "no edge" read is real for the
+detection-independent legs but detection-sourced break_* slices stay values-stale
+until Batch 1. Sweep leg remains sweep-rebuild-owned.
+
 ## Layer map (where numbers are born)
 
 1. **Detection** — smc_radar.py / smc_detector.py / dealing_range.py (shared with live).
 2. **Replay** — backtest/replay_engine.py walks bars, holds OB state, yields alerts.
 3. **Simulation + row build** — backtest/h1_only_simulator.py; `_build_row` at :1172, row dict at :1386-1565.
-4. **Insights** — backtest/insights.py (stats) + backtest/h1_only_reporting.py (sections, Excel tabs, trades.csv writer `_trades_csv` at :1217).
+4. **Insights** — backtest/insights.py (stats) + backtest/h1_only_reporting.py (sections, Excel tabs, trades.csv writer `_trades_csv` at :1216).
 5. **Email/report** — backtest/reporting_email.py + backtest/render_report.py.
 
 ## Population caveats
@@ -196,8 +214,8 @@ Row build: h1_only_simulator.py `_build_row` at :1172; row dict at :1386-1565. "
 ## Insights (backtest/insights.py + reporting sections)
 
 Two consumers, two populations — this matters:
-- **Per-run (Excel tabs / email)**: population = `trades_all` (IST+weekend hard-dropped at h1_only_reporting.py:3237) filtered to real fills. Matches headline. CLEAN.
-- **Cross-run (aggregate_runs.py)**: FIXED by T2 — `_eligible_mask` (:48) filters the population before insights (`eligible = primary[_eligible_mask(primary)]` :435, `filled = ins._filled(eligible)` + hard assert :439). Pre-fix it loaded raw trades.csv with NO eligibility filter and timeout/window_end force-closed rows fed every aggregate insight (D3).
+- **Per-run (Excel tabs / email)**: population = `trades_all` (IST+weekend hard-dropped by `_is_hard_blocked` :191, applied `trades_all = [...] ` :3329) filtered to real fills. Matches headline. CLEAN.
+- **Cross-run (aggregate_runs.py)**: FIXED by T2 — `_eligible_mask` (:48) filters the population before insights (`eligible = primary[_eligible_mask(primary)]` :435, `filled = ins._filled(eligible)` :436 + hard assert). Pre-fix it loaded raw trades.csv with NO eligibility filter and timeout/window_end force-closed rows fed every aggregate insight (D3).
 
 | insight | src | population | status | note |
 |---|---|---|---|---|
@@ -207,24 +225,24 @@ Two consumers, two populations — this matters:
 | compute_overall | insights.py:128-156 | _filled(eligible) | **fixed** | T2 landed: eligibility mask + hard assert; guard tests/test_aggregate_eligibility.py PASS |
 | pair_session_matrix | insights.py:163-194 | _filled(eligible) | **fixed** | T2; per-run tab was already clean; uses UTC-fixed `session` (parked caveat) |
 | instrument_verdicts | insights.py:216-255 | _filled(eligible) | **fixed** | T2. PREMIUM_PAIRS still lists NAS100 (dropped pair — harmless, stale) |
-| confluence_attribution | insights.py:286-323 | _filled(caller) | verified (population) | 2026-07-10 un-voided: fvg_pts/freshness_pts real & varied in 07-09 baseline (Fix 3 landed pre-run); D3 closed by T2. Population clean. SWEEP LEG STILL out-of-scope (sweep-rebuild) — un-voided only the fvg/freshness/structure legs. Aggregation math itself re-audited in Batch 3 |
-| score_validation | insights.py:330-378 | _filled(caller) | verified (population) | 2026-07-10 un-voided: score (4-9, varied) built on alert-time view (T1) with fvg/freshness un-corrupted (Fix 3); D1 structure taint fixed by T1; D3 by T2. Population clean; score's own validation math re-audited in Batch 3 |
-| setup_badge_validation | insights.py:387-454 | _filled(caller) | verified (population) | 2026-07-10 un-voided: setup_badge/_kind populated (2,823 badges, 3 kinds) via alert-time ob_view (T1); D3 by T2. Sweep input stays sweep-workstream-owned. Badge validation math re-audited in Batch 3 |
+| confluence_attribution | insights.py:286-323 | _filled(caller) | verified (population) | 2026-07-10 un-voided: fvg_pts/freshness_pts real & varied in 07-09 baseline (Fix 3 landed pre-run); D3 closed by T2. Population clean. SWEEP LEG STILL out-of-scope (sweep-rebuild) — un-voided only the fvg/freshness/structure legs. Aggregation math re-audited Batch 3: real n/uplift per confluence, coherent verdicts |
+| score_validation | insights.py:330-378 | _filled(caller) | verified (population) | 2026-07-10 un-voided: score (4-9, varied) built on alert-time view (T1) with fvg/freshness un-corrupted (Fix 3); D1 structure taint fixed by T1; D3 by T2. Population clean; score validation math re-audited Batch 3: buckets/spearman on varied score, verdict=BROKEN (no edge, real) |
+| setup_badge_validation | insights.py:387-454 | _filled(caller) | verified (population) | 2026-07-10 un-voided: setup_badge/_kind populated (2,823 badges, 3 kinds) via alert-time ob_view (T1); D3 by T2. Sweep input stays sweep-workstream-owned. Badge validation math re-audited Batch 3 on populated setup_badge |
 | group_comparison | insights.py:456-476 | _filled(eligible) | **fixed** | T2 |
 | entry_zone_comparison | insights.py:483-509 | eligible + never_filled (fill-rate denominator) | **fixed** | T2; single proximal bucket now (degenerate, harmless) |
-| ob_freshness_comparison | insights.py:527-559 | _filled, keyed on ob_touches | **fixed** | 2026-07-07: re-keyed from the DEAD alert_seq (pinned to 1 by the first-fire dedup, run_backtest.py:161-169) onto ob_touches — the alert-time proximal touch count (touches_at_alert, real 0/1/2 variance). Buckets are now 0/1/2 prior touches and populate for real. No re-run needed: ob_touches already in trades.csv. Guard: tests/test_ob_freshness_column.py (fails if it ever re-keys on a constant column) |
-| regime_verification | insights.py:559-598 | _filled(eligible) per run_id | **fixed** | T2 |
-| generate_verdict | insights.py:605-672 | upstream dicts | **fixed** (population) | T2; 2026-07-10: its score-issue line no longer inherits a voided score_v — score_validation un-voided against the 07-09 baseline |
-| verify_capturable / is_peak_metric | insights.py:708-716 | gate | verified | 2026-07-02 truth-chain audit (peak-vs-fill gate); law block at :675-705 |
+| ob_freshness_comparison | insights.py:533-559 | _filled, keyed on ob_touches | **fixed** | 2026-07-07: re-keyed from the DEAD alert_seq (pinned to 1 by the first-fire dedup, run_backtest.py:161-169) onto ob_touches — the alert-time proximal touch count (touches_at_alert, real 0/1/2 variance). Buckets are now 0/1/2 prior touches and populate for real. No re-run needed: ob_touches already in trades.csv. Guard: tests/test_ob_freshness_column.py (fails if it ever re-keys on a constant column) |
+| regime_verification | insights.py:566-605 | _filled(eligible) per run_id | **fixed** | T2 |
+| generate_verdict | insights.py:612-679 | upstream dicts | **fixed** (population) | T2; 2026-07-10: its score-issue line no longer inherits a voided score_v — score_validation un-voided against the 07-09 baseline |
+| verify_capturable / is_peak_metric | insights.py:723-766 / :715-720 | gate | verified | 2026-07-02 truth-chain audit (peak-vs-fill gate); law block at :682-708 |
 | G1-G10 gates | backtest/scanlog/gates.py (evaluate) + g10_violations :105 | headline | verified | 2026-07-02 truth-chain audit; G10 rule set extracted to pure g10_violations() predicate 2026-07-03 (gate + test bind to one threshold; be_eps FP fix, rule b at +1.001R) |
 | headline exclusions (_headline_exclusion) | h1_only_reporting.py:142-176 | audit-only rows out of P&L | verified | 2026-07-02 truth-chain audit + G1 blocked-rows fix |
 | killzone alignment table | h1_only_reporting.py:546 (_killzone_alignment_table) | prox_trades (verified population) | verified | aggregates verified killzone_alignment column over headline population |
-| driver buckets / two-way | h1_only_reporting.py:815 (_driver_buckets), :870 (_driver_two_way) | prox_trades | verified (population) | 2026-07-10 un-voided: fvg/freshness/badge/bos_verdict dims all populated & varied in 07-09 baseline (Fix 3 + T1 pre-run). Section math re-audited in Batch 3. SWEEP dim (if present) stays out-of-scope |
-| counterfactual exits | h1_only_reporting.py:628 (_counterfactual_dataframe) | prox_trades | verified | population verified; exit replay = truth-chain audit scope |
+| driver buckets / two-way | h1_only_reporting.py:814 (_driver_buckets), :869 (_driver_two_way) | prox_trades | verified (population) | 2026-07-10 un-voided: fvg/freshness/badge/bos_verdict dims all populated & varied in 07-09 baseline (Fix 3 + T1 pre-run). Section math re-audited Batch 3. SWEEP dim (if present) stays out-of-scope |
+| counterfactual exits | h1_only_reporting.py:627 (_counterfactual_dataframe) | prox_trades | verified | population verified; exit replay = truth-chain audit scope |
 | Act 1-6 sections | h1_only_reporting.py (report body) | prox_trades (verified) | verified (population) | aggregation of audited columns over headline population; 2026-07-10: the score/badge/fvg slices are un-voided against the 07-09 baseline (their source columns are clean). Detection-sourced slices (break_*) remain values-stale until the fresh run |
 | recipe ranking | h1_only_reporting.py (recipe table) | exit-lab sink (block-stamped, run_backtest.py) | verified (population) | sink rows carry ist/weekend flags so the table drops what the headline drops (826-vs-668 RCA fix) |
-| zone register | h1_only_reporting.py:1126 | trades_all | verified (population) | |
-| Excel tabs (confluences/badges/pair-session/break-ladder) | h1_only_reporting.py:1403 (reference tabs), :1468 (break ladder) | filled(trades_all) = headline population (:3458 write) | verified (population) | 2026-07-10 un-voided: confluence/badge/break-ladder tabs' source columns all populated in 07-09 baseline. NOTE: break-ladder reads break_* which are DETECTION-sourced — the break gates were removed 07-10, so break-ladder VALUES are stale until the fresh run (population/plumbing clean, values pending Batch 1). Tab construction re-audited in Batch 3 |
+| zone register | h1_only_reporting.py:1128 (_build_zone_register_df) | trades_all | verified (population) | |
+| Excel tabs (confluences/badges/pair-session/break-ladder) | h1_only_reporting.py:1411 (reference tabs §10), :1475 (_break_ladder_tab_df) | trades_all, written at :3480 (_try_excel(trades_all)); each tab filters to _is_real_filled internally | verified (population) | 2026-07-10 un-voided: confluence/badge/break-ladder tabs' source columns all populated in 07-09 baseline. NOTE: break-ladder reads break_* which are DETECTION-sourced — the break gates were removed 07-10, so break-ladder VALUES are stale until the fresh run (population/plumbing clean, values pending Batch 1). Tab construction re-audited Batch 3 |
 
 ## Rules
 
