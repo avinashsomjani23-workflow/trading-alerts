@@ -761,5 +761,26 @@
     "interval": "1h",
     "reason": "feed fetch failed",
     "age_hours": null
+  },
+  {
+    "ts": "2026-07-13T00:35:56.676695",
+    "symbol": "JPY=X",
+    "interval": "1h",
+    "reason": "stale data (age 44.10h, limit 2.0h)",
+    "age_hours": 44.1
+  },
+  {
+    "ts": "2026-07-13T00:35:56.882737",
+    "symbol": "NZDUSD=X",
+    "interval": "1h",
+    "reason": "stale data (age 44.10h, limit 2.0h)",
+    "age_hours": 44.1
+  },
+  {
+    "ts": "2026-07-13T00:35:57.089086",
+    "symbol": "GC=F",
+    "interval": "1h",
+    "reason": "stale data (age 44.10h, limit 2.0h)",
+    "age_hours": 44.1
   }
 ]
