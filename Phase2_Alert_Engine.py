@@ -978,7 +978,8 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
         return None
 
 
-def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=None):
+def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=None,
+                      pools=None):
     try:
         dp = pair_conf.get("decimal_places", 5)
         # Window widened 80 -> 130 to match the Phase 1 context chart. Same
@@ -1002,6 +1003,28 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         proximal = float(ob.get('proximal_line', 0))
         distal = float(ob.get('distal_line', 0))
         zone_hi, zone_lo = max(proximal, distal), min(proximal, distal)
+
+        # PD/PW pool levels: accept the full snapshot ({"pools": {...}}) or the
+        # pools sub-dict itself. None / empty = no lines (feed degrade).
+        pool_lines = None
+        if pools:
+            pool_lines = pools.get("pools", pools)
+        # Proximity gate (mirrors Phase 1's _wall_in_view): a pool level is
+        # drawn only when it sits within max(2.5*ATR, 1.5*candle-range) of the
+        # candle range, so a stale far level can't stretch the axis or leave a
+        # stray line. Same band logic as the DR walls in the scout chart.
+        _candle_lo = float(df_plot['Low'].min())
+        _candle_hi = float(df_plot['High'].max())
+        _candle_span = max(_candle_hi - _candle_lo, 1e-9)
+        _p2_atr = float(ob.get('h1_atr', 0.0) or 0.0)
+        if _p2_atr > 0:
+            _pool_prox_max = max(2.5 * _p2_atr, 1.5 * _candle_span)
+        else:
+            _pool_prox_max = 1.5 * _candle_span
+
+        def _pool_in_view(price):
+            return (price is not None
+                    and _candle_lo - _pool_prox_max <= price <= _candle_hi + _pool_prox_max)
 
         # --- Zone band ---
         if zone_hi > 0 and zone_lo > 0:
@@ -1185,6 +1208,14 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             if tp2_p > 0:
                 ax.axhline(y=tp2_p, color='#1e8449', linewidth=1.0, linestyle=':', alpha=0.85, zorder=3)
 
+        # --- PD/PW pool levels (PDH/PDL/PWH/PWL) ---
+        # Prior-day / prior-week high & low visible in the window, dotted D1/W1
+        # lines with left-edge labels — same shared style as the Phase 1 scout
+        # chart. Only in-view levels draw (proximity gate). Observation only.
+        if pool_lines:
+            charts.draw_pool_lines(ax, pool_lines, x_right=n + 5,
+                                   in_view=_pool_in_view, zorder=2)
+
         # --- Current price line ---
         current = float(df_plot['Close'].iloc[-1])
         ax.axhline(y=current, color='#ffffff', linewidth=0.8, linestyle='-', alpha=0.5, zorder=2)
@@ -1279,6 +1310,21 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             y_min = min(y_min, sl_p)
         if entry_p > 0:
             y_max = max(y_max, entry_p)
+        # In-view PD/PW pool levels: keep them inside the axis so a drawn line
+        # isn't clipped. Far levels were already gated out of drawing above.
+        if pool_lines:
+            for _pk in ("pdh", "pdl", "pwh", "pwl"):
+                _p = pool_lines.get(_pk)
+                _lv = _p.get("level") if _p else None
+                if _lv is None:
+                    continue
+                try:
+                    _lv_f = float(_lv)
+                except (TypeError, ValueError):
+                    continue
+                if _pool_in_view(_lv_f):
+                    y_min = min(y_min, _lv_f)
+                    y_max = max(y_max, _lv_f)
         pad = (y_max - y_min) * 0.08
         ax.set_ylim(y_min - pad, y_max + pad)
         ax.set_xlim(-1, n + 8)
@@ -2868,7 +2914,8 @@ if __name__ == "__main__":
             # MIME slot 2) -- the bytes it carries are the zoomed H1 chart.
             # Renaming the CID would invalidate any cached email templates.
             h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
-                                         f"{name} H1 - {bias} zone context", levels, dr)
+                                         f"{name} H1 - {bias} zone context", levels, dr,
+                                         pools=pool_ctx)
             m15_chart = generate_h1_zoomed_chart(
                 df_h1, ob, pair_conf,
                 f"{name} H1 zoomed - entry zone", levels

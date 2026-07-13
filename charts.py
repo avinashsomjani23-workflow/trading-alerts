@@ -68,6 +68,15 @@ CHOCH_COLOR     = "#ff9800"   # orange — trend flip
 DR_FACE = "#3498db"
 DR_EDGE = "#5dade2"
 
+# PD/PW liquidity pool levels (prior-day / prior-week high & low).
+# One violet family, distinct from every other palette entry (OB purple is
+# redder, DR blue is cyan-blue): D1 = softer periwinkle, W1 = bolder violet.
+# Weekly is the higher-tier level so it draws thicker (POOL_LW_W1 > POOL_LW_D1).
+POOL_D1_COLOR = "#b0a8ff"   # PDH / PDL — prior-day high & low
+POOL_W1_COLOR = "#c8a2ff"   # PWH / PWL — prior-week high & low
+POOL_LW_D1    = 1.0
+POOL_LW_W1    = 1.4
+
 # Levels (Phase 2 trade chart)
 ENTRY_COLOR = "#e67e22"
 SL_COLOR    = "#e74c3c"
@@ -161,6 +170,66 @@ def draw_candles(ax, O, H, L, C, *, body_w=BODY_W, wick_w=WICK_W,
             (i - body_w / 2, min(o, c)), body_w, body,
             facecolor=col, linewidth=0, alpha=body_alpha, zorder=3,
         ))
+
+
+# PD/PW pool line spec: (snapshot-key, label, tier). Order = draw order.
+# Tier picks color + linewidth from the constants above.
+_POOL_LINES = (
+    ("pdh", "PDH", "D1"),
+    ("pdl", "PDL", "D1"),
+    ("pwh", "PWH", "W1"),
+    ("pwl", "PWL", "W1"),
+)
+
+
+def draw_pool_lines(ax, pools, *, x_right, in_view, zorder=2):
+    """Draw the PD/PW liquidity levels as leftmost-labelled dotted lines.
+
+    Shared by Phase 1 (scout) and Phase 2 (trade) so the pool levels can
+    never visually drift between the two emails — same colours, same dotted
+    style, same D1/W1 tier weighting, same left-edge label.
+
+    Args:
+      pools   : the ``pools`` sub-dict of a pool_builder snapshot, i.e.
+                ``{"pdh": {"level": float|None, ...}, "pdl": {...}, ...}``.
+                None / empty is a no-op (feed degrade — chart still renders).
+      x_right : plot x-coordinate of the right edge (where labels would clash
+                with candles); labels are placed at the LEFT edge (x=0) so
+                they read cleanly against the oldest candles.
+      in_view : callable(price) -> bool. Only levels inside the caller's
+                proximity band are drawn, so a stale far level can't stretch
+                the y-axis or leave a stray line (mirrors the DR-wall gate).
+
+    Returns the number of lines actually drawn (for logging / tests).
+    """
+    if not pools:
+        return 0
+    drawn = 0
+    for key, label, tier in _POOL_LINES:
+        pool = pools.get(key)
+        if not pool:
+            continue
+        level = pool.get("level")
+        if level is None:
+            continue
+        try:
+            level = float(level)
+        except (TypeError, ValueError):
+            continue
+        if not in_view(level):
+            continue
+        color = POOL_D1_COLOR if tier == "D1" else POOL_W1_COLOR
+        lw    = POOL_LW_D1 if tier == "D1" else POOL_LW_W1
+        ax.axhline(y=level, color=color, linewidth=lw, linestyle=":",
+                   alpha=0.7, zorder=zorder)
+        # Left-edge label: "D1 PDH" so the vet sees tier + which edge at a
+        # glance. Boxed in the chart bg so it stays legible over candles.
+        ax.text(0, level, f"  {tier} {label}",
+                color=color, fontsize=7, fontweight="bold",
+                ha="left", va="center", zorder=zorder + 5,
+                bbox=dict(facecolor=BG, edgecolor="none", pad=1.0, alpha=0.78))
+        drawn += 1
+    return drawn
 
 
 def event_color(tag: str, tier: str) -> str:

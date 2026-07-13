@@ -1468,7 +1468,8 @@ def _split_primary_alternative(obs, cur_price, trend=None):
 # ---------------------------------------------------------------------------
 
 def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
-                      is_invalidated=False, last_event=None, alt_ob=None):
+                      is_invalidated=False, last_event=None, alt_ob=None,
+                      pools=None):
     """
     H1 zone chart. Used for active zones, invalidated zones, and structure-only
     (no zone) views.
@@ -1484,6 +1485,11 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
               the 4-8 x H1 ATR ring from current price. Rendered with reduced
               opacity and a "Alt" label so OB1 stays the loud focus. None
               when no alternative exists.
+      pools:  the ``pools`` sub-dict of a pool_builder snapshot
+              (pdh/pdl/pwh/pwl → {level, ...}). When present, prior-day and
+              prior-week high/low levels visible in the window are drawn as
+              dotted D1/W1 lines. None / degrade = no pool lines, chart
+              renders unchanged. Observation only — never gates.
 
     Visual elements:
       - Candles (thin body 0.55, fat wick 1.5) — last 130 candles + 8 right margin
@@ -1494,6 +1500,8 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
       - Current price (white)
       - DR ceiling/floor (always drawn): solid dotted if confirmed,
         dashed-gap if placeholder; faded color
+      - PD/PW pool levels (PDH/PDL/PWH/PWL): dotted violet lines, D1 vs W1
+        tier, leftmost-labelled — only those within the proximity band
       - Equilibrium line (only when both DR walls on-screen)
       - Swing markers: filled triangle for lookback-3 structural swings,
         muted yellow, placed outside the candle
@@ -1504,6 +1512,13 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
         n_full  = len(full_df)
         has_ob  = ob is not None
         ob_abs  = ob['ob_idx'] if has_ob else None
+
+        # PD/PW pool levels: accept either the full pool_builder snapshot
+        # ({"pools": {...}}) or the pools sub-dict itself, so callers can pass
+        # whichever they hold. None / empty = no lines (feed degrade).
+        pool_lines = None
+        if pools:
+            pool_lines = pools.get("pools", pools)
 
         # --- Plot window: 130 back from current, but always include OB candle.
         # Wider window (~5 days of H1) gives the vet enough context to trace
@@ -1629,6 +1644,24 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                     ymin_candidates.append(_le_bws_y_f)
                     ymax_candidates.append(_le_bws_y_f)
                     _off_window_bws_for_y = _le_bws_y_f  # kept for off-window branch only
+
+        # PD/PW pool levels within the proximity band: include in the y-range
+        # so an in-view level isn't clipped by the axis. Far levels are gated
+        # out here (same _wall_in_view band as the DR walls) and are simply
+        # not drawn — they never stretch the axis or leave a stray line.
+        if pool_lines:
+            for _pk in ("pdh", "pdl", "pwh", "pwl"):
+                _p = pool_lines.get(_pk)
+                _lv = _p.get("level") if _p else None
+                if _lv is None:
+                    continue
+                try:
+                    _lv_f = float(_lv)
+                except (TypeError, ValueError):
+                    continue
+                if _wall_in_view(_lv_f):
+                    ymin_candidates.append(_lv_f)
+                    ymax_candidates.append(_lv_f)
 
         y_min_raw = min(ymin_candidates)
         y_max_raw = max(ymax_candidates)
@@ -1922,6 +1955,15 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                 y=eq_price, color=EQ_COLOR, linewidth=0.8,
                 linestyle=':', alpha=0.6, zorder=2
             )
+
+        # --- PD/PW pool levels (PDH/PDL/PWH/PWL) ---
+        # Prior-day / prior-week high & low visible in the window, as dotted
+        # D1/W1 lines with left-edge labels. Only in-view levels draw (same
+        # proximity gate as the DR walls via _wall_in_view). Observation only.
+        if pool_lines:
+            charts.draw_pool_lines(ax, pool_lines,
+                                   x_right=n_plot + RIGHT_MARGIN - 1,
+                                   in_view=_wall_in_view, zorder=2)
 
         # --- Swing markers (triangles + current-setup broken-swing X) ---
         # SINGLE SOURCE: consume the persisted swing pool from dealing_range
@@ -4319,6 +4361,7 @@ def run_radar():
                         df, ob_for_render, dp, pair_name, ist_ts_full,
                         walls=pair_walls,
                         alt_ob=alt_ob_for_render,
+                        pools=pair_pools.get(pair_name),
                     )
 
                 narrative = generate_zone_narrative_with_atr(
@@ -4417,7 +4460,8 @@ def run_radar():
                     else:
                         chart_b64 = generate_h1_chart(
                             df, ob_for_chart, dp, pair_name, ist_ts_full,
-                            walls=pair_walls, is_invalidated=True
+                            walls=pair_walls, is_invalidated=True,
+                            pools=pair_pools.get(pair_name),
                         )
                     if chart_b64:
                         invalidation_cards.append(
@@ -4441,7 +4485,8 @@ def run_radar():
                         cid = f"chart_{pair_name}_{chart_counter}"
                         chart_b64 = generate_h1_chart(
                             df, None, dp, pair_name, ist_ts_full,
-                            walls=pair_walls, last_event=last_event
+                            walls=pair_walls, last_event=last_event,
+                            pools=pair_pools.get(pair_name),
                         )
                         if chart_b64:
                             inactive_pair_cards.append(
@@ -4487,7 +4532,8 @@ def run_radar():
                     cid = f"chart_{pair_name}_{chart_counter}"
                     chart_b64 = generate_h1_chart(
                         df, None, dp, pair_name, ist_ts_full,
-                        walls=pair_walls, last_event=last_event
+                        walls=pair_walls, last_event=last_event,
+                        pools=pair_pools.get(pair_name),
                     )
                     if chart_b64:
                         inactive_pair_cards.append(
