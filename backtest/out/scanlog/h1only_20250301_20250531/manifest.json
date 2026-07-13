@@ -1,0 +1,46 @@
+{
+  "run_id": "h1only_20250301_20250531",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-07-13T12:10:08.033182+00:00",
+  "git_sha": "88037cf-dirty",
+  "risk_usd": 250.0,
+  "min_warmup_bars": 150,
+  "fetch_pad_days": 35,
+  "pairs": [
+    {
+      "name": "EURUSD",
+      "symbol": "EURUSD=X",
+      "requested_start": "2025-03-01T00:00:00+00:00",
+      "requested_end": "2025-05-31T00:00:00+00:00",
+      "served_start": "2025-01-26T22:00:00+00:00",
+      "served_end": "2025-05-30T20:00:00+00:00",
+      "n_bars": 2159,
+      "fingerprint": "31458b4adeabe515",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "GOLD",
+      "symbol": "GC=F",
+      "requested_start": "2025-03-01T00:00:00+00:00",
+      "requested_end": "2025-05-31T00:00:00+00:00",
+      "served_start": "2025-01-26T23:00:00+00:00",
+      "served_end": "2025-05-30T20:00:00+00:00",
+      "n_bars": 2043,
+      "fingerprint": "a96da903377ff3ba",
+      "prox_cap_atr": 3.0
+    }
+  ],
+  "knobs": {
+    "EURUSD.atr_multiplier": 2.5,
+    "EURUSD.distal_invalidation_mode": "close",
+    "EURUSD.spread_pips": 2.0,
+    "GOLD.atr_multiplier": 3.0,
+    "GOLD.distal_invalidation_mode": "close",
+    "GOLD.spread_pips": 0.5
+  },
+  "versions": {
+    "python": "3.14.5",
+    "pandas": "3.0.3",
+    "yfinance": "1.3.0"
+  }
+}
