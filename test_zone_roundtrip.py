@@ -202,26 +202,25 @@ def test_walkback_fields_persist_and_freeze():
         _ok("walk-back fields persist on create, freeze on refresh, back-fill once")
 
 
-# --- 6) OB event-identity fields: which freeze vs re-stamp on refresh --------
+# --- 6) OB event-identity fields: ALL frozen on refresh ---------------------
 # Deep Value Pass Area A (2026-07-10). The 6 OB-build "frozen-by-design" fields
-# split into TWO groups in the LIVE persistence layer (zone.py refresh):
+# (ob_timestamp, direction, bos_tag, bos_timestamp, bos_tier, h1_atr/atr_at_ob)
+# are immutable event facts stamped once at OB formation. They MUST all survive
+# a refresh unchanged.
 #
-#   TRULY FROZEN (refresh never touches them):  ob_timestamp, direction, bos_tag
-#   RE-STAMPED on refresh from the fresh scan:  bos_timestamp, bos_tier, h1_atr
-#
-# This is a REAL divergence from TRUTH_LEDGER.md, which calls bos_timestamp /
-# bos_tier / atr_at_ob "immutable event fact / frozen BY DESIGN". On LIVE a
-# proximity-fallback match (find_matching_slate_zone branch b, smc_radar.py:3328
-# — same price, DIFFERENT break) runs refresh() and overwrites those three
-# (zone.py:261/268/271). The canonical BACKTEST CSV is UNAFFECTED (its replay
-# merge keys on exact ob_timestamp and refreshes only fvg) — this is a LIVE-only
-# read-meaning drift, flagged as a DISCUSSION POINT, not fixed here.
-#
-# This test LOCKS the real behaviour so any future change in EITHER direction
-# (a frozen field starting to move, or a re-stamped one being frozen) fails
-# loudly. It is the guard the ledger note points at.
+# BUG FOUND + FIXED 2026-07-10: a proximity-fallback match
+# (find_matching_slate_zone branch b, smc_radar.py:3328 — same price, DIFFERENT
+# break) ran refresh() and USED TO overwrite bos_timestamp/bos_tier/h1_atr with
+# the newer break's values (zone.py:261/268/271), so a refreshed zone no longer
+# described the break that formed it and its atr_at_ob (→ every LIVE *_atr
+# metric) silently drifted with today's volatility. Owner confirmed this is a
+# leak, not intended. Fixed: refresh now keeps the formation value for all three
+# (back-fill-if-unset only, mirroring body_ratio/walkback_depth). The backtest
+# never had this bug (its replay merges by EXACT ob_timestamp, refreshes only
+# fvg); this brings live to parity. This test proves the fix and bites if any of
+# the 6 ever starts moving on refresh again.
 
-def test_ob_identity_fields_freeze_split_on_refresh():
+def test_ob_identity_fields_all_frozen_on_refresh():
     fresh = {
         "ob_timestamp": "2026-07-01T00:00:00+00:00", "direction": "bullish",
         "bos_tag": "BOS", "bos_tier": "BOS",
@@ -235,7 +234,7 @@ def test_ob_identity_fields_freeze_split_on_refresh():
     z = Zone.from_fresh(fresh, "EUR01", ist, 1.0999, 5)
 
     # A proximity-matched re-fire: SAME zone identity kept, but a LATER break was
-    # re-detected carrying drifted event fields.
+    # re-detected carrying DRIFTED event fields. None of them may leak in.
     drift = dict(fresh, bos_timestamp="2026-07-05T09:00:00+00:00",
                  bos_tier="Range", h1_atr=0.0025)
     z.refresh(drift, datetime(2026, 7, 5, 10, 0, 0), 1.0999, 5)
@@ -244,24 +243,56 @@ def test_ob_identity_fields_freeze_split_on_refresh():
     # Plain asserts (NOT _bad): this file's _bad only prints+appends, so a bare
     # _bad is fake-green under `pytest test_zone_roundtrip.py`. asserts bite under
     # BOTH the script path (main) AND pytest.
-    # Group 1 — TRULY FROZEN. These MUST keep the formation value.
-    assert d["ob_timestamp"] == "2026-07-01T00:00:00+00:00", \
-        f"ob_timestamp moved on refresh (must be frozen): {d['ob_timestamp']}"
-    assert d["direction"] == "bullish", \
-        f"direction moved on refresh (must be frozen): {d['direction']}"
-    assert d["bos_tag"] == "BOS", \
-        f"bos_tag moved on refresh (must be frozen): {d['bos_tag']}"
-    # Group 2 — RE-STAMPED (documented live behaviour, diverges from the ledger's
-    # "immutable" note). If any starts freezing, the ledger claim would become
-    # TRUE and this must be revisited — fail loudly to force that conversation.
-    assert d["bos_timestamp"] == "2026-07-05T09:00:00+00:00", \
-        f"bos_timestamp did NOT re-stamp on refresh — live behaviour changed: {d['bos_timestamp']}"
-    assert d["bos_tier"] == "Range", \
-        f"bos_tier did NOT re-stamp on refresh — behaviour changed: {d['bos_tier']}"
-    assert d["h1_atr"] == 0.0025, \
-        f"h1_atr did NOT re-stamp on refresh — behaviour changed: {d['h1_atr']}"
-    _ok("refresh freezes ob_timestamp/direction/bos_tag; re-stamps "
-        "bos_timestamp/bos_tier/h1_atr (live divergence from ledger, locked)")
+    frozen_expect = {
+        "ob_timestamp": "2026-07-01T00:00:00+00:00",
+        "direction": "bullish",
+        "bos_tag": "BOS",
+        "bos_timestamp": "2026-07-01T00:00:00+00:00",   # was leaking to 07-05
+        "bos_tier": "BOS",                              # was leaking to Range
+        "h1_atr": 0.0010,                               # was leaking to 0.0025
+    }
+    for k, want in frozen_expect.items():
+        assert d[k] == want, (
+            f"{k} changed on refresh (must stay frozen at formation): "
+            f"got {d[k]!r}, want {want!r} — the proximity-match re-stamp leak is back")
+    _ok("all 6 OB event-identity fields stay frozen through a proximity-match refresh")
+
+
+def test_ob_identity_fields_backfill_once_when_legacy_unset():
+    """A legacy zone that predates a field (h1_atr==0.0 / bos_timestamp None)
+    adopts it ONCE on refresh, then it freezes — same one-time back-fill contract
+    as body_ratio/walkback_depth. Guards the fix from over-freezing legacy zones
+    into a permanently-null field."""
+    fresh = {
+        "ob_timestamp": "2026-07-01T00:00:00+00:00", "direction": "bullish",
+        "bos_tag": "BOS", "bos_tier": "BOS", "bos_timestamp": None, "h1_atr": 0.0,
+        "proximal_line": 1.10, "distal_line": 1.09, "high": 1.105, "low": 1.085,
+        "ob_body": 0.01, "median_leg_body": 0.02, "bos_idx": 10, "ob_idx": 5,
+        "impulse_start_idx": 3, "impulse_start_price": 1.08,
+        "bos_swing_price": 1.10, "fvg": {},
+    }
+    ist = datetime(2026, 7, 1, 12, 0, 0)
+    z = Zone.from_fresh(fresh, "LEG01", ist, 1.0999, 5)
+    d0 = z.to_dict()
+    assert not d0["h1_atr"] and d0["bos_timestamp"] is None, \
+        "legacy zone should start with unset h1_atr / bos_timestamp"
+
+    # First refresh carries the real values -> back-fill once.
+    z.refresh(dict(fresh, h1_atr=0.0018, bos_timestamp="2026-07-01T00:00:00+00:00"),
+              datetime(2026, 7, 2, 10, 0, 0), 1.0999, 5)
+    d1 = z.to_dict()
+    assert d1["h1_atr"] == 0.0018, f"h1_atr did not back-fill: {d1['h1_atr']}"
+    assert d1["bos_timestamp"] == "2026-07-01T00:00:00+00:00", \
+        f"bos_timestamp did not back-fill: {d1['bos_timestamp']}"
+
+    # A later refresh with DRIFTED values must NOT overwrite the back-filled ones.
+    z.refresh(dict(fresh, h1_atr=0.0099, bos_timestamp="2026-07-09T00:00:00+00:00"),
+              datetime(2026, 7, 3, 10, 0, 0), 1.0999, 5)
+    d2 = z.to_dict()
+    assert d2["h1_atr"] == 0.0018, f"h1_atr re-stamped after back-fill: {d2['h1_atr']}"
+    assert d2["bos_timestamp"] == "2026-07-01T00:00:00+00:00", \
+        f"bos_timestamp re-stamped after back-fill: {d2['bos_timestamp']}"
+    _ok("legacy zone back-fills h1_atr/bos_timestamp once, then freezes")
 
 
 def main():
@@ -274,8 +305,9 @@ def main():
     test_from_fresh_shape()
     print("\n== walk-back geometry persistence ==")
     test_walkback_fields_persist_and_freeze()
-    print("\n== OB identity fields: freeze vs re-stamp split on refresh ==")
-    test_ob_identity_fields_freeze_split_on_refresh()
+    print("\n== OB identity fields: all frozen on refresh (leak fixed) ==")
+    test_ob_identity_fields_all_frozen_on_refresh()
+    test_ob_identity_fields_backfill_once_when_legacy_unset()
     print()
     if _FAILS:
         print(f"FAILED: {len(_FAILS)} problem(s)")

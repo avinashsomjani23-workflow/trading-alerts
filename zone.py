@@ -258,17 +258,35 @@ class Zone:
         self.break_quality = fresh.get("break_quality", self.break_quality)
         self.touches = fresh.get("touches", 0)
         self.status_label = fresh.get("status", "Pristine")
-        self.h1_atr = fresh.get("h1_atr", 0.0)
+        # h1_atr = atr_at_ob source. FORMATION-FROZEN (2026-07-10 Deep Value fix):
+        # this is the volatility AT OB FORMATION — an immutable event fact, same as
+        # body_ratio/walkback_depth above. A proximity-fallback match
+        # (find_matching_slate_zone branch b) used to overwrite it with the
+        # refresh-scan ATR, silently un-freezing atr_at_ob and warping every LIVE
+        # *_atr metric (distance-in-ATR, zone-width-in-ATR) that reads it. Keep the
+        # formation value; adopt from fresh ONLY as a one-time back-fill for a
+        # legacy zone that never had it (h1_atr == 0.0 default).
+        if not self.h1_atr:
+            self.h1_atr = fresh.get("h1_atr", 0.0)
         self.current_price_at_scan = current_price
         self.distance_to_proximal_pips = round(
             abs(current_price - fresh["proximal_line"]) / _pip_unit(dp), 1)
         self.fvg = fresh["fvg"]
         self.sweep_observed = fresh.get("sweep_observed", self.sweep_observed)
         self.dealing_range = fresh.get("dealing_range", self.dealing_range)
-        self.bos_tier = fresh.get("bos_tier", self.bos_tier)
+        # bos_tier / bos_timestamp: FORMATION-FROZEN immutable event facts
+        # (2026-07-10 Deep Value fix). Was overwritten from the fresh scan on a
+        # proximity-fallback match — a LATER break at a nearby price would re-stamp
+        # the zone with the newer break's tier/timestamp, so a refreshed zone no
+        # longer described the break that formed it. The backtest never had this
+        # (its replay merges by EXACT ob_timestamp and refreshes only fvg); this
+        # brings live to parity. bos_tier is always set at from_fresh so no
+        # back-fill is needed; bos_timestamp back-fills once if a legacy zone lacks
+        # it. (ob_timestamp/direction/bos_tag were already never touched here.)
         self.broken_was_wall = fresh.get("broken_was_wall", self.broken_was_wall)
         self.reversal_pct = fresh.get("reversal_pct", self.reversal_pct)
-        self.bos_timestamp = fresh.get("bos_timestamp", self.bos_timestamp)
+        if self.bos_timestamp is None:
+            self.bos_timestamp = fresh.get("bos_timestamp")
         self.role = fresh.get("role", self.role)
         return self
 

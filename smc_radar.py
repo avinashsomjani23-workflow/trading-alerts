@@ -636,7 +636,16 @@ def _dedupe_same_leg_impl(obs, thresh):
         if b['bos_idx'] > a['bos_idx']:
             return b
 
-        logging.warning(
+        # Defensive tie-break: two same-direction OBs off the same broken swing
+        # share a bos_idx and neither wins on touch/FVG — keep first. Logged at
+        # DEBUG, not WARNING: with the break gates OFF (2026-07-10) a bare close-
+        # through fires far more same-leg OB candidates, so this branch is hit
+        # per-collision inside the O(n^2) dedupe. At WARNING (basicConfig level
+        # INFO, routed to stdout -> captured synchronously by GitHub Actions) it
+        # floods the run log with thousands of synchronous writes and dominates
+        # wall-clock on the 18-yr x 10-pair grid. This is a normal tie-break, not
+        # an anomaly — DEBUG keeps it inspectable without the per-collision I/O.
+        logging.debug(
             f"Dedupe Test 4 triggered — identical bos_idx {a['bos_idx']} "
             f"for direction {a['direction']}. Keeping first."
         )
