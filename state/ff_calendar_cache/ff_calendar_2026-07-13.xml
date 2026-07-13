@@ -31,6 +31,16 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/839-us-fomc-member-waller-speaks]]></url>
 	</event>
 	<event>
+		<title>Federal Budget Balance</title>
+		<country>USD</country>
+		<date><![CDATA[07-13-2026]]></date>
+		<time><![CDATA[5:59pm]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast><![CDATA[-135.8B]]></forecast>
+		<previous><![CDATA[-292.6B]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/322-us-federal-budget-balance]]></url>
+	</event>
+	<event>
 		<title>MPC Member Pill Speaks</title>
 		<country>GBP</country>
 		<date><![CDATA[07-13-2026]]></date>
@@ -39,16 +49,6 @@
 		<forecast />
 		<previous />
 		<url><![CDATA[https://www.forexfactory.com/calendar/850-uk-mpc-member-pill-speaks]]></url>
-	</event>
-	<event>
-		<title>Federal Budget Balance</title>
-		<country>USD</country>
-		<date><![CDATA[07-13-2026]]></date>
-		<time><![CDATA[6:00pm]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-135.8B]]></forecast>
-		<previous><![CDATA[-292.6B]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/322-us-federal-budget-balance]]></url>
 	</event>
 	<event>
 		<title>NZIER Business Confidence</title>
