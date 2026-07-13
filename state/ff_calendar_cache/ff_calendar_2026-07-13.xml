@@ -46,7 +46,7 @@
 		<date><![CDATA[07-13-2026]]></date>
 		<time><![CDATA[6:00pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-132.8B]]></forecast>
+		<forecast><![CDATA[-135.8B]]></forecast>
 		<previous><![CDATA[-292.6B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/322-us-federal-budget-balance]]></url>
 	</event>
@@ -76,7 +76,7 @@
 		<date><![CDATA[07-13-2026]]></date>
 		<time><![CDATA[11:01pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[2.9%]]></forecast>
+		<forecast><![CDATA[2.6%]]></forecast>
 		<previous><![CDATA[3.4%]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/114-uk-brc-retail-sales-monitor-yy]]></url>
 	</event>
@@ -106,7 +106,7 @@
 		<date><![CDATA[07-14-2026]]></date>
 		<time><![CDATA[2:03am]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[820B]]></forecast>
+		<forecast><![CDATA[810B]]></forecast>
 		<previous><![CDATA[724B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/630-ch-trade-balance]]></url>
 	</event>
@@ -116,7 +116,7 @@
 		<date><![CDATA[07-14-2026]]></date>
 		<time><![CDATA[2:04am]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[121.4B]]></forecast>
+		<forecast><![CDATA[119.5B]]></forecast>
 		<previous><![CDATA[105.4B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/450-ch-usd-denominated-trade-balance]]></url>
 	</event>
@@ -561,16 +561,6 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/931-us-fed-chairman-warsh-testifies]]></url>
 	</event>
 	<event>
-		<title>BOC Press Conference</title>
-		<country>CAD</country>
-		<date><![CDATA[07-15-2026]]></date>
-		<time><![CDATA[2:30pm]]></time>
-		<impact><![CDATA[High]]></impact>
-		<forecast />
-		<previous />
-		<url><![CDATA[https://www.forexfactory.com/calendar/471-ca-boc-press-conference]]></url>
-	</event>
-	<event>
 		<title>Crude Oil Inventories</title>
 		<country>USD</country>
 		<date><![CDATA[07-15-2026]]></date>
@@ -579,6 +569,16 @@
 		<forecast />
 		<previous><![CDATA[3.0M]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/10-us-crude-oil-inventories]]></url>
+	</event>
+	<event>
+		<title>BOC Press Conference</title>
+		<country>CAD</country>
+		<date><![CDATA[07-15-2026]]></date>
+		<time><![CDATA[2:45pm]]></time>
+		<impact><![CDATA[High]]></impact>
+		<forecast />
+		<previous />
+		<url><![CDATA[https://www.forexfactory.com/calendar/471-ca-boc-press-conference]]></url>
 	</event>
 	<event>
 		<title>German Buba President Nagel Speaks</title>
