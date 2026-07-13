@@ -31,7 +31,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.83,
+        "break_body_atr": 0.81,
         "event_candle_delta": 0
       },
       {
@@ -47,7 +47,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.0,
+        "break_body_atr": 0.97,
         "event_candle_delta": 0
       },
       {
@@ -63,7 +63,7 @@
         "reversal_pct": 1.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 0.76,
+        "break_body_atr": 0.74,
         "event_candle_delta": 0
       },
       {
@@ -79,7 +79,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 0.81,
+        "break_body_atr": 0.79,
         "event_candle_delta": 0
       }
     ],
@@ -216,17 +216,17 @@
       "confirmed_floor_ts": "2026-07-08T09:00:00+00:00",
       "n_confirmed_highs": 3,
       "n_confirmed_lows": 2,
-      "current_price": 1.14276,
+      "current_price": 1.14293,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
-        "full4": 31,
-        "short": 4,
+        "full4": 32,
+        "short": 3,
         "bars_per_candle": {
           "1": 2,
-          "4": 31,
-          "3": 2
+          "4": 32,
+          "3": 1
         }
       }
     },
@@ -264,7 +264,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 0.83,
+          "break_body_atr": 0.81,
           "event_candle_delta": 0
         },
         {
@@ -280,7 +280,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 1.0,
+          "break_body_atr": 0.97,
           "event_candle_delta": 0
         },
         {
@@ -296,7 +296,7 @@
           "reversal_pct": 1.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 0.76,
+          "break_body_atr": 0.74,
           "event_candle_delta": 0
         },
         {
@@ -312,7 +312,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 0.81,
+          "break_body_atr": 0.79,
           "event_candle_delta": 0
         }
       ],
@@ -484,7 +484,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 0.89,
+        "break_body_atr": 0.9,
         "event_candle_delta": 0
       },
       {
@@ -500,7 +500,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.54,
+        "break_body_atr": 1.55,
         "event_candle_delta": 0
       },
       {
@@ -532,7 +532,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.02,
+        "break_body_atr": 2.03,
         "event_candle_delta": 0
       },
       {
@@ -548,7 +548,7 @@
         "reversal_pct": 1.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 0.45,
+        "break_body_atr": 0.46,
         "event_candle_delta": 1
       }
     ],
@@ -709,17 +709,17 @@
       "confirmed_floor_ts": "2026-07-10T13:00:00+00:00",
       "n_confirmed_highs": 2,
       "n_confirmed_lows": 3,
-      "current_price": 162.12784,
+      "current_price": 162.12864,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
-        "full4": 31,
-        "short": 4,
+        "full4": 32,
+        "short": 3,
         "bars_per_candle": {
           "1": 2,
-          "4": 31,
-          "3": 2
+          "4": 32,
+          "3": 1
         }
       }
     },
@@ -773,7 +773,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 0.89,
+          "break_body_atr": 0.9,
           "event_candle_delta": 0
         },
         {
@@ -789,7 +789,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 1.54,
+          "break_body_atr": 1.55,
           "event_candle_delta": 0
         },
         {
@@ -821,7 +821,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 2.02,
+          "break_body_atr": 2.03,
           "event_candle_delta": 0
         },
         {
@@ -837,7 +837,7 @@
           "reversal_pct": 1.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 0.45,
+          "break_body_atr": 0.46,
           "event_candle_delta": 1
         }
       ],
@@ -1016,7 +1016,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.49,
+        "break_body_atr": 0.45,
         "event_candle_delta": 0
       },
       {
@@ -1032,7 +1032,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.47,
+        "break_body_atr": 0.43,
         "event_candle_delta": 0
       },
       {
@@ -1048,7 +1048,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.41,
+        "break_body_atr": 0.38,
         "event_candle_delta": 0
       },
       {
@@ -1064,7 +1064,7 @@
         "reversal_pct": 1.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.45,
+        "break_body_atr": 1.34,
         "event_candle_delta": 0
       },
       {
@@ -1080,7 +1080,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 1.45,
+        "break_body_atr": 1.34,
         "event_candle_delta": 0
       },
       {
@@ -1096,7 +1096,7 @@
         "reversal_pct": 1.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 0.96,
+        "break_body_atr": 0.89,
         "event_candle_delta": 0
       },
       {
@@ -1112,7 +1112,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.27,
+        "break_body_atr": 1.18,
         "event_candle_delta": 0
       },
       {
@@ -1128,7 +1128,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.36,
+        "break_body_atr": 1.26,
         "event_candle_delta": 1
       },
       {
@@ -1144,7 +1144,7 @@
         "reversal_pct": 1.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.63,
+        "break_body_atr": 0.59,
         "event_candle_delta": 0
       },
       {
@@ -1160,7 +1160,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.37,
+        "break_body_atr": 1.27,
         "event_candle_delta": 0
       }
     ],
@@ -1321,17 +1321,17 @@
       "confirmed_floor_ts": "2026-07-08T13:00:00+00:00",
       "n_confirmed_highs": 3,
       "n_confirmed_lows": 3,
-      "current_price": 0.57812,
+      "current_price": 0.57852,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
-        "full4": 31,
-        "short": 4,
+        "full4": 32,
+        "short": 3,
         "bars_per_candle": {
           "1": 2,
-          "4": 31,
-          "3": 2
+          "4": 32,
+          "3": 1
         }
       }
     },
@@ -1369,7 +1369,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 0.49,
+          "break_body_atr": 0.45,
           "event_candle_delta": 0
         },
         {
@@ -1385,7 +1385,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 0.47,
+          "break_body_atr": 0.43,
           "event_candle_delta": 0
         },
         {
@@ -1401,7 +1401,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 0.41,
+          "break_body_atr": 0.38,
           "event_candle_delta": 0
         },
         {
@@ -1417,7 +1417,7 @@
           "reversal_pct": 1.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 1.45,
+          "break_body_atr": 1.34,
           "event_candle_delta": 0
         },
         {
@@ -1433,7 +1433,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 1.45,
+          "break_body_atr": 1.34,
           "event_candle_delta": 0
         },
         {
@@ -1449,7 +1449,7 @@
           "reversal_pct": 1.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 0.96,
+          "break_body_atr": 0.89,
           "event_candle_delta": 0
         },
         {
@@ -1465,7 +1465,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 1.27,
+          "break_body_atr": 1.18,
           "event_candle_delta": 0
         },
         {
@@ -1481,7 +1481,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 1.36,
+          "break_body_atr": 1.26,
           "event_candle_delta": 1
         },
         {
@@ -1497,7 +1497,7 @@
           "reversal_pct": 1.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 0.63,
+          "break_body_atr": 0.59,
           "event_candle_delta": 0
         },
         {
@@ -1513,7 +1513,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 1.37,
+          "break_body_atr": 1.27,
           "event_candle_delta": 0
         }
       ],
@@ -1724,7 +1724,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.48,
+        "break_body_atr": 1.49,
         "event_candle_delta": 0
       },
       {
@@ -1740,7 +1740,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.4,
+        "break_body_atr": 0.41,
         "event_candle_delta": 0
       },
       {
@@ -1911,17 +1911,17 @@
       "confirmed_floor_ts": "2026-07-10T01:00:00+00:00",
       "n_confirmed_highs": 2,
       "n_confirmed_lows": 3,
-      "current_price": 0.80956,
+      "current_price": 0.80974,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
-        "full4": 31,
-        "short": 4,
+        "full4": 32,
+        "short": 3,
         "bars_per_candle": {
           "1": 2,
-          "4": 31,
-          "3": 2
+          "4": 32,
+          "3": 1
         }
       }
     },
@@ -1991,7 +1991,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 1.48,
+          "break_body_atr": 1.49,
           "event_candle_delta": 0
         },
         {
@@ -2007,7 +2007,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 0.4,
+          "break_body_atr": 0.41,
           "event_candle_delta": 0
         },
         {
@@ -2196,7 +2196,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.31,
+        "break_body_atr": 0.3,
         "event_candle_delta": 0
       },
       {
@@ -2212,7 +2212,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.2,
+        "break_body_atr": 1.17,
         "event_candle_delta": 0
       },
       {
@@ -2228,7 +2228,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.96,
+        "break_body_atr": 0.94,
         "event_candle_delta": null
       },
       {
@@ -2244,7 +2244,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.65,
+        "break_body_atr": 0.64,
         "event_candle_delta": 1
       },
       {
@@ -2260,7 +2260,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 4.43,
+        "break_body_atr": 4.33,
         "event_candle_delta": 0
       },
       {
@@ -2276,7 +2276,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 2.02,
+        "break_body_atr": 1.98,
         "event_candle_delta": 0
       },
       {
@@ -2292,7 +2292,7 @@
         "reversal_pct": 1.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.54,
+        "break_body_atr": 1.51,
         "event_candle_delta": 0
       },
       {
@@ -2308,7 +2308,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 0.72,
+        "break_body_atr": 0.7,
         "event_candle_delta": 0
       },
       {
@@ -2324,7 +2324,7 @@
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.74,
+        "break_body_atr": 0.72,
         "event_candle_delta": 1
       }
     ],
@@ -2473,16 +2473,16 @@
       "confirmed_floor_ts": "2026-07-08T13:00:00+00:00",
       "n_confirmed_highs": 1,
       "n_confirmed_lows": 1,
-      "current_price": 4056.76908,
+      "current_price": 4066.08214,
       "contained": true,
       "source": "h4",
       "stats": {
         "gaps_split": 0,
-        "full4": 27,
-        "short": 6,
+        "full4": 28,
+        "short": 5,
         "bars_per_candle": {
-          "4": 27,
-          "3": 6
+          "4": 28,
+          "3": 5
         }
       }
     },
@@ -2520,7 +2520,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 0.31,
+          "break_body_atr": 0.3,
           "event_candle_delta": 0
         },
         {
@@ -2536,7 +2536,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 1.2,
+          "break_body_atr": 1.17,
           "event_candle_delta": 0
         },
         {
@@ -2552,7 +2552,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 0.96,
+          "break_body_atr": 0.94,
           "event_candle_delta": null
         },
         {
@@ -2568,7 +2568,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 0.65,
+          "break_body_atr": 0.64,
           "event_candle_delta": 1
         },
         {
@@ -2584,7 +2584,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 4.43,
+          "break_body_atr": 4.33,
           "event_candle_delta": 0
         },
         {
@@ -2600,7 +2600,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 2.02,
+          "break_body_atr": 1.98,
           "event_candle_delta": 0
         },
         {
@@ -2616,7 +2616,7 @@
           "reversal_pct": 1.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 1.54,
+          "break_body_atr": 1.51,
           "event_candle_delta": 0
         },
         {
@@ -2632,7 +2632,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bullish",
           "chop": false,
-          "break_body_atr": 0.72,
+          "break_body_atr": 0.7,
           "event_candle_delta": 0
         },
         {
@@ -2648,7 +2648,7 @@
           "reversal_pct": 0.0,
           "trend_after": "bearish",
           "chop": false,
-          "break_body_atr": 0.74,
+          "break_body_atr": 0.72,
           "event_candle_delta": 1
         }
       ],
