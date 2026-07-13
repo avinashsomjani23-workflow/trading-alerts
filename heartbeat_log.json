@@ -1,25 +1,5 @@
 [
   {
-    "ts": "2026-06-30T09:35:39.851020",
-    "ts_human": "09:35 IST, 30 Jun 2026",
-    "ob_count_total": 6,
-    "ob_count_per_pair": {
-      "EURUSD": 1,
-      "USDJPY": 1,
-      "NZDUSD": 1,
-      "USDCHF": 1,
-      "NAS100": 1,
-      "GOLD": 1
-    },
-    "ob_age_hrs": 0.0060628466666666665,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 0,
-    "issues": []
-  },
-  {
     "ts": "2026-06-30T12:35:40.021420",
     "ts_human": "12:35 IST, 30 Jun 2026",
     "ob_count_total": 7,
@@ -1119,5 +1099,29 @@
     "smtp_fails_3h": 0,
     "issue_count": 0,
     "issues": []
+  },
+  {
+    "ts": "2026-07-13T23:35:58.177562",
+    "ts_human": "23:35 IST, 13 Jul 2026",
+    "ob_count_total": 5,
+    "ob_count_per_pair": {
+      "EURUSD": 0,
+      "USDJPY": 2,
+      "NZDUSD": 2,
+      "USDCHF": 0,
+      "GOLD": 1
+    },
+    "ob_age_hrs": 0.009054187222222222,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 1,
+    "issues": [
+      {
+        "title": "10 silent Phase-1 degrade(s) in last 3h (pool_context_fail\u00d710)",
+        "action": "Check p1_degrade_log.json + P1 Actions tab. p1_email_fail=a digest was lost; walls_*_error=a pair degraded to a placeholder (no structure/OBs)."
+      }
+    ]
   }
 ]
