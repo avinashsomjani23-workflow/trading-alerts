@@ -3141,11 +3141,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-09T09:35:56.345691",
-      "last_seen_ist": "2026-07-09T18:36:48.324173",
+      "last_seen_ist": "2026-07-13T22:35:53.276642",
       "last_email_day": "2026-07-09",
       "still_valid_count": 0,
       "reentry_armed": true,
-      "max_exit_distance": 0.003489999999999993,
+      "max_exit_distance": 0.0048399999999999554,
       "bias": "LONG",
       "pair": "NZDUSD",
       "ob_snapshot": {
@@ -4835,7 +4835,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-13T09:35:52.760626",
-      "last_seen_ist": "2026-07-13T21:36:00.939962",
+      "last_seen_ist": "2026-07-13T22:35:53.276642",
       "last_email_day": "2026-07-13",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -5440,7 +5440,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-13T20:35:59.173307",
-      "last_seen_ist": "2026-07-13T21:36:00.939962",
+      "last_seen_ist": "2026-07-13T22:35:53.276642",
       "last_email_day": "2026-07-13",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -5561,11 +5561,11 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-13T20:35:59.173307",
-      "last_seen_ist": "2026-07-13T21:36:00.939962",
+      "last_seen_ist": "2026-07-13T22:35:53.276642",
       "last_email_day": "2026-07-13",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 57.02489999999989,
       "bias": "SHORT",
       "pair": "GOLD",
       "ob_snapshot": {
