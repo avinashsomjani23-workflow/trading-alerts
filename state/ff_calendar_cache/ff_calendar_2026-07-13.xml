@@ -11,26 +11,6 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/852-nz-businessnz-services-index]]></url>
 	</event>
 	<event>
-		<title>M2 Money Supply y/y</title>
-		<country>CNY</country>
-		<date><![CDATA[07-13-2026]]></date>
-		<time><![CDATA[8:03am]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[8.5%]]></forecast>
-		<previous><![CDATA[8.6%]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/476-ch-m2-money-supply-yy]]></url>
-	</event>
-	<event>
-		<title>New Loans</title>
-		<country>CNY</country>
-		<date><![CDATA[07-13-2026]]></date>
-		<time><![CDATA[8:03am]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[1950B]]></forecast>
-		<previous><![CDATA[520B]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/477-ch-new-loans]]></url>
-	</event>
-	<event>
 		<title>FOMC Member Bowman Speaks</title>
 		<country>USD</country>
 		<date><![CDATA[07-13-2026]]></date>
@@ -179,6 +159,26 @@
 		<forecast><![CDATA[-0.5%]]></forecast>
 		<previous><![CDATA[-0.4%]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/96-sz-ppi-mm]]></url>
+	</event>
+	<event>
+		<title>M2 Money Supply y/y</title>
+		<country>CNY</country>
+		<date><![CDATA[07-14-2026]]></date>
+		<time><![CDATA[8:03am]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast><![CDATA[8.5%]]></forecast>
+		<previous><![CDATA[8.6%]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/476-ch-m2-money-supply-yy]]></url>
+	</event>
+	<event>
+		<title>New Loans</title>
+		<country>CNY</country>
+		<date><![CDATA[07-14-2026]]></date>
+		<time><![CDATA[8:03am]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast><![CDATA[1950B]]></forecast>
+		<previous><![CDATA[520B]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/477-ch-new-loans]]></url>
 	</event>
 	<event>
 		<title>BOE Gov Bailey Speaks</title>
