@@ -1299,7 +1299,10 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     # recomputed here; we only surface the frozen numbers so the backtest can
     # benchmark what break ATR multiple actually wins, per event type.
     #   break_close_atr = raw ATR multiple the close cleared the broken level by
-    #   break_excess    = times over that event's required ATR floor (BOS 0.4 / CHoCH 1.0)
+    #   break_excess    = break-candle body / the event's BODY reference (BOS 1.0 /
+    #                     CHoCH 1.5 ATR). 2026-07-10: gates removed, so this floor
+    #                     no longer gates anything — excess is an observation, not a
+    #                     pass margin (see smc_detector.compute_break_quality).
     _bq = ob.get("break_quality") or {}
     dr = ob.get("dealing_range")
     pd_zone = _pd_zone_from_dr(entry, dr)

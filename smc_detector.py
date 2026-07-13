@@ -2803,15 +2803,18 @@ def compute_break_quality(df, bos_idx, broken_price, direction, atr, event_type=
     """EVENT-AWARE, pair-aware BODY (displacement) quality of the break.
 
     Quality is judged on the BREAK CANDLE BODY — the conviction of the move —
-    relative to the event's own body floor, the same gate that fires the break:
-      - CHoCH body min = STRUCTURE_CHOCH_BODY_ATR_MULT (1.5 ATR)
-      - BOS   body min = BOS_BODY_ATR_MULT             (1.0 ATR)
-    Read from dealing_range (single source — no duplicated numbers), so if the
-    engine thresholds change, grading re-anchors automatically (no maintenance).
+    relative to the event's own body REFERENCE. 2026-07-10: this reference is NO
+    LONGER a gate (body/distance gates removed — a break fires on a bare
+    close-through). It is retained only as the normalising anchor for `excess`:
+      - CHoCH body ref = STRUCTURE_CHOCH_BODY_ATR_MULT (1.5 ATR)
+      - BOS   body ref = BOS_BODY_ATR_MULT             (1.0 ATR)
+    Read from dealing_range (single source — no duplicated numbers), so if that
+    reference ever moves, grading re-anchors automatically (no maintenance).
 
     Body is window-aware (option B): the break candle OR the candle right after
-    it (whichever body is larger), matching dealing_range._body_gate_ok exactly.
-    A break cannot exist below the floor, so `excess` (= body / floor) is >= 1.0.
+    it (whichever body is larger) — the window a re-armed data-derived body gate
+    would read. Because the gate is off, a kept break's body CAN be below the
+    reference, so `excess` (= body / reference) can be < 1.0.
 
     Measures (all in ATR units, so pair-aware):
       - close_beyond_atr : how far PAST the broken level the candle CLOSED (ref only).
@@ -2832,11 +2835,12 @@ def compute_break_quality(df, bos_idx, broken_price, direction, atr, event_type=
         i = int(bos_idx)
         if i < 0 or i >= len(df):
             return out
-        # Event-specific BODY floor — the gate that actually fires the break,
-        # read from the engine constants (single source, no duplicated numbers).
-        # Grading is now anchored to BODY (displacement/conviction), matching the
-        # fire gate. Window-aware (option B): the break candle OR the candle right
-        # after it (whichever body is larger), exactly as dealing_range gates.
+        # Event-specific BODY reference (2026-07-10: NO LONGER a gate — gates
+        # removed; a break fires on a bare close-through). Read from the engine
+        # constants (single source, no duplicated numbers) purely to normalise
+        # `excess`. Window-aware (option B): the break candle OR the candle right
+        # after it (whichever body is larger) — the window a re-armed body gate
+        # would read.
         event_min = (_dr_const.STRUCTURE_CHOCH_BODY_ATR_MULT if event_type == 'CHoCH'
                      else _dr_const.BOS_BODY_ATR_MULT)
         if not event_min or event_min <= 0:
@@ -2851,7 +2855,7 @@ def compute_break_quality(df, bos_idx, broken_price, direction, atr, event_type=
         else:
             close_beyond = float(broken_price) - c
         close_beyond_atr = max(close_beyond, 0.0) / atr
-        excess = body_atr / event_min  # times over the required body floor
+        excess = body_atr / event_min  # body / body reference (NOT a pass margin — gate off)
         if excess >= 2.5:
             tier = 'strong'
         elif excess >= 1.5:
