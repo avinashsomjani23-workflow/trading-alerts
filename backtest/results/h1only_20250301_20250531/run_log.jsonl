@@ -1,3 +1,0 @@
-{"ts": "2026-07-13T12:10:02.158682+00:00", "level": "info", "event": "run_start", "regime": "bau", "regime_label": null, "mode": "h1_only", "start": "2025-03-01", "end": "2025-05-31", "pairs": ["EURUSD", "GOLD"], "risk_usd": 250.0, "send_email": false}
-{"ts": "2026-07-13T12:10:02.158849+00:00", "level": "info", "event": "backtest_atr_cap", "pair": "EURUSD", "pair_type": "forex", "live": 2.5, "backtest": 2.5}
-{"ts": "2026-07-13T12:10:02.158900+00:00", "level": "info", "event": "backtest_atr_cap", "pair": "GOLD", "pair_type": "commodity", "live": 3.0, "backtest": 3.0}
