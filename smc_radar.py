@@ -10,6 +10,7 @@ import time
 import smc_detector
 import dealing_range
 import h4_range  # H4-derived dealing range (built from H1, mapped onto H1)
+import pool_builder  # PD/PW liquidity pools — observation only, never gates
 import charts  # shared H1 chart style engine (Wave 2 item 2C)
 from zone import Zone  # typed slate zone — single slate field definition (Wave 2 item 2B)
 import schema as _schema  # schema_version stamp/check for state files (Wave 1 item 1C)
@@ -327,7 +328,7 @@ def _backfill_phase1_scan_log():
 def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
                               slate_zones, fresh_zones, dropped_this_scan,
                               diagnostics=None, placeholder_diagnostic=None,
-                              ob_build_diagnostics=None):
+                              ob_build_diagnostics=None, pools=None):
     """Construct a single per-pair scan record (snapshot of decisions)."""
     walls = walls or {}
     sv2 = walls.get('structure_v2') or {}
@@ -404,6 +405,9 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
         'diagnostics': diagnostics or [],
         'h4_range': walls.get('h4_range'),
         'ob_build_diagnostics': ob_build_diagnostics or [],
+        # PD/PW liquidity pools (pool_builder snapshot: levels + statuses +
+        # day_state). None when the pool layer had no levels this scan.
+        'pools': pools,
     }
 
 
@@ -3875,6 +3879,7 @@ def run_radar():
     pair_dfs = {}  # pair_name -> df (for drop-reason analysis)
     pair_atrs = {}  # pair_name -> h1_atr
     pair_prices = {}  # pair_name -> current_price
+    pair_pools = {}  # pair_name -> PD/PW pool snapshot (observation only)
 
     # --- SCAN EACH PAIR, RECONCILE WITH SLATE ---
     audit_rows = []
@@ -3956,6 +3961,24 @@ def run_radar():
 
         pair_atrs[name] = h1_atr
         pair_prices[name] = current_price
+
+        # --- PD/PW LIQUIDITY POOLS (observation only, DAILY_BIAS_V4_SPEC) ---
+        # Previous-day / previous-week high & low, with sweep/break status
+        # evaluated on this scan's CLOSED bars. Levels come from a once-per-
+        # server-day cached wide fetch (state/pool_levels.json). Surfaces in
+        # the digest banner + scan log; never gates, scores, or drops a zone.
+        # Any failure logs a degrade and the scan continues untouched.
+        try:
+            pair_pools[name] = pool_builder.live_pool_context(
+                name, ticker, drop_forming_bar(df),
+                is_gold=(ptype == "commodity"),
+                mark_transitions=True,  # P1 owns the sweep/break NEW markers
+            )
+        except Exception as _pool_err:
+            logging.warning(f"[{name}] pool context failed: {_pool_err}")
+            log_p1_degrade("pool_context_fail", pair=name,
+                           reason=str(_pool_err)[:200])
+            pair_pools[name] = None
 
         # Stamp fresh zones with h1_atr from this scan (already done in detect_smc_radar
         # via 'h1_atr' field, but we ensure consistency here).
@@ -4076,6 +4099,7 @@ def run_radar():
             slate_zones, fresh_zones, drops_this_pair,
             placeholder_diagnostic=placeholder_diag,
             ob_build_diagnostics=ob_build_diag,  # OB BUILD LEDGER
+            pools=pair_pools.get(name),  # PD/PW pool snapshot (forensics)
         ))
 
         # Audit log row per active zone post-reconcile.
@@ -4146,6 +4170,27 @@ def run_radar():
             _structure_banner_lines.append(
                 f"  \u26a0\ufe0f Rapid CHoCH (possible chop, low conviction): {', '.join(_chop_pairs)}"
             )
+        # PD/PW liquidity pools \u2014 one line per pair (information only).
+        # '*' marks a status that CHANGED since the previous scan (a sweep or
+        # break that just happened). Pairs with no levels are listed so a
+        # silent pool-layer failure is visible, not hidden.
+        _pool_lines = []
+        _pool_missing = []
+        for _pn in pair_names:
+            _pline = pool_builder.format_pool_line(
+                pair_pools.get(_pn), dp_map.get(_pn, 5))
+            if _pline:
+                _pool_lines.append(f"  {_pn}: {_pline}")
+            elif _pn in pairs_with_fresh_data:
+                _pool_missing.append(_pn)
+        if _pool_lines or _pool_missing:
+            _structure_banner_lines.append(
+                "Liquidity levels \u2014 previous day (PDH/PDL) & week (PWH/PWL); "
+                "* = new this scan:")
+            _structure_banner_lines.extend(_pool_lines)
+            if _pool_missing:
+                _structure_banner_lines.append(
+                    f"  (levels unavailable: {', '.join(_pool_missing)})")
         structure_banner_text = "\n".join(_structure_banner_lines)
         print(structure_banner_text)
         # Collect renderable items across all pairs.

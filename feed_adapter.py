@@ -78,7 +78,18 @@ def fetch_h1(config_symbol, outputsize=200, retries=2):
     return _fetch(config_symbol, "1h", outputsize, retries)
 
 
-def _fetch(config_symbol, interval, outputsize, retries):
+def fetch_h1_unstripped(config_symbol, outputsize=450, retries=2):
+    """H1 candles WITHOUT the closed-market strip — for the PD/PW pool
+    resampler (pool_builder), which needs the Sunday-evening UTC bars that
+    fetch_h1 deliberately drops: they are the first bars of MONDAY'S MT5
+    server day (server = UTC+3), so stripping them would clip Monday's true
+    daily high/low. pool_builder applies its own SERVER-time strip instead.
+    Engines keep using fetch_h1 — chart/positional parity is unchanged.
+    """
+    return _fetch(config_symbol, "1h", outputsize, retries, strip=False)
+
+
+def _fetch(config_symbol, interval, outputsize, retries, strip=True):
     if not API_KEY:
         print("  [FEED ERR] TWELVEDATA_API_KEY not set — cannot fetch live data.")
         return None
@@ -108,7 +119,8 @@ def _fetch(config_symbol, interval, outputsize, retries):
                 continue
 
             if data.get("status") == "ok" and data.get("values"):
-                return _to_dataframe(data["values"], td_symbol=td_symbol)
+                return _to_dataframe(data["values"], td_symbol=td_symbol,
+                                     strip=strip)
 
             last_error = message or data.get("status", "unknown error")
         except Exception as e:
@@ -124,11 +136,12 @@ def _fetch(config_symbol, interval, outputsize, retries):
     return None
 
 
-def _to_dataframe(values, td_symbol=""):
+def _to_dataframe(values, td_symbol="", strip=True):
     """Twelve Data 'values' list -> UTC-indexed OHLCV DataFrame, newest row last.
 
     td_symbol (Twelve Data symbol, e.g. 'XAU/USD') selects the closed-market rule
     in _strip_market_closed — Gold has a daily maintenance break FX does not.
+    strip=False skips that strip entirely (fetch_h1_unstripped / pool levels).
     """
     df = pd.DataFrame(values)
     df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
@@ -144,7 +157,8 @@ def _to_dataframe(values, td_symbol=""):
     else:
         df["Volume"] = 0.0
 
-    df = _strip_market_closed(df, td_symbol=td_symbol)
+    if strip:
+        df = _strip_market_closed(df, td_symbol=td_symbol)
     return df[["Open", "High", "Low", "Close", "Volume"]]
 
 

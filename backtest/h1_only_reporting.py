@@ -1282,6 +1282,15 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "flip_pending_dir_at_alert",
         "leg_extreme_at_alert", "leg_retrace_pct_at_alert", "leg_extreme_clipped",
         "dr_ceiling_broken_at_ob", "dr_floor_broken_at_ob",
+        # PD/PW liquidity pools (DAILY_BIAS_V4_SPEC §1.3) — observation only,
+        # stamped at alert from strictly-prior bars. One source:
+        # pool_builder.POOL_FEATURE_COLUMNS via _pool_features_at_alert.
+        "day_state_at_alert",
+        "pdh_status_at_alert", "pdl_status_at_alert",
+        "pwh_status_at_alert", "pwl_status_at_alert",
+        "dist_next_pool_above_atr", "dist_next_pool_below_atr",
+        "next_pool_above_tier", "next_pool_below_tier",
+        "trade_toward_pool", "last_sweep_age_h1", "last_sweep_tier",
     ]
     df = pd.DataFrame(trades)
     cols_present = [c for c in front_cols if c in df.columns]

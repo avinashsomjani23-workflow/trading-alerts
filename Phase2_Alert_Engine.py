@@ -20,6 +20,7 @@ import xml.etree.ElementTree as ET
 import smc_detector
 import news_filter
 import charts  # shared H1 chart style engine (Wave 2 item 2C)
+import pool_builder  # PD/PW liquidity pools — informational only, never gates
 # Direction-aware structural-event label. One implementation lives in smc_radar
 # (chart uses it too); the email reuses it so every CHoCH/BOS mention shows
 # bullish/bearish — the trader must never verify direction off the candles.
@@ -1490,6 +1491,35 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         {trend_icon} Trend Context: {trend_label}
     </div>"""
 
+    # PD/PW liquidity banner — INFORMATION ONLY (like the news block): where
+    # yesterday's and last week's highs/lows sit, whether each was swept or
+    # broken, and whether this trade runs toward the nearest untouched level.
+    pools = data.get("pools") or {}
+    pools_banner_html = ""
+    if pools.get("line"):
+        _pf = pools.get("features") or {}
+        _toward = _pf.get("trade_toward_pool")
+        if _toward is True:
+            _tier = (_pf.get("next_pool_above_tier")
+                     if bias == "LONG" else _pf.get("next_pool_below_tier"))
+            _dist = (_pf.get("dist_next_pool_above_atr")
+                     if bias == "LONG" else _pf.get("dist_next_pool_below_atr"))
+            _tier_word = {"PD": "yesterday's level", "PW": "last week's level"}.get(_tier, "level")
+            _toward_note = (f" Trade runs TOWARD the nearest untouched pool "
+                            f"({_tier_word}, {_dist} ATR away).")
+        elif _toward is False:
+            _toward_note = " Trade runs AWAY from the nearest untouched pool."
+        else:
+            _toward_note = ""
+        pools_banner_html = (
+            '<div style="margin-bottom:12px;padding:10px 12px;background:#1a1a2e;'
+            'border-left:3px solid #5dade2;border-radius:4px;font-size:12px;'
+            'color:#bbb;line-height:1.5;">'
+            '<b style="color:#eee;">Liquidity levels (prev day / prev week):</b><br>'
+            f'{pools["line"]}{_toward_note}'
+            ' (Information only; does not affect the score.)</div>'
+        )
+
     # Chart blocks with fallback banner (B8)
     if h1_chart_ok:
         h1_chart_block = '<img src="cid:chart_h1" style="width:100%;border-radius:6px;margin-bottom:12px;" />'
@@ -1619,6 +1649,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         <div style="padding:14px 18px;">
             {setup_badge_html}
             {trend_banner_html}
+            {pools_banner_html}
             {distance_html}
             {context_html}
             {break_quality_html}
@@ -2328,6 +2359,23 @@ if __name__ == "__main__":
 
         scan_record["current_price"] = current_price
 
+        # --- PD/PW LIQUIDITY POOLS (informational, DAILY_BIAS_V4_SPEC) ---
+        # Same layer Phase 1 runs: previous-day / previous-week high & low with
+        # sweep/break status on this fetch's CLOSED bars (live_pool_context
+        # drops the forming bar itself). Levels come from the shared per-day
+        # cache (state/pool_levels.json), so this normally costs zero extra API
+        # credits. Feeds the alert email + scan log ONLY — no score, no gate.
+        # mark_transitions stays False: P1 owns the NEW-event marker state.
+        try:
+            pool_ctx = pool_builder.live_pool_context(
+                name, symbol, df_h1,
+                is_gold=(pair_conf.get("pair_type") == "commodity"),
+            )
+        except Exception as _pool_err:
+            print(f"  [POOL WARN] {name}: pool context failed: {_pool_err}")
+            pool_ctx = None
+        scan_record["pools"] = pool_ctx
+
         surviving_obs = []
         for ob in pair_obs:
             proximal = float(ob['proximal_line'])
@@ -2602,6 +2650,22 @@ if __name__ == "__main__":
             distance_str = f"{distance_pips_num} {pip_unit_label(pair_conf)}"
             atr_label = atr_distance_label(distance, h1_atr, "H1")
 
+            # PD/PW pool context for THIS trade's direction (informational).
+            # Snapshot line + trade-relative features (nearest unspent pool,
+            # toward/against). None-safe: a dead pool layer just drops the line.
+            pool_email = None
+            if pool_ctx:
+                try:
+                    pool_email = {
+                        "line": pool_builder.format_pool_line(pool_ctx, dp),
+                        "features": pool_builder.trade_features(
+                            pool_ctx, ref_price=current_price, atr=h1_atr,
+                            direction=ob.get("direction"),
+                            h1_index=pool_builder.drop_forming(df_h1).index),
+                    }
+                except Exception as _pf_err:
+                    print(f"  [POOL WARN] {name}: trade features failed: {_pf_err}")
+
             trade_data = {
                 "pair": name,
                 "bias": bias,
@@ -2626,7 +2690,9 @@ if __name__ == "__main__":
                 "scorecard_version": "v2",
                 "trend_alignment": trend_alignment,
                 "trend_label": trend_label,
-                "h1_trend": current_trend
+                "h1_trend": current_trend,
+                # PD/PW pools — email banner + dedup-state breadcrumb only.
+                "pools": pool_email
             }
             dr = score_res.get('dealing_range')
 

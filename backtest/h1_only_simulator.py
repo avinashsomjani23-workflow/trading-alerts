@@ -1641,6 +1641,16 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # named pattern matched. kind is 'premium' or 'caution'; None otherwise.
         "setup_badge":         setup_badge,
         "setup_badge_kind":    setup_kind,
+        # ── PD/PW LIQUIDITY POOLS (DAILY_BIAS_V4_SPEC §1.3) ────────────────────
+        # 12 columns spread from ONE helper (day_state / pdh|pdl|pwh|pwl status /
+        # nearest-unspent-pool distances+tiers / trade_toward_pool / last sweep
+        # age+tier), all *_at_alert: derived from H1 bars strictly BEFORE
+        # alert_ts (same rule as _closed_bars_at_alert) — price history is
+        # immutable, so no replay-yield freeze is needed (fvg_state precedent).
+        # The helper is defined BELOW simulate_h1_only_dual on purpose: any line
+        # added above this return dict would shift every ledger line-ref
+        # (tests/test_truth_ledger.py). Column list: pool_builder.POOL_FEATURE_COLUMNS.
+        **_pool_features_at_alert(df_h1, alert_ts, ob, entry),
     }
 
 
@@ -1681,3 +1691,26 @@ def simulate_h1_only_dual(
     if prox_row is None:
         return []
     return [prox_row]
+
+
+def _pool_features_at_alert(df_h1, alert_ts, ob, entry):
+    """PD/PW pool columns for one row (pool_builder.POOL_FEATURE_COLUMNS).
+
+    Thin shim over pool_builder.features_at_alert — bars strictly before
+    alert_ts only, per-frame day/week resample cached inside pool_builder.
+    ATR denominator = ob['h1_atr'] (frozen OB-formation ATR), matching every
+    other *_atr feature column. ref_price = the placed entry.
+
+    DEFINED AFTER _build_row / simulate_h1_only_dual on purpose: a top-of-file
+    import or any code line inserted above _build_row's return dict would
+    shift the ledger's row-build line-refs (tests/test_truth_ledger.py guards
+    them). Python resolves this name at call time, so placement is safe.
+    Never raises (pool_builder guarantees the all-None dict on failure).
+    """
+    import pool_builder
+    return pool_builder.features_at_alert(
+        df_h1, alert_ts,
+        direction=ob.get("direction"),
+        ref_price=entry,
+        atr=ob.get("h1_atr"),
+    )
