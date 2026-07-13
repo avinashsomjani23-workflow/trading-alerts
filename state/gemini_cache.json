@@ -1,14 +1,8 @@
 {
-  "EURUSD|2026-07-10": {
-    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no external macro factors are expected to directly influence this EURUSD trade setup today."
+  "USDJPY|2026-07-13": {
+    "macro_summary": "There are no scheduled high-impact events for JPY or USD today. Therefore, no scheduled events will directly influence the USDJPY pair's macro backdrop today. The trade setup will rely on technicals and any unscheduled news."
   },
-  "USDJPY|2026-07-10": {
-    "macro_summary": "There are no scheduled high-impact events for JPY or USD today. Therefore, no external macroeconomic factors are expected to directly influence the USDJPY pair's direction today. The trade setup will rely solely on technical factors."
-  },
-  "NZDUSD|2026-07-10": {
-    "macro_summary": "There are no scheduled high-impact events for NZD or USD today. Therefore, no external macro factors are expected to directly influence the NZDUSD pair's price action today."
-  },
-  "GOLD|2026-07-10": {
-    "macro_summary": "There are no scheduled high-impact events for USD today that would directly affect Gold. Therefore, no specific macro events will help or hurt this Gold long setup today."
+  "NZDUSD|2026-07-13": {
+    "macro_summary": "There are no scheduled high-impact events for NZD or USD today. Therefore, no external macro factors are expected to influence the NZDUSD pair's direction today."
   }
 }
