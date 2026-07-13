@@ -395,8 +395,8 @@ def _score_h1_only(alert: Dict[str, Any], pair_conf: Dict[str, Any],
     # run_scorecard UNBOUNDED history (up to 15 yrs), so depth-sensitive score
     # inputs drifted with run start date instead of matching live.
     h1_slice = _closed_bars_at_alert(df_h1, alert_ts)
-    fvg_h1 = ob.get("fvg", {"exists": False, "was_detected": False,
-                            "mitigation": "none"})
+    # Live-parity fallback — ONE definition with live P2; never inline it.
+    fvg_h1 = ob.get("fvg", smc_detector.fvg_missing())
     fvg_data = {"h1": fvg_h1}
     try:
         score_res = smc_detector.run_scorecard(

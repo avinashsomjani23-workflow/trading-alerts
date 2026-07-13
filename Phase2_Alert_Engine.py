@@ -2527,8 +2527,8 @@ if __name__ == "__main__":
 
             # FVG — H1 only. Inherited from Phase 1's frozen snapshot
             # (radar detected with the OB→OB+7 H1 window). P2 does NOT redetect.
-            fvg_h1 = ob.get("fvg", {"exists": False, "was_detected": False,
-                                    "mitigation": "none"})
+            # Fallback lives in ONE place (fvg_missing) — parity with backtest.
+            fvg_h1 = ob.get("fvg", smc_detector.fvg_missing())
             fvg_data = {"h1": fvg_h1}
             fvg_source = "H1" if fvg_h1.get('exists') else None
 

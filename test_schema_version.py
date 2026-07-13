@@ -85,11 +85,11 @@ def test_check_non_dict_passes():
 
 # --- integration: real load_state / load_slate round-trip -------------------
 
-def test_dealing_range_state_roundtrip(tmp):
+def test_dealing_range_state_roundtrip(tmp_path):
     import dealing_range as dr
     orig = dr.STATE_PATH
     try:
-        dr.STATE_PATH = os.path.join(tmp, "structure_state.json")
+        dr.STATE_PATH = os.path.join(tmp_path, "structure_state.json")
         dr.save_state({"EURUSD": {"trend": "bullish"}})
         # file got stamped
         raw = json.load(open(dr.STATE_PATH, encoding="utf-8"))
@@ -120,11 +120,11 @@ def test_dealing_range_state_roundtrip(tmp):
         dr.STATE_PATH = orig
 
 
-def test_slate_roundtrip(tmp):
+def test_slate_roundtrip(tmp_path):
     import smc_radar as sr
     orig = sr.SLATE_FILE
     try:
-        sr.SLATE_FILE = os.path.join(tmp, "active_obs.json")
+        sr.SLATE_FILE = os.path.join(tmp_path, "active_obs.json")
         sr.save_slate({"slate_date": "x", "slate_started_iso": "y", "pairs": {}})
         raw = json.load(open(sr.SLATE_FILE, encoding="utf-8"))
         assert raw.get(schema.SCHEMA_KEY) == schema.CURRENT_VERSION

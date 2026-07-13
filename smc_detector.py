@@ -1473,6 +1473,13 @@ def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
 #   Phase 1 (H1 FVG inside dealing range), Phase 2 (M15 FVG for scorecard input),
 #   Phase 3 (M5 FVG for chart context). Timeframe determined by caller's df.
 #   Any change to detection logic affects FVG identification in all three phases.
+def fvg_missing():
+    """Fallback FVG snapshot for an OB with no 'fvg' key (legacy/defensive).
+    ONE definition shared by live Phase 2 and the backtest simulator —
+    inline copies drift and break parity. Fresh dict per call."""
+    return {"exists": False, "was_detected": False, "mitigation": "none"}
+
+
 def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
                        leg_start_idx=None, leg_end_idx=None,
                        pair_type="forex"):
@@ -1545,6 +1552,27 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
         # 'Datetime' column first — Phase 1's reset_index df has an integer
         # index that would stamp row numbers. See module _iso_for_idx.
         return _iso_for_idx(df, k)
+
+    # Result-dict builders — ONE definition each, shared by LONG + SHORT below.
+    def _ghost_result(ft, fb, k, full_fill_idx):
+        return {
+            "exists": False, "fvg_top": None, "fvg_bottom": None,
+            "was_detected": True, "mitigation": "full",
+            "ghost_top": ft, "ghost_bottom": fb,
+            "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
+            "ghost_c1_timestamp": _idx_to_iso(k),
+            "mitigated_at_idx": full_fill_idx,
+            "mitigated_at_iso": _idx_to_iso(full_fill_idx)
+        }
+
+    def _live_result(ft, fb, k, partial_hit):
+        return {
+            "exists": True, "fvg_top": ft, "fvg_bottom": fb,
+            "c1_idx": k, "c3_idx": k + 2,
+            "c1_timestamp": _idx_to_iso(k),
+            "mitigation": "partial" if partial_hit else "pristine",
+            "was_detected": True
+        }
 
     # Close-based full mit for index (NAS), commodity (Gold) and crypto (BTC) —
     # all wick through levels on news/thin liquidity without genuine fills.
@@ -1651,23 +1679,9 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
                     partial_hit = True
             if full_fill_idx is not None:
                 # Track latest ghost; keep scanning for a live FVG closer to BOS.
-                last_ghost = {
-                    "exists": False, "fvg_top": None, "fvg_bottom": None,
-                    "was_detected": True, "mitigation": "full",
-                    "ghost_top": ft, "ghost_bottom": fb,
-                    "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
-                    "ghost_c1_timestamp": _idx_to_iso(k),
-                    "mitigated_at_idx": full_fill_idx,
-                    "mitigated_at_iso": _idx_to_iso(full_fill_idx)
-                }
+                last_ghost = _ghost_result(ft, fb, k, full_fill_idx)
                 continue
-            return {
-                "exists": True, "fvg_top": ft, "fvg_bottom": fb,
-                "c1_idx": k, "c3_idx": k + 2,
-                "c1_timestamp": _idx_to_iso(k),
-                "mitigation": "partial" if partial_hit else "pristine",
-                "was_detected": True
-            }
+            return _live_result(ft, fb, k, partial_hit)
 
         elif bias == "SHORT" and L[k] > H[k + 2]:
             ft, fb = float(L[k]), float(H[k + 2])
@@ -1690,23 +1704,9 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
                 if H[m] >= fb:
                     partial_hit = True
             if full_fill_idx is not None:
-                last_ghost = {
-                    "exists": False, "fvg_top": None, "fvg_bottom": None,
-                    "was_detected": True, "mitigation": "full",
-                    "ghost_top": ft, "ghost_bottom": fb,
-                    "ghost_c1_idx": k, "ghost_c3_idx": k + 2,
-                    "ghost_c1_timestamp": _idx_to_iso(k),
-                    "mitigated_at_idx": full_fill_idx,
-                    "mitigated_at_iso": _idx_to_iso(full_fill_idx)
-                }
+                last_ghost = _ghost_result(ft, fb, k, full_fill_idx)
                 continue
-            return {
-                "exists": True, "fvg_top": ft, "fvg_bottom": fb,
-                "c1_idx": k, "c3_idx": k + 2,
-                "c1_timestamp": _idx_to_iso(k),
-                "mitigation": "partial" if partial_hit else "pristine",
-                "was_detected": True
-            }
+            return _live_result(ft, fb, k, partial_hit)
 
     # No live FVG found in the window. Return the latest ghost if any.
     if last_ghost is not None:
