@@ -161,10 +161,20 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/96-sz-ppi-mm]]></url>
 	</event>
 	<event>
+		<title>BOE Gov Bailey Speaks</title>
+		<country>GBP</country>
+		<date><![CDATA[07-14-2026]]></date>
+		<time><![CDATA[8:45am]]></time>
+		<impact><![CDATA[Medium]]></impact>
+		<forecast />
+		<previous />
+		<url><![CDATA[https://www.forexfactory.com/calendar/838-uk-boe-gov-bailey-speaks]]></url>
+	</event>
+	<event>
 		<title>M2 Money Supply y/y</title>
 		<country>CNY</country>
 		<date><![CDATA[07-14-2026]]></date>
-		<time><![CDATA[8:03am]]></time>
+		<time><![CDATA[9:33am]]></time>
 		<impact><![CDATA[Low]]></impact>
 		<forecast><![CDATA[8.5%]]></forecast>
 		<previous><![CDATA[8.6%]]></previous>
@@ -174,21 +184,11 @@
 		<title>New Loans</title>
 		<country>CNY</country>
 		<date><![CDATA[07-14-2026]]></date>
-		<time><![CDATA[8:03am]]></time>
+		<time><![CDATA[9:33am]]></time>
 		<impact><![CDATA[Low]]></impact>
 		<forecast><![CDATA[1950B]]></forecast>
 		<previous><![CDATA[520B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/477-ch-new-loans]]></url>
-	</event>
-	<event>
-		<title>BOE Gov Bailey Speaks</title>
-		<country>GBP</country>
-		<date><![CDATA[07-14-2026]]></date>
-		<time><![CDATA[8:45am]]></time>
-		<impact><![CDATA[Medium]]></impact>
-		<forecast />
-		<previous />
-		<url><![CDATA[https://www.forexfactory.com/calendar/838-uk-boe-gov-bailey-speaks]]></url>
 	</event>
 	<event>
 		<title>NFIB Small Business Index</title>

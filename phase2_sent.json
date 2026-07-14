@@ -4599,7 +4599,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-13T09:35:52.760626",
-      "last_seen_ist": "2026-07-14T13:35:58.843946",
+      "last_seen_ist": "2026-07-14T14:36:08.820666",
       "last_email_day": "2026-07-14",
       "still_valid_count": 1,
       "reentry_armed": false,
@@ -5195,7 +5195,7 @@
       "score_int": 7,
       "score_raw": 7.0,
       "score_high_water": 7.0,
-      "score_low_water": 7.0,
+      "score_low_water": 5.0,
       "breakdown": {
         "structure": 4,
         "sweep": 0.0,
@@ -5204,7 +5204,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-13T20:35:59.173307",
-      "last_seen_ist": "2026-07-14T13:35:58.843946",
+      "last_seen_ist": "2026-07-14T14:36:08.820666",
       "last_email_day": "2026-07-14",
       "still_valid_count": 1,
       "reentry_armed": false,
@@ -5325,11 +5325,11 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-13T20:35:59.173307",
-      "last_seen_ist": "2026-07-14T13:35:58.843946",
+      "last_seen_ist": "2026-07-14T14:36:08.820666",
       "last_email_day": "2026-07-14",
       "still_valid_count": 1,
       "reentry_armed": false,
-      "max_exit_distance": 32.10294000000022,
+      "max_exit_distance": 35.67860000000019,
       "bias": "SHORT",
       "pair": "GOLD",
       "ob_snapshot": {
