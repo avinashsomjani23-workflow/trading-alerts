@@ -1,11 +1,8 @@
 {
-  "USDJPY|2026-07-13": {
-    "macro_summary": "There are no scheduled high-impact events for JPY or USD today. Therefore, no scheduled events will directly influence the USDJPY pair's macro backdrop today. The trade setup will rely on technicals and any unscheduled news."
+  "USDJPY|2026-07-14": {
+    "macro_summary": "US CPI at 18:00 IST and Fed Chairman Warsh Testifies at 19:30 IST are the key events. Higher than expected CPI prints and hawkish testimony would hurt this USDJPY short, while lower prints and dovish commentary would help. All events are scheduled for today."
   },
-  "NZDUSD|2026-07-13": {
-    "macro_summary": "There are no scheduled high-impact events for NZD or USD today. Therefore, no external macro factors are expected to influence the NZDUSD pair's direction today."
-  },
-  "GOLD|2026-07-13": {
-    "macro_summary": "There are no scheduled high-impact events for USD today that would directly affect Gold. Therefore, this trade setup is not influenced by today's macroeconomic calendar."
+  "GOLD|2026-07-14": {
+    "macro_summary": "US CPI at 18:00 IST and Fed Chairman Warsh Testifies at 19:30 IST are the key events. Higher than expected CPI readings would hurt the short GOLD setup, while lower readings would help. Fed testimony that signals a hawkish stance would hurt, while a dovish tone would help."
   }
 }
