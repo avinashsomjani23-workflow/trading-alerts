@@ -142,6 +142,12 @@ FILL_TIME_FEATURES = {
     "fill_in_killzone", "killzone_alignment",
     "sl_distance_atr",  # |entry − sl_initial|/atr_at_ob — known once the fill sets entry
     "fill_ts",
+    # Approach-quality (RETRACE_QUALITY_SPEC, built 2026-07-15): the journey into
+    # the zone over the closed bars BEFORE the fill. FILL-time by construction —
+    # unknown at alert, so walled out of the §5.1 alert-time entry screen (the
+    # look-ahead wall). Legal action class = order_rule only if validated.
+    "approach_speed_atr_at_fill", "approach_body_ratio_at_fill",
+    "approach_er_at_fill",
 }
 
 

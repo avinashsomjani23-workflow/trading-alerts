@@ -1265,9 +1265,9 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # Walk-back geometry (A3, DECISION_GUARDRAILS.md) — logging only, no
         # gate. None for legacy zones built before this change.
         "ob_body_ratio", "ob_walkback_depth",
-        # Kaufman efficiency ratio (N=10) at OB formation — trend-vs-chop regime
-        # around the setup. Observe-only, gates nothing. None for legacy zones.
-        "efficiency_ratio_at_alert",
+        # Choppiness Index on the alert's server trading day — daily trend-vs-
+        # range regime at the alert bar. Observe-only, gates nothing.
+        "chop_at_alert",
         # News blackout audit columns. INFORMATIONAL ONLY — news never gates
         # (the one eligibility rule is _headline_exclusion above).
         "news_blocked", "news_event_title", "news_event_currency",
@@ -1374,7 +1374,7 @@ _EXCEL_COL_NAMES = {
     "fvg_size_atr":      "FVG Size (ATR)",
     "impulse_leg_atr":   "Impulse Leg (ATR)",
     "atr_at_ob":         "ATR at OB (price)",
-    "efficiency_ratio_at_alert": "Trend Quality (0-1)",
+    "chop_at_alert":     "Market Regime (chop 0-100)",
     "vet_review":        "Worth Reviewing",
     "vet_review_reason": "Why Worth Reviewing",
     # news / session audit

@@ -251,8 +251,15 @@ def test_walkback_fields_read_directly_no_snapshot():
         "ob_body_ratio must read ob['body_ratio'] directly (formation-frozen, no snapshot needed)"
     assert 'ob.get("walkback_depth")' in src, \
         "ob_walkback_depth must read ob['walkback_depth'] directly (formation-frozen, no snapshot needed)"
-    assert 'ob.get("efficiency_ratio")' in src, \
-        "efficiency_ratio_at_alert must read ob['efficiency_ratio'] directly (formation-frozen, no snapshot needed)"
+    # chop_at_alert is deliberately NOT read from the OB dict — it is alert-
+    # anchored and computed at row build from df_h1 + alert_ts (never frozen on
+    # the OB). Guard that it stays computed, not silently frozen back onto the OB.
+    assert 'compute_choppiness_index(df_h1,' in src, \
+        "chop_at_alert must be computed at the alert bar from df_h1, not read off the frozen OB"
+    assert 'df_h1.index < alert_ts' in src, \
+        "chop anchor must exclude the still-forming alert bar (candle B) — use bars strictly before alert_ts"
+    assert 'ob.get("efficiency_ratio")' not in src, \
+        "efficiency_ratio was removed (replaced by chop_at_alert); no OB read should remain"
     assert "body_ratio_at_alert" not in src and "walkback_depth_at_alert" not in src, \
         "no *_at_alert snapshot expected for walk-back fields — they are formation-time immutable, not live state"
 
@@ -261,7 +268,7 @@ def test_walkback_fields_stamped_once_in_radar():
     src = (_ROOT / "smc_radar.py").read_text(encoding="utf-8")
     assert src.count("'body_ratio':") == 1, "body_ratio must be stamped exactly once (formation only, never re-stamped on re-fire)"
     assert src.count("'walkback_depth':") == 1, "walkback_depth must be stamped exactly once (formation only, never re-stamped on re-fire)"
-    assert src.count("'efficiency_ratio':") == 1, "efficiency_ratio must be stamped exactly once (formation only, never re-stamped on re-fire)"
+    assert "'efficiency_ratio':" not in src, "efficiency_ratio was removed (replaced by alert-anchored chop_at_alert); it must not be stamped on the OB"
 
 
 # --- OB-BUILD FROZEN-BY-DESIGN: the 6 event-identity fields ----------------

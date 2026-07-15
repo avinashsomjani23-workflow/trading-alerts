@@ -231,6 +231,10 @@ def test_dual_simulator_columns():
         "pd_zone", "score", "structure_pts", "sweep_pts",
         "fvg_pts", "freshness_pts", "killzone_pts",
         "confluences_present", "session", "event",
+        # Weekly PD zone (HTF premium/discount, observe-only) — 5 columns.
+        "weekly_pd_position_at_alert",
+        "weekly_range_high_at_alert", "weekly_range_low_at_alert",
+        "weekly_pd_zone_at_alert", "pd_zone_agreement_at_alert",
     }
     ok = True
     for r in rows:
@@ -799,6 +803,156 @@ def test_area_b_atr_source_uses_h1_atr():
     assert ok, "Area B source tripwire failed (see output above)"
 
 
+def _chop_day_df(bars, day_utc_start="2026-04-01 21:00"):
+    """Build a small UTC-indexed H1 OHLC frame from (H,L,C) tuples, one bar/hour
+    starting at day_utc_start (a server-day start = prev-day 21:00 UTC). Open is
+    set to the close (irrelevant to CHOP). Returns the df + the last bar's ts."""
+    idx = pd.date_range(pd.Timestamp(day_utc_start, tz="UTC"),
+                        periods=len(bars), freq="h")
+    df = pd.DataFrame(
+        {"Open": [c for _, _, c in bars], "High": [h for h, _, _ in bars],
+         "Low": [l for _, l, _ in bars], "Close": [c for _, _, c in bars]},
+        index=idx)
+    return df, idx[-1]
+
+
+def test_choppiness_index_math():
+    """Choppiness Index (smc_detector.compute_choppiness_index) — pins the
+    formula out-of-band so a math/guard regression fails loudly (never in the
+    live path). Observe-only; this only guards the math + None conventions.
+
+      CHOP = 100 * log10(sum(TR) / (dayHigh - dayLow)) / log10(N)
+      - a perfectly trending day (day spread == ground walked) -> 0 (LOW=trend)
+      - a max-ranging day (all range inside one band) -> 100 (HIGH=chop)
+      - a flat day (dayHigh==dayLow, spread 0) -> None, never a fabricated value
+    """
+    print("\n== test_choppiness_index_math ==")
+    chop = smc_detector.compute_choppiness_index
+    ok = True
+
+    # Perfectly trending: 5 bars stepping up, each H-L=10, no wick/gap. Sum(TR)=
+    # 50, day spread = 150-100 = 50, ratio 1 -> log10(1)=0 -> CHOP=0.
+    trend = [(110, 100, 110), (120, 110, 120), (130, 120, 130),
+             (140, 130, 140), (150, 140, 150)]
+    df_t, ts_t = _chop_day_df(trend)
+    ok &= check(chop(df_t, ts_t) == 0.0,
+                f"perfectly trending day -> 0.0 (got {chop(df_t, ts_t)})")
+
+    # Max ranging: 5 bars whipping inside one 10-wide band. Sum(TR)=50, spread=
+    # 10, ratio 5 -> log10(5)/log10(5)=1 -> CHOP=100.
+    rng = [(110, 100, 100), (110, 100, 110), (110, 100, 100),
+           (110, 100, 110), (110, 100, 100)]
+    df_r, ts_r = _chop_day_df(rng)
+    ok &= check(chop(df_r, ts_r) == 100.0,
+                f"max-ranging day -> 100.0 (got {chop(df_r, ts_r)})")
+
+    # Flat day (spread 0) with no measurable prior day -> None (never fabricated).
+    flat = [(100, 100, 100)] * 5
+    df_f, ts_f = _chop_day_df(flat)
+    ok &= check(chop(df_f, ts_f) is None,
+                f"flat day, no prior -> None (got {chop(df_f, ts_f)!r})")
+
+    # None / empty inputs never crash.
+    ok &= check(chop(None, ts_t) is None and chop(df_t, None) is None,
+                "None inputs -> None (no crash)")
+
+    assert ok, "choppiness-index math checks failed (see output above)"
+
+
+def test_choppiness_index_prev_day_fallback():
+    """N < CHOP_MIN_BARS in the alert's own day -> fall back to the PREVIOUS
+    fully-closed server day, not None. Proves the two-day rule + that the
+    fallback reads a real whole-day value."""
+    print("\n== test_choppiness_index_prev_day_fallback ==")
+    chop = smc_detector.compute_choppiness_index
+    ok = True
+
+    # Full prior server day (2026-04-01, starts 2026-03-31 21:00 UTC): a clean
+    # trending day -> CHOP 0. Then only 2 bars into the NEXT server day (starts
+    # 2026-04-01 21:00 UTC) — below CHOP_MIN_BARS=5, so the reading must come
+    # from the prior day (0.0), NOT the thin 2-bar partial.
+    prior = [(110, 100, 110), (120, 110, 120), (130, 120, 130),
+             (140, 130, 140), (150, 140, 150), (160, 150, 160)]
+    df_prior, _ = _chop_day_df(prior, day_utc_start="2026-03-31 21:00")
+    # 2 bars of the new day, ranging (would read high chop if used directly).
+    new = [(200, 190, 190), (200, 190, 200)]
+    df_new, ts_new = _chop_day_df(new, day_utc_start="2026-04-01 21:00")
+    df = pd.concat([df_prior, df_new])
+    ok &= check(len(df_new) < smc_detector.CHOP_MIN_BARS,
+                "test premise: alert day has < CHOP_MIN_BARS bars")
+    ok &= check(chop(df, ts_new) == 0.0,
+                f"thin alert day -> prior full day's CHOP 0.0 (got {chop(df, ts_new)})")
+
+    assert ok, "choppiness prev-day fallback checks failed (see output above)"
+
+
+def test_choppiness_day_boundary_matches_server_date():
+    """The CHOP day boundary MUST be the MT5 server day PDH/PDL use, NOT a naive
+    midnight. A 20:00 UTC bar and a 21:00 UTC bar fall in DIFFERENT server days
+    (server day rolls at 21:00 UTC = +3h offset). Assert against the SAME
+    pool_builder._server_date the D1 levels use so the two can never drift."""
+    print("\n== test_choppiness_day_boundary_matches_server_date ==")
+    import pool_builder
+    ok = True
+
+    # 20:00 UTC is still the PREVIOUS server day; 21:00 UTC starts the next one.
+    d_2000 = pool_builder._server_date(pd.Timestamp("2026-04-01 20:00", tz="UTC"))
+    d_2100 = pool_builder._server_date(pd.Timestamp("2026-04-01 21:00", tz="UTC"))
+    ok &= check(d_2000 != d_2100,
+                f"20:00 and 21:00 UTC must be different server days ({d_2000} vs {d_2100})")
+    ok &= check(d_2100 == pd.Timestamp("2026-04-02"),
+                f"21:00 UTC rolls to the next server date (got {d_2100})")
+
+    # Behavioural proof through CHOP: build a frame straddling the 21:00 roll.
+    # Bars 18:00-20:00 UTC belong to day 04-01; 21:00+ belong to 04-02. A CHOP
+    # stamped at a 04-02 bar must NOT pull the 04-01 bars into its day.
+    chop = smc_detector.compute_choppiness_index
+    # Day 04-02: 5 clean trending bars from 21:00 -> CHOP 0.
+    day2 = [(110, 100, 110), (120, 110, 120), (130, 120, 130),
+            (140, 130, 140), (150, 140, 150)]
+    df2, ts2 = _chop_day_df(day2, day_utc_start="2026-04-01 21:00")
+    # Prepend 3 wild bars at 18:00-20:00 UTC (still day 04-01). If the boundary
+    # were a naive midnight these would leak into the 04-02 reading and break 0.
+    pre = [(500, 100, 100), (500, 100, 500), (500, 100, 100)]
+    df_pre, _ = _chop_day_df(pre, day_utc_start="2026-04-01 18:00")
+    df = pd.concat([df_pre, df2])
+    ok &= check(chop(df, ts2) == 0.0,
+                f"04-01 bars must NOT leak into the 04-02 CHOP day (got {chop(df, ts2)})")
+
+    assert ok, "choppiness day-boundary checks failed (see output above)"
+
+
+def test_choppiness_anchor_includes_its_bar_no_lookahead():
+    """The compute INCLUDES its anchor bar and NOTHING after it. This pins the
+    contract both callers rely on for look-ahead safety: the backtest passes the
+    last bar strictly BEFORE alert_ts (candle A) as the anchor, so candle B (the
+    still-forming alert bar at df.index == alert_ts) is excluded. A wild candle B
+    placed one bar past the anchor must not move the reading."""
+    print("\n== test_choppiness_anchor_includes_its_bar_no_lookahead ==")
+    chop = smc_detector.compute_choppiness_index
+    ok = True
+
+    # 5 clean trending closed bars (candle A is the 5th) -> CHOP 0.
+    day = [(110, 100, 110), (120, 110, 120), (130, 120, 130),
+           (140, 130, 140), (150, 140, 150)]
+    df, _ = _chop_day_df(day, day_utc_start="2026-04-01 21:00")
+    anchor = df.index[-1]  # candle A = last closed bar
+
+    # Append a wild "candle B" one hour later (same server day). If the compute
+    # leaked past the anchor it would blow up the day spread and change CHOP.
+    b_ts = df.index[-1] + pd.Timedelta(hours=1)
+    df_with_b = pd.concat([df, pd.DataFrame(
+        {"Open": [999], "High": [999], "Low": [100], "Close": [999]}, index=[b_ts])])
+
+    val_clean = chop(df, anchor)
+    val_with_b = chop(df_with_b, anchor)  # same anchor; candle B must be ignored
+    ok &= check(val_clean == 0.0, f"closed-only day -> 0.0 (got {val_clean})")
+    ok &= check(val_with_b == val_clean,
+                f"candle B past the anchor must NOT change CHOP ({val_with_b} vs {val_clean})")
+
+    assert ok, "choppiness anchor/look-ahead checks failed (see output above)"
+
+
 def main():
     # Robust to BOTH styles: assert-based tests (return None on pass, raise on
     # fail — the pytest-visible ones) and legacy bool-returning tests. A raised
@@ -828,6 +982,14 @@ def main():
          test_area_b_all_atr_cols_share_the_one_h1_atr_denominator),
         ("test_area_b_atr_source_uses_h1_atr",
          test_area_b_atr_source_uses_h1_atr),
+        ("test_exit_lab_atr_recipe",    test_exit_lab_atr_recipe),
+        ("test_choppiness_index_math",  test_choppiness_index_math),
+        ("test_choppiness_index_prev_day_fallback",
+         test_choppiness_index_prev_day_fallback),
+        ("test_choppiness_day_boundary_matches_server_date",
+         test_choppiness_day_boundary_matches_server_date),
+        ("test_choppiness_anchor_includes_its_bar_no_lookahead",
+         test_choppiness_anchor_includes_its_bar_no_lookahead),
     ]
     results = [(name, _run(name, fn)) for name, fn in tests]
     print("\n=== SUMMARY ===")
@@ -840,6 +1002,100 @@ def main():
         print(f"\n{fail}/{len(results)} test(s) failed.")
         sys.exit(1)
     print(f"\nAll {len(results)} tests passed.")
+
+
+def test_exit_lab_atr_recipe():
+    """Guard the ATR-anchored exit recipe (E_atr_sl1.5_tp2.5, the KVignesh exit).
+
+    Three silent-failure modes pinned, all OUT of the live path (exit_lab is a
+    post-processing diagnostic):
+      (a) ATR SOURCE. _atr_at_fill must use the ENGINE's ATR (smc_detector.
+          compute_atr = simple mean of the last 14 true ranges), NOT a bespoke
+          formula, so this recipe's volatility matches atr_at_ob and every other
+          *_atr in the system. And it must be the volatility at the FILL, not the
+          stale atr_at_ob — else the head-to-head lies for any OB that sat unfilled.
+      (a2) NO LOOK-AHEAD. It must use bars STRICTLY BEFORE the fill candle (< not
+          <=). The fill bar is still forming when a live order fills, so its own
+          range must not leak into the stop — the one-bar look-ahead the trader
+          flagged. Proven by making the fill bar HUGE and confirming the ATR ignores
+          it (matches the ATR of the prior-bars-only series).
+      (b) SL/TP PLACEMENT. The recipe must place SL at entry-1.5*ATR and TP at
+          entry+2.5*ATR (LONG) — a clean stop-through loses exactly -1R of the ATR
+          risk, the TP fills at +1.6667R of that risk (2.5/1.5).
+    """
+    print("\n== test_exit_lab_atr_recipe ==")
+    from backtest.diagnostics.exit_lab import _atr_at_fill, CONFIGS
+    from backtest.exit_engine import walk_multileg
+    import smc_detector
+    ok = True
+
+    # ---- (a) ATR source = engine ATR, evaluated at the fill -------------------
+    idx = pd.date_range("2020-01-01", periods=20, freq="h", tz="UTC")
+    # Each bar: High-Low = 1.0, no gaps -> TR = 1.0 every bar -> ATR = 1.0.
+    pb = pd.DataFrame({
+        "Open":  [10.0] * 20, "High": [10.5] * 20,
+        "Low":   [9.5] * 20,  "Close": [10.0] * 20,
+    }, index=idx)
+    atr = _atr_at_fill(pb, idx[15], period=14)
+    ok &= check(atr is not None and abs(atr - 1.0) < 1e-9,
+                f"ATR(14) at fill = 1.0 on constant-TR series (got {atr})")
+    # It must equal the engine's own ATR on the strictly-prior slice (one ATR defn).
+    engine_atr = smc_detector.compute_atr(pb.loc[pb.index < idx[15]], period=14)
+    ok &= check(atr == (engine_atr if engine_atr and engine_atr > 0 else None),
+                f"_atr_at_fill == engine compute_atr on prior bars ({atr} vs {engine_atr})")
+    # Too few PRIOR bars -> None, never fabricated (compute_atr needs period+1).
+    atr_short = _atr_at_fill(pb, idx[5], period=14)
+    ok &= check(atr_short is None,
+                f"<15 prior bars -> None (got {atr_short}), ATR never faked")
+
+    # ---- (a2) NO LOOK-AHEAD: a huge fill bar must NOT change the ATR ----------
+    pb_spike = pb.copy()
+    # Blow up the fill bar (idx[15]) to a 100-wide range. If _atr_at_fill leaked the
+    # forming fill bar, ATR would jump; with the strict-before rule it stays 1.0.
+    pb_spike.loc[idx[15], ["High", "Low"]] = [60.0, -40.0]
+    atr_spike = _atr_at_fill(pb_spike, idx[15], period=14)
+    ok &= check(atr_spike is not None and abs(atr_spike - 1.0) < 1e-9,
+                f"fill-bar spike ignored (no look-ahead): ATR stays 1.0 (got {atr_spike})")
+
+    # ---- (b) SL/TP placement via the recipe's own multipliers ------------------
+    cfg = CONFIGS["E_atr_sl1.5_tp2.5"]
+    ok &= check(cfg.get("atr_sl_mult") == 1.5 and cfg.get("atr_tp_mult") == 2.5,
+                "recipe carries atr_sl_mult=1.5 / atr_tp_mult=2.5")
+    ok &= check(cfg.get("be_trigger_r") is None,
+                "recipe has no break-even (his mechanical exit is bare SL/TP)")
+    entry, atr_fill = 100.0, 1.0
+    r_rd = cfg["atr_sl_mult"] * atr_fill          # 1.5 risk
+    r_sl = entry - r_rd                            # 98.5 (LONG)
+    tp_R = cfg["atr_tp_mult"] / cfg["atr_sl_mult"] # 1.6667 R
+    legs = [(frac, tp_R if spec == "atr_tp" else spec) for frac, spec in cfg["legs"]]
+    run_cfg = dict(cfg); run_cfg["legs"] = legs
+    # TP price for the walk = entry + tp_R*r_rd = 100 + 1.6667*1.5 = 102.5 = 2.5*ATR. Good.
+    tp_price = entry + tp_R * r_rd
+    ok &= check(abs(tp_price - (entry + 2.5 * atr_fill)) < 1e-9,
+                f"TP resolves to entry+2.5*ATR = {entry + 2.5*atr_fill} (got {tp_price})")
+    # A bar that cleanly hits the TP -> +1.6667R of the ATR risk.
+    fut = pd.DataFrame({
+        "Open":  [100.0, 100.5],
+        "High":  [100.0, 102.6],   # bar 1 clears TP (102.5)
+        "Low":   [99.6,  100.4],   # never touches SL (98.5)
+        "Close": [100.4, 102.5],
+    }, index=pd.date_range("2020-02-01", periods=2, freq="h", tz="UTC"))
+    res = walk_multileg(fut, "LONG", entry, r_sl, r_rd, tp_price, run_cfg,
+                        weekend_flat=False)
+    ok &= check(abs(res["r_realised"] - tp_R) < 0.01,
+                f"clean TP hit -> +{tp_R:.3f}R of ATR risk (got {res['r_realised']})")
+    # A bar that cleanly hits the SL -> exactly -1R of the ATR risk.
+    fut_sl = pd.DataFrame({
+        "Open":  [100.0, 99.0],
+        "High":  [100.0, 99.0],
+        "Low":   [99.6,  98.4],    # bar 1 breaks SL (98.5)
+        "Close": [99.8,  98.4],
+    }, index=pd.date_range("2020-03-01", periods=2, freq="h", tz="UTC"))
+    res_sl = walk_multileg(fut_sl, "LONG", entry, r_sl, r_rd, tp_price, run_cfg,
+                           weekend_flat=False)
+    ok &= check(abs(res_sl["r_realised"] - (-1.0)) < 0.01,
+                f"clean SL-through -> -1.0R of ATR risk (got {res_sl['r_realised']})")
+    assert ok, "exit-lab ATR-recipe checks failed (see output above)"
 
 
 if __name__ == "__main__":

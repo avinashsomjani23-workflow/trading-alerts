@@ -195,41 +195,116 @@ def compute_atr(df, period=14):
 
 
 # ---------------------------------------------------------------------------
-# Kaufman Efficiency Ratio — trend-vs-chop regime around a setup (observe-only).
-# ER = |close[t] - close[t-N]| / sum_{i=t-N+1..t} |close[i] - close[i-1]|
-# Numerator = net move (straight-line distance); denominator = total distance
-# walked. Result in [0,1]: ~1 = clean directional move into the setup, ~0 = chop.
-# Fixed N=10 (standard Kaufman lookback — NOT a knob). Computed once at OB
-# formation and frozen; NEVER a gate/filter/score (EFFICIENCY_RATIO_BUILD_SPEC).
+# Choppiness Index — daily trending-vs-ranging regime on the ALERT day
+# (observe-only). CHOP = 100 * log10(sum(TR) / (maxHigh - minLow)) / log10(N)
+# over the H1 bars of the alert's server trading day, up to & incl. the alert
+# bar. Numerator = total ground walked (sum of true ranges); denominator = how
+# far the day actually spread (its full high-low). Result 0-100: LOW (<=~38) =
+# trending, HIGH (>=~62) = choppy/ranging.
+#
+# Day boundary is the MT5 SERVER day — the SAME window PDH/PDL levels use
+# (pool_builder._server_date: [prev 21:00, 21:00) UTC, offset +3h, no DST). Both
+# feeds arrive UTC (Twelve Data live, MT5 parquet backtest), so the boundary is
+# identical for both — that identity is the point: CHOP must describe the exact
+# same day as the D1 levels, never a rolling window or naive midnight.
+#
+# Anchored at the ALERT bar (unlike the OB-formation-frozen setup-geometry cols)
+# so it reads the regime as of the trade decision, not stale OB-birth context.
+# Computed point-in-time from closed bars only; NEVER a gate/filter/score.
+# The "choppy day = worse trades" idea is an UNPROVEN hypothesis — this column
+# exists to test it, and asserts it nowhere.
 # ---------------------------------------------------------------------------
-EFFICIENCY_RATIO_LOOKBACK = 10
+# Minimum H1 bars in the alert's own day before we trust its CHOP. Below this
+# the partial day is too thin to characterise, so we fall back to the previous
+# fully-closed server day. log10(N) also needs N >= 2 to be defined at all.
+CHOP_MIN_BARS = 5
 
 
-def compute_efficiency_ratio(closes, t, n=EFFICIENCY_RATIO_LOOKBACK):
-    """Kaufman efficiency ratio on H1 closes over the N-bar window ENDING at t.
+def _chop_from_ohlc(highs, lows, closes):
+    """Raw Choppiness Index over a contiguous H1 OHLC slice (already one day).
 
-    `closes` = a sequence of H1 close prices (np array or list); `t` = the
-    OB-formation bar index (the anchor). Needs N+1 closes at/preceding t.
-
-    Returns a float in [0,1] rounded to 3dp, or None when it cannot be measured:
-      - fewer than N+1 closes precede/include t, or
-      - the denominator (total distance walked) is 0.
-    None is DISTINCT from 0.0 — 0.0 is a real "pure chop" reading; None means
-    "couldn't measure" and must never be fabricated as 0.0.
+    Returns a float rounded 3dp, or None when unmeasurable:
+      - fewer than 2 bars (log10(N) undefined), or
+      - denominator (day high-low spread) is 0 — a flat day.
+    None is DISTINCT from a real reading and must never be fabricated as 0.0.
     """
-    if closes is None or t is None:
+    n = len(highs)
+    if n < 2:
         return None
-    t = int(t)
-    # Need indices t-N .. t inclusive (N+1 closes) all present and non-negative.
-    if t < n or t >= len(closes):
+    day_high = max(float(h) for h in highs)
+    day_low = min(float(l) for l in lows)
+    spread = day_high - day_low
+    if spread <= 0:
         return None
-    net = abs(float(closes[t]) - float(closes[t - n]))
-    total = 0.0
-    for i in range(t - n + 1, t + 1):
-        total += abs(float(closes[i]) - float(closes[i - 1]))
-    if total == 0.0:
+    # True range: first bar has no prior close, so H-L. Subsequent bars use the
+    # standard max(H-L, |H-prevClose|, |L-prevClose|) so wicks/gaps count.
+    tr_sum = float(highs[0]) - float(lows[0])
+    for i in range(1, n):
+        h, l, pc = float(highs[i]), float(lows[i]), float(closes[i - 1])
+        tr_sum += max(h - l, abs(h - pc), abs(l - pc))
+    if tr_sum <= 0:
         return None
-    return round(net / total, 3)
+    import math
+    return round(100.0 * math.log10(tr_sum / spread) / math.log10(n), 3)
+
+
+def compute_choppiness_index(df_h1, anchor_ts):
+    """Choppiness Index for the alert's server trading day (observe-only).
+
+    `df_h1` = H1 OHLC frame (UTC index or a 'Datetime'/'Date' column; either
+    feed). `anchor_ts` = the ALERT bar timestamp — the last bar included. Only
+    bars at/before anchor_ts are used, so there is no look-ahead.
+
+    Day = the MT5 server day of anchor_ts (pool_builder._server_date). If that
+    day has fewer than CHOP_MIN_BARS bars up to the anchor (early in the day),
+    fall back to the PREVIOUS fully-closed server day so the reading is never a
+    thin partial. Returns a float rounded 3dp, or None when neither the alert
+    day nor the fallback day can be measured (flat day / too few bars).
+    """
+    if df_h1 is None or anchor_ts is None or len(df_h1) == 0:
+        return None
+    import pool_builder  # stdlib+pandas only; lazy to avoid import-order coupling
+
+    # Normalise to a tz-naive UTC index the server-date math expects, matching
+    # the exact gate PDH/PDL use so the day boundary can never drift from D1.
+    df = pool_builder._naive_utc_index(df_h1)
+    anchor = pd.Timestamp(anchor_ts)
+    if anchor.tzinfo is not None:
+        anchor = anchor.tz_convert("UTC").tz_localize(None)
+
+    # Closed bars only, up to & including the alert bar. No future bars.
+    df = df[df.index <= anchor]
+    if df.empty:
+        return None
+    if not {"High", "Low", "Close"}.issubset(df.columns):
+        return None
+
+    server_day = (df.index + pd.Timedelta(hours=pool_builder.SERVER_UTC_OFFSET_HOURS)).normalize()
+    anchor_day = pool_builder._server_date(anchor)
+
+    def _day_slice(day):
+        m = server_day == day
+        return df.loc[m, ["High", "Low", "Close"]]
+
+    today = _day_slice(anchor_day)
+    if len(today) >= CHOP_MIN_BARS:
+        val = _chop_from_ohlc(today["High"].values, today["Low"].values,
+                              today["Close"].values)
+        if val is not None:
+            return val
+        # Alert day was measurable-length but flat (spread 0): fall through to
+        # the previous full day rather than returning a fabricated reading.
+
+    # Fallback: the most recent EARLIER server day that has bars in frame. This
+    # is a fully-closed day (every one before anchor_day is complete), so its
+    # CHOP is a real whole-day reading, not a partial.
+    prior_days = server_day[server_day < anchor_day]
+    if len(prior_days) == 0:
+        return None
+    prev_day = prior_days.max()
+    prev = _day_slice(prev_day)
+    return _chop_from_ohlc(prev["High"].values, prev["Low"].values,
+                           prev["Close"].values)
 
 
 # ---------------------------------------------------------------------------

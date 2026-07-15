@@ -1370,11 +1370,11 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     # yet). Frozen at OB formation (smc_radar.py), read as-is, never recomputed.
     ob_body_ratio = ob.get("body_ratio")
     ob_walkback_depth = ob.get("walkback_depth")
-    # Kaufman efficiency ratio over the last 10 H1 closes ending at OB formation
-    # (smc_radar.py). Trend-vs-chop regime around the setup. Frozen at formation,
-    # read as-is, never recomputed. None for legacy zones / <N+1 prior closes.
-    # Observe-only, gates nothing (EFFICIENCY_RATIO_BUILD_SPEC).
-    efficiency_ratio_at_alert = ob.get("efficiency_ratio")
+    # Choppiness Index — daily trend-vs-range regime on the alert's server day
+    # (compute_choppiness_index). alert_ts is candle B's OPEN (still forming), so
+    # anchor on the last CLOSED bar strictly before it — no look-ahead.
+    _closed_pre = df_h1.loc[df_h1.index < alert_ts]
+    chop_at_alert = smc_detector.compute_choppiness_index(df_h1, _closed_pre.index[-1] if len(_closed_pre) else None)
 
     # FVG size in ATR — the displacement gap's magnitude (present/absent throws
     # this gradient away). FVG-mitigation-agnostic: measures the gap as detected.
@@ -1596,9 +1596,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # Walk-back geometry (A3) — None for legacy zones built before this change.
         "ob_body_ratio":     ob_body_ratio,
         "ob_walkback_depth": ob_walkback_depth,
-        # Kaufman ER (N=10) at OB formation — trend-vs-chop regime. None for
-        # legacy zones / windows with <N+1 prior closes. Observe-only.
-        "efficiency_ratio_at_alert": efficiency_ratio_at_alert,
+        # Choppiness Index on the alert's server trading day — daily trend-vs-
+        # range regime at the alert bar. None when un-measurable. Observe-only.
+        "chop_at_alert":     chop_at_alert,
         "fvg_present":   _frozen["fvg_present"],
         # fresh / stale / no_fvg — was the FVG already discharged on an earlier
         # approach before this trigger? Feeds the FVG-staleness breakdown.
@@ -1667,6 +1667,25 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # yield freeze needed — same rule as the pool columns above).
         # Column list: eq_pools.EQ_FEATURE_COLUMNS. Observation only, no gate.
         **_eq_features_at_alert(df_h1, alert_ts, ob, entry, sl),
+        # ── WEEKLY PD ZONE (higher-timeframe premium/discount, 2026-07-15) ─────
+        # 5 columns spread from ONE helper: the weekly PD position (price vs
+        # last COMPLETED week's high/low — may run <0 / >1 when price closed
+        # beyond, which IS the break signal by owner decision), the weekly
+        # range high/low, the premium/discount zone (split at 0.5), and the
+        # H4-vs-weekly agreement (both_premium / both_discount / mixed). Weekly
+        # levels are the SAME PWH/PWL the pool spread above uses (one weekly
+        # derivation); the H4 read is the frozen pd_pct computed above. All at
+        # alert from bars strictly BEFORE alert_ts. Observation only, no gate.
+        # Column list: weekly_pd.WEEKLY_PD_FEATURE_COLUMNS.
+        **_weekly_pd_features_at_alert(df_h1, alert_ts, entry, _pd_position_01),
+        # ── APPROACH QUALITY (fill-time entry mechanics, RETRACE_QUALITY_SPEC) ─
+        # 3 columns from ONE helper: how price travelled into the zone over the
+        # closed bars strictly BEFORE the fill bar (speed toward zone in
+        # formation-ATR, candle body share, Kaufman ER). FILL-time, NOT
+        # alert-time — never an alert-time screen input (look-ahead wall).
+        # All None when never_filled / thin history. Observation only, no gate.
+        # Column list: approach_quality.APPROACH_FEATURE_COLUMNS.
+        **_approach_features_at_fill(df_h1, fill_ts, ob),
     }
 
 
@@ -1751,5 +1770,47 @@ def _eq_features_at_alert(df_h1, alert_ts, ob, entry, sl):
         direction=ob.get("direction"),
         entry=entry,
         sl=sl,
+        atr=ob.get("h1_atr"),
+    )
+
+
+def _weekly_pd_features_at_alert(df_h1, alert_ts, entry, h4_pd_position):
+    """Weekly-PD columns for one row (weekly_pd.WEEKLY_PD_FEATURE_COLUMNS).
+
+    Thin shim over weekly_pd.features_at_alert — bars strictly before alert_ts
+    only, weekly high/low from the SAME pool-layer resample (PWH/PWL), the H4
+    read passed straight through as the already-computed frozen pd_pct/100
+    (0-1). ref_price = the placed entry.
+
+    Same deliberate placement as the pool / eq shims above (defined after
+    _build_row so the ledger's row-build line-refs never shift). Never raises
+    (weekly_pd guarantees the all-None dict on failure).
+    """
+    import weekly_pd
+    return weekly_pd.features_at_alert(
+        df_h1, alert_ts,
+        ref_price=entry,
+        h4_pd_position=h4_pd_position,
+    )
+
+
+def _approach_features_at_fill(df_h1, fill_ts, ob):
+    """Approach-quality columns for one row (approach_quality.APPROACH_FEATURE_COLUMNS).
+
+    Thin shim over approach_quality.features_at_fill — the 7 closed H1 bars
+    strictly BEFORE the fill bar only (fill_ts is an exact bar timestamp from
+    the walk, :750). FILL-time, NOT alert-time (look-ahead wall,
+    RETRACE_QUALITY_SPEC §1.3). ATR denominator = ob['h1_atr'] (frozen
+    OB-formation ATR), matching every other *_atr column. never_filled rows
+    pass fill_ts=None (:878) -> all-None dict via the module contract.
+
+    Same deliberate placement as the pool / eq / weekly-PD shims above (defined
+    after _build_row so the ledger's row-build line-refs never shift). Never
+    raises (approach_quality guarantees the all-None dict on failure).
+    """
+    import approach_quality
+    return approach_quality.features_at_fill(
+        df_h1, fill_ts,
+        direction=ob.get("direction"),
         atr=ob.get("h1_atr"),
     )

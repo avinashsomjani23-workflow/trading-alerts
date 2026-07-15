@@ -57,6 +57,10 @@ def _iter_live_zones():
 # this test guards. Round-trip may differ ONLY by these keys appearing with a
 # null value; any other diff (a dropped field, reorder, or changed value) still
 # fails loudly.
+# NOTE: efficiency_ratio was removed 2026-07-15 (replaced by chop_at_alert, which
+# is alert-anchored and NOT frozen on the zone). Legacy zones on disk may still
+# carry it as an inert `_extra` key; that round-trips unchanged, so it is not a
+# migration field here.
 _ADDITIVE_MIGRATION_FIELDS = {"body_ratio", "walkback_depth"}
 
 
@@ -169,7 +173,7 @@ def test_walkback_fields_persist_and_freeze():
     }
     ist = datetime(2026, 7, 6, 22, 35, 0)
 
-    # Create: both fields must land on disk with their formation values.
+    # Create: all three fields must land on disk with their formation values.
     z = Zone.from_fresh(fresh, "NZD99", ist, 0.571, 4)
     d = z.to_dict()
     ok = True

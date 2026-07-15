@@ -13,6 +13,7 @@ import dealing_range
 import h4_range  # H4-derived dealing range (built from H1, mapped onto H1)
 import pool_builder  # PD/PW liquidity pools — observation only, never gates
 import eq_pools      # EQH/EQL equal-level clusters — observation only, never gates
+import weekly_pd     # Weekly PD zone (HTF premium/discount) — observation only
 import charts  # shared H1 chart style engine (Wave 2 item 2C)
 from zone import Zone  # typed slate zone — single slate field definition (Wave 2 item 2B)
 import schema as _schema  # schema_version stamp/check for state files (Wave 1 item 1C)
@@ -331,7 +332,7 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
                               slate_zones, fresh_zones, dropped_this_scan,
                               diagnostics=None, placeholder_diagnostic=None,
                               ob_build_diagnostics=None, pools=None,
-                              eq_clusters=None):
+                              eq_clusters=None, weekly_pd_feats=None):
     """Construct a single per-pair scan record (snapshot of decisions)."""
     walls = walls or {}
     sv2 = walls.get('structure_v2') or {}
@@ -414,6 +415,9 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
         # EQH/EQL equal-level clusters (eq_pools): side/level/size/status per
         # cluster visible this scan. None when the layer found none / erred.
         'eq_clusters': eq_clusters,
+        # Weekly PD zone (weekly_pd): the HTF premium/discount read + H4-vs-
+        # weekly agreement, all *_at_alert. None when history is thin / erred.
+        'weekly_pd': weekly_pd_feats,
     }
 
 
@@ -1210,12 +1214,10 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             # counters so a knob-sweep run (MIN_OB_RANGE_ATR_MULT > 0) is counted
             # too — each candle hits exactly one branch, so no double-count.
             'walkback_depth':     oversized_count + undersized_count + doji_count,
-            # efficiency_ratio = Kaufman ER on the last N=10 H1 closes ENDING at
-            # the OB-formation bar (ob_idx). Trend-vs-chop regime AROUND the setup
-            # — independent of the impulse-leg cols. Observe-only, gates nothing.
-            # Frozen once at formation (same *_at_alert discipline as body_ratio);
-            # None when fewer than N+1 prior closes exist. (EFFICIENCY_RATIO_BUILD_SPEC)
-            'efficiency_ratio':   smc_detector.compute_efficiency_ratio(C, ob_idx),
+            # NOTE: daily trend-vs-chop regime is logged as chop_at_alert, computed
+            # at the ALERT bar (not here at OB formation) so it is not stale — see
+            # smc_detector.compute_choppiness_index. Nothing regime-related is
+            # frozen on the OB dict.
             'h1_atr':             float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
             'fvg':                fvg_dict,
             'sweep_observed':     sweep_obs,
@@ -1407,73 +1409,36 @@ def _count_confluences(ob):
 
 def _split_primary_alternative(obs, cur_price, trend=None):
     """
-    Surface up to two OBs (trader spec, LOCKED 2026-06-10; OB2 trend-priority
-    added 2026-06):
+    Surface EVERY unmitigated order block (2026-07-15: 2-OB cap REMOVED).
 
-      OB1 = 'primary'     — the LAST-EVENT order block: the OB built from the
-                            most recent structural event (highest bos_idx),
-                            regardless of type (BOS or CHoCH). NOT gated by
-                            proximity — it always surfaces while it exists, so
-                            the vet can always see where the last structural OB
-                            sits, even when price has run far from it.
+    History: this used to cap output at two zones — OB1 'primary' (last-event,
+    highest bos_idx) and OB2 'alternative' (best in OB_PROXIMITY_ATR, ranked
+    WITH-TREND > nearest > pristine). Both the cap and the with-trend/nearest
+    ranking are GONE:
 
-      OB2 = 'alternative' — the best order block within OB_PROXIMITY_ATR, OB1
-                            excluded. Ranking (2026-06): WITH-TREND first, then
-                            nearest, then pristine. A with-trend zone that is
-                            still inside the window beats a closer counter-trend
-                            zone (higher-probability setup). `trend` is the H1
-                            trend ('bullish'|'bearish'|None); None => nearest-wins
-                            (old behaviour). If no with-trend zone is in the
-                            window, the nearest counter-trend one fills the slot
-                            (the slot is never left empty when a candidate exists).
+      - The 2-slot cap censored real proximity events: on a sample it hid
+        22-28% of in-ring OBs (an alive, un-mitigated zone was simply invisible
+        that bar and could never alert). Detection must show what it sees.
+      - The OB2 ranking keyed on `_distance_atr <= OB_PROXIMITY_ATR`, i.e. on a
+        DETECTION CONSTANT, not on trading logic. Ranking "nearest" is ranking
+        on a knob; change the ring and the ranks reshuffle. Dropped.
 
-    Edge cases (all confirmed with trader):
-      - Last event produced no OB (walk-back failed / out of window): OB1 empty,
-        OB2 still surfaces. (no OB to show is the honest outcome)
-      - OB1 and the closest OB are the SAME OB: show it once as OB1; no OB2.
-      - No OB within the proximity window: OB2 empty (OB1 may still show).
+    Result: no cap, no ranking, no 'role'. Every un-mitigated OB is an equal
+    candidate; downstream proximity + re-arm decide which fire. Mitigated OBs
+    are already dropped upstream (replay_engine drop pass), so `obs` here is the
+    live slate. `trend` is retained in the signature for call-site compatibility
+    but is no longer used for selection.
 
-    Distance (in ATR) is stamped on every OB for downstream display/logging.
+    Distance (in ATR) is still stamped on every OB for downstream display/logging.
     """
-    # Stamp distance on all OBs (used for OB2 ranking + display).
+    # Stamp distance on all OBs (display/logging only — no longer a selector).
     for ob in obs:
         atr = float(ob.get('h1_atr') or 0.0)
         ob['_distance_atr'] = (round(abs(cur_price - float(ob['proximal_line'])) / atr, 3)
                                if atr > 0 else None)
 
-    # --- OB1: last-event OB = highest bos_idx (most recent event). Ungated. ---
-    ob1 = None
-    obs_with_idx = [o for o in obs if o.get('bos_idx') is not None]
-    if obs_with_idx:
-        ob1 = max(obs_with_idx, key=lambda o: int(o['bos_idx']))
-
-    # --- OB2: best OB within proximity, excluding OB1. ------------------------
-    # Rank: with-trend first, then nearest, then pristine. A with-trend zone in
-    # the window beats a closer counter-trend one; if none is with-trend, the
-    # key degrades to (nearest, pristine) so the nearest counter-trend wins.
-    in_window = []
-    for ob in obs:
-        if ob is ob1:
-            continue
-        d = ob.get('_distance_atr')
-        if d is not None and d <= OB_PROXIMITY_ATR:
-            in_window.append(ob)
-
-    def _ob2_key(o):
-        with_trend = (trend is not None and o.get('direction') == trend)
-        return (0 if with_trend else 1, o['_distance_atr'], int(o.get('touches', 0)))
-
-    in_window.sort(key=_ob2_key)
-    ob2 = in_window[0] if in_window else None
-
-    kept = []
-    if ob1 is not None:
-        ob1['role'] = 'primary'
-        kept.append(ob1)
-    if ob2 is not None:
-        ob2['role'] = 'alternative'
-        kept.append(ob2)
-    return kept
+    # No cap, no ranking, no role: surface every OB on the slate.
+    return list(obs)
 
 # ---------------------------------------------------------------------------
 # CHART GENERATION
@@ -2608,13 +2573,6 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
     else:
         fvg_line = "FVG: <span style='color:#888;'>None</span>"
 
-    # Trend quality — Kaufman efficiency ratio (N=10 H1 closes ending at OB
-    # formation): how straight-line the move into this setup was (1.0 = clean
-    # trend, 0 = choppy/ranging). Context only, no verdict/colour. `—` on None
-    # (legacy zone or <N+1 prior closes). (EFFICIENCY_RATIO_BUILD_SPEC)
-    _er = sz.get('efficiency_ratio')
-    trend_quality_text = f"{_er:.2f}" if _er is not None else "&mdash;"
-
     pip_unit  = _pip_unit(dp)
     zone_pips = round(abs(sz['proximal_line'] - sz['distal_line']) / pip_unit, 1)
     h1_atr_val = sz.get('h1_atr', 0.0)
@@ -2711,9 +2669,6 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
         </span>
         <span style="font-size:11px;color:#aaa;">
           <b>Sweep</b> {sweep_chip}
-        </span>
-        <span style="font-size:11px;color:#aaa;">
-          <b style="color:#bb8fce;">Trend quality</b> {trend_quality_text}
         </span>
         <span style="font-size:11px;color:#aaa;">{fvg_line}</span>
       </div>
@@ -3797,24 +3752,27 @@ def is_choch_superseded(slate_zone, structure_events):
     return later_same_dir_bos >= CHOCH_SUPERSEDE_BOS_COUNT
 
 
-def select_relevant_zone_for_pair(active_zones, current_price, dp):
+def select_relevant_zone_for_pair(active_zones, current_price, dp, trend=None):
     """
-    Phase 1 highlights ONE primary zone + optionally ONE alternative zone
-    per pair, recomputed every scan.
+    LIVE-ONLY human shortlist. The shared detector (_split_primary_alternative)
+    is now UNCAPPED — it surfaces EVERY un-mitigated OB so the backtest can learn
+    from the full book. But a human cannot track 6+ zones per pair in an email, so
+    the LIVE email caps the display to ONE primary headline + ONE alternative here.
+    This keeps live output identical to the pre-2026-07-15 two-OB behaviour while
+    the backtest sees everything.
 
-    Selection (two-OB system):
-      Primary headline (OB1):
-        1. If price is INSIDE any active primary zone, that zone wins
-           ('zone-in-progress'). Tie -> closest proximal.
-        2. Else: among primaries (role=='primary'), pick smallest distance.
-        3. Else (no primary exists this scan): fall back to the alternative
-           (role=='alternative') closest to price. This handles the case
-           where price ran past OB1 and only OB2 remains.
+    NOTE: the 2-OB pick below is a DISPLAY cap, not a trading rule — the data-driven
+    rank that will replace "last-event + nearest" comes AFTER the canonical run
+    (slice touches_at_alert / break-quality / freshness on the full book). Until
+    then this reproduces the old selection so live behaviour does not silently change.
 
-      Alternative (OB2) — returned alongside for chart rendering:
-        - The single role=='alternative' zone (if any) in the same
-          direction as the chosen primary. None if no alternative or if
-          its direction conflicts.
+    Selection (reconstructed from the full uncapped list, no 'role' field):
+      Primary headline (OB1) = the LAST-EVENT OB (highest bos_idx), matching the
+        old _split_primary_alternative OB1. If price is INSIDE any active zone,
+        the nearest such zone wins instead ('zone-in-progress').
+      Alternative (OB2) = best OB within OB_PROXIMITY_ATR, OB1 excluded, ranked
+        WITH-TREND > nearest > least-touched (old OB2 key). `trend` is the H1
+        trend ('bullish'|'bearish'|None); None => nearest-wins.
 
     Returns (selected_zone, in_progress_flag, alt_zone)
             or (None, False, None) if no zones.
@@ -3822,11 +3780,9 @@ def select_relevant_zone_for_pair(active_zones, current_price, dp):
     if not active_zones:
         return None, False, None
 
-    primaries    = [z for z in active_zones if z.get('role', 'primary') == 'primary']
-    alternatives = [z for z in active_zones if z.get('role') == 'alternative']
-
+    # --- zone-in-progress: price sitting inside any active zone wins ----------
     inside = []
-    for z in primaries:
+    for z in active_zones:
         prox = z['proximal_line']
         dist = z['distal_line']
         z_lo = min(prox, dist)
@@ -3839,24 +3795,43 @@ def select_relevant_zone_for_pair(active_zones, current_price, dp):
     if inside:
         selected = min(inside, key=lambda z: abs(current_price - z['proximal_line']))
         in_progress = True
-    elif primaries:
-        selected = min(primaries, key=lambda z: abs(current_price - z['proximal_line']))
-    elif alternatives:
-        # Fallback: only alternative zones exist this scan. Promote one to
-        # the headline so the pair isn't silently empty.
-        selected = min(alternatives, key=lambda z: abs(current_price - z['proximal_line']))
+    else:
+        # Primary = last-event OB (highest bos_idx), mirroring the old OB1. Fall
+        # back to nearest-proximal if no zone carries a bos_idx.
+        with_idx = [z for z in active_zones if z.get('bos_idx') is not None]
+        if with_idx:
+            selected = max(with_idx, key=lambda z: int(z['bos_idx']))
+        else:
+            selected = min(active_zones,
+                           key=lambda z: abs(current_price - z['proximal_line']))
 
     if selected is None:
         return None, False, None
 
-    # Return the alternative zone (OB2). Direction may differ from OB1 —
-    # no type filter applied. OB2 was already picked globally as the best
-    # pristine zone in the outer ring by _split_primary_alternative.
-    alt = None
-    valid_alts = [a for a in alternatives
-                  if a.get('zone_id') != selected.get('zone_id')]
-    if valid_alts:
-        alt = valid_alts[0]
+    # --- Alternative (OB2): best in the proximity ring, primary excluded ------
+    # Reproduces the old OB2 key: with-trend first, then nearest, then least
+    # touched. Distance uses OB_PROXIMITY_ATR against per-zone h1_atr.
+    def _dist_atr(z):
+        atr = float(z.get('h1_atr') or 0.0)
+        if atr <= 0:
+            return None
+        return abs(current_price - float(z['proximal_line'])) / atr
+
+    in_ring = []
+    for z in active_zones:
+        if z.get('zone_id') == selected.get('zone_id'):
+            continue
+        d = _dist_atr(z)
+        if d is not None and d <= OB_PROXIMITY_ATR:
+            in_ring.append((z, d))
+
+    def _alt_key(item):
+        z, d = item
+        with_trend = (trend is not None and z.get('direction') == trend)
+        return (0 if with_trend else 1, d, int(z.get('touches', 0)))
+
+    in_ring.sort(key=_alt_key)
+    alt = in_ring[0][0] if in_ring else None
 
     return selected, in_progress, alt
 
@@ -4180,6 +4155,22 @@ def run_radar():
                 # Never let a retirement lookup failure kill the scan or a live zone.
                 logging.warning(f"[retire] {name} {sz.get('zone_id')} check failed: {_retire_err}")
 
+        # Weekly PD zone (observation only) — HTF premium/discount read +
+        # H4-vs-weekly agreement, for the forensic scan log. Weekly high/low
+        # come from the SAME PWH/PWL the pool banner uses (pair_pools levels);
+        # the H4 read is compute_pd_position on this scan's walls. None-safe.
+        try:
+            _h4_pd = dealing_range.compute_pd_position(
+                current_price, new_walls).get("pd_position")
+            _wk_levels = (pair_pools[name].get("levels")
+                          if pair_pools.get(name) else None)
+            _wk_feats = weekly_pd.live_features(
+                drop_forming_bar(df), current_price, _h4_pd,
+                weekly_levels=_wk_levels)
+        except Exception as _wk_err:
+            logging.warning(f"[{name}] weekly PD read failed: {_wk_err}")
+            _wk_feats = None
+
         # Phase 1 scan log — one record per pair per scan (forensic trail).
         phase1_scan_records.append(_build_phase1_scan_record(
             name, ist_now, current_price, new_walls,
@@ -4191,6 +4182,7 @@ def run_radar():
                 [{k: c.get(k) for k in ("side", "level", "size", "status")}
                  for c in pair_eqs[name]["clusters"]]
                 if pair_eqs.get(name) else None),
+            weekly_pd_feats=_wk_feats,  # HTF PD read + agreement (forensics)
         ))
 
         # Audit log row per active zone post-reconcile.
@@ -4383,7 +4375,8 @@ def run_radar():
             if active_zones and current_price is not None:
                 # --- Active path -------------------------------------------
                 sz, in_progress, alt_sz = select_relevant_zone_for_pair(
-                    active_zones, current_price, dp
+                    active_zones, current_price, dp,
+                    trend=pair_walls.get("trend"),
                 )
                 if sz is None:
                     continue  # defensive — active_zones non-empty so shouldn't fire

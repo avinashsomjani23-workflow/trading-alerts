@@ -21,6 +21,9 @@ import smc_detector
 import news_filter
 import charts  # shared H1 chart style engine (Wave 2 item 2C)
 import pool_builder  # PD/PW liquidity pools — informational only, never gates
+import eq_pools      # EQH/EQL equal-level clusters — informational only, never gates
+import weekly_pd     # Weekly PD zone (HTF premium/discount) — informational only
+import approach_quality  # approach-into-zone shape — observe-only, never gates
 # Direction-aware structural-event label. One implementation lives in smc_radar
 # (chart uses it too); the email reuses it so every CHoCH/BOS mention shows
 # bullish/bearish — the trader must never verify direction off the candles.
@@ -1523,6 +1526,27 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     else:
         break_quality_html = ""
 
+    # Market regime — daily Choppiness Index on the alert's server trading day.
+    # Plain word + raw number, no verdict/colour/score — observe only. Low chop =
+    # the day trended; high chop = it ranged. The "choppy = worse" idea is an
+    # UNPROVEN hypothesis; this line asserts nothing about trade quality.
+    # `—` when unmeasurable (None). (see compute_choppiness_index)
+    _chop = data.get('chop_at_alert')
+    if _chop is not None:
+        if _chop <= 38:
+            _regime_word = "Trending"
+        elif _chop >= 62:
+            _regime_word = "Ranging"
+        else:
+            _regime_word = "Neutral"
+        _regime_detail = f"{_regime_word} (chop {_chop:.0f})"
+    else:
+        _regime_detail = "&mdash;"
+    trend_quality_html = (
+        '<div style="margin-bottom:12px;font-size:11px;color:#888;">'
+        f'<b style="color:#aaa;">Market regime:</b> {_regime_detail}</div>'
+    )
+
     # Trend banner (information only — trader decides whether to take counter-trend)
     trend_alignment = data.get("trend_alignment", "ambiguous")
     trend_label = data.get("trend_label", "H1 trend unavailable")
@@ -1537,34 +1561,93 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         {trend_icon} Trend Context: {trend_label}
     </div>"""
 
-    # PD/PW liquidity banner — INFORMATION ONLY (like the news block): where
-    # yesterday's and last week's highs/lows sit, whether each was swept or
-    # broken, and whether this trade runs toward the nearest untouched level.
+    # LIQUIDITY MAP — one consolidated INFORMATION-ONLY block (was two stacked
+    # banners for PD/PW pools and EQH/EQL clusters). Fixed shape so the reader
+    # always gets the verdict on the last line:
+    #   1. the pool status line (PDH/PDL/PWH/PWL glyphs)
+    #   2. equal-level stop clusters around price (when present)
+    #   3. "→ What it means" — a predefined inference naming the EXACT pool
+    #      this trade points at (fixes the old vague "level")
+    # The stop-placement warning (stop resting in FRONT of an equal pool) is
+    # promoted to the TOP in red — it is the single most actionable line here.
     pools = data.get("pools") or {}
-    pools_banner_html = ""
+    eq = data.get("eq") or {}
+    _pf = pools.get("features") or {}
+
+    _liq_rows = []
+    _warn = eq.get("warning")
+    if _warn:
+        _liq_rows.append(
+            f'<div style="margin-bottom:8px;padding:6px 8px;background:#2d1a1a;'
+            f'border-left:3px solid #e74c3c;border-radius:3px;color:#f0ad4e;'
+            f'font-weight:bold;">{_warn}</div>')
     if pools.get("line"):
-        _pf = pools.get("features") or {}
-        _toward = _pf.get("trade_toward_pool")
-        if _toward is True:
-            _tier = (_pf.get("next_pool_above_tier")
-                     if bias == "LONG" else _pf.get("next_pool_below_tier"))
-            _dist = (_pf.get("dist_next_pool_above_atr")
-                     if bias == "LONG" else _pf.get("dist_next_pool_below_atr"))
-            _tier_word = {"PD": "yesterday's level", "PW": "last week's level"}.get(_tier, "level")
-            _toward_note = (f" Trade runs TOWARD the nearest untouched pool "
-                            f"({_tier_word}, {_dist} ATR away).")
-        elif _toward is False:
-            _toward_note = " Trade runs AWAY from the nearest untouched pool."
-        else:
-            _toward_note = ""
+        _liq_rows.append(
+            '<b style="color:#eee;">Prev day / prev week:</b> '
+            f'{pools["line"]}')
+    if eq.get("line"):
+        _liq_rows.append(f'{eq["line"]}')
+    _infer = pool_builder.format_liquidity_inference(_pf, bias)
+    if _infer:
+        _liq_rows.append(
+            f'<div style="margin-top:6px;color:#eee;">{_infer}</div>')
+
+    # Weekly PD zone — HTF premium/discount vs the H4 read. Predefined
+    # sentence names both timeframes + both percentages so the trader always
+    # sees the numbers and can override manually. Information only.
+    _wk = data.get("weekly_pd") or {}
+    if _wk.get("line"):
+        _liq_rows.append(
+            f'<div style="margin-top:6px;color:#eee;">{_wk["line"]}</div>')
+
+    pools_banner_html = ""
+    if _liq_rows:
         pools_banner_html = (
             '<div style="margin-bottom:12px;padding:10px 12px;background:#1a1a2e;'
             'border-left:3px solid #5dade2;border-radius:4px;font-size:12px;'
             'color:#bbb;line-height:1.5;">'
-            '<b style="color:#eee;">Liquidity levels (prev day / prev week):</b><br>'
-            f'{pools["line"]}{_toward_note}'
-            ' (Information only; does not affect the score.)</div>'
+            '<div style="color:#aaa;font-size:10px;letter-spacing:0.6px;'
+            'text-transform:uppercase;margin-bottom:6px;">Liquidity Map '
+            '&middot; info only</div>'
+            + '<br>'.join(_liq_rows)
+            + '</div>'
         )
+
+    # Approach-into-zone shape (RETRACE_QUALITY_SPEC §4.3). Plain wording, NO
+    # verdict / good-bad label / colour — SIGNAL_CANDIDATES rule (no email
+    # verdicts before validation). None -> em-dash (win-rate helper convention);
+    # negative speed renders the "(drifting away)" hint. Same visual weight as
+    # the pools banner. Observe-only.
+    approach_banner_html = ""
+    _apr = data.get("approach") or {}
+    if _apr:
+        def _apr_num(v, suffix=""):
+            return "&mdash;" if v is None else f"{v:g}{suffix}"
+
+        _sp = _apr.get("approach_speed_atr_at_fill")
+        if _sp is None:
+            _sp_txt = "&mdash; ATR toward zone"
+        elif _sp < 0:
+            _sp_txt = f"{_sp:g} ATR (drifting away)"
+        else:
+            _sp_txt = f"{_sp:g} ATR toward zone"
+        _body = _apr.get("approach_body_ratio_at_fill")
+        _body_txt = ("&mdash;" if _body is None
+                     else f"{round(_body * 100)}%")
+        _er = _apr.get("approach_er_at_fill")
+        _er_txt = _apr_num(_er)
+        # Render only when at least one value is real (all-None -> skip banner).
+        if any(v is not None for v in (_sp, _body, _er)):
+            approach_banner_html = (
+                '<div style="margin-bottom:12px;padding:10px 12px;background:#1a1a2e;'
+                'border-left:3px solid #7f8c8d;border-radius:4px;font-size:12px;'
+                'color:#bbb;line-height:1.5;">'
+                '<div style="color:#aaa;font-size:10px;letter-spacing:0.6px;'
+                'text-transform:uppercase;margin-bottom:6px;">Approach '
+                '&middot; last 4 closed H1 &middot; info only</div>'
+                f'{_sp_txt} &middot; bodies {_body_txt} &middot; one-way {_er_txt}'
+                '</div>'
+            )
 
     # Chart blocks with fallback banner (B8)
     if h1_chart_ok:
@@ -1696,9 +1779,11 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             {setup_badge_html}
             {trend_banner_html}
             {pools_banner_html}
+            {approach_banner_html}
             {distance_html}
             {context_html}
             {break_quality_html}
+            {trend_quality_html}
             {scorecard_html}
             <div style="margin:14px 0 6px 0;color:#aaa;font-size:11px;letter-spacing:1px;text-transform:uppercase;">H1 Context</div>
             {h1_chart_block}
@@ -1731,11 +1816,6 @@ def build_sweep_breakdown_html(data, dp):
     if base <= 0:
         return ""
 
-    presence_icon = "&#10003;" if base > 0 else "&#10007;"      # ✓ / ✗
-    eq_icon       = "&#10003;" if eq_score > 0 else "&#10007;"
-    rej_icon      = "&#10003;" if rej_score > 0 else "&#10007;"
-
-    hrs_str = f"{hrs_before:.0f}h before OB" if hrs_before is not None else "n/a"
     sweep_price_str = f"{sweep_price:.{dp}f}" if sweep_price is not None else "n/a"
 
     # Plain-English rejection label (2026-06-16). "wick:body ratio" = how many
@@ -1750,13 +1830,6 @@ def build_sweep_breakdown_html(data, dp):
         rej_label = f"weak rejection — wick is only {wb_ratio:.1f}x the candle body (want 2x+ for a clean one)"
     else:
         rej_label = f"no real rejection — wick is only {wb_ratio:.1f}x the candle body (body dominates)"
-
-    if eq_matches >= 2:
-        eq_label = f"{eq_matches} equal levels matched"
-    elif eq_matches == 1:
-        eq_label = "1 equal level matched"
-    else:
-        eq_label = "0 equal levels matched"
 
     total = base + eq_score + rej_score
 
@@ -1775,14 +1848,24 @@ def build_sweep_breakdown_html(data, dp):
         location_html = ('<div style="color:#888;">&#128205; Swept level: no round-number / '
                          'session / prior-day confluence.</div>')
 
+    # One-line verdict (de-bloated 2026-07-14). The old 3-component breakdown
+    # (Presence / Equal Levels / Rejection with per-line scores) explained HOW
+    # the sweep score was computed — scoring internals the trader doesn't act
+    # on. Collapsed to: overall tier + the rejection read + where the swept
+    # level sits (the confluence that actually matters). Score internals stay
+    # in trades.csv / sweep_components; nothing measured is lost.
+    if total >= 2.5:
+        tier_word, tier_col = "textbook", "#27ae60"
+    elif total >= 1.5:
+        tier_word, tier_col = "decent", "#f1c40f"
+    else:
+        tier_word, tier_col = "weak", "#888"
+
     return f"""
     <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #00bcd4;border-radius:4px;font-size:12px;color:#bbb;line-height:1.6;">
-        <div style="color:#eee;font-weight:bold;margin-bottom:6px;letter-spacing:0.5px;">SWEEP QUALITY BREAKDOWN</div>
-        <div>{presence_icon} <b style="color:#eee;">Presence:</b> {base:.2f}/1.5 &middot; {sweep_tf} sweep at {sweep_price_str}, {hrs_str}</div>
-        <div>{eq_icon} <b style="color:#eee;">Equal Levels:</b> {eq_score:.2f}/0.5 &middot; {eq_label}</div>
-        <div>{rej_icon} <b style="color:#eee;">Rejection Quality:</b> {rej_score:.2f}/1.0 &middot; {rej_label}</div>
+        <b style="color:#eee;">Sweep quality:</b> <b style="color:{tier_col};">{tier_word}</b>
+        &middot; {rej_label} &middot; {sweep_tf} sweep at {sweep_price_str}
         {location_html}
-        <div style="margin-top:4px;color:#eee;"><b>Total: {total:.2f}/3.0</b></div>
     </div>"""
 def send_email(subject, html_body, h1_chart_b64, m15_chart_b64):
     for recipient in config["account"].get("alert_emails", []):
@@ -2422,6 +2505,19 @@ if __name__ == "__main__":
             pool_ctx = None
         scan_record["pools"] = pool_ctx
 
+        # --- EQH/EQL equal-level clusters (informational) --- same family as
+        # the pool layer: detected on this fetch's CLOSED bars, surfaces in the
+        # email + scan log only. No score, no gate. live_eq_context drops the
+        # forming bar itself and never raises past its own guard.
+        try:
+            eq_ctx = eq_pools.live_eq_context(df_h1, h1_atr)
+        except Exception as _eq_err:
+            print(f"  [EQ WARN] {name}: eq context failed: {_eq_err}")
+            eq_ctx = None
+        scan_record["eq_clusters"] = (
+            [{k: c.get(k) for k in ("side", "level", "size", "status")}
+             for c in eq_ctx["clusters"]] if eq_ctx else None)
+
         surviving_obs = []
         for ob in pair_obs:
             proximal = float(ob['proximal_line'])
@@ -2712,6 +2808,67 @@ if __name__ == "__main__":
                 except Exception as _pf_err:
                     print(f"  [POOL WARN] {name}: trade features failed: {_pf_err}")
 
+            # EQH/EQL context for THIS trade (informational). One digest line
+            # plus the stop-placement warning when the trade's stop sits in
+            # front of a resting equal-level pool (eq_sl_at_risk geometry).
+            # None-safe: a dead EQ layer just drops the line.
+            eq_email = None
+            if eq_ctx:
+                try:
+                    _eq_feats = eq_pools.features_from_clusters(
+                        eq_ctx["clusters"], ref_price=current_price,
+                        sl=levels.get("sl"), direction=ob.get("direction"),
+                        atr=h1_atr, asof_pos=eq_ctx["asof_pos"])
+                    eq_email = {
+                        "line": eq_pools.format_eq_line(
+                            eq_ctx, current_price, h1_atr),
+                        "warning": eq_pools.format_eq_sl_warning(_eq_feats),
+                        "features": _eq_feats,
+                    }
+                except Exception as _eqf_err:
+                    print(f"  [EQ WARN] {name}: eq trade features failed: {_eqf_err}")
+
+            # WEEKLY PD ZONE (higher-timeframe premium/discount, informational).
+            # Compares the weekly PD read (price vs last completed week's high/
+            # low, from the SAME PWH/PWL the pool banner shows — pool_ctx carries
+            # the cached levels) against the H4 PD position the scorecard already
+            # computed. Produces one plain-English agreement line naming BOTH
+            # timeframes and BOTH percentages. None-safe: a dead layer / missing
+            # read just drops the line. No score, no gate.
+            weekly_pd_email = None
+            try:
+                _h4_pd = score_res.get('pd_position')  # H4 read, 0-1 scale
+                _wk_levels = (pool_ctx.get("levels") if pool_ctx else None)
+                _wk_feats = weekly_pd.live_features(
+                    df_h1, current_price, _h4_pd, weekly_levels=_wk_levels)
+                _wk_line = weekly_pd.format_agreement_line(
+                    _wk_feats, _h4_pd, bias)
+                if _wk_line:
+                    weekly_pd_email = {"line": _wk_line, "features": _wk_feats}
+            except Exception as _wk_err:
+                print(f"  [WEEKLY_PD WARN] {name}: weekly PD read failed: {_wk_err}")
+
+            # ── APPROACH QUALITY (scan-time entry mechanics, RETRACE_QUALITY_SPEC)
+            # The live twin of the backtest's fill-time approach columns: as of
+            # now, how did price travel into the zone over the last closed H1
+            # bars (speed toward zone in formation-ATR, candle body share, ER).
+            # Closed bars only (drop the forming bar, same convention the pool /
+            # chop reads above use). ATR = ob['h1_atr'] (the frozen OB-formation
+            # ATR, matching every backtest *_atr column). Observe-only: NO gate,
+            # NO score, NO verdict — one plain email line. Never raises; an
+            # all-None dict renders em-dashes. Computed ONCE here, shared by both
+            # the email payload and the phase2_zones stamp below.
+            _approach_closed = pool_builder.drop_forming(df_h1)
+            approach = approach_quality.features_now(
+                _approach_closed,
+                direction=ob.get("direction"),
+                atr=ob.get("h1_atr"),
+            )
+            approach_asof_utc = (
+                _approach_closed.index[-1].isoformat()
+                if _approach_closed is not None and len(_approach_closed) else None
+            )
+
             trade_data = {
                 "pair": name,
                 "bias": bias,
@@ -2729,6 +2886,15 @@ if __name__ == "__main__":
                                 if setup_name else None),
                 "levels": levels,
                 "ob": ob,
+                # Choppiness Index on the alert's server trading day — daily
+                # trend-vs-range regime as of THIS alert. Anchored at the last
+                # CLOSED H1 bar (drop the forming bar), grouped by the same
+                # server day PDH/PDL use. Observe-only, gates nothing; None when
+                # un-measurable. Backtest computes the identical value at
+                # alert_ts (h1_only_simulator). See compute_choppiness_index.
+                "chop_at_alert": smc_detector.compute_choppiness_index(
+                    df_h1, pool_builder.drop_forming(df_h1).index[-1]
+                    if len(pool_builder.drop_forming(df_h1)) else None),
                 "current_price": current_price,
                 "distance_to_proximal": distance,
                 "h1_atr": h1_atr,
@@ -2738,7 +2904,15 @@ if __name__ == "__main__":
                 "trend_label": trend_label,
                 "h1_trend": current_trend,
                 # PD/PW pools — email banner + dedup-state breadcrumb only.
-                "pools": pool_email
+                "pools": pool_email,
+                # EQH/EQL clusters — email banner line + stop warning only.
+                "eq": eq_email,
+                # Weekly PD zone — HTF premium/discount agreement line only.
+                "weekly_pd": weekly_pd_email,
+                # Approach-into-zone shape (RETRACE_QUALITY_SPEC) — one info line,
+                # no verdict. The 3 values + asof travel to the email builder here.
+                "approach": approach,
+                "approach_asof_utc": approach_asof_utc,
             }
             dr = score_res.get('dealing_range')
 
@@ -2908,6 +3082,16 @@ if __name__ == "__main__":
                 # so this is the only place the full record survives long enough
                 # to be archived when the zone later dies (see GC eviction).
                 "ob_snapshot": ob,
+                # Approach-into-zone shape at this email (RETRACE_QUALITY_SPEC §4).
+                # MUTABLE BY DESIGN — re-stamped on every email (fresh/reentry/
+                # still_valid) because it is a rolling scan-time observation, not
+                # frozen OB state; approach_asof_utc disambiguates. archive_
+                # phase2_zone carries this dict to phase2_history when the zone
+                # dies, so backtest-comparable history comes free.
+                "approach_speed_atr_at_email": approach["approach_speed_atr_at_fill"],
+                "approach_body_ratio_at_email": approach["approach_body_ratio_at_fill"],
+                "approach_er_at_email": approach["approach_er_at_fill"],
+                "approach_asof_utc": approach_asof_utc,
             }
             # H1 wide context + H1 zoomed entry. The "m15_chart" variable name
             # is preserved through the email plumbing for now (CID = chart_m15,

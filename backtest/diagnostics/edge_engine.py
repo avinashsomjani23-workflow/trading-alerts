@@ -131,7 +131,7 @@ CONTINUOUS_FEATURES = [
     "break_close_atr", "break_body_atr", "impulse_leg_atr", "fvg_size_atr",
     "ob_range_atr", "atr_at_ob", "pd_pct", "reversal_pct", "ob_age_h1_bars",
     "ob_to_fill_hours", "bars_break_to_pullback", "bos_sequence_count",
-    "score", "alert_utc_hour", "ob_body_ratio",
+    "score", "alert_utc_hour", "ob_body_ratio", "chop_at_alert",
     # STRUCTURE_SIGNALS_SPEC S3 screen candidate (support cols leg_extreme_at_alert /
     # leg_extreme_clipped are NOT screened — they are audit/derivation support).
     "leg_retrace_pct_at_alert",

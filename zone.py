@@ -113,6 +113,10 @@ class Zone:
     # candle took). Nullable for zones created before this logging shipped.
     body_ratio: Optional[float] = None
     walkback_depth: Optional[int] = None
+    # NOTE: daily trend-vs-chop regime is logged as chop_at_alert, computed at
+    # the ALERT bar (Phase 2 / backtest row build), NOT frozen on the zone — it
+    # must read current regime, not stale OB-birth context. Nothing regime-
+    # related lives here. (see smc_detector.compute_choppiness_index)
 
     # df-frame indices (roll each scan; refreshed together)
     bos_idx: Optional[int] = None

@@ -529,6 +529,7 @@ surviving confluence — that IS the "best recipe from the data points".
 | Population flags | `eligible_for_headline`, `headline_exclusion`, `ist_blocked`, `weekend_blocked`, `killzone_blocked`, `news_blocked` | row filters / confounder context (§3.1, §5.5); never features |
 | Redundant | §5.1 redundant-by-construction list | excluded, reason recorded there |
 | Decreed out | `sweep_*` (rebuild workstream), `news_event_*` (confounder only), NAS100 | §5.1 |
+| Approach quality (fill-time entry mechanics, RETRACE_QUALITY_SPEC, built 2026-07-15) | `approach_speed_atr_at_fill`, `approach_body_ratio_at_fill`, `approach_er_at_fill` | FILL-time features — NEVER §5.1 alert-time screen inputs (look-ahead wall: unknown at alert). Judged ONLY under the pre-registered hypotheses H-A/H-C (RETRACE_QUALITY_SPEC §0.1, F-rule thresholds, FX and GOLD bucketed separately; H-B rides the existing `bars_break_to_pullback`). actionable_at: order_rule (cancel-pending-limit) if validated. No email verdict / gate / score until then |
 
 - Rule for the future: any NEW trades.csv feature column added by the logging workstream must
   be placed in this table (feature / outcome / flag / redundant) before a run feeds the engine;
