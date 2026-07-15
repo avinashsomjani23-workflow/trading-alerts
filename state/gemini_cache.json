@@ -10,5 +10,9 @@
   },
   "EURUSD|2026-07-15": {
     "macro_summary": "US Core PPI and PPI at 18:00 IST are scheduled; a lower-than-expected reading would help this EURUSD long, while a higher reading would hurt it. Fed Chairman Warsh testifying at 19:30 IST presents a risk; hawkish commentary would hurt this trade, while dovish commentary would help. All events are yet to occur."
+  },
+  "NZDUSD|2026-07-15": {
+    "macro_summary": null,
+    "macro_unavailable": true
   }
 }
