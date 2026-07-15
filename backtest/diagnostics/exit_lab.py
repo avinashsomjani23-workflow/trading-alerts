@@ -26,7 +26,7 @@ import argparse
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -34,6 +34,7 @@ import pandas as pd
 from backtest import data_loader, insights
 from backtest.exit_engine import walk_multileg
 from backtest import h1_only_simulator as sim
+import smc_detector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -50,12 +51,48 @@ CONFIGS: Dict[str, Dict[str, Any]] = {
     "C_fullTP_1.5R":         {"legs": [(1.0, 1.5)], "be_trigger_r": None},
     "C_fullTP_2.0R":         {"legs": [(1.0, 2.0)], "be_trigger_r": None},
     "D_partial50_1R_runLiq": {"legs": [(0.5, 1.0), (0.5, "tp1")], "be_trigger_r": 1.0, "be_to_r": 0.0},
+    # ATR-anchored mechanical exit (the KVignesh MT5-bot exit, for a head-to-head
+    # vs our structural stop). SL = atr_sl_mult x ATR, TP = atr_tp_mult x ATR, both
+    # measured from the fill price — NOT the structural r_distance. `atr_sl_mult`
+    # present => _replay REBUILDS sl / r_distance / target from ATR-14 computed on
+    # the H1 bars STRICTLY BEFORE the fill candle (causal — the fill bar is still
+    # forming when a live order fills, so its range is unknown; and NOT atr_at_ob,
+    # which is frozen at OB formation and is stale when the OB sat unfilled for many
+    # bars). Single target, no BE, no trail — his exact mechanical exit. Trades with
+    # <15 prior bars are skipped for this recipe (real ATR unavailable; never faked).
+    "E_atr_sl1.5_tp2.5":     {"legs": [(1.0, "atr_tp")], "be_trigger_r": None,
+                              "atr_sl_mult": 1.5, "atr_tp_mult": 2.5, "atr_period": 14},
 }
 
 
 def _quarter(ts) -> str:
     ts = pd.to_datetime(ts, utc=True)
     return f"{ts.year}Q{(ts.month - 1) // 3 + 1}"
+
+
+def _atr_at_fill(pb: pd.DataFrame, fill_ts, period: int = 14):
+    """ATR(period) as it would be known the instant a live order fills.
+
+    CAUSAL — no look-ahead. A live ATR stop is set the moment the limit order
+    fills; the fill bar is still FORMING at that instant, so only bars STRICTLY
+    BEFORE the fill are closed and known. We therefore compute ATR on
+    `pb[pb.index < fill_ts]` (< not <=). Including the fill bar would leak that
+    bar's own range into the stop — a one-bar look-ahead the trader flagged.
+
+    Uses the engine's OWN ATR (smc_detector.compute_atr = simple mean of the last
+    `period` true ranges) — NOT a bespoke Wilder ATR — so this recipe's volatility
+    matches `atr_at_ob` and every other *_atr in the system (one ATR definition).
+
+    This is deliberately NOT `atr_at_ob` (frozen at OB formation): an OB can sit
+    unfilled for many bars, so its formation ATR is stale by fill time. We want the
+    volatility at the fill, which is what a live ATR stop would see.
+
+    Returns None when <period+1 prior bars exist (compute_atr returns None) — the
+    ATR is undefined and is NEVER fabricated.
+    """
+    prior = pb.loc[pb.index < fill_ts]
+    atr = smc_detector.compute_atr(prior, period=period)
+    return atr if (atr and atr > 0) else None
 
 
 def _symbol_map() -> Dict[str, str]:
@@ -122,8 +159,35 @@ def _replay(trades: pd.DataFrame, bars: Dict[str, pd.DataFrame]) -> pd.DataFrame
             "break_body_atr": t.get("break_body_atr"),
             "pd_zone": t.get("pd_zone"), "event": t.get("event"),
         }
+        # ATR at the fill candle (fresh, period-14) — only computed if an ATR
+        # recipe needs it. None when <15 pre-fill bars exist (ATR undefined).
+        _atr_fill_cache: Dict[int, Optional[float]] = {}
         for name, cfg in CONFIGS.items():
-            res = walk_multileg(future, bias, entry, sl, r_distance, tp1, cfg,
+            r_sl, r_rd, r_tp1, r_legs = sl, r_distance, tp1, None
+            atr_mult = cfg.get("atr_sl_mult")
+            if atr_mult is not None:
+                period = int(cfg.get("atr_period", 14))
+                if period not in _atr_fill_cache:
+                    _atr_fill_cache[period] = _atr_at_fill(pb, fill_ts, period)
+                atr_fill = _atr_fill_cache[period]
+                if not atr_fill:
+                    # No real ATR at fill -> this recipe cannot run for this trade.
+                    rows.append({**base, "config": name, "r": np.nan,
+                                 "recipe_exit_reason": "no_atr",
+                                 "recipe_mfe_r": np.nan, "recipe_mae_r": np.nan})
+                    continue
+                # Rebuild SL / risk / target from the FILL-bar ATR (not r_distance).
+                r_rd = float(atr_mult) * atr_fill
+                r_sl = (entry - r_rd) if bias == "LONG" else (entry + r_rd)
+                # Resolve each leg's "atr_tp" spec to an R-multiple of the ATR risk:
+                #   TP at atr_tp_mult x ATR  ==  (atr_tp_mult / atr_sl_mult) R.
+                tp_R = float(cfg["atr_tp_mult"]) / float(atr_mult)
+                r_legs = [(frac, tp_R if spec == "atr_tp" else spec)
+                          for frac, spec in cfg["legs"]]
+            run_cfg = dict(cfg)
+            if r_legs is not None:
+                run_cfg["legs"] = r_legs
+            res = walk_multileg(future, bias, entry, r_sl, r_rd, r_tp1, run_cfg,
                                 weekend_flat=wk_flat, weekend_hour_utc=wk_hour,
                                 max_hold=max_hold)
             rows.append({**base, "config": name, "r": res["r_realised"],
@@ -138,6 +202,9 @@ def _recipe_summary(rep: pd.DataFrame, r_col: str = "r") -> pd.DataFrame:
     out = []
     for name in CONFIGS:
         sub = rep[rep["config"] == name]
+        # ATR recipes emit NaN r for trades with no fill-bar ATR (<15 pre-fill
+        # bars). Drop them so totR/expR/CI/quarters are computed on real exits only.
+        sub = sub[sub[r_col].notna()]
         if sub.empty:
             continue
         vals = sub[r_col].tolist()
