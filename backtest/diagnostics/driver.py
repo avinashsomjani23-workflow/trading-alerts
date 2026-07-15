@@ -459,7 +459,7 @@ def walk_detection(pair_conf: Dict[str, Any], df: pd.DataFrame,
         with contextlib.redirect_stdout(io.StringIO()):
             raw = smc_radar.detect_smc_radar(
                 slice_df, pair_type=pair_type, events=events,
-                walls=walls, pair_name=pair_name)
+                walls=walls, pair_name=pair_name, cap_zones=False)
         raw_type = _classify_radar_return(raw)
         obs = replay_engine._normalize_obs_result(raw)
         sv2 = walls.get("structure_v2", {}) or {}
@@ -564,7 +564,8 @@ def census_full_df(pair_conf: Dict[str, Any], df: pd.DataFrame) -> CensusResult:
     events = walls.get("events", []) or []
     with contextlib.redirect_stdout(io.StringIO()):
         raw = smc_radar.detect_smc_radar(df, pair_type=pair_type, events=events,
-                                         walls=walls, pair_name=pair_name)
+                                         walls=walls, pair_name=pair_name,
+                                         cap_zones=False)
     obs = replay_engine._normalize_obs_result(raw)
     sv2 = walls.get("structure_v2", {}) or {}
     return CensusResult(

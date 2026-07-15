@@ -298,6 +298,7 @@ def replay_pair(
                     events=events,
                     walls=walls,
                     pair_name=pair_name,
+                    cap_zones=False,   # backtest sees EVERY OB (no 2-OB live cap)
                 )
         except Exception as e:
             diag["radar_errors"] += 1
