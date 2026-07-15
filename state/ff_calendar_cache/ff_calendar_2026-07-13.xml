@@ -161,26 +161,6 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/96-sz-ppi-mm]]></url>
 	</event>
 	<event>
-		<title>M2 Money Supply y/y</title>
-		<country>CNY</country>
-		<date><![CDATA[07-14-2026]]></date>
-		<time><![CDATA[8:03am]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[8.5%]]></forecast>
-		<previous><![CDATA[8.6%]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/476-ch-m2-money-supply-yy]]></url>
-	</event>
-	<event>
-		<title>New Loans</title>
-		<country>CNY</country>
-		<date><![CDATA[07-14-2026]]></date>
-		<time><![CDATA[8:03am]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[1950B]]></forecast>
-		<previous><![CDATA[520B]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/477-ch-new-loans]]></url>
-	</event>
-	<event>
 		<title>BOE Gov Bailey Speaks</title>
 		<country>GBP</country>
 		<date><![CDATA[07-14-2026]]></date>
@@ -441,6 +421,26 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/220-ez-industrial-production-mm]]></url>
 	</event>
 	<event>
+		<title>M2 Money Supply y/y</title>
+		<country>CNY</country>
+		<date><![CDATA[07-15-2026]]></date>
+		<time><![CDATA[9:33am]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast><![CDATA[8.5%]]></forecast>
+		<previous><![CDATA[8.6%]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/476-ch-m2-money-supply-yy]]></url>
+	</event>
+	<event>
+		<title>New Loans</title>
+		<country>CNY</country>
+		<date><![CDATA[07-15-2026]]></date>
+		<time><![CDATA[9:33am]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast><![CDATA[1950B]]></forecast>
+		<previous><![CDATA[520B]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/477-ch-new-loans]]></url>
+	</event>
+	<event>
 		<title>German 30-y Bond Auction</title>
 		<country>EUR</country>
 		<date><![CDATA[07-15-2026]]></date>
@@ -486,7 +486,7 @@
 		<date><![CDATA[07-15-2026]]></date>
 		<time><![CDATA[12:30pm]]></time>
 		<impact><![CDATA[High]]></impact>
-		<forecast><![CDATA[0.4%]]></forecast>
+		<forecast><![CDATA[0.3%]]></forecast>
 		<previous><![CDATA[0.4%]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/87-us-core-ppi-mm]]></url>
 	</event>
@@ -506,7 +506,7 @@
 		<date><![CDATA[07-15-2026]]></date>
 		<time><![CDATA[12:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[9.4]]></forecast>
+		<forecast><![CDATA[9.3]]></forecast>
 		<previous><![CDATA[5.7]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/207-us-empire-state-manufacturing-index]]></url>
 	</event>
@@ -566,7 +566,7 @@
 		<date><![CDATA[07-15-2026]]></date>
 		<time><![CDATA[2:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast />
+		<forecast><![CDATA[-1.8M]]></forecast>
 		<previous><![CDATA[3.0M]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/10-us-crude-oil-inventories]]></url>
 	</event>
@@ -806,7 +806,7 @@
 		<date><![CDATA[07-16-2026]]></date>
 		<time><![CDATA[2:00pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[-0.4%]]></forecast>
+		<forecast><![CDATA[-0.5%]]></forecast>
 		<previous><![CDATA[3.8%]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/233-us-pending-home-sales-mm]]></url>
 	</event>
@@ -816,7 +816,7 @@
 		<date><![CDATA[07-16-2026]]></date>
 		<time><![CDATA[2:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast />
+		<forecast><![CDATA[45B]]></forecast>
 		<previous><![CDATA[61B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/26-us-natural-gas-storage]]></url>
 	</event>
@@ -869,6 +869,16 @@
 		<forecast />
 		<previous />
 		<url><![CDATA[https://www.forexfactory.com/calendar/881-us-fomc-member-jefferson-speaks]]></url>
+	</event>
+	<event>
+		<title>President Trump Speaks</title>
+		<country>USD</country>
+		<date><![CDATA[07-17-2026]]></date>
+		<time><![CDATA[1:00am]]></time>
+		<impact><![CDATA[Medium]]></impact>
+		<forecast />
+		<previous />
+		<url><![CDATA[https://www.forexfactory.com/calendar/645-us-president-trump-speaks]]></url>
 	</event>
 	<event>
 		<title>Current Account</title>
