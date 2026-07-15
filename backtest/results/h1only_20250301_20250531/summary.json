@@ -8,194 +8,298 @@
     "mode": "h1_only",
     "pairs": [
       "EURUSD",
-      "GOLD"
+      "NZDUSD",
+      "USDJPY",
+      "USDCHF",
+      "GOLD",
+      "GBPUSD",
+      "AUDUSD",
+      "USDCAD",
+      "EURJPY",
+      "BTCUSD"
     ],
-    "generated_utc": "2026-07-13T12:12:40.677750+00:00",
-    "code_sha": "2c8d978-dirty",
+    "generated_utc": "2026-07-15T15:29:21.110194+00:00",
+    "code_sha": "ddef986-dirty",
     "news_coverage": {
       "ff": false
     },
     "news_events_fetched": 0,
     "news_blocked_rows": 0,
     "news_window_minutes": 30,
-    "ist_blocked_rows": 49,
+    "ist_blocked_rows": 534,
     "ist_window_forex": "UTC 03:30-18:30 (IST 09:00-24:00)",
     "ist_window_index": "UTC 03:30-18:30 (IST 09:00-24:00)",
-    "killzone_dropped_alerts": 113,
+    "killzone_dropped_alerts": 1117,
     "killzone_drops_by_pair": {
-      "EURUSD": 59,
-      "GOLD": 54
+      "EURUSD": 115,
+      "USDJPY": 112,
+      "NZDUSD": 95,
+      "USDCHF": 83,
+      "GOLD": 83,
+      "GBPUSD": 123,
+      "AUDUSD": 117,
+      "USDCAD": 117,
+      "EURJPY": 106,
+      "BTCUSD": 166
     },
     "killzone_windows_by_pair": {
       "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
-      "GOLD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
+      "USDJPY": "Asian Range: 20:00-00:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "NZDUSD": "Asian Range: 20:00-00:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "USDCHF": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "GOLD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "GBPUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "AUDUSD": "Asian Range: 20:00-00:00 America/New_York, London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York",
+      "USDCAD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "EURJPY": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "BTCUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York"
     }
   },
   "risk_per_trade_usd": 250.0,
-  "total_trade_rows": 107,
+  "total_trade_rows": 1165,
   "fill_rate_proximal": {
-    "alerts": 107,
-    "filled": 84,
-    "fill_rate_pct": 78.5
+    "alerts": 1165,
+    "filled": 816,
+    "fill_rate_pct": 70.0
   },
   "exit_reason_counts_proximal": {
-    "never_filled": 23,
-    "sl": 64,
-    "tp1": 16,
-    "friday_flat": 4
+    "never_filled": 348,
+    "tp1": 398,
+    "sl": 390,
+    "friday_flat": 28,
+    "timeout": 1
   },
   "scoreboards": {
     "proximal_realised": {
-      "trades": 84,
-      "wins": 20,
-      "losses": 47,
-      "breakevens": 17,
-      "win_rate_pct": 29.9,
-      "expectancy_r": -0.154,
-      "expectancy_usd": -38.62,
-      "total_r": -12.976,
-      "total_pnl_usd": -3244.0,
-      "avg_win_r": 1.701,
-      "avg_loss_r": -1.0,
-      "avg_win_usd": 425.0,
-      "avg_loss_usd": -250.0,
-      "avg_mfe_r": 1.783,
-      "avg_mae_r": -0.376,
-      "win_capture_pct": 95.0
+      "trades": 816,
+      "wins": 415,
+      "losses": 366,
+      "breakevens": 35,
+      "win_rate_pct": 53.1,
+      "expectancy_r": -0.021,
+      "expectancy_usd": -5.33,
+      "total_r": -17.413,
+      "total_pnl_usd": -4353.25,
+      "avg_win_r": 0.824,
+      "avg_loss_r": -0.981,
+      "avg_win_usd": 206.0,
+      "avg_loss_usd": -245.0,
+      "avg_mfe_r": 0.83,
+      "avg_mae_r": -0.32,
+      "win_capture_pct": 99.0
     },
     "proximal_exit_tp1": {
-      "trades": 84,
-      "wins": 25,
-      "losses": 59,
+      "trades": 816,
+      "wins": 420,
+      "losses": 396,
       "breakevens": 0,
-      "win_rate_pct": 29.8,
-      "expectancy_r": -0.066,
-      "expectancy_usd": -16.57,
-      "total_r": -5.569,
-      "total_pnl_usd": -1392.25,
-      "avg_win_r": 2.137,
-      "avg_loss_r": -1.0,
-      "avg_win_usd": 534.0,
-      "avg_loss_usd": -250.0,
-      "avg_mfe_r": 1.886,
-      "avg_mae_r": -0.345,
-      "win_capture_pct": 113.0
+      "win_rate_pct": 51.5,
+      "expectancy_r": 0.022,
+      "expectancy_usd": 5.55,
+      "total_r": 18.124,
+      "total_pnl_usd": 4531.0,
+      "avg_win_r": 0.984,
+      "avg_loss_r": -0.998,
+      "avg_win_usd": 246.0,
+      "avg_loss_usd": -249.0,
+      "avg_mfe_r": 0.85,
+      "avg_mae_r": -0.325,
+      "win_capture_pct": 116.0
     },
     "proximal_exit_tp2": {
-      "trades": 84,
-      "wins": 13,
-      "losses": 59,
-      "breakevens": 12,
-      "win_rate_pct": 18.1,
-      "expectancy_r": 0.499,
-      "expectancy_usd": 124.78,
-      "total_r": 41.925,
-      "total_pnl_usd": 10481.25,
-      "avg_win_r": 7.763,
-      "avg_loss_r": -1.0,
-      "avg_win_usd": 1941.0,
-      "avg_loss_usd": -250.0,
-      "avg_mfe_r": 1.968,
-      "avg_mae_r": -0.345,
-      "win_capture_pct": 394.0
+      "trades": 816,
+      "wins": 138,
+      "losses": 398,
+      "breakevens": 280,
+      "win_rate_pct": 25.7,
+      "expectancy_r": 0.164,
+      "expectancy_usd": 40.89,
+      "total_r": 133.481,
+      "total_pnl_usd": 33370.25,
+      "avg_win_r": 3.841,
+      "avg_loss_r": -0.996,
+      "avg_win_usd": 960.0,
+      "avg_loss_usd": -249.0,
+      "avg_mfe_r": 0.909,
+      "avg_mae_r": -0.325,
+      "win_capture_pct": 423.0
     }
   },
   "per_pair_proximal_realised": [
     {
+      "pair": "USDCAD",
+      "trades": 109,
+      "win_rate_pct": 60.6,
+      "expectancy_r": 0.202,
+      "total_pnl_usd": 5498.75,
+      "verdict": "edge"
+    },
+    {
+      "pair": "EURJPY",
+      "trades": 101,
+      "win_rate_pct": 65.3,
+      "expectancy_r": 0.192,
+      "total_pnl_usd": 4839.0,
+      "verdict": "edge"
+    },
+    {
+      "pair": "AUDUSD",
+      "trades": 97,
+      "win_rate_pct": 61.1,
+      "expectancy_r": 0.078,
+      "total_pnl_usd": 1898.75,
+      "verdict": "unproven"
+    },
+    {
+      "pair": "NZDUSD",
+      "trades": 72,
+      "win_rate_pct": 55.7,
+      "expectancy_r": -0.005,
+      "total_pnl_usd": -88.25,
+      "verdict": "unproven"
+    },
+    {
+      "pair": "USDCHF",
+      "trades": 68,
+      "win_rate_pct": 54.0,
+      "expectancy_r": -0.005,
+      "total_pnl_usd": -92.0,
+      "verdict": "unproven"
+    },
+    {
+      "pair": "BTCUSD",
+      "trades": 64,
+      "win_rate_pct": 50.8,
+      "expectancy_r": -0.103,
+      "total_pnl_usd": -1650.25,
+      "verdict": "unproven"
+    },
+    {
+      "pair": "USDJPY",
+      "trades": 69,
+      "win_rate_pct": 49.3,
+      "expectancy_r": -0.112,
+      "total_pnl_usd": -1940.0,
+      "verdict": "unproven"
+    },
+    {
       "pair": "GOLD",
-      "trades": 37,
-      "win_rate_pct": 35.7,
-      "expectancy_r": 0.008,
-      "total_pnl_usd": 77.25,
+      "trades": 67,
+      "win_rate_pct": 37.3,
+      "expectancy_r": -0.219,
+      "total_pnl_usd": -3673.25,
       "verdict": "unproven"
     },
     {
       "pair": "EURUSD",
-      "trades": 47,
-      "win_rate_pct": 25.6,
-      "expectancy_r": -0.283,
-      "total_pnl_usd": -3321.25,
-      "verdict": "unproven"
+      "trades": 79,
+      "win_rate_pct": 44.0,
+      "expectancy_r": -0.226,
+      "total_pnl_usd": -4458.75,
+      "verdict": "loser"
+    },
+    {
+      "pair": "GBPUSD",
+      "trades": 90,
+      "win_rate_pct": 42.5,
+      "expectancy_r": -0.208,
+      "total_pnl_usd": -4687.25,
+      "verdict": "loser"
     }
   ],
   "per_session_proximal_realised": [
     {
       "session": "Asia",
-      "trades": 7,
-      "win_rate_pct": 71.4,
-      "expectancy_r": 1.039,
-      "total_pnl_usd": 1819.0
+      "trades": 64,
+      "win_rate_pct": 56.5,
+      "expectancy_r": -0.017,
+      "total_pnl_usd": -272.75
     },
     {
       "session": "London",
-      "trades": 40,
-      "win_rate_pct": 33.3,
-      "expectancy_r": -0.023,
-      "total_pnl_usd": -228.5
+      "trades": 346,
+      "win_rate_pct": 54.6,
+      "expectancy_r": 0.017,
+      "total_pnl_usd": 1481.5
     },
     {
       "session": "NY",
-      "trades": 37,
-      "win_rate_pct": 16.7,
-      "expectancy_r": -0.523,
-      "total_pnl_usd": -4834.5
+      "trades": 406,
+      "win_rate_pct": 51.4,
+      "expectancy_r": -0.055,
+      "total_pnl_usd": -5562.0
     }
   ],
   "score_buckets_proximal_realised": [
     {
+      "score_bucket": "2-3",
+      "trades": 2,
+      "win_rate_pct": 50.0,
+      "expectancy_r": -0.052
+    },
+    {
       "score_bucket": "3-4",
-      "trades": 1,
-      "win_rate_pct": null,
-      "expectancy_r": 0.0
+      "trades": 43,
+      "win_rate_pct": 38.1,
+      "expectancy_r": -0.29
     },
     {
       "score_bucket": "4-5",
-      "trades": 13,
-      "win_rate_pct": 40.0,
-      "expectancy_r": 0.09
+      "trades": 156,
+      "win_rate_pct": 60.1,
+      "expectancy_r": 0.099
     },
     {
       "score_bucket": "5-6",
-      "trades": 17,
-      "win_rate_pct": 16.7,
-      "expectancy_r": -0.327
+      "trades": 146,
+      "win_rate_pct": 50.7,
+      "expectancy_r": -0.062
     },
     {
       "score_bucket": "6-7",
-      "trades": 26,
-      "win_rate_pct": 31.8,
-      "expectancy_r": -0.13
+      "trades": 186,
+      "win_rate_pct": 50.6,
+      "expectancy_r": -0.075
     },
     {
       "score_bucket": "7+",
-      "trades": 27,
-      "win_rate_pct": 30.4,
-      "expectancy_r": -0.193
+      "trades": 283,
+      "win_rate_pct": 54.4,
+      "expectancy_r": 0.01
     }
   ],
   "news_blocked_trade_rows": 0,
   "news_blocked_audit": [],
-  "killzone_dropped_alerts": 113,
+  "killzone_dropped_alerts": 1117,
   "killzone_drops_by_pair": {
-    "EURUSD": 59,
-    "GOLD": 54
+    "EURUSD": 115,
+    "USDJPY": 112,
+    "NZDUSD": 95,
+    "USDCHF": 83,
+    "GOLD": 83,
+    "GBPUSD": 123,
+    "AUDUSD": 117,
+    "USDCAD": 117,
+    "EURJPY": 106,
+    "BTCUSD": 166
   },
   "killzone_windows_by_pair": {
     "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
-    "GOLD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
+    "USDJPY": "Asian Range: 20:00-00:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "NZDUSD": "Asian Range: 20:00-00:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "USDCHF": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "GOLD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "GBPUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "AUDUSD": "Asian Range: 20:00-00:00 America/New_York, London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York",
+    "USDCAD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "EURJPY": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "BTCUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York"
   },
   "score_floor": 4.0,
   "below_score_floor_trade_rows": 0,
   "below_score_floor_audit": [],
-  "ist_blocked_trade_rows": 49,
+  "ist_blocked_trade_rows": 534,
   "ist_blocked_audit": [
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2025-03-02T22:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
     {
       "pair": "EURUSD",
       "alert_ts": "2025-03-02T22:00:00+00:00",
@@ -205,10 +309,24 @@
     },
     {
       "pair": "EURUSD",
+      "alert_ts": "2025-03-02T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
       "alert_ts": "2025-03-06T02:00:00+00:00",
       "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": 0.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-03-06T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -222,26 +340,61 @@
       "alert_ts": "2025-03-14T02:00:00+00:00",
       "score": 5.0,
       "exit_reason": "tp1",
-      "would_have_r": 1.576
+      "would_have_r": 0.652
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2025-03-31T00:00:00+00:00",
       "score": 7.0,
       "exit_reason": "tp1",
-      "would_have_r": 1.333
+      "would_have_r": 0.513
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2025-03-31T01:00:00+00:00",
       "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.486
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 6.0,
       "exit_reason": "sl",
-      "would_have_r": 0.0
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2025-04-03T00:00:00+00:00",
       "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-06T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-06T22:00:00+00:00",
+      "score": 6.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -254,8 +407,99 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2025-04-09T23:00:00+00:00",
+      "alert_ts": "2025-04-08T20:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-09T19:00:00+00:00",
       "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-09T19:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-09T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.642
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-09T19:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-09T20:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-09T20:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-09T21:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-09T21:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-09T22:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-09T22:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-09T23:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-10T00:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-10T01:00:00+00:00",
+      "score": 4.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -268,6 +512,20 @@
     },
     {
       "pair": "EURUSD",
+      "alert_ts": "2025-04-10T02:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-04-10T03:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
       "alert_ts": "2025-04-11T00:00:00+00:00",
       "score": 8.0,
       "exit_reason": "never_filled",
@@ -275,10 +533,17 @@
     },
     {
       "pair": "EURUSD",
+      "alert_ts": "2025-04-16T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "timeout",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
       "alert_ts": "2025-04-20T22:00:00+00:00",
       "score": 6.0,
       "exit_reason": "tp1",
-      "would_have_r": 1.783
+      "would_have_r": 0.506
     },
     {
       "pair": "EURUSD",
@@ -289,24 +554,31 @@
     },
     {
       "pair": "EURUSD",
+      "alert_ts": "2025-04-27T23:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
       "alert_ts": "2025-04-29T19:00:00+00:00",
       "score": 4.0,
-      "exit_reason": "sl",
-      "would_have_r": 0.0
+      "exit_reason": "tp1",
+      "would_have_r": 0.698
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2025-04-30T02:00:00+00:00",
       "score": 5.0,
-      "exit_reason": "sl",
-      "would_have_r": 0.0
+      "exit_reason": "tp1",
+      "would_have_r": 0.875
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2025-05-01T02:00:00+00:00",
       "score": 7.0,
       "exit_reason": "tp1",
-      "would_have_r": 1.396
+      "would_have_r": 0.518
     },
     {
       "pair": "EURUSD",
@@ -317,10 +589,31 @@
     },
     {
       "pair": "EURUSD",
+      "alert_ts": "2025-05-08T02:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-05-14T19:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
       "alert_ts": "2025-05-14T19:00:00+00:00",
       "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.551
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-05-18T22:00:00+00:00",
+      "score": 4.0,
       "exit_reason": "sl",
-      "would_have_r": 0.0
+      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -328,6 +621,13 @@
       "score": 9.0,
       "exit_reason": "tp1",
       "would_have_r": 0.741
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2025-05-21T03:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
     },
     {
       "pair": "EURUSD",
@@ -345,17 +645,1102 @@
     },
     {
       "pair": "EURUSD",
+      "alert_ts": "2025-05-28T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
       "alert_ts": "2025-05-29T00:00:00+00:00",
       "score": 5.0,
       "exit_reason": "tp1",
-      "would_have_r": 1.681
+      "would_have_r": 0.802
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-03T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-03T21:00:00+00:00",
+      "score": 7.2,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-03T21:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.908
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-04T20:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.923
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-04T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-06T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-07T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-07T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-07T20:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-12T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.909
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-14T01:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.54
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-14T02:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-18T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 6.024
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-19T19:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-19T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-21T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.837
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-24T00:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-25T00:00:00+00:00",
+      "score": 2.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.676
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-27T02:00:00+00:00",
+      "score": 3.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-03-30T23:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "tp1",
+      "would_have_r": 0.837
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-01T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-09T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-11T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-14T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.471
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-17T02:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-17T02:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-20T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-22T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-22T19:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-22T22:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "tp1",
+      "would_have_r": 0.585
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-22T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-22T23:00:00+00:00",
+      "score": 3.5,
+      "exit_reason": "tp1",
+      "would_have_r": 1.519
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-25T00:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-25T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "friday_flat",
+      "would_have_r": 0.3
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-25T01:00:00+00:00",
+      "score": 3.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-28T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-04-30T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.541
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-01T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.479
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-02T01:00:00+00:00",
+      "score": 2.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-05T20:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "tp1",
+      "would_have_r": 0.479
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-06T03:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "tp1",
+      "would_have_r": 0.479
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-06T23:00:00+00:00",
+      "score": 7.7,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-06T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-07T19:00:00+00:00",
+      "score": 6.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-07T19:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-07T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-16T01:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.56
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-18T22:00:00+00:00",
+      "score": 8.4,
+      "exit_reason": "tp1",
+      "would_have_r": 1.064
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-20T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-20T23:00:00+00:00",
+      "score": 8.4,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-21T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-21T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-21T23:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-21T23:00:00+00:00",
+      "score": 3.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-22T03:00:00+00:00",
+      "score": 2.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-26T03:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-26T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-26T23:00:00+00:00",
+      "score": 2.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-28T02:00:00+00:00",
+      "score": 3.5,
+      "exit_reason": "tp1",
+      "would_have_r": 0.854
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-29T00:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-29T00:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-30T00:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.598
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2025-05-30T02:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-02T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-03T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-03T20:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 4.168
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-04T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-04T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-07T03:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.373
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-09T23:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-10T19:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.451
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-11T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.817
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-19T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.673
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-21T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.441
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-24T02:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.601
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-24T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.537
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-24T22:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.642
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-25T19:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.791
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-27T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-28T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.894
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-30T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.209
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-03-31T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-01T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-01T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.736
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.803
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.827
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.736
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-03T01:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-03T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-04T03:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-06T23:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.064
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-09T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-11T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-14T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.699
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-15T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-15T19:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.805
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-17T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-18T03:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-18T03:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-20T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-20T23:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-21T22:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-22T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.964
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-22T23:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-04-23T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-01T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-05T03:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.762
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-08T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-12T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.429
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-16T03:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "friday_flat",
+      "would_have_r": -0.16
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-21T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.965
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-21T02:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.812
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-27T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-27T22:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-28T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-28T03:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-28T19:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-29T00:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-29T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "NZDUSD",
+      "alert_ts": "2025-05-29T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-03-02T23:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-03-03T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.756
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-03-04T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-03-06T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-03-06T23:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-03-12T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-03-20T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-03-26T22:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.578
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-03-27T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-03-30T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-04-02T23:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-04-02T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-04-16T22:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-04-21T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-04-22T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-04-28T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-04-30T20:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-01T22:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-06T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-11T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-13T21:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-13T22:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-15T03:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-16T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-18T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.771
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-20T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-26T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-26T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-27T22:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.699
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-28T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-29T00:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2025-05-29T00:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-03-02T23:00:00+00:00",
+      "score": 5.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
     },
     {
       "pair": "GOLD",
       "alert_ts": "2025-03-02T23:00:00+00:00",
       "score": 5.0,
-      "exit_reason": "sl",
-      "would_have_r": 0.0
+      "exit_reason": "tp1",
+      "would_have_r": 0.74
     },
     {
       "pair": "GOLD",
@@ -366,10 +1751,17 @@
     },
     {
       "pair": "GOLD",
-      "alert_ts": "2025-03-03T23:00:00+00:00",
+      "alert_ts": "2025-03-03T21:00:00+00:00",
       "score": 7.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-03-10T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
     },
     {
       "pair": "GOLD",
@@ -410,6 +1802,13 @@
       "pair": "GOLD",
       "alert_ts": "2025-04-03T00:00:00+00:00",
       "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-04-04T03:00:00+00:00",
+      "score": 3.5,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -464,6 +1863,20 @@
     },
     {
       "pair": "GOLD",
+      "alert_ts": "2025-05-05T02:00:00+00:00",
+      "score": 3.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-05-05T02:00:00+00:00",
+      "score": 8.2,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
       "alert_ts": "2025-05-05T03:00:00+00:00",
       "score": 7.0,
       "exit_reason": "never_filled",
@@ -475,6 +1888,13 @@
       "score": 6.0,
       "exit_reason": "never_filled",
       "would_have_r": null
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-05-07T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
     },
     {
       "pair": "GOLD",
@@ -492,10 +1912,66 @@
     },
     {
       "pair": "GOLD",
+      "alert_ts": "2025-05-09T00:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
       "alert_ts": "2025-05-09T02:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-05-09T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.088
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-05-09T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.648
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-05-11T23:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-05-11T23:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-05-11T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.648
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-05-12T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.088
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-05-18T22:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "tp1",
+      "would_have_r": 2.908
     },
     {
       "pair": "GOLD",
@@ -513,8 +1989,29 @@
     },
     {
       "pair": "GOLD",
+      "alert_ts": "2025-05-20T23:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-05-21T02:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.771
+    },
+    {
+      "pair": "GOLD",
       "alert_ts": "2025-05-22T02:00:00+00:00",
       "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-05-25T23:00:00+00:00",
+      "score": 7.7,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -531,6 +2028,2015 @@
       "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
+    },
+    {
+      "pair": "GOLD",
+      "alert_ts": "2025-05-29T00:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-02T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-03T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.704
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-06T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-11T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-13T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.239
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-13T21:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.041
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-13T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.041
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-13T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.041
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-14T01:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-14T02:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-14T03:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-14T19:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-14T19:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-14T20:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-16T21:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-16T22:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-16T23:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-17T00:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-17T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.71
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-18T20:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-19T19:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-25T00:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.805
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-27T03:00:00+00:00",
+      "score": 2.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.898
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-03-31T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-01T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.712
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-09T02:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-10T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-14T01:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-16T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.534
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-18T01:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "friday_flat",
+      "would_have_r": 0.545
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-18T20:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-20T22:00:00+00:00",
+      "score": 1.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-22T19:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-22T22:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.948
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-22T22:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-22T22:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-23T01:00:00+00:00",
+      "score": 10.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-23T21:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-24T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-04-30T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-01T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-02T19:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-02T20:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-04T21:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-04T22:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-04T23:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-06T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-08T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-08T02:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-09T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-13T21:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.115
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-21T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.589
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-23T02:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-28T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-29T00:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-29T00:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-29T00:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "GBPUSD",
+      "alert_ts": "2025-05-30T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.926
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-02T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-04T21:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-06T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.606
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-07T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.423
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-10T01:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-10T19:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-11T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.476
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-19T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-19T19:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-20T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-24T00:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.669
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-27T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-27T03:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "friday_flat",
+      "would_have_r": -0.47
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-28T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.89
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-30T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.466
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-03-31T19:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.452
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-01T03:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.452
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-01T23:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-02T22:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-03T02:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-03T20:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-03T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-04T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-04T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-15T03:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.238
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-15T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-22T03:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.5
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-22T19:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-22T20:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-22T22:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-22T22:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.748
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-04-28T20:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.473
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-01T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-07T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-07T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-11T23:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.766
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-15T02:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-16T03:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-19T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.609
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-20T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.471
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-21T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.988
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-23T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.938
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-25T23:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-27T00:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "AUDUSD",
+      "alert_ts": "2025-05-30T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-02T22:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-03T20:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.021
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-04T22:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.544
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-04T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-04T22:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.89
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-04T22:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-04T23:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.89
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-05T00:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.89
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-05T01:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.89
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-05T02:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.89
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-05T03:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.89
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-05T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-05T19:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.89
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-06T20:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "friday_flat",
+      "would_have_r": -0.222
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-10T19:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-11T20:00:00+00:00",
+      "score": 10.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-13T19:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-27T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-03-28T20:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-01T21:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.584
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-02T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.478
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-02T23:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-02T23:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-06T23:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-08T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-08T03:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-08T19:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-08T20:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-11T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.956
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-15T00:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.569
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-16T19:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-16T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-20T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.659
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-22T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.824
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-22T23:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-24T20:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-27T21:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.152
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-28T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.77
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-28T20:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-04-29T22:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.519
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-02T03:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-02T19:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-04T23:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-05T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.797
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-07T20:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.088
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-07T20:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-12T20:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-13T19:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-15T19:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "friday_flat",
+      "would_have_r": -0.467
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-20T20:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.522
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-21T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-23T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-26T02:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-27T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.774
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-27T21:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-29T00:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCAD",
+      "alert_ts": "2025-05-29T00:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-02T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-02T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-02T23:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-03T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.02
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-03T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-06T23:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-07T00:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-07T01:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-07T02:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-07T03:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-07T19:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-07T20:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-07T21:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-09T22:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-09T23:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-10T00:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-10T01:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-10T02:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-10T03:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.864
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-23T23:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-25T00:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-03-30T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-01T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.937
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-09T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.936
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-10T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-14T00:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-16T19:00:00+00:00",
+      "score": 4.7,
+      "exit_reason": "tp1",
+      "would_have_r": 1.584
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-16T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-20T23:00:00+00:00",
+      "score": 5.5,
+      "exit_reason": "tp1",
+      "would_have_r": 0.769
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-20T23:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-22T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-22T22:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-24T19:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.539
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-27T22:00:00+00:00",
+      "score": 5.5,
+      "exit_reason": "tp1",
+      "would_have_r": 0.539
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-04-28T21:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.718
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-05-06T00:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-05-06T00:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-05-11T22:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-05-11T22:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-05-12T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.569
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-05-13T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.99
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-05-16T01:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.561
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-05-21T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-05-22T19:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-05-25T23:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURJPY",
+      "alert_ts": "2025-05-27T00:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-02T23:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-02T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-02T23:00:00+00:00",
+      "score": 3.5,
+      "exit_reason": "tp1",
+      "would_have_r": 0.539
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-03T19:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-04T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-04T21:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-05T22:00:00+00:00",
+      "score": 3.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-06T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-06T02:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.86
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-06T23:00:00+00:00",
+      "score": 3.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-07T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-07T01:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-09T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-11T19:00:00+00:00",
+      "score": 7.2,
+      "exit_reason": "tp1",
+      "would_have_r": 1.506
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-11T21:00:00+00:00",
+      "score": 7.2,
+      "exit_reason": "tp1",
+      "would_have_r": 0.801
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-16T23:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-16T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.47
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-19T03:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-19T19:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-20T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-21T02:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-25T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.483
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-26T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-27T19:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.01
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-27T20:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-27T21:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-27T23:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.01
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-28T00:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.01
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-28T01:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.01
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-28T02:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-28T03:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-03-30T23:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.265
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-01T22:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.59
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-02T21:00:00+00:00",
+      "score": 5.5,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-02T22:00:00+00:00",
+      "score": 5.5,
+      "exit_reason": "tp1",
+      "would_have_r": 0.515
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-02T23:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-06T23:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-07T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-09T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-09T22:00:00+00:00",
+      "score": 5.7,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-11T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-11T19:00:00+00:00",
+      "score": 6.2,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-11T19:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-14T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.023
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-15T19:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.656
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-20T22:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-20T23:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-25T00:00:00+00:00",
+      "score": 3.2,
+      "exit_reason": "tp1",
+      "would_have_r": 0.74
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-27T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.069
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-04-29T23:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.291
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-05T23:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-06T20:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.581
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-07T19:00:00+00:00",
+      "score": 3.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-07T20:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-08T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-11T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-12T19:00:00+00:00",
+      "score": 4.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-12T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-15T01:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-15T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-15T19:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-18T23:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-19T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.955
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-22T01:00:00+00:00",
+      "score": 2.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-27T02:00:00+00:00",
+      "score": 3.5,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-27T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-28T03:00:00+00:00",
+      "score": 3.5,
+      "exit_reason": "tp1",
+      "would_have_r": 0.636
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-28T20:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-29T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-30T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "BTCUSD",
+      "alert_ts": "2025-05-30T02:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
     }
   ],
   "by_group": {
@@ -538,76 +4044,157 @@
       "label": "Original (FX majors + Gold)",
       "pairs": [
         "EURUSD",
+        "NZDUSD",
+        "USDJPY",
+        "USDCHF",
         "GOLD"
       ],
       "scoreboards": {
         "proximal_realised": {
-          "trades": 84,
-          "wins": 20,
-          "losses": 47,
-          "breakevens": 17,
-          "win_rate_pct": 29.9,
-          "expectancy_r": -0.154,
-          "expectancy_usd": -38.62,
-          "total_r": -12.976,
-          "total_pnl_usd": -3244.0,
-          "avg_win_r": 1.701,
-          "avg_loss_r": -1.0,
-          "avg_win_usd": 425.0,
-          "avg_loss_usd": -250.0,
-          "avg_mfe_r": 1.783,
-          "avg_mae_r": -0.376,
-          "win_capture_pct": 95.0
+          "trades": 355,
+          "wins": 161,
+          "losses": 173,
+          "breakevens": 21,
+          "win_rate_pct": 48.2,
+          "expectancy_r": -0.116,
+          "expectancy_usd": -28.88,
+          "total_r": -41.009,
+          "total_pnl_usd": -10252.25,
+          "avg_win_r": 0.812,
+          "avg_loss_r": -0.993,
+          "avg_win_usd": 203.0,
+          "avg_loss_usd": -248.0,
+          "avg_mfe_r": 0.828,
+          "avg_mae_r": -0.341,
+          "win_capture_pct": 98.0
         },
         "proximal_exit_tp1": {
-          "trades": 84,
-          "wins": 25,
-          "losses": 59,
+          "trades": 355,
+          "wins": 168,
+          "losses": 187,
           "breakevens": 0,
-          "win_rate_pct": 29.8,
-          "expectancy_r": -0.066,
-          "expectancy_usd": -16.57,
-          "total_r": -5.569,
-          "total_pnl_usd": -1392.25,
-          "avg_win_r": 2.137,
+          "win_rate_pct": 47.3,
+          "expectancy_r": -0.039,
+          "expectancy_usd": -9.77,
+          "total_r": -13.878,
+          "total_pnl_usd": -3469.5,
+          "avg_win_r": 1.03,
           "avg_loss_r": -1.0,
-          "avg_win_usd": 534.0,
+          "avg_win_usd": 258.0,
           "avg_loss_usd": -250.0,
-          "avg_mfe_r": 1.886,
+          "avg_mfe_r": 0.871,
           "avg_mae_r": -0.345,
-          "win_capture_pct": 113.0
+          "win_capture_pct": 118.0
         },
         "proximal_exit_tp2": {
-          "trades": 84,
-          "wins": 13,
-          "losses": 59,
-          "breakevens": 12,
-          "win_rate_pct": 18.1,
-          "expectancy_r": 0.499,
-          "expectancy_usd": 124.78,
-          "total_r": 41.925,
-          "total_pnl_usd": 10481.25,
-          "avg_win_r": 7.763,
+          "trades": 355,
+          "wins": 46,
+          "losses": 187,
+          "breakevens": 122,
+          "win_rate_pct": 19.7,
+          "expectancy_r": 0.221,
+          "expectancy_usd": 55.23,
+          "total_r": 78.423,
+          "total_pnl_usd": 19605.75,
+          "avg_win_r": 5.77,
           "avg_loss_r": -1.0,
-          "avg_win_usd": 1941.0,
+          "avg_win_usd": 1443.0,
           "avg_loss_usd": -250.0,
-          "avg_mfe_r": 1.968,
+          "avg_mfe_r": 0.982,
           "avg_mae_r": -0.345,
-          "win_capture_pct": 394.0
+          "win_capture_pct": 587.0
         }
       },
       "fill_rate_proximal": {
-        "alerts": 107,
-        "filled": 84,
-        "fill_rate_pct": 78.5
+        "alerts": 520,
+        "filled": 355,
+        "fill_rate_pct": 68.3
       },
       "news_blocked_trade_rows": 0,
       "ist_blocked_trade_rows": 0,
-      "killzone_dropped_alerts": 113,
+      "killzone_dropped_alerts": 488,
       "score_floor": 4.0,
       "below_score_floor_trade_rows": 0,
       "html_file": "report_forex.html",
       "excel_file": "forex_trades.xlsx"
+    },
+    "gold_nas": {
+      "label": "New (new FX + BTC)",
+      "pairs": [
+        "GBPUSD",
+        "AUDUSD",
+        "USDCAD",
+        "EURJPY",
+        "BTCUSD"
+      ],
+      "scoreboards": {
+        "proximal_realised": {
+          "trades": 461,
+          "wins": 254,
+          "losses": 193,
+          "breakevens": 14,
+          "win_rate_pct": 56.8,
+          "expectancy_r": 0.051,
+          "expectancy_usd": 12.8,
+          "total_r": 23.596,
+          "total_pnl_usd": 5899.0,
+          "avg_win_r": 0.831,
+          "avg_loss_r": -0.971,
+          "avg_win_usd": 208.0,
+          "avg_loss_usd": -243.0,
+          "avg_mfe_r": 0.832,
+          "avg_mae_r": -0.301,
+          "win_capture_pct": 100.0
+        },
+        "proximal_exit_tp1": {
+          "trades": 461,
+          "wins": 252,
+          "losses": 209,
+          "breakevens": 0,
+          "win_rate_pct": 54.7,
+          "expectancy_r": 0.069,
+          "expectancy_usd": 17.35,
+          "total_r": 32.002,
+          "total_pnl_usd": 8000.5,
+          "avg_win_r": 0.953,
+          "avg_loss_r": -0.996,
+          "avg_win_usd": 238.0,
+          "avg_loss_usd": -249.0,
+          "avg_mfe_r": 0.835,
+          "avg_mae_r": -0.306,
+          "win_capture_pct": 114.0
+        },
+        "proximal_exit_tp2": {
+          "trades": 461,
+          "wins": 92,
+          "losses": 211,
+          "breakevens": 158,
+          "win_rate_pct": 30.4,
+          "expectancy_r": 0.119,
+          "expectancy_usd": 29.86,
+          "total_r": 55.058,
+          "total_pnl_usd": 13764.5,
+          "avg_win_r": 2.876,
+          "avg_loss_r": -0.993,
+          "avg_win_usd": 719.0,
+          "avg_loss_usd": -248.0,
+          "avg_mfe_r": 0.872,
+          "avg_mae_r": -0.307,
+          "win_capture_pct": 330.0
+        }
+      },
+      "fill_rate_proximal": {
+        "alerts": 645,
+        "filled": 461,
+        "fill_rate_pct": 71.5
+      },
+      "news_blocked_trade_rows": 0,
+      "ist_blocked_trade_rows": 0,
+      "killzone_dropped_alerts": 629,
+      "score_floor": 4.0,
+      "below_score_floor_trade_rows": 0,
+      "html_file": "report_gold_nas.html",
+      "excel_file": "nas_xau_trades.xlsx"
     }
   }
 }
