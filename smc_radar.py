@@ -11,6 +11,7 @@ import smc_detector
 import dealing_range
 import h4_range  # H4-derived dealing range (built from H1, mapped onto H1)
 import pool_builder  # PD/PW liquidity pools — observation only, never gates
+import eq_pools      # EQH/EQL equal-level clusters — observation only, never gates
 import charts  # shared H1 chart style engine (Wave 2 item 2C)
 from zone import Zone  # typed slate zone — single slate field definition (Wave 2 item 2B)
 import schema as _schema  # schema_version stamp/check for state files (Wave 1 item 1C)
@@ -328,7 +329,8 @@ def _backfill_phase1_scan_log():
 def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
                               slate_zones, fresh_zones, dropped_this_scan,
                               diagnostics=None, placeholder_diagnostic=None,
-                              ob_build_diagnostics=None, pools=None):
+                              ob_build_diagnostics=None, pools=None,
+                              eq_clusters=None):
     """Construct a single per-pair scan record (snapshot of decisions)."""
     walls = walls or {}
     sv2 = walls.get('structure_v2') or {}
@@ -408,6 +410,9 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
         # PD/PW liquidity pools (pool_builder snapshot: levels + statuses +
         # day_state). None when the pool layer had no levels this scan.
         'pools': pools,
+        # EQH/EQL equal-level clusters (eq_pools): side/level/size/status per
+        # cluster visible this scan. None when the layer found none / erred.
+        'eq_clusters': eq_clusters,
     }
 
 
@@ -1204,6 +1209,12 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             # counters so a knob-sweep run (MIN_OB_RANGE_ATR_MULT > 0) is counted
             # too — each candle hits exactly one branch, so no double-count.
             'walkback_depth':     oversized_count + undersized_count + doji_count,
+            # efficiency_ratio = Kaufman ER on the last N=10 H1 closes ENDING at
+            # the OB-formation bar (ob_idx). Trend-vs-chop regime AROUND the setup
+            # — independent of the impulse-leg cols. Observe-only, gates nothing.
+            # Frozen once at formation (same *_at_alert discipline as body_ratio);
+            # None when fewer than N+1 prior closes exist. (EFFICIENCY_RATIO_BUILD_SPEC)
+            'efficiency_ratio':   smc_detector.compute_efficiency_ratio(C, ob_idx),
             'h1_atr':             float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
             'fvg':                fvg_dict,
             'sweep_observed':     sweep_obs,
@@ -2596,6 +2607,13 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
     else:
         fvg_line = "FVG: <span style='color:#888;'>None</span>"
 
+    # Trend quality — Kaufman efficiency ratio (N=10 H1 closes ending at OB
+    # formation): how straight-line the move into this setup was (1.0 = clean
+    # trend, 0 = choppy/ranging). Context only, no verdict/colour. `—` on None
+    # (legacy zone or <N+1 prior closes). (EFFICIENCY_RATIO_BUILD_SPEC)
+    _er = sz.get('efficiency_ratio')
+    trend_quality_text = f"{_er:.2f}" if _er is not None else "&mdash;"
+
     pip_unit  = _pip_unit(dp)
     zone_pips = round(abs(sz['proximal_line'] - sz['distal_line']) / pip_unit, 1)
     h1_atr_val = sz.get('h1_atr', 0.0)
@@ -2692,6 +2710,9 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
         </span>
         <span style="font-size:11px;color:#aaa;">
           <b>Sweep</b> {sweep_chip}
+        </span>
+        <span style="font-size:11px;color:#aaa;">
+          <b style="color:#bb8fce;">Trend quality</b> {trend_quality_text}
         </span>
         <span style="font-size:11px;color:#aaa;">{fvg_line}</span>
       </div>
@@ -3922,6 +3943,7 @@ def run_radar():
     pair_atrs = {}  # pair_name -> h1_atr
     pair_prices = {}  # pair_name -> current_price
     pair_pools = {}  # pair_name -> PD/PW pool snapshot (observation only)
+    pair_eqs = {}    # pair_name -> EQH/EQL cluster context (observation only)
 
     # --- SCAN EACH PAIR, RECONCILE WITH SLATE ---
     audit_rows = []
@@ -4021,6 +4043,19 @@ def run_radar():
             log_p1_degrade("pool_context_fail", pair=name,
                            reason=str(_pool_err)[:200])
             pair_pools[name] = None
+
+        # --- EQH/EQL equal-level clusters (observation only) --- same family
+        # as the pool layer: nearest equal-highs / equal-lows stop clusters
+        # around price, on this scan's CLOSED bars. Digest banner line only;
+        # never gates, scores, or drops a zone.
+        try:
+            pair_eqs[name] = eq_pools.live_eq_context(
+                drop_forming_bar(df), h1_atr)
+        except Exception as _eq_err:
+            logging.warning(f"[{name}] eq context failed: {_eq_err}")
+            log_p1_degrade("eq_context_fail", pair=name,
+                           reason=str(_eq_err)[:200])
+            pair_eqs[name] = None
 
         # Stamp fresh zones with h1_atr from this scan (already done in detect_smc_radar
         # via 'h1_atr' field, but we ensure consistency here).
@@ -4142,6 +4177,10 @@ def run_radar():
             placeholder_diagnostic=placeholder_diag,
             ob_build_diagnostics=ob_build_diag,  # OB BUILD LEDGER
             pools=pair_pools.get(name),  # PD/PW pool snapshot (forensics)
+            eq_clusters=(  # EQH/EQL clusters (forensics; JSON-safe summary)
+                [{k: c.get(k) for k in ("side", "level", "size", "status")}
+                 for c in pair_eqs[name]["clusters"]]
+                if pair_eqs.get(name) else None),
         ))
 
         # Audit log row per active zone post-reconcile.
@@ -4212,27 +4251,42 @@ def run_radar():
             _structure_banner_lines.append(
                 f"  \u26a0\ufe0f Rapid CHoCH (possible chop, low conviction): {', '.join(_chop_pairs)}"
             )
-        # PD/PW liquidity pools \u2014 one line per pair (information only).
-        # '*' marks a status that CHANGED since the previous scan (a sweep or
-        # break that just happened). Pairs with no levels are listed so a
-        # silent pool-layer failure is visible, not hidden.
+        # PD/PW liquidity pools \u2014 one compact bullet per pair (info only).
+        # Glyphs (\u2713 / swept\u26a0 / broke\u2192) + '*' for a status that CHANGED this
+        # scan. The full meaning of each glyph is stated ONCE in the legend at
+        # the foot \u2014 repeating it per pair was the bulk of the P1 bloat. Pairs
+        # with no levels are listed so a silent pool-layer failure stays visible.
         _pool_lines = []
         _pool_missing = []
         for _pn in pair_names:
             _pline = pool_builder.format_pool_line(
                 pair_pools.get(_pn), dp_map.get(_pn, 5))
             if _pline:
-                _pool_lines.append(f"  {_pn}: {_pline}")
+                _pool_lines.append(f"  \u2022 {_pn}: {_pline}")
             elif _pn in pairs_with_fresh_data:
                 _pool_missing.append(_pn)
         if _pool_lines or _pool_missing:
-            _structure_banner_lines.append(
-                "Liquidity levels \u2014 previous day (PDH/PDL) & week (PWH/PWL); "
-                "* = new this scan:")
+            _structure_banner_lines.append("Liquidity levels (prev day/week):")
             _structure_banner_lines.extend(_pool_lines)
             if _pool_missing:
                 _structure_banner_lines.append(
-                    f"  (levels unavailable: {', '.join(_pool_missing)})")
+                    f"  (unavailable: {', '.join(_pool_missing)})")
+        # EQH/EQL equal-level clusters \u2014 one bullet per pair that HAS one
+        # (information only). Silent when a pair has no cluster: "no equal
+        # levels right now" is the normal state and listing it would just bloat.
+        _eq_lines = []
+        for _pn in pair_names:
+            _eline = eq_pools.format_eq_line(
+                pair_eqs.get(_pn), pair_prices.get(_pn), pair_atrs.get(_pn))
+            if _eline:
+                _eq_lines.append(f"  \u2022 {_pn}: {_eline}")
+        if _eq_lines:
+            _structure_banner_lines.append(
+                "Equal highs/lows (resting stop clusters):")
+            _structure_banner_lines.extend(_eq_lines)
+        # One-time legend for the glyphs above (was repeated on every pool line).
+        if _pool_lines:
+            _structure_banner_lines.append(f"  {pool_builder.POOL_LEGEND}")
         structure_banner_text = "\n".join(_structure_banner_lines)
         print(structure_banner_text)
         # Collect renderable items across all pairs.

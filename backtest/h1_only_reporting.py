@@ -1265,6 +1265,9 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # Walk-back geometry (A3, DECISION_GUARDRAILS.md) — logging only, no
         # gate. None for legacy zones built before this change.
         "ob_body_ratio", "ob_walkback_depth",
+        # Kaufman efficiency ratio (N=10) at OB formation — trend-vs-chop regime
+        # around the setup. Observe-only, gates nothing. None for legacy zones.
+        "efficiency_ratio_at_alert",
         # News blackout audit columns. INFORMATIONAL ONLY — news never gates
         # (the one eligibility rule is _headline_exclusion above).
         "news_blocked", "news_event_title", "news_event_currency",
@@ -1291,6 +1294,15 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "dist_next_pool_above_atr", "dist_next_pool_below_atr",
         "next_pool_above_tier", "next_pool_below_tier",
         "trade_toward_pool", "last_sweep_age_h1", "last_sweep_tier",
+        # EQH/EQL equal-level clusters (2026-07-14) — observation only,
+        # stamped at alert from strictly-prior bars. One source:
+        # eq_pools.EQ_FEATURE_COLUMNS via _eq_features_at_alert.
+        "eqh_above_dist_atr", "eqh_above_size",
+        "eql_below_dist_atr", "eql_below_size",
+        "eq_trade_toward",
+        "eq_sl_gap_atr", "eq_sl_at_risk",
+        "eq_last_sweep_age_h1", "eq_last_sweep_side",
+        "eq_intact_above_count", "eq_intact_below_count",
     ]
     df = pd.DataFrame(trades)
     cols_present = [c for c in front_cols if c in df.columns]
@@ -1362,6 +1374,7 @@ _EXCEL_COL_NAMES = {
     "fvg_size_atr":      "FVG Size (ATR)",
     "impulse_leg_atr":   "Impulse Leg (ATR)",
     "atr_at_ob":         "ATR at OB (price)",
+    "efficiency_ratio_at_alert": "Trend Quality (0-1)",
     "vet_review":        "Worth Reviewing",
     "vet_review_reason": "Why Worth Reviewing",
     # news / session audit

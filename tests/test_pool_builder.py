@@ -296,6 +296,79 @@ def test_format_pool_line():
     patch_bar(df, TUE_BAR, h=1.2005, c=1.1950)
     snap = snap_at(df)
     line = pb.format_pool_line(snap, 5)
-    assert "Yesterday: high SWEPT (dipped past, snapped back" in line
-    assert "low untouched" in line
-    assert "Day: yesterday's high swept — grabbed and rejected" in line
+    # Compact glyph form (2026-07-14 de-bloat): PDH swept, PDL untouched,
+    # day-state as a short tag. Long meaning lives once in POOL_LEGEND.
+    assert "PDH swept" in line          # swept glyph on the prior-day high
+    assert "PDL ✓" in line              # untouched prior-day low
+    assert "high swept" in line         # short day-state tag, not a sentence
+    assert "SWEPT (dipped past" not in line  # verbose phrasing is gone
+
+
+def test_format_liquidity_inference_names_exact_pool():
+    """P2 inference line must name the EXACT pool the trade points at (not a
+    vague 'level') and read toward/away correctly. Built from feature dicts
+    directly — no frame needed."""
+    # LONG toward a near prior-day HIGH -> names PDH, calls it a target.
+    f = pb.features_none()
+    f.update({"trade_toward_pool": True,
+              "next_pool_above_tier": "PD", "dist_next_pool_above_atr": 1.2})
+    line = pb.format_liquidity_inference(f, "LONG")
+    assert "yesterday's high (PDH)" in line
+    assert "target" in line.lower()
+
+    # SHORT toward a near prior-week LOW -> names PWL.
+    f = pb.features_none()
+    f.update({"trade_toward_pool": True,
+              "next_pool_below_tier": "PW", "dist_next_pool_below_atr": 0.8})
+    line = pb.format_liquidity_inference(f, "SHORT")
+    assert "last week's low (PWL)" in line
+
+    # LONG running AWAY -> names the above pool, warns weaker follow-through.
+    f = pb.features_none()
+    f.update({"trade_toward_pool": False,
+              "next_pool_above_tier": "PW", "dist_next_pool_above_atr": 2.0})
+    line = pb.format_liquidity_inference(f, "LONG")
+    assert "AWAY" in line and "last week's high (PWH)" in line
+
+    # Far pool (>=3 ATR) toward -> tempered wording, still names the pool.
+    f = pb.features_none()
+    f.update({"trade_toward_pool": True,
+              "next_pool_above_tier": "PD", "dist_next_pool_above_atr": 4.5})
+    line = pb.format_liquidity_inference(f, "LONG")
+    assert "far" in line.lower() and "yesterday's high (PDH)" in line
+
+    # No trade_toward signal -> None (nothing to say).
+    assert pb.format_liquidity_inference(pb.features_none(), "LONG") is None
+
+
+def test_naive_utc_index_accepts_live_reset_index_frame():
+    """REGRESSION (2026-07-14): the live engine passes a reset-index frame with
+    the timestamp in a `Datetime` column (smc_radar.fetch_data), not the index.
+    _naive_utc_index must restore the DatetimeIndex instead of crashing on
+    `df.index.tz` ('RangeIndex' object has no attribute 'tz'), which silently
+    killed the pool layer on every live scan.
+
+    Failure mode: pool_context_fail on all pairs every scan -> blank pool line.
+    Guard lives out of the live path (offline test). Trading impact if
+    unguarded: pool observation context (never gates/scores) stays None.
+    """
+    df = two_weeks()                       # DatetimeIndex, tz-naive
+    live_shape = df.copy()
+    live_shape.index.name = "Datetime"
+    live_shape = live_shape.reset_index()  # RangeIndex + 'Datetime' column
+    assert not isinstance(live_shape.index, pd.DatetimeIndex)
+
+    out = pb._naive_utc_index(live_shape)
+    assert isinstance(out.index, pd.DatetimeIndex)
+    assert out.index.tz is None
+    # Same values, same order as the DatetimeIndexed source.
+    assert list(out.index) == list(df.index)
+
+    # tz-aware column variant also lands as tz-naive UTC.
+    aware = df.copy()
+    aware.index = aware.index.tz_localize("UTC")
+    aware.index.name = "Datetime"
+    aware = aware.reset_index()
+    out_aware = pb._naive_utc_index(aware)
+    assert isinstance(out_aware.index, pd.DatetimeIndex)
+    assert out_aware.index.tz is None

@@ -1370,6 +1370,11 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     # yet). Frozen at OB formation (smc_radar.py), read as-is, never recomputed.
     ob_body_ratio = ob.get("body_ratio")
     ob_walkback_depth = ob.get("walkback_depth")
+    # Kaufman efficiency ratio over the last 10 H1 closes ending at OB formation
+    # (smc_radar.py). Trend-vs-chop regime around the setup. Frozen at formation,
+    # read as-is, never recomputed. None for legacy zones / <N+1 prior closes.
+    # Observe-only, gates nothing (EFFICIENCY_RATIO_BUILD_SPEC).
+    efficiency_ratio_at_alert = ob.get("efficiency_ratio")
 
     # FVG size in ATR — the displacement gap's magnitude (present/absent throws
     # this gradient away). FVG-mitigation-agnostic: measures the gap as detected.
@@ -1591,6 +1596,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # Walk-back geometry (A3) — None for legacy zones built before this change.
         "ob_body_ratio":     ob_body_ratio,
         "ob_walkback_depth": ob_walkback_depth,
+        # Kaufman ER (N=10) at OB formation — trend-vs-chop regime. None for
+        # legacy zones / windows with <N+1 prior closes. Observe-only.
+        "efficiency_ratio_at_alert": efficiency_ratio_at_alert,
         "fvg_present":   _frozen["fvg_present"],
         # fresh / stale / no_fvg — was the FVG already discharged on an earlier
         # approach before this trigger? Feeds the FVG-staleness breakdown.
@@ -1651,6 +1659,14 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # added above this return dict would shift every ledger line-ref
         # (tests/test_truth_ledger.py). Column list: pool_builder.POOL_FEATURE_COLUMNS.
         **_pool_features_at_alert(df_h1, alert_ts, ob, entry),
+        # ── EQH/EQL EQUAL-LEVEL CLUSTERS (2026-07-14) ──────────────────────────
+        # 11 columns spread from ONE helper (nearest intact equal-highs /
+        # equal-lows shelf distance+size / trade-toward / stop-vs-pool gap +
+        # at-risk flag / last EQ sweep age+side / intact counts), all at-alert:
+        # derived from H1 bars strictly BEFORE alert_ts (immutable history, no
+        # yield freeze needed — same rule as the pool columns above).
+        # Column list: eq_pools.EQ_FEATURE_COLUMNS. Observation only, no gate.
+        **_eq_features_at_alert(df_h1, alert_ts, ob, entry, sl),
     }
 
 
@@ -1712,5 +1728,28 @@ def _pool_features_at_alert(df_h1, alert_ts, ob, entry):
         df_h1, alert_ts,
         direction=ob.get("direction"),
         ref_price=entry,
+        atr=ob.get("h1_atr"),
+    )
+
+
+def _eq_features_at_alert(df_h1, alert_ts, ob, entry, sl):
+    """EQH/EQL cluster columns for one row (eq_pools.EQ_FEATURE_COLUMNS).
+
+    Thin shim over eq_pools.features_at_alert — bars strictly before alert_ts
+    only, per-frame raw-swing pool cached inside eq_pools. ATR denominator =
+    ob['h1_atr'] (frozen OB-formation ATR), matching every other *_atr
+    column. ref_price = the placed entry; sl = the traded stop (sl_initial),
+    feeding the eq_sl_gap_atr / eq_sl_at_risk geometry.
+
+    Same deliberate placement as _pool_features_at_alert above (defined after
+    _build_row so the ledger's row-build line-refs never shift). Never raises
+    (eq_pools guarantees the all-None dict on failure).
+    """
+    import eq_pools
+    return eq_pools.features_at_alert(
+        df_h1, alert_ts,
+        direction=ob.get("direction"),
+        entry=entry,
+        sl=sl,
         atr=ob.get("h1_atr"),
     )

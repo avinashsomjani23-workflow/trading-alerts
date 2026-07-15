@@ -102,8 +102,20 @@ def _naive_utc_index(df):
 
     Both feeds arrive as UTC: Twelve Data (feed_adapter requests timezone=UTC)
     and the backtest parquet cache (import_mt5 stores server -3h, tz='UTC').
+
+    Shape tolerance: the live Phase 1 engine passes a reset-index frame with the
+    timestamp in a `Datetime` column (smc_radar.fetch_data does .reset_index()),
+    while the backtest passes a DatetimeIndexed frame. Restore the index from the
+    column when needed so BOTH callers funnel through the same UTC-index gate
+    (fixed 2026-07-14: live pool context crashed with
+    "'RangeIndex' object has no attribute 'tz'" — the pool layer never ran live).
     """
-    if df.index.tz is not None:
+    if not isinstance(df.index, pd.DatetimeIndex):
+        for col in ("Datetime", "datetime"):
+            if col in df.columns:
+                df = df.set_index(col)
+                break
+    if getattr(df.index, "tz", None) is not None:
         out = df.copy()
         out.index = out.index.tz_convert("UTC").tz_localize(None)
         return out
@@ -672,14 +684,21 @@ def live_pool_context(pair_name, config_symbol, df_h1, is_gold,
 # Presentation helpers (shared by the P1 banner and the P2 email line)
 # ---------------------------------------------------------------------------
 
-# Plain-English status phrasing for the email (codes stay in logs/trades.csv).
-_STATUS_PHRASE = {
-    "intact": "untouched",
-    "swept": "SWEPT (dipped past, snapped back — possible reversal fuel)",
-    "broken": "BROKEN (closed through and held)",
+# Compact status glyphs for the P1 digest (codes stay in logs/trades.csv).
+# The long "what it means" phrasing moved to a one-time legend at the foot of
+# the digest — repeating it on every pool line was the bulk of the P1 bloat.
+_STATUS_GLYPH = {
+    "intact": "✓",       # ✓ untouched (the boring default)
+    "swept": "swept⚠",   # ⚠ grabbed and rejected — possible reversal fuel
+    "broken": "broke→",  # → closed through and held
 }
 
-# Plain-English day-state phrasing for the email.
+# One-time legend line for the P1 digest (printed once, not per pair).
+POOL_LEGEND = ("Legend: ✓ untouched · swept⚠ = grabbed & "
+               "rejected (reversal fuel) · broke→ = closed through "
+               "and held · * = changed this scan.")
+
+# Plain-English day-state phrasing (full sentence — kept for any long-form use).
 _DAY_STATE_PHRASE = {
     "INSIDE": "trading inside yesterday's range",
     "EXPANSION_UP": "broke above yesterday's range and holding",
@@ -689,24 +708,40 @@ _DAY_STATE_PHRASE = {
     "BOTH_SIDES": "both sides of yesterday's range taken — choppy day",
 }
 
+# Short day-state tag for the compact P1 digest line (no full sentence).
+_DAY_STATE_TAG = {
+    "INSIDE": "inside range",
+    "EXPANSION_UP": "broke up, holding",
+    "EXPANSION_DOWN": "broke down, holding",
+    "SWEPT_HIGH": "high swept",
+    "SWEPT_LOW": "low swept",
+    "BOTH_SIDES": "both sides taken (choppy)",
+}
 
-def _pool_phrase(p):
-    """Status phrase for one pool, with the '*' new-this-scan marker.
+# Full pool name for the P2 email (which exact level the trade points at).
+_POOL_NAME = {
+    "pdh": "yesterday's high (PDH)", "pdl": "yesterday's low (PDL)",
+    "pwh": "last week's high (PWH)", "pwl": "last week's low (PWL)",
+}
+
+
+def _pool_glyph(p):
+    """Compact status glyph for one pool, with the '*' new-this-scan marker.
     None if the pool has no level/status."""
     if p["level"] is None or p["status"] is None:
         return None
-    word = _STATUS_PHRASE.get(p["status"], p["status"])
+    g = _STATUS_GLYPH.get(p["status"], p["status"])
     star = "*" if p.get("changed") else ""
-    return f"{word}{star}"
+    return f"{g}{star}"
 
 
 def format_pool_line(snap, dp):
-    """One plain-English line, e.g. 'Yesterday: high SWEPT (...) · low untouched.
-    Last week: high untouched · low untouched. Day: yesterday's high swept —
-    grabbed and rejected.'  '*' marks a status change since the previous scan.
-    Returns None for an empty snapshot.
+    """One compact glyph line for the P1 digest, e.g.
+    'PDH swept⚠ PDL ✓ · PWH ✓ PWL ✓ · inside range'.
+    '*' marks a status change since the previous scan. None for an empty
+    snapshot. The long meaning of each glyph lives once in POOL_LEGEND.
 
-    `dp` is kept in the signature for caller parity; prices now live in the
+    `dp` is kept in the signature for caller parity; prices live in the
     logs/trades.csv columns, and the email text stays code-free.
     """
     if not snap or not snap.get("pools"):
@@ -714,32 +749,91 @@ def format_pool_line(snap, dp):
     pools = snap["pools"]
     segments = []
 
-    pdh, pdl = _pool_phrase(pools["pdh"]), _pool_phrase(pools["pdl"])
-    if pdh or pdl:
-        bits = []
-        if pdh:
-            bits.append(f"high {pdh}")
-        if pdl:
-            bits.append(f"low {pdl}")
-        segments.append("Yesterday: " + " · ".join(bits))
+    # Prior day: PDH / PDL glyphs side by side.
+    pdh, pdl = _pool_glyph(pools["pdh"]), _pool_glyph(pools["pdl"])
+    day_bits = []
+    if pdh:
+        day_bits.append(f"PDH {pdh}")
+    if pdl:
+        day_bits.append(f"PDL {pdl}")
+    if day_bits:
+        segments.append(" ".join(day_bits))
 
-    pwh, pwl = _pool_phrase(pools["pwh"]), _pool_phrase(pools["pwl"])
-    if pwh or pwl:
-        bits = []
-        if pwh:
-            bits.append(f"high {pwh}")
-        if pwl:
-            bits.append(f"low {pwl}")
-        segments.append("Last week: " + " · ".join(bits))
+    # Prior week: PWH / PWL glyphs side by side.
+    pwh, pwl = _pool_glyph(pools["pwh"]), _pool_glyph(pools["pwl"])
+    wk_bits = []
+    if pwh:
+        wk_bits.append(f"PWH {pwh}")
+    if pwl:
+        wk_bits.append(f"PWL {pwl}")
+    if wk_bits:
+        segments.append(" ".join(wk_bits))
 
     if not segments:
         return None
 
+    # Day-state as a short tag, not a sentence (full phrasing dropped —
+    # the glyphs above already say what was swept/broken).
     ds = snap.get("day_state")
     if ds:
-        segments.append("Day: " + _DAY_STATE_PHRASE.get(ds, ds))
+        segments.append(_DAY_STATE_TAG.get(ds, ds.lower()))
 
-    line = ". ".join(segments) + "."
+    line = " · ".join(segments)
     if snap.get("levels_stale"):
-        line += "  [levels stale — fetch failed, using previous day's cache]"
+        line += "  [levels stale — using cache]"
     return line
+
+
+def _pool_key_from(tier, side):
+    """The exact pool key (pdh/pdl/pwh/pwl) from its tier (PD/PW) and its
+    side of price (above/below). A pool sitting above price is a high, below
+    is a low — so tier + side names the level unambiguously."""
+    if tier not in ("PD", "PW") or side not in ("above", "below"):
+        return None
+    return {("PD", "above"): "pdh", ("PD", "below"): "pdl",
+            ("PW", "above"): "pwh", ("PW", "below"): "pwl"}[(tier, side)]
+
+
+def format_liquidity_inference(features, bias):
+    """P2 only: one plain-English "what it means for THIS trade" line.
+    Names the EXACT pool the trade points at (yesterday's high, last week's
+    low, ...), not a vague "level", and says whether that helps or hurts.
+    Returns None when there is no unspent pool to speak to.
+
+    `bias` is "LONG"/"SHORT". Distances are in ATR (how the trader sizes a
+    move). Information only — never gates or scores.
+    """
+    if not features:
+        return None
+    toward = features.get("trade_toward_pool")
+    if toward is None:
+        return None
+
+    if bias == "LONG":
+        tier = features.get("next_pool_above_tier")
+        dist = features.get("dist_next_pool_above_atr")
+        side = "above"
+    else:
+        tier = features.get("next_pool_below_tier")
+        dist = features.get("dist_next_pool_below_atr")
+        side = "below"
+    key = _pool_key_from(tier, side)
+    name = _POOL_NAME.get(key, "the nearest untouched level")
+    dist_str = f"{dist} ATR away" if dist is not None else "nearby"
+
+    if toward:
+        if dist is not None and dist <= 2.0:
+            return (f"→ You're trading straight at {name} ({dist_str}). "
+                    f"Resting stops sit there, so price is pulled toward it — "
+                    f"a natural take-profit target.")
+        if dist is not None and dist >= 3.0:
+            return (f"→ You're aimed at {name}, but it's far ({dist_str}). "
+                    f"The pull is real but don't expect a clean reach in one "
+                    f"leg.")
+        return (f"→ You're trading toward {name} ({dist_str}) — that pool of "
+                f"resting stops acts as a target pulling price your way.")
+
+    # Trade runs away from the nearest untouched pool.
+    return (f"→ You're trading AWAY from {name} ({dist_str}), the nearest "
+            f"untouched level. The obvious magnet is behind you — expect "
+            f"weaker follow-through.")
