@@ -171,16 +171,17 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
 
     print(f"  {name}: {len(pair_alerts)} OB-touch alerts")
 
-    seen_obs: set = set()
+    # 2026-07-15: seen_obs first-touch dedupe REMOVED. Every re-armed re-touch is
+    # a real, spaced re-approach (re-arm hysteresis, replay_engine.py:519 — price
+    # must clear (prox_cap + REARM_EXTRA_ATR)xATR and return), NOT a same-bar clone
+    # (proven 0 clones on 2019H1/2016H1 samples). A mitigated OB is already dropped
+    # UPSTREAM before it can fire (replay_engine.py:350-363: 3rd proximal touch OR
+    # close beyond distal), so re-fires can only occur while the zone is alive. The
+    # backtest now trades every touch until mitigation; touches_at_alert (frozen at
+    # the yield) is the row-slice lever for later capping how many touches to trade.
+    # The old 2026-03 "cloned-fill" RCA is guarded by the re-arm state machine, not
+    # by this dedupe — see tests/test_retouch_trading.py.
     for alert in pair_alerts:
-        ob_key = (
-            (alert.get("ob") or {}).get("ob_timestamp"),
-            (alert.get("ob") or {}).get("direction"),
-        )
-        if ob_key in seen_obs:
-            continue
-        seen_obs.add(ob_key)
-
         alert_ts_raw = alert["ts"]
         if not isinstance(alert_ts_raw, _pd.Timestamp):
             alert_ts_raw = _pd.Timestamp(alert_ts_raw)

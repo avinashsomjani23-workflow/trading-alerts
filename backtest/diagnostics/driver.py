@@ -525,7 +525,6 @@ def walk_alerts(pair_conf: Dict[str, Any], df: pd.DataFrame, start_ts, end_ts,
 
     res = AlertWalkResult(pair=pair_name)
     state = replay_engine.ReplayState()
-    seen_obs: set = set()
     counters = {"alerts_total": 0, "alerts_simulated": 0, "ob_dedup_skipped": 0}
 
     for event in replay_engine.replay_pair(conf, df, state=state,
@@ -539,12 +538,11 @@ def walk_alerts(pair_conf: Dict[str, Any], df: pd.DataFrame, start_ts, end_ts,
         elif kind == "alert":
             counters["alerts_total"] += 1
             res.alerts.append(event)
-            ob = event.get("ob") or {}
-            ob_key = (ob.get("ob_timestamp"), ob.get("direction"))
-            if ob_key in seen_obs:
-                counters["ob_dedup_skipped"] += 1
-                continue
-            seen_obs.add(ob_key)
+            # 2026-07-15: seen_obs first-touch dedupe REMOVED (parity with
+            # run_backtest.py). Every re-armed re-touch is a real spaced re-approach
+            # (re-arm hysteresis) and a mitigated OB is dropped upstream before it
+            # can fire, so we simulate every touch until mitigation. ob_dedup_skipped
+            # is now always 0 (kept for schema stability). See test_retouch_trading.py.
             counters["alerts_simulated"] += 1
             import backtest.h1_only_simulator as sim
             rows = sim.simulate_h1_only_dual(event, conf, df, risk_usd=risk_usd)
