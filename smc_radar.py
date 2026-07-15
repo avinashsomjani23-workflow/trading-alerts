@@ -7,6 +7,7 @@ import smtplib
 import logging
 import os
 import time
+import traceback
 import smc_detector
 import dealing_range
 import h4_range  # H4-derived dealing range (built from H1, mapped onto H1)
@@ -4039,9 +4040,18 @@ def run_radar():
                 mark_transitions=True,  # P1 owns the sweep/break NEW markers
             )
         except Exception as _pool_err:
-            logging.warning(f"[{name}] pool context failed: {_pool_err}")
+            # Self-diagnosing degrade: the bare message (e.g. "'RangeIndex' object
+            # has no attribute 'tz'") gave no crash site and cost hours of guessing.
+            # Capture the traceback's origin file:line and a UTC stamp (the ts field
+            # is IST, which reads +5:30 and made a 05:04-UTC failure look like 10:34),
+            # so any recurrence names itself instead of being re-investigated.
+            _tb = traceback.extract_tb(_pool_err.__traceback__)
+            _site = (f"{_tb[-1].filename.split(chr(92))[-1].split('/')[-1]}"
+                     f":{_tb[-1].lineno}") if _tb else "?"
+            logging.warning(f"[{name}] pool context failed at {_site}: {_pool_err}")
             log_p1_degrade("pool_context_fail", pair=name,
-                           reason=str(_pool_err)[:200])
+                           reason=f"{type(_pool_err).__name__}: {_pool_err} @ {_site}"[:200],
+                           utc=datetime.utcnow().isoformat())
             pair_pools[name] = None
 
         # --- EQH/EQL equal-level clusters (observation only) --- same family
