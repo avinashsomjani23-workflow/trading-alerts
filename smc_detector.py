@@ -195,6 +195,44 @@ def compute_atr(df, period=14):
 
 
 # ---------------------------------------------------------------------------
+# Kaufman Efficiency Ratio — trend-vs-chop regime around a setup (observe-only).
+# ER = |close[t] - close[t-N]| / sum_{i=t-N+1..t} |close[i] - close[i-1]|
+# Numerator = net move (straight-line distance); denominator = total distance
+# walked. Result in [0,1]: ~1 = clean directional move into the setup, ~0 = chop.
+# Fixed N=10 (standard Kaufman lookback — NOT a knob). Computed once at OB
+# formation and frozen; NEVER a gate/filter/score (EFFICIENCY_RATIO_BUILD_SPEC).
+# ---------------------------------------------------------------------------
+EFFICIENCY_RATIO_LOOKBACK = 10
+
+
+def compute_efficiency_ratio(closes, t, n=EFFICIENCY_RATIO_LOOKBACK):
+    """Kaufman efficiency ratio on H1 closes over the N-bar window ENDING at t.
+
+    `closes` = a sequence of H1 close prices (np array or list); `t` = the
+    OB-formation bar index (the anchor). Needs N+1 closes at/preceding t.
+
+    Returns a float in [0,1] rounded to 3dp, or None when it cannot be measured:
+      - fewer than N+1 closes precede/include t, or
+      - the denominator (total distance walked) is 0.
+    None is DISTINCT from 0.0 — 0.0 is a real "pure chop" reading; None means
+    "couldn't measure" and must never be fabricated as 0.0.
+    """
+    if closes is None or t is None:
+        return None
+    t = int(t)
+    # Need indices t-N .. t inclusive (N+1 closes) all present and non-negative.
+    if t < n or t >= len(closes):
+        return None
+    net = abs(float(closes[t]) - float(closes[t - n]))
+    total = 0.0
+    for i in range(t - n + 1, t + 1):
+        total += abs(float(closes[i]) - float(closes[i - 1]))
+    if total == 0.0:
+        return None
+    return round(net / total, 3)
+
+
+# ---------------------------------------------------------------------------
 # PHASE 1 ONLY — Dealing range lookback per pair type (in H1 candles).
 # Used internally by get_dealing_range(). Trader-set: Forex 5 trading days,
 # Index 3 days, Gold 5 days. 1 trading day = 24 H1 candles. Weekend candles
