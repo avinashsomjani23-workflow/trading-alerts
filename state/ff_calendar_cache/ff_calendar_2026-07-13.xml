@@ -411,20 +411,10 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/382-jn-tertiary-industry-activity-mm]]></url>
 	</event>
 	<event>
-		<title>Industrial Production m/m</title>
-		<country>EUR</country>
-		<date><![CDATA[07-15-2026]]></date>
-		<time><![CDATA[9:00am]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[0.3%]]></forecast>
-		<previous><![CDATA[0.1%]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/220-ez-industrial-production-mm]]></url>
-	</event>
-	<event>
 		<title>M2 Money Supply y/y</title>
 		<country>CNY</country>
 		<date><![CDATA[07-15-2026]]></date>
-		<time><![CDATA[9:33am]]></time>
+		<time><![CDATA[7:00am]]></time>
 		<impact><![CDATA[Low]]></impact>
 		<forecast><![CDATA[8.5%]]></forecast>
 		<previous><![CDATA[8.6%]]></previous>
@@ -434,11 +424,21 @@
 		<title>New Loans</title>
 		<country>CNY</country>
 		<date><![CDATA[07-15-2026]]></date>
-		<time><![CDATA[9:33am]]></time>
+		<time><![CDATA[7:01am]]></time>
 		<impact><![CDATA[Low]]></impact>
 		<forecast><![CDATA[1950B]]></forecast>
 		<previous><![CDATA[520B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/477-ch-new-loans]]></url>
+	</event>
+	<event>
+		<title>Industrial Production m/m</title>
+		<country>EUR</country>
+		<date><![CDATA[07-15-2026]]></date>
+		<time><![CDATA[9:00am]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast><![CDATA[0.3%]]></forecast>
+		<previous><![CDATA[0.1%]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/220-ez-industrial-production-mm]]></url>
 	</event>
 	<event>
 		<title>German 30-y Bond Auction</title>

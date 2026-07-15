@@ -1,30 +1,5 @@
 [
   {
-    "ts": "2026-07-01T15:35:46.311396",
-    "ts_human": "15:35 IST, 01 Jul 2026",
-    "ob_count_total": 7,
-    "ob_count_per_pair": {
-      "EURUSD": 0,
-      "USDJPY": 1,
-      "NZDUSD": 2,
-      "USDCHF": 1,
-      "NAS100": 2,
-      "GOLD": 1,
-      "GBPUSD": 0,
-      "AUDUSD": 0,
-      "USDCAD": 0,
-      "EURJPY": 0,
-      "BTCUSD": 0
-    },
-    "ob_age_hrs": 0.006994645277777778,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 0,
-    "issues": []
-  },
-  {
     "ts": "2026-07-01T19:35:51.194253",
     "ts_human": "19:35 IST, 01 Jul 2026",
     "ob_count_total": 10,
@@ -1142,5 +1117,24 @@
         "action": "Check p1_degrade_log.json + P1 Actions tab. p1_email_fail=a digest was lost; walls_*_error=a pair degraded to a placeholder (no structure/OBs)."
       }
     ]
+  },
+  {
+    "ts": "2026-07-15T13:35:58.578049",
+    "ts_human": "13:35 IST, 15 Jul 2026",
+    "ob_count_total": 7,
+    "ob_count_per_pair": {
+      "EURUSD": 1,
+      "USDJPY": 2,
+      "NZDUSD": 1,
+      "USDCHF": 1,
+      "GOLD": 2
+    },
+    "ob_age_hrs": 0.008704616666666666,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
   }
 ]
