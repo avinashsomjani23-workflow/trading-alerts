@@ -541,6 +541,14 @@ def _simulate_single_entry(
     tp2    = float(levels["tp2"]) if levels.get("tp2") is not None else None
     tp1_rr = float(levels.get("rr", 0.0))
     tp2_rr = float(levels.get("tp2_rr", 0.0)) if tp2 is not None else 0.0
+    # TP-placement audit (2026-07-15): the zone-edge TP vs the raw swing wick it
+    # replaced, and both RRs. Lets the analysis separate "nearer TP" (zone vs
+    # wick) from "lower floor" (0.5). Straight pass-through of compute_phase2_levels.
+    tp1_wick = levels.get("tp1_wick")
+    tp1_wick_rr = float(levels.get("tp1_wick_rr", 0.0))
+    tp1_zone_source = levels.get("tp1_zone_source", "wick")
+    tp2_wick = levels.get("tp2_wick")
+    tp2_zone_source = levels.get("tp2_zone_source", "wick") if tp2 is not None else None
 
     # Apply pair spread to widen SL (worst-case execution). spread_pips is
     # the pair's typical broker spread. pip_size derived from decimal_places:
@@ -873,6 +881,8 @@ def _simulate_single_entry(
             alert=alert, pair_conf=pair_conf, ob=ob,
             entry_zone=entry_zone, entry=entry, sl=sl, sl_raw=sl_raw, tp1=tp1, tp2=tp2,
             tp1_rr=tp1_rr, tp2_rr=tp2_rr,
+            tp1_wick=tp1_wick, tp1_wick_rr=tp1_wick_rr, tp1_zone_source=tp1_zone_source,
+            tp2_wick=tp2_wick, tp2_zone_source=tp2_zone_source,
             score=score, breakdown=breakdown,
             df_h1=df_h1, alert_ts=alert_ts,
             fill_ts=None, exit_ts=None, exit_reason="never_filled",
@@ -1123,6 +1133,8 @@ def _simulate_single_entry(
         alert=alert, pair_conf=pair_conf, ob=ob,
         entry_zone=entry_zone, entry=entry, sl=sl, sl_raw=sl_raw, tp1=tp1, tp2=tp2,
         tp1_rr=tp1_rr, tp2_rr=tp2_rr,
+        tp1_wick=tp1_wick, tp1_wick_rr=tp1_wick_rr, tp1_zone_source=tp1_zone_source,
+        tp2_wick=tp2_wick, tp2_zone_source=tp2_zone_source,
         score=score, breakdown=breakdown,
         df_h1=df_h1, alert_ts=alert_ts,
         fill_ts=fill_ts, exit_ts=exit_ts, exit_reason=exit_reason,
@@ -1282,7 +1294,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                bars_sl_to_tp1_touch=None, sl_recovered_to_entry=None,
                ob_to_fill_hours=None,
                bars_break_to_pullback=None,
-               be_arm_bar_touched_entry=None) -> Dict[str, Any]:
+               be_arm_bar_touched_entry=None,
+               tp1_wick=None, tp1_wick_rr=None, tp1_zone_source=None,
+               tp2_wick=None, tp2_zone_source=None) -> Dict[str, Any]:
     """Assemble the final trade row dict in stable column order."""
     direction = ob.get("direction", "?")
     # FIX 3d: mutable OB state (touches, fvg) is frozen at the replay yield into
@@ -1493,6 +1507,14 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "tp2":           tp2,
         "tp1_rr":        round(tp1_rr, 3),
         "tp2_rr":        round(tp2_rr, 3) if tp2 is not None else None,
+        # TP-placement audit (2026-07-15). tp1/tp2 above are the ZONE-EDGE
+        # (traded) levels; these expose the raw swing wick they replaced and its
+        # RR, plus the source ("zone" = opposing OB edge used, "wick" = fallback).
+        "tp1_wick":         tp1_wick,
+        "tp1_wick_rr":      round(tp1_wick_rr, 3) if tp1_wick_rr is not None else None,
+        "tp1_zone_source":  tp1_zone_source,
+        "tp2_wick":         tp2_wick,
+        "tp2_zone_source":  tp2_zone_source,
         "exit_price":    exit_price,
         "exit_reason":   exit_reason,
         "r_realised":    r_realised,

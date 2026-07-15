@@ -1827,24 +1827,113 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
     return _empty
 
 
+# SHARED TP PLACEMENT — the reversal-zone edge at a target swing.
+#
+# SMC rule (same definition as the OB the system ENTERS on, smc_radar
+# build_ob_zones ~:946): price reverses at the last opposing candle before the
+# impulse — the order block — NOT at the raw swing wick. Our ENTRY already sits
+# at the proximal edge of OUR order block; this makes the EXIT sit at the
+# proximal edge of the OPPOSING order block. One definition, both ends of the
+# trade.
+#
+# Given a target swing (a high we are selling into for LONG, a low for SHORT)
+# and its row index in df_h1, walk BACK from the swing bar to the last opposing
+# candle (last down-candle before a swing high; last up-candle before a swing
+# low). Return that candle's NEAR edge — the first price the market meets on the
+# way to the swing:
+#   LONG  target = a swing high -> opposing (down) candle -> its LOW  (near edge)
+#   SHORT target = a swing low  -> opposing (up)   candle -> its HIGH (near edge)
+#
+# FALLBACK: if no qualifying opposing candle exists in the walk-back window, the
+# approach had no reversal block to aim at, so we return the raw swing wick
+# (`swing_price`) unchanged — identical to the pre-2026-07 behaviour. This makes
+# the change strictly additive per trade: a target either moves IN to its zone
+# edge or stays exactly where it was.
+#
+# The same 20%-body doji screen the OB build uses (is_valid_ob_candle) is
+# applied so a near-doji opposing candle is skipped, not treated as a block.
+# (Inlined, not imported: smc_radar imports smc_detector, so importing back
+# would be circular. It is a one-line threshold; duplicating it is cheaper than
+# a circular import, and both sites read the same 0.20 constant.)
+_TP_ZONE_WALKBACK_MAX = 10  # bars to search back from the swing for the block
+
+
+def _tp_zone_edge(df_h1, swing_idx, swing_price, bias, entry):
+    """Reversal-zone near edge for a target swing; raw wick on fallback.
+
+    Returns (edge_price, source) where source is "zone" (opposing OB edge found)
+    or "wick" (fallback). Pure geometry — no ATR, no state, deterministic.
+
+    TWO guards force a wick fallback, and both matter:
+      1. Profit-side: the zone edge MUST stay on the profit side of entry — above
+         entry for LONG, below for SHORT. An opposing candle whose near edge has
+         a long wick can dip BACK PAST entry (its low sits below a LONG entry);
+         placing TP there parks the "target" behind the entry, so price hits it
+         instantly as a LOSS that is then mislabelled a TP1 win. The wick is
+         always on the profit side (opposing swings are pre-filtered past entry),
+         so it is the safe fallback.
+      2. Beyond-wick: the edge must not sit past the swing wick itself (malformed
+         bar). Falls back to the wick.
+    """
+    try:
+        i = int(swing_idx)
+    except (TypeError, ValueError):
+        return swing_price, "wick"
+    if df_h1 is None or i is None or i <= 0 or i >= len(df_h1):
+        return swing_price, "wick"
+    O = df_h1['Open'].values
+    H = df_h1['High'].values
+    L = df_h1['Low'].values
+    C = df_h1['Close'].values
+    # LONG sells into a swing HIGH -> the block is the last DOWN candle (C<O).
+    # SHORT buys at a swing LOW  -> the block is the last UP   candle (C>O).
+    want_down = (bias == "LONG")
+    lo = max(0, i - _TP_ZONE_WALKBACK_MAX)
+    for j in range(i, lo - 1, -1):  # include the swing bar itself, then back
+        o, h, l, c = float(O[j]), float(H[j]), float(L[j]), float(C[j])
+        is_opposing = (c < o) if want_down else (c > o)
+        if not is_opposing:
+            continue
+        rng = h - l
+        if rng <= 0 or abs(o - c) <= rng * 0.20:  # doji screen (matches OB build)
+            continue
+        edge = l if want_down else h  # near edge: low for LONG, high for SHORT
+        # Guard 1 — profit side: LONG edge must be ABOVE entry, SHORT BELOW.
+        # Guard 2 — beyond wick: LONG edge <= swing high, SHORT edge >= swing low.
+        if want_down:
+            valid = entry < edge <= swing_price
+        else:
+            valid = swing_price <= edge < entry
+        if valid:
+            return edge, "zone"
+        return swing_price, "wick"  # block crosses entry (or wick) -> wick
+    return swing_price, "wick"
+
+
 # PHASE 2 ONLY — computes SL/TP1/TP2 from H1 structure.
 # (Phase 3 historically called this too. Phase 3 is disabled in the H1-only
 # migration; if it is ever re-enabled, this function's H1-only behaviour is
 # what it will get.)
 def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
-                          entry_zone="proximal", tp1_min_rr=1.5):
+                          entry_zone="proximal", tp1_min_rr=0.5):
     """
     Phase 2 entry / SL / TP computation. H1-only since 2026-05-26 migration.
 
-    `tp1_min_rr` (default 1.5) is the LIVE trade-existence floor: TP1 must clear
-    it or there is no trade. Live callers never pass it, so live behaviour is
-    frozen at 1.5R. The backtest passes 0.5 to study the sub-1.5R population it
-    could never see before. CRITICAL: this ONLY relaxes trade EXISTENCE, never
-    TP1 SELECTION. TP1 is still chosen as the nearest target clearing 1.5R when
-    one exists (winners are byte-identical to the 1.5R world); the lower floor is
-    a pure FALLBACK used only when nothing clears 1.5R, so the change is strictly
-    additive — every trade that exists today keeps its exact TP1, and only
-    previously-rejected trades appear (targeting their best >= tp1_min_rr option).
+    `tp1_min_rr` (default 0.5, matched live+backtest 2026-07-15) is the single
+    trade-existence floor: TP1 must clear it or there is no trade. Live and the
+    backtest now share the same floor so live surfaces the smaller-target
+    population for observation. The floor is graded on the ZONE-EDGE TP (the
+    price the trade actually targets), never on the raw wick — grading RR on a
+    level we do not trade is fiction.
+
+    TP PLACEMENT (2026-07-15): TP1/TP2 target the near edge of the OPPOSING
+    order block at the target swing (the last opposing candle before the swing —
+    the same OB definition the system ENTERS on), NOT the raw swing wick. Price
+    reverses at the block, not at the wick tip. `_tp_zone_edge` does the
+    walk-back; it returns the raw wick as a fallback when no opposing candle
+    exists, so a target either moves in to its zone edge or is unchanged. Both
+    the wick price/RR and the zone price/RR are returned for logging so the two
+    effects (nearer TP, lower floor) stay separable downstream.
 
     Entry: always taken from H1 OB geometry. `entry_zone` selects the line:
       - "proximal" (default, live) -> OB proximal edge. Standard SMC limit.
@@ -1854,14 +1943,13 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     SL: H1 OB distal +/- 1x spread.
 
     TP swings: H1 swings at lookback=3.
-      TP1 = nearest opposing H1 swing past entry that clears 1.5R. If NO swing
-            clears 1.5R, fall back to the H4 dealing-range wall (ceiling for
-            LONG / floor for SHORT) if it clears 1.5R. If neither qualifies at
-            1.5R AND the caller lowered `tp1_min_rr` (backtest passes 0.5), the
-            same swing/wall pick re-runs at that lower floor so the setup can
-            still exist. If nothing clears `tp1_min_rr` -> no trade (reason
-            'no_qualifying_target', logged for counting).
-      TP2 = next opposing H1 swing past TP1 (no RR gate). None when TP1 is the
+      TP1 = nearest opposing H1 swing past entry whose ZONE-EDGE clears the
+            floor. If NO swing qualifies, fall back to the H4 dealing-range wall
+            (ceiling for LONG / floor for SHORT) if it clears the floor. If
+            nothing clears the floor -> no trade (reason 'no_qualifying_target',
+            logged for counting).
+      TP2 = next opposing H1 swing past TP1 (no RR gate), zone-edge placed. None
+            when TP1 is the
             wall, or when no further swing exists; simulator rides TP1 + BE-stop.
 
     Limit-order chase guard (proximal entry only):
@@ -1941,12 +2029,9 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
                     if s['type'] == 'low' and s['price'] < entry]
         opposing.sort(key=lambda s: s['price'], reverse=True)  # descending -- nearest first
 
-    # TP1 selection is a two-stage floor. Stage 1 always demands 1.5R so the
-    # LIVE target is unchanged and winners are never cut. Stage 2 only runs when
-    # nothing cleared 1.5R AND the caller relaxed the floor (backtest passes
-    # 0.5); it re-scans with the lower floor purely to let a previously-rejected
-    # setup EXIST. A helper does the pick so swing + H4-wall use the identical
-    # rule at whichever floor is active.
+    # TP1 selection: single floor (`tp1_min_rr`, 0.5 live+backtest). The pick is
+    # graded on the ZONE-EDGE RR — the price the trade actually targets — not the
+    # raw wick. A helper does the pick so swing + H4-wall use the identical rule.
     dr_for_tp = ob.get('dealing_range') if isinstance(ob, dict) else None
     wall = None
     if isinstance(dr_for_tp, dict) and dr_for_tp.get('valid'):
@@ -1957,27 +2042,32 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         wall = None
 
     def _pick_tp1(floor):
-        """(tp1, tp1_rr, idx_in_opposing, source) for the given RR floor, or
-        (None, ...) if nothing clears it. Nearest qualifying swing first; H4
-        dealing-range wall as the fallback draw-on-liquidity (LONG ceiling /
-        SHORT floor). Same rule live has always used, parameterised on floor."""
+        """Pick TP1 at the given RR floor, graded on the ZONE-EDGE price.
+
+        Returns (tp1_zone, tp1_zone_rr, tp1_wick, tp1_wick_rr, idx_in_opposing,
+        source, zone_source) or (None, ...) if nothing clears the floor.
+        Nearest qualifying swing first; H4 dealing-range wall as the fallback
+        draw-on-liquidity (LONG ceiling / SHORT floor). The wall has no candle
+        behind it, so it is never zone-shifted — its zone == its wick."""
         for i, sw in enumerate(opposing):
-            rr = abs(sw['price'] - entry) / risk
-            if rr >= floor:
-                return sw['price'], rr, i, "swing"
+            wick = sw['price']
+            zone, zsrc = _tp_zone_edge(df_h1, sw.get('idx'), wick, bias, entry)
+            zone_rr = abs(zone - entry) / risk
+            if zone_rr >= floor:  # gate the level we actually trade
+                wick_rr = abs(wick - entry) / risk
+                return zone, zone_rr, wick, wick_rr, i, "swing", zsrc
         # H4 wall fallback (2026-06): a fresh CHoCH often has no qualifying
-        # opposing swing yet — aim at the institutional draw instead.
+        # opposing swing yet — aim at the institutional draw instead. No candle
+        # behind a wall -> no zone shift; wick == zone.
         if wall is not None:
             on_side = (wall > entry) if bias == "LONG" else (wall < entry)
             wall_rr = abs(wall - entry) / risk
             if on_side and wall_rr >= floor:
-                return wall, wall_rr, None, "h4_wall"
-        return None, 0.0, None, "swing"
+                return wall, wall_rr, wall, wall_rr, None, "h4_wall", "wick"
+        return None, 0.0, None, 0.0, None, "swing", "wick"
 
-    tp1, tp1_rr, tp1_idx_in_opposing, tp1_source = _pick_tp1(1.5)
-    # Stage 2: only when the live floor found nothing AND the caller relaxed it.
-    if tp1 is None and tp1_min_rr < 1.5:
-        tp1, tp1_rr, tp1_idx_in_opposing, tp1_source = _pick_tp1(tp1_min_rr)
+    (tp1, tp1_rr, tp1_wick, tp1_wick_rr,
+     tp1_idx_in_opposing, tp1_source, tp1_zone_source) = _pick_tp1(tp1_min_rr)
 
     if tp1 is None:
         return {
@@ -2000,9 +2090,14 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     #       equal highs/lows are the same pool of resting liquidity even when a
     #       tiny opposite blip technically separates them. This is the same band
     #       the sweep engine uses to call two levels "equal" (no new parameter).
-    # TP2 is still the real next swing's PRICE — the band only DISQUALIFIES a
-    # candidate too close to TP1; it never becomes the target itself.
+    # Pool separation (separator + equal-level band) is measured on the RAW
+    # SWING WICKS — pools are wick levels of resting liquidity, unchanged by
+    # where we place the TP. Only the PRICE finally emitted for TP2 is
+    # zone-edge-shifted (same walk-back as TP1), so TP1 and TP2 share the exact
+    # placement rule while pool logic stays on the true swings.
     tp2 = None
+    tp2_wick = None
+    tp2_zone_source = "wick"
     if tp1_idx_in_opposing is not None and tp1_idx_in_opposing + 1 < len(opposing):
         tp1_sw = opposing[tp1_idx_in_opposing]
         tp2_sw = opposing[tp1_idx_in_opposing + 1]
@@ -2014,25 +2109,34 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
             and tp1_sw['idx'] < s['idx'] < tp2_sw['idx']
             for s in h1_swings
         )
-        # Equal-level band: TP2 must clear TP1 by more than the pair's
-        # equal-level tolerance. ATR-scaled, same constant as the sweep engine.
-        # Fail open: if ATR is unavailable, the band gate is skipped (a missing
-        # ATR must never silently drop a structurally valid TP2).
+        # Equal-level band: TP2's swing wick must clear TP1's swing wick by more
+        # than the pair's equal-level tolerance. Measured wick-to-wick (pool
+        # separation), NOT on the zone-shifted prices. ATR-scaled, same constant
+        # as the sweep engine. Fail open: if ATR is unavailable, the band gate is
+        # skipped (a missing ATR must never silently drop a structurally valid TP2).
         pair_type = pair_conf.get("pair_type", "forex")
         h1_atr = compute_atr(df_h1)
         tol = SWEEP_EQUAL_LEVEL_TOLERANCE_ATR.get(pair_type, 0.30) * h1_atr if h1_atr else None
-        beyond_band = tol is None or abs(tp2_sw['price'] - tp1) > tol
+        beyond_band = tol is None or abs(tp2_sw['price'] - tp1_sw['price']) > tol
         if has_separator and beyond_band:
-            tp2 = tp2_sw['price']
+            tp2_wick = tp2_sw['price']
+            tp2, tp2_zone_source = _tp_zone_edge(
+                df_h1, tp2_sw.get('idx'), tp2_wick, bias, entry)
 
     out = {
         "valid": True,
         "entry": round(entry, dp),
         "sl": round(sl, dp),
-        "tp1": round(tp1, dp),
-        "rr": round(tp1_rr, 2),
+        "tp1": round(tp1, dp),          # zone-edge TP1 (the traded level)
+        "rr": round(tp1_rr, 2),         # RR of the traded (zone) level
         "entry_source": entry_source,
-        "tp1_source": tp1_source,  # "swing" | "h4_wall"
+        "tp1_source": tp1_source,       # "swing" | "h4_wall"
+        # Placement audit — lets the backtest separate "nearer TP" (zone vs wick)
+        # from "lower floor" (0.5). tp1_zone_source: "zone" (opposing OB edge) |
+        # "wick" (fallback, no opposing candle). For an h4_wall TP, zone==wick.
+        "tp1_wick": round(tp1_wick, dp) if tp1_wick is not None else None,
+        "tp1_wick_rr": round(tp1_wick_rr, 2),
+        "tp1_zone_source": tp1_zone_source,
     }
     # Post-rounding direction check. Pre-round, the swing list ordering
     # guarantees tp2 > tp1 (LONG) or tp2 < tp1 (SHORT). After rounding to
@@ -2045,6 +2149,8 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         if (bias == "LONG" and tp2_r > tp1_r) or (bias == "SHORT" and tp2_r < tp1_r):
             out["tp2"] = tp2_r
             out["tp2_rr"] = round(abs(tp2 - entry) / risk, 2)
+            out["tp2_wick"] = round(tp2_wick, dp) if tp2_wick is not None else None
+            out["tp2_zone_source"] = tp2_zone_source
         # else: tp2 collapsed onto tp1 (or wrong side) -> emit no tp2.
     return out
 

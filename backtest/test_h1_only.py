@@ -167,11 +167,12 @@ def test_levels_dual_entry():
         ok &= check(lv_prox["tp1"] >= lv_mid["tp1"] - 1e-9,
                     f"proximal TP1 ({lv_prox['tp1']}) >= 50pct TP1 ({lv_mid['tp1']}) "
                     "(tighter R gate lets 50pct pick a nearer swing)")
-        # Both RRs must clear the 1.5R live gate.
-        ok &= check(lv_prox.get("rr", 0) >= 1.5,
-                    f"proximal RR >= 1.5 ({lv_prox.get('rr')})")
-        ok &= check(lv_mid.get("rr", 0) >= 1.5,
-                    f"50pct RR >= 1.5 ({lv_mid.get('rr')})")
+        # Both RRs must clear the live gate (0.5R since 2026-07-15; the traded
+        # tp1 is the zone edge, graded on zone RR).
+        ok &= check(lv_prox.get("rr", 0) >= 0.5,
+                    f"proximal RR >= 0.5 ({lv_prox.get('rr')})")
+        ok &= check(lv_mid.get("rr", 0) >= 0.5,
+                    f"50pct RR >= 0.5 ({lv_mid.get('rr')})")
         # If TPs happen to be identical, 50pct RR must be strictly larger
         # (tighter R, same numerator). If TPs differ, no strict relation.
         if abs(lv_prox["tp1"] - lv_mid["tp1"]) < 1e-9:
@@ -953,6 +954,169 @@ def test_choppiness_anchor_includes_its_bar_no_lookahead():
     assert ok, "choppiness anchor/look-ahead checks failed (see output above)"
 
 
+def _zone_df(rows):
+    """rows: list of (open, high, low, close). Return an H1 df at UTC hourly."""
+    idx = pd.date_range("2026-04-01 00:00", periods=len(rows), freq="h", tz="UTC")
+    return pd.DataFrame(
+        {"Open": [r[0] for r in rows], "High": [r[1] for r in rows],
+         "Low":  [r[2] for r in rows], "Close": [r[3] for r in rows],
+         "Volume": [100] * len(rows)},
+        index=idx,
+    )
+
+
+def test_tp_zone_edge_picks_last_opposite_candle():
+    """LONG: zone edge = LOW of the last DOWN candle before the swing high.
+       SHORT: zone edge = HIGH of the last UP candle before the swing low."""
+    ok = True
+    # LONG: bars rise into a swing high at idx 4. idx 3 is a DOWN candle
+    # (open>close) — the opposing OB. Its LOW is the zone edge.
+    long_rows = [
+        (1.0000, 1.0010, 0.9990, 1.0005),  # 0 up
+        (1.0005, 1.0025, 1.0000, 1.0020),  # 1 up
+        (1.0020, 1.0040, 1.0015, 1.0035),  # 2 up
+        (1.0060, 1.0065, 1.0030, 1.0038),  # 3 DOWN (open>close), big body -> the OB
+        (1.0038, 1.0090, 1.0035, 1.0085),  # 4 up -> swing high 1.0090
+    ]
+    df = _zone_df(long_rows)
+    # entry below the zone edge so the profit-side guard passes.
+    edge, src = smc_detector._tp_zone_edge(df, swing_idx=4, swing_price=1.0090,
+                                           bias="LONG", entry=1.0000)
+    ok &= check(src == "zone", f"LONG found a zone (src={src})")
+    ok &= check(abs(edge - 1.0030) < 1e-9, f"LONG zone edge = down-candle LOW 1.0030 (got {edge})")
+    ok &= check(edge < 1.0090, "LONG zone edge sits nearer than the wick")
+
+    # SHORT: bars fall into a swing low at idx 4. idx 3 is an UP candle
+    # (close>open) — the opposing OB. Its HIGH is the zone edge.
+    short_rows = [
+        (1.0100, 1.0110, 1.0090, 1.0095),  # 0 down
+        (1.0095, 1.0100, 1.0075, 1.0080),  # 1 down
+        (1.0080, 1.0085, 1.0060, 1.0065),  # 2 down
+        (1.0040, 1.0070, 1.0035, 1.0062),  # 3 UP (close>open), big body -> the OB
+        (1.0062, 1.0065, 1.0010, 1.0015),  # 4 down -> swing low 1.0010
+    ]
+    df2 = _zone_df(short_rows)
+    # entry above the zone edge so the profit-side guard passes.
+    edge2, src2 = smc_detector._tp_zone_edge(df2, swing_idx=4, swing_price=1.0010,
+                                             bias="SHORT", entry=1.0100)
+    ok &= check(src2 == "zone", f"SHORT found a zone (src={src2})")
+    ok &= check(abs(edge2 - 1.0070) < 1e-9, f"SHORT zone edge = up-candle HIGH 1.0070 (got {edge2})")
+    ok &= check(edge2 > 1.0010, "SHORT zone edge sits nearer than the wick")
+    assert ok, "zone-edge last-opposite-candle picks failed (see output above)"
+
+
+def test_tp_zone_edge_falls_back_to_wick():
+    """No opposing candle in the walk-back -> return the raw wick, src='wick'.
+       Also: a doji opposing candle is skipped (same 20%-body screen as OB)."""
+    ok = True
+    # LONG into a swing high with ONLY up candles behind it -> no down candle ->
+    # fallback to the wick.
+    all_up = [
+        (1.0000, 1.0010, 0.9995, 1.0008),
+        (1.0008, 1.0025, 1.0005, 1.0022),
+        (1.0022, 1.0045, 1.0020, 1.0042),
+        (1.0042, 1.0070, 1.0040, 1.0068),  # swing high 1.0070, idx 3
+    ]
+    df = _zone_df(all_up)
+    edge, src = smc_detector._tp_zone_edge(df, swing_idx=3, swing_price=1.0070,
+                                           bias="LONG", entry=1.0000)
+    ok &= check(src == "wick", f"no opposing candle -> wick fallback (src={src})")
+    ok &= check(abs(edge - 1.0070) < 1e-9, f"fallback returns the raw wick 1.0070 (got {edge})")
+
+    # A near-doji DOWN candle (body <= 20% of range) must be SKIPPED, not used.
+    # idx 3 is a doji (tiny body, big range); no other down candle -> wick.
+    doji = [
+        (1.0000, 1.0010, 0.9995, 1.0008),
+        (1.0008, 1.0025, 1.0005, 1.0022),
+        (1.0022, 1.0045, 1.0020, 1.0042),
+        (1.0050, 1.0060, 1.0030, 1.0049),  # DOWN but body 1pt / range 30pt = doji
+        (1.0049, 1.0090, 1.0045, 1.0085),  # swing high 1.0090, idx 4
+    ]
+    df2 = _zone_df(doji)
+    edge2, src2 = smc_detector._tp_zone_edge(df2, swing_idx=4, swing_price=1.0090,
+                                             bias="LONG", entry=1.0000)
+    ok &= check(src2 == "wick", f"doji opposing candle skipped -> wick (src={src2})")
+    assert ok, "zone-edge fallback/doji-skip checks failed (see output above)"
+
+
+def test_tp_zone_edge_wrong_side_of_entry_falls_back_to_wick():
+    """REGRESSION (2026-07-15): an opposing candle whose near edge dips BACK PAST
+    entry must NOT be used — that parks TP behind the entry and books an instant
+    loss mislabelled as a TP1 win (G10 mfe_beyond_tp1_exit). Fall back to wick."""
+    ok = True
+    # LONG: swing high 1.0090 at idx 4; the opposing DOWN candle at idx 3 has a
+    # LOW of 1.0030. If entry sits ABOVE that low (1.0050), the zone edge is
+    # behind entry -> must fall back to the wick (1.0090, on the profit side).
+    long_rows = [
+        (1.0000, 1.0010, 0.9990, 1.0005),
+        (1.0005, 1.0025, 1.0000, 1.0020),
+        (1.0020, 1.0040, 1.0015, 1.0035),
+        (1.0060, 1.0065, 1.0030, 1.0038),  # DOWN, low 1.0030 -> BEHIND entry
+        (1.0038, 1.0090, 1.0035, 1.0085),  # swing high 1.0090
+    ]
+    df = _zone_df(long_rows)
+    edge, src = smc_detector._tp_zone_edge(df, swing_idx=4, swing_price=1.0090,
+                                           bias="LONG", entry=1.0050)
+    ok &= check(src == "wick", f"LONG zone behind entry -> wick (src={src})")
+    ok &= check(abs(edge - 1.0090) < 1e-9, f"LONG falls back to wick 1.0090 (got {edge})")
+    ok &= check(edge > 1.0050, "LONG fallback TP stays on the profit side of entry")
+
+    # SHORT mirror: opposing UP candle high 1.0070; entry BELOW it (1.0050) ->
+    # zone behind entry -> wick fallback (1.0010, below entry = profit side).
+    short_rows = [
+        (1.0100, 1.0110, 1.0090, 1.0095),
+        (1.0095, 1.0100, 1.0075, 1.0080),
+        (1.0080, 1.0085, 1.0060, 1.0065),
+        (1.0040, 1.0070, 1.0035, 1.0062),  # UP, high 1.0070 -> BEHIND a 1.0050 entry
+        (1.0062, 1.0065, 1.0010, 1.0015),  # swing low 1.0010
+    ]
+    df2 = _zone_df(short_rows)
+    edge2, src2 = smc_detector._tp_zone_edge(df2, swing_idx=4, swing_price=1.0010,
+                                             bias="SHORT", entry=1.0050)
+    ok &= check(src2 == "wick", f"SHORT zone behind entry -> wick (src={src2})")
+    ok &= check(edge2 < 1.0050, "SHORT fallback TP stays on the profit side of entry")
+    assert ok, "wrong-side-of-entry guard checks failed (see output above)"
+
+
+def test_compute_phase2_levels_emits_placement_audit_fields():
+    """compute_phase2_levels must emit the tp1_wick/rr/zone_source audit fields,
+       and tp1 (traded) must be the zone edge = nearer-or-equal to the wick."""
+    df = _synth_h1_df(200)
+    ob = _synth_ob_bullish(df, ts_idx=-50)
+    conf = _synth_pair_conf()
+    current = float(df["Close"].iloc[-50])
+    lv = smc_detector.compute_phase2_levels(conf, "LONG", ob, current, df,
+                                            entry_zone="proximal")
+    ok = check(lv.get("valid"), f"levels valid ({lv.get('reason')})")
+    for f in ("tp1_wick", "tp1_wick_rr", "tp1_zone_source"):
+        ok &= check(f in lv, f"levels carry '{f}'")
+    ok &= check(lv["tp1_zone_source"] in ("zone", "wick"),
+                f"tp1_zone_source is zone|wick (got {lv.get('tp1_zone_source')})")
+    if lv.get("tp1_wick") is not None:
+        # LONG: traded tp1 (zone edge) must be <= the wick it replaced.
+        ok &= check(lv["tp1"] <= lv["tp1_wick"] + 1e-9,
+                    f"LONG traded tp1 {lv['tp1']} <= wick {lv['tp1_wick']}")
+    # INVARIANT: a valid TP1 must sit on the PROFIT side of entry (LONG above,
+    # SHORT below) — never behind it. This is the G10 mfe_beyond_tp1_exit bug.
+    ok &= check(lv["tp1"] > lv["entry"],
+                f"LONG tp1 {lv['tp1']} strictly above entry {lv['entry']}")
+    assert ok, "placement-audit field checks failed (see output above)"
+
+
+def test_floor_is_half_r_live_and_backtest():
+    """The trade-existence floor is 0.5R and matches live+backtest."""
+    import inspect
+    sig = inspect.signature(smc_detector.compute_phase2_levels)
+    default_floor = sig.parameters["tp1_min_rr"].default
+    ok = check(abs(default_floor - 0.5) < 1e-9,
+               f"live default floor is 0.5 (got {default_floor})")
+    ok &= check(abs(h1_only_simulator.BACKTEST_TP1_MIN_RR - 0.5) < 1e-9,
+                f"backtest floor is 0.5 (got {h1_only_simulator.BACKTEST_TP1_MIN_RR})")
+    ok &= check(abs(default_floor - h1_only_simulator.BACKTEST_TP1_MIN_RR) < 1e-9,
+                "live floor == backtest floor")
+    assert ok, "floor checks failed (see output above)"
+
+
 def main():
     # Robust to BOTH styles: assert-based tests (return None on pass, raise on
     # fail — the pytest-visible ones) and legacy bool-returning tests. A raised
@@ -990,6 +1154,16 @@ def main():
          test_choppiness_day_boundary_matches_server_date),
         ("test_choppiness_anchor_includes_its_bar_no_lookahead",
          test_choppiness_anchor_includes_its_bar_no_lookahead),
+        ("test_tp_zone_edge_picks_last_opposite_candle",
+         test_tp_zone_edge_picks_last_opposite_candle),
+        ("test_tp_zone_edge_falls_back_to_wick",
+         test_tp_zone_edge_falls_back_to_wick),
+        ("test_tp_zone_edge_wrong_side_of_entry_falls_back_to_wick",
+         test_tp_zone_edge_wrong_side_of_entry_falls_back_to_wick),
+        ("test_compute_phase2_levels_emits_placement_audit_fields",
+         test_compute_phase2_levels_emits_placement_audit_fields),
+        ("test_floor_is_half_r_live_and_backtest",
+         test_floor_is_half_r_live_and_backtest),
     ]
     results = [(name, _run(name, fn)) for name, fn in tests]
     print("\n=== SUMMARY ===")

@@ -1234,6 +1234,11 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "pair", "alert_ts", "fill_ts", "exit_ts", "session",
         "direction", "event", "entry_zone",
         "entry", "sl_raw", "sl_initial", "tp1", "tp2", "tp1_rr", "tp2_rr",
+        # TP-placement audit (2026-07-15): tp1/tp2 above are the ZONE-EDGE
+        # (traded) levels; these expose the raw swing wick they replaced, its RR,
+        # and the source ("zone" opposing-OB edge used | "wick" fallback).
+        "tp1_wick", "tp1_wick_rr", "tp1_zone_source",
+        "tp2_wick", "tp2_zone_source",
         "exit_reason", "exit_price",
         "r_realised", "r_if_exit_tp1", "r_if_exit_tp2", "pnl_usd",
         # Headline membership: True rows sum to the email headline. When False,
