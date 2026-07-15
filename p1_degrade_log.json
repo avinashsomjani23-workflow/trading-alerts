@@ -1,35 +1,5 @@
 [
   {
-    "ts": "2026-07-05T02:06:25.741359",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-05T02:06:25.798751",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-05T02:06:25.840520",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-05T02:06:26.006361",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-07-05T02:06:26.059244",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "USDCHF",
-    "source": "legacy_window_120h"
-  },
-  {
     "ts": "2026-07-05T02:06:26.093085",
     "kind": "dealing_range_legacy_fallback",
     "pair": "USDCHF",
@@ -1195,6 +1165,36 @@
   },
   {
     "ts": "2026-07-14T23:34:58.656924",
+    "kind": "pool_context_fail",
+    "pair": "GOLD",
+    "reason": "'RangeIndex' object has no attribute 'tz'"
+  },
+  {
+    "ts": "2026-07-15T09:33:48.764971",
+    "kind": "pool_context_fail",
+    "pair": "EURUSD",
+    "reason": "'RangeIndex' object has no attribute 'tz'"
+  },
+  {
+    "ts": "2026-07-15T09:33:48.932558",
+    "kind": "pool_context_fail",
+    "pair": "USDJPY",
+    "reason": "'RangeIndex' object has no attribute 'tz'"
+  },
+  {
+    "ts": "2026-07-15T09:33:49.080832",
+    "kind": "pool_context_fail",
+    "pair": "NZDUSD",
+    "reason": "'RangeIndex' object has no attribute 'tz'"
+  },
+  {
+    "ts": "2026-07-15T09:33:49.238671",
+    "kind": "pool_context_fail",
+    "pair": "USDCHF",
+    "reason": "'RangeIndex' object has no attribute 'tz'"
+  },
+  {
+    "ts": "2026-07-15T09:34:53.992084",
     "kind": "pool_context_fail",
     "pair": "GOLD",
     "reason": "'RangeIndex' object has no attribute 'tz'"
