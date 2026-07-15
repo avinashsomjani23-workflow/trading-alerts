@@ -2597,6 +2597,17 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
     table (which is fed pair_walls directly) shows the real bias, a direct
     contradiction. Falls back to sz['walls'] for any caller that still embeds it.
     """
+    # `narrative` is a list of plain-English bullet strings (generate_zone_
+    # narrative_with_atr). Render each as an <li>. Defensive: a bare string or
+    # None still renders (str -> single bullet, None -> empty list) so a caller
+    # regression can never crash the digest.
+    if isinstance(narrative, str):
+        _bullets = [narrative] if narrative else []
+    else:
+        _bullets = list(narrative or [])
+    narrative_html = "".join(
+        f'<li style="margin-bottom:6px;">{b}</li>' for b in _bullets)
+
     direction  = "Bullish (Demand)" if sz['direction'] == 'bullish' else "Bearish (Supply)"
     dir_color  = '#27ae60' if sz['direction'] == 'bullish' else '#e74c3c'
     status_label = sz.get('status_label', 'Pristine')
@@ -2712,10 +2723,10 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
         </span>
         <span style="font-size:11px;color:#aaa;">{fvg_line}</span>
       </div>
-      <p style="font-size:12px;color:#bbb;line-height:1.6;margin:0 0 12px 0;
-                border-left:3px solid #2a2a3e;padding-left:10px;">
-        {narrative}
-      </p>
+      <ul style="font-size:12px;color:#bbb;line-height:1.6;margin:0 0 12px 0;
+                 border-left:3px solid #2a2a3e;padding:0 0 0 24px;list-style:disc;">
+        {narrative_html}
+      </ul>
       {chart_html}
     </div>"""
 
@@ -3073,64 +3084,115 @@ def build_price_moved_banner_html(pairs_info):
     )
 
 
-def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr):
+def generate_zone_narrative_with_atr(ob, name, dp, current_price, h1_atr,
+                                     pool_snap=None, eq_ctx=None):
     """
-    Builds the zone briefing (structural read -> conviction -> what to watch).
+    Build the per-card zone briefing as a LIST of bullet strings (no prose).
 
-    Phase 1 is deterministic and uses NO external API. The local builder
-    (_fallback_narrative_with_atr) produces the full three-part briefing from
-    real zone data (FVG state, tested/pristine, CHoCH vs BOS, in-zone vs
-    approaching). Gemini was removed here: it fired up to 6 calls per scan for
-    decorative prose that feeds no decision, which blew the API quota. Macro
-    context via Gemini lives on Phase 2 only.
+    Bullets, in order (each one only when it has something to say):
+      - Structure : CHoCH/BOS event + zone side (demand/supply).
+      - FVG       : the gap's STATUS only (pristine / partial / filled / none).
+      - Liquidity : PD/PW pool glyph line + which range price sits in.
+      - Magnet    : nearest untouched pool in THIS zone's direction, and what
+                    to do with it — reuses the same P2 pool features so P1 and
+                    P2 say the same thing.
+      - EQ        : nearest equal-level stop cluster and how it maps to the trade.
+
+    Phase 1 is deterministic and uses NO external API. Gemini was removed here:
+    it fired up to 6 calls per scan for decorative prose that fed no decision.
+
+    `pool_snap` = pair PD/PW snapshot (pair_pools[name]); `eq_ctx` = pair EQ
+    context (pair_eqs[name]). Either may be None (dead layer) — the matching
+    bullet is simply dropped. Info only — never gates or scores.
     """
-    return _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr)
+    return _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr,
+                                        pool_snap, eq_ctx)
 
 
-def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr):
-    # Judgment-only fallback. The card chips already carry width, distance,
-    # H1 ATR, FVG state and OB status — this paragraph must NOT restate them.
-    # It gives the structural read + what confirms / kills the zone.
-    z_lo = min(ob['proximal_line'], ob['distal_line'])
-    z_hi = max(ob['proximal_line'], ob['distal_line'])
-    in_zone = z_lo <= current_price <= z_hi
-    is_tested = 'Pristine' not in ob.get('status', 'Pristine')
+# Where price sits vs yesterday's range, for the P1 Liquidity bullet. This
+# clause ONLY states position — it must NOT restate a sweep/break already named
+# in the plain-word pool status list above it (day_state is derived from the
+# PD status, so a SWEPT_LOW clause would just repeat "yesterday's low swept").
+# Sweep/break day-states therefore map to None here (no extra clause).
+_P1_DAY_RANGE_PHRASE = {
+    "INSIDE": "price is inside yesterday's range",
+    "EXPANSION_UP": "price is above yesterday's range",
+    "EXPANSION_DOWN": "price is below yesterday's range",
+    "SWEPT_HIGH": None,
+    "SWEPT_LOW": None,
+    "BOTH_SIDES": None,
+}
 
-    if ob['fvg'].get('exists'):
-        mit = ob['fvg'].get('mitigation', 'pristine')
-        if mit == 'partial':
-            conviction = ("OB carries partial-FVG displacement — proximal already "
-                          "tagged, so conviction is moderate; the distal half is "
-                          "where the unfilled imbalance still sits.")
-        else:
-            conviction = ("OB is backed by a clean displacement FVG — the strongest "
-                          "form of this setup.")
-    elif ob['fvg'].get('was_detected'):
-        conviction = ("The FVG has been filled, so the zone rests on the OB alone — "
-                      "treat conviction as reduced.")
-    else:
-        conviction = ("No FVG formed, so the zone rests on the OB alone — demand "
-                      "tighter confirmation before trusting it.")
-    if is_tested:
-        conviction += " The OB has already been tested, so expect a weaker reaction than a pristine block."
 
+def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr,
+                                 pool_snap=None, eq_ctx=None):
+    # Returns a LIST of plain-English bullets. The card chips already carry
+    # width, distance, H1 ATR and OB status — these bullets must NOT restate
+    # them. Bullets only give the structural read + the liquidity picture.
+    bullets = []
+
+    # 1. STRUCTURE — CHoCH flips, BOS continues; name the zone side. The old
+    #    "as the origin smart money may defend on the retrace" tail was dropped:
+    #    the zone side already carries that meaning (repetition, not signal).
     event_label = _event_label(ob.get('bos_tag', 'BOS'), ob.get('bos_tier', 'BOS'))
     side = "demand" if ob['direction'] == 'bullish' else "supply"
-    # A CHoCH flips structure; a BOS (incl. Range BOS / birth) continues it.
-    # Using the right verb keeps the narrative honest — a BOS card must never
-    # read "flipped structure". `event_label` is the single source of truth for
-    # the event type here.
     structural_verb = "flipped structure" if event_label == 'CHoCH' else "continued structure"
-    structural = (f"{event_label} {structural_verb} {ob['direction']}, leaving this "
-                  f"{side} zone as the origin smart money may defend on the retrace.")
-    if in_zone:
-        watch = ("Price is mitigating it now — watch the reaction candle for a "
-                 "rejection that holds, and stand down if it closes through the distal.")
+    bullets.append(
+        f"<b>Structure:</b> {event_label} {structural_verb} {ob['direction']} "
+        f"— {side} zone.")
+
+    # 2. FVG — STATUS ONLY. No conviction verdict, no "rests on the OB alone"
+    #    (dropped per requirement — that was extra information, not the state).
+    if ob['fvg'].get('exists'):
+        mit = ob['fvg'].get('mitigation', 'pristine')
+        fvg_state = ("partial (proximal half tagged, distal gap still open)"
+                     if mit == 'partial' else "pristine (clean, unfilled gap)")
+    elif ob['fvg'].get('was_detected'):
+        fvg_state = "filled"
     else:
-        watch = ("Wait for price to reach the zone and reject; a clean close beyond "
-                 "the distal invalidates it.")
+        fvg_state = "none formed"
+    bullets.append(f"<b>FVG:</b> {fvg_state}.")
+
+    # 3. LIQUIDITY — plain-word PD/PW status + which range price sits in (names
+    #    the range so "inside range" is never ambiguous). Plain words, no glyphs
+    #    — a non-trader needs no legend. Dropped when the pool layer is dead.
+    if pool_snap:
+        pool_words = pool_builder.format_pool_words(pool_snap)
+        if pool_words:
+            ds = pool_snap.get("day_state")
+            range_phrase = _P1_DAY_RANGE_PHRASE.get(ds) if ds else None
+            if range_phrase:
+                bullets.append(
+                    f"<b>Liquidity:</b> {pool_words} Right now, {range_phrase}.")
+            else:
+                bullets.append(f"<b>Liquidity:</b> {pool_words}")
+
+    # 4. MAGNET — nearest untouched pool in THIS zone's direction + what to do.
+    #    Reuses the P2 trade features / inference so both phases agree.
+    if pool_snap:
+        try:
+            _pf = pool_builder.trade_features(
+                pool_snap, ref_price=current_price, atr=h1_atr,
+                direction=ob['direction'])
+            _bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
+            _magnet = pool_builder.format_liquidity_inference(_pf, _bias)
+            if _magnet:
+                bullets.append(f"<b>Magnet:</b> {_magnet}")
+        except Exception:
+            pass  # pool feature failure never blocks the card
+
+    # 5. EQ — equal-level stop cluster mapped to the trade. Same 3-part shape.
+    if eq_ctx:
+        try:
+            _eq = eq_pools.format_eq_inference(eq_ctx, current_price, h1_atr,
+                                               ob['direction'])
+            if _eq:
+                bullets.append(f"<b>Equal levels:</b> {_eq}")
+        except Exception:
+            pass
+
     logging.info(f"[OB_BODY_RATIO] {name} zone {ob.get('zone_id','?')}: ob_body={ob['ob_body']:.{dp}f} median_leg={ob['median_leg_body']:.{dp}f} ratio={round(ob['ob_body']/ob['median_leg_body'],2):.2f}x (fallback narrative)")
-    return f"{structural} {conviction} {watch}"
+    return bullets
 
 
 # ---------------------------------------------------------------------------
@@ -4277,42 +4339,13 @@ def run_radar():
             _structure_banner_lines.append(
                 f"  \u26a0\ufe0f Rapid CHoCH (possible chop, low conviction): {', '.join(_chop_pairs)}"
             )
-        # PD/PW liquidity pools \u2014 one compact bullet per pair (info only).
-        # Glyphs (\u2713 / swept\u26a0 / broke\u2192) + '*' for a status that CHANGED this
-        # scan. The full meaning of each glyph is stated ONCE in the legend at
-        # the foot \u2014 repeating it per pair was the bulk of the P1 bloat. Pairs
-        # with no levels are listed so a silent pool-layer failure stays visible.
-        _pool_lines = []
-        _pool_missing = []
-        for _pn in pair_names:
-            _pline = pool_builder.format_pool_line(
-                pair_pools.get(_pn), dp_map.get(_pn, 5))
-            if _pline:
-                _pool_lines.append(f"  \u2022 {_pn}: {_pline}")
-            elif _pn in pairs_with_fresh_data:
-                _pool_missing.append(_pn)
-        if _pool_lines or _pool_missing:
-            _structure_banner_lines.append("Liquidity levels (prev day/week):")
-            _structure_banner_lines.extend(_pool_lines)
-            if _pool_missing:
-                _structure_banner_lines.append(
-                    f"  (unavailable: {', '.join(_pool_missing)})")
-        # EQH/EQL equal-level clusters \u2014 one bullet per pair that HAS one
-        # (information only). Silent when a pair has no cluster: "no equal
-        # levels right now" is the normal state and listing it would just bloat.
-        _eq_lines = []
-        for _pn in pair_names:
-            _eline = eq_pools.format_eq_line(
-                pair_eqs.get(_pn), pair_prices.get(_pn), pair_atrs.get(_pn))
-            if _eline:
-                _eq_lines.append(f"  \u2022 {_pn}: {_eline}")
-        if _eq_lines:
-            _structure_banner_lines.append(
-                "Equal highs/lows (resting stop clusters):")
-            _structure_banner_lines.extend(_eq_lines)
-        # One-time legend for the glyphs above (was repeated on every pool line).
-        if _pool_lines:
-            _structure_banner_lines.append(f"  {pool_builder.POOL_LEGEND}")
+        # PD/PW liquidity pools and EQH/EQL clusters USED to be listed here as a
+        # standalone per-pair section. They now live INSIDE each zone card (the
+        # Liquidity / Magnet / Equal-levels bullets in the narrative), so the
+        # trader reads the level state in the context of the zone it affects
+        # instead of a separate block they had to cross-reference. The glyph
+        # legend moved to the email footer (rendered once). See
+        # generate_zone_narrative_with_atr / _fallback_narrative_with_atr.
         structure_banner_text = "\n".join(_structure_banner_lines)
         print(structure_banner_text)
         # Collect renderable items across all pairs.
@@ -4445,7 +4478,9 @@ def run_radar():
                     )
 
                 narrative = generate_zone_narrative_with_atr(
-                    ob_for_render, pair_name, dp, current_price, sz.get("h1_atr", 0.0)
+                    ob_for_render, pair_name, dp, current_price, sz.get("h1_atr", 0.0),
+                    pool_snap=pair_pools.get(pair_name),
+                    eq_ctx=pair_eqs.get(pair_name),
                 )
 
                 card_html = build_active_zone_card_html(

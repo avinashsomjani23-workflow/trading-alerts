@@ -784,6 +784,39 @@ def format_pool_line(snap, dp):
     return line
 
 
+# Plain-word status for the P1 zone-card Liquidity bullet — no glyphs, so a
+# non-trader reads it with no legend to cross-reference.
+_STATUS_WORD = {
+    "intact": "untouched",
+    "swept": "swept (grabbed & rejected)",
+    "broken": "broken (closed through)",
+}
+_POOL_WORD = {
+    "pdh": "Yesterday's high", "pdl": "Yesterday's low",
+    "pwh": "Last week's high", "pwl": "Last week's low",
+}
+
+
+def format_pool_words(snap):
+    """Plain-English P1 pool status, e.g.
+    'Yesterday's high swept (grabbed & rejected); yesterday's low untouched;
+    last week's high untouched; last week's low untouched.'
+    No glyphs, no legend needed. None for an empty snapshot."""
+    if not snap or not snap.get("pools"):
+        return None
+    pools = snap["pools"]
+    parts = []
+    for key in ("pdh", "pdl", "pwh", "pwl"):
+        p = pools.get(key) or {}
+        if p.get("level") is None or p.get("status") is None:
+            continue
+        word = _STATUS_WORD.get(p["status"], p["status"])
+        parts.append(f"{_POOL_WORD[key]} {word}")
+    if not parts:
+        return None
+    return "; ".join(parts) + "."
+
+
 def _pool_key_from(tier, side):
     """The exact pool key (pdh/pdl/pwh/pwl) from its tier (PD/PW) and its
     side of price (above/below). A pool sitting above price is a high, below
@@ -795,13 +828,25 @@ def _pool_key_from(tier, side):
 
 
 def format_liquidity_inference(features, bias):
-    """P2 only: one plain-English "what it means for THIS trade" line.
-    Names the EXACT pool the trade points at (yesterday's high, last week's
-    low, ...), not a vague "level", and says whether that helps or hurts.
-    Returns None when there is no unspent pool to speak to.
+    """P2 only: one plain-English "what it means for THIS trade" line, in three
+    parts — the data, what it means, what to do — for a 5-year-old reader.
 
-    `bias` is "LONG"/"SHORT". Distances are in ATR (how the trader sizes a
-    move). Information only — never gates or scores.
+    TWO cases only, toward or away (no near/mid/far buckets — the ATR number
+    already carries the distance):
+      - toward: the nearest untouched pool sits in the trade's direction, so it
+        is a natural take-profit target price is pulled toward.
+      - away:   the nearest untouched pool sits BEHIND the trade, so price is
+        likely to grab it FIRST — a dip/shakeout risk before any move.
+
+    All distances are ATR from the CURRENT price (ref_price=current_price at the
+    P2 call site), never the OB or the alert candle — the wording says so.
+
+    Side selection is by trade_toward_pool, not by bias alone: a LONG that is
+    running AWAY names the pool BELOW (the magnet behind it), not the pool above
+    (older code named the above-pool on the away branch — the wrong level).
+
+    Returns None when there is no untouched pool to speak to. Information only —
+    never gates or scores.
     """
     if not features:
         return None
@@ -809,31 +854,37 @@ def format_liquidity_inference(features, bias):
     if toward is None:
         return None
 
-    if bias == "LONG":
-        tier = features.get("next_pool_above_tier")
-        dist = features.get("dist_next_pool_above_atr")
-        side = "above"
+    long = (bias == "LONG")
+    # The magnet this line is about: the pool in the trade's direction when
+    # toward, the pool behind the trade when away.
+    if (toward and long) or (not toward and not long):
+        tier, dist, side, arrow = (features.get("next_pool_above_tier"),
+                                   features.get("dist_next_pool_above_atr"),
+                                   "above", "up")
     else:
-        tier = features.get("next_pool_below_tier")
-        dist = features.get("dist_next_pool_below_atr")
-        side = "below"
+        tier, dist, side, arrow = (features.get("next_pool_below_tier"),
+                                   features.get("dist_next_pool_below_atr"),
+                                   "below", "down")
     key = _pool_key_from(tier, side)
     name = _POOL_NAME.get(key, "the nearest untouched level")
-    dist_str = f"{dist} ATR away" if dist is not None else "nearby"
+    dist_str = f"{dist} ATR {arrow}" if dist is not None else "nearby"
 
     if toward:
-        if dist is not None and dist <= 2.0:
-            return (f"→ You're trading straight at {name} ({dist_str}). "
-                    f"Resting stops sit there, so price is pulled toward it — "
-                    f"a natural take-profit target.")
-        if dist is not None and dist >= 3.0:
-            return (f"→ You're aimed at {name}, but it's far ({dist_str}). "
-                    f"The pull is real but don't expect a clean reach in one "
-                    f"leg.")
-        return (f"→ You're trading toward {name} ({dist_str}) — that pool of "
-                f"resting stops acts as a target pulling price your way.")
+        # Data → meaning → what to do (target).
+        return (f"<b>{side.title()} the current price:</b> {name}, "
+                f"{dist_str}, never touched.<br>"
+                f"Price is pulled toward untouched levels to grab the stops "
+                f"resting there.<br>"
+                f"<b>Your {bias.lower()} points straight at it → use {name} "
+                f"as your take-profit.</b>")
 
-    # Trade runs away from the nearest untouched pool.
-    return (f"→ You're trading AWAY from {name} ({dist_str}), the nearest "
-            f"untouched level. The obvious magnet is behind you — expect "
-            f"weaker follow-through.")
+    # Away: the magnet is behind the trade — a shakeout risk first. The move to
+    # reach it is `arrow` (down for a long's below-pool, up for a short's
+    # above-pool), so the wording stays directionally correct for both sides.
+    return (f"<b>{side.title()} the current price:</b> {name}, "
+            f"{dist_str}, never touched.<br>"
+            f"Price usually grabs an untouched level like this FIRST, before "
+            f"moving the other way.<br>"
+            f"<b>Your {bias.lower()} is fighting this pull → expect price to "
+            f"go {arrow} to {name} first. Put your stop beyond {name}, not just "
+            f"at the zone, and take less out of the move.</b>")

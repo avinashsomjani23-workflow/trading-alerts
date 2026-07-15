@@ -1607,8 +1607,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             'border-left:3px solid #5dade2;border-radius:4px;font-size:12px;'
             'color:#bbb;line-height:1.5;">'
             '<div style="color:#aaa;font-size:10px;letter-spacing:0.6px;'
-            'text-transform:uppercase;margin-bottom:6px;">Liquidity Map '
-            '&middot; info only</div>'
+            'text-transform:uppercase;margin-bottom:6px;">Liquidity Map</div>'
             + '<br>'.join(_liq_rows)
             + '</div>'
         )
@@ -1644,7 +1643,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
                 'color:#bbb;line-height:1.5;">'
                 '<div style="color:#aaa;font-size:10px;letter-spacing:0.6px;'
                 'text-transform:uppercase;margin-bottom:6px;">Approach '
-                '&middot; last 4 closed H1 &middot; info only</div>'
+                '&middot; last 4 closed H1</div>'
                 f'{_sp_txt} &middot; bodies {_body_txt} &middot; one-way {_er_txt}'
                 '</div>'
             )
@@ -1684,8 +1683,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             'border-left:3px solid #888;border-radius:4px;font-size:12px;'
             'color:#bbb;line-height:1.5;">'
             '<b style="color:#eee;">News calendar:</b> the ForexFactory fetch '
-            'failed for this scan — could not load today\'s events. '
-            '(Information only; does not affect the setup.)</div>'
+            'failed for this scan — could not load today\'s events.</div>'
         )
     else:
         day_events = news_ctx.get('day_events') or []

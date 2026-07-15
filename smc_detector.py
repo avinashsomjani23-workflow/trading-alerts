@@ -1830,19 +1830,27 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
 # SHARED TP PLACEMENT — the reversal-zone edge at a target swing.
 #
 # SMC rule (same definition as the OB the system ENTERS on, smc_radar
-# build_ob_zones ~:946): price reverses at the last opposing candle before the
-# impulse — the order block — NOT at the raw swing wick. Our ENTRY already sits
-# at the proximal edge of OUR order block; this makes the EXIT sit at the
-# proximal edge of the OPPOSING order block. One definition, both ends of the
-# trade.
+# build_ob_zones ~:946): the block is the last candle OPPOSING THE IMPULSE that
+# leaves it — "for a bullish move the last down-candle before the up-impulse;
+# for a bearish move, the last up-candle before the down-impulse." At a TP swing
+# the impulse that matters is the REVERSAL AWAY from the swing (that reversal is
+# why the swing exists and why we exit there):
+#   - a swing HIGH reverses DOWN -> its block is the last UP  candle at/before
+#     the high (the bearish OB — supply that capped price);
+#   - a swing LOW  reverses UP   -> its block is the last DOWN candle at/before
+#     the low (the bullish OB — demand that floored price).
+# Our ENTRY sits at the proximal edge of OUR order block; this makes the EXIT
+# sit at the proximal edge of the opposing side's order block. One definition,
+# both ends of the trade. (2026-07-15 first cut had the parity inverted — it
+# anchored a LONG's TP to the last DOWN candle under the high, i.e. demand, not
+# the supply that turns price. Fixed same day.)
 #
 # Given a target swing (a high we are selling into for LONG, a low for SHORT)
-# and its row index in df_h1, walk BACK from the swing bar to the last opposing
-# candle (last down-candle before a swing high; last up-candle before a swing
-# low). Return that candle's NEAR edge — the first price the market meets on the
+# and its row index in df_h1, walk BACK from the swing bar (inclusive) to that
+# block candle. Return its NEAR edge — the first price the market meets on the
 # way to the swing:
-#   LONG  target = a swing high -> opposing (down) candle -> its LOW  (near edge)
-#   SHORT target = a swing low  -> opposing (up)   candle -> its HIGH (near edge)
+#   LONG  target = a swing high -> block = last UP   candle -> its LOW  (near edge)
+#   SHORT target = a swing low  -> block = last DOWN candle -> its HIGH (near edge)
 #
 # FALLBACK: if no qualifying opposing candle exists in the walk-back window, the
 # approach had no reversal block to aim at, so we return the raw swing wick
@@ -1885,22 +1893,24 @@ def _tp_zone_edge(df_h1, swing_idx, swing_price, bias, entry):
     H = df_h1['High'].values
     L = df_h1['Low'].values
     C = df_h1['Close'].values
-    # LONG sells into a swing HIGH -> the block is the last DOWN candle (C<O).
-    # SHORT buys at a swing LOW  -> the block is the last UP   candle (C>O).
-    want_down = (bias == "LONG")
+    # LONG sells into a swing HIGH; the high reverses DOWN, so its block is the
+    # last UP candle (C>O) at/before it — the bearish OB (supply).
+    # SHORT buys at a swing LOW; the low reverses UP, so its block is the last
+    # DOWN candle (C<O) at/before it — the bullish OB (demand).
+    want_up = (bias == "LONG")
     lo = max(0, i - _TP_ZONE_WALKBACK_MAX)
     for j in range(i, lo - 1, -1):  # include the swing bar itself, then back
         o, h, l, c = float(O[j]), float(H[j]), float(L[j]), float(C[j])
-        is_opposing = (c < o) if want_down else (c > o)
-        if not is_opposing:
+        is_block = (c > o) if want_up else (c < o)
+        if not is_block:
             continue
         rng = h - l
         if rng <= 0 or abs(o - c) <= rng * 0.20:  # doji screen (matches OB build)
             continue
-        edge = l if want_down else h  # near edge: low for LONG, high for SHORT
+        edge = l if want_up else h  # near edge: low for LONG, high for SHORT
         # Guard 1 — profit side: LONG edge must be ABOVE entry, SHORT BELOW.
         # Guard 2 — beyond wick: LONG edge <= swing high, SHORT edge >= swing low.
-        if want_down:
+        if want_up:
             valid = entry < edge <= swing_price
         else:
             valid = swing_price <= edge < entry

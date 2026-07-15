@@ -1446,3 +1446,5 @@
 {"ts": "2026-07-15T15:29:21.099438+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "BTCUSD", "trades": 183, "news_blocked": 0, "ist_blocked": 71, "killzone_dropped_alerts": 166}
 {"ts": "2026-07-15T15:30:51.823702+00:00", "level": "info", "event": "report_written", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20250301_20250531", "total_alerts": 1891, "total_trades": 1707}
 {"ts": "2026-07-15T15:30:51.879854+00:00", "level": "info", "event": "exit_lab_sink_persisted", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20250301_20250531\\exit_lab_sink.jsonl", "rows": 9680}
+{"ts": "2026-07-15T15:30:52.613301+00:00", "level": "info", "event": "logs_committed_local_only", "run_id": "h1only_20250301_20250531", "sha": "7ae34b1b"}
+{"ts": "2026-07-15T15:30:52.619371+00:00", "level": "info", "event": "run_end", "wall_s": 306.9, "active_s": 97.5, "idle_s": 209.3, "max_gap_s": 209.3, "wall_min": 5.11, "active_min": 1.63}

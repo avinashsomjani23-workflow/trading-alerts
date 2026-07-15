@@ -390,6 +390,51 @@ def format_eq_line(ctx, ref_price, atr):
     return "Equal levels: " + " · ".join(bits) + "."
 
 
+def format_eq_inference(ctx, ref_price, atr, direction):
+    """Direction-aware 3-part EQ bullet (data -> meaning -> what to do), used by
+    the P1 zone card and shaped for a 5-year-old reader. Distances are ATR from
+    the CURRENT price (ref_price). None when there is no intact cluster in the
+    trade's direction to speak to. Info only — never gates or scores.
+
+    A stack of equal highs/lows is a pile of resting stops = a magnet. In the
+    trade's direction it is a take-profit target (expect a wick, not a clean
+    stop); behind the trade it is a shakeout risk (give the stop room).
+    """
+    if not ctx or not ctx.get("clusters") or ref_price is None:
+        return None
+    f = features_from_clusters(ctx["clusters"], ref_price=ref_price, sl=None,
+                               direction=direction, atr=atr,
+                               asof_pos=ctx["asof_pos"])
+    long = (direction == "bullish")
+    # The cluster in the trade's direction (a target) if one exists, else the
+    # cluster behind the trade (a risk).
+    if long:
+        tgt_dist, tgt_size = f["eqh_above_dist_atr"], f["eqh_above_size"]
+        risk_dist, risk_size = f["eql_below_dist_atr"], f["eql_below_size"]
+        tgt_word, risk_word = "equal highs", "equal lows"
+        tgt_dir, risk_dir = "up", "down"
+    else:
+        tgt_dist, tgt_size = f["eql_below_dist_atr"], f["eql_below_size"]
+        risk_dist, risk_size = f["eqh_above_dist_atr"], f["eqh_above_size"]
+        tgt_word, risk_word = "equal lows", "equal highs"
+        tgt_dir, risk_dir = "down", "up"
+    bias = "long" if long else "short"
+
+    if tgt_dist is not None:
+        return (f"<b>{'Above' if long else 'Below'} the current price:</b> "
+                f"{tgt_word} ({tgt_size} touches), {tgt_dist} ATR {tgt_dir}.<br>"
+                f"A stack of stops like this pulls price toward it.<br>"
+                f"<b>Good take-profit for your {bias} — but expect a sharp "
+                f"wick, not a clean stop.</b>")
+    if risk_dist is not None:
+        return (f"<b>{'Below' if long else 'Above'} the current price:</b> "
+                f"{risk_word} ({risk_size} touches), {risk_dist} ATR {risk_dir}."
+                f"<br>Price often grabs a stack like this before turning.<br>"
+                f"<b>Your {bias} may get shaken out first — give the stop room "
+                f"beyond these {risk_word}.</b>")
+    return None
+
+
 def format_eq_sl_warning(features):
     """P2 trade-email warning when the stop sits in front of an equal-level
     pool. Plain English, one sentence, None when not at risk."""

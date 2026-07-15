@@ -306,36 +306,45 @@ def test_format_pool_line():
 
 def test_format_liquidity_inference_names_exact_pool():
     """P2 inference line must name the EXACT pool the trade points at (not a
-    vague 'level') and read toward/away correctly. Built from feature dicts
-    directly — no frame needed."""
-    # LONG toward a near prior-day HIGH -> names PDH, calls it a target.
+    vague 'level'), read toward/away correctly, and name the RIGHT side. TWO
+    cases only (toward / away) — no near/mid/far buckets. Built from feature
+    dicts directly — no frame needed."""
+    # LONG toward a prior-day HIGH -> names PDH above, calls it a take-profit.
     f = pb.features_none()
     f.update({"trade_toward_pool": True,
               "next_pool_above_tier": "PD", "dist_next_pool_above_atr": 1.2})
     line = pb.format_liquidity_inference(f, "LONG")
     assert "yesterday's high (PDH)" in line
-    assert "target" in line.lower()
+    assert "take-profit" in line.lower()
+    assert "1.2 ATR up" in line          # distance anchored from current price
+    assert "Above the current price" in line
 
-    # SHORT toward a near prior-week LOW -> names PWL.
+    # SHORT toward a prior-week LOW -> names PWL below.
     f = pb.features_none()
     f.update({"trade_toward_pool": True,
               "next_pool_below_tier": "PW", "dist_next_pool_below_atr": 0.8})
     line = pb.format_liquidity_inference(f, "SHORT")
     assert "last week's low (PWL)" in line
+    assert "0.8 ATR down" in line
+    assert "Below the current price" in line
 
-    # LONG running AWAY -> names the above pool, warns weaker follow-through.
+    # LONG running AWAY -> the magnet is BEHIND it: the pool BELOW, not above.
+    # (Regression: old code named the ABOVE pool on the away branch.)
     f = pb.features_none()
     f.update({"trade_toward_pool": False,
-              "next_pool_above_tier": "PW", "dist_next_pool_above_atr": 2.0})
+              "next_pool_below_tier": "PW", "dist_next_pool_below_atr": 0.9})
     line = pb.format_liquidity_inference(f, "LONG")
-    assert "AWAY" in line and "last week's high (PWH)" in line
+    assert "last week's low (PWL)" in line   # the pool behind the long
+    assert "fighting this pull" in line
+    assert "stop beyond" in line             # concrete stop instruction
 
-    # Far pool (>=3 ATR) toward -> tempered wording, still names the pool.
+    # SHORT running AWAY -> the magnet behind it is the pool ABOVE.
     f = pb.features_none()
-    f.update({"trade_toward_pool": True,
-              "next_pool_above_tier": "PD", "dist_next_pool_above_atr": 4.5})
-    line = pb.format_liquidity_inference(f, "LONG")
-    assert "far" in line.lower() and "yesterday's high (PDH)" in line
+    f.update({"trade_toward_pool": False,
+              "next_pool_above_tier": "PD", "dist_next_pool_above_atr": 1.1})
+    line = pb.format_liquidity_inference(f, "SHORT")
+    assert "yesterday's high (PDH)" in line
+    assert "fighting this pull" in line
 
     # No trade_toward signal -> None (nothing to say).
     assert pb.format_liquidity_inference(pb.features_none(), "LONG") is None

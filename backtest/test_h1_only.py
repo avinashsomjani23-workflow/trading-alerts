@@ -966,41 +966,45 @@ def _zone_df(rows):
 
 
 def test_tp_zone_edge_picks_last_opposite_candle():
-    """LONG: zone edge = LOW of the last DOWN candle before the swing high.
-       SHORT: zone edge = HIGH of the last UP candle before the swing low."""
+    """A swing HIGH reverses DOWN -> its block is the last UP candle at/before
+       it (bearish OB); LONG zone edge = that candle's LOW.
+       A swing LOW reverses UP -> its block is the last DOWN candle at/before
+       it (bullish OB); SHORT zone edge = that candle's HIGH."""
     ok = True
-    # LONG: bars rise into a swing high at idx 4. idx 3 is a DOWN candle
-    # (open>close) — the opposing OB. Its LOW is the zone edge.
+    # LONG: bars rise into a swing high at idx 4. The swing bar itself closed
+    # DOWN (reversal bar), so the block is idx 3 — the last UP candle before the
+    # down-move away from the high. Its LOW is the zone edge.
     long_rows = [
         (1.0000, 1.0010, 0.9990, 1.0005),  # 0 up
         (1.0005, 1.0025, 1.0000, 1.0020),  # 1 up
         (1.0020, 1.0040, 1.0015, 1.0035),  # 2 up
-        (1.0060, 1.0065, 1.0030, 1.0038),  # 3 DOWN (open>close), big body -> the OB
-        (1.0038, 1.0090, 1.0035, 1.0085),  # 4 up -> swing high 1.0090
+        (1.0035, 1.0075, 1.0032, 1.0070),  # 3 UP (close>open), big body -> the block
+        (1.0070, 1.0090, 1.0050, 1.0055),  # 4 DOWN reversal bar -> swing high 1.0090
     ]
     df = _zone_df(long_rows)
     # entry below the zone edge so the profit-side guard passes.
     edge, src = smc_detector._tp_zone_edge(df, swing_idx=4, swing_price=1.0090,
                                            bias="LONG", entry=1.0000)
     ok &= check(src == "zone", f"LONG found a zone (src={src})")
-    ok &= check(abs(edge - 1.0030) < 1e-9, f"LONG zone edge = down-candle LOW 1.0030 (got {edge})")
+    ok &= check(abs(edge - 1.0032) < 1e-9, f"LONG zone edge = up-candle LOW 1.0032 (got {edge})")
     ok &= check(edge < 1.0090, "LONG zone edge sits nearer than the wick")
 
-    # SHORT: bars fall into a swing low at idx 4. idx 3 is an UP candle
-    # (close>open) — the opposing OB. Its HIGH is the zone edge.
+    # SHORT: bars fall into a swing low at idx 4. The swing bar itself closed
+    # UP (reversal bar), so the block is idx 3 — the last DOWN candle before the
+    # up-move away from the low. Its HIGH is the zone edge.
     short_rows = [
         (1.0100, 1.0110, 1.0090, 1.0095),  # 0 down
         (1.0095, 1.0100, 1.0075, 1.0080),  # 1 down
         (1.0080, 1.0085, 1.0060, 1.0065),  # 2 down
-        (1.0040, 1.0070, 1.0035, 1.0062),  # 3 UP (close>open), big body -> the OB
-        (1.0062, 1.0065, 1.0010, 1.0015),  # 4 down -> swing low 1.0010
+        (1.0065, 1.0068, 1.0025, 1.0030),  # 3 DOWN (open>close), big body -> the block
+        (1.0030, 1.0050, 1.0010, 1.0045),  # 4 UP reversal bar -> swing low 1.0010
     ]
     df2 = _zone_df(short_rows)
     # entry above the zone edge so the profit-side guard passes.
     edge2, src2 = smc_detector._tp_zone_edge(df2, swing_idx=4, swing_price=1.0010,
                                              bias="SHORT", entry=1.0100)
     ok &= check(src2 == "zone", f"SHORT found a zone (src={src2})")
-    ok &= check(abs(edge2 - 1.0070) < 1e-9, f"SHORT zone edge = up-candle HIGH 1.0070 (got {edge2})")
+    ok &= check(abs(edge2 - 1.0068) < 1e-9, f"SHORT zone edge = down-candle HIGH 1.0068 (got {edge2})")
     ok &= check(edge2 > 1.0010, "SHORT zone edge sits nearer than the wick")
     assert ok, "zone-edge last-opposite-candle picks failed (see output above)"
 
@@ -1009,33 +1013,34 @@ def test_tp_zone_edge_falls_back_to_wick():
     """No opposing candle in the walk-back -> return the raw wick, src='wick'.
        Also: a doji opposing candle is skipped (same 20%-body screen as OB)."""
     ok = True
-    # LONG into a swing high with ONLY up candles behind it -> no down candle ->
-    # fallback to the wick.
-    all_up = [
-        (1.0000, 1.0010, 0.9995, 1.0008),
-        (1.0008, 1.0025, 1.0005, 1.0022),
-        (1.0022, 1.0045, 1.0020, 1.0042),
-        (1.0042, 1.0070, 1.0040, 1.0068),  # swing high 1.0070, idx 3
+    # LONG into a swing high made ENTIRELY of down-closing candles (gap-ups) ->
+    # no UP candle to act as the block -> fallback to the wick.
+    all_down = [
+        (1.0020, 1.0030, 1.0000, 1.0005),
+        (1.0035, 1.0045, 1.0010, 1.0018),
+        (1.0050, 1.0060, 1.0025, 1.0035),
+        (1.0068, 1.0070, 1.0040, 1.0050),  # swing high 1.0070, idx 3, DOWN
     ]
-    df = _zone_df(all_up)
+    df = _zone_df(all_down)
     edge, src = smc_detector._tp_zone_edge(df, swing_idx=3, swing_price=1.0070,
-                                           bias="LONG", entry=1.0000)
-    ok &= check(src == "wick", f"no opposing candle -> wick fallback (src={src})")
+                                           bias="LONG", entry=0.9990)
+    ok &= check(src == "wick", f"no block candle -> wick fallback (src={src})")
     ok &= check(abs(edge - 1.0070) < 1e-9, f"fallback returns the raw wick 1.0070 (got {edge})")
 
-    # A near-doji DOWN candle (body <= 20% of range) must be SKIPPED, not used.
-    # idx 3 is a doji (tiny body, big range); no other down candle -> wick.
+    # A near-doji UP candle (body <= 20% of range) must be SKIPPED, not used.
+    # idx 3 is the only up candle and it is a doji; everything else closes
+    # down -> no block -> wick.
     doji = [
-        (1.0000, 1.0010, 0.9995, 1.0008),
-        (1.0008, 1.0025, 1.0005, 1.0022),
-        (1.0022, 1.0045, 1.0020, 1.0042),
-        (1.0050, 1.0060, 1.0030, 1.0049),  # DOWN but body 1pt / range 30pt = doji
-        (1.0049, 1.0090, 1.0045, 1.0085),  # swing high 1.0090, idx 4
+        (1.0030, 1.0040, 1.0010, 1.0015),  # down
+        (1.0045, 1.0055, 1.0020, 1.0028),  # down
+        (1.0060, 1.0070, 1.0035, 1.0042),  # down
+        (1.0049, 1.0080, 1.0048, 1.0050),  # UP but body 1pt / range 32pt = doji
+        (1.0085, 1.0090, 1.0055, 1.0060),  # swing high 1.0090, idx 4, DOWN
     ]
     df2 = _zone_df(doji)
     edge2, src2 = smc_detector._tp_zone_edge(df2, swing_idx=4, swing_price=1.0090,
                                              bias="LONG", entry=1.0000)
-    ok &= check(src2 == "wick", f"doji opposing candle skipped -> wick (src={src2})")
+    ok &= check(src2 == "wick", f"doji block candle skipped -> wick (src={src2})")
     assert ok, "zone-edge fallback/doji-skip checks failed (see output above)"
 
 
@@ -1044,15 +1049,16 @@ def test_tp_zone_edge_wrong_side_of_entry_falls_back_to_wick():
     entry must NOT be used — that parks TP behind the entry and books an instant
     loss mislabelled as a TP1 win (G10 mfe_beyond_tp1_exit). Fall back to wick."""
     ok = True
-    # LONG: swing high 1.0090 at idx 4; the opposing DOWN candle at idx 3 has a
-    # LOW of 1.0030. If entry sits ABOVE that low (1.0050), the zone edge is
-    # behind entry -> must fall back to the wick (1.0090, on the profit side).
+    # LONG: swing high 1.0090 at idx 4 (DOWN reversal bar); the block UP candle
+    # at idx 3 has a LOW of 1.0030. Entry sits ABOVE that low (1.0050), so the
+    # zone edge is behind entry -> must fall back to the wick (1.0090, on the
+    # profit side).
     long_rows = [
         (1.0000, 1.0010, 0.9990, 1.0005),
         (1.0005, 1.0025, 1.0000, 1.0020),
         (1.0020, 1.0040, 1.0015, 1.0035),
-        (1.0060, 1.0065, 1.0030, 1.0038),  # DOWN, low 1.0030 -> BEHIND entry
-        (1.0038, 1.0090, 1.0035, 1.0085),  # swing high 1.0090
+        (1.0032, 1.0075, 1.0030, 1.0070),  # UP block, low 1.0030 -> BEHIND entry
+        (1.0070, 1.0090, 1.0048, 1.0055),  # DOWN reversal bar -> swing high 1.0090
     ]
     df = _zone_df(long_rows)
     edge, src = smc_detector._tp_zone_edge(df, swing_idx=4, swing_price=1.0090,
@@ -1061,14 +1067,14 @@ def test_tp_zone_edge_wrong_side_of_entry_falls_back_to_wick():
     ok &= check(abs(edge - 1.0090) < 1e-9, f"LONG falls back to wick 1.0090 (got {edge})")
     ok &= check(edge > 1.0050, "LONG fallback TP stays on the profit side of entry")
 
-    # SHORT mirror: opposing UP candle high 1.0070; entry BELOW it (1.0050) ->
+    # SHORT mirror: block DOWN candle high 1.0070; entry BELOW it (1.0050) ->
     # zone behind entry -> wick fallback (1.0010, below entry = profit side).
     short_rows = [
         (1.0100, 1.0110, 1.0090, 1.0095),
         (1.0095, 1.0100, 1.0075, 1.0080),
         (1.0080, 1.0085, 1.0060, 1.0065),
-        (1.0040, 1.0070, 1.0035, 1.0062),  # UP, high 1.0070 -> BEHIND a 1.0050 entry
-        (1.0062, 1.0065, 1.0010, 1.0015),  # swing low 1.0010
+        (1.0068, 1.0070, 1.0028, 1.0032),  # DOWN block, high 1.0070 -> BEHIND a 1.0050 entry
+        (1.0032, 1.0048, 1.0010, 1.0045),  # UP reversal bar -> swing low 1.0010
     ]
     df2 = _zone_df(short_rows)
     edge2, src2 = smc_detector._tp_zone_edge(df2, swing_idx=4, swing_price=1.0010,
