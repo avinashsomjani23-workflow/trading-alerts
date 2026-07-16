@@ -4,5 +4,11 @@
   },
   "USDCHF|2026-07-16": {
     "macro_summary": "US Retail Sales m/m and Unemployment Claims at 18:00 IST are key; stronger than expected data helps USDCHF long, weaker data hurts. The Philly Fed Manufacturing Index at 18:00 IST also matters; a higher reading supports the trade, a lower reading opposes it. President Trump speaking at 06:30 IST on Friday could impact USDCHF; positive remarks would help, negative remarks would hurt."
+  },
+  "EURUSD|2026-07-16": {
+    "macro_summary": "US Retail Sales m/m and Unemployment Claims at 18:00 IST are key; stronger data helps the SHORT trade, weaker data hurts. The Philly Fed Manufacturing Index at 18:00 IST is also relevant; a higher reading helps, a lower reading hurts. President Trump speaking at 06:30 IST on Friday could impact the trade, with positive comments potentially hurting the SHORT and negative comments helping."
+  },
+  "USDJPY|2026-07-16": {
+    "macro_summary": "US Retail Sales m/m and Unemployment Claims at 18:00 IST will HELP if strong, HURT if weak. The Philly Fed Manufacturing Index at 18:00 IST will HELP if above 10, HURT if below 10. President Trump speaking at 06:30 IST on Friday could HELP if he signals a dovish stance, HURT if hawkish."
   }
 }
