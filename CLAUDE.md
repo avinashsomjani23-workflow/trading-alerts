@@ -13,6 +13,7 @@ Four rules. Violating any one means the response is wrong — rewrite before sen
 - Column meanings: read the `file:line` pointer in `TRUTH_LEDGER.md`, then read that code. `TRUTH_LEDGER.md` is the ONLY doc trusted for columns.
 - Every other `.md` (handoffs, specs, findings) is background, not truth. If a doc and the code disagree, code wins and the doc is a stale trap — do not repeat it. (Docs have lied before: "dual entry" / "yfinance" long after both were removed.)
 - If you cannot quote the code, say "I haven't verified this" — never imply you did.
+- Changing code = update its comments/docstrings in the SAME edit. A comment that now lies is a bug (stale comments have burned hours). If behaviour moves, the words next to it move too.
 - Session memories and recalled numbers/insights are HYPOTHESES, not facts. State one only after re-verifying against live code or an approved analysis `.md` (TRUTH_LEDGER.md, backtest/RECOMMENDATIONS.md) whose date is AFTER the last detection change. Detection changed = every older derived stat (%, WR, counts) is stale until recomputed. (The "93% with-trend" figure was quoted 2 weeks stale — this rule exists because of that.)
 
 **2. One data file.**
