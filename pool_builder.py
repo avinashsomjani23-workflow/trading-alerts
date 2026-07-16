@@ -877,8 +877,10 @@ def format_liquidity_fact(features, bias):
 
 
 def format_liquidity_inference(features, bias):
-    """P2 only: one plain-English "what it means for THIS trade" line, in three
-    parts — the data, what it means, what to do — for a 5-year-old reader.
+    """P2 only: the "what it means for THIS trade" read as THREE labelled bullets
+    — Fact / Means / For this trade. Returns a list of (label, text) tuples (the
+    email renders each as its own bullet); None when there is no untouched pool
+    to speak to. Plain short English, no jargon.
 
     TWO cases only, toward or away (no near/mid/far buckets — the ATR number
     already carries the distance):
@@ -918,22 +920,30 @@ def format_liquidity_inference(features, bias):
     name = _POOL_NAME.get(key, "the nearest untouched level")
     dist_str = f"{dist} ATR {arrow}" if dist is not None else "nearby"
 
+    # Three labelled bullets — Fact / Means / For this trade. Same facts and
+    # wording as before, restructured so the reader sees a list not a paragraph
+    # (email renders each as its own bullet row via _liq_bullets). The action
+    # bullet is explicitly tied to THIS trade's bias, take-profit and stop.
     if toward:
-        # Data → meaning → what to do (target).
-        return (f"<b>{side.title()} the current price:</b> {name}, "
-                f"{dist_str}, never touched.<br>"
-                f"Price is pulled toward untouched levels to grab the stops "
-                f"resting there.<br>"
-                f"<b>Your {bias.lower()} points straight at it → use {name} "
-                f"as your take-profit.</b>")
+        return [
+            ("Fact", f"{name} sits {side} the current price, {dist_str}, "
+                     f"never touched."),
+            ("Means", "Price is pulled toward untouched levels to grab the "
+                      "stops resting there."),
+            ("For this trade", f"Your {bias.lower()} points straight at it — "
+                               f"use {name} as your take-profit."),
+        ]
 
     # Away: the magnet is behind the trade — a shakeout risk first. The move to
     # reach it is `arrow` (down for a long's below-pool, up for a short's
     # above-pool), so the wording stays directionally correct for both sides.
-    return (f"<b>{side.title()} the current price:</b> {name}, "
-            f"{dist_str}, never touched.<br>"
-            f"Price usually grabs an untouched level like this FIRST, before "
-            f"moving the other way.<br>"
-            f"<b>Your {bias.lower()} is fighting this pull → expect price to "
-            f"go {arrow} to {name} first. Put your stop beyond {name}, not just "
-            f"at the zone, and take less out of the move.</b>")
+    return [
+        ("Fact", f"{name} sits {side} the current price, {dist_str}, "
+                 f"never touched."),
+        ("Means", "Price usually grabs an untouched level like this FIRST, "
+                  "before moving the other way."),
+        ("For this trade", f"Your {bias.lower()} is fighting this pull — expect "
+                           f"price to go {arrow} to {name} first. Put your stop "
+                           f"beyond {name}, not just at the zone, and take less "
+                           f"out of the move."),
+    ]

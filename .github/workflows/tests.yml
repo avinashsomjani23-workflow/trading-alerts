@@ -66,6 +66,15 @@ jobs:
         # error — this goes red instead. Standalone script (no pytest).
         run: python tests/test_event_candle_fix.py
 
+      - name: Defended-swing polarity guard (false-CHoCH class)
+        # 2026-07-16 DEFENDED-POLARITY FIX (commit 7152f7f). Asserts `defended`
+        # updates on ANY confirmed counter-trend swing (HH in downtrend, LL in
+        # uptrend), so a close between a stale swing and the true one no longer
+        # fires a false CHoCH. A revert re-opens the class (17.5% of CHoCHs were
+        # false at that candle) with no error — this goes red instead. Standalone
+        # script (no test_* functions, so pytest collects 0 — must run directly).
+        run: python tests/test_defended_polarity.py
+
       - name: Offline pytest suite (session DST, choch supersession, ...)
         # The pytest-style offline guards were never run in CI (this job listed
         # scripts by name and invoked no pytest). Wires them in so a regression in

@@ -1011,7 +1011,8 @@ def test_tp_zone_edge_picks_last_opposite_candle():
 
 def test_tp_zone_edge_falls_back_to_wick():
     """No opposing candle in the walk-back -> return the raw wick, src='wick'.
-       Also: a doji opposing candle is skipped (same 20%-body screen as OB)."""
+       Also: a small-bodied (doji) right-COLOUR candle is now USED, not skipped
+       (doji screen removed 2026-07-16 — colour is the only requirement)."""
     ok = True
     # LONG into a swing high made ENTIRELY of down-closing candles (gap-ups) ->
     # no UP candle to act as the block -> fallback to the wick.
@@ -1027,21 +1028,23 @@ def test_tp_zone_edge_falls_back_to_wick():
     ok &= check(src == "wick", f"no block candle -> wick fallback (src={src})")
     ok &= check(abs(edge - 1.0070) < 1e-9, f"fallback returns the raw wick 1.0070 (got {edge})")
 
-    # A near-doji UP candle (body <= 20% of range) must be SKIPPED, not used.
-    # idx 3 is the only up candle and it is a doji; everything else closes
-    # down -> no block -> wick.
+    # A small-bodied (near-doji) UP candle is the block nearest the swing and
+    # must now be USED (its low is the zone edge), NOT skipped. idx 3 is the only
+    # up candle; its low 1.0048 is above entry (1.0000) and below the swing high.
     doji = [
         (1.0030, 1.0040, 1.0010, 1.0015),  # down
         (1.0045, 1.0055, 1.0020, 1.0028),  # down
         (1.0060, 1.0070, 1.0035, 1.0042),  # down
-        (1.0049, 1.0080, 1.0048, 1.0050),  # UP but body 1pt / range 32pt = doji
+        (1.0049, 1.0080, 1.0048, 1.0050),  # UP, small body -> STILL the block
         (1.0085, 1.0090, 1.0055, 1.0060),  # swing high 1.0090, idx 4, DOWN
     ]
     df2 = _zone_df(doji)
     edge2, src2 = smc_detector._tp_zone_edge(df2, swing_idx=4, swing_price=1.0090,
                                              bias="LONG", entry=1.0000)
-    ok &= check(src2 == "wick", f"doji block candle skipped -> wick (src={src2})")
-    assert ok, "zone-edge fallback/doji-skip checks failed (see output above)"
+    ok &= check(src2 == "zone", f"small-body up candle used as block -> zone (src={src2})")
+    ok &= check(abs(edge2 - 1.0048) < 1e-9,
+                f"zone edge = small-body candle low 1.0048 (got {edge2})")
+    assert ok, "zone-edge fallback/colour-only checks failed (see output above)"
 
 
 def test_tp_zone_edge_wrong_side_of_entry_falls_back_to_wick():

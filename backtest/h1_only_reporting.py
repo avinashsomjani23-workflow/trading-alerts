@@ -1213,6 +1213,61 @@ def _day_of_week(ts_str: str) -> str:
 # CSV (machine-readable, column names unchanged — used by aggregate_runs.py)
 # ---------------------------------------------------------------------------
 
+# Events calendar for the automated news enrichment (Part D, 2026-07-16). The
+# ONE maintenance seam: re-scrape (backtest/data/ff_calendar_scraper.py) before
+# each baseline so this file covers the run window (see CANONICAL.md checklist).
+_NEWS_EVENTS_CSV = Path(__file__).resolve().parent / "data" / "ff_calendar_2007_2026.csv"
+
+
+def _enrich_news_columns(csv_path: Path) -> None:
+    """Stamp the 5 news columns onto trades.csv in place (Part D, 2026-07-16).
+
+    Runs at the END of the report build so news_fill/news_open land in the same
+    artifact as the rest — no separate command. Fail-LOUD offline: this is a
+    report build, not the live alert path, so a missing/short events file must
+    RAISE rather than silently write empty news columns (CLAUDE.md's "no raise
+    in the live alert path" does not apply here). Determinism/idempotence are
+    covered by test_news_enrichment.py; a fresh run pairs true-UTC candles
+    (import_mt5 Part B) with the no-double-correction enrichment (Part C).
+    """
+    import backtest.news_enrichment as ne  # local import: offline tooling only
+
+    if not _NEWS_EVENTS_CSV.exists():
+        raise FileNotFoundError(
+            f"news events file missing: {_NEWS_EVENTS_CSV} — re-scrape with "
+            "backtest/data/ff_calendar_scraper.py before the run (Part E seam)")
+    trades = pd.read_csv(csv_path, low_memory=False)
+    if "fill_ts" not in trades.columns:  # e.g. the "no trades this run" stub
+        return
+    events = ne.load_events(str(_NEWS_EVENTS_CSV))
+    # Coverage guard: the events file must span the filled-trade window, else the
+    # enrichment would silently NULL the uncovered tail. Raise loud instead.
+    fills = pd.to_datetime(trades["fill_ts"], utc=True,
+                           format="mixed", errors="coerce").dropna()
+    if len(fills):
+        need_lo, need_hi = fills.min(), fills.max()
+        have_lo, have_hi = events["utc"].min(), events["utc"].max()
+        if need_lo < have_lo or need_hi > have_hi:
+            raise ValueError(
+                "news events file does not cover the run window "
+                f"(trades {need_lo}..{need_hi}, events {have_lo}..{have_hi}); "
+                "re-scrape ff_calendar_scraper.py (Part E seam)")
+    res, _stats = ne.enrich(trades, events)
+    # Health check (Part D): the 5 columns must be present and news_fill must be
+    # populated (not all-null) — an all-null news_fill means the join silently
+    # matched nothing (bad events file or a wholesale coverage miss). Only assert
+    # when there are filled trades to flag; a run with zero fills legitimately
+    # has an all-null column.
+    missing = [c for c in ne.NEW_COLS if c not in res.columns]
+    if missing:
+        raise AssertionError(f"news enrichment dropped columns: {missing}")
+    if len(fills) and not res["news_fill"].notna().any():
+        raise AssertionError(
+            "news_fill is entirely null despite filled trades — events join "
+            "matched nothing (check ff_calendar coverage / clock fix)")
+    res.to_csv(csv_path, index=False)
+
+
 def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
     if not trades:
         pd.DataFrame([{"info": "no trades this run"}]).to_csv(path, index=False)
@@ -3491,6 +3546,10 @@ def write_h1_only_report(
     # reads them, it does not regenerate them.
     if not preview:
         _trades_csv(trades_all, out_dir / "trades.csv")
+        # News columns are RUN-PRODUCED (Part D, 2026-07-16): enrich the CSV in
+        # place right after writing it, so the 5 news_* columns ship in the same
+        # artifact. Fail-loud offline if the events file is missing/short.
+        _enrich_news_columns(out_dir / "trades.csv")
         _try_excel(trades_all, out_dir / "trades.xlsx", risk_usd=risk_usd)
         with open(out_dir / "raw_alerts.jsonl", "w") as f:
             for a in raw_alerts:

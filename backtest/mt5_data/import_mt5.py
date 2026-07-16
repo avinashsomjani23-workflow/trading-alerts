@@ -1,33 +1,28 @@
 """Wire MT5 H1 CSVs as the SOLE backtest data source.
 
-Offset PINNED empirically (2026-06-23, terminal open, FundingPips2-SIM).
-Re-verified 2026-06-24 against the full 18y history of all 6 symbols:
-  MT5 server clock = UTC+3 (fixed, NO DST). Proof:
-    1. Monday week-open server hour is CONSTANT 01:00 across all 12 months
-       (115k bars x 5 FX symbols). A DST broker would flip 00:00/01:00 by
-       season; it never does -> server runs no daylight saving.
-    2. Apply -3h to every week-open bar -> 5 FX symbols land Sun 22:00 UTC
-       (XAUUSD Sun 23:00, its true session open is 1h later than spot FX).
-       867/934 EURUSD weeks hit Sun 22:00 UTC exactly; 100% land on Sunday.
-       1h-wrong offset would land them on 21:00 or 23:00 as the mode. It does
-       not -> -3h is correct.
-    3. NAS100 after -3h shows the daily index break thinning at 21:00 UTC
-       (5pm ET), matching US index session structure.
-  All 6 symbols share ONE FundingPips account = ONE server clock, so the
-  -3h proven on FX applies identically to Gold and NAS.
-  => convert server -> UTC by SUBTRACTING 3 hours.
+CLOCK: the flat -3h is only PROVISIONAL — it is TRUE UTC for the most recent
+broker era only. Correcting audit (2026-07-16, MT5_CANDLE_CLOCK_AUDIT.md):
+spike-aligning 13,839 exact-UTC ForexFactory events against the cached H1
+candles proves the broker's SERVER CLOCK CHANGED TWICE over 18 years, so the
+label - true_utc offset is era- AND season-dependent:
+    era A  ..2014-10-31        0 in EU-DST summer, -1 in winter  (EET+DST)
+    flip   2014-11-01..12-07    regime flip -> unfixable, label left provisional
+    era B  2014-12-08..2024-10-26  +1 in EU-DST summer, 0 in winter (UTC+3+DST)
+    era C  2024-10-27..         0 year-round (fixed UTC+3 -> the -3h below is exact)
+  So for H1 we first apply the flat -3h (PROVISIONAL, = era C), then map through
+  the empirical era table in backtest/mt5_clock.py to TRUE UTC (load_one below).
+  The earlier "-3h, NO DST, timeframe-independent" pin (2026-06-23/24/26) was
+  TRUE FOR ERA C ONLY: the week-open proof sampled recent behaviour and could
+  not see the two historical regime changes. Prices/OHLC are untouched — only
+  the hour LABEL was wrong, by +/-1h, ~5 months/year in eras A/B.
 
-  Re-verified 2026-06-26 for the new evaluation pairs (GBPUSD, AUDUSD, USDCAD,
-  EURJPY, BTCUSD): the Monday week-open SERVER hour is the SAME constant 01:00
-  across all 12 months on every new FX pair (identical DST-free signature to
-  EURUSD) -> same server clock -> the -3h is correct for them too. BTC's calendar
-  week-open sits at server 00:00 because it trades 24/7 (no session open), but it
-  is the SAME account/clock, so -3h still yields correct UTC. Same offset applies
-  to D1/W1 (a clock conversion is timeframe-independent).
+  D1/W1 are session-aggregated (no hour-of-day meaning) so they KEEP the flat
+  -3h; only H1 gets the era correction.
 
 What this does:
   - reads backtest/mt5_data/<SYM>_H1.csv (cols: time_server, open..close, tick_volume)
-  - server -> UTC (-3h), drops weekend/dup rows, renames to Open/High/Low/Close/Volume
+  - H1: server -> PROVISIONAL UTC (-3h) -> TRUE UTC (mt5_clock era table);
+    D1/W1: server -> UTC (-3h). Drops weekend/dup rows, renames to OHLCV
   - backs up the existing yfinance parquet to <name>.yf.parquet (once)
   - writes UTC-indexed parquet to backtest/cache/<cache_name>.parquet + meta.json
   - cache spans 2008+, so load_bars() slices it and NEVER re-fetches yfinance.
@@ -35,12 +30,18 @@ What this does:
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
 
-SERVER_TO_UTC_HOURS = 3  # MT5 server is UTC+3; subtract to get UTC.
+# Shared era table (Part A, 2026-07-16). is_flip_window flags the 2014 regime
+# flip; mt5_label_error_hours maps the PROVISIONAL -3h label to true UTC.
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from mt5_clock import mt5_label_error_hours  # noqa: E402
+
+SERVER_TO_UTC_HOURS = 3  # MT5 server is UTC+3; subtract to PROVISIONAL UTC (era C).
 
 HERE = Path(__file__).parent
 CACHE = HERE.parent / "cache"
@@ -94,12 +95,44 @@ TIMEFRAMES = [
 ]
 
 
+def _provisional_to_true_utc(provisional: pd.DatetimeIndex):
+    """Map the PROVISIONAL -3h UTC labels to TRUE UTC via the era table.
+
+    The parquet labels we produce today ARE the provisional -3h values, and the
+    era table (mt5_clock) was calibrated against exactly those labels, so it
+    composes: true = provisional - mt5_label_error_hours(provisional). Applied
+    per row because the correction is era- AND season-dependent.
+
+    Returns the TRUE-UTC index. Flip-window rows (2014-11-01..12-07) are
+    UNFIXABLE to the hour: their shift is 0 so the label stays at the provisional
+    value. No flag column is added — because those rows keep the provisional
+    label, they still fall in the flip date range, so a consumer re-derives the
+    ambiguity with is_flip_window(true_label) and needs no schema change.
+    """
+    err = [mt5_label_error_hours(ts) for ts in provisional]
+    # None (flip window) -> 0h shift (keep provisional label; re-derivable later).
+    shift = pd.Series(err).fillna(0).astype("int64").to_numpy()
+    return pd.DatetimeIndex(provisional - pd.to_timedelta(shift, unit="h"))
+
+
 def load_one(csv_path: Path, interval: str = "1h", drop_saturday: bool = True) -> pd.DataFrame:
     df = pd.read_csv(csv_path, parse_dates=["time_server"])
-    # server (naive, UTC+3) -> UTC
-    idx = df["time_server"] - pd.Timedelta(hours=SERVER_TO_UTC_HOURS)
+    # server (naive, UTC+3) -> PROVISIONAL UTC (-3h; correct for era C only)
+    provisional = pd.DatetimeIndex(
+        df["time_server"] - pd.Timedelta(hours=SERVER_TO_UTC_HOURS)
+    ).tz_localize("UTC")
     df = df.drop(columns=["time_server"])
-    df.index = pd.DatetimeIndex(idx).tz_localize("UTC")
+    # PROVISIONAL -> TRUE UTC via the empirical era table (mt5_clock). Fixes the
+    # +/-1h seasonal label error in eras A/B; era C is a no-op. Flip-window rows
+    # keep the provisional label (unfixable to the hour) and stay re-derivable
+    # via is_flip_window(true_label) — no schema/column change.
+    # H1 ONLY: the bug is an hour-of-day LABEL error. D1/W1 bars are session-
+    # aggregated (no hour-of-day meaning); shifting their labels ±1h would move a
+    # daily/weekly open off its true session boundary. So D1/W1 keep the flat -3h.
+    if interval == "1h":
+        df.index = _provisional_to_true_utc(provisional)
+    else:
+        df.index = provisional
     df.index.name = "Datetime"
     df = df.rename(columns={
         "open": "Open", "high": "High", "low": "Low",
@@ -159,7 +192,14 @@ def main():
                     "start": df.index.min().isoformat(),
                     "end": df.index.max().isoformat(),
                     "updated_utc": datetime.now(timezone.utc).isoformat(),
-                    "source": "MT5 FundingPips2-SIM, server UTC+3 -> UTC (-3h)",
+                    "source": (
+                        "MT5 FundingPips2-SIM; H1 server -> provisional UTC (-3h) "
+                        "-> true UTC via mt5_clock era table (2 broker-clock eras, "
+                        "see MT5_CANDLE_CLOCK_AUDIT.md); D1/W1 flat -3h"
+                        if cache_interval == "1h" else
+                        "MT5 FundingPips2-SIM, server UTC+3 -> UTC (-3h); "
+                        "D1/W1 keep flat -3h (era correction is H1-only)"
+                    ),
                 }, f, indent=2)
             print(f"{mt5_stem:7s} {tf_suffix:2s} -> {cache_stem:14s}  rows={len(df):7d}  "
                   f"{df.index.min().date()}..{df.index.max().date()}")

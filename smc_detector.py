@@ -1858,11 +1858,12 @@ def detect_fvg_in_zone(df, bias, zone_top, zone_bottom, atr_floor,
 # the change strictly additive per trade: a target either moves IN to its zone
 # edge or stays exactly where it was.
 #
-# The same 20%-body doji screen the OB build uses (is_valid_ob_candle) is
-# applied so a near-doji opposing candle is skipped, not treated as a block.
-# (Inlined, not imported: smc_radar imports smc_detector, so importing back
-# would be circular. It is a one-line threshold; duplicating it is cheaper than
-# a circular import, and both sites read the same 0.20 constant.)
+# NO doji screen (removed 2026-07-16 by trader instruction): the ONLY thing that
+# defines the block here is CANDLE COLOUR — the last up candle before a swing
+# high (LONG), the last down candle before a swing low (SHORT). Body size is
+# irrelevant; a small-bodied right-colour candle is still the block nearest the
+# swing. The old 20%-body screen (matching the OB build) wrongly walked the TP
+# back to a farther, larger candle. Colour is the rule; nothing else.
 _TP_ZONE_WALKBACK_MAX = 10  # bars to search back from the swing for the block
 
 
@@ -1905,8 +1906,12 @@ def _tp_zone_edge(df_h1, swing_idx, swing_price, bias, entry):
         if not is_block:
             continue
         rng = h - l
-        if rng <= 0 or abs(o - c) <= rng * 0.20:  # doji screen (matches OB build)
+        if rng <= 0:  # degenerate flat bar has no distinct edge -> skip
             continue
+        # NO doji screen: the ONLY requirement is the right COLOUR (up for LONG,
+        # down for SHORT). A small-bodied right-colour candle is still the block
+        # nearest the swing -- rejecting it (old behaviour) walked the TP back to
+        # a farther, larger candle and moved the target to the wrong place.
         edge = l if want_up else h  # near edge: low for LONG, high for SHORT
         # Guard 1 — profit side: LONG edge must be ABOVE entry, SHORT BELOW.
         # Guard 2 — beyond wick: LONG edge <= swing high, SHORT edge >= swing low.

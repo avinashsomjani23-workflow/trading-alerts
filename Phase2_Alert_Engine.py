@@ -1551,12 +1551,12 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             _regime_word = "Ranging"
         else:
             _regime_word = "Neutral"
-        _regime_detail = f"{_regime_word} (chop {_chop:.0f})"
+        _regime_detail = f"{_regime_word} ({_chop:.0f})"
     else:
         _regime_detail = "&mdash;"
     trend_quality_html = (
         '<div style="margin-bottom:12px;font-size:11px;color:#888;">'
-        f'<b style="color:#aaa;">Market regime:</b> {_regime_detail}</div>'
+        f'<b style="color:#aaa;">Trend vs range (choppiness):</b> {_regime_detail}</div>'
     )
 
     # Trend banner (information only — trader decides whether to take counter-trend)
@@ -1599,10 +1599,18 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             f'{pools["line"]}')
     if eq.get("line"):
         _liq_rows.append(f'{eq["line"]}')
+    # The "what it means for THIS trade" read — three labelled bullets
+    # (Fact / Means / For this trade) so it reads as a list, not a paragraph.
+    # format_liquidity_inference returns a list of (label, text) tuples.
     _infer = pool_builder.format_liquidity_inference(_pf, bias)
     if _infer:
+        _bullets = "".join(
+            f'<div style="margin-top:4px;color:#eee;">'
+            f'<span style="color:#5dade2;">&bull;</span> '
+            f'<b style="color:#8fc9ea;">{lbl}:</b> {txt}</div>'
+            for lbl, txt in _infer)
         _liq_rows.append(
-            f'<div style="margin-top:6px;color:#eee;">{_infer}</div>')
+            f'<div style="margin-top:6px;">{_bullets}</div>')
 
     # Weekly PD zone — HTF premium/discount vs the H4 read. Predefined
     # sentence names both timeframes + both percentages so the trader always
@@ -1619,46 +1627,19 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             'border-left:3px solid #5dade2;border-radius:4px;font-size:12px;'
             'color:#bbb;line-height:1.5;">'
             '<div style="color:#aaa;font-size:10px;letter-spacing:0.6px;'
-            'text-transform:uppercase;margin-bottom:6px;">Liquidity Map</div>'
+            'text-transform:uppercase;margin-bottom:6px;">Liquidity</div>'
             + '<br>'.join(_liq_rows)
             + '</div>'
         )
 
-    # Approach-into-zone shape (RETRACE_QUALITY_SPEC §4.3). Plain wording, NO
-    # verdict / good-bad label / colour — SIGNAL_CANDIDATES rule (no email
-    # verdicts before validation). None -> em-dash (win-rate helper convention);
-    # negative speed renders the "(drifting away)" hint. Same visual weight as
-    # the pools banner. Observe-only.
-    approach_banner_html = ""
-    _apr = data.get("approach") or {}
-    if _apr:
-        def _apr_num(v, suffix=""):
-            return "&mdash;" if v is None else f"{v:g}{suffix}"
-
-        _sp = _apr.get("approach_speed_atr_at_fill")
-        if _sp is None:
-            _sp_txt = "&mdash; ATR toward zone"
-        elif _sp < 0:
-            _sp_txt = f"{_sp:g} ATR (drifting away)"
-        else:
-            _sp_txt = f"{_sp:g} ATR toward zone"
-        _body = _apr.get("approach_body_ratio_at_fill")
-        _body_txt = ("&mdash;" if _body is None
-                     else f"{round(_body * 100)}%")
-        _er = _apr.get("approach_er_at_fill")
-        _er_txt = _apr_num(_er)
-        # Render only when at least one value is real (all-None -> skip banner).
-        if any(v is not None for v in (_sp, _body, _er)):
-            approach_banner_html = (
-                '<div style="margin-bottom:12px;padding:10px 12px;background:#1a1a2e;'
-                'border-left:3px solid #7f8c8d;border-radius:4px;font-size:12px;'
-                'color:#bbb;line-height:1.5;">'
-                '<div style="color:#aaa;font-size:10px;letter-spacing:0.6px;'
-                'text-transform:uppercase;margin-bottom:6px;">Approach '
-                '&middot; last 4 closed H1</div>'
-                f'{_sp_txt} &middot; bodies {_body_txt} &middot; one-way {_er_txt}'
-                '</div>'
-            )
+    # Approach-into-zone shape (approach_quality.py, aka RETRACE_QUALITY) REMOVED
+    # from the email 2026-07-17 (owner call). The three reads (speed / body share
+    # / Kaufman ER over a FIXED 4-/7-bar window before fill) were the retracement-
+    # quality probe: FX = NULL, gold-only signal never re-proven, fill-time class
+    # so it can never inform an alert decision (only cancel a pending limit). They
+    # added no decision value and three verdict-less numbers only confused the
+    # read. The trades.csv columns stay logged for research — only the email line
+    # is gone. See project_retrace_quality memory.
 
     # Chart blocks with fallback banner (B8)
     if h1_chart_ok:
@@ -1789,7 +1770,6 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             {setup_badge_html}
             {trend_banner_html}
             {pools_banner_html}
-            {approach_banner_html}
             {distance_html}
             {context_html}
             {break_quality_html}

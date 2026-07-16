@@ -59,6 +59,14 @@ _PAIR_CURRENCIES: Dict[str, frozenset] = {
     "XAUUSD": frozenset({"USD"}),
     "GOLD":   frozenset({"USD"}),
     "NAS100": frozenset({"USD"}),
+    # Backtest-only pairs (config.json backtest_only). Live never queries
+    # these; listed so offline analysis (backtest/news_enrichment.py) shares
+    # this one map instead of duplicating it.
+    "GBPUSD": frozenset({"USD", "GBP"}),
+    "AUDUSD": frozenset({"USD", "AUD"}),
+    "USDCAD": frozenset({"USD", "CAD"}),
+    "EURJPY": frozenset({"EUR", "JPY"}),
+    "BTCUSD": frozenset({"USD"}),
 }
 
 

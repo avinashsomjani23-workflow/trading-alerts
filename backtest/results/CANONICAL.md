@@ -5,7 +5,16 @@ Any analysis, finding, or column question uses THIS file and no other:
     backtest/results/h1only_20080102_20251231/trades.csv
 
 - Commit: `1feb2db` (2026-07-09), git-clean / reproducible
-- Shape: 108 columns, 33,838 rows
+- Shape: 113 columns, 33,838 rows. As of 2026-07-16 (Part D) all 113 are
+  RUN-PRODUCED: the 5 news columns (`news_fill`…) are now stamped natively by
+  the report writer (`h1_only_reporting._enrich_news_columns`, deterministic,
+  idempotent join from `backtest/data/ff_calendar_2007_2026.csv`) — no separate
+  post-hoc script. Re-scrape that events file before each baseline so it covers
+  the run window (the one maintenance seam; the run fails loud otherwise).
+  NOTE: THIS canonical CSV predates the clock fix — its news columns were
+  stamped by the OLD post-hoc script (provisional labels + in-enrichment
+  correction). The next fresh run is the first to pair true-UTC candles
+  (import_mt5 Part B) with the no-double-correction enrichment (Part C).
 - Discovery-eligible: 11,366
 
 > **STALE FOR DETECTION as of 2026-07-10.** This run was built with the break gates
@@ -19,7 +28,7 @@ Any analysis, finding, or column question uses THIS file and no other:
 ## Rules (non-negotiable)
 
 - NEVER `glob` for `trades.csv` and use whatever turns up. There is exactly one truth file — this one.
-- Before using it, confirm the header has **108 columns**. Wrong count = wrong file = STOP.
+- Before using it, confirm the header has **113 columns**. Wrong count = wrong file = STOP.
 - Any other `trades.csv` that ever reappears under `backtest/results/` is a fresh run in progress or a stale artifact. It is NOT truth until this file is updated to name it.
 - Column meanings come from `TRUTH_LEDGER.md` (file:line), read against live code. Not from any other doc.
 
