@@ -141,11 +141,16 @@ def test_wick_sweep_of_pdh():
     assert snap["day_state"] == "SWEPT_HIGH"
 
 
+# asof right after the break confirm, so no later quiet bar closes back and
+# reclaims the level (a reclaim would correctly downgrade broken -> swept).
+BREAK_ASOF = pd.Timestamp("2026-06-09 07:00")
+
+
 def test_clean_break_needs_next_close_confirm():
     df = two_weeks()
     patch_bar(df, TUE_BAR, h=1.2020, c=1.2010)   # close beyond PDH
     patch_bar(df, TUE_NEXT, h=1.2030, c=1.2015)  # next close holds
-    snap = snap_at(df)
+    snap = snap_at(df, BREAK_ASOF)
     assert snap["pools"]["pdh"]["status"] == "broken"
     assert snap["day_state"] == "EXPANSION_UP"
 
@@ -171,7 +176,31 @@ def test_break_overrides_earlier_sweep():
     patch_bar(df, "2026-06-09 03:00", h=1.2005, c=1.1950)  # sweep first
     patch_bar(df, TUE_BAR, h=1.2020, c=1.2010)             # then break
     patch_bar(df, TUE_NEXT, c=1.2015)                      # confirmed
-    snap = snap_at(df)
+    snap = snap_at(df, BREAK_ASOF)
+    assert snap["pools"]["pdh"]["status"] == "broken"
+
+
+def test_break_then_reclaim_is_swept():
+    # Rule A: broken holds only while price stays beyond. A later close back
+    # across the level is a reclaim -> swept (the label tells the truth NOW).
+    df = two_weeks()
+    patch_bar(df, TUE_BAR, h=1.2020, c=1.2010)   # close beyond PDH
+    patch_bar(df, TUE_NEXT, c=1.2015)            # confirmed -> broken
+    patch_bar(df, "2026-06-09 07:00", c=1.1950)  # closes back inside -> reclaim
+    snap = snap_at(df, pd.Timestamp("2026-06-09 08:00"))
+    assert snap["pools"]["pdh"]["status"] == "swept"
+    assert snap["pools"]["pdh"]["broken_ts"] is None
+
+
+def test_reclaim_then_rebreak_is_broken_again():
+    # A reclaim can itself be re-broken; status must follow price, not freeze.
+    df = two_weeks()
+    patch_bar(df, TUE_BAR, h=1.2020, c=1.2010)   # break
+    patch_bar(df, TUE_NEXT, c=1.2015)            # -> broken
+    patch_bar(df, "2026-06-09 07:00", c=1.1950)  # reclaim -> swept
+    patch_bar(df, "2026-06-09 08:00", c=1.2018)  # close beyond again
+    patch_bar(df, "2026-06-09 09:00", c=1.2020)  # confirm -> broken again
+    snap = snap_at(df, pd.Timestamp("2026-06-09 10:00"))
     assert snap["pools"]["pdh"]["status"] == "broken"
 
 
@@ -180,7 +209,7 @@ def test_pdl_side_and_both_sides_state():
     patch_bar(df, "2026-06-09 03:00", l=1.1895, c=1.1950)  # sweep PDL
     patch_bar(df, TUE_BAR, h=1.2020, c=1.2010)             # break PDH
     patch_bar(df, TUE_NEXT, c=1.2015)
-    snap = snap_at(df)
+    snap = snap_at(df, BREAK_ASOF)
     assert snap["pools"]["pdl"]["status"] == "swept"
     assert snap["pools"]["pdh"]["status"] == "broken"
     assert snap["day_state"] == "BOTH_SIDES"
@@ -211,7 +240,7 @@ def test_no_look_ahead():
     pb._FRAME_CACHE.clear()  # frames share id-space; force a clean build
     f_future = pb.features_at_alert(with_future, ASOF, "bullish", 1.1950, 0.0010)
     assert f_base == f_future
-    assert f_base["pdh_status_at_alert"] == "intact"
+    assert f_base["pdh_status_at_fill"] == "intact"
 
 
 def test_determinism():
@@ -252,7 +281,7 @@ def test_spent_pool_leaves_distance_slot():
     # Nearest UNSPENT above is now the weekly high, 150 pips away.
     assert f["next_pool_above_tier"] == "PW"
     assert f["dist_next_pool_above_atr"] == 15.0
-    assert f["pdh_status_at_alert"] == "swept"
+    assert f["pdh_status_at_fill"] == "swept"
     assert f["last_sweep_tier"] == "PD"
     assert f["last_sweep_age_h1"] is not None and f["last_sweep_age_h1"] >= 0
 

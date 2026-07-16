@@ -73,9 +73,9 @@ POOL_STATUS_STATE_PATH = os.path.join("state", "pool_status.json")
 # One list, one implementation — the backtest row build and the None-fallback
 # both key off it.
 POOL_FEATURE_COLUMNS = (
-    "day_state_at_alert",
-    "pdh_status_at_alert", "pdl_status_at_alert",
-    "pwh_status_at_alert", "pwl_status_at_alert",
+    "day_state_at_fill",
+    "pdh_status_at_fill", "pdl_status_at_fill",
+    "pwh_status_at_fill", "pwl_status_at_fill",
     "dist_next_pool_above_atr", "dist_next_pool_below_atr",
     "next_pool_above_tier", "next_pool_below_tier",
     "trade_toward_pool",
@@ -302,9 +302,16 @@ def pool_status(bars, level, side):
 
     Rules (module docstring has the full story):
       wick through + close back        -> swept
-      close beyond + next close beyond -> broken (terminal; overrides swept)
+      close beyond + next close beyond -> broken (holds while price stays beyond)
       close beyond + next close back   -> swept (failed break)
       close beyond, no next bar yet    -> prior status (no look-ahead)
+      broken, then close back across    -> swept (reclaim — a break price gave
+                                           back is a sweep, not a clean break)
+
+    `broken` is NOT terminal: it holds only while price keeps closing beyond the
+    level. The first bar that closes back on the origin side reclaims the level
+    and downgrades it to swept, so the label always tells the truth about NOW.
+    The level itself is a fact and never moves — only this status label updates.
     """
     status, swept_ts, broken_ts, last_sweep_ts = "intact", None, None, None
     pending_ts = None  # unconfirmed close-beyond awaiting its N=1 confirm
@@ -322,14 +329,27 @@ def pool_status(bars, level, side):
         if side == "above":
             pierced = highs[i] > level
             closed_beyond = closes[i] > level
+            closed_back = closes[i] <= level  # reclaimed below a high pool
         else:
             pierced = lows[i] < level
             closed_beyond = closes[i] < level
+            closed_back = closes[i] >= level  # reclaimed above a low pool
+
+        # Reclaim: a level that WAS broken but now closes back on the origin
+        # side was given back — that is a sweep, not a clean break. Record the
+        # reclaim bar as the sweep and keep scanning (a later re-break can flip
+        # it back to broken).
+        if status == "broken" and closed_back:
+            status = "swept"
+            swept_ts = swept_ts or index[i]
+            last_sweep_ts = index[i]
+            broken_ts = None
 
         if pending_ts is not None:
             if closed_beyond:
                 status, broken_ts = "broken", index[i]
-                break  # spent — terminal, later bars are irrelevant
+                pending_ts = None
+                continue  # broken for now; later bars may reclaim it
             # Failed break: liquidity taken and rejected -> swept.
             status = "swept"
             swept_ts = swept_ts or pending_ts
@@ -440,11 +460,11 @@ def trade_features(snap, ref_price, atr, direction, h1_index=None):
         return out
     pools = snap["pools"]
 
-    out["day_state_at_alert"] = snap.get("day_state")
-    out["pdh_status_at_alert"] = pools["pdh"]["status"]
-    out["pdl_status_at_alert"] = pools["pdl"]["status"]
-    out["pwh_status_at_alert"] = pools["pwh"]["status"]
-    out["pwl_status_at_alert"] = pools["pwl"]["status"]
+    out["day_state_at_fill"] = snap.get("day_state")
+    out["pdh_status_at_fill"] = pools["pdh"]["status"]
+    out["pdl_status_at_fill"] = pools["pdl"]["status"]
+    out["pwh_status_at_fill"] = pools["pwh"]["status"]
+    out["pwl_status_at_fill"] = pools["pwl"]["status"]
 
     # Nearest UNSPENT (intact) pool each side of ref_price, ATR-normalised.
     # Position is by price relative to ref_price, not by the pool's high/low
@@ -825,6 +845,35 @@ def _pool_key_from(tier, side):
         return None
     return {("PD", "above"): "pdh", ("PD", "below"): "pdl",
             ("PW", "above"): "pwh", ("PW", "below"): "pwl"}[(tier, side)]
+
+
+def format_liquidity_fact(features, bias):
+    """P1 only: the FACT, one line, no advice. Names the nearest untouched pool
+    in the trade's direction and how far it sits (ATR + arrow). NO "use as
+    take-profit", NO "put your stop beyond" — that read belongs in P2
+    (format_liquidity_inference). P1 states what IS; P2 states what to do.
+
+    Same side-selection as the P2 inference so P1 and P2 point at the SAME
+    level. Returns None when there is no untouched pool to name. Info only.
+    """
+    if not features:
+        return None
+    toward = features.get("trade_toward_pool")
+    if toward is None:
+        return None
+    long = (bias == "LONG")
+    if (toward and long) or (not toward and not long):
+        tier, dist, side, arrow = (features.get("next_pool_above_tier"),
+                                   features.get("dist_next_pool_above_atr"),
+                                   "above", "up")
+    else:
+        tier, dist, side, arrow = (features.get("next_pool_below_tier"),
+                                   features.get("dist_next_pool_below_atr"),
+                                   "below", "down")
+    key = _pool_key_from(tier, side)
+    name = _POOL_NAME.get(key, "the nearest untouched level")
+    dist_str = f"{dist} ATR {arrow}" if dist is not None else "nearby"
+    return (f"{name} sits {side} the current price ({dist_str}), never touched.")
 
 
 def format_liquidity_inference(features, bias):

@@ -390,15 +390,14 @@ def format_eq_line(ctx, ref_price, atr):
     return "Equal levels: " + " · ".join(bits) + "."
 
 
-def format_eq_inference(ctx, ref_price, atr, direction):
-    """Direction-aware 3-part EQ bullet (data -> meaning -> what to do), used by
-    the P1 zone card and shaped for a 5-year-old reader. Distances are ATR from
-    the CURRENT price (ref_price). None when there is no intact cluster in the
-    trade's direction to speak to. Info only — never gates or scores.
-
-    A stack of equal highs/lows is a pile of resting stops = a magnet. In the
-    trade's direction it is a take-profit target (expect a wick, not a clean
-    stop); behind the trade it is a shakeout risk (give the stop room).
+def format_eq_fact(ctx, ref_price, atr, direction):
+    """P1 only: the FACT, one line, no advice. Names the nearest intact equal-
+    level shelf in the trade's direction (or, if none, the one behind the trade)
+    with its touch count and distance. NO "good take-profit", NO "give the stop
+    room" — that P2 read is format_eq_line + format_eq_sl_warning. EQ shelves are
+    H1-only (built
+    from H1 swings, no resample). Returns None when there is no intact shelf to
+    name. Info only.
     """
     if not ctx or not ctx.get("clusters") or ref_price is None:
         return None
@@ -406,32 +405,22 @@ def format_eq_inference(ctx, ref_price, atr, direction):
                                direction=direction, atr=atr,
                                asof_pos=ctx["asof_pos"])
     long = (direction == "bullish")
-    # The cluster in the trade's direction (a target) if one exists, else the
-    # cluster behind the trade (a risk).
     if long:
         tgt_dist, tgt_size = f["eqh_above_dist_atr"], f["eqh_above_size"]
         risk_dist, risk_size = f["eql_below_dist_atr"], f["eql_below_size"]
-        tgt_word, risk_word = "equal highs", "equal lows"
-        tgt_dir, risk_dir = "up", "down"
+        tgt_word, tgt_dir, tgt_side = "equal highs", "up", "above"
+        risk_word, risk_dir, risk_side = "equal lows", "down", "below"
     else:
         tgt_dist, tgt_size = f["eql_below_dist_atr"], f["eql_below_size"]
         risk_dist, risk_size = f["eqh_above_dist_atr"], f["eqh_above_size"]
-        tgt_word, risk_word = "equal lows", "equal highs"
-        tgt_dir, risk_dir = "down", "up"
-    bias = "long" if long else "short"
-
+        tgt_word, tgt_dir, tgt_side = "equal lows", "down", "below"
+        risk_word, risk_dir, risk_side = "equal highs", "up", "above"
     if tgt_dist is not None:
-        return (f"<b>{'Above' if long else 'Below'} the current price:</b> "
-                f"{tgt_word} ({tgt_size} touches), {tgt_dist} ATR {tgt_dir}.<br>"
-                f"A stack of stops like this pulls price toward it.<br>"
-                f"<b>Good take-profit for your {bias} — but expect a sharp "
-                f"wick, not a clean stop.</b>")
+        return (f"{tgt_word} ({tgt_size} touches) sit {tgt_side} the current "
+                f"price ({tgt_dist} ATR {tgt_dir}).")
     if risk_dist is not None:
-        return (f"<b>{'Below' if long else 'Above'} the current price:</b> "
-                f"{risk_word} ({risk_size} touches), {risk_dist} ATR {risk_dir}."
-                f"<br>Price often grabs a stack like this before turning.<br>"
-                f"<b>Your {bias} may get shaken out first — give the stop room "
-                f"beyond these {risk_word}.</b>")
+        return (f"{risk_word} ({risk_size} touches) sit {risk_side} the current "
+                f"price ({risk_dist} ATR {risk_dir}).")
     return None
 
 

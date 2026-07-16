@@ -1293,9 +1293,9 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # PD/PW liquidity pools (DAILY_BIAS_V4_SPEC §1.3) — observation only,
         # stamped at alert from strictly-prior bars. One source:
         # pool_builder.POOL_FEATURE_COLUMNS via _pool_features_at_alert.
-        "day_state_at_alert",
-        "pdh_status_at_alert", "pdl_status_at_alert",
-        "pwh_status_at_alert", "pwl_status_at_alert",
+        "day_state_at_fill",
+        "pdh_status_at_fill", "pdl_status_at_fill",
+        "pwh_status_at_fill", "pwl_status_at_fill",
         "dist_next_pool_above_atr", "dist_next_pool_below_atr",
         "next_pool_above_tier", "next_pool_below_tier",
         "trade_toward_pool", "last_sweep_age_h1", "last_sweep_tier",

@@ -9,8 +9,10 @@ The H1 trend is read directly from swing structure: higher-highs + higher-lows
 
   - BOS   (Break of Structure)   — a trend-direction swing is taken out with
                                     displacement. Continuation.
-  - CHoCH (Change of Character)   — the defended swing (last HL in an uptrend /
-                                    last LH in a downtrend) is closed through
+  - CHoCH (Change of Character)   — the defended swing (LAST confirmed swing
+                                    low in an uptrend / LAST confirmed swing
+                                    high in a downtrend — either polarity, not
+                                    only HL/LH) is closed through
                                     against the trend by >= the CHoCH
                                     displacement. ARMS a pending reversal; the
                                     trend flips only on a later Confirmation BOS.
@@ -1056,7 +1058,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     choch_pending_dir = None; confirm_break_swing = None
                     choch_arm_idx = None
                     defended = leg_extreme_low if leg_extreme_low is not None else defended
-                    defended_swing = None  # raw leg extreme until next HL confirms
+                    defended_swing = None  # raw leg extreme until the next confirmed swing low
                     leg_extreme_high = hi_i; leg_extreme_low = lo_i
                     leg_start = ci
                     # S1: a trend flip starts a fresh leg — the ranging counter
@@ -1114,7 +1116,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     choch_pending_dir = None; confirm_break_swing = None
                     choch_arm_idx = None
                     defended = leg_extreme_high if leg_extreme_high is not None else defended
-                    defended_swing = None  # raw leg extreme until next LH confirms
+                    defended_swing = None  # raw leg extreme until the next confirmed swing high
                     leg_extreme_high = hi_i; leg_extreme_low = lo_i
                     leg_start = ci
                     # S1: fresh leg on the flip — reset the ranging counter (see the
@@ -1355,40 +1357,58 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             # Here we only keep the targets current as confirmed swings arrive:
             #   - trend-direction swing (low in DOWN / high in UP) => new BOS
             #     break target (most-recent confirmed swing point to break next).
-            #   - counter-trend swing (HL in UP / LH in DOWN) => new `defended`
-            #     swing for the CHoCH check (unchanged from before).
+            #   - counter-trend swing (low in UP / high in DOWN) => new `defended`
+            #     swing for the CHoCH check — ANY polarity (HL or lower low in
+            #     UP; LH or higher high in DOWN). The CHoCH must break the LAST
+            #     confirmed counter-trend swing, never a stale older one. The
+            #     old code updated only on HL/LH; a counter-polarity swing
+            #     (higher high in a downtrend) left `defended` stuck on the
+            #     stale lower high, so a close BETWEEN the two fired a false
+            #     CHoCH without the true last swing being broken (proven live:
+            #     USDCHF 2026-07-16, CHoCH-up at 0.80643 vs true swing high
+            #     0.80649). Same rule h4_range already states: the most recent
+            #     confirmed swing always replaces the old one, higher or lower.
+            #     `impulse_start_ts` / `leg_extreme_*` travel with `defended`
+            #     (the new swing IS the current leg's origin), and the re-arm
+            #     block clears — its purpose is "wait for a REAL confirmed
+            #     defended swing", which either polarity satisfies. Only the
+            #     RANGING counter still distinguishes polarity: HL/LH is a
+            #     trend extension (reset), the counter-polarity swing is not
+            #     (increment).
             if state == _UP:
                 made_hl = (s["type"] == "low"  and len(lows)  >= 2
                            and lows[-1]["price"]  > lows[-2]["price"])
                 if s["type"] == "high":
                     # New confirmed swing high = next BOS-up break target.
                     bos_break_high = highs[-1]
-                if made_hl:
+                elif s["type"] == "low":
                     defended = lows[-1]["price"]
-                    defended_swing = lows[-1]  # confirmed swing low (the new HL)
+                    defended_swing = lows[-1]  # last confirmed swing low
                     leg_extreme_high = float(H[ci])
                     impulse_start_ts = lows[-1]["ts"]
-                    trend_dir_swings_since_extend = 0
+                    if made_hl:
+                        trend_dir_swings_since_extend = 0
+                    else:
+                        trend_dir_swings_since_extend += 1
                     if rearm_block_dir == _DOWN:
                         rearm_block_dir = None
-                elif s["type"] == "low":
-                    trend_dir_swings_since_extend += 1
             elif state == _DOWN:
                 made_lh = (s["type"] == "high" and len(highs) >= 2
                            and highs[-1]["price"] < highs[-2]["price"])
                 if s["type"] == "low":
                     # New confirmed swing low = next BOS-down break target.
                     bos_break_low = lows[-1]
-                if made_lh:
+                elif s["type"] == "high":
                     defended = highs[-1]["price"]
-                    defended_swing = highs[-1]  # confirmed swing high (the new LH)
+                    defended_swing = highs[-1]  # last confirmed swing high
                     leg_extreme_low = float(L[ci])
                     impulse_start_ts = highs[-1]["ts"]
-                    trend_dir_swings_since_extend = 0
+                    if made_lh:
+                        trend_dir_swings_since_extend = 0
+                    else:
+                        trend_dir_swings_since_extend += 1
                     if rearm_block_dir == _UP:
                         rearm_block_dir = None
-                elif s["type"] == "high":
-                    trend_dir_swings_since_extend += 1
 
         if _trace is not None:
             _trace.append(state)
@@ -1396,7 +1416,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     # `ranging` = trend defined AND >= STRUCTURE_RANGING_STALE consecutive
     # counter-trend swings have confirmed WITHOUT a trend extension. The counter
     # (`trend_dir_swings_since_extend`) starts at 0 and is reset to 0 on: birth,
-    # a trend extension (new HL/LH `defended` reset), a continuation BOS, and
+    # a trend extension (a new HL/LH — note `defended` itself now updates on ANY
+    # counter-trend swing, but only HL/LH counts as an extension), a continuation BOS, and
     # (S1) a Confirmation-BOS trend flip. It increments only on a confirmed
     # counter-trend swing that did not extend the trend. Informational only —
     # never gates detection, alerts, or trades.

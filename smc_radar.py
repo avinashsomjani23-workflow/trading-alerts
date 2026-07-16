@@ -1486,7 +1486,7 @@ def _split_primary_alternative(obs, cur_price, trend=None, cap=True):
 
 def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                       is_invalidated=False, last_event=None, alt_ob=None,
-                      pools=None):
+                      pools=None, eq_ctx=None):
     """
     H1 zone chart. Used for active zones, invalidated zones, and structure-only
     (no zone) views.
@@ -1974,13 +1974,24 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
             )
 
         # --- PD/PW pool levels (PDH/PDL/PWH/PWL) ---
-        # Prior-day / prior-week high & low visible in the window, as dotted
-        # D1/W1 lines with left-edge labels. Only in-view levels draw (same
-        # proximity gate as the DR walls via _wall_in_view). Observation only.
+        # Prior-day / prior-week high & low as dotted D1/W1 lines with left-edge
+        # labels. In-view levels draw a full line; off-view levels draw an edge
+        # arrow (↑/↓) so they're never silently lost (#6). Observation only.
         if pool_lines:
             charts.draw_pool_lines(ax, pool_lines,
                                    x_right=n_plot + RIGHT_MARGIN - 1,
-                                   in_view=_wall_in_view, zorder=2)
+                                   in_view=_wall_in_view, zorder=2,
+                                   y_min=y_min, y_max=y_max,
+                                   x_center=n_plot / 2.0)
+
+        # --- Equal-level shelves (EQH/EQL) ---
+        # Intact equal-high / equal-low clusters as teal dotted lines (#5),
+        # off-view ones as edge arrows. EQ is H1-only. Observation only.
+        if eq_ctx:
+            charts.draw_eq_lines(ax, eq_ctx,
+                                 in_view=_wall_in_view, zorder=2,
+                                 y_min=y_min, y_max=y_max,
+                                 x_center=n_plot / 2.0)
 
         # --- Swing markers (triangles + current-setup broken-swing X) ---
         # SINGLE SOURCE: consume the persisted swing pool from dealing_range
@@ -3167,25 +3178,29 @@ def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr,
             else:
                 bullets.append(f"<b>Liquidity:</b> {pool_words}")
 
-    # 4. MAGNET — nearest untouched pool in THIS zone's direction + what to do.
-    #    Reuses the P2 trade features / inference so both phases agree.
+    # 4. MAGNET — FACT only: nearest untouched pool in THIS zone's direction +
+    #    how far. NO trade advice (take-profit / stop placement) — that read is
+    #    P2 (format_liquidity_inference). P1 = facts, P2 = the play. Same feature
+    #    + side-selection so both phases point at the SAME level.
     if pool_snap:
         try:
             _pf = pool_builder.trade_features(
                 pool_snap, ref_price=current_price, atr=h1_atr,
                 direction=ob['direction'])
             _bias = "LONG" if ob['direction'] == 'bullish' else "SHORT"
-            _magnet = pool_builder.format_liquidity_inference(_pf, _bias)
+            _magnet = pool_builder.format_liquidity_fact(_pf, _bias)
             if _magnet:
                 bullets.append(f"<b>Magnet:</b> {_magnet}")
         except Exception:
             pass  # pool feature failure never blocks the card
 
-    # 5. EQ — equal-level stop cluster mapped to the trade. Same 3-part shape.
+    # 5. EQ — FACT only: nearest equal-level shelf + touches + distance. No
+    #    advice — P2 owns the EQ read via format_eq_line + format_eq_sl_warning
+    #    (Phase2_Alert_Engine.py).
     if eq_ctx:
         try:
-            _eq = eq_pools.format_eq_inference(eq_ctx, current_price, h1_atr,
-                                               ob['direction'])
+            _eq = eq_pools.format_eq_fact(eq_ctx, current_price, h1_atr,
+                                          ob['direction'])
             if _eq:
                 bullets.append(f"<b>Equal levels:</b> {_eq}")
         except Exception:
@@ -4475,6 +4490,7 @@ def run_radar():
                         walls=pair_walls,
                         alt_ob=alt_ob_for_render,
                         pools=pair_pools.get(pair_name),
+                        eq_ctx=pair_eqs.get(pair_name),
                     )
 
                 narrative = generate_zone_narrative_with_atr(
@@ -4577,6 +4593,7 @@ def run_radar():
                             df, ob_for_chart, dp, pair_name, ist_ts_full,
                             walls=pair_walls, is_invalidated=True,
                             pools=pair_pools.get(pair_name),
+                            eq_ctx=pair_eqs.get(pair_name),
                         )
                     if chart_b64:
                         invalidation_cards.append(
@@ -4602,6 +4619,7 @@ def run_radar():
                             df, None, dp, pair_name, ist_ts_full,
                             walls=pair_walls, last_event=last_event,
                             pools=pair_pools.get(pair_name),
+                            eq_ctx=pair_eqs.get(pair_name),
                         )
                         if chart_b64:
                             inactive_pair_cards.append(
@@ -4649,6 +4667,7 @@ def run_radar():
                         df, None, dp, pair_name, ist_ts_full,
                         walls=pair_walls, last_event=last_event,
                         pools=pair_pools.get(pair_name),
+                        eq_ctx=pair_eqs.get(pair_name),
                     )
                     if chart_b64:
                         inactive_pair_cards.append(

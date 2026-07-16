@@ -511,7 +511,7 @@
     "choch_level": null,
     "choch_from_zone": false,
     "choch_flip_count": 0,
-    "defended": 2752.0,
+    "defended": 2730.0,
     "broken_swing_ts": null,
     "last_bos": {
       "kind": "BOS",
@@ -559,7 +559,7 @@
         "direction": "bullish",
         "candle_ts": "2013-04-28T21:00:00+00:00",
         "confirm_ts": "2013-04-28T21:00:00+00:00",
-        "impulse_start_ts": "2013-03-17T21:00:00+00:00",
+        "impulse_start_ts": "2013-04-17T21:00:00+00:00",
         "broken_swing_price": 2862.0,
         "broken_swing_ts": "2013-04-10T21:00:00+00:00",
         "broken_was_wall": false,

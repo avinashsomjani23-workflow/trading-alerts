@@ -135,6 +135,19 @@ CONTINUOUS_FEATURES = [
     # STRUCTURE_SIGNALS_SPEC S3 screen candidate (support cols leg_extreme_at_alert /
     # leg_extreme_clipped are NOT screened — they are audit/derivation support).
     "leg_retrace_pct_at_alert",
+    # Weekly PD zone (weekly_pd.py, 2026-07-15) — ALERT-time (bars strictly before
+    # alert_ts, h1_only_simulator.py:1708). weekly_pd_position is the continuous
+    # read; range_high/low are support (audit), zone/agreement are categorical below.
+    "weekly_pd_position_at_alert",
+    # PD/PW liquidity pools (DAILY_BIAS_V4_SPEC §1.3) — FILL-time distances
+    # (see FILL_TIME_FEATURES). Continuous ATR distances to the nearest unspent pool.
+    "dist_next_pool_above_atr", "dist_next_pool_below_atr",
+    # EQH/EQL equal-level clusters (eq_pools.py, 2026-07-14) — FILL-time. Continuous
+    # shelf distances/sizes + stop-vs-pool gap. Support counts are categorical/int below.
+    "eqh_above_dist_atr", "eqh_above_size", "eql_below_dist_atr", "eql_below_size",
+    "eq_sl_gap_atr",
+    # Approach quality (RETRACE_QUALITY_SPEC, 2026-07-15) — FILL-time entry mechanics.
+    "approach_speed_atr_at_fill", "approach_body_ratio_at_fill", "approach_er_at_fill",
 ]
 
 CATEGORICAL_FEATURES = [
@@ -146,6 +159,20 @@ CATEGORICAL_FEATURES = [
     # STRUCTURE_SIGNALS_SPEC S2/S4 screen candidates (booleans + pending dir).
     "structure_ranging_at_alert", "flip_pending_at_alert",
     "flip_pending_dir_at_alert", "dr_ceiling_broken_at_ob", "dr_floor_broken_at_ob",
+    # Weekly PD zone (ALERT-time) — premium/discount + H4-vs-weekly agreement.
+    "weekly_pd_zone_at_alert", "pd_zone_agreement_at_alert",
+    # Trend-vs-PD confluence bool (2026-07-08, was un-screened) — enters here, NOT
+    # via h1_trend (which is redundant-by-construction with trend_alignment).
+    "trend_pd_agree",
+    # PD/PW liquidity pools (FILL-time) — day state, per-pool swept/intact status,
+    # nearest-pool tiers, and the draw-on-liquidity direction read.
+    "day_state_at_alert", "pdh_status_at_alert", "pdl_status_at_alert",
+    "pwh_status_at_alert", "pwl_status_at_alert",
+    "next_pool_above_tier", "next_pool_below_tier", "trade_toward_pool",
+    # EQ clusters (FILL-time) — draw-toward + the instant-death stop-in-a-pool test
+    # + intact-shelf counts (screened as levels-as-is like ob_touches).
+    "eq_trade_toward", "eq_sl_at_risk",
+    "eq_intact_above_count", "eq_intact_below_count",
 ]
 
 ALL_FEATURES = CONTINUOUS_FEATURES + CATEGORICAL_FEATURES
@@ -156,12 +183,32 @@ ALL_FEATURES = CONTINUOUS_FEATURES + CATEGORICAL_FEATURES
 FILL_TIME_FEATURES = {
     "ob_to_fill_hours", "bars_break_to_pullback", "fill_session",
     "fill_in_killzone", "killzone_alignment",
+    # PD/PW pool + EQ columns are FILL-anchored (owner call 2026-07-16,
+    # h1_only_simulator.py:1677-1697): derived from bars strictly BEFORE fill_ts,
+    # because alert-time pool status can be stale by the time the limit fills. The
+    # `_at_alert` suffix on the pool/EQ names is HISTORICAL — the anchor is the
+    # fill. So they screen in Stage 1 but route to the order-rule track, never the
+    # alert-time EV model.
+    "day_state_at_alert", "pdh_status_at_alert", "pdl_status_at_alert",
+    "pwh_status_at_alert", "pwl_status_at_alert",
+    "dist_next_pool_above_atr", "dist_next_pool_below_atr",
+    "next_pool_above_tier", "next_pool_below_tier", "trade_toward_pool",
+    "eqh_above_dist_atr", "eqh_above_size", "eql_below_dist_atr", "eql_below_size",
+    "eq_trade_toward", "eq_sl_gap_atr", "eq_sl_at_risk",
+    "eq_intact_above_count", "eq_intact_below_count",
+    # Approach quality — fill-time by construction (RETRACE_QUALITY_SPEC §1.3).
+    "approach_speed_atr_at_fill", "approach_body_ratio_at_fill", "approach_er_at_fill",
 }
 
 # None-by-construction: screen each on its own valid subpopulation only, never
 # impute (SPEC §5.1 missing-value rule).
 FVG_ONLY_FEATURES = {"fvg_size_atr", "fvg_mitigation", "fvg_state"}  # need fvg_present
 DR_ONLY_FEATURES = {"pd_pct"}  # need a valid dealing range (non-null)
+# Weekly-PD: None until a completed prior week exists; screen on non-null only.
+WEEKLY_PD_ONLY_FEATURES = {"weekly_pd_position_at_alert", "weekly_pd_zone_at_alert",
+                           "pd_zone_agreement_at_alert"}
+# Pool/EQ/approach: None on never_filled rows (fill_ts=None) + thin history; screen
+# each on its own non-null subpopulation only (same rule as FVG_ONLY).
 
 # Outcome / geometry columns Stage 0 requires present (SPEC §4.1).
 REQUIRED_OUTCOME_COLS = [
@@ -776,11 +823,18 @@ def _discovery_quintile_edges(disc: pd.DataFrame, feat: str) -> Optional[List[fl
 def _feature_subpop(df: pd.DataFrame, feat: str) -> pd.DataFrame:
     """None-by-construction rule (SPEC §5.1): FVG features screened only on
     fvg_present==True; pd_pct only where the DR was valid (pd_pct non-null).
-    Never impute — restrict the screen to the feature's valid rows."""
+    Never impute — restrict the screen to the feature's valid rows.
+
+    The pool / EQ / weekly-PD / approach features are also None-by-construction:
+    None on never_filled rows (fill anchor) and on thin history. They are screened
+    on their own non-null subpopulation the same way — restricting to notna() is
+    the correct honest screen (a None is 'not measurable here', not a zero)."""
     if feat in FVG_ONLY_FEATURES and "fvg_present" in df.columns:
         return df[df["fvg_present"] == True].copy()  # noqa: E712
-    if feat in DR_ONLY_FEATURES:
-        return df[df[feat].notna()].copy()
+    if (feat in DR_ONLY_FEATURES or feat in WEEKLY_PD_ONLY_FEATURES
+            or feat in FILL_TIME_FEATURES):
+        if feat in df.columns:
+            return df[df[feat].notna()].copy()
     return df
 
 

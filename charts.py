@@ -77,6 +77,11 @@ POOL_W1_COLOR = "#c8a2ff"   # PWH / PWL — prior-week high & low
 POOL_LW_D1    = 1.0
 POOL_LW_W1    = 1.4
 
+# Equal-level shelves (EQH / EQL) — a distinct teal so they never read as a
+# PD/PW pool. Same dotted style, so the eye groups them as "resting liquidity".
+EQ_COLOR = "#4fd1c5"
+EQ_LW    = 1.0
+
 # Levels (Phase 2 trade chart)
 ENTRY_COLOR = "#e67e22"
 SL_COLOR    = "#e74c3c"
@@ -182,7 +187,8 @@ _POOL_LINES = (
 )
 
 
-def draw_pool_lines(ax, pools, *, x_right, in_view, zorder=2):
+def draw_pool_lines(ax, pools, *, x_right, in_view, zorder=2,
+                    y_min=None, y_max=None, x_center=None):
     """Draw the PD/PW liquidity levels as leftmost-labelled dotted lines.
 
     Shared by Phase 1 (scout) and Phase 2 (trade) so the pool levels can
@@ -197,13 +203,20 @@ def draw_pool_lines(ax, pools, *, x_right, in_view, zorder=2):
                 with candles); labels are placed at the LEFT edge (x=0) so
                 they read cleanly against the oldest candles.
       in_view : callable(price) -> bool. Only levels inside the caller's
-                proximity band are drawn, so a stale far level can't stretch
-                the y-axis or leave a stray line (mirrors the DR-wall gate).
+                proximity band get a full dotted line, so a stale far level
+                can't stretch the y-axis or leave a stray line.
+      y_min/y_max/x_center : plot bounds + horizontal centre. When given, an
+                off-view level is NOT dropped — instead a small arrow marker is
+                drawn at the top (level above view) or bottom (level below view)
+                edge with its label, so the vet knows the level EXISTS off-screen
+                and which way (point #6). Mirrors the DR-wall off-chart pattern.
+                Omit them to keep the old drop-if-off-view behaviour.
 
-    Returns the number of lines actually drawn (for logging / tests).
+    Returns the number of markers drawn (full lines + off-screen arrows).
     """
     if not pools:
         return 0
+    can_arrow = y_min is not None and y_max is not None and x_center is not None
     drawn = 0
     for key, label, tier in _POOL_LINES:
         pool = pools.get(key)
@@ -216,16 +229,91 @@ def draw_pool_lines(ax, pools, *, x_right, in_view, zorder=2):
             level = float(level)
         except (TypeError, ValueError):
             continue
-        if not in_view(level):
-            continue
         color = POOL_D1_COLOR if tier == "D1" else POOL_W1_COLOR
         lw    = POOL_LW_D1 if tier == "D1" else POOL_LW_W1
+        if not in_view(level):
+            # Off-view: draw an edge arrow so the level isn't silently lost.
+            if not can_arrow:
+                continue
+            above = level > y_max
+            edge_y = y_max if above else y_min
+            arrow = "↑" if above else "↓"
+            ax.text(x_center, edge_y, f"{arrow} {tier} {label}",
+                    color=color, fontsize=7, fontweight="bold",
+                    ha="center", va=("top" if above else "bottom"),
+                    zorder=zorder + 5,
+                    bbox=dict(facecolor=BG, edgecolor=color, linewidth=0.6,
+                              pad=1.5, alpha=0.85))
+            drawn += 1
+            continue
         ax.axhline(y=level, color=color, linewidth=lw, linestyle=":",
                    alpha=0.7, zorder=zorder)
         # Left-edge label: "D1 PDH" so the vet sees tier + which edge at a
         # glance. Boxed in the chart bg so it stays legible over candles.
         ax.text(0, level, f"  {tier} {label}",
                 color=color, fontsize=7, fontweight="bold",
+                ha="left", va="center", zorder=zorder + 5,
+                bbox=dict(facecolor=BG, edgecolor="none", pad=1.0, alpha=0.78))
+        drawn += 1
+    return drawn
+
+
+def draw_eq_lines(ax, eq_ctx, *, in_view, zorder=2,
+                  y_min=None, y_max=None, x_center=None):
+    """Draw INTACT equal-level shelves (EQH / EQL) as teal dotted lines (#5).
+
+    Same dotted style as the PD/PW pool lines so the eye reads them as the same
+    kind of thing (resting liquidity), but a distinct teal so they never blur
+    into a PD/PW level. Shared by Phase 1 and Phase 2 so the shelves can't drift
+    between the two emails.
+
+    Args:
+      eq_ctx  : an eq_pools live/backtest EQ context, i.e. ``{"clusters": [
+                {"side": "high"|"low", "level": float, "size": int,
+                 "status": "intact"|"swept"|"broken", ...}, ...], ...}``.
+                None / empty / no clusters is a no-op. Only INTACT shelves draw
+                — a spent shelf is no longer a live draw on price.
+      in_view : callable(price) -> bool. Off-view shelves get an edge arrow when
+                y_min/y_max/x_center are given (same rule as draw_pool_lines),
+                else they are dropped.
+
+    Returns the number of markers drawn (lines + off-screen arrows).
+    """
+    if not eq_ctx or not eq_ctx.get("clusters"):
+        return 0
+    can_arrow = y_min is not None and y_max is not None and x_center is not None
+    drawn = 0
+    for cl in eq_ctx["clusters"]:
+        if cl.get("status") != "intact":
+            continue
+        level = cl.get("level")
+        if level is None:
+            continue
+        try:
+            level = float(level)
+        except (TypeError, ValueError):
+            continue
+        label = "EQH" if cl.get("side") == "high" else "EQL"
+        size = cl.get("size")
+        tag = f"{label}" + (f" ×{size}" if size else "")
+        if not in_view(level):
+            if not can_arrow:
+                continue
+            above = level > y_max
+            edge_y = y_max if above else y_min
+            arrow = "↑" if above else "↓"
+            ax.text(x_center, edge_y, f"{arrow} {tag}",
+                    color=EQ_COLOR, fontsize=7, fontweight="bold",
+                    ha="center", va=("top" if above else "bottom"),
+                    zorder=zorder + 5,
+                    bbox=dict(facecolor=BG, edgecolor=EQ_COLOR, linewidth=0.6,
+                              pad=1.5, alpha=0.85))
+            drawn += 1
+            continue
+        ax.axhline(y=level, color=EQ_COLOR, linewidth=EQ_LW, linestyle=":",
+                   alpha=0.7, zorder=zorder)
+        ax.text(0, level, f"  {tag}",
+                color=EQ_COLOR, fontsize=7, fontweight="bold",
                 ha="left", va="center", zorder=zorder + 5,
                 bbox=dict(facecolor=BG, edgecolor="none", pad=1.0, alpha=0.78))
         drawn += 1

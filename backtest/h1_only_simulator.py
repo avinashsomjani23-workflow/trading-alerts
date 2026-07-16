@@ -1674,21 +1674,27 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # ── PD/PW LIQUIDITY POOLS (DAILY_BIAS_V4_SPEC §1.3) ────────────────────
         # 12 columns spread from ONE helper (day_state / pdh|pdl|pwh|pwl status /
         # nearest-unspent-pool distances+tiers / trade_toward_pool / last sweep
-        # age+tier), all *_at_alert: derived from H1 bars strictly BEFORE
-        # alert_ts (same rule as _closed_bars_at_alert) — price history is
-        # immutable, so no replay-yield freeze is needed (fvg_state precedent).
-        # The helper is defined BELOW simulate_h1_only_dual on purpose: any line
-        # added above this return dict would shift every ledger line-ref
-        # (tests/test_truth_ledger.py). Column list: pool_builder.POOL_FEATURE_COLUMNS.
-        **_pool_features_at_alert(df_h1, alert_ts, ob, entry),
+        # age+tier), anchored at the FILL bar: derived from H1 bars strictly
+        # BEFORE fill_ts. The fill candle is the latest info a real trade holds;
+        # alert-time pool status can be stale by the time the limit fills, so an
+        # alert-anchored status is not what the trade actually saw (owner call
+        # 2026-07-16). Observation only, no gate/score consumer, so fill-anchoring
+        # crosses no look-ahead wall. never_filled rows (fill_ts=None) -> all-None
+        # dict via the shim guard. The helper is defined BELOW simulate_h1_only_dual
+        # on purpose: any line added above this return dict would shift every
+        # ledger line-ref (tests/test_truth_ledger.py).
+        # Column list: pool_builder.POOL_FEATURE_COLUMNS.
+        **_pool_features_at_fill(df_h1, fill_ts, ob, entry),
         # ── EQH/EQL EQUAL-LEVEL CLUSTERS (2026-07-14) ──────────────────────────
         # 11 columns spread from ONE helper (nearest intact equal-highs /
         # equal-lows shelf distance+size / trade-toward / stop-vs-pool gap +
-        # at-risk flag / last EQ sweep age+side / intact counts), all at-alert:
-        # derived from H1 bars strictly BEFORE alert_ts (immutable history, no
-        # yield freeze needed — same rule as the pool columns above).
-        # Column list: eq_pools.EQ_FEATURE_COLUMNS. Observation only, no gate.
-        **_eq_features_at_alert(df_h1, alert_ts, ob, entry, sl),
+        # at-risk flag / last EQ sweep age+side / intact counts), anchored at the
+        # FILL bar: derived from H1 bars strictly BEFORE fill_ts — same fill
+        # anchor and rationale as the pool columns above. EQ is H1-only (built
+        # from H1 swings, no resample). Observation only, no gate.
+        # never_filled rows (fill_ts=None) -> all-None dict via the shim guard.
+        # Column list: eq_pools.EQ_FEATURE_COLUMNS.
+        **_eq_features_at_fill(df_h1, fill_ts, ob, entry, sl),
         # ── WEEKLY PD ZONE (higher-timeframe premium/discount, 2026-07-15) ─────
         # 5 columns spread from ONE helper: the weekly PD position (price vs
         # last COMPLETED week's high/low — may run <0 / >1 when price closed
@@ -1750,13 +1756,19 @@ def simulate_h1_only_dual(
     return [prox_row]
 
 
-def _pool_features_at_alert(df_h1, alert_ts, ob, entry):
+def _pool_features_at_fill(df_h1, fill_ts, ob, entry):
     """PD/PW pool columns for one row (pool_builder.POOL_FEATURE_COLUMNS).
 
-    Thin shim over pool_builder.features_at_alert — bars strictly before
-    alert_ts only, per-frame day/week resample cached inside pool_builder.
-    ATR denominator = ob['h1_atr'] (frozen OB-formation ATR), matching every
-    other *_atr feature column. ref_price = the placed entry.
+    Thin shim over pool_builder.features_at_alert (a generic asof helper — the
+    name is historical), anchored at the FILL bar: bars strictly before fill_ts
+    only, per-frame day/week resample cached inside pool_builder. The fill candle
+    is the latest info the trade holds; alert-anchored status can be stale by
+    fill. Observation only (no gate/score consumer), so fill-anchoring crosses no
+    look-ahead wall. ATR denominator = ob['h1_atr'] (frozen OB-formation ATR),
+    matching every other *_atr feature column. ref_price = the placed entry.
+
+    never_filled rows pass fill_ts=None -> all-None dict (no fill happened, so no
+    fill-anchored status exists), mirroring _approach_features_at_fill.
 
     DEFINED AFTER _build_row / simulate_h1_only_dual on purpose: a top-of-file
     import or any code line inserted above _build_row's return dict would
@@ -1765,30 +1777,39 @@ def _pool_features_at_alert(df_h1, alert_ts, ob, entry):
     Never raises (pool_builder guarantees the all-None dict on failure).
     """
     import pool_builder
+    if fill_ts is None:
+        return dict.fromkeys(pool_builder.POOL_FEATURE_COLUMNS)
     return pool_builder.features_at_alert(
-        df_h1, alert_ts,
+        df_h1, fill_ts,
         direction=ob.get("direction"),
         ref_price=entry,
         atr=ob.get("h1_atr"),
     )
 
 
-def _eq_features_at_alert(df_h1, alert_ts, ob, entry, sl):
+def _eq_features_at_fill(df_h1, fill_ts, ob, entry, sl):
     """EQH/EQL cluster columns for one row (eq_pools.EQ_FEATURE_COLUMNS).
 
-    Thin shim over eq_pools.features_at_alert — bars strictly before alert_ts
-    only, per-frame raw-swing pool cached inside eq_pools. ATR denominator =
-    ob['h1_atr'] (frozen OB-formation ATR), matching every other *_atr
-    column. ref_price = the placed entry; sl = the traded stop (sl_initial),
-    feeding the eq_sl_gap_atr / eq_sl_at_risk geometry.
+    Thin shim over eq_pools.features_at_alert (generic asof helper — name is
+    historical), anchored at the FILL bar: bars strictly before fill_ts only,
+    per-frame raw-swing pool cached inside eq_pools. EQ is H1-only (built from H1
+    swings, no resample). Same fill anchor and rationale as _pool_features_at_fill
+    above. ATR denominator = ob['h1_atr'] (frozen OB-formation ATR), matching
+    every other *_atr column. ref_price = the placed entry; sl = the traded stop
+    (sl_initial), feeding the eq_sl_gap_atr / eq_sl_at_risk geometry.
 
-    Same deliberate placement as _pool_features_at_alert above (defined after
+    never_filled rows pass fill_ts=None -> all-None dict, mirroring
+    _approach_features_at_fill.
+
+    Same deliberate placement as _pool_features_at_fill above (defined after
     _build_row so the ledger's row-build line-refs never shift). Never raises
     (eq_pools guarantees the all-None dict on failure).
     """
     import eq_pools
+    if fill_ts is None:
+        return dict.fromkeys(eq_pools.EQ_FEATURE_COLUMNS)
     return eq_pools.features_at_alert(
-        df_h1, alert_ts,
+        df_h1, fill_ts,
         direction=ob.get("direction"),
         entry=entry,
         sl=sl,

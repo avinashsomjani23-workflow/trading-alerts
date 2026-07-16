@@ -982,7 +982,7 @@ def generate_h1_zoomed_chart(df_h1, ob, pair_conf, title, levels=None):
 
 
 def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=None,
-                      pools=None):
+                      pools=None, eq_ctx=None):
     try:
         dp = pair_conf.get("decimal_places", 5)
         # Window widened 80 -> 130 to match the Phase 1 context chart. Same
@@ -1211,13 +1211,8 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
             if tp2_p > 0:
                 ax.axhline(y=tp2_p, color='#1e8449', linewidth=1.0, linestyle=':', alpha=0.85, zorder=3)
 
-        # --- PD/PW pool levels (PDH/PDL/PWH/PWL) ---
-        # Prior-day / prior-week high & low visible in the window, dotted D1/W1
-        # lines with left-edge labels — same shared style as the Phase 1 scout
-        # chart. Only in-view levels draw (proximity gate). Observation only.
-        if pool_lines:
-            charts.draw_pool_lines(ax, pool_lines, x_right=n + 5,
-                                   in_view=_pool_in_view, zorder=2)
+        # PD/PW + EQ liquidity lines are drawn AFTER the y-axis range is set
+        # (below), so off-screen edge arrows land on the final padded bounds.
 
         # --- Current price line ---
         current = float(df_plot['Close'].iloc[-1])
@@ -1329,8 +1324,25 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                     y_min = min(y_min, _lv_f)
                     y_max = max(y_max, _lv_f)
         pad = (y_max - y_min) * 0.08
-        ax.set_ylim(y_min - pad, y_max + pad)
+        _ylim_lo, _ylim_hi = y_min - pad, y_max + pad
+        ax.set_ylim(_ylim_lo, _ylim_hi)
         ax.set_xlim(-1, n + 8)
+
+        # --- PD/PW pool levels (PDH/PDL/PWH/PWL) + EQ shelves ---
+        # Same shared draw + style as the Phase 1 scout chart, so the two emails
+        # can't drift. In-view levels draw a full dotted line; off-view levels
+        # draw an edge arrow (↑/↓) on the final padded bounds (#6). EQ shelves
+        # (intact only) draw as teal dotted lines (#5). Observation only.
+        if pool_lines:
+            charts.draw_pool_lines(ax, pool_lines, x_right=n + 5,
+                                   in_view=_pool_in_view, zorder=2,
+                                   y_min=_ylim_lo, y_max=_ylim_hi,
+                                   x_center=n / 2.0)
+        if eq_ctx:
+            charts.draw_eq_lines(ax, eq_ctx, in_view=_pool_in_view, zorder=2,
+                                 y_min=_ylim_lo, y_max=_ylim_hi,
+                                 x_center=n / 2.0)
+
         ax.set_title(title, color='#dddddd', fontsize=11, pad=8, loc='left')
         ax.tick_params(colors='#888', labelsize=9)
         ax.yaxis.tick_right()
@@ -3097,7 +3109,7 @@ if __name__ == "__main__":
             # Renaming the CID would invalidate any cached email templates.
             h1_chart = generate_h1_chart(df_h1, ob, pair_conf,
                                          f"{name} H1 - {bias} zone context", levels, dr,
-                                         pools=pool_ctx)
+                                         pools=pool_ctx, eq_ctx=eq_ctx)
             m15_chart = generate_h1_zoomed_chart(
                 df_h1, ob, pair_conf,
                 f"{name} H1 zoomed - entry zone", levels
