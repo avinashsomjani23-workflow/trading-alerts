@@ -27,6 +27,10 @@ Four rules. Violating any one means the response is wrong — rewrite before sen
 
 **4. Response format.** Bullets and headers only, no paragraphs. Every word earns its place. Plain English, simple sentences.
 
+**5b. Alert-time is NOT "better" than fill-time — and never re-anchor without permission.**
+- Alert-time anchoring carries no quality bonus. Alert timing is subject to the PROXIMITY CAP (how close price must be before an alert fires) — it is a constrained snapshot, not a superior read. Never call a feature "better placed" or "well positioned" because it is alert-time. Judge every feature on its MECHANISM and its test result, never on when it is stamped.
+- NOTHING that is anchored to alert-time (or any time) gets re-anchored, moved, or re-timed without explicit permission in that turn. Proposing is fine; changing is not.
+
 **5. No 18-year backtest without an explicit ask.**
 - NEVER launch the full 18-yr run (2008→now) on your own judgment. It is slow and expensive. Run it ONLY when the user says so in that turn.
 - Default to SMART SAMPLING: a small, representative slice (a few months / a few pairs / a targeted window) proves or kills a hypothesis. Validate on a sample first; escalate to more data only when the sample is genuinely ambiguous, and say why.
