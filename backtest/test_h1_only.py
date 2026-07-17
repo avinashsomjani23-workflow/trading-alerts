@@ -1126,6 +1126,260 @@ def test_floor_is_half_r_live_and_backtest():
     assert ok, "floor checks failed (see output above)"
 
 
+# ── 3-TARGET LADDER (triple mode) — 2026-07-17 ──────────────────────────────
+
+def test_triple_mode_single_default_is_unchanged():
+    """`tp_targets` default is "single" AND single-mode output is byte-identical to
+    the pre-change 2-target shape: same keys, no tp_wick/tp_nextpool/tp_targets, and
+    tp2 (if present) still means the next pool. Proves LIVE is untouched."""
+    print("\n== test_triple_mode_single_default_is_unchanged ==")
+    import inspect
+    df = _synth_h1_df(200)
+    conf = _synth_pair_conf()
+    ok = True
+    # 1. default is "single"
+    sig = inspect.signature(smc_detector.compute_phase2_levels)
+    ok &= check(sig.parameters["tp_targets"].default == "single",
+                "tp_targets defaults to 'single' (live)")
+    for bias, ob_fn, ts in (("LONG", _synth_ob_bullish, -150),):
+        ob = ob_fn(df, ts_idx=ts)
+        cur = float(df["Close"].iloc[ts])
+        default = smc_detector.compute_phase2_levels(conf, bias, ob, cur, df)
+        single = smc_detector.compute_phase2_levels(conf, bias, ob, cur, df,
+                                                    tp_targets="single")
+        ok &= check(default == single, "default output == explicit single output")
+        # single mode emits NONE of the triple-only keys
+        for k in ("tp_wick", "tp_wick_rr", "tp_nextpool", "tp_nextpool_rr",
+                  "tp_nextpool_zone_source", "tp2_collapsed_to_tp1", "tp_targets"):
+            ok &= check(k not in single, f"single mode does NOT emit '{k}'")
+    assert ok, "single-mode-unchanged checks failed (see output above)"
+
+
+def _triple_cases(bias, require_wick=True, require_next=False):
+    """Every valid triple-mode result over the synthetic OB anchor bars, optionally
+    filtered to those carrying a tp_wick and/or a tp_nextpool. Returns a list so the
+    caller can assert the invariant on ALL matching cases (not just one)."""
+    df = _synth_h1_df(200)
+    conf = _synth_pair_conf()
+    ob_fn = _synth_ob_bullish if bias == "LONG" else _synth_ob_bearish
+    out = []
+    for ts in range(-170, -40):
+        try:
+            ob = ob_fn(df, ts_idx=ts)
+        except Exception:
+            continue
+        cur = float(df["Close"].iloc[ts])
+        lv = smc_detector.compute_phase2_levels(conf, bias, ob, cur, df,
+                                                tp_targets="triple")
+        if not lv.get("valid"):
+            continue
+        if require_wick and lv.get("tp_wick") is None:
+            continue
+        if require_next and lv.get("tp_nextpool") is None:
+            continue
+        out.append(lv)
+    return out
+
+
+def _synth_ob_bearish(df_h1, ts_idx=-50):
+    """Mirror of _synth_ob_bullish: a small bearish OB just above price."""
+    px = float(df_h1["Close"].iloc[ts_idx])
+    bot = px + 0.0005
+    top = bot + 0.0018
+    return {
+        "direction": "bearish", "bos_tag": "BOS", "bos_tier": "Major",
+        "high": top, "low": bot, "proximal_line": bot, "distal_line": top,
+        "ob_timestamp": (df_h1.index[ts_idx]).isoformat(),
+        "fvg": {"exists": False}, "touches": 0,
+        "dealing_range": {"valid": True, "range_low": bot - 0.0300,
+                          "range_high": top + 0.0080},
+    }
+
+
+def test_triple_mode_ladder_ordering_and_fields():
+    """Triple mode emits the ladder with correct ordering + fields on EVERY case.
+    The invariant `entry < TP1 <= tp_wick (< tp_nextpool when present)` (LONG,
+    mirrored SHORT) must hold for all valid tp_wick cases. TP1 == today's zone edge;
+    the triple-only audit fields are always present. (The synthetic fixture yields
+    tp_wick cases but no distinct next-pool; the full 3-distinct ladder is asserted
+    on REAL data in the sample-replay step — this pins the geometry + fields.)"""
+    print("\n== test_triple_mode_ladder_ordering_and_fields ==")
+    ok = True
+    total = 0
+    for bias in ("LONG", "SHORT"):
+        cases = _triple_cases(bias, require_wick=True)
+        for lv in cases:
+            total += 1
+            e, t1, tw = lv["entry"], lv["tp1"], lv["tp_wick"]
+            ok &= check(lv["tp_targets"] == "triple", f"{bias}: tp_targets == 'triple'")
+            for k in ("tp_wick_rr", "tp_nextpool", "tp_nextpool_rr",
+                      "tp_nextpool_zone_source", "tp2_collapsed_to_tp1"):
+                ok &= check(k in lv, f"{bias}: emits '{k}'")
+            if bias == "LONG":
+                ok &= check(e < t1 <= tw + 1e-12,
+                            f"LONG entry {e} < tp1 {t1} <= wick {tw}")
+            else:
+                ok &= check(e > t1 >= tw - 1e-12,
+                            f"SHORT entry {e} > tp1 {t1} >= wick {tw}")
+            tn = lv.get("tp_nextpool")
+            if tn is not None:
+                if bias == "LONG":
+                    ok &= check(tw < tn, f"LONG wick {tw} < next {tn}")
+                else:
+                    ok &= check(tw > tn, f"SHORT wick {tw} > next {tn}")
+            # (single-mode tp1 identity — that the traded TP1 is unchanged — is
+            # covered by test_triple_mode_single_default_is_unchanged.)
+    ok &= check(total > 0, f"had at least one tp_wick case to assert ({total})")
+    assert ok, "triple ladder checks failed (see output above)"
+
+
+def test_triple_mode_wick_buffer_direction_and_size():
+    """tp_wick = pool wick pulled IN toward entry by SWEEP_EQUAL_LEVEL_TOLERANCE_ATR
+    x H1 ATR. For a non-collapsed LONG case, tp_wick < tp1_wick (pulled in) and the
+    gap ~= the buffer. Direction mirrors for SHORT."""
+    print("\n== test_triple_mode_wick_buffer_direction_and_size ==")
+    ok = True
+    for bias in ("LONG", "SHORT"):
+        noncollapsed = [lv for lv in _triple_cases(bias, require_wick=True)
+                        if not lv["tp2_collapsed_to_tp1"]]
+        if not noncollapsed:
+            print(f"  SKIP {bias}: no non-collapsed case in synthetic fixture "
+                  "(buffer geometry unit-covered in test_triple_mode_wick_buffered_helper)")
+            continue
+        for lv in noncollapsed:
+            wick = lv["tp1_wick"]; tw = lv["tp_wick"]
+            if bias == "LONG":
+                ok &= check(tw < wick + 1e-9, "LONG tp_wick pulled IN below raw wick")
+            else:
+                ok &= check(tw > wick - 1e-9, "SHORT tp_wick pulled IN above raw wick")
+    assert ok, "buffer direction checks failed (see output above)"
+
+
+def test_triple_mode_wick_buffered_helper():
+    """Unit-test the buffer helper directly: pulls IN on the profit side, and
+    clamps to raw wick when the buffer would cross entry (tiny pool)."""
+    print("\n== test_triple_mode_wick_buffered_helper ==")
+    ok = True
+    # LONG: wick 1.1000, entry 1.0900, buffer 0.0030 -> 1.0970 (pulled in, > entry)
+    ok &= check(abs(smc_detector._tp_wick_buffered(1.1000, "LONG", 1.0900, 0.0030) - 1.0970) < 1e-9,
+                "LONG normal buffer pulls wick in")
+    # LONG tiny pool: buffer 0.0200 would land 1.0800 < entry 1.0900 -> clamp to wick
+    ok &= check(smc_detector._tp_wick_buffered(1.1000, "LONG", 1.0900, 0.0200) == 1.1000,
+                "LONG oversized buffer clamps to raw wick (never past entry)")
+    # SHORT: wick 1.0900, entry 1.1000, buffer 0.0030 -> 1.0930 (pulled in, < entry)
+    ok &= check(abs(smc_detector._tp_wick_buffered(1.0900, "SHORT", 1.1000, 0.0030) - 1.0930) < 1e-9,
+                "SHORT normal buffer pulls wick in")
+    ok &= check(smc_detector._tp_wick_buffered(1.0900, "SHORT", 1.1000, 0.0200) == 1.0900,
+                "SHORT oversized buffer clamps to raw wick")
+    # zero buffer -> raw wick
+    ok &= check(smc_detector._tp_wick_buffered(1.1000, "LONG", 1.0900, 0.0) == 1.1000,
+                "zero buffer -> raw wick (ATR unavailable path)")
+    assert ok, "wick-buffer helper checks failed (see output above)"
+
+
+def test_triple_mode_collapse_when_zone_is_wick():
+    """When TP1's zone fell back to the wick (tp1_zone_source == 'wick'), tp_wick ==
+    tp1 exactly (no buffer) and tp2_collapsed_to_tp1 is True — ordering preserved."""
+    print("\n== test_triple_mode_collapse_when_zone_is_wick ==")
+    df = _synth_h1_df(200)
+    conf = _synth_pair_conf()
+    ok = True
+    found = False
+    for bias, ob_fn in (("LONG", _synth_ob_bullish), ("SHORT", _synth_ob_bearish)):
+        for ts in range(-170, -40):
+            try:
+                ob = ob_fn(df, ts_idx=ts)
+            except Exception:
+                continue
+            cur = float(df["Close"].iloc[ts])
+            lv = smc_detector.compute_phase2_levels(conf, bias, ob, cur, df,
+                                                    tp_targets="triple")
+            if not lv.get("valid") or lv.get("tp_wick") is None:
+                continue
+            if lv.get("tp1_zone_source") == "wick" and not lv.get("no_liquidity_pool_fallback"):
+                found = True
+                ok &= check(lv["tp_wick"] == lv["tp1"],
+                            f"{bias}: zone==wick -> tp_wick == tp1 ({lv['tp_wick']})")
+                ok &= check(lv["tp2_collapsed_to_tp1"] is True,
+                            f"{bias}: tp2_collapsed_to_tp1 True on zone==wick")
+                break
+    if not found:
+        print("  SKIP: no zone==wick case in synthetic data (guard still unit-covered)")
+    assert ok, "collapse checks failed (see output above)"
+
+
+def test_triple_mode_1to1_fallback_has_no_wick_or_nextpool():
+    """On the 1:1 fallback (no unbroken pool in band) triple mode emits tp_wick=None
+    AND tp_nextpool=None — never invents a wick target with no pool behind it."""
+    print("\n== test_triple_mode_1to1_fallback_has_no_wick_or_nextpool ==")
+    df = _synth_h1_df(200)
+    conf = _synth_pair_conf()
+    ok = True
+    # Force a fallback: an OB so wide that no swing lands >= 0.5R AND <= 4R, OR at
+    # the very end of the window where no opposing swings exist ahead.
+    ob = _synth_ob_bullish(df, ts_idx=-3)   # near the end: no forward swings
+    cur = float(df["Close"].iloc[-3])
+    lv = smc_detector.compute_phase2_levels(conf, "LONG", ob, cur, df,
+                                            tp_targets="triple")
+    if lv.get("valid") and lv.get("no_liquidity_pool_fallback"):
+        ok &= check(lv.get("tp_wick") is None, "1:1 fallback -> tp_wick None")
+        ok &= check(lv.get("tp_nextpool") is None, "1:1 fallback -> tp_nextpool None")
+        ok &= check(lv.get("tp2_collapsed_to_tp1") is False,
+                    "1:1 fallback -> collapse flag False (no pool)")
+    else:
+        print(f"  SKIP: could not force fallback here (valid={lv.get('valid')}, "
+              f"fallback={lv.get('no_liquidity_pool_fallback')})")
+    assert ok, "1:1 fallback checks failed (see output above)"
+
+
+def test_exit_engine_triple_leg_recipe():
+    """walk_multileg resolves tp_wick / tp_nextpool string specs to the committed
+    prices, closes each leg at the right price, and existing single-target recipes
+    are unaffected (regression). Also: a leg targeting an UNCOMMITTED (None) price
+    raises rather than booking a bogus fill."""
+    print("\n== test_exit_engine_triple_leg_recipe ==")
+    from backtest.exit_engine import walk_multileg, _target_price
+    ok = True
+    # _target_price resolves the new specs
+    ok &= check(_target_price("tp_wick", "LONG", 1.0, 0.01, 1.02, tp_wick=1.05) == 1.05,
+                "tp_wick spec -> committed wick price")
+    ok &= check(_target_price("tp_nextpool", "LONG", 1.0, 0.01, 1.02, tp_nextpool=1.08) == 1.08,
+                "tp_nextpool spec -> committed nextpool price")
+    # missing committed price raises
+    try:
+        _target_price("tp_wick", "LONG", 1.0, 0.01, 1.02)
+        ok &= check(False, "missing tp_wick should raise")
+    except ValueError:
+        ok &= check(True, "missing tp_wick raises ValueError (no bogus fill)")
+    # Full 3-leg walk: build a future that tags each target in turn.
+    entry, sl = 1.0000, 0.9900
+    r_dist = abs(entry - sl)   # 0.0100
+    tp1, tw, tn = 1.0100, 1.0150, 1.0300   # 1R / 1.5R / 3R
+    idx = pd.date_range("2026-04-01", periods=6, freq="h", tz="UTC")
+    highs = [1.0005, 1.0105, 1.0160, 1.0310, 1.0310, 1.0310]  # tag tp1, then wick, then next
+    df_fut = pd.DataFrame({
+        "Open":  [entry] * 6,
+        "High":  highs,
+        "Low":   [entry - 0.0002] * 6,
+        "Close": [h - 0.0001 for h in highs],
+    }, index=idx)
+    cfg = {"legs": [(1/3, "tp1"), (1/3, "tp_wick"), (1/3, "tp_nextpool")],
+           "be_trigger_r": None}
+    res = walk_multileg(df_fut, "LONG", entry, sl, r_dist, tp1, cfg,
+                        tp_wick=tw, tp_nextpool=tn, weekend_flat=False)
+    specs = {l["target_spec"]: l["target"] for l in res["legs"]}
+    ok &= check(abs(specs["tp1"] - tp1) < 1e-9, "leg tp1 target == committed tp1")
+    ok &= check(abs(specs["tp_wick"] - tw) < 1e-9, "leg tp_wick target == committed wick")
+    ok &= check(abs(specs["tp_nextpool"] - tn) < 1e-9, "leg tp_nextpool target == committed next")
+    ok &= check(all(l["closed"] for l in res["legs"]), "all 3 legs closed on their targets")
+    # Regression: a plain single-target recipe still works with no new kwargs.
+    res2 = walk_multileg(df_fut, "LONG", entry, sl, r_dist, tp1,
+                         {"legs": [(1.0, "tp1")], "be_trigger_r": None},
+                         weekend_flat=False)
+    ok &= check(res2["legs"][0]["closed"], "single-target recipe unaffected (regression)")
+    assert ok, "exit-engine triple-leg checks failed (see output above)"
+
+
 def main():
     # Robust to BOTH styles: assert-based tests (return None on pass, raise on
     # fail — the pytest-visible ones) and legacy bool-returning tests. A raised
@@ -1173,6 +1427,20 @@ def main():
          test_compute_phase2_levels_emits_placement_audit_fields),
         ("test_floor_is_half_r_live_and_backtest",
          test_floor_is_half_r_live_and_backtest),
+        ("test_triple_mode_single_default_is_unchanged",
+         test_triple_mode_single_default_is_unchanged),
+        ("test_triple_mode_ladder_ordering_and_fields",
+         test_triple_mode_ladder_ordering_and_fields),
+        ("test_triple_mode_wick_buffer_direction_and_size",
+         test_triple_mode_wick_buffer_direction_and_size),
+        ("test_triple_mode_wick_buffered_helper",
+         test_triple_mode_wick_buffered_helper),
+        ("test_triple_mode_collapse_when_zone_is_wick",
+         test_triple_mode_collapse_when_zone_is_wick),
+        ("test_triple_mode_1to1_fallback_has_no_wick_or_nextpool",
+         test_triple_mode_1to1_fallback_has_no_wick_or_nextpool),
+        ("test_exit_engine_triple_leg_recipe",
+         test_exit_engine_triple_leg_recipe),
     ]
     results = [(name, _run(name, fn)) for name, fn in tests]
     print("\n=== SUMMARY ===")

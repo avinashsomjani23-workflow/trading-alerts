@@ -776,6 +776,11 @@ _EXIT_RECIPE_LABELS = {
     "C_fullTP_1.5R":         "Fixed TP 1.5R",
     "C_fullTP_2.0R":         "Fixed TP 2.0R",
     "D_partial50_1R_runLiq": "Partial 50% @1R, runner to TP1",
+    # 3-target ladder (2026-07-17): zone (TP1) / wick (pool A magnet) / next pool.
+    "E_zoneTP_be1.0":              "Zone TP (TP1) + BE@1R",
+    "E_wickTP_be1.0":              "Wick TP + BE@1R",
+    "E_partial_zone_then_wick":    "50% zone, 50% wick",
+    "E_partial_zone_wick_nextpool": "Thirds: zone / wick / next pool",
 }
 _EXIT_BASELINE_KEY = "baseline_liqTP_be1.0"
 
@@ -1294,6 +1299,14 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # and the source ("zone" opposing-OB edge used | "wick" fallback).
         "tp1_wick", "tp1_wick_rr", "tp1_zone_source",
         "tp2_wick", "tp2_zone_source",
+        # 3-TARGET LADDER (backtest triple mode, 2026-07-17). Unambiguous names —
+        # `tp2` above still means "next pool". tp_wick = pool-A liquidity wick
+        # (buffered); tp_nextpool = the runner (next different pool); tp2_collapsed_
+        # to_tp1 = wick landed on TP1; tp_targets = "triple" marker. Consumed by the
+        # exit recipes via walk_multileg "tp_wick"/"tp_nextpool" specs.
+        "tp_wick", "tp_wick_rr",
+        "tp_nextpool", "tp_nextpool_rr", "tp_nextpool_zone_source",
+        "tp2_collapsed_to_tp1", "tp_targets",
         "exit_reason", "exit_price",
         "r_realised", "r_if_exit_tp1", "r_if_exit_tp2", "pnl_usd",
         # Headline membership: True rows sum to the email headline. When False,

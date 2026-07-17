@@ -35,9 +35,14 @@ walk_multileg(future, bias, entry, sl, r_distance, tp1, config, ...)
   entry,sl    : floats (sl already spread-widened).
   r_distance  : abs(entry - sl) (1R in price).
   tp1         : the liquidity TP price (used by legs whose target spec is "tp1").
+  tp_wick     : pool-A buffered wick TP (triple mode); used by "tp_wick" legs. None
+                when not committed -> a "tp_wick" leg raises (never a bogus price).
+  tp_nextpool : the runner, next different pool B (triple mode); used by
+                "tp_nextpool" legs. None when not committed -> raises for that leg.
   config      : {
       "legs": [(fraction, target_spec), ...]   # fractions sum to 1.0
-                 target_spec = float R-multiple (e.g. 1.0) OR "tp1" (liquidity).
+                 target_spec = float R-multiple (e.g. 1.0) OR one of the committed
+                 structural TP names "tp1" | "tp_wick" | "tp_nextpool".
       "be_trigger_r": float | None,            # arm BE at +X R; None = no BE.
       "be_to_r": float,                        # move stop to this R (default 0.0).
       "trail_r": float | None,                 # trailing stop distance in R; None
@@ -65,11 +70,29 @@ TargetSpec = Union[float, str]
 
 
 def _target_price(spec: TargetSpec, bias: str, entry: float,
-                  r_distance: float, tp1: float) -> float:
-    """Resolve a leg target spec to an absolute price."""
+                  r_distance: float, tp1: float,
+                  tp_wick: Optional[float] = None,
+                  tp_nextpool: Optional[float] = None) -> float:
+    """Resolve a leg target spec to an absolute price.
+
+    String specs name a committed structural TP price:
+      "tp1"          -> the liquidity TP1 (zone edge of pool A).
+      "tp_wick"      -> pool A's buffered liquidity wick (triple-mode 2nd target).
+      "tp_nextpool"  -> the next DIFFERENT pool B, the runner (triple-mode 3rd).
+    A numeric spec is an R-multiple off entry. A string spec whose price was not
+    committed for this trade (None) is a config error for THIS trade -> raise, so a
+    recipe never silently books a leg at a bogus price."""
     if isinstance(spec, str):
         if spec == "tp1":
             return tp1
+        if spec == "tp_wick":
+            if tp_wick is None:
+                raise ValueError("leg targets 'tp_wick' but no tp_wick committed")
+            return tp_wick
+        if spec == "tp_nextpool":
+            if tp_nextpool is None:
+                raise ValueError("leg targets 'tp_nextpool' but no tp_nextpool committed")
+            return tp_nextpool
         raise ValueError(f"unknown target spec {spec!r}")
     # numeric R-multiple
     return entry + spec * r_distance if bias == "LONG" else entry - spec * r_distance
@@ -89,6 +112,8 @@ def walk_multileg(
     tp1: float,
     config: Dict[str, Any],
     *,
+    tp_wick: Optional[float] = None,
+    tp_nextpool: Optional[float] = None,
     weekend_flat: bool = True,
     weekend_hour_utc: int = 18,
     max_hold: int = 48,
@@ -102,7 +127,8 @@ def walk_multileg(
         raise ValueError(f"leg fractions must sum to 1.0, got {frac_sum}")
     legs: List[Dict[str, Any]] = []
     for frac, spec in raw_legs:
-        tprice = _target_price(spec, bias, entry, r_distance, tp1)
+        tprice = _target_price(spec, bias, entry, r_distance, tp1,
+                               tp_wick=tp_wick, tp_nextpool=tp_nextpool)
         legs.append({
             "frac": float(frac),
             "target_spec": spec,

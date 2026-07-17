@@ -62,6 +62,17 @@ CONFIGS: Dict[str, Dict[str, Any]] = {
     # <15 prior bars are skipped for this recipe (real ATR unavailable; never faked).
     "E_atr_sl1.5_tp2.5":     {"legs": [(1.0, "atr_tp")], "be_trigger_r": None,
                               "atr_sl_mult": 1.5, "atr_tp_mult": 2.5, "atr_period": 14},
+    # ── 3-TARGET LADDER (2026-07-17) — triple-mode structural TPs ────────────────
+    # Only run on trades that committed the needed target (guarded in _replay).
+    #   zone     = TP1 (pool A zone edge)  — the conservative reversal-zone read.
+    #   wick     = tp_wick (pool A liquidity wick, buffered)  — the true magnet.
+    #   nextpool = tp_nextpool (pool B, the runner).
+    "E_zoneTP_be1.0":              {"legs": [(1.0, "tp1")], "be_trigger_r": 1.0, "be_to_r": 0.0},
+    "E_wickTP_be1.0":              {"legs": [(1.0, "tp_wick")], "be_trigger_r": 1.0, "be_to_r": 0.0},
+    "E_partial_zone_then_wick":    {"legs": [(0.5, "tp1"), (0.5, "tp_wick")],
+                                    "be_trigger_r": 1.0, "be_to_r": 0.0},
+    "E_partial_zone_wick_nextpool": {"legs": [(1/3, "tp1"), (1/3, "tp_wick"), (1/3, "tp_nextpool")],
+                                     "be_trigger_r": 1.0, "be_to_r": 0.0},
 }
 
 
@@ -148,6 +159,17 @@ def _replay(trades: pd.DataFrame, bars: Dict[str, pd.DataFrame]) -> pd.DataFrame
         if r_distance <= 0:
             skipped += 1
             continue
+        # Triple-target ladder prices (2026-07-17). Committed on the trade row by
+        # the simulator (triple mode). A recipe leg targeting "tp_wick"/"tp_nextpool"
+        # gets the committed price; None when the trade had no such target (1:1
+        # fallback, no runner) -> walk_multileg raises for that leg, so those
+        # recipes are only run when the price exists (guarded below). NaN in the CSV
+        # (missing/blank) is treated as None.
+        def _price(col):
+            v = t.get(col)
+            return None if v is None or (isinstance(v, float) and pd.isna(v)) else float(v)
+        tp_wick = _price("tp_wick")
+        tp_nextpool = _price("tp_nextpool")
         base = {
             "pair": pair, "quarter": _quarter(t["alert_ts"]),
             "alert_ts": t["alert_ts"], "fill_ts": t["fill_ts"],
@@ -187,7 +209,20 @@ def _replay(trades: pd.DataFrame, bars: Dict[str, pd.DataFrame]) -> pd.DataFrame
             run_cfg = dict(cfg)
             if r_legs is not None:
                 run_cfg["legs"] = r_legs
+            # Structural-target guard: a recipe that targets "tp_wick"/"tp_nextpool"
+            # can only run on a trade that committed that price. When it is missing
+            # (1:1 fallback, or no runner / collapsed away), emit a NaN row (same
+            # as the ATR-unavailable path) rather than raising — the summary drops
+            # NaN so a recipe's stats are computed on the trades it actually ran.
+            _specs = {spec for _, spec in run_cfg["legs"] if isinstance(spec, str)}
+            if ("tp_wick" in _specs and tp_wick is None) or \
+               ("tp_nextpool" in _specs and tp_nextpool is None):
+                rows.append({**base, "config": name, "r": np.nan,
+                             "recipe_exit_reason": "no_target",
+                             "recipe_mfe_r": np.nan, "recipe_mae_r": np.nan})
+                continue
             res = walk_multileg(future, bias, entry, r_sl, r_rd, r_tp1, run_cfg,
+                                tp_wick=tp_wick, tp_nextpool=tp_nextpool,
                                 weekend_flat=wk_flat, weekend_hour_utc=wk_hour,
                                 max_hold=max_hold)
             rows.append({**base, "config": name, "r": res["r_realised"],

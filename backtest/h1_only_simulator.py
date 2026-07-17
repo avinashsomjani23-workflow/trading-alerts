@@ -522,6 +522,7 @@ def _simulate_single_entry(
         levels = smc_detector.compute_phase2_levels(
             pair_conf, bias, ob, current_price, df_h1_at_alert,
             entry_zone=entry_zone, tp1_min_rr=BACKTEST_TP1_MIN_RR,
+            tp_targets="triple",
         )
     except Exception as e:
         log_event("h1only_levels_error", level="error", pair=pair,
@@ -538,17 +539,38 @@ def _simulate_single_entry(
     entry  = float(levels["entry"])
     sl     = float(levels["sl"])
     tp1    = float(levels["tp1"])
-    tp2    = float(levels["tp2"]) if levels.get("tp2") is not None else None
+    # TRIPLE mode (backtest, 2026-07-17): compute_phase2_levels returns the 3-target
+    # ladder. The next-different-pool runner comes back as `tp_nextpool` (single
+    # mode's `tp2`); the SAME-pool buffered wick target comes back as `tp_wick`.
+    #   - Backtest `tp2` local KEEPS its historical meaning = next pool (so every
+    #     downstream reader, the ordering guard, r_if_exit_tp2 and bars_to_tp2 are
+    #     unchanged). It reads from tp_nextpool.
+    #   - tp_wick / tp_nextpool are emitted as new, unambiguous columns; the exit
+    #     recipes target them via walk_multileg string specs.
+    tp_nextpool = levels.get("tp_nextpool")
+    tp2    = float(tp_nextpool) if tp_nextpool is not None else None
     tp1_rr = float(levels.get("rr", 0.0))
-    tp2_rr = float(levels.get("tp2_rr", 0.0)) if tp2 is not None else 0.0
+    tp2_rr = float(levels.get("tp_nextpool_rr", 0.0)) if tp2 is not None else 0.0
     # TP-placement audit (2026-07-15): the zone-edge TP vs the raw swing wick it
     # replaced, and both RRs. Lets the analysis separate "nearer TP" (zone vs
     # wick) from "lower floor" (0.5). Straight pass-through of compute_phase2_levels.
     tp1_wick = levels.get("tp1_wick")
     tp1_wick_rr = float(levels.get("tp1_wick_rr", 0.0))
     tp1_zone_source = levels.get("tp1_zone_source", "wick")
+    # tp2_wick / tp2_zone_source audit the NEXT-POOL runner's raw wick + source
+    # (same meaning as before — `tp2` == next pool). In triple mode the runner is
+    # zone-edge placed by tp_nextpool_zone_source.
     tp2_wick = levels.get("tp2_wick")
-    tp2_zone_source = levels.get("tp2_zone_source", "wick") if tp2 is not None else None
+    tp2_zone_source = (levels.get("tp_nextpool_zone_source", "wick")
+                       if tp2 is not None else None)
+    # Triple-mode 3rd/wick target set (new): the same-pool buffered wick and the
+    # runner, plus the collapse flag and mode marker. Passed straight to the row.
+    tp_wick = levels.get("tp_wick")
+    tp_wick_rr = levels.get("tp_wick_rr")
+    tp_nextpool_rr = levels.get("tp_nextpool_rr")
+    tp_nextpool_zone_source = levels.get("tp_nextpool_zone_source")
+    tp2_collapsed_to_tp1 = levels.get("tp2_collapsed_to_tp1", False)
+    tp_targets = levels.get("tp_targets", "triple")
 
     # Apply pair spread to widen SL (worst-case execution). spread_pips is
     # the pair's typical broker spread. pip_size derived from decimal_places:
@@ -883,6 +905,10 @@ def _simulate_single_entry(
             tp1_rr=tp1_rr, tp2_rr=tp2_rr,
             tp1_wick=tp1_wick, tp1_wick_rr=tp1_wick_rr, tp1_zone_source=tp1_zone_source,
             tp2_wick=tp2_wick, tp2_zone_source=tp2_zone_source,
+            tp_wick=tp_wick, tp_wick_rr=tp_wick_rr,
+            tp_nextpool=tp_nextpool, tp_nextpool_rr=tp_nextpool_rr,
+            tp_nextpool_zone_source=tp_nextpool_zone_source,
+            tp2_collapsed_to_tp1=tp2_collapsed_to_tp1, tp_targets=tp_targets,
             score=score, breakdown=breakdown,
             df_h1=df_h1, alert_ts=alert_ts,
             fill_ts=None, exit_ts=None, exit_reason="never_filled",
@@ -1103,10 +1129,21 @@ def _simulate_single_entry(
     if EXIT_LAB_CONFIGS and EXIT_LAB_SINK is not None and fill_bar_idx >= 0:
         from backtest.exit_engine import walk_multileg
         _post = future.iloc[fill_bar_idx:]
+        # Structural-target coercion: tp_wick/tp_nextpool are floats or None here.
+        _tpw = float(tp_wick) if tp_wick is not None else None
+        _tpn = float(tp_nextpool) if tp_nextpool is not None else None
         for _name, _cfg in EXIT_LAB_CONFIGS.items():
+            # A recipe that targets a structural TP we did not commit for this trade
+            # (tp_wick / tp_nextpool absent) can't run — skip it rather than let
+            # walk_multileg raise (same policy as exit_lab._replay's no_target guard).
+            _specs = {s for _, s in _cfg["legs"] if isinstance(s, str)}
+            if ("tp_wick" in _specs and _tpw is None) or \
+               ("tp_nextpool" in _specs and _tpn is None):
+                continue
             try:
                 _res = walk_multileg(
                     _post, bias, entry, sl, r_distance, tp1, _cfg,
+                    tp_wick=_tpw, tp_nextpool=_tpn,
                     weekend_flat=WEEKEND_FLAT,
                     weekend_hour_utc=WEEKEND_FLAT_HOUR_UTC,
                     max_hold=MAX_HOLD_H1_BARS,
@@ -1135,6 +1172,10 @@ def _simulate_single_entry(
         tp1_rr=tp1_rr, tp2_rr=tp2_rr,
         tp1_wick=tp1_wick, tp1_wick_rr=tp1_wick_rr, tp1_zone_source=tp1_zone_source,
         tp2_wick=tp2_wick, tp2_zone_source=tp2_zone_source,
+        tp_wick=tp_wick, tp_wick_rr=tp_wick_rr,
+        tp_nextpool=tp_nextpool, tp_nextpool_rr=tp_nextpool_rr,
+        tp_nextpool_zone_source=tp_nextpool_zone_source,
+        tp2_collapsed_to_tp1=tp2_collapsed_to_tp1, tp_targets=tp_targets,
         score=score, breakdown=breakdown,
         df_h1=df_h1, alert_ts=alert_ts,
         fill_ts=fill_ts, exit_ts=exit_ts, exit_reason=exit_reason,
@@ -1296,7 +1337,10 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                bars_break_to_pullback=None,
                be_arm_bar_touched_entry=None,
                tp1_wick=None, tp1_wick_rr=None, tp1_zone_source=None,
-               tp2_wick=None, tp2_zone_source=None) -> Dict[str, Any]:
+               tp2_wick=None, tp2_zone_source=None,
+               tp_wick=None, tp_wick_rr=None,
+               tp_nextpool=None, tp_nextpool_rr=None, tp_nextpool_zone_source=None,
+               tp2_collapsed_to_tp1=None, tp_targets=None) -> Dict[str, Any]:
     """Assemble the final trade row dict in stable column order."""
     direction = ob.get("direction", "?")
     # FIX 3d: mutable OB state (touches, fvg) is frozen at the replay yield into
@@ -1515,6 +1559,20 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "tp1_zone_source":  tp1_zone_source,
         "tp2_wick":         tp2_wick,
         "tp2_zone_source":  tp2_zone_source,
+        # 3-TARGET LADDER (backtest triple mode, 2026-07-17). Unambiguous names so
+        # `tp2` above keeps meaning "next pool" for every existing reader. tp_wick =
+        # same-pool-as-TP1 liquidity wick front-run by the equal-level buffer;
+        # tp_nextpool = the runner (next DIFFERENT pool, zone-edge, uncapped RR).
+        # tp2_collapsed_to_tp1 = tp_wick landed on TP1 (zone==wick / tiny-pool guard
+        # / rounding). None on a 1:1 fallback (no pool). Consumed by the exit recipes
+        # via walk_multileg "tp_wick"/"tp_nextpool" string specs.
+        "tp_wick":                 tp_wick,
+        "tp_wick_rr":              round(tp_wick_rr, 3) if tp_wick_rr is not None else None,
+        "tp_nextpool":             tp_nextpool,
+        "tp_nextpool_rr":          round(tp_nextpool_rr, 3) if tp_nextpool_rr is not None else None,
+        "tp_nextpool_zone_source": tp_nextpool_zone_source,
+        "tp2_collapsed_to_tp1":    tp2_collapsed_to_tp1,
+        "tp_targets":              tp_targets,
         "exit_price":    exit_price,
         "exit_reason":   exit_reason,
         "r_realised":    r_realised,

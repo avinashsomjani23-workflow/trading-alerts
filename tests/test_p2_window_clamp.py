@@ -47,11 +47,21 @@ def _bad(m):
 
 
 def _build_frame():
-    """400-bar LONG frame. Two isolated opposing swing HIGHS:
-      - idx 100 (300 bars back, OUTSIDE the 200 window): price 1.0040 -> NEARER
-        to entry (would be TP1 if visible).
-      - idx 350 (50 bars back, INSIDE the 200 window): price 1.0080 -> farther.
-    Entry = OB top 1.0000. So clamped picks 1.0080; unclamped picks 1.0040.
+    """400-bar LONG frame with ONE isolated, UNBROKEN opposing swing HIGH:
+      - idx 100 (300 bars back, OUTSIDE the 200 window): price 1.0080.
+    It is the highest bar in the frame, so nothing later pierces it -> it stays
+    UNBROKEN (`is_swing_active` keeps it). The in-window region (last 200 bars) has
+    NO qualifying opposing high. Entry = OB top 1.0000.
+
+    So: UNCLAMPED sees the 1.0080 pool -> TP1 is a real swing target. CLAMPED (last
+    200 bars only) cannot see idx 100 and finds no pool -> falls back to a mechanical
+    1:1. The clamp flips tp1_source swing -> fallback_1to1, proving it is live.
+
+    (Rewritten 2026-07-17 for the unbroken-pool filter: the old fixture used a
+    NEARER out-of-window high [1.0040] + a FARTHER in-window high [1.0080], but a
+    later higher high necessarily SWEEPS the nearer one, so `is_swing_active` now
+    correctly drains 1.0040 and the old "unclamped picks 1.0040" premise is
+    geometrically impossible. This fixture keeps the out-of-window pool unbroken.)
     """
     N = 400
     idx = pd.date_range("2020-01-01", periods=N, freq="h", tz="UTC")
@@ -59,7 +69,7 @@ def _build_frame():
     close = np.full(N, base)
     high = np.full(N, base + 0.0002)
     low = np.full(N, base - 0.0002)
-    for i, p in [(100, 1.0040), (350, 1.0080)]:  # clean isolated swing highs
+    for i, p in [(100, 1.0080)]:  # the ONE unbroken swing high, outside the window
         high[i] = p
         close[i] = p - 0.0001
         low[i] = p - 0.0003
@@ -76,7 +86,7 @@ def _tp1(frame):
     res = smc_detector.compute_phase2_levels(
         pair_conf, "LONG", ob, 1.0000, frame,
         entry_zone="proximal", tp1_min_rr=1.5)
-    return res.get("valid"), res.get("tp1")
+    return res.get("valid"), res.get("tp1"), res.get("tp1_source")
 
 
 # --- 1) constant is 200 and lives in smc_detector ---------------------------
@@ -124,20 +134,23 @@ def test_clamp_changes_tp1():
     clamped = h1_only_simulator._closed_bars_at_alert(df, alert_ts)
     unclamped = df.loc[df.index < alert_ts]  # full closed history, no tail
 
-    valid_c, tp1_c = _tp1(clamped)
-    valid_u, tp1_u = _tp1(unclamped)
+    valid_c, tp1_c, src_c = _tp1(clamped)
+    valid_u, tp1_u, src_u = _tp1(unclamped)
 
-    # Unclamped sees the nearer 300-bar-back swing (1.0040); clamped cannot,
-    # so it picks the farther in-window swing (1.0080).
+    # Unclamped sees the unbroken out-of-window pool (1.0080) -> real swing TP.
+    # Clamped (last 200 bars) cannot see idx 100 -> no pool -> mechanical 1:1.
+    # The clamp flips tp1_source swing -> fallback_1to1, proving it is live.
     if not (valid_c and valid_u):
         _bad(f"expected both valid; clamped={valid_c}, unclamped={valid_u}")
         return
-    if abs(tp1_u - 1.0040) < 1e-9 and abs(tp1_c - 1.0080) < 1e-9:
-        _ok("clamp is LIVE: unclamped tp1=1.0040 (300-bar swing), "
-            "clamped tp1=1.0080 (200-window swing)")
+    if (src_u == "swing" and abs(tp1_u - 1.0080) < 1e-9
+            and src_c == "fallback_1to1"):
+        _ok("clamp is LIVE: unclamped tp1=1.0080 (unbroken out-of-window swing), "
+            "clamped falls back to 1:1 (pool invisible in the 200-bar window)")
     else:
-        _bad(f"clamp did not change TP1 as expected: clamped tp1={tp1_c}, "
-             f"unclamped tp1={tp1_u} (want 1.0080 / 1.0040)")
+        _bad(f"clamp did not change TP1 selection as expected: "
+             f"unclamped tp1={tp1_u} src={src_u} (want 1.0080/swing); "
+             f"clamped tp1={tp1_c} src={src_c} (want fallback_1to1)")
 
 
 # --- 4) source tripwires: live + backtest use the SAME window ---------------
