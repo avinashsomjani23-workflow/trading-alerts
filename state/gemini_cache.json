@@ -7,5 +7,11 @@
   },
   "GOLD|2026-07-17": {
     "macro_summary": "The Prelim UoM Consumer Sentiment and Prelim UoM Inflation Expectations at 19:30 IST are the only scheduled high-impact events. Higher sentiment and inflation expectations would hurt this short gold trade, while lower readings would help it."
+  },
+  "EURUSD|2026-07-17": {
+    "macro_summary": "Prelim UoM Consumer Sentiment and Inflation Expectations at 19:30 IST are the key events. Stronger sentiment and lower inflation expectations would hurt this EURUSD SHORT trade, while weaker sentiment and higher inflation expectations would help. These events are still to come."
+  },
+  "USDCHF|2026-07-17": {
+    "macro_summary": "The Prelim UoM Consumer Sentiment and Prelim UoM Inflation Expectations at 19:30 IST are the key USD events. Higher sentiment and lower inflation expectations would help this USDCHF LONG trade, while the opposite would hurt it."
   }
 }
