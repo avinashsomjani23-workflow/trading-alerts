@@ -2313,7 +2313,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-15T19:36:01.337327",
-      "last_seen_ist": "2026-07-17T18:35:57.596888",
+      "last_seen_ist": "2026-07-17T19:35:53.751298",
       "last_email_day": "2026-07-17",
       "still_valid_count": 1,
       "reentry_armed": false,
@@ -2563,7 +2563,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-16T15:35:54.691152",
-      "last_seen_ist": "2026-07-17T18:35:57.596888",
+      "last_seen_ist": "2026-07-17T19:35:53.751298",
       "last_email_day": "2026-07-17",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -2801,23 +2801,23 @@
       "approach_asof_utc": "2026-07-16T11:00:00+00:00"
     },
     "EURUSD_SHORT_BOS_1.1461_2026-07-16T11": {
-      "score_int": 6,
-      "score_raw": 6.0,
-      "score_high_water": 6.0,
+      "score_int": 5,
+      "score_raw": 5.0,
+      "score_high_water": 5.0,
       "score_low_water": 5.0,
       "breakdown": {
         "structure": 3,
         "sweep": 0.0,
         "fvg": 0,
-        "freshness": 2,
+        "freshness": 1,
         "killzone": 1
       },
       "alert_ist": "2026-07-16T18:35:56.807364",
-      "last_seen_ist": "2026-07-17T18:35:57.596888",
-      "last_email_day": "2026-07-16",
+      "last_seen_ist": "2026-07-17T19:35:53.751298",
+      "last_email_day": "2026-07-17",
       "still_valid_count": 0,
-      "reentry_armed": true,
-      "max_exit_distance": 0.0029200000000000337,
+      "reentry_armed": false,
+      "max_exit_distance": 0.0,
       "bias": "SHORT",
       "pair": "EURUSD",
       "ob_snapshot": {
@@ -2826,9 +2826,9 @@
         "drop_reason": null,
         "first_seen_iso": "2026-07-16T18:33:52.468893",
         "first_seen_label": "18:33 IST",
-        "last_seen_iso": "2026-07-16T18:33:52.468893",
+        "last_seen_iso": "2026-07-17T18:33:50.612518",
         "last_seen_label": "18:33 IST",
-        "is_new_this_scan": true,
+        "is_new_this_scan": false,
         "ob_timestamp": "2026-07-16T11:00:00+00:00",
         "direction": "bearish",
         "bos_tag": "BOS",
@@ -2844,23 +2844,23 @@
         "median_leg_body": 0.0005149999999999322,
         "body_ratio": 0.63,
         "walkback_depth": 0,
-        "bos_idx": 148,
-        "ob_idx": 147,
-        "impulse_start_idx": 143,
+        "bos_idx": 124,
+        "ob_idx": 123,
+        "impulse_start_idx": 119,
         "impulse_start_price": 1.1477,
         "bos_swing_price": 1.14605,
         "bos_sequence_count": 1,
         "break_quality": {
           "tier": "solid",
-          "close_beyond_atr": 1.48,
-          "body_atr": 2.38,
-          "excess": 2.38
+          "close_beyond_atr": 1.53,
+          "body_atr": 2.46,
+          "excess": 2.46
         },
-        "touches": 0,
-        "status_label": "Pristine",
+        "touches": 1,
+        "status_label": "Tested (1x proximal)",
         "h1_atr": 0.0008450000000000005,
-        "current_price_at_scan": 1.14467,
-        "distance_to_proximal_pips": 11.2,
+        "current_price_at_scan": 1.14277,
+        "distance_to_proximal_pips": 30.2,
         "fvg": {
           "exists": false,
           "fvg_top": null,
@@ -2903,15 +2903,15 @@
         },
         "dealing_range": {
           "valid": true,
-          "range_high": 1.14818,
-          "range_low": 1.14068,
-          "equilibrium": 1.1444299999999998,
-          "tentative": false,
+          "range_high": 1.14522,
+          "range_low": 1.14254,
+          "equilibrium": 1.1438799999999998,
+          "tentative": true,
           "chop_flag": false,
           "last_event_type": "BOS",
           "source": "h4_dealing_range",
           "ceiling_broken": false,
-          "floor_broken": false
+          "floor_broken": true
         },
         "role": "primary",
         "_zone_id": "EURUSD_SHORT_BOS_1.1461_2026-07-16T11",
@@ -2920,10 +2920,10 @@
         "sweep_tf": "H1",
         "sweep_timestamp": null
       },
-      "approach_speed_atr_at_email": -2.142,
-      "approach_body_ratio_at_email": 0.578,
-      "approach_er_at_email": 0.544,
-      "approach_asof_utc": "2026-07-16T12:00:00+00:00"
+      "approach_speed_atr_at_email": 1.03,
+      "approach_body_ratio_at_email": 0.549,
+      "approach_er_at_email": 0.289,
+      "approach_asof_utc": "2026-07-17T13:00:00+00:00"
     },
     "USDJPY_LONG_BOS_162.18_2026-07-16T10": {
       "score_int": 4,
@@ -3063,7 +3063,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-16T20:35:54.458906",
-      "last_seen_ist": "2026-07-17T18:35:57.596888",
+      "last_seen_ist": "2026-07-17T19:35:53.751298",
       "last_email_day": "2026-07-17",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -3178,7 +3178,7 @@
     "GOLD_SHORT_BOS_4023.1_2026-07-16T11": {
       "score_int": 4,
       "score_raw": 4.0,
-      "score_high_water": 4.0,
+      "score_high_water": 6.0,
       "score_low_water": 4.0,
       "breakdown": {
         "structure": 1,
@@ -3188,7 +3188,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-16T20:35:54.458906",
-      "last_seen_ist": "2026-07-17T18:35:57.596888",
+      "last_seen_ist": "2026-07-17T19:35:53.751298",
       "last_email_day": "2026-07-17",
       "still_valid_count": 1,
       "reentry_armed": false,
@@ -3438,7 +3438,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-17T12:35:57.728876",
-      "last_seen_ist": "2026-07-17T17:36:02.436405",
+      "last_seen_ist": "2026-07-17T19:35:53.751298",
       "last_email_day": "2026-07-17",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -3563,7 +3563,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-17T12:35:57.728876",
-      "last_seen_ist": "2026-07-17T18:35:57.596888",
+      "last_seen_ist": "2026-07-17T19:35:53.751298",
       "last_email_day": "2026-07-17",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -3688,7 +3688,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-17T12:35:57.728876",
-      "last_seen_ist": "2026-07-17T18:35:57.596888",
+      "last_seen_ist": "2026-07-17T19:35:53.751298",
       "last_email_day": "2026-07-17",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -3813,7 +3813,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-17T14:35:55.540668",
-      "last_seen_ist": "2026-07-17T18:35:57.596888",
+      "last_seen_ist": "2026-07-17T19:35:53.751298",
       "last_email_day": "2026-07-17",
       "still_valid_count": 0,
       "reentry_armed": false,
