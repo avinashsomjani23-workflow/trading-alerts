@@ -841,16 +841,6 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/912-us-fomc-member-schmid-speaks]]></url>
 	</event>
 	<event>
-		<title>Treasury Currency Report</title>
-		<country>USD</country>
-		<date><![CDATA[07-16-2026]]></date>
-		<time><![CDATA[8:30pm]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast />
-		<previous />
-		<url><![CDATA[https://www.forexfactory.com/calendar/459-us-treasury-currency-report]]></url>
-	</event>
-	<event>
 		<title>FPI m/m</title>
 		<country>NZD</country>
 		<date><![CDATA[07-16-2026]]></date>
@@ -989,5 +979,15 @@
 		<forecast />
 		<previous><![CDATA[4.6%]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/236-us-prelim-uom-inflation-expectations]]></url>
+	</event>
+	<event>
+		<title>Treasury Currency Report</title>
+		<country>USD</country>
+		<date><![CDATA[07-17-2026]]></date>
+		<time><![CDATA[8:30pm]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast />
+		<previous />
+		<url><![CDATA[https://www.forexfactory.com/calendar/459-us-treasury-currency-report]]></url>
 	</event>
 </weeklyevents>
