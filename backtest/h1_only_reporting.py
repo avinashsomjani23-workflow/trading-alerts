@@ -1352,11 +1352,11 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "h1_trend", "trend_alignment", "trend_pd_agree",
         # Structure signals (STRUCTURE_SIGNALS_SPEC) — edge-discovery inputs, no
         # gate/email change yet. S2 ranging/pending-flip state at alert; S3 leg
-        # retracement (extreme + clipped are audit support, retrace is screened);
-        # S4 broken-wall PD flags at OB formation. None per each column's rule.
+        # leg extreme (extreme + clipped are audit support); S4 broken-wall PD
+        # flags at OB formation. None per each column's rule.
         "structure_ranging_at_alert", "flip_pending_at_alert",
         "flip_pending_dir_at_alert",
-        "leg_extreme_at_alert", "leg_retrace_pct_at_alert", "leg_extreme_clipped",
+        "leg_extreme_at_alert", "leg_extreme_clipped",
         "dr_ceiling_broken_at_ob", "dr_floor_broken_at_ob",
         # PD/PW liquidity pools (DAILY_BIAS_V4_SPEC §1.3) — observation only,
         # stamped at alert from strictly-prior bars. One source:
@@ -1376,6 +1376,22 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "eq_sl_gap_atr", "eq_sl_at_risk",
         "eq_last_sweep_age_h1", "eq_last_sweep_side",
         "eq_intact_above_count", "eq_intact_below_count",
+        # Sweep v2 (rebuilt pool-anchored sweep, 2026-07-18) — observation
+        # only, re-labelled from the FROZEN ob['sweep_v2'] snapshot stamped at
+        # OB build. One source: liquidity_sweep.SWEEP2_FEATURE_COLUMNS via
+        # _sweep2_features. Legacy sweep_pts / sweep_present stay unchanged
+        # (score parity); superseded for ANALYSIS by these columns.
+        "sweep2_present", "sweep2_tier", "sweep2_level",
+        "sweep2_pierce_atr", "sweep2_rejection_ratio", "sweep2_follow_atr",
+        "sweep2_pools_swept", "sweep2_rn_aligned", "sweep2_rn_dist_atr",
+        "sweep2_eq_size", "sweep2_age_at_alert_h1", "sweep2_tiers_checked",
+        # SETUP-LIQ (this trade's own stop/target vs swing liquidity, 2026-07-20)
+        # — 6 columns from setup_liq._setup_liq_features. Reads 1 & 2 anchor on
+        # the trade SL/TP1 (level-calc, not OB-build-frozen); Read 3.2 is the
+        # leg-extreme-was-a-sweep payload scalar. See TRUTH_LEDGER setup_liq_* rows.
+        "setup_liq_stop_present", "setup_liq_stop_offset_atr", "setup_liq_stop_tier",
+        "setup_liq_tp_present", "setup_liq_tp_offset_atr",
+        "setup_liq_legextreme_swept",
     ]
     df = pd.DataFrame(trades)
     cols_present = [c for c in front_cols if c in df.columns]

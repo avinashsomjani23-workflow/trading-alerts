@@ -132,9 +132,9 @@ CONTINUOUS_FEATURES = [
     "ob_range_atr", "atr_at_ob", "pd_pct", "reversal_pct", "ob_age_h1_bars",
     "ob_to_fill_hours", "bars_break_to_pullback", "bos_sequence_count",
     "score", "alert_utc_hour", "ob_body_ratio", "chop_at_alert",
-    # STRUCTURE_SIGNALS_SPEC S3 screen candidate (support cols leg_extreme_at_alert /
-    # leg_extreme_clipped are NOT screened — they are audit/derivation support).
-    "leg_retrace_pct_at_alert",
+    # (leg_retrace_pct_at_alert removed 2026-07-19 — uninformative for an
+    # order-block-limit system; support cols leg_extreme_at_alert /
+    # leg_extreme_clipped remain in the CSV as audit support, never screened.)
     # Weekly PD zone (weekly_pd.py, 2026-07-15) — ALERT-time (bars strictly before
     # alert_ts, h1_only_simulator.py:1708). weekly_pd_position is the continuous
     # read; range_high/low are support (audit), zone/agreement are categorical below.

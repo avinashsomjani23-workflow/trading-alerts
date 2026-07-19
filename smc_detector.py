@@ -462,11 +462,6 @@ PAIR_SESSION_TAGS = {
     "NAS100": ["ny"]
 }
 
-# PHASE 1 ONLY — Sweep observation window for the Phase 1 display-only badge.
-# Same 72 trading-hour rule applied during OB construction. Kept as a separate
-# constant so Phase 1 observation logic is decoupled from Phase 2 grading.
-PHASE1_SWEEP_OBS_TRADING_HOURS = 72
-
 # INTERNAL — scoring caps for the sweep score. Consumed by run_scorecard()
 # (Phase 2 only). Sums to 3.0 by construction. Vet's allocation: Presence
 # carries the trade (1.5), Rejection confirms it (1.0), Equal Levels is the
@@ -2650,10 +2645,27 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
     # resolution we keep these pairs graded for.
     pair_name_for_sweep_scoring = pair_conf.get('name', '') if pair_conf else ''
     is_non_jpy_forex = (pair_type == 'forex' and 'JPY' not in pair_name_for_sweep_scoring)
+    # SCORE INPUT REWIRE (2026-07-20, owner "Option 1"): the sweep score leg now
+    # reads the MERGED sweep v2 snapshot (ob['sweep_v2'] — pool-anchored PW/PD/EQ
+    # plus the folded-in tier SW bare-swing) instead of the legacy sweep_observed.
+    # This is a LIVE-BEHAVIOUR CHANGE: sweep v2 judges differently, so FX presence
+    # and JPY/Gold grade shift on some OBs -> a few alerts flip. ONLY the score is
+    # rewired; the setup badge, OB2 ranking, sweep_present column and zone
+    # plumbing STILL read sweep_observed (legacy stays alive, not dead code).
+    # chosen_sweep (legacy) is still used below for the sweep_price / sweep_tf /
+    # narration fields — only bd["sweep"] moves to the new source.
+    # Local import: liquidity_sweep imports smc_detector at module top, so a
+    # top-level import here would be circular. Same pattern as the backtest's
+    # _sweep2_features shim.
+    import liquidity_sweep
+    _sweep2_exists, _sweep2_grade_0_3 = liquidity_sweep.score_inputs(
+        ob.get('sweep_v2'))
     if is_non_jpy_forex:
-        bd["sweep"] = 1.0 if chosen_sweep['tier'] != 'none' else 0.0
+        bd["sweep"] = 1.0 if _sweep2_exists else 0.0
     else:
-        bd["sweep"] = round(chosen_sweep['score'] * (2.0 / 3.0), 2)
+        # Same 0-3 -> 0-2 scaling the legacy grade used (2026-06-18 budget cut),
+        # so the JPY/Gold sweep leg keeps its 2-point ceiling and gradient.
+        bd["sweep"] = round(_sweep2_grade_0_3 * (2.0 / 3.0), 2)
     sweep_price  = chosen_sweep['price']
     sweep_tf     = chosen_sweep['tf']
 
@@ -2752,8 +2764,7 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
 # PHASE 2 ONLY — generates scorecard HTML rows for Phase 2 alert email.
 def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_conf,
                             dealing_range=None, fvg_source=None, pd_position=None,
-                            sweep_tier=None, sweep_components=None,
-                            sweep_hours_before_ob=None, fvg=None):
+                            sweep_tier=None, sweep_components=None, fvg=None):
     """
     Return list of (label, score, max_score, status, explanation) for email rendering.
 
@@ -2818,10 +2829,12 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     else:
         rows.append(("Structure", s, 4, "fail", "No confirmed BOS or CHoCH."))
 
-    # 2. Liquidity Sweep — scorecard shows PRESENCE only.
-    # Quality breakdown rendered separately above Macro Context in email.
-    # Max is 1 (presence-only) for non-JPY forex, 2 (quality-graded, scaled from
-    # the raw 0-3 grade) for JPY/Gold/NAS.
+    # 2. Liquidity Sweep — LEGACY signal (any-minor-swing detector). The points
+    # still come from it (score parity holds until the edge engine rules on the
+    # rebuilt sweep2_* columns), but the row SAYS so and points the reader at
+    # the pool-based read (build_sweep_breakdown_html banner / sweep_v2), so
+    # the email speaks one definition. Max is 1 (presence-only) for non-JPY
+    # forex, 2 (quality-graded, scaled 0-3 -> 0-2) for JPY/Gold/NAS.
     s = breakdown.get("sweep", 0)
     comps = sweep_components or {}
     presence = comps.get('base', 0.0)
@@ -2829,11 +2842,13 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     pair_type_for_row = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
     sweep_max = 1 if (pair_type_for_row == 'forex' and 'JPY' not in pair_name_for_row) else 2
     if presence > 0 and sweep_price is not None:
-        rows.append(("Liquidity Sweep", s, sweep_max, "ok",
-                     f"{sweep_tf} sweep confirmed at {sweep_price:.{dp}f}. See breakdown below charts."))
+        rows.append(("Sweep (legacy pts)", s, sweep_max, "ok",
+                     "Old swing-sweep signal — points kept for score continuity. "
+                     "The real liquidity read is the Sweep banner below the charts."))
     else:
-        rows.append(("Liquidity Sweep", s, sweep_max, "fail",
-                     "No qualifying sweep within recency window before the OB."))
+        rows.append(("Sweep (legacy pts)", s, sweep_max, "fail",
+                     "Old swing-sweep signal absent — points unaffected elsewhere. "
+                     "The real liquidity read is the Sweep banner below the charts."))
 
     # 3. FVG — H1 only (max 2). pristine 2 | partial 1 | none/mitigated 0
     s = breakdown.get("fvg", 0)

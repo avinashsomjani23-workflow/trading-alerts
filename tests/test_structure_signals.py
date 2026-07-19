@@ -32,7 +32,6 @@ import pandas as pd  # noqa: E402
 import dealing_range as dr  # noqa: E402
 from backtest.h1_only_simulator import (  # noqa: E402
     read_s4_broken_flags,
-    leg_retrace_pct,
 )
 
 _FAILS = []
@@ -202,44 +201,6 @@ def test_s3_extreme_higher_on_refire_but_first_wins():
         _bad("S3: leg_extreme_at_alert drifted to a later fire's higher extreme")
 
 
-# ── S3 retrace math — long/short normal, degenerate denom, missing impulse,
-# clipped flag pass-through, >100 not clamped. Mirrors _build_row's derivation.
-
-def _retrace(direction, leg_extreme, entry, impulse_start):
-    """Drives the LIVE leg_retrace_pct helper — no copy. An S3-math drift in
-    _build_row moves this test with it."""
-    return leg_retrace_pct(direction, leg_extreme, entry, impulse_start)
-
-
-def test_s3_retrace_math():
-    # LONG normal: leg 100->120, entry 110 => 50% back.
-    if _retrace("bullish", 120.0, 110.0, 100.0) == 50.0:
-        _ok("S3 long retrace ~50% correct")
-    else:
-        _bad(f"long retrace wrong: {_retrace('bullish',120.0,110.0,100.0)}")
-    # SHORT normal: leg 100->80, entry 90 => 50% back.
-    if _retrace("bearish", 80.0, 90.0, 100.0) == 50.0:
-        _ok("S3 short retrace ~50% correct")
-    else:
-        _bad(f"short retrace wrong: {_retrace('bearish',80.0,90.0,100.0)}")
-    # Degenerate denominator (extreme not beyond origin) -> None.
-    if _retrace("bullish", 100.0, 105.0, 100.0) is None:
-        _ok("S3 degenerate denominator -> None (no crash)")
-    else:
-        _bad("S3 degenerate denominator should be None")
-    # Missing impulse_start -> None.
-    if _retrace("bullish", 120.0, 110.0, None) is None:
-        _ok("S3 missing impulse_start -> None")
-    else:
-        _bad("S3 missing impulse_start should be None")
-    # > 100 is VALID (price ran past the leg origin), not clamped.
-    v = _retrace("bullish", 120.0, 95.0, 100.0)  # (120-95)/(120-100)=125%
-    if v == 125.0:
-        _ok("S3 retrace > 100 preserved (not clamped)")
-    else:
-        _bad(f"S3 >100 clamped or wrong: {v}")
-
-
 # ── S4 snapshot — the frozen dr snapshot carries the broken flags; row reads
 # them; intact range => both False; invalid/legacy => None.
 
@@ -404,8 +365,6 @@ def main():
     print("\n== S2/S3: alert-time payload freeze ==")
     test_s2_state_frozen_from_first_fire_payload()
     test_s3_extreme_higher_on_refire_but_first_wins()
-    print("\n== S3: leg-retracement math ==")
-    test_s3_retrace_math()
     print("\n== S4: broken-wall PD flags ==")
     test_s4_broken_flags_from_snapshot()
     test_s4_source_chain_emits_flags()

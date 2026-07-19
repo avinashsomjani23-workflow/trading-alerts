@@ -76,9 +76,9 @@ def test_jpy_merge():
 
 def test_eurusd_merge():
     atr = 0.0012
-    thr = _thresh(atr)                       # 0.25 * 0.0012 = 0.0003
+    thr = _thresh(atr)                       # 1.0 * 0.0012 = 0.0012
     a = _ob("bearish", 1.10000, bos_idx=10)
-    b = _ob("bearish", 1.10020, bos_idx=12)  # 0.0002 apart < 0.0003
+    b = _ob("bearish", 1.10020, bos_idx=12)  # 0.0002 apart (0.17 ATR) << thr
     kept = smc_radar._dedupe_same_leg_impl([a, b], thr)
     if len(kept) == 1:
         _ok(f"EURUSD: 0.0002 apart, ATR 0.0012 (thr={thr:g}) -> merged to 1")
@@ -86,16 +86,51 @@ def test_eurusd_merge():
         _bad(f"EURUSD merge: expected 1, got {len(kept)} (thr={thr:g})")
 
 
-def test_eurusd_no_merge():
+def test_eurusd_merge_under_one_atr():
+    # 2026-07-17: at the widened 1.0-ATR threshold, a 0.83-ATR gap that used to
+    # survive (old 0.25-ATR rule) now correctly merges — this is the USDCHF fix.
     atr = 0.0012
-    thr = _thresh(atr)                       # 0.0003
+    thr = _thresh(atr)                       # 0.0012
     a = _ob("bearish", 1.10000, bos_idx=10)
-    b = _ob("bearish", 1.10100, bos_idx=12)  # 0.0010 apart > 0.0003
+    b = _ob("bearish", 1.10100, bos_idx=12)  # 0.0010 apart (0.83 ATR) < thr
+    kept = smc_radar._dedupe_same_leg_impl([a, b], thr)
+    if len(kept) == 1:
+        _ok(f"EURUSD: 0.83 ATR apart, ATR 0.0012 (thr={thr:g}) -> merged to 1")
+    else:
+        _bad(f"EURUSD under-1-ATR merge: expected 1, got {len(kept)} (thr={thr:g})")
+
+
+def test_eurusd_no_merge():
+    # Gap > 1.0 ATR -> genuinely separate zones, both survive.
+    atr = 0.0012
+    thr = _thresh(atr)                       # 0.0012
+    a = _ob("bearish", 1.10000, bos_idx=10)
+    b = _ob("bearish", 1.10200, bos_idx=12)  # 0.0020 apart (1.67 ATR) > thr
     kept = smc_radar._dedupe_same_leg_impl([a, b], thr)
     if len(kept) == 2:
-        _ok(f"EURUSD: 0.0010 apart, ATR 0.0012 (thr={thr:g}) -> both survive")
+        _ok(f"EURUSD: 1.67 ATR apart, ATR 0.0012 (thr={thr:g}) -> both survive")
     else:
         _bad(f"EURUSD no-merge: expected 2, got {len(kept)} (thr={thr:g})")
+
+
+def test_span_cap_prevents_chaining():
+    # THREE same-direction OBs, each 0.8 ATR from the next (proximals 0, 0.8,
+    # 1.6 ATR). Naive "merge into nearest survivor" would chain all three into
+    # one zone spanning 1.6 ATR. The span cap must keep the merged zone <= 1.0
+    # ATR: OB1+OB2 merge (0.8 <= 1.0); OB3 is 1.6 ATR from OB1 -> cannot join,
+    # survives on its own. Expect 2 zones, not 1.
+    atr = 0.0012
+    thr = _thresh(atr)                       # 0.0012 (1.0 ATR)
+    step = 0.8 * atr                         # 0.00096
+    a = _ob("bullish", 1.10000, bos_idx=10)
+    b = _ob("bullish", 1.10000 + step, bos_idx=11)      # 0.8 ATR from a
+    c = _ob("bullish", 1.10000 + 2 * step, bos_idx=12)  # 1.6 ATR from a
+    kept = smc_radar._dedupe_same_leg_impl([a, b, c], thr)
+    if len(kept) == 2:
+        _ok("span cap: 3 OBs at 0.8-ATR steps -> 2 zones (no >1 ATR chaining)")
+    else:
+        _bad(f"span cap: expected 2 zones, got {len(kept)} "
+             f"(proximals {[round(o['proximal_line'],5) for o in kept]})")
 
 
 # --- 3) ATR None/0 -> falls back to 0.0003 behaviour -----------------------
@@ -146,7 +181,10 @@ def main():
     print("== threshold + merge (JPY / EURUSD scale) ==")
     test_jpy_merge()
     test_eurusd_merge()
+    test_eurusd_merge_under_one_atr()
     test_eurusd_no_merge()
+    print("\n== span cap (anti-chaining) ==")
+    test_span_cap_prevents_chaining()
     print("\n== ATR-unavailable fallback ==")
     test_atr_fallback()
     print("\n== ladder guards ==")

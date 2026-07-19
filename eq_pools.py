@@ -205,6 +205,18 @@ def clusters_at(df_h1, asof_pos, atr, swings=None):
             cl["last_sweep_pos"] = (
                 int(df_h1.index.searchsorted(pd.Timestamp(ts)))
                 if ts is not None else None)
+            # Stamp the first/last member's timestamps. The chart draws the EQ
+            # shelf as a dotted segment BETWEEN the two touch bars (not a
+            # full-width axhline), and it maps by ts — first_idx/last_idx are
+            # positions in THIS eq frame (forming bar dropped), which need not
+            # equal the render df's positions. Timestamps are frame-independent,
+            # so the chart can locate the exact touch bars in its own df.
+            try:
+                cl["first_ts"] = df_h1.index[cl["first_idx"]].isoformat()
+                cl["last_ts"] = df_h1.index[cl["last_idx"]].isoformat()
+            except Exception:
+                cl["first_ts"] = None
+                cl["last_ts"] = None
             out.append(cl)
     return out
 

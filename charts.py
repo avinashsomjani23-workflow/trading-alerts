@@ -259,25 +259,43 @@ def draw_pool_lines(ax, pools, *, x_right, in_view, zorder=2,
 
 
 def draw_eq_lines(ax, eq_ctx, *, in_view, zorder=2,
-                  y_min=None, y_max=None, x_center=None):
-    """Draw INTACT equal-level shelves (EQH / EQL) as teal dotted lines (#5).
+                  y_min=None, y_max=None, x_center=None,
+                  ts_to_x=None, x_right=None):
+    """Draw INTACT equal-level shelves (EQH / EQL) as teal dotted SEGMENTS (#5).
 
-    Same dotted style as the PD/PW pool lines so the eye reads them as the same
-    kind of thing (resting liquidity), but a distinct teal so they never blur
-    into a PD/PW level. Shared by Phase 1 and Phase 2 so the shelves can't drift
-    between the two emails.
+    An equal-level shelf is two (or more) swings at the SAME price — the line
+    that matters is the one CONNECTING those touch points, not a full-width
+    rule across the whole chart. A full axhline implies the level extends
+    everywhere; the shelf only exists between its first and last touch. So we
+    draw a dotted segment from the first member's bar to the last member's bar.
+    Same teal dotted style as before (reads as resting liquidity, distinct from
+    PD/PW). Shared by Phase 1 and Phase 2 so the shelves can't drift between the
+    two emails.
 
     Args:
       eq_ctx  : an eq_pools live/backtest EQ context, i.e. ``{"clusters": [
                 {"side": "high"|"low", "level": float, "size": int,
-                 "status": "intact"|"swept"|"broken", ...}, ...], ...}``.
+                 "status": "intact"|"swept"|"broken",
+                 "first_ts": iso|None, "last_ts": iso|None, ...}, ...], ...}``.
                 None / empty / no clusters is a no-op. Only INTACT shelves draw
                 — a spent shelf is no longer a live draw on price.
       in_view : callable(price) -> bool. Off-view shelves get an edge arrow when
                 y_min/y_max/x_center are given (same rule as draw_pool_lines),
                 else they are dropped.
+      ts_to_x : callable(iso_ts) -> int|None. Maps a member's timestamp to its
+                local plot-x. None when the bar isn't in the plotted window.
+                When ts_to_x (and the cluster's first_ts/last_ts) are available,
+                the shelf draws as a point-to-point segment; otherwise it falls
+                back to a full-width dotted axhline (legacy / thin-context
+                charts that don't pass a mapper). Segments never span past the
+                chart: an endpoint that ran off the window is clamped to the
+                visible edge (0 on the left, x_right on the right) so a shelf
+                straddling the window edge still shows a connecting line.
+      x_right : right-edge plot-x for clamping the last touch when it sits at /
+                past the current bar. Falls back to a segment that ends at the
+                mapped last-touch x when not given.
 
-    Returns the number of markers drawn (lines + off-screen arrows).
+    Returns the number of markers drawn (segments/lines + off-screen arrows).
     """
     if not eq_ctx or not eq_ctx.get("clusters"):
         return 0
@@ -310,9 +328,49 @@ def draw_eq_lines(ax, eq_ctx, *, in_view, zorder=2,
                               pad=1.5, alpha=0.85))
             drawn += 1
             continue
-        ax.axhline(y=level, color=EQ_COLOR, linewidth=EQ_LW, linestyle=":",
-                   alpha=0.7, zorder=zorder)
-        ax.text(0, level, f"  {tag}",
+
+        # Point-to-point segment between the first and last touch. Resolve both
+        # member bars via ts_to_x; clamp any endpoint that fell outside the
+        # window to the visible edge so the shelf still shows a connecting line.
+        # Three outcomes (tri-state so each is handled explicitly):
+        #   'segment'  -> draw the dotted plot() between (xa, xb)
+        #   'skip'     -> the shelf resolved but BOTH touches sit off the plotted
+        #                 window: it isn't on this chart, draw nothing
+        #   'fallback' -> we can't resolve endpoints at all (no mapper, or the
+        #                 cluster lacks first_ts/last_ts): legacy full-width line
+        mode, seg = "fallback", None
+        if ts_to_x is not None:
+            first_ts = cl.get("first_ts")
+            last_ts = cl.get("last_ts")
+            if first_ts and last_ts:
+                x0 = ts_to_x(first_ts)
+                x1 = ts_to_x(last_ts)
+                if x0 is None and x1 is None:
+                    mode = "skip"  # shelf fully off the plotted window
+                else:
+                    # Clamp an off-window endpoint to the visible edge: an older
+                    # first touch -> left edge (0); a last touch at/after the last
+                    # drawn bar -> right edge (x_right, else the resolved x0).
+                    right_edge = x_right if x_right is not None else x0
+                    xa = 0 if x0 is None else x0
+                    xb = right_edge if x1 is None else x1
+                    if xb < xa:
+                        xa, xb = xb, xa
+                    mode, seg = "segment", (xa, xb)
+
+        if mode == "skip":
+            continue  # not on this chart — no line, no label, not counted
+        if mode == "segment":
+            xa, xb = seg
+            ax.plot([xa, xb], [level, level], color=EQ_COLOR,
+                    linewidth=EQ_LW, linestyle=":", alpha=0.7, zorder=zorder)
+            label_x = xa
+        else:
+            # Fallback: no mapper / missing touch ts -> legacy full-width line.
+            ax.axhline(y=level, color=EQ_COLOR, linewidth=EQ_LW, linestyle=":",
+                       alpha=0.7, zorder=zorder)
+            label_x = 0
+        ax.text(label_x, level, f"  {tag}",
                 color=EQ_COLOR, fontsize=7, fontweight="bold",
                 ha="left", va="center", zorder=zorder + 5,
                 bbox=dict(facecolor=BG, edgecolor="none", pad=1.0, alpha=0.78))

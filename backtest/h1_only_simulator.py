@@ -609,6 +609,22 @@ def _simulate_single_entry(
                   reason="zero_r_distance")
         return None
 
+    # ── SETUP-LIQ Reads 1 & 2 (setup_liq / SWING_SWEEP_SPEC) ──────────────────
+    # Read 1 (stop-side liquidity) + Read 2 (tp-side magnet) anchor on the FINAL
+    # trade SL (post-spread) and TP1 born from compute_phase2_levels above. Same
+    # closed-bar frame the levels used (df_h1_at_alert -> look-ahead-safe); ATR =
+    # ob['h1_atr'] (the shared *_atr denominator). A 1:1-fallback TP1 has no pool
+    # behind it, so the magnet reads absent by construction (flagged via
+    # no_liquidity_pool_fallback). Observation only; never raises (all-None on
+    # failure). Read 3.2 (leg-extreme) is a SEPARATE payload scalar from the
+    # replay yield (leg_extreme_swept) — it anchors on leg geometry, not SL/TP.
+    import setup_liq
+    _setup_liq_reads = setup_liq.reads_stop_and_tp(
+        df_h1_at_alert, ob.get("direction"), sl, tp1,
+        ob.get("h1_atr"), pair_conf.get("pair_type", "forex"),
+        tp1_is_fallback=bool(levels.get("no_liquidity_pool_fallback")),
+    )
+
     # Defense in depth: drop the trade if TP2 is on the wrong side of TP1.
     # compute_phase2_levels already filters this; this guard catches any
     # future regression or forced-TP path where the upstream check is bypassed.
@@ -636,10 +652,14 @@ def _simulate_single_entry(
     # negligible on H1. Same-bar fill+SL is still resolved SL-first by the
     # fill-bar rule below, so a candle-B fill never fabricates an unearned win.
     #
-    # NOTE the earlier "cloned-fill" RCA (2026-03): that was fixed by the OB dedup
-    # in run_backtest (first alert per OB only) — NOT by the +1h, which was an
-    # over-correction on top. Filling on candle B is safe because dedup already
-    # removed the identical re-fire rows.
+    # NOTE the earlier "cloned-fill" RCA (2026-03): a zone that re-alerted while its
+    # trade was still open booked a second independent fill for one position. That is
+    # guarded in run_backtest by the ONE-TRADE-PER-ZONE gate (`filled_obs`: once a
+    # zone produces a filled trade, later alerts from that zone are dropped) — NOT by
+    # the +1h fill offset, which was an over-correction on top. (This gate replaced
+    # the 2026-07-15 "trade every re-touch" experiment; it is fill-based, not the old
+    # first-alert `seen_obs` dedupe.) Filling on candle B is safe because a zone can
+    # only be filled once, so no identical re-fire row can be created.
     #
     # Two separate clocks:
     #   - Pre-fill:  limit pends at most MAX_HOLD_H1_BARS candles from candle B.
@@ -909,6 +929,7 @@ def _simulate_single_entry(
             tp_nextpool=tp_nextpool, tp_nextpool_rr=tp_nextpool_rr,
             tp_nextpool_zone_source=tp_nextpool_zone_source,
             tp2_collapsed_to_tp1=tp2_collapsed_to_tp1, tp_targets=tp_targets,
+            setup_liq_reads=_setup_liq_reads,
             score=score, breakdown=breakdown,
             df_h1=df_h1, alert_ts=alert_ts,
             fill_ts=None, exit_ts=None, exit_reason="never_filled",
@@ -1176,6 +1197,7 @@ def _simulate_single_entry(
         tp_nextpool=tp_nextpool, tp_nextpool_rr=tp_nextpool_rr,
         tp_nextpool_zone_source=tp_nextpool_zone_source,
         tp2_collapsed_to_tp1=tp2_collapsed_to_tp1, tp_targets=tp_targets,
+        setup_liq_reads=_setup_liq_reads,
         score=score, breakdown=breakdown,
         df_h1=df_h1, alert_ts=alert_ts,
         fill_ts=fill_ts, exit_ts=exit_ts, exit_reason=exit_reason,
@@ -1215,8 +1237,7 @@ def _simulate_single_entry(
 #     fvg_at_alert, h1_trend / trend_alignment / alert_bar_*, and the S2/S3
 #     structure signals (structure_ranging_at_alert, flip_pending_at_alert,
 #     flip_pending_dir_at_alert, leg_extreme_at_alert, leg_extreme_clipped —
-#     all payload scalars from the replay yield; leg_retrace_pct_at_alert is
-#     derived here from leg_extreme_at_alert + the placed entry).
+#     all payload scalars from the replay yield).
 #   MUTABLE STATE, fixed by this spec: touches/status (3a), break_quality (3b),
 #     fvg (3c/3d).
 # RULE: mutable state is stamped `*_at_alert` at the replay yield and read from
@@ -1303,27 +1324,6 @@ def read_s4_broken_flags(dr):
     return (None, None)
 
 
-def leg_retrace_pct(direction, leg_extreme, entry, impulse_start):
-    """S3 (STRUCTURE_SIGNALS_SPEC): how much of the displacement leg price gave
-    back by the placed entry.
-      bullish OB: (leg_extreme - entry) / (leg_extreme - impulse_start) * 100
-      bearish OB: (entry - leg_extreme) / (impulse_start - leg_extreme) * 100
-    None (never a crash) when the extreme is unstamped, impulse_start is missing,
-    or the denominator is degenerate (extreme not beyond the leg origin). >100 is
-    VALID (price ran past the leg origin) and is NOT clamped. Single implementation
-    — the row build and tests/test_structure_signals.py both call this."""
-    if leg_extreme is None or impulse_start is None:
-        return None
-    try:
-        _lex = float(leg_extreme)
-        _origin = float(impulse_start)
-    except (TypeError, ValueError):
-        return None
-    if direction == "bullish":
-        _denom = _lex - _origin
-        return round((_lex - entry) / _denom * 100, 1) if _denom > 0 else None
-    _denom = _origin - _lex
-    return round((entry - _lex) / _denom * 100, 1) if _denom > 0 else None
 def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                tp1_rr, tp2_rr, score, breakdown, df_h1, alert_ts,
                fill_ts, exit_ts, exit_reason, exit_price,
@@ -1340,7 +1340,8 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                tp2_wick=None, tp2_zone_source=None,
                tp_wick=None, tp_wick_rr=None,
                tp_nextpool=None, tp_nextpool_rr=None, tp_nextpool_zone_source=None,
-               tp2_collapsed_to_tp1=None, tp_targets=None) -> Dict[str, Any]:
+               tp2_collapsed_to_tp1=None, tp_targets=None,
+               setup_liq_reads=None) -> Dict[str, Any]:
     """Assemble the final trade row dict in stable column order."""
     direction = ob.get("direction", "?")
     # FIX 3d: mutable OB state (touches, fvg) is frozen at the replay yield into
@@ -1494,24 +1495,18 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         )
         trend_pd_agree = bool(_with_trend and pd_alignment == "aligned")
 
-    # ── S3 (STRUCTURE_SIGNALS_SPEC): leg retracement at alert ──────────────────
-    # How much of the displacement leg price has given back by the time the OB
-    # fills. Stamped at alert: `leg_extreme_at_alert` (the a-priori extreme since
-    # OB formation) is a payload scalar frozen at the replay yield; `entry` is the
-    # limit the simulator placed. impulse_start_price is the leg origin (frozen at
-    # OB build). retrace_pct is derived HERE because only _build_row knows `entry`.
-    #   bullish OB: (leg_extreme - entry) / (leg_extreme - impulse_start) * 100
-    #   bearish OB: (entry - leg_extreme) / (impulse_start - leg_extreme) * 100
-    # None (never a crash) when: extreme not stamped, impulse_start missing, or a
-    # degenerate denominator (extreme not beyond the leg origin). >100 is VALID
-    # (price ran past the leg origin) and is NOT clamped. `leg_extreme_clipped`
-    # (payload) flags an OB older than the point-in-time slice — extreme may be
-    # understated; the flag keeps the column honest.
+    # ── S3 (DISPLACEMENT_LEG_BUILD_SPEC): displacement-leg extreme + ER ────────
+    # `leg_extreme_at_alert` (structural leg extreme, span [ob_idx, extreme_end_idx])
+    # and `leg_er_at_alert` (Kaufman ER over the same span) are payload scalars
+    # frozen at the replay yield by the shared displacement_leg core.
+    # `leg_extreme_clipped` (payload) flags an OB older than the point-in-time slice
+    # (extreme is None there, honest). (leg_retrace_pct_at_alert was removed 2026-07-19:
+    # retracement quality is uninformative for an order-block-limit system — our
+    # entry sits at one fixed depth by construction, and the shallow-retrace cases
+    # never reach the limit, so there is no depth variation to measure.)
     leg_extreme_at_alert = alert.get("leg_extreme_at_alert")
+    leg_er_at_alert = alert.get("leg_er_at_alert")
     leg_extreme_clipped = alert.get("leg_extreme_clipped")
-    # leg_retrace_pct is the ONE reader (same fn test_structure_signals.py drives).
-    leg_retrace_pct_at_alert = leg_retrace_pct(
-        direction, leg_extreme_at_alert, entry, _isp)
 
     pnl_usd = round(r_realised * risk_usd, 2)
 
@@ -1712,13 +1707,15 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "structure_ranging_at_alert":   alert.get("structure_ranging_at_alert"),
         "flip_pending_at_alert":        alert.get("flip_pending_at_alert"),
         "flip_pending_dir_at_alert":    alert.get("flip_pending_dir_at_alert"),
-        # S3: leg retracement at alert. leg_extreme_at_alert + leg_extreme_clipped
-        # are payload scalars (a-priori extreme since OB formation); retrace_pct is
-        # derived above from those + the placed entry. Support columns (extreme /
-        # clipped) exist for audit + derivation; only retrace_pct is a screen
-        # candidate. None per the edge cases documented at the computation.
+        # S3 (DISPLACEMENT_LEG_BUILD_SPEC): structural displacement-leg extreme +
+        # Kaufman ER over the span [ob_idx, extreme_end_idx] (through the break
+        # candle to the leg's structural top). Both payload scalars, stamped at
+        # the replay yield, sharing the exact same span. leg_extreme_clipped stays
+        # informational (True only when the OB predates the slice — extreme None).
+        # (leg_retrace_pct_at_alert removed 2026-07-19 — see comment at the S3
+        # computation.)
         "leg_extreme_at_alert":         leg_extreme_at_alert,
-        "leg_retrace_pct_at_alert":     leg_retrace_pct_at_alert,
+        "leg_er_at_alert":              leg_er_at_alert,
         "leg_extreme_clipped":          leg_extreme_clipped,
         # S4: broken-wall PD flags read off the FROZEN ob["dealing_range"]
         # snapshot (immutable after OB build). None when the snapshot is
@@ -1772,6 +1769,26 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # All None when never_filled / thin history. Observation only, no gate.
         # Column list: approach_quality.APPROACH_FEATURE_COLUMNS.
         **_approach_features_at_fill(df_h1, fill_ts, ob),
+        # ── SWEEP V2 (rebuilt pool-anchored sweep, 2026-07-18) ─────────────────
+        # 12 columns spread from ONE helper, re-labelled off the FROZEN
+        # ob['sweep_v2'] snapshot stamped at OB build inside detect_smc_radar
+        # (the replay drives the same function — nothing is re-detected here).
+        # Only sweep2_age_at_alert_h1 is derived: arithmetic on the frozen
+        # sweep_ts against the alert bar (same class as ob_age_h1_bars).
+        # Legacy zones / failed layer -> all-None dict. Observation only; the
+        # legacy sweep_pts / sweep_present above stay byte-identical (score
+        # parity). Column list: liquidity_sweep.SWEEP2_FEATURE_COLUMNS.
+        **_sweep2_features(ob, df_h1, alert_ts),
+        # ── SETUP-LIQ (this trade's own stop/target vs swing liquidity) ────────
+        # 6 columns from ONE helper. Reads 1 & 2 (stop-side / tp-side magnet)
+        # were computed WITH the trade levels in _simulate_single_entry
+        # (setup_liq_reads) and anchor on the FINAL SL / TP1 — NOT frozen at OB
+        # build, because the anchor (SL/TP) is born from compute_phase2_levels.
+        # Read 3.2 (leg-extreme-was-a-sweep) is a payload scalar from the replay
+        # yield (leg_extreme_swept), anchored on leg geometry. All from bars
+        # strictly at/before the alert (look-ahead-safe). Observation only, no
+        # gate. Column list: setup_liq.SETUP_LIQ_FEATURE_COLUMNS.
+        **_setup_liq_features(setup_liq_reads, alert.get("leg_extreme_swept")),
     }
 
 
@@ -1873,6 +1890,44 @@ def _eq_features_at_fill(df_h1, fill_ts, ob, entry, sl):
         sl=sl,
         atr=ob.get("h1_atr"),
     )
+
+
+def _sweep2_features(ob, df_h1, alert_ts):
+    """Sweep-v2 columns for one row (liquidity_sweep.SWEEP2_FEATURE_COLUMNS).
+
+    Thin shim over liquidity_sweep.features_from_snapshot: pure re-labelling of
+    the FROZEN ob['sweep_v2'] snapshot (stamped once at OB build by
+    detect_smc_radar — the replay runs the same function, so the snapshot is
+    already point-in-time clean and immutable; the zone merge refreshes only
+    fvg). No re-detection, no re-grading. sweep2_age_at_alert_h1 is derived
+    arithmetic on the frozen sweep_ts vs the alert bar (ob_age_h1_bars class).
+
+    Legacy zones (no snapshot) / failed layer -> all-None dict.
+
+    Same deliberate placement as the pool / eq shims above (defined after
+    _build_row so the ledger's row-build line-refs never shift). Never raises
+    (liquidity_sweep guarantees the all-None dict on failure).
+    """
+    import liquidity_sweep
+    return liquidity_sweep.features_from_snapshot(
+        ob.get("sweep_v2"), df_h1, alert_ts)
+
+
+def _setup_liq_features(setup_liq_reads, leg_extreme_swept):
+    """Setup-liquidity columns for one row (setup_liq.SETUP_LIQ_FEATURE_COLUMNS).
+
+    Pure assembly from the pre-computed Read 1/2 dict (setup_liq_reads, built in
+    _simulate_single_entry when the trade levels were computed) and the Read 3.2
+    payload scalar (leg_extreme_swept, from the replay yield). Nothing is
+    re-detected here. A None reads dict (legacy path / degraded) -> all-None
+    columns via the module contract.
+
+    Same deliberate placement as the pool / eq / sweep2 shims above (defined
+    after _build_row so the ledger's row-build line-refs never shift). Never
+    raises (setup_liq guarantees the all-None dict on failure).
+    """
+    import setup_liq
+    return setup_liq.features_from_reads(setup_liq_reads, leg_extreme_swept)
 
 
 def _weekly_pd_features_at_alert(df_h1, alert_ts, entry, h4_pd_position):

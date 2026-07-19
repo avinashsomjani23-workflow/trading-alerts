@@ -499,8 +499,9 @@ def walk_alerts(pair_conf: Dict[str, Any], df: pd.DataFrame, start_ts, end_ts,
                 overrides: Optional[KnobOverrides] = None) -> AlertWalkResult:
     """Mode B. Replays the REAL replay_engine.replay_pair generator and
     simulates each alert with the REAL simulator. Applies run_backtest's
-    OB-dedup rule (FABLE_REFERENCE Â§6 guard 6; source: run_backtest.py:212-223):
-    only the FIRST alert per (ob_timestamp, direction) is simulated.
+    ONE-TRADE-PER-ZONE rule (2026-07-19): once a (ob_timestamp, direction) zone
+    has produced a FILLED trade, later alerts from that zone are dropped. Gates on
+    fill, not on first alert, so a non-filling alert never blocks the real trade.
 
     NEVER mutates the caller's pair_conf. proximity_cap (if any) is applied to
     a deep copy here â this is the ONLY proximity mechanism (Â§3 #10/#11), and
@@ -527,6 +528,7 @@ def walk_alerts(pair_conf: Dict[str, Any], df: pd.DataFrame, start_ts, end_ts,
     state = replay_engine.ReplayState()
     counters = {"alerts_total": 0, "alerts_simulated": 0, "ob_dedup_skipped": 0}
 
+    filled_obs: set = set()
     for event in replay_engine.replay_pair(conf, df, state=state,
                                            walk_start_ts=start_ts,
                                            walk_end_ts=end_ts):
@@ -538,15 +540,25 @@ def walk_alerts(pair_conf: Dict[str, Any], df: pd.DataFrame, start_ts, end_ts,
         elif kind == "alert":
             counters["alerts_total"] += 1
             res.alerts.append(event)
-            # 2026-07-15: seen_obs first-touch dedupe REMOVED (parity with
-            # run_backtest.py). Every re-armed re-touch is a real spaced re-approach
-            # (re-arm hysteresis) and a mitigated OB is dropped upstream before it
-            # can fire, so we simulate every touch until mitigation. ob_dedup_skipped
-            # is now always 0 (kept for schema stability). See test_retouch_trading.py.
+            # ONE TRADE PER ZONE (parity with run_backtest.py, 2026-07-19). The
+            # backtest needs no re-arm reminder — an alert is an assumed limit order,
+            # so trading every re-alert double-books a fill for a zone whose trade is
+            # already open. Once a (ob_timestamp, direction) zone has FILLED, later
+            # alerts from it are dropped (ob_dedup_skipped counts them). Gates on fill,
+            # not first alert, so a non-filling alert never blocks the real trade.
+            ob_key = (
+                (event.get("ob") or {}).get("ob_timestamp"),
+                (event.get("ob") or {}).get("direction"),
+            )
+            if ob_key in filled_obs:
+                counters["ob_dedup_skipped"] += 1
+                continue
             counters["alerts_simulated"] += 1
             import backtest.h1_only_simulator as sim
             rows = sim.simulate_h1_only_dual(event, conf, df, risk_usd=risk_usd)
             res.trade_rows.extend(rows)
+            if any(r.get("fill_ts") for r in rows):
+                filled_obs.add(ob_key)
 
     res.counters = counters
     return res

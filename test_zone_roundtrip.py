@@ -61,7 +61,7 @@ def _iter_live_zones():
 # is alert-anchored and NOT frozen on the zone). Legacy zones on disk may still
 # carry it as an inert `_extra` key; that round-trips unchanged, so it is not a
 # migration field here.
-_ADDITIVE_MIGRATION_FIELDS = {"body_ratio", "walkback_depth"}
+_ADDITIVE_MIGRATION_FIELDS = {"body_ratio", "walkback_depth", "sweep_v2"}
 
 
 def _diff_is_only_additive_nulls(original: dict, roundtripped: dict) -> bool:

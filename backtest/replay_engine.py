@@ -31,6 +31,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 import smc_radar              # live module — read-only use (compute_pair_walls + detect_smc_radar)
 import smc_detector           # live module — read-only use
+import displacement_leg       # live module — shared displacement-leg extreme + ER core
+import setup_liq              # live module — setup-liquidity reads (Read 3.2 leg-extreme-was-a-sweep)
 
 from backtest.run_logger import log_event
 from backtest.scanlog import get_active as _scanlog
@@ -622,33 +624,52 @@ def replay_pair(
                              trend=_bt_trend, trend_alignment=_bt_align)
             _bt_fired = True
 
-            # S3 (STRUCTURE_SIGNALS_SPEC) — leg extreme reached SINCE OB formation,
-            # measured over closed bars in the point-in-time slice with ts >= the
-            # OB timestamp. The retrace % itself is derived in _build_row (which
-            # knows the placed entry price); here we only carry the a-priori extreme
-            # as a payload scalar. `leg_extreme_clipped` = True when the OB predates
-            # the slice window start (extreme may be understated).
-            _leg_extreme_at_alert = None
-            _leg_extreme_clipped = None
+            # S3 (STRUCTURE_SIGNALS_SPEC / DISPLACEMENT_LEG_BUILD_SPEC) — the
+            # displacement leg that gave birth to this OB, graded by the ONE
+            # shared core (displacement_leg.compute_leg_extreme_er). The span is
+            # [ob_idx, extreme_end_idx] — from the OB candle, THROUGH the break
+            # candle, to the leg's STRUCTURAL top (first confirmed opposing swing
+            # after the break, or the running extreme if none has confirmed yet).
+            # This REPLACES the old unbounded .max()/.min() to the end of the
+            # slice, which folded in later unrelated moves (the bug it fixed).
+            #   leg_extreme_at_alert = highest High / lowest Low over that span.
+            #   leg_er_at_alert      = Kaufman ER over that span's closes.
+            # Both are PAYLOAD SCALARS (T1: never stamped on the shared ob dict,
+            # which the next re-fire would overwrite). The core takes TIMESTAMPS
+            # (ob_timestamp/bos_timestamp) + walls['swings'] and re-resolves
+            # ts->idx internally; h1_slice is already closed-bars-only. It never
+            # raises. `leg_extreme_clipped` stays informational: True only when
+            # the OB predates the slice (extreme unmeasurable -> extreme is None,
+            # so the flag never accompanies a clipped guess).
             _ob_ts_raw = ob.get("ob_timestamp")
+            _leg_extreme_clipped = None
             if _ob_ts_raw is not None and len(h1_slice) > 0:
                 try:
-                    _ob_ts = pd.Timestamp(_ob_ts_raw)
-                    if _ob_ts.tzinfo is None:
-                        _ob_ts = _ob_ts.tz_localize("UTC")
-                    _slice_start = h1_slice.index[0]
-                    _leg_extreme_clipped = bool(_ob_ts < _slice_start)
-                    _leg_bars = h1_slice[h1_slice.index >= _ob_ts]
-                    if len(_leg_bars) > 0:
-                        if direction == "bullish":
-                            _leg_extreme_at_alert = float(_leg_bars["High"].max())
-                        else:
-                            _leg_extreme_at_alert = float(_leg_bars["Low"].min())
+                    _ob_ts_norm = smc_detector.ts_to_utc_instant(_ob_ts_raw)
+                    _slice_start = smc_detector.ts_to_utc_instant(h1_slice.index[0])
+                    if _ob_ts_norm is not None and _slice_start is not None:
+                        _leg_extreme_clipped = bool(_ob_ts_norm < _slice_start)
                 except Exception:
-                    # Never crash the walk for a leg-extreme measurement — leave
-                    # None (retrace becomes None downstream, honestly).
-                    _leg_extreme_at_alert = None
                     _leg_extreme_clipped = None
+            _leg_extreme_at_alert, _leg_er_at_alert, _leg_extreme_end_idx = \
+                displacement_leg.compute_leg_extreme_er(
+                    h1_slice,
+                    ob.get("ob_timestamp"),
+                    ob.get("bos_timestamp"),
+                    direction,
+                    walls.get("swings"),
+                )
+
+            # Read 3.2 (setup_liq / SWING_SWEEP_SPEC): was the leg's OWN terminal
+            # extreme itself a sweep of an active swing (the leg ENDED on a
+            # stop-run, then reversed — institutional-intent tell)? Computed on
+            # the SAME closed-bar h1_slice + the extreme_end_idx the shared core
+            # just resolved, so it shares the leg core's point-in-time frame and
+            # never re-detects. Payload scalar (T1 re-fire discipline). None when
+            # the extreme was unmeasurable. Never raises.
+            _leg_extreme_swept = setup_liq.read_legextreme_swept(
+                h1_slice, _leg_extreme_at_alert, _leg_extreme_end_idx,
+                direction, pair_type, h1_atr)
 
             yield {
                 "kind": "alert",
@@ -668,11 +689,16 @@ def replay_pair(
                 "structure_ranging_at_alert": _structure_ranging_at_alert,
                 "flip_pending_at_alert": _flip_pending_at_alert,
                 "flip_pending_dir_at_alert": _flip_pending_dir_at_alert,
-                # S3 (STRUCTURE_SIGNALS_SPEC): a-priori leg extreme since OB
-                # formation, payload scalar (same re-fire rationale). retrace_pct
-                # is derived in _build_row from this + the placed entry.
+                # S3 (STRUCTURE_SIGNALS_SPEC / DISPLACEMENT_LEG_BUILD_SPEC):
+                # structural displacement-leg extreme + Kaufman ER over the span
+                # [ob_idx, extreme_end_idx], payload scalars (same re-fire
+                # rationale). Both share the exact same span in the same stamp.
                 "leg_extreme_at_alert": _leg_extreme_at_alert,
+                "leg_er_at_alert": _leg_er_at_alert,
                 "leg_extreme_clipped": _leg_extreme_clipped,
+                # Read 3.2 (setup_liq): leg-extreme-was-a-sweep, payload scalar
+                # (same re-fire rationale — never on the shared ob dict).
+                "leg_extreme_swept": _leg_extreme_swept,
                 # T1 (TRUTH_FIXES_SPEC): the OB dict is shared and re-stamped on
                 # every re-fire; rows are built after the whole walk. Carry the
                 # ALERT-TIME verdict as a payload scalar so a multi-fire zone's

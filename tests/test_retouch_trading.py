@@ -1,13 +1,18 @@
-"""Guard tests for the 2026-07-15 selection/dedupe changes:
+"""Guard tests for zone selection + the ONE-TRADE-PER-ZONE gate:
 
   1. _split_primary_alternative is MODE-SPLIT:
        cap=False (BACKTEST) -> every OB surfaces, no 'role'.
        cap=True  (LIVE, default) -> at most 2 OBs (primary + alternative),
                  'role' stamped. The default MUST be cap=True so live never
                  silently uncaps. replay_engine must call cap_zones=False.
-  2. The backtest run paths (run_backtest.py, diagnostics/driver.py) NO LONGER
-     carry a seen_obs first-touch dedupe — every re-armed re-touch is simulated.
-     Re-introducing `seen_obs` fails the source-level guard here.
+  2. The backtest run paths (run_backtest.py, diagnostics/driver.py) carry a
+     ONE-TRADE-PER-ZONE gate (2026-07-19): once a (ob_timestamp, direction) zone
+     has produced a FILLED trade, later alerts from that zone are dropped, so one
+     open position can never be booked twice. The gate is FILL-based (`filled_obs`),
+     NOT the pre-2026-07-15 first-alert `seen_obs` dedupe — a non-filling alert must
+     never mark the zone spent (else the real, later-filling trade is lost). This
+     guard fails if either the gate is missing OR the old alert-based `seen_obs`
+     dedupe is reintroduced.
 
 These are OUT of the live trade path (offline asserts), per the guard rule:
 a guard must never break the thing it protects.
@@ -128,27 +133,44 @@ def test_backtest_calls_uncapped():
     )
 
 
-# --- 5) Source guard: no seen_obs dedupe in either run path ----------------
+# --- Source guards: ONE-TRADE-PER-ZONE gate present, fill-based ------------
 def _read(rel):
     return (_ROOT / rel).read_text(encoding="utf-8-sig")
 
 
-def test_run_backtest_has_no_seen_obs():
-    src = _read("backtest/run_backtest.py")
-    # allow the word inside the removal-note comment, but NO live `seen_obs` set
-    # construction or membership test.
-    assert not re.search(r"seen_obs\s*:\s*set\s*=", src), \
-        "seen_obs set re-introduced in run_backtest.py — re-touch trading broken"
-    assert "if ob_key in seen_obs" not in src, \
-        "seen_obs membership test re-introduced in run_backtest.py"
+def _assert_fill_based_zone_gate(src, path):
+    """The run path must (a) carry a fill-based `filled_obs` zone gate and
+    (b) NOT reintroduce the old alert-based `seen_obs` dedupe."""
+    assert re.search(r"filled_obs\s*:\s*set\s*=", src), (
+        f"{path}: ONE-TRADE-PER-ZONE gate missing — `filled_obs` set not "
+        f"constructed. Without it a re-alert double-books an open position."
+    )
+    assert "if ob_key in filled_obs" in src, (
+        f"{path}: `filled_obs` membership skip missing — later alerts on a "
+        f"filled zone are not dropped."
+    )
+    # The gate must mark the zone only on a real fill (fill_ts), never on the
+    # first alert — the whole point of gating on fill, not alert.
+    assert "fill_ts" in src, (
+        f"{path}: zone must be marked spent on fill_ts, not on first alert."
+    )
+    # The old alert-based dedupe must not come back (it loses a non-filling
+    # alert #1's zone -> the later filling alert #2 would be wrongly skipped).
+    assert not re.search(r"seen_obs\s*:\s*set\s*=", src), (
+        f"{path}: old alert-based `seen_obs` dedupe reintroduced — it marks a "
+        f"zone spent on the first alert even when it never fills, losing the "
+        f"real later trade. Use the fill-based `filled_obs` gate instead."
+    )
 
 
-def test_driver_has_no_seen_obs():
-    src = _read("backtest/diagnostics/driver.py")
-    assert not re.search(r"seen_obs\s*:\s*set\s*=", src), \
-        "seen_obs set re-introduced in diagnostics/driver.py"
-    assert "if ob_key in seen_obs" not in src, \
-        "seen_obs membership test re-introduced in diagnostics/driver.py"
+def test_run_backtest_has_fill_based_zone_gate():
+    _assert_fill_based_zone_gate(_read("backtest/run_backtest.py"),
+                                 "run_backtest.py")
+
+
+def test_driver_has_fill_based_zone_gate():
+    _assert_fill_based_zone_gate(_read("backtest/diagnostics/driver.py"),
+                                 "diagnostics/driver.py")
 
 
 if __name__ == "__main__":
@@ -159,6 +181,6 @@ if __name__ == "__main__":
     test_distance_still_stamped()
     test_empty_input()
     test_backtest_calls_uncapped()
-    test_run_backtest_has_no_seen_obs()
-    test_driver_has_no_seen_obs()
+    test_run_backtest_has_fill_based_zone_gate()
+    test_driver_has_fill_based_zone_gate()
     print("all retouch-trading guards passed")

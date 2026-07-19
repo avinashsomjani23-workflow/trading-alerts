@@ -246,10 +246,10 @@ def test_baseline_ex_corrupted_columns_are_real():
 # population. Batch 2 did this for only 2 columns; this does it for all 15 that
 # are CSV-recomputable. Columns needing row-build internals not in the CSV
 # (frozen DR object -> pd_zone/pd_pct, df H1 index -> ob_age_h1_bars/
-# bars_break_to_pullback, impulse_start_price -> leg_retrace_pct, exit-engine TP
-# replay -> r_if_exit_tp1/2) are NOT here — their FORMULAS are unit-tested on
-# synthetic OBs in backtest/test_h1_only.py::test_edge_lab_columns (drives live
-# _build_row); population recompute needs a re-run and is out of this pass.
+# bars_break_to_pullback, exit-engine TP replay -> r_if_exit_tp1/2) are NOT here
+# — their FORMULAS are unit-tested on synthetic OBs in
+# backtest/test_h1_only.py::test_edge_lab_columns (drives live _build_row);
+# population recompute needs a re-run and is out of this pass.
 #
 # sl_distance_atr is special: it divides by the FULL-precision _h1_atr
 # (h1_only_simulator.py:1407) but the CSV only stores atr_at_ob rounded to 6dp

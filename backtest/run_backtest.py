@@ -171,17 +171,35 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
 
     print(f"  {name}: {len(pair_alerts)} OB-touch alerts")
 
-    # 2026-07-15: seen_obs first-touch dedupe REMOVED. Every re-armed re-touch is
-    # a real, spaced re-approach (re-arm hysteresis, replay_engine.py:519 — price
-    # must clear (prox_cap + REARM_EXTRA_ATR)xATR and return), NOT a same-bar clone
-    # (proven 0 clones on 2019H1/2016H1 samples). A mitigated OB is already dropped
-    # UPSTREAM before it can fire (replay_engine.py:350-363: 3rd proximal touch OR
-    # close beyond distal), so re-fires can only occur while the zone is alive. The
-    # backtest now trades every touch until mitigation; touches_at_alert (frozen at
-    # the yield) is the row-slice lever for later capping how many touches to trade.
-    # The old 2026-03 "cloned-fill" RCA is guarded by the re-arm state machine, not
-    # by this dedupe — see tests/test_retouch_trading.py.
+    # 2026-07-19: ONE TRADE PER ZONE (first FILL wins). Live re-arms the same OB on
+    # each re-approach so a human doesn't miss the email; the backtest needs no such
+    # reminder — an alert IS an assumed limit order. Trading every re-alert therefore
+    # booked a SECOND independent fill for a zone that already had an open position
+    # (proximity round-trip -> alert #2 -> second limit -> second row for one trade),
+    # double-counting P&L. Fix: once a zone has produced a FILLED trade, drop every
+    # later alert from that zone entirely (no row at all).
+    #
+    # This gates on FILL, not on alert (the pre-2026-07-15 `seen_obs` guard gated on
+    # the first alert — a non-filling alert #1 would then wrongly block a filling
+    # alert #2 and lose the real trade). Alerts that never fill mark nothing, so the
+    # first alert that actually fills becomes the zone's one trade.
+    #
+    # Not "one trade per zone-LIFE forever": a mitigated OB is dropped UPSTREAM
+    # (replay_engine.py:351-364) and can no longer alert, so the cap is naturally
+    # bounded by the zone's life. The multi-touch question ("would trading touch 2+
+    # add expectancy?") is deferred to its own study — those alerts are dropped, not
+    # kept-and-flagged, to keep the trade population clean and policy-comparable.
+    # Backtest-only; live re-arming (Phase2_Alert_Engine) is untouched.
+    filled_obs: set = set()
     for alert in pair_alerts:
+        ob_key = (
+            (alert.get("ob") or {}).get("ob_timestamp"),
+            (alert.get("ob") or {}).get("direction"),
+        )
+        if ob_key in filled_obs:
+            # Zone already has its one filled trade — drop this re-alert entirely.
+            continue
+
         alert_ts_raw = alert["ts"]
         if not isinstance(alert_ts_raw, _pd.Timestamp):
             alert_ts_raw = _pd.Timestamp(alert_ts_raw)
@@ -231,6 +249,12 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
                 n_blocked += 1
             if ist_blocked:
                 n_ist_blocked += 1
+
+        # ONE TRADE PER ZONE (see filled_obs note above): mark this zone spent only
+        # if THIS alert actually filled (fill_ts set). A never_filled row leaves the
+        # zone open so a later re-approach that DOES fill can still be its one trade.
+        if any(r.get("fill_ts") for r in rows):
+            filled_obs.add(ob_key)
 
     print(f"  {name}: {n_trades} simulated trade rows "
           f"({n_blocked} news-blocked, {n_ist_blocked} IST-blocked, "

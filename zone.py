@@ -71,6 +71,10 @@ _FIELD_ORDER = [
     "status_label", "h1_atr", "current_price_at_scan",
     "distance_to_proximal_pips", "fvg", "sweep_observed", "dealing_range",
     "role",
+    # Appended 2026-07-18 (sweep v2). Appending keeps legacy on-disk zones
+    # byte-stable: they gain the key as an additive null on their next write
+    # (see test_zone_roundtrip._ADDITIVE_MIGRATION_FIELDS).
+    "sweep_v2",
 ]
 
 
@@ -142,6 +146,11 @@ class Zone:
     # two-OB role
     role: str = "primary"
 
+    # Sweep v2 (pool-anchored, liquidity_sweep.py) — FORMATION-FROZEN snapshot.
+    # None (not a dict) on legacy zones so the on-disk migration is an additive
+    # null; consumers treat None as "not evaluated" (all-None columns).
+    sweep_v2: Optional[Dict[str, Any]] = None
+
     # ---- constructors -----------------------------------------------------
 
     @classmethod
@@ -197,6 +206,8 @@ class Zone:
             sweep_observed=fresh.get("sweep_observed", _default_sweep()),
             dealing_range=fresh.get("dealing_range", _default_dealing_range()),
             role=fresh.get("role", "primary"),
+            # Formation-frozen sweep-v2 snapshot — stamped once here (A3-style).
+            sweep_v2=fresh.get("sweep_v2"),
         )
 
     @classmethod
@@ -277,6 +288,12 @@ class Zone:
             abs(current_price - fresh["proximal_line"]) / _pip_unit(dp), 1)
         self.fvg = fresh["fvg"]
         self.sweep_observed = fresh.get("sweep_observed", self.sweep_observed)
+        # sweep_v2 is FORMATION-FROZEN (unlike sweep_observed above, which
+        # re-stamps each scan): a later re-compute runs on a rolled frame with
+        # truncated history and can silently differ — the exact re-grade bug
+        # class the freeze kills. One-time back-fill only (legacy zones).
+        if self.sweep_v2 is None:
+            self.sweep_v2 = fresh.get("sweep_v2")
         self.dealing_range = fresh.get("dealing_range", self.dealing_range)
         # bos_tier / bos_timestamp: FORMATION-FROZEN immutable event facts
         # (2026-07-10 Deep Value fix). Was overwritten from the fresh scan on a

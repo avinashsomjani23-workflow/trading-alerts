@@ -22,8 +22,11 @@ import news_filter
 import charts  # shared H1 chart style engine (Wave 2 item 2C)
 import pool_builder  # PD/PW liquidity pools — informational only, never gates
 import eq_pools      # EQH/EQL equal-level clusters — informational only, never gates
+import liquidity_sweep  # sweep v2 (pool-anchored) — informational only, never gates
 import weekly_pd     # Weekly PD zone (HTF premium/discount) — informational only
 import approach_quality  # approach-into-zone shape — observe-only, never gates
+import displacement_leg  # displacement-leg extreme + Kaufman ER — observe-only, never gates
+import setup_liq        # setup-liquidity reads (stop-side / tp magnet / leg-extreme) — observe-only, never gates
 # Direction-aware structural-event label. One implementation lives in smc_radar
 # (chart uses it too); the email reuses it so every CHoCH/BOS mention shows
 # bullish/bearish — the trader must never verify direction off the candles.
@@ -756,6 +759,10 @@ def _p2_swing_markers(ax, df_h1, h1_pos_to_local, n, pair_conf, y_min, y_max, ob
         SETUP_BREAK_COLOR = '#ffffff'  # max contrast on dark bg + red/green candles; bold X marker, distinct from the thin white price line
         offset = (y_max - y_min) * 0.012
         ob_bst = smc_detector.ob_broken_swing_ts(ob, walls) if ob else None
+        # Compare instants, not raw strings: the swing pool and event ring can
+        # serialize the same moment in different tz forms (see ts_to_utc_instant),
+        # which a string == would miss — silently dropping the break X.
+        ob_bst_inst = smc_detector.ts_to_utc_instant(ob_bst) if ob_bst else None
         for s in swings:
             ts = s.get('ts')
             if not ts:
@@ -776,7 +783,8 @@ def _p2_swing_markers(ax, df_h1, h1_pos_to_local, n, pair_conf, y_min, y_max, ob
                     else float(df_h1['Low'].iloc[abs_i])
             except Exception:
                 continue
-            if ob_bst and ts == ob_bst:
+            if ob_bst_inst is not None and \
+                    smc_detector.ts_to_utc_instant(ts) == ob_bst_inst:
                 ax.scatter([xi], [candle_price], marker='x', s=70,
                            color=SETUP_BREAK_COLOR, linewidths=2.0, zorder=8)
             elif is_high:
@@ -1058,13 +1066,21 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
         if bos_price > 0:
             ax.axhline(y=bos_price, color=bos_color, linewidth=0.8, linestyle='--', alpha=0.7, zorder=2)
 
-        # --- Liquidity sweep wick highlight (H1 only) ---
-        # Draws a dotted rectangle around the wick portion of the sweep candle.
-        # Drawn only if sweep occurred on H1 timeframe.
-        sweep_tf = ob.get('sweep_tf')
-        sweep_ts = ob.get('sweep_timestamp')
-        if sweep_tf == 'H1' and sweep_ts:
-            sw_abs_idx, sw_found = smc_detector.locate_ob_candle_idx(df_h1, sweep_ts)
+        # --- Liquidity sweep overlay — SWEEP V2 (pool-anchored, 2026-07-19) ---
+        # One source: the frozen ob['sweep_v2'] snapshot (the same read the
+        # emails narrate — one definition on every surface). Draws:
+        #   - dotted rectangle around the raid wick of the sweep candle,
+        #   - dotted line at the raided pool level (6-bar stub into the candle),
+        #   - star + 'Sweep' label at the wick tip.
+        # The old any-swing overlay (sweep_observed star on the swept swing) is
+        # retired with the old narration. Resolve by TIMESTAMP — P1 indices are
+        # not portable to P2's fresh dataframe.
+        sw = ob.get('sweep_v2')
+        if isinstance(sw, dict) and sw.get('exists') and sw.get('sweep_ts'):
+            sw_color = '#00e5ff'
+            sw_level = sw.get('level')
+            ob_dir = ob.get('direction')
+            sw_abs_idx, sw_found = smc_detector.locate_ob_candle_idx(df_h1, sw['sweep_ts'])
             if sw_found and sw_abs_idx >= window_start:
                 sw_local = sw_abs_idx - window_start
                 if 0 <= sw_local < n:
@@ -1074,61 +1090,34 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                     sw_c = float(df_plot['Close'].iloc[sw_local])
                     body_top = max(sw_o, sw_c)
                     body_bot = min(sw_o, sw_c)
-                    # LONG sweep -> wick pierces below: lower wick
-                    # SHORT sweep -> wick pierces above: upper wick
-                    if ob.get('direction') == 'bullish':
+                    # LONG raid -> lower wick took the pool; SHORT -> upper wick.
+                    if ob_dir == 'bullish':
                         wick_lo, wick_hi = sw_l, body_bot
+                        wick_tip = sw_l
                     else:
                         wick_lo, wick_hi = body_top, sw_h
+                        wick_tip = sw_h
                     if wick_hi > wick_lo:
                         ax.add_patch(patches.Rectangle(
                             (sw_local - 0.45, wick_lo), 0.9, wick_hi - wick_lo,
-                            fill=False, edgecolor='#00e5ff', linestyle=':',
+                            fill=False, edgecolor=sw_color, linestyle=':',
                             linewidth=1.5, zorder=5
                         ))
-
-        # --- Sweep star on the swept swing point ---
-        sw = ob.get('sweep_observed') or {}
-        if sw.get('exists'):
-            sw_tier = sw.get('tier', 'weak')
-            SWEEP_COLOR_MAP = {'textbook': '#00e5ff', 'decent': '#26c6da', 'weak': '#80deea'}
-            sw_color = SWEEP_COLOR_MAP.get(sw_tier, '#80deea')
-            swept_ts = sw.get('swept_swing_ts')
-            sweep_candle_ts = sw.get('timestamp')
-            sw_level = sw.get('price')
-            ob_dir = ob.get('direction')
-            # Resolve swept swing position via timestamp (idx not portable cross-phase).
-            star_local = None
-            swing_tip = None
-            if swept_ts:
-                swept_abs, swept_found = smc_detector.locate_ob_candle_idx(df_h1, swept_ts)
-                if swept_found and swept_abs >= window_start:
-                    star_local = swept_abs - window_start
-                    if 0 <= star_local < n:
-                        swing_tip = float(df_plot['Low'].iloc[star_local]) if ob_dir == 'bullish' \
-                                    else float(df_plot['High'].iloc[star_local])
-                    else:
-                        star_local = None
-            # Dotted level line from swept swing forward to sweep candle.
-            if sw_level is not None and sweep_candle_ts:
-                sc_abs, sc_found = smc_detector.locate_ob_candle_idx(df_h1, sweep_candle_ts)
-                if sc_found and sc_abs >= window_start:
-                    sc_local = sc_abs - window_start
-                    x_lo = star_local if star_local is not None else max(0, sc_local - 6)
-                    if 0 <= sc_local < n and x_lo < sc_local:
-                        ax.plot([x_lo, sc_local], [sw_level, sw_level],
-                                color=sw_color, linewidth=1.0,
-                                linestyle=(0, (3, 2)), alpha=0.8, zorder=4)
-            if star_local is not None and swing_tip is not None:
-                ax.scatter([star_local], [swing_tip], marker='*', s=140,
-                           color=sw_color, edgecolors='#001f24',
-                           linewidths=0.8, zorder=8)
-                label_dy = -14 if ob_dir == 'bullish' else 14
-                label_va = 'top' if ob_dir == 'bullish' else 'bottom'
-                ax.annotate('Sweep', xy=(star_local, swing_tip),
-                            xytext=(0, label_dy), textcoords='offset points',
-                            color=sw_color, fontsize=8, fontweight='bold',
-                            ha='center', va=label_va, zorder=8)
+                    if sw_level is not None:
+                        x_lo = max(0, sw_local - 6)
+                        if x_lo < sw_local:
+                            ax.plot([x_lo, sw_local], [sw_level, sw_level],
+                                    color=sw_color, linewidth=1.0,
+                                    linestyle=(0, (3, 2)), alpha=0.8, zorder=4)
+                    ax.scatter([sw_local], [wick_tip], marker='*', s=140,
+                               color=sw_color, edgecolors='#001f24',
+                               linewidths=0.8, zorder=8)
+                    label_dy = -14 if ob_dir == 'bullish' else 14
+                    label_va = 'top' if ob_dir == 'bullish' else 'bottom'
+                    ax.annotate('Sweep', xy=(sw_local, wick_tip),
+                                xytext=(0, label_dy), textcoords='offset points',
+                                color=sw_color, fontsize=8, fontweight='bold',
+                                ha='center', va=label_va, zorder=8)
 
         # --- FVG: outline middle (displacement) candle only, slightly wider for mitigation visibility ---
         # Cross-phase safety: resolve c1 candle position via timestamp (c1_idx
@@ -1339,9 +1328,23 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                                    y_min=_ylim_lo, y_max=_ylim_hi,
                                    x_center=n / 2.0)
         if eq_ctx:
+            # EQ shelves as dotted SEGMENTS between their touch bars (matches
+            # Phase 1). Map a member ts -> local plot-x via the SAME contract the
+            # swing markers use here (locate_ob_candle_idx -> h1_pos_to_local_ctx),
+            # so shelf endpoints land on the exact touch candles even when dropna
+            # removed rows inside the window.
+            def _eq_ts_to_x_p2(ts_iso):
+                _abs, _found = smc_detector.locate_ob_candle_idx(df_h1, ts_iso)
+                if not _found:
+                    return None
+                _xi = h1_pos_to_local_ctx.get(_abs, -1)
+                return _xi if 0 <= _xi < n else None
+
             charts.draw_eq_lines(ax, eq_ctx, in_view=_pool_in_view, zorder=2,
                                  y_min=_ylim_lo, y_max=_ylim_hi,
-                                 x_center=n / 2.0)
+                                 x_center=n / 2.0,
+                                 ts_to_x=_eq_ts_to_x_p2,
+                                 x_right=n - 1)
 
         ax.set_title(title, color='#dddddd', fontsize=11, pad=8, loc='left')
         ax.tick_params(colors='#888', labelsize=9)
@@ -1433,7 +1436,7 @@ def _chart_legend_html(bos_tag="BOS", bos_tier="BOS"):
         ('#27ae60', 'TP1'),
         ('#1e8449', 'TP2'),
         ('#5dade2', 'Equilibrium (50% of range)'),
-        ('#00e5ff', 'Liquidity sweep (wick highlight)'),
+        ('#00e5ff', 'Liquidity sweep — raid of a real pool (wick highlight + level line)'),
     ]
     rows = "".join(
         f'<span style="display:inline-block;margin:2px 10px 2px 0;font-size:11px;color:#bbb;">'
@@ -1655,6 +1658,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         m15_chart_block = '<div style="padding:10px 12px;background:#2d1a1a;border-left:3px solid #e74c3c;border-radius:4px;color:#e74c3c;font-size:12px;margin-bottom:12px;">&#9888; H1 zoomed chart failed to render for this alert. Check GitHub Actions logs.</div>'
 
     sweep_breakdown_html = build_sweep_breakdown_html(data, dp)
+    setup_liq_html = build_setup_liq_html(data)
 
     # Scheduled-news block — INFORMATION ONLY. Never gates, filters or suppresses
     # a setup. Two pieces:
@@ -1781,6 +1785,7 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
             {m15_chart_block}
             {_chart_legend_html(bos_tag, bos_tier)}
             {sweep_breakdown_html}
+            {setup_liq_html}
             {news_banner_html}
             {macro_html}
         </div>
@@ -1789,73 +1794,110 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
 
 def build_sweep_breakdown_html(data, dp):
     """
-    Render the Sweep Quality Breakdown banner. Placed below M15 chart, above
-    Macro Context. Shows the three components that make up the sweep score:
-    Presence, Equal Levels, Rejection Quality.
+    Render the Liquidity Sweep banner — SWEEP V2 (2026-07-18, pool-anchored).
+
+    Reads the FORMATION-FROZEN ob['sweep_v2'] snapshot (liquidity_sweep.py):
+    a sweep exists only when this zone's own leg took out a REAL resting-
+    liquidity level (yesterday's / last week's high-low, or an equal-level
+    shelf) that was untouched when the leg began. The old any-minor-swing
+    grade (textbook/decent/weak, verified noise-to-inverse on the canonical
+    run) is no longer narrated; its score leg is unchanged in the scorecard
+    until the edge engine rules on the new columns.
+
+    Legacy zones with no snapshot render nothing (they age out in days).
+    Plain English, short — replaces the old sweep text, never adds beside it.
     """
-    comps = data.get('sweep_components') or {}
-    sweep_price = data.get('sweep_price')
-    sweep_tf    = data.get('sweep_tf', 'H1')
-    hrs_before  = data.get('sweep_hours_before_ob')
-    base        = comps.get('base', 0.0)
-    eq_score    = comps.get('equal_levels', 0.0)
-    eq_matches  = comps.get('equal_levels_matches', 0)
-    rej_score   = comps.get('rejection', 0.0)
-    wb_ratio    = comps.get('wick_body_ratio', 0.0)
+    ob = data.get('ob') or {}
+    sw = ob.get('sweep_v2')
+    if not isinstance(sw, dict) or sw.get('pools_swept') is None:
+        return ""  # legacy zone / layer couldn't run — nothing honest to say
 
-    if base <= 0:
-        return ""
+    if not sw.get('exists'):
+        return """
+    <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #555;border-radius:4px;font-size:12px;color:#bbb;line-height:1.6;">
+        <b style="color:#eee;">Liquidity sweep:</b> <span style="color:#888;">none —
+        the move behind this zone did not take out any real resting-liquidity level
+        (yesterday's / last week's high-low or an equal-level shelf). No stop-run fuel.</span>
+    </div>"""
 
-    sweep_price_str = f"{sweep_price:.{dp}f}" if sweep_price is not None else "n/a"
+    pool_word = liquidity_sweep.describe_pool(sw) or "a mapped pool"
+    level = sw.get('level')
+    level_str = f"{level:.{dp}f}" if level is not None else "n/a"
 
-    # Plain-English rejection label (2026-06-16). "wick:body ratio" = how many
-    # times longer the candle's rejection wick is than its body. A long wick vs.
-    # a small body = price was pushed back hard = a clean rejection. We fold the
-    # measured ratio straight into the sentence (no separate jargon bucket).
-    if rej_score >= 1.0:
-        rej_label = f"textbook rejection — wick is {wb_ratio:.1f}x the candle body (3x+ is textbook)"
-    elif rej_score >= 0.66:
-        rej_label = f"strong rejection — wick is {wb_ratio:.1f}x the candle body (want 2x+)"
-    elif rej_score >= 0.33:
-        rej_label = f"weak rejection — wick is only {wb_ratio:.1f}x the candle body (want 2x+ for a clean one)"
+    # Rejection read — RAW wick:body of the sweep candle, folded into plain
+    # words (same thresholds a vet eyeballs: 3x+ textbook, 2x+ strong).
+    ratio = sw.get('rejection_ratio')
+    if ratio is None:
+        rej_label = "rejection unreadable"
+    elif ratio >= 3.0:
+        rej_label = f"textbook rejection — wick {ratio:.1f}x the candle body"
+    elif ratio >= 2.0:
+        rej_label = f"strong rejection — wick {ratio:.1f}x the candle body"
+    elif ratio >= 1.0:
+        rej_label = f"modest rejection — wick {ratio:.1f}x the candle body"
     else:
-        rej_label = f"no real rejection — wick is only {wb_ratio:.1f}x the candle body (body dominates)"
+        rej_label = f"weak rejection — wick only {ratio:.1f}x the candle body (body dominates)"
 
-    total = base + eq_score + rej_score
+    # Follow-through: how far price drove beyond the raided level into the
+    # break that built this zone. The displacement is the proof the raid fed
+    # real orders, not just a wick.
+    ft = sw.get('follow_atr')
+    ft_html = (f" &middot; drove {ft:.1f}&times; ATR beyond it into the break"
+               if isinstance(ft, (int, float)) else "")
 
-    # Swept-level LOCATION (info only). The context tags (round number, session
-    # high/low, prior-day high/low) are already computed by Phase 1 and frozen on
-    # the OB. On non-JPY forex the sweep score is presence-only, so WHERE the
-    # level sits (a round number / session level) is the quality signal that
-    # actually matters — surfaced here for the trader to judge, not scored. Shown
-    # for all pairs (no per-pair branch = nothing to maintain).
-    tags = (((data.get('ob') or {}).get('sweep_observed') or {}).get('context_tags')) or []
-    if tags:
-        pretty = ", ".join(str(t).replace('_', ' ') for t in tags)
-        location_html = (f'<div>&#128205; <b style="color:#eee;">Swept level sits at:</b> '
-                         f'{pretty}</div>')
-    else:
-        location_html = ('<div style="color:#888;">&#128205; Swept level: no round-number / '
-                         'session / prior-day confluence.</div>')
+    rn_html = ""
+    if sw.get('rn_aligned'):
+        rn_html = ('<div>&#128205; <b style="color:#eee;">Round number:</b> '
+                   'the raided level sits on a round number — the strongest '
+                   'sweep location.</div>')
 
-    # One-line verdict (de-bloated 2026-07-14). The old 3-component breakdown
-    # (Presence / Equal Levels / Rejection with per-line scores) explained HOW
-    # the sweep score was computed — scoring internals the trader doesn't act
-    # on. Collapsed to: overall tier + the rejection read + where the swept
-    # level sits (the confluence that actually matters). Score internals stay
-    # in trades.csv / sweep_components; nothing measured is lost.
-    if total >= 2.5:
-        tier_word, tier_col = "textbook", "#27ae60"
-    elif total >= 1.5:
-        tier_word, tier_col = "decent", "#f1c40f"
-    else:
-        tier_word, tier_col = "weak", "#888"
+    extra = ""
+    n_pools = sw.get('pools_swept') or 0
+    if n_pools > 1:
+        extra = (f'<div>This leg cleared {n_pools} resting-liquidity levels '
+                 f'in one run — a wide stop hunt.</div>')
 
     return f"""
     <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #00bcd4;border-radius:4px;font-size:12px;color:#bbb;line-height:1.6;">
-        <b style="color:#eee;">Sweep quality:</b> <b style="color:{tier_col};">{tier_word}</b>
-        &middot; {rej_label} &middot; {sweep_tf} sweep at {sweep_price_str}
-        {location_html}
+        <b style="color:#eee;">Liquidity sweep:</b> the move behind this zone took out
+        <b style="color:#00e5ff;">{pool_word}</b> at {level_str} &middot; {rej_label}{ft_html}
+        {rn_html}{extra}
+    </div>"""
+
+
+def build_setup_liq_html(data):
+    """Render the Setup-Liquidity banner — Reads 1 (stop-side), 2 (tp magnet),
+    3.2 (leg-extreme-was-a-sweep) — from the setup_liq reads computed at alert.
+
+    Observe-only narration: this trade's own stop and target vs resting swing
+    liquidity, plus whether the OB leg ended on a sweep. Renders nothing when the
+    reads are absent (legacy path / degraded). Plain English, short — one line
+    per read, only the lines that have something honest to say.
+    """
+    reads = data.get('setup_liq_reads') or {}
+    swept = data.get('leg_extreme_swept')
+    lines = []
+    stop_line = setup_liq.describe_stop(
+        reads.get('setup_liq_stop_present'),
+        reads.get('setup_liq_stop_offset_atr'),
+        reads.get('setup_liq_stop_tier'))
+    if stop_line:
+        lines.append(f'<div>&#128737; <b style="color:#eee;">Stop:</b> {stop_line}</div>')
+    tp_line = setup_liq.describe_tp(
+        reads.get('setup_liq_tp_present'),
+        reads.get('setup_liq_tp_offset_atr'))
+    if tp_line:
+        lines.append(f'<div>&#127919; <b style="color:#eee;">Target:</b> {tp_line}</div>')
+    leg_line = setup_liq.describe_legextreme(swept)
+    if leg_line:
+        lines.append(f'<div>&#9889; <b style="color:#eee;">Leg end:</b> {leg_line}</div>')
+    if not lines:
+        return ""
+    body = "".join(lines)
+    return f"""
+    <div style="margin-top:12px;padding:10px 12px;background:#0d0d1a;border-left:3px solid #7e57c2;border-radius:4px;font-size:12px;color:#bbb;line-height:1.6;">
+        <b style="color:#eee;">Setup liquidity:</b>
+        {body}
     </div>"""
 def send_email(subject, html_body, h1_chart_b64, m15_chart_b64):
     for recipient in config["account"].get("alert_emails", []):
@@ -2724,6 +2766,22 @@ if __name__ == "__main__":
                 append_scan_log(scan_record)
                 continue
 
+            # SETUP-LIQ Reads 1 & 2 (setup_liq / SWING_SWEEP_SPEC) — this trade's
+            # own STOP-side liquidity and TP-side magnet vs resting swings.
+            # Anchored on the SL / TP1 just computed (levels['sl'] already carries
+            # the OB-distal +/- spread — the live traded stop). Same df_h1 the
+            # levels used (compute_phase2_levels drops the forming bar internally
+            # -> look-ahead-safe); ATR = ob['h1_atr'] (shared *_atr denominator).
+            # A 1:1-fallback TP1 sits on no pool -> magnet absent by construction.
+            # Observe-only; never raises (all-None on failure). Backtest computes
+            # the identical reads at the level-calc step (h1_only_simulator).
+            setup_liq_reads = setup_liq.reads_stop_and_tp(
+                df_h1, ob.get("direction"),
+                levels.get("sl"), levels.get("tp1"), ob.get("h1_atr"),
+                pair_conf.get("pair_type", "forex"),
+                tp1_is_fallback=bool(levels.get("no_liquidity_pool_fallback")),
+            )
+
             # Setup classifier — recognise named textbook patterns (badge + note).
             # Reads only already-computed fields; pd_position from the scorecard.
             setup_name, setup_note, setup_kind = smc_detector.classify_setup(
@@ -2761,20 +2819,11 @@ if __name__ == "__main__":
                 score_res.get('dealing_range'), fvg_source, score_res.get('pd_position'),
                 sweep_tier=score_res.get('sweep_tier'),
                 sweep_components=score_res.get('sweep_components'),
-                sweep_hours_before_ob=score_res.get('sweep_hours_before_ob'),
                 fvg=fvg_data
             )
-            # Resolve sweep candle timestamp for chart rendering.
-            # H1 sweep: consumed from P1's snapshot. P1's sweep_idx points
-            # into P1's H1 dataframe, NOT P2's (different fetches). Always
-            # use the timestamp the snapshot carries.
-            sweep_tf_resolved = score_res.get('sweep_tf')
-            sweep_ts_iso = score_res.get('sweep_timestamp_iso')
-
-            # Inject onto the ob dict so chart functions can locate the sweep
-            # candle by timestamp. Non-invasive: ob is reused only for charts.
-            ob['sweep_tf'] = sweep_tf_resolved
-            ob['sweep_timestamp'] = sweep_ts_iso
+            # (Legacy ob['sweep_tf']/ob['sweep_timestamp'] chart injection
+            # removed 2026-07-19 — the chart overlay now reads the frozen
+            # ob['sweep_v2'] snapshot directly, same source as the emails.)
 
             distance = abs(current_price - proximal)
             pip = pip_size(pair_conf)
@@ -2859,16 +2908,60 @@ if __name__ == "__main__":
                 if _approach_closed is not None and len(_approach_closed) else None
             )
 
+            # DISPLACEMENT_LEG_BUILD_SPEC — structural displacement-leg extreme +
+            # Kaufman ER for THIS OB, via the SAME shared core the backtest uses
+            # (displacement_leg.compute_leg_extreme_er). Parity is real for the
+            # first time: live previously did not stamp leg_extreme at all.
+            # Observe-only: NO gate, NO score, NO verdict. The core takes
+            # TIMESTAMPS (ob_timestamp/bos_timestamp) + the persisted swing list
+            # and re-resolves ts->idx internally, because the OB/swing indices
+            # loaded from Phase-1 state are STALE against the live H1 frame
+            # (spec §1.3). Closed bars only (drop the forming bar, same as the
+            # approach read). Never raises; returns None on any failure.
+            #   *_at_alert here matches the backtest column name; the phase2_zones
+            #   re-stamp below carries the *_at_email twin (same value, re-anchored
+            #   on re-arm — trader-approved for these two columns only, spec §5).
+            _leg_swings = []
+            try:
+                import dealing_range as _dr_leg
+                _leg_state = _dr_leg.load_state() or {}
+                _leg_swings = smc_detector.swings_for_chart(_leg_state.get(name) or {})
+            except Exception:
+                _leg_swings = []
+            leg_extreme_at_alert, leg_er_at_alert, _leg_extreme_end_idx = \
+                displacement_leg.compute_leg_extreme_er(
+                    _approach_closed,               # closed bars only (forming dropped)
+                    ob.get("ob_timestamp"),
+                    ob.get("bos_timestamp"),
+                    ob.get("direction"),
+                    _leg_swings,
+                )
+
+            # Read 3.2 (setup_liq): was the leg's OWN terminal extreme itself a
+            # sweep of an active swing (the leg ENDED on a stop-run, then
+            # reversed)? Same closed frame + the extreme_end_idx the shared core
+            # just resolved -> shares the leg core's point-in-time picture, no
+            # re-detection. Observe-only; None when un-measurable. Backtest
+            # computes the identical value at the replay yield (replay_engine).
+            leg_extreme_swept = setup_liq.read_legextreme_swept(
+                _approach_closed, leg_extreme_at_alert, _leg_extreme_end_idx,
+                ob.get("direction"), pair_conf.get("pair_type", "forex"),
+                ob.get("h1_atr"),
+            )
+
             trade_data = {
                 "pair": name,
                 "bias": bias,
                 "score": score_res['total'],
                 "breakdown": score_res['breakdown'],
+                # Legacy sweep record fields — SCORE-side facts only (the sweep
+                # leg still feeds the score, so what it saw stays logged).
+                # sweep_hours_before_ob dropped 2026-07-19 with the old banner
+                # (write-only after the sweep-v2 narration replaced it).
                 "sweep_price": score_res.get('sweep_price'),
                 "sweep_tf": score_res.get('sweep_tf', 'H1'),
                 "sweep_tier": score_res.get('sweep_tier'),
                 "sweep_components": score_res.get('sweep_components'),
-                "sweep_hours_before_ob": score_res.get('sweep_hours_before_ob'),
                 "macro_summary": gemini_risk.get("macro_summary"),
                 "macro_unavailable": bool(gemini_risk.get("macro_unavailable", False)),
                 "news_ctx": news_ctx,
@@ -2876,6 +2969,18 @@ if __name__ == "__main__":
                                 if setup_name else None),
                 "levels": levels,
                 "ob": ob,
+                # DISPLACEMENT_LEG_BUILD_SPEC — displacement-leg extreme + Kaufman
+                # ER at this alert (observe-only). *_at_alert name matches the
+                # backtest column; the phase2_zones re-stamp carries the *_at_email
+                # twin. None when un-measurable (OB predates frame / degenerate).
+                "leg_extreme_at_alert": leg_extreme_at_alert,
+                "leg_er_at_alert": leg_er_at_alert,
+                # SETUP-LIQ (setup_liq / SWING_SWEEP_SPEC) — Reads 1 (stop-side),
+                # 2 (tp magnet), 3.2 (leg-extreme-was-a-sweep). Observe-only; the
+                # email narrates these (describe_stop/describe_tp/describe_legextreme).
+                # Backtest logs the identical values as setup_liq_* columns.
+                "setup_liq_reads": setup_liq_reads,
+                "leg_extreme_swept": leg_extreme_swept,
                 # Choppiness Index on the alert's server trading day — daily
                 # trend-vs-range regime as of THIS alert. Anchored at the last
                 # CLOSED H1 bar (drop the forming bar), grouped by the same
@@ -3081,6 +3186,15 @@ if __name__ == "__main__":
                 "approach_speed_atr_at_email": approach["approach_speed_atr_at_fill"],
                 "approach_body_ratio_at_email": approach["approach_body_ratio_at_fill"],
                 "approach_er_at_email": approach["approach_er_at_fill"],
+                # DISPLACEMENT_LEG_BUILD_SPEC — displacement-leg extreme + ER
+                # re-stamped on every email (fresh/reentry/still_valid). This is
+                # the trader-approved re-anchor for THESE TWO COLUMNS ONLY (spec
+                # §5): a leg still running at first alert, or a top that has since
+                # confirmed, gets its true extreme now. Same value shape as the
+                # *_at_alert payload above, different stamp name (the *_at_email
+                # convention the approach twins use). approach_asof_utc dates it.
+                "leg_extreme_at_email": leg_extreme_at_alert,
+                "leg_er_at_email": leg_er_at_alert,
                 "approach_asof_utc": approach_asof_utc,
             }
             # H1 wide context + H1 zoomed entry. The "m15_chart" variable name

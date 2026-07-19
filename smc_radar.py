@@ -13,6 +13,7 @@ import dealing_range
 import h4_range  # H4-derived dealing range (built from H1, mapped onto H1)
 import pool_builder  # PD/PW liquidity pools — observation only, never gates
 import eq_pools      # EQH/EQL equal-level clusters — observation only, never gates
+import liquidity_sweep  # sweep v2 (pool-anchored) — observation only, never gates
 import weekly_pd     # Weekly PD zone (HTF premium/discount) — observation only
 import charts  # shared H1 chart style engine (Wave 2 item 2C)
 from zone import Zone  # typed slate zone — single slate field definition (Wave 2 item 2B)
@@ -88,10 +89,19 @@ OB_MAX_KEEP = 2          # hard cap on surfaced OBs
 LIVE_DETECTION_BARS = 150
 
 # Same-leg dedupe: two same-direction OBs whose proximal lines are within
-# this fraction of H1 ATR are the same visual zone. 0.25 x a typical EURUSD
-# H1 ATR (~0.0012) ~= 0.0003, the old hardcoded forex threshold -- sub-1
-# pair behaviour is preserved; JPY/Gold/NAS dedupe starts working.
-DEDUPE_PROXIMAL_ATR_MULT = 0.25
+# this fraction of H1 ATR are the same visual zone -> merge to one. A vet
+# trading one of two same-direction OBs a fraction of an hourly move apart
+# would never place both; the backtest must not book both either.
+# Set to 1.0 (one H1 ATR) 2026-07-17: a measurement over 2,689 same-direction
+# OB pairs (5 pairs x 4 regime windows on frozen cache) showed 0.25 merged
+# just 1 pair -- the rule was effectively off, which is why USDCHF fired two
+# overlapping LONGs (2026-07-16 03:00 + 06:00 OBs, proximal gap 0.00031 =
+# ~0.35 ATR). At 1.0 ATR, 710 of 2,689 pairs (26%) merge -- the real overlaps.
+# NOTE: the merge loop caps a merged zone's TOTAL proximal span at this same
+# threshold (see _dedupe_same_leg_impl) so transitive chaining (A~B, B~C) can't
+# collapse OBs >1 ATR apart into one over-wide blob -- 54 such over-reach cases
+# (max span 3.14 ATR) were measured and are prevented by the span cap.
+DEDUPE_PROXIMAL_ATR_MULT = 1.0
 
 # ---------------------------------------------------------------------------
 # RANGING (INFORMATION ONLY — gates nothing). Two-component definition:
@@ -341,6 +351,7 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
         if sz.get('status') != 'active':
             continue
         sw = sz.get('sweep_observed') or {}
+        sw2 = sz.get('sweep_v2')
         active.append({
             'id': sz.get('zone_id'),
             'direction': sz.get('direction'),
@@ -364,6 +375,15 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
                 'tier': sw.get('tier'),
                 'price': sw.get('price'),
             } if sw else None,
+            # Sweep v2 (pool-anchored) — the rebuilt read. Summary only; the
+            # full frozen snapshot lives on the zone (active_obs.json).
+            'sweep_v2': {
+                'exists': bool(sw2.get('exists')),
+                'tier': sw2.get('tier'),
+                'level': sw2.get('level'),
+                'rn_aligned': sw2.get('rn_aligned'),
+                'pools_swept': sw2.get('pools_swept'),
+            } if isinstance(sw2, dict) else None,
         })
     return {
         'scan_ts': ist_now.isoformat(),
@@ -611,7 +631,7 @@ is_ob_mitigated_phase1 = smc_detector.is_ob_mitigated_phase1
 
 
 def _dedupe_same_leg_impl(obs, thresh):
-    """Same-leg dedupe — 4-test ladder applied in strict order.
+    """Same-leg dedupe — 4-test ladder applied in strict order, span-capped.
 
     Two OBs in the same direction whose proximal lines are within `thresh`
     (an absolute price distance) are the same visual zone; keep one using:
@@ -620,6 +640,16 @@ def _dedupe_same_leg_impl(obs, thresh):
       Test 2: Both same touch state — FVG-holder wins.
       Test 3: Tied on touch and FVG — freshest (higher bos_idx) wins.
       Test 4: Defensive — identical bos_idx, keep first encountered.
+
+    SPAN CAP (2026-07-17): an OB joins an existing cluster only if doing so
+    keeps that cluster's TOTAL proximal span (max - min proximal across all its
+    members) within `thresh`. This is the guard against transitive chaining:
+    with the widened 1.0-ATR threshold, a naive "merge into the nearest survivor"
+    loop lets A~B and B~C collapse A and C into one zone even when A and C are
+    >1 ATR apart (measured: 54 such cases, max span 3.14 ATR). The cap keeps a
+    merged zone no wider than one threshold, so genuinely separate OBs survive.
+    The ladder (_pick_winner) still decides WHICH member represents a cluster —
+    the cap only limits how far a cluster may reach.
 
     Pure: no captured state. The caller supplies `thresh` (in live/backtest
     this is DEDUPE_PROXIMAL_ATR_MULT x H1 ATR, with a 0.00030 fallback). Kept
@@ -674,18 +704,26 @@ def _dedupe_same_leg_impl(obs, thresh):
         if len(group) == 1:
             kept.extend(group)
             continue
-        survivors = []
-        for cand in group:
+        # Each cluster tracks: the ladder-winning OB ('winner'), and the min/max
+        # proximal across ALL members ('lo'/'hi') so we can span-cap. Process OBs
+        # sorted by proximal so a cluster grows monotonically and the span test
+        # is order-stable (nearest neighbour joins first).
+        clusters = []  # list of {'winner': ob, 'lo': float, 'hi': float}
+        for cand in sorted(group, key=lambda o: float(o['proximal_line'])):
+            cp = float(cand['proximal_line'])
             merged = False
-            for idx, surv in enumerate(survivors):
-                if abs(cand['proximal_line'] - surv['proximal_line']) <= thresh:
-                    winner = _pick_winner(cand, surv)
-                    survivors[idx] = winner
+            for cl in clusters:
+                # Join only if the resulting cluster span stays within thresh.
+                new_lo = min(cl['lo'], cp)
+                new_hi = max(cl['hi'], cp)
+                if (new_hi - new_lo) <= thresh:
+                    cl['winner'] = _pick_winner(cand, cl['winner'])
+                    cl['lo'], cl['hi'] = new_lo, new_hi
                     merged = True
                     break
             if not merged:
-                survivors.append(cand)
-        kept.extend(survivors)
+                clusters.append({'winner': cand, 'lo': cp, 'hi': cp})
+        kept.extend(cl['winner'] for cl in clusters)
     return kept
 
 
@@ -1131,6 +1169,24 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             logging.warning(f"[sweep_observed] OB build failed sweep observation: {_sweep_err}")
             sweep_obs = {'exists': False}
 
+        # Sweep v2 — rebuilt pool-anchored sweep (liquidity_sweep.py). Same
+        # leg window, but the target must be a RANKED pool (PW/PD/EQ shelf)
+        # that was intact when the leg began; event judged by the ONE pool
+        # status machine. Observation only — the legacy sweep_obs above keeps
+        # feeding the score/OB2-rank unchanged. Snapshot is FORMATION-FROZEN
+        # on the zone (Zone.refresh never re-stamps it). Follow-through is
+        # measured to the break-confirmation candle (_confirm_idx_bq).
+        try:
+            sweep_v2 = liquidity_sweep.observe_pool_sweep(
+                df, ob_idx, impulse_start_idx, ev_dir,
+                h1_atr_for_leg, pair_type, pair_name,
+                prior_event_idx=prior_event_idx,
+                break_idx=_confirm_idx_bq,
+            )
+        except Exception as _sweep2_err:
+            logging.warning(f"[sweep_v2] OB build failed pool-sweep observation: {_sweep2_err}")
+            sweep_v2 = liquidity_sweep.snapshot_failed()
+
         # Dealing range snapshot — Phase 1 is the single source of truth
         # for DR. Computed once at OB build time using this scan's H1 frame,
         # then frozen on the zone. Phase 2 consumes ob['dealing_range']
@@ -1229,6 +1285,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             'h1_atr':             float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
             'fvg':                fvg_dict,
             'sweep_observed':     sweep_obs,
+            'sweep_v2':           sweep_v2,
             'dealing_range':      dealing_range_snapshot,
             # OB BUILD LEDGER — back-reference so post-build mitigation can amend
             # the right diag entry. Stripped before returning.
@@ -1985,13 +2042,27 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                                    x_center=n_plot / 2.0)
 
         # --- Equal-level shelves (EQH/EQL) ---
-        # Intact equal-high / equal-low clusters as teal dotted lines (#5),
-        # off-view ones as edge arrows. EQ is H1-only. Observation only.
+        # Intact equal-high / equal-low clusters as teal dotted SEGMENTS (#5)
+        # connecting the shelf's touch bars, off-view ones as edge arrows. EQ is
+        # H1-only. Observation only. The mapper turns a member ts into a local
+        # plot-x (or None off-window) via the SAME ts->abs table the swing
+        # markers use, so shelf endpoints land on the exact touch candles.
         if eq_ctx:
+            _eq_ts_to_abs = smc_detector.build_ts_to_local_x(full_df)
+
+            def _eq_ts_to_x(ts_iso):
+                _abs = _eq_ts_to_abs.get(smc_detector.ts_to_utc_instant(ts_iso))
+                if _abs is None:
+                    return None
+                _xi = _abs - window_start
+                return _xi if 0 <= _xi < n_plot else None
+
             charts.draw_eq_lines(ax, eq_ctx,
                                  in_view=_wall_in_view, zorder=2,
                                  y_min=y_min, y_max=y_max,
-                                 x_center=n_plot / 2.0)
+                                 x_center=n_plot / 2.0,
+                                 ts_to_x=_eq_ts_to_x,
+                                 x_right=n_plot - 1)
 
         # --- Swing markers (triangles + current-setup broken-swing X) ---
         # SINGLE SOURCE: consume the persisted swing pool from dealing_range
@@ -2002,6 +2073,12 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
         SETUP_BREAK_COLOR = '#ffffff'  # max contrast on dark bg + red/green candles; the X is a bold marker, never confused with the thin white price line
         marker_offset = (y_max - y_min) * 0.012
         _ob_bst = smc_detector.ob_broken_swing_ts(ob, walls) if has_ob else None
+        # Normalise the X-target to a UTC instant ONCE. The swing pool and the
+        # event ring can serialize the same moment differently (gold arrives
+        # US/Eastern on some fetches, UTC on others — see ts_to_utc_instant), so
+        # a raw string == would silently miss and drop the X even when both name
+        # the same bar. Compare instants, exactly like the abs-idx lookup below.
+        _ob_bst_inst = smc_detector.ts_to_utc_instant(_ob_bst) if _ob_bst else None
         swings_persisted = smc_detector.swings_for_chart(walls)
         if swings_persisted:
             # ts -> absolute idx over full_df, then shift to local plot x.
@@ -2022,7 +2099,8 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                 # from the timestamp; the price must come from the same bar.
                 is_high = (s['type'] == 'high')
                 candle_price = float(H[xi]) if is_high else float(L[xi])
-                if _ob_bst and s.get('ts') == _ob_bst:
+                _s_inst = smc_detector.ts_to_utc_instant(s.get('ts'))
+                if _ob_bst_inst is not None and _s_inst == _ob_bst_inst:
                     ax.scatter([xi], [candle_price], marker='x',
                                s=70, color=SETUP_BREAK_COLOR, linewidths=2.0, zorder=8)
                 elif is_high:
@@ -2034,60 +2112,39 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                                s=42, color=SWING_COLOR, edgecolors=SWING_COLOR,
                                linewidths=1.0, zorder=6)
 
-        # --- Sweep candle marker (Phase 1 sweep observation) ---
-        # Star at the wick tip + dotted level line from sweep candle BACK
-        # to the swept swing's idx. NO wick highlight — the bar bloom hid
-        # the candle itself. Star is drawn for EVERY tier (textbook /
-        # decent / weak); color varies so visual intensity still hints at
-        # quality, but presence is consistent.
-        sw = (ob.get('sweep_observed') or {}) if (has_ob and not is_invalidated) else {}
-        if sw.get('exists'):
-            sw_abs_idx = sw.get('sweep_idx')
-            sw_level = sw.get('price')
-            sw_tier = sw.get('tier', 'weak')
-            sw_swept_idx = sw.get('swept_swing_idx')  # may be None on legacy snapshots
-            SWEEP_COLOR_MAP = {
-                'textbook': '#00e5ff',
-                'decent':   '#26c6da',
-                'weak':     '#80deea',
-            }
-            SWEEP_COLOR = SWEEP_COLOR_MAP.get(sw_tier, '#80deea')
-            if sw_abs_idx is not None and sw_level is not None:
+        # --- Sweep marker — SWEEP V2 (pool-anchored, 2026-07-19) ---
+        # One source: the frozen ob['sweep_v2'] snapshot (same read the emails
+        # narrate — one definition on every surface; the old any-swing overlay
+        # retired with the old narration). Star at the raid wick tip + dotted
+        # line at the raided pool level (6-bar stub into the sweep candle).
+        # Resolve the sweep candle by TIMESTAMP — snapshot indices are not
+        # portable across fetches (D5 class).
+        sw = (ob.get('sweep_v2') or {}) if (has_ob and not is_invalidated) else {}
+        if isinstance(sw, dict) and sw.get('exists') and sw.get('sweep_ts'):
+            SWEEP_COLOR = '#00e5ff'
+            sw_level = sw.get('level')
+            # Same ts->abs-idx table the swing/EQ markers use (instant-
+            # normalised, D5-safe across fetch serialisations).
+            _sw_inst = smc_detector.ts_to_utc_instant(sw.get('sweep_ts'))
+            sw_abs_idx = (smc_detector.build_ts_to_local_x(full_df).get(_sw_inst)
+                          if _sw_inst is not None else None)
+            if sw_abs_idx is not None:
                 sw_local = sw_abs_idx - window_start
-                # Dotted line at the swept price level — extends from
-                # the swept swing's idx forward to the sweep candle.
-                # Falls back to a 6-candle stub when swept_swing_idx
-                # isn't on the snapshot (legacy zones).
-                if sw_swept_idx is not None:
-                    lvl_x_start = max(0, int(sw_swept_idx) - window_start)
-                else:
-                    lvl_x_start = max(0, sw_local - 6) if 0 <= sw_local < n_plot else None
-                if lvl_x_start is not None and 0 <= sw_local < n_plot and lvl_x_start < sw_local:
-                    ax.plot([lvl_x_start, sw_local], [sw_level, sw_level],
-                            color=SWEEP_COLOR, linewidth=1.0,
-                            linestyle=(0, (3, 2)), alpha=0.8, zorder=4)
-                # Star on the SWEPT SWING point (the level that was taken out).
-                # Falls back to the sweep candle wick tip on legacy zones where
-                # swept_swing_idx is absent.
-                if sw_swept_idx is not None:
-                    star_local = int(sw_swept_idx) - window_start
-                    if 0 <= star_local < n_plot:
-                        swing_tip = float(L[star_local]) if ob['direction'] == 'bullish' else float(H[star_local])
-                    else:
-                        star_local = None
-                else:
-                    star_local = sw_local if 0 <= sw_local < n_plot else None
-                    if star_local is not None:
-                        sw_h = float(H[star_local])
-                        sw_l = float(L[star_local])
-                        swing_tip = sw_l if ob['direction'] == 'bullish' else sw_h
-                if star_local is not None:
-                    ax.scatter([star_local], [swing_tip], marker='*', s=140,
+                if 0 <= sw_local < n_plot:
+                    wick_tip = float(L[sw_local]) if ob['direction'] == 'bullish' \
+                               else float(H[sw_local])
+                    if sw_level is not None:
+                        lvl_x_start = max(0, sw_local - 6)
+                        if lvl_x_start < sw_local:
+                            ax.plot([lvl_x_start, sw_local], [sw_level, sw_level],
+                                    color=SWEEP_COLOR, linewidth=1.0,
+                                    linestyle=(0, (3, 2)), alpha=0.8, zorder=4)
+                    ax.scatter([sw_local], [wick_tip], marker='*', s=140,
                                color=SWEEP_COLOR, edgecolors='#001f24',
                                linewidths=0.8, zorder=8)
                     label_dy = -14 if ob['direction'] == 'bullish' else 14
                     label_va = 'top' if ob['direction'] == 'bullish' else 'bottom'
-                    ax.annotate('Sweep', xy=(star_local, swing_tip),
+                    ax.annotate('Sweep', xy=(sw_local, wick_tip),
                                 xytext=(0, label_dy), textcoords='offset points',
                                 color=SWEEP_COLOR, fontsize=8, fontweight='bold',
                                 ha='center', va=label_va, zorder=8)
@@ -2152,19 +2209,22 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
             _mid = ob['fvg']['ghost_c1_idx'] + 1 - window_start
             if 0 <= _mid < n_plot:
                 obstacles.append((_mid - 0.6, _mid - 0.6 + 3.0, _fb, _ft))
-        # Sweep — dotted level line from swept_swing back to sweep_idx, plus
-        # star + label at the wick tip. Treat the level line span as obstacle.
-        _sw = (ob.get('sweep_observed') or {}) if (has_ob and not is_invalidated) else {}
-        if _sw.get('exists') and _sw.get('sweep_idx') is not None and _sw.get('price') is not None:
-            _sw_local = _sw['sweep_idx'] - window_start
-            if 0 <= _sw_local < n_plot:
-                _swept = _sw.get('swept_swing_idx')
-                _x_lo = max(0, _swept - window_start) if _swept is not None else max(0, _sw_local - 6)
-                _x_hi = _sw_local
-                if _x_lo > _x_hi:
-                    _x_lo, _x_hi = _x_hi, _x_lo
-                _sw_p = float(_sw['price'])
-                obstacles.append((_x_lo, _x_hi + 0.5, _sw_p - label_half_h, _sw_p + label_half_h))
+        # Sweep (v2) — dotted pool-level stub + star at the raid wick tip.
+        # Treat the level-line span as obstacle. Same ts->idx resolution as the
+        # drawing block above (snapshot carries a timestamp, never an idx).
+        _sw = (ob.get('sweep_v2') or {}) if (has_ob and not is_invalidated) else {}
+        if isinstance(_sw, dict) and _sw.get('exists') and _sw.get('sweep_ts') \
+                and _sw.get('level') is not None:
+            _sw_inst2 = smc_detector.ts_to_utc_instant(_sw.get('sweep_ts'))
+            _sw_abs2 = (smc_detector.build_ts_to_local_x(full_df).get(_sw_inst2)
+                        if _sw_inst2 is not None else None)
+            if _sw_abs2 is not None:
+                _sw_local = _sw_abs2 - window_start
+                if 0 <= _sw_local < n_plot:
+                    _x_lo = max(0, _sw_local - 6)
+                    _sw_p = float(_sw['level'])
+                    obstacles.append((_x_lo, _sw_local + 0.5,
+                                      _sw_p - label_half_h, _sw_p + label_half_h))
         # Break candle outline — spans br_start..br_end at ±0.5 around column.
         if has_ob:
             try:
@@ -2468,20 +2528,28 @@ def build_summary_table_html(all_zones_for_table, dp_map, pair_prices=None):
         else:
             fvg_glyph, fvg_col, fvg_title = '&ndash;', '#666', 'No FVG'
 
-        # --- Sweep cell: star for every sweep, color encodes tier.
-        # textbook = green, decent = yellow, weak = grey.
-        # Detail (tier name) sits in the chart legend + zone narrative.
-        sw = z.get('sweep_observed') or {}
-        if not sw.get('exists'):
-            sw_glyph, sw_col, sw_title = '&ndash;', '#666', 'No sweep'
+        # --- Sweep cell: SWEEP V2 (pool-anchored, 2026-07-18). Star only when
+        # the zone's leg raided a REAL mapped pool (PW/PD/EQ shelf); the old
+        # any-minor-swing read (verified noise-to-inverse) no longer shows
+        # here. Color encodes the raided pool's weight; RN alignment upgrades
+        # to green. Legacy zones (no snapshot) show a dash.
+        sw = z.get('sweep_v2')
+        if not isinstance(sw, dict) or not sw.get('exists'):
+            sw_glyph, sw_col, sw_title = '&ndash;', '#666', 'No pool raided'
         else:
-            tier = (sw.get('tier') or 'weak').lower()
-            if tier == 'textbook':
-                sw_glyph, sw_col, sw_title = '&#9733;', '#27ae60', 'Textbook sweep'
-            elif tier == 'decent':
-                sw_glyph, sw_col, sw_title = '&#9733;', '#f1c40f', 'Decent sweep'
+            tier = sw.get('tier')
+            names = {'PW': "last week's level", 'PD': "yesterday's level",
+                     'EQ': 'equal-level shelf'}
+            sw_title = f"Swept {names.get(tier, 'a mapped pool')}"
+            if sw.get('rn_aligned'):
+                sw_glyph, sw_col = '&#9733;', '#27ae60'
+                sw_title += ' at a round number'
+            elif tier == 'PW':
+                sw_glyph, sw_col = '&#9733;', '#27ae60'
+            elif tier == 'PD':
+                sw_glyph, sw_col = '&#9733;', '#f1c40f'
             else:
-                sw_glyph, sw_col, sw_title = '&#9733;', '#888', 'Weak sweep'
+                sw_glyph, sw_col = '&#9733;', '#888'
 
         is_new     = z.get('is_new', False)
         is_changed = z.get('is_changed', False)
@@ -2555,7 +2623,7 @@ def _phase1_chart_legend_html(bos_tag="BOS", bos_tier=None):
         ('#5dade2', 'Dealing range walls (dotted=anchored, dashed=placeholder; far walls render as edge labels)'),
         ('#85c1e9', 'Equilibrium (50%)'),
         ('#d4a017', 'Swing: ▲▼ lookback-3 (structural swings — walls / BOS / CHoCH)'),
-        ('#00e5ff', 'Sweep — ★ at wick tip + dotted line back to the swept swing (color: textbook=cyan, decent=teal, weak=pale)'),
+        ('#00e5ff', 'Sweep — ★ at the raid wick tip + dotted line at the raided pool level (yesterday\'s/last week\'s H-L or an equal-level shelf)'),
         ('#ffffff', 'Current price'),
     ]
     rows = "".join(
@@ -2567,29 +2635,6 @@ def _phase1_chart_legend_html(bos_tag="BOS", bos_tier=None):
     return (
         f'<div style="margin:8px 0 0 0;padding:8px 10px;background:#0d0d1a;'
         f'border-radius:4px;line-height:1.8;">{rows}</div>'
-    )
-
-
-def _render_sweep_observation_html(sweep_obs, dp):
-    """
-    Render the Phase 1 sweep observation badge HTML. Single source of truth
-    used by both NEW-zone and active-zone card builders so the format stays
-    consistent. Snapshot semantics: timestamp / numbers / tags are frozen at
-    OB build time.
-
-    Returns the HTML string starting with "Sweep:".
-    """
-    sweep_obs = sweep_obs or {}
-    if not sweep_obs.get('exists'):
-        return "Sweep: <span style='color:#888;'>None observed in this leg</span>"
-
-    tier = sweep_obs.get('tier', 'weak')
-    tier_color = {'textbook': '#27ae60', 'decent': '#e67e22', 'weak': '#888'}.get(tier, '#888')
-    tier_emoji = {'textbook': '🎯', 'decent': '◐', 'weak': '·'}.get(tier, '·')
-
-    return (
-        f"Sweep: <span style='color:{tier_color};'>"
-        f"{tier_emoji} {tier.title()}</span>"
     )
 
 
@@ -2674,13 +2719,18 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
     else:
         trend_text, trend_col = 'Undefined', '#888'
 
-    # Sweep status for the chip row. The standalone "Sweep: None" line below
-    # the chips is dropped — absence is shown here and in the table dash.
-    _sw = sz.get('sweep_observed') or {}
-    if _sw.get('exists'):
-        _sw_tier = (_sw.get('tier') or 'weak').lower()
-        _sw_col = {'textbook': '#27ae60', 'decent': '#f1c40f', 'weak': '#888'}.get(_sw_tier, '#888')
-        sweep_chip = f"<span style='color:{_sw_col};'>★ {_sw_tier.title()}</span>"
+    # Sweep chip — SWEEP V2 (pool-anchored, 2026-07-18): names the raided pool
+    # in plain words instead of the old textbook/decent/weak grade (verified
+    # noise-to-inverse). Legacy zones (no snapshot) read "None".
+    _sw = sz.get('sweep_v2')
+    if isinstance(_sw, dict) and _sw.get('exists'):
+        _tier = _sw.get('tier')
+        _chip_word = {'PW': "last week's level", 'PD': "yesterday's level",
+                      'EQ': 'equal-level shelf'}.get(_tier, 'mapped pool')
+        _sw_col = '#27ae60' if (_sw.get('rn_aligned') or _tier == 'PW') else \
+                  ('#f1c40f' if _tier == 'PD' else '#888')
+        _rn = ' @ round number' if _sw.get('rn_aligned') else ''
+        sweep_chip = f"<span style='color:{_sw_col};'>★ {_chip_word}{_rn}</span>"
     else:
         sweep_chip = "<span style='color:#888;'>None</span>"
 
@@ -2789,6 +2839,13 @@ def _slate_zone_to_ob_shape(sz):
         "median_leg_body": sz["median_leg_body"],
         "ob_idx":    sz["ob_idx"],
         "bos_idx":   sz["bos_idx"],
+        # bos_timestamp is what ob_broken_swing_ts() matches against the event
+        # ring to find THIS OB's broken swing (the X-marker target). Without it
+        # the lookup returns None and the Phase 1 chart never drew the break X
+        # on any slate/active zone — only the plain swing triangles (the CHoCH
+        # break swing showed a ▼ but no X). Carry it through so the X lands on
+        # the exact swing this OB's BOS/CHoCH broke.
+        "bos_timestamp":     sz.get("bos_timestamp"),
         "bos_swing_price":   sz["bos_swing_price"],
         "impulse_start_idx": sz["impulse_start_idx"],
         "impulse_start_price": sz["impulse_start_price"],
@@ -2796,7 +2853,11 @@ def _slate_zone_to_ob_shape(sz):
         "touches":   sz.get("touches", 0),
         "status":    sz.get("status_label", "Pristine"),
         "h1_atr":    sz.get("h1_atr", 0.0),
-        "sweep_observed": sz.get("sweep_observed", {"exists": False}),
+        # Sweep v2 — the chart overlay's source (pool-anchored read). The
+        # legacy sweep_observed carry was dropped 2026-07-19: the chart no
+        # longer reads it (the legacy snapshot stays on the ZONE for the
+        # score/OB2-rank; this adaptor feeds charts only).
+        "sweep_v2": sz.get("sweep_v2"),
     }
 
 
@@ -4470,7 +4531,7 @@ def run_radar():
                     "fvg_ghost": (not sz["fvg"].get("exists", False))
                                   and sz["fvg"].get("was_detected", False),
                     "fvg_mitigation": sz["fvg"].get("mitigation", "none"),
-                    "sweep_observed": sz.get("sweep_observed", {"exists": False}),
+                    "sweep_v2": sz.get("sweep_v2"),
                     "first_seen_ist": sz.get("first_seen_label", "—"),
                     "is_new": sz.get("is_new_this_scan", False),
                     "is_changed": False,
