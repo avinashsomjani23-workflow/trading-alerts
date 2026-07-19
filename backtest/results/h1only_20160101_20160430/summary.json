@@ -1,0 +1,558 @@
+{
+  "run_id": "h1only_20160101_20160430",
+  "meta": {
+    "start": "2016-01-01",
+    "end": "2016-04-30",
+    "regime": "bau",
+    "regime_label": null,
+    "mode": "h1_only",
+    "pairs": [
+      "EURUSD",
+      "USDCHF"
+    ],
+    "generated_utc": "2026-07-19T10:39:34.501217+00:00",
+    "code_sha": "cce2378-dirty",
+    "news_coverage": {
+      "ff": false
+    },
+    "news_events_fetched": 0,
+    "news_blocked_rows": 0,
+    "news_window_minutes": 30,
+    "ist_blocked_rows": 41,
+    "ist_window_forex": "UTC 03:30-18:30 (IST 09:00-24:00)",
+    "ist_window_index": "UTC 03:30-18:30 (IST 09:00-24:00)",
+    "killzone_dropped_alerts": 154,
+    "killzone_drops_by_pair": {
+      "EURUSD": 79,
+      "USDCHF": 75
+    },
+    "killzone_windows_by_pair": {
+      "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "USDCHF": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
+    }
+  },
+  "risk_per_trade_usd": 250.0,
+  "total_trade_rows": 226,
+  "fill_rate_proximal": {
+    "alerts": 226,
+    "filled": 162,
+    "fill_rate_pct": 71.7
+  },
+  "exit_reason_counts_proximal": {
+    "sl": 99,
+    "never_filled": 63,
+    "tp1": 59,
+    "friday_flat": 4,
+    "timeout": 1
+  },
+  "scoreboards": {
+    "proximal_realised": {
+      "trades": 162,
+      "wins": 62,
+      "losses": 87,
+      "breakevens": 13,
+      "win_rate_pct": 41.6,
+      "expectancy_r": -0.137,
+      "expectancy_usd": -34.19,
+      "total_r": -22.157,
+      "total_pnl_usd": -5539.25,
+      "avg_win_r": 1.033,
+      "avg_loss_r": -0.991,
+      "avg_win_usd": 258.0,
+      "avg_loss_usd": -248.0,
+      "avg_mfe_r": 1.047,
+      "avg_mae_r": -0.217,
+      "win_capture_pct": 99.0
+    },
+    "proximal_exit_tp1": {
+      "trades": 162,
+      "wins": 65,
+      "losses": 97,
+      "breakevens": 0,
+      "win_rate_pct": 40.1,
+      "expectancy_r": -0.057,
+      "expectancy_usd": -14.23,
+      "total_r": -9.218,
+      "total_pnl_usd": -2304.5,
+      "avg_win_r": 1.35,
+      "avg_loss_r": -1.0,
+      "avg_win_usd": 338.0,
+      "avg_loss_usd": -250.0,
+      "avg_mfe_r": 1.082,
+      "avg_mae_r": -0.228,
+      "win_capture_pct": 125.0
+    },
+    "proximal_exit_tp2": {
+      "trades": 162,
+      "wins": 20,
+      "losses": 97,
+      "breakevens": 45,
+      "win_rate_pct": 17.1,
+      "expectancy_r": 0.154,
+      "expectancy_usd": 38.55,
+      "total_r": 24.981,
+      "total_pnl_usd": 6245.25,
+      "avg_win_r": 6.099,
+      "avg_loss_r": -1.0,
+      "avg_win_usd": 1525.0,
+      "avg_loss_usd": -250.0,
+      "avg_mfe_r": 1.152,
+      "avg_mae_r": -0.228,
+      "win_capture_pct": 530.0
+    }
+  },
+  "per_pair_proximal_realised": [
+    {
+      "pair": "EURUSD",
+      "trades": 87,
+      "win_rate_pct": 45.6,
+      "expectancy_r": 0.002,
+      "total_pnl_usd": 46.75,
+      "verdict": "unproven"
+    },
+    {
+      "pair": "USDCHF",
+      "trades": 75,
+      "win_rate_pct": 37.1,
+      "expectancy_r": -0.298,
+      "total_pnl_usd": -5586.0,
+      "verdict": "loser"
+    }
+  ],
+  "per_session_proximal_realised": [
+    {
+      "session": "Asia",
+      "trades": 18,
+      "win_rate_pct": 31.2,
+      "expectancy_r": -0.313,
+      "total_pnl_usd": -1407.75
+    },
+    {
+      "session": "London",
+      "trades": 76,
+      "win_rate_pct": 44.1,
+      "expectancy_r": -0.097,
+      "total_pnl_usd": -1834.5
+    },
+    {
+      "session": "NY",
+      "trades": 68,
+      "win_rate_pct": 41.5,
+      "expectancy_r": -0.135,
+      "total_pnl_usd": -2297.0
+    }
+  ],
+  "score_buckets_proximal_realised": [
+    {
+      "score_bucket": "3-4",
+      "trades": 2,
+      "win_rate_pct": 100.0,
+      "expectancy_r": 0.884
+    },
+    {
+      "score_bucket": "4-5",
+      "trades": 7,
+      "win_rate_pct": 28.6,
+      "expectancy_r": -0.551
+    },
+    {
+      "score_bucket": "5-6",
+      "trades": 24,
+      "win_rate_pct": 42.1,
+      "expectancy_r": -0.049
+    },
+    {
+      "score_bucket": "6-7",
+      "trades": 52,
+      "win_rate_pct": 39.6,
+      "expectancy_r": -0.146
+    },
+    {
+      "score_bucket": "7+",
+      "trades": 77,
+      "win_rate_pct": 42.5,
+      "expectancy_r": -0.147
+    }
+  ],
+  "news_blocked_trade_rows": 0,
+  "news_blocked_audit": [],
+  "killzone_dropped_alerts": 154,
+  "killzone_drops_by_pair": {
+    "EURUSD": 79,
+    "USDCHF": 75
+  },
+  "killzone_windows_by_pair": {
+    "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "USDCHF": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
+  },
+  "score_floor": 4.0,
+  "below_score_floor_trade_rows": 0,
+  "below_score_floor_audit": [],
+  "ist_blocked_trade_rows": 41,
+  "ist_blocked_audit": [
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-01-07T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 2.655
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-01-07T19:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.853
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-01-07T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-01-08T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-01-13T21:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.818
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-01-18T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-01-18T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-01-20T20:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-01-25T21:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-01-26T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-02-08T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.748
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-02-15T23:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.844
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-02-24T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.856
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-02-26T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-03-08T19:00:00+00:00",
+      "score": 9.0,
+      "exit_reason": "tp1",
+      "would_have_r": 2.021
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-03-24T02:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.977
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-04-01T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2016-04-27T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-01-07T19:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.85
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-01-07T20:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-01-08T21:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-01-11T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-01-13T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-01-13T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-01-14T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.943
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-01-25T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-01-27T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-02-14T23:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-02-19T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-02-19T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.554
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-02-22T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-02-26T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-03-08T20:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.224
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-03-21T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.872
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-03-22T19:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-03-23T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.767
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-03-31T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-04-10T22:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.868
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-04-15T03:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-04-21T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDCHF",
+      "alert_ts": "2016-04-29T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    }
+  ],
+  "by_group": {
+    "forex": {
+      "label": "Original (FX majors + Gold)",
+      "pairs": [
+        "EURUSD",
+        "USDCHF"
+      ],
+      "scoreboards": {
+        "proximal_realised": {
+          "trades": 162,
+          "wins": 62,
+          "losses": 87,
+          "breakevens": 13,
+          "win_rate_pct": 41.6,
+          "expectancy_r": -0.137,
+          "expectancy_usd": -34.19,
+          "total_r": -22.157,
+          "total_pnl_usd": -5539.25,
+          "avg_win_r": 1.033,
+          "avg_loss_r": -0.991,
+          "avg_win_usd": 258.0,
+          "avg_loss_usd": -248.0,
+          "avg_mfe_r": 1.047,
+          "avg_mae_r": -0.217,
+          "win_capture_pct": 99.0
+        },
+        "proximal_exit_tp1": {
+          "trades": 162,
+          "wins": 65,
+          "losses": 97,
+          "breakevens": 0,
+          "win_rate_pct": 40.1,
+          "expectancy_r": -0.057,
+          "expectancy_usd": -14.23,
+          "total_r": -9.218,
+          "total_pnl_usd": -2304.5,
+          "avg_win_r": 1.35,
+          "avg_loss_r": -1.0,
+          "avg_win_usd": 338.0,
+          "avg_loss_usd": -250.0,
+          "avg_mfe_r": 1.082,
+          "avg_mae_r": -0.228,
+          "win_capture_pct": 125.0
+        },
+        "proximal_exit_tp2": {
+          "trades": 162,
+          "wins": 20,
+          "losses": 97,
+          "breakevens": 45,
+          "win_rate_pct": 17.1,
+          "expectancy_r": 0.154,
+          "expectancy_usd": 38.55,
+          "total_r": 24.981,
+          "total_pnl_usd": 6245.25,
+          "avg_win_r": 6.099,
+          "avg_loss_r": -1.0,
+          "avg_win_usd": 1525.0,
+          "avg_loss_usd": -250.0,
+          "avg_mfe_r": 1.152,
+          "avg_mae_r": -0.228,
+          "win_capture_pct": 530.0
+        }
+      },
+      "fill_rate_proximal": {
+        "alerts": 226,
+        "filled": 162,
+        "fill_rate_pct": 71.7
+      },
+      "news_blocked_trade_rows": 0,
+      "ist_blocked_trade_rows": 0,
+      "killzone_dropped_alerts": 154,
+      "score_floor": 4.0,
+      "below_score_floor_trade_rows": 0,
+      "html_file": "report_forex.html",
+      "excel_file": "forex_trades.xlsx"
+    }
+  }
+}
