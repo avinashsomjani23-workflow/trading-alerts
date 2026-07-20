@@ -1332,6 +1332,86 @@ def test_triple_mode_1to1_fallback_has_no_wick_or_nextpool():
     assert ok, "1:1 fallback checks failed (see output above)"
 
 
+def _bug_geometry_h1_df():
+    """H1 frame with the exact runner-bug geometry (LONG): TWO unbroken opposing
+    highs above where the trade will sit, where the FARTHER (higher) pool FORMED
+    EARLIER in time than the NEARER pool, with a swing low separating them in the
+    sequence. `opposing` is sorted by price (nearest-first), so the runner
+    candidate (far pool) has a SMALLER bar index than TP1 — the case the old
+    tp1_idx < s < tp2_idx separator window silently dropped."""
+    base = pd.Timestamp("2026-05-01 00:00", tz="UTC")
+    closes = [
+        1.10000, 1.10400, 1.10800, 1.11000, 1.11150, 1.11200,  # 0-5: FAR high @5
+        1.11050, 1.10800, 1.10550, 1.10350, 1.10130, 1.10000,  # 6-11
+        1.09930,                                                # 12: separator LOW
+        1.10030, 1.10080, 1.10130, 1.10160, 1.10180, 1.10200,  # 13-18: NEAR high @18
+        1.10100, 1.10000, 1.09850, 1.09700, 1.09550,           # 19-23: clean decline
+        1.09450, 1.09430, 1.09420, 1.09415, 1.09412,           # 24-28
+    ] + [1.09410] * 31                                          # 29-59: flat (no swings)
+    idx = pd.date_range(base, periods=len(closes), freq="h")
+    df = pd.DataFrame({
+        "Open":  [c - 0.0001 for c in closes],
+        "High":  [c + 0.0002 for c in closes],
+        "Low":   [c - 0.0002 for c in closes],
+        "Close": closes,
+        "Volume": [100] * len(closes),
+    }, index=idx)
+    return df
+
+
+def test_triple_mode_runner_emits_when_far_pool_formed_earlier():
+    """REGRESSION (2026-07-20): the runner (tp_nextpool) must emit when the farther
+    pool formed EARLIER in time than TP1. The separator check keys on the two
+    swings' TIME order, not on the assumption that the nearer-price pool formed
+    first. Before the fix, `opposing` (price-sorted) handed the loop a runner
+    candidate with a smaller idx than TP1, the tp1_idx < s < tp2_idx window was
+    empty, and tp_nextpool was dead in every real run (0/4513 trades)."""
+    print("\n== test_triple_mode_runner_emits_when_far_pool_formed_earlier ==")
+    df = _bug_geometry_h1_df()
+    conf = _synth_pair_conf()
+    # OB below the future trade: 30-pip bullish OB, proximal 1.0965 / distal 1.0935.
+    ob = {
+        "direction": "bullish", "bos_tag": "BOS", "bos_tier": "Major",
+        "high": 1.09650, "low": 1.09350,
+        "proximal_line": 1.09650, "distal_line": 1.09350,
+        "ob_timestamp": df.index[45].isoformat(),
+        "fvg": {"exists": False}, "touches": 0,
+        "dealing_range": {"valid": True, "range_low": 1.09000, "range_high": 1.12000},
+    }
+    lv = smc_detector.compute_phase2_levels(
+        conf, "LONG", ob, current_price=1.09660, df_h1=df, tp_targets="triple")
+
+    ok = check(lv.get("valid") is True, "levels valid")
+    ok &= check(lv.get("tp_wick") is not None, "tp_wick present (TP1 anchored on a pool)")
+    ok &= check(lv.get("tp_nextpool") is not None,
+                f"tp_nextpool EMITS (runner alive): {lv.get('tp_nextpool')}")
+    if lv.get("tp_nextpool") is not None:
+        ok &= check(lv["tp_nextpool"] > lv["tp_wick"],
+                    "runner sits past the wick target (LONG ordering)")
+        ok &= check(lv.get("tp_nextpool_rr") is not None, "tp_nextpool_rr present")
+
+    # Prove the test actually exercises the bug: the runner pool's bar index is
+    # SMALLER than TP1's, so the OLD (tp1_idx < s < tp2_idx) window was empty.
+    entry = lv["entry"]
+    swings = smc_detector.get_swing_points(df, lookback=3)
+    highs = sorted((s for s in swings if s["type"] == "high" and s["price"] > entry),
+                   key=lambda s: s["price"])
+    lows = [s for s in swings if s["type"] == "low"]
+    if len(highs) >= 2:
+        tp1_sw, runner_sw = highs[0], highs[1]  # nearest, then farther
+        ok &= check(runner_sw["idx"] < tp1_sw["idx"],
+                    "runner pool formed EARLIER than TP1 (the regressed geometry)")
+        old_window = any(l["idx"] for l in lows
+                         if tp1_sw["idx"] < l["idx"] < runner_sw["idx"])
+        new_window = any(tp1_sw["idx"] > l["idx"] > runner_sw["idx"]
+                         or runner_sw["idx"] < l["idx"] < tp1_sw["idx"] for l in lows)
+        ok &= check(not old_window and new_window,
+                    "old idx window empty, time-ordered window finds the separator")
+    else:
+        ok &= check(False, f"fixture must expose 2 opposing highs (got {len(highs)})")
+    assert ok, "runner regression checks failed (see output above)"
+
+
 def test_exit_engine_triple_leg_recipe():
     """walk_multileg resolves tp_wick / tp_nextpool string specs to the committed
     prices, closes each leg at the right price, and existing single-target recipes

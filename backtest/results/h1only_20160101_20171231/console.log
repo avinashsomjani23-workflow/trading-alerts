@@ -1,0 +1,65 @@
+[INFO] run_start regime=bau regime_label=None mode=h1_only start=2016-01-01 end=2017-12-31 pairs=['EURUSD', 'USDJPY', 'NZDUSD', 'USDCHF', 'GOLD'] risk_usd=250.0 send_email=False
+[INFO] backtest_atr_cap pair=EURUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDJPY pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=NZDUSD pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=USDCHF pair_type=forex live=2.5 backtest=2.5
+[INFO] backtest_atr_cap pair=GOLD pair_type=commodity live=3.0 backtest=3.0
+
+[H1-ONLY MODE] start=2016-01-01 end=2017-12-31 pairs=['EURUSD', 'USDJPY', 'NZDUSD', 'USDCHF', 'GOLD'] risk_per_trade=$250
+  No M15/M5 fetches. No scoring gate. Dual entry per OB.
+  News: 0 High-impact events fetched (coverage: {'ff': False})
+[INFO] news_fetched events=0 coverage={'ff': False} range=2015-12-31T00:00:00+00:00..2018-01-01T00:00:00+00:00
+  [scanlog] manifest written -> C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\out\scanlog\h1only_20160101_20171231
+[INFO] pair_data_loaded pair=EURUSD h1_rows=13000 h1_first=2015-11-27 00:00:00+00:00 h1_last=2017-12-29 21:00:00+00:00
+[INFO] pair_data_loaded pair=USDJPY h1_rows=13000 h1_first=2015-11-27 00:00:00+00:00 h1_last=2017-12-29 21:00:00+00:00
+[INFO] pair_data_loaded pair=NZDUSD h1_rows=13003 h1_first=2015-11-27 00:00:00+00:00 h1_last=2017-12-29 21:00:00+00:00
+[INFO] pair_data_loaded pair=USDCHF h1_rows=13003 h1_first=2015-11-27 00:00:00+00:00 h1_last=2017-12-29 21:00:00+00:00
+[INFO] pair_data_loaded pair=GOLD h1_rows=12287 h1_first=2015-11-27 00:00:00+00:00 h1_last=2017-12-29 21:00:00+00:00
+
+  [parallel] launching 5 pairs across 5 workers
+[INFO] pair_alerts_collected pair=EURUSD alerts=1450 mode=h1_only
+[INFO] pair_trades_simulated pair=EURUSD trades=1295 news_blocked=0 ist_blocked=261 killzone_dropped_alerts=756
+[INFO] pair_alerts_collected pair=USDJPY alerts=1432 mode=h1_only
+[INFO] pair_trades_simulated pair=USDJPY trades=1298 news_blocked=0 ist_blocked=457 killzone_dropped_alerts=785
+[INFO] pair_alerts_collected pair=NZDUSD alerts=1319 mode=h1_only
+[INFO] pair_trades_simulated pair=NZDUSD trades=1173 news_blocked=0 ist_blocked=396 killzone_dropped_alerts=744
+[INFO] pair_alerts_collected pair=USDCHF alerts=1375 mode=h1_only
+[INFO] pair_trades_simulated pair=USDCHF trades=1214 news_blocked=0 ist_blocked=264 killzone_dropped_alerts=739
+[INFO] pair_alerts_collected pair=GOLD alerts=1399 mode=h1_only
+[INFO] pair_trades_simulated pair=GOLD trades=1268 news_blocked=0 ist_blocked=357 killzone_dropped_alerts=758
+[INFO] report_written path=C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20160101_20171231 total_alerts=6975 total_trades=6248
+
+H1-only report written to C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20160101_20171231
+[INFO] exit_lab_sink_persisted path=C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\results\h1only_20160101_20171231\exit_lab_sink.jsonl rows=44511
+================================================================
+SCAN-LOG RUN HEALTH
+================================================================
+GATE  VERDICT DESCRIPTION
+G1    PASS    Sum pnl_usd == Sum r_realised*risk, and equals reporting headline
+G2    PASS    scan records == expected (pair x walk bars); zero HEARTBEAT_GAP; never vacuous (0 declared bars with trades present = blind run)
+G3    PASS    ob<=bos<alert<=fill on every filled trade (fill on the alert candle allowed)
+G4    PASS    every FAIL-severity condition counter is 0
+G5    PASS    every knob re-read at END equals manifest (no drift)
+G6    PASS    headline recomputed from r_realised only; tp1/tp2 excluded
+G7    PASS    content hash of scan_log + events recorded for re-run compare
+G8    PASS    NAN_ATR_SKIP <= 1% post-warmup per pair (WARN >1%, FAIL >5%)
+G9    PASS    every record validated against SCHEMA.md (ts/tz/outcome)
+G10   PASS    per-trade metrics physically possible (no fake excursions)
+----------------------------------------------------------------
+CONDITION COUNTERS: none
+----------------------------------------------------------------
+headline (from r_realised): $-44,812.25
+OVERALL: PASS (exit code 0)
+================================================================
+  [scanlog] compressed artifacts in C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\out\scanlog\h1only_20160101_20171231
+C:\Users\aviso\OneDrive\Desktop\trading-alerts\backtest\update_registry.py:82: DtypeWarning: Columns (0: dr_ceiling_broken_at_ob, 1: dr_floor_broken_at_ob) have mixed types. Specify dtype option on import or set low_memory=False.
+  return pd.read_csv(p)
+  [registry] processed h1only_20160101_20171231 — 3184 filled trades, expectancy -0.06R
+  [registry] registry.json written (7 runs)
+  [registry] BACKTEST_LOG.md written (7 runs)
+[commit_logs] committed cce2378c -- 5 files for h1only_20160101_20171231
+  [log commit OK — LOCAL ONLY, not pushed] h1only_20160101_20171231 -> cce2378c
+    To publish to GitHub when ready: git push origin main
+[INFO] logs_committed_local_only run_id=h1only_20160101_20171231 sha=cce2378c
+[INFO] run_end wall_s=2099.4 active_s=36.2 idle_s=2063.2 max_gap_s=1695.0 wall_min=34.99 active_min=0.6
+  [timing] WALL 34.99min but ACTIVE only 0.6min -- machine was FROZEN 34.4min (longest freeze 28.2min). Data unaffected; budget on active_min.

@@ -1775,9 +1775,13 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # (the replay drives the same function — nothing is re-detected here).
         # Only sweep2_age_at_alert_h1 is derived: arithmetic on the frozen
         # sweep_ts against the alert bar (same class as ob_age_h1_bars).
-        # Legacy zones / failed layer -> all-None dict. Observation only; the
-        # legacy sweep_pts / sweep_present above stay byte-identical (score
-        # parity). Column list: liquidity_sweep.SWEEP2_FEATURE_COLUMNS.
+        # Legacy zones / failed layer -> all-None dict. Observation only.
+        # NOTE (2026-07-20): sweep_present above IS still byte-identical (it
+        # reads the legacy ob['sweep_observed']). sweep_pts is NOT — the score
+        # leg was rewired this same commit to read sweep_v2 (run_scorecard,
+        # owner "Option 1"), so sweep_pts now reflects the new sweep, not the
+        # legacy detector. Do NOT read this as score parity.
+        # Column list: liquidity_sweep.SWEEP2_FEATURE_COLUMNS.
         **_sweep2_features(ob, df_h1, alert_ts),
         # ── SETUP-LIQ (this trade's own stop/target vs swing liquidity) ────────
         # 6 columns from ONE helper. Reads 1 & 2 (stop-side / tp-side magnet)

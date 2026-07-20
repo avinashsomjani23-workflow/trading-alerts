@@ -2223,9 +2223,18 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         for tp2_sw in opposing[tp1_idx_in_opposing + 1:]:
             if not is_swing_active(tp2_sw, df_h1, pierce_min):
                 continue  # broken/drained -> not a TP2 target
+            # The separator (a continuation-type swing between the two pools) is a
+            # TIME-order concept: does a low separate two highs in the SEQUENCE.
+            # `opposing` is sorted by PRICE (nearest-first), and a farther-by-price
+            # pool very often FORMED EARLIER than TP1 (its idx < tp1_sw['idx']), so
+            # the between-window must span the two swings' actual bar order, not
+            # assume tp1 formed first. Ordering the endpoints fixes a dead runner:
+            # with the raw tp1<s<tp2 window, an earlier-formed farther pool gave an
+            # empty range and no tp2/tp_nextpool ever emitted.
+            sep_lo, sep_hi = sorted((tp1_sw['idx'], tp2_sw['idx']))
             has_separator = any(
                 s['type'] == continuation_type
-                and tp1_sw['idx'] < s['idx'] < tp2_sw['idx']
+                and sep_lo < s['idx'] < sep_hi
                 for s in h1_swings
             )
             beyond_band = tol is None or abs(tp2_sw['price'] - tp1_sw['price']) > tol

@@ -408,10 +408,23 @@ def test_features_from_snapshot_and_age():
 
 def test_features_none_on_legacy_or_failed():
     df, *_ = build_scenario()
-    for snap in (None, {}, ls.snapshot_failed()):
+    # Legacy zone (no snapshot) / junk dict -> every column None.
+    for snap in (None, {}):
         out = ls.features_from_snapshot(snap, df, df.index[-1])
         assert out == ls.features_none()
         assert all(v is None for v in out.values())
+
+
+def test_failed_layer_says_failed_not_blank():
+    """A layer failure must SAY 'failed' in the honesty label, never a silent
+    blank that a reader could mistake for the ran-but-empty-window case."""
+    df, *_ = build_scenario()
+    out = ls.features_from_snapshot(ls.snapshot_failed(), df, df.index[-1])
+    assert out["sweep2_tiers_checked"] == "failed"
+    # every OTHER column is still None (no real values exist on a failure)
+    for col in ls.SWEEP2_FEATURE_COLUMNS:
+        if col != "sweep2_tiers_checked":
+            assert out[col] is None
 
 
 def test_snapshot_ran_clean_maps_to_present_false():

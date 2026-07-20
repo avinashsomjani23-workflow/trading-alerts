@@ -128,8 +128,9 @@ SWEEP2_FEATURE_COLUMNS = (
 
 def snapshot_none(tiers_checked=""):
     """Canonical empty snapshot. pools_swept=0 + a tiers_checked string means
-    the detector RAN and found no qualifying raid; pools_swept=None (via
-    snapshot_failed) means it could not run at all."""
+    the detector RAN and found no qualifying raid; pools_swept=None +
+    tiers_checked='failed' (via snapshot_failed) means it could not run at all.
+    An EMPTY tiers_checked ('') is the ran-but-no-pre-window case."""
     return {
         "exists": False,
         "tier": None,
@@ -150,10 +151,16 @@ def snapshot_none(tiers_checked=""):
 
 def snapshot_failed():
     """Layer-couldn't-run shape (bad inputs / internal error). Distinct from
-    'ran, found none' so the columns stay honest (EQ None-vs-[] precedent)."""
+    'ran, found none' so the columns stay honest (EQ None-vs-[] precedent).
+
+    pools_swept=None is the machine-readable failure flag (drives the all-None
+    columns in features_from_snapshot). tiers_checked='failed' is the HUMAN
+    flag: it is emitted to sweep2_tiers_checked so a failure reads as the word
+    'failed' in the CSV, never as a blank that could be mistaken for the
+    ran-but-empty-window case ('') — a failure must SAY it failed."""
     snap = snapshot_none()
     snap["pools_swept"] = None
-    snap["tiers_checked"] = None
+    snap["tiers_checked"] = "failed"
     return snap
 
 
@@ -461,8 +468,14 @@ def features_from_snapshot(snap, df_h1, alert_ts):
     """
     out = features_none()
     try:
-        if not isinstance(snap, dict) or snap.get("pools_swept") is None:
-            return out  # legacy zone / layer failed — every column stays None
+        if not isinstance(snap, dict):
+            return out  # legacy zone / no snapshot at all — every column None
+        if snap.get("pools_swept") is None:
+            # Layer failed to run. Numeric columns stay None (no real values
+            # exist), but the honesty label carries the explicit 'failed' word
+            # so the failure is never a silent blank in the CSV.
+            out["sweep2_tiers_checked"] = snap.get("tiers_checked")
+            return out
         out["sweep2_present"] = bool(snap.get("exists"))
         out["sweep2_tier"] = snap.get("tier")
         out["sweep2_level"] = snap.get("level")
