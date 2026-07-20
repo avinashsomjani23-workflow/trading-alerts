@@ -76,10 +76,19 @@ Fixed at source per `CLOCK_AND_NEWS_FIX_SPEC.md`, 2026-07-16:
 - News enrichment stopped double-correcting (Part C) and became run-produced
   (Part D). Docs updated (Part E).
 
-STATUS: code committed to the working tree, **not yet baselined**. The parquet
-cache still holds the OLD −3h labels until `import_mt5.main()` is re-run; the
-fix takes effect on the next fresh 18-year baseline (owner's explicit word
-required, CLAUDE.md rule 5). Commit hash: pending (uncommitted at time of write).
+STATUS: RESOLVED & CACHE REBUILT (2026-07-20, commit f783ab0). `import_mt5.main()`
+re-run — all 11 H1 parquets now carry TRUE-UTC labels (meta source string updated).
+Verified: pre-rebuild disk.index == provisional −3h path (raw, NOT double-corrected;
+the −3h/no-DST pin was era-C-only and never touched eras A/B — different bug, no
+overlap). Post-rebuild == corrected importer output; 46.7% of H1 bars shifted ±1h
+(era-A winters −1, era-B summers +1), OHLC untouched. Guards green:
+test_mt5_clock (era logic) + test_mt5_clock_import (news spike-align peaks at
+offset 0 per era on the rebuilt candles). All 5 live pairs load via load_bars.
+Raw pre-rebuild caches backed up to backtest/cache/_prefix_backup_2026-07-20/
+(gitignored). NOTE: the *.yf.parquet slots were overwritten by import_mt5's
+auto-backup with the old raw-MT5 caches — original yfinance parquets no longer
+in that slot. Remaining: fresh 18-year per-pair baseline re-derives clock columns
+(owner runs it; CLAUDE.md rule 5).
 
 Past time-of-day conclusions (killzone / alert-hour edge tests) inherited the
 wrong hour and must be re-run on the fixed baseline before being cited again
