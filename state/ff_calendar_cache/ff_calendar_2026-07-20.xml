@@ -61,16 +61,6 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/88-ge-ppi-mm]]></url>
 	</event>
 	<event>
-		<title>Foreign Direct Investment ytd/y</title>
-		<country>CNY</country>
-		<date><![CDATA[07-20-2026]]></date>
-		<time><![CDATA[6:02am]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast />
-		<previous><![CDATA[-8.6%]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/457-ch-foreign-direct-investment-ytdy]]></url>
-	</event>
-	<event>
 		<title>CPI m/m</title>
 		<country>CAD</country>
 		<date><![CDATA[07-20-2026]]></date>
@@ -179,6 +169,16 @@
 		<forecast><![CDATA[4.9%]]></forecast>
 		<previous><![CDATA[4.9%]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/58-uk-unemployment-rate]]></url>
+	</event>
+	<event>
+		<title>Foreign Direct Investment ytd/y</title>
+		<country>CNY</country>
+		<date><![CDATA[07-21-2026]]></date>
+		<time><![CDATA[6:02am]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast />
+		<previous><![CDATA[-8.6%]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/457-ch-foreign-direct-investment-ytdy]]></url>
 	</event>
 	<event>
 		<title>ZEW Economic Sentiment</title>
