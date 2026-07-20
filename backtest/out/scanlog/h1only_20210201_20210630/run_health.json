@@ -6,7 +6,7 @@
   "headline_pnl_usd": -4100.0,
   "live_proximal_headline_usd": -4100.0,
   "study_fifty_pct_headline_usd": 0.0,
-  "content_hash": "3f30857a4eb2359baaea42b4caf41234841f7509aa6f9d4730df6eaf76fc4c2d",
+  "content_hash": "781676ecba843f09ed13702dba17676a3a89563d53149532553025795538131e",
   "condition_counts": {},
   "event_counts": {
     "ob_seen": 533,
@@ -77,7 +77,7 @@
       "threshold": "independent recompute",
       "observed": {
         "realised_headline": -4100.0,
-        "tp2_headline_for_contrast": 11663.5
+        "tp2_headline_for_contrast": 8970.0
       },
       "verdict": "PASS"
     },
@@ -85,7 +85,7 @@
       "id": "G7",
       "description": "content hash of scan_log + events recorded for re-run compare",
       "threshold": "recorded",
-      "observed": "3f30857a4eb2359baaea42b4caf41234841f7509aa6f9d4730df6eaf76fc4c2d",
+      "observed": "781676ecba843f09ed13702dba17676a3a89563d53149532553025795538131e",
       "verdict": "PASS"
     },
     {

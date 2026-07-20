@@ -11,8 +11,8 @@
       "USDCHF",
       "GOLD"
     ],
-    "generated_utc": "2026-07-20T04:38:27.770842+00:00",
-    "code_sha": "097e211-dirty",
+    "generated_utc": "2026-07-20T14:12:29.780010+00:00",
+    "code_sha": "fd1812e-dirty",
     "news_coverage": {
       "ff": false
     },
@@ -87,21 +87,21 @@
     },
     "proximal_exit_tp2": {
       "trades": 287,
-      "wins": 38,
+      "wins": 43,
       "losses": 161,
-      "breakevens": 88,
-      "win_rate_pct": 19.1,
-      "expectancy_r": 0.163,
-      "expectancy_usd": 40.64,
-      "total_r": 46.654,
-      "total_pnl_usd": 11663.5,
-      "avg_win_r": 5.465,
+      "breakevens": 83,
+      "win_rate_pct": 21.1,
+      "expectancy_r": 0.125,
+      "expectancy_usd": 31.25,
+      "total_r": 35.88,
+      "total_pnl_usd": 8970.0,
+      "avg_win_r": 4.579,
       "avg_loss_r": -1.0,
-      "avg_win_usd": 1366.0,
+      "avg_win_usd": 1145.0,
       "avg_loss_usd": -250.0,
-      "avg_mfe_r": 1.257,
+      "avg_mfe_r": 1.222,
       "avg_mae_r": -0.316,
-      "win_capture_pct": 435.0
+      "win_capture_pct": 375.0
     }
   },
   "per_pair_proximal_realised": [
@@ -1062,21 +1062,21 @@
         },
         "proximal_exit_tp2": {
           "trades": 287,
-          "wins": 38,
+          "wins": 43,
           "losses": 161,
-          "breakevens": 88,
-          "win_rate_pct": 19.1,
-          "expectancy_r": 0.163,
-          "expectancy_usd": 40.64,
-          "total_r": 46.654,
-          "total_pnl_usd": 11663.5,
-          "avg_win_r": 5.465,
+          "breakevens": 83,
+          "win_rate_pct": 21.1,
+          "expectancy_r": 0.125,
+          "expectancy_usd": 31.25,
+          "total_r": 35.88,
+          "total_pnl_usd": 8970.0,
+          "avg_win_r": 4.579,
           "avg_loss_r": -1.0,
-          "avg_win_usd": 1366.0,
+          "avg_win_usd": 1145.0,
           "avg_loss_usd": -250.0,
-          "avg_mfe_r": 1.257,
+          "avg_mfe_r": 1.222,
           "avg_mae_r": -0.316,
-          "win_capture_pct": 435.0
+          "win_capture_pct": 375.0
         }
       },
       "fill_rate_proximal": {
