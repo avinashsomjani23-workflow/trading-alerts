@@ -1103,7 +1103,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-14T21:36:08.934716",
-      "last_seen_ist": "2026-07-20T16:35:57.347419",
+      "last_seen_ist": "2026-07-20T17:35:56.141597",
       "last_email_day": "2026-07-15",
       "still_valid_count": 0,
       "reentry_armed": true,
@@ -2329,11 +2329,11 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-16T18:35:56.807364",
-      "last_seen_ist": "2026-07-20T16:35:57.347419",
+      "last_seen_ist": "2026-07-20T17:35:56.141597",
       "last_email_day": "2026-07-20",
       "still_valid_count": 0,
       "reentry_armed": true,
-      "max_exit_distance": 0.0027300000000001212,
+      "max_exit_distance": 0.0028200000000000447,
       "bias": "SHORT",
       "pair": "EURUSD",
       "ob_snapshot": {
@@ -3255,7 +3255,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-17T12:35:57.728876",
-      "last_seen_ist": "2026-07-20T16:35:57.347419",
+      "last_seen_ist": "2026-07-20T17:35:56.141597",
       "last_email_day": "2026-07-20",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -3787,7 +3787,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-20T11:35:55.560360",
-      "last_seen_ist": "2026-07-20T16:35:57.347419",
+      "last_seen_ist": "2026-07-20T17:35:56.141597",
       "last_email_day": "2026-07-20",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -3928,7 +3928,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-20T11:35:55.560360",
-      "last_seen_ist": "2026-07-20T16:35:57.347419",
+      "last_seen_ist": "2026-07-20T17:35:56.141597",
       "last_email_day": "2026-07-20",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4069,7 +4069,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-20T15:35:56.641139",
-      "last_seen_ist": "2026-07-20T16:35:57.347419",
+      "last_seen_ist": "2026-07-20T17:35:56.141597",
       "last_email_day": "2026-07-20",
       "still_valid_count": 0,
       "reentry_armed": false,
