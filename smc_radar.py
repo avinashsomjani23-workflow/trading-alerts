@@ -187,7 +187,42 @@ def drop_forming_bar(df):
 # ATOMIC SAVE (A3) + LOGGING HELPERS (B3)
 # ---------------------------------------------------------------------------
 
+# State files live in state/. Authors keep calling load/save with a BARE
+# filename ("heartbeat_state.json") — this choke-point rewrites any bare state
+# filename to state/<name> so nothing lands at repo root by accident. Every JSON
+# load/save in both engines flows through here, so today's files AND any future
+# state file are routed automatically — no per-call os.path.join, no convention
+# to remember. A CI test (tests/test_state_paths.py) fails if a bare root-writer
+# ever slips past this. See CLAUDE.md "One data file" / logging discipline.
+#
+# ROOT_ALLOWLIST: the only files that INTENTIONALLY live at repo root.
+#   active_obs.json        — the daily slate; committed at root by the Phase-1 job.
+#   config.json            — instrument config, hand-edited, read at root.
+#   phase2_scan_log.jsonl  — a live scan log read at ROOT NAME across git history
+#                            by backtest/diagnostics/h3_live_extract.py; routing
+#                            it into state/ would break that forensic reader.
+# Anything with an explicit folder ("state/x", "backtest/y", absolute path) is
+# left exactly as given — only a bare "<name>.json"/".jsonl" gets routed.
+_STATE_DIR = "state"
+_ROOT_ALLOWLIST = {"active_obs.json", "config.json", "phase2_scan_log.jsonl"}
+
+
+def resolve_state_path(path):
+    """Route a bare state filename into state/. Idempotent + allowlist-aware."""
+    if not isinstance(path, str):
+        return path
+    # Has a directory component already? (state/, backtest/, C:\..., /abs) → leave it.
+    if os.path.dirname(path) or ":" in path:
+        return path
+    if path in _ROOT_ALLOWLIST:
+        return path
+    if path.endswith(".json") or path.endswith(".jsonl"):
+        return os.path.join(_STATE_DIR, path)
+    return path
+
+
 def save_json_atomic(path, data):
+    path = resolve_state_path(path)
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
@@ -196,7 +231,7 @@ def save_json_atomic(path, data):
 
 def load_json_safe(path, default):
     try:
-        with open(path) as f:
+        with open(resolve_state_path(path)) as f:
             return json.load(f)
     except Exception:
         return default
@@ -3448,7 +3483,7 @@ def append_audit_log(zones_this_scan, ist_now):
             "ts_label": ist_now.strftime('%d %b %Y, %H:%M IST'),
             "zones": zones_this_scan
         }
-        with open("zone_audit_log.jsonl", "a") as f:
+        with open(resolve_state_path("zone_audit_log.jsonl"), "a") as f:
             f.write(json.dumps(entry) + "\n")
     except Exception as e:
         logging.error(f"Audit log write failed: {e}")

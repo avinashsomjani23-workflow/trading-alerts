@@ -31,6 +31,9 @@ import setup_liq        # setup-liquidity reads (stop-side / tp magnet / leg-ext
 # (chart uses it too); the email reuses it so every CHoCH/BOS mention shows
 # bullish/bearish — the trader must never verify direction off the candles.
 from smc_radar import _event_label_dir
+# Single choke-point: bare state filenames auto-route to state/ (one impl,
+# defined in smc_radar). See its docstring + tests/test_state_paths.py.
+from smc_radar import resolve_state_path
 
 with open("config.json") as f:
     config = json.load(f)
@@ -172,7 +175,7 @@ def _entry_killzone_forecast_label(data, pair_conf):
 
 def load_json(path, default):
     try:
-        with open(path) as f:
+        with open(resolve_state_path(path)) as f:
             return json.load(f)
     except Exception:
         return default
@@ -180,6 +183,7 @@ def load_json(path, default):
 
 def save_json(path, data):
     """Atomic save: write to temp file then rename."""
+    path = resolve_state_path(path)
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
