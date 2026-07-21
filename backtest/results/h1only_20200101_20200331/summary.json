@@ -1,0 +1,704 @@
+{
+  "run_id": "h1only_20200101_20200331",
+  "meta": {
+    "start": "2020-01-01",
+    "end": "2020-03-31",
+    "regime": "bau",
+    "regime_label": null,
+    "mode": "h1_only",
+    "pairs": [
+      "EURUSD",
+      "USDJPY"
+    ],
+    "generated_utc": "2026-07-21T17:00:07.715614+00:00",
+    "code_sha": "7716806d-dirty",
+    "news_coverage": {
+      "ff": false
+    },
+    "news_events_fetched": 0,
+    "news_blocked_rows": 0,
+    "news_window_minutes": 30,
+    "ist_blocked_rows": 62,
+    "ist_window_forex": "UTC 03:30-18:30 (IST 09:00-24:00)",
+    "ist_window_index": "UTC 03:30-18:30 (IST 09:00-24:00)",
+    "killzone_dropped_alerts": 127,
+    "killzone_drops_by_pair": {
+      "EURUSD": 65,
+      "USDJPY": 62
+    },
+    "killzone_windows_by_pair": {
+      "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+      "USDJPY": "Asian Range: 20:00-00:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
+    }
+  },
+  "risk_per_trade_usd": 250.0,
+  "total_trade_rows": 179,
+  "fill_rate_proximal": {
+    "alerts": 179,
+    "filled": 109,
+    "fill_rate_pct": 60.9
+  },
+  "exit_reason_counts_proximal": {
+    "sl": 60,
+    "tp1": 43,
+    "never_filled": 70,
+    "friday_flat": 6
+  },
+  "scoreboards": {
+    "proximal_realised": {
+      "trades": 109,
+      "wins": 47,
+      "losses": 58,
+      "breakevens": 4,
+      "win_rate_pct": 44.8,
+      "expectancy_r": -0.134,
+      "expectancy_usd": -33.58,
+      "total_r": -14.642,
+      "total_pnl_usd": -3660.5,
+      "avg_win_r": 0.894,
+      "avg_loss_r": -0.977,
+      "avg_win_usd": 223.0,
+      "avg_loss_usd": -244.0,
+      "avg_mfe_r": 0.95,
+      "avg_mae_r": -0.33,
+      "win_capture_pct": 94.0
+    },
+    "proximal_exit_tp1": {
+      "trades": 109,
+      "wins": 49,
+      "losses": 60,
+      "breakevens": 0,
+      "win_rate_pct": 45.0,
+      "expectancy_r": -0.014,
+      "expectancy_usd": -3.56,
+      "total_r": -1.553,
+      "total_pnl_usd": -388.25,
+      "avg_win_r": 1.193,
+      "avg_loss_r": -1.0,
+      "avg_win_usd": 298.0,
+      "avg_loss_usd": -250.0,
+      "avg_mfe_r": 0.977,
+      "avg_mae_r": -0.328,
+      "win_capture_pct": 122.0
+    },
+    "proximal_exit_tp2": {
+      "trades": 109,
+      "wins": 19,
+      "losses": 60,
+      "breakevens": 30,
+      "win_rate_pct": 24.1,
+      "expectancy_r": 0.392,
+      "expectancy_usd": 97.94,
+      "total_r": 42.701,
+      "total_pnl_usd": 10675.25,
+      "avg_win_r": 5.405,
+      "avg_loss_r": -1.0,
+      "avg_win_usd": 1351.0,
+      "avg_loss_usd": -250.0,
+      "avg_mfe_r": 1.165,
+      "avg_mae_r": -0.328,
+      "win_capture_pct": 464.0
+    }
+  },
+  "per_pair_proximal_realised": [
+    {
+      "pair": "USDJPY",
+      "trades": 50,
+      "win_rate_pct": 57.4,
+      "expectancy_r": 0.068,
+      "total_pnl_usd": 849.75,
+      "verdict": "unproven"
+    },
+    {
+      "pair": "EURUSD",
+      "trades": 59,
+      "win_rate_pct": 34.5,
+      "expectancy_r": -0.306,
+      "total_pnl_usd": -4510.25,
+      "verdict": "loser"
+    }
+  ],
+  "per_session_proximal_realised": [
+    {
+      "session": "Asia",
+      "trades": 9,
+      "win_rate_pct": 55.6,
+      "expectancy_r": -0.007,
+      "total_pnl_usd": -14.75
+    },
+    {
+      "session": "London",
+      "trades": 43,
+      "win_rate_pct": 46.3,
+      "expectancy_r": -0.083,
+      "total_pnl_usd": -895.0
+    },
+    {
+      "session": "NY",
+      "trades": 57,
+      "win_rate_pct": 41.8,
+      "expectancy_r": -0.193,
+      "total_pnl_usd": -2750.75
+    }
+  ],
+  "score_buckets_proximal_realised": [
+    {
+      "score_bucket": "3-4",
+      "trades": 2,
+      "win_rate_pct": 100.0,
+      "expectancy_r": 0.863
+    },
+    {
+      "score_bucket": "4-5",
+      "trades": 9,
+      "win_rate_pct": 66.7,
+      "expectancy_r": 0.272
+    },
+    {
+      "score_bucket": "5-6",
+      "trades": 24,
+      "win_rate_pct": 50.0,
+      "expectancy_r": -0.01
+    },
+    {
+      "score_bucket": "6-7",
+      "trades": 34,
+      "win_rate_pct": 45.5,
+      "expectancy_r": -0.124
+    },
+    {
+      "score_bucket": "7+",
+      "trades": 40,
+      "win_rate_pct": 32.4,
+      "expectancy_r": -0.359
+    }
+  ],
+  "news_blocked_trade_rows": 0,
+  "news_blocked_audit": [],
+  "killzone_dropped_alerts": 127,
+  "killzone_drops_by_pair": {
+    "EURUSD": 65,
+    "USDJPY": 62
+  },
+  "killzone_windows_by_pair": {
+    "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York",
+    "USDJPY": "Asian Range: 20:00-00:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
+  },
+  "score_floor": 4.0,
+  "below_score_floor_trade_rows": 0,
+  "below_score_floor_audit": [],
+  "ist_blocked_trade_rows": 62,
+  "ist_blocked_audit": [
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-01-08T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-01-21T22:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.873
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-01-22T03:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.843
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-01-27T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-01-29T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-01-29T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-02-05T03:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.867
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-02-05T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-02-18T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.778
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-02-19T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-02-19T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-02-27T02:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-03-02T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.911
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-03-02T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-03-08T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-03-18T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-03-20T00:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-03-24T01:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2020-03-25T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 1.024
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-03T02:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-05T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.74
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-06T20:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.78
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-08T00:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-14T19:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-15T00:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.426
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-17T00:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.759
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-21T01:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-21T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-21T19:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-22T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-22T23:00:00+00:00",
+      "score": 2.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-24T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-30T01:00:00+00:00",
+      "score": 6.7,
+      "exit_reason": "tp1",
+      "would_have_r": 0.531
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-01-31T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-02-03T01:00:00+00:00",
+      "score": 8.7,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-02-06T03:00:00+00:00",
+      "score": 2.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.829
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-02-06T21:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-02-11T01:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.761
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-02-18T03:00:00+00:00",
+      "score": 7.7,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-02-19T02:00:00+00:00",
+      "score": 2.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-02-24T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.935
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-02-25T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-02-28T03:00:00+00:00",
+      "score": 5.7,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-02T00:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.937
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-02T21:00:00+00:00",
+      "score": 5.7,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-05T00:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-06T02:00:00+00:00",
+      "score": 6.7,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-09T00:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.954
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-10T00:00:00+00:00",
+      "score": 5.7,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-10T20:00:00+00:00",
+      "score": 6.2,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-10T20:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-12T02:00:00+00:00",
+      "score": 7.7,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-13T19:00:00+00:00",
+      "score": 7.7,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-15T23:00:00+00:00",
+      "score": 8.7,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-16T00:00:00+00:00",
+      "score": 7.7,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-19T01:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-20T00:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-20T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-23T00:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-24T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-25T23:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "USDJPY",
+      "alert_ts": "2020-03-27T01:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    }
+  ],
+  "by_group": {
+    "forex": {
+      "label": "Original (FX majors + Gold)",
+      "pairs": [
+        "EURUSD",
+        "USDJPY"
+      ],
+      "scoreboards": {
+        "proximal_realised": {
+          "trades": 109,
+          "wins": 47,
+          "losses": 58,
+          "breakevens": 4,
+          "win_rate_pct": 44.8,
+          "expectancy_r": -0.134,
+          "expectancy_usd": -33.58,
+          "total_r": -14.642,
+          "total_pnl_usd": -3660.5,
+          "avg_win_r": 0.894,
+          "avg_loss_r": -0.977,
+          "avg_win_usd": 223.0,
+          "avg_loss_usd": -244.0,
+          "avg_mfe_r": 0.95,
+          "avg_mae_r": -0.33,
+          "win_capture_pct": 94.0
+        },
+        "proximal_exit_tp1": {
+          "trades": 109,
+          "wins": 49,
+          "losses": 60,
+          "breakevens": 0,
+          "win_rate_pct": 45.0,
+          "expectancy_r": -0.014,
+          "expectancy_usd": -3.56,
+          "total_r": -1.553,
+          "total_pnl_usd": -388.25,
+          "avg_win_r": 1.193,
+          "avg_loss_r": -1.0,
+          "avg_win_usd": 298.0,
+          "avg_loss_usd": -250.0,
+          "avg_mfe_r": 0.977,
+          "avg_mae_r": -0.328,
+          "win_capture_pct": 122.0
+        },
+        "proximal_exit_tp2": {
+          "trades": 109,
+          "wins": 19,
+          "losses": 60,
+          "breakevens": 30,
+          "win_rate_pct": 24.1,
+          "expectancy_r": 0.392,
+          "expectancy_usd": 97.94,
+          "total_r": 42.701,
+          "total_pnl_usd": 10675.25,
+          "avg_win_r": 5.405,
+          "avg_loss_r": -1.0,
+          "avg_win_usd": 1351.0,
+          "avg_loss_usd": -250.0,
+          "avg_mfe_r": 1.165,
+          "avg_mae_r": -0.328,
+          "win_capture_pct": 464.0
+        }
+      },
+      "fill_rate_proximal": {
+        "alerts": 179,
+        "filled": 109,
+        "fill_rate_pct": 60.9
+      },
+      "news_blocked_trade_rows": 0,
+      "ist_blocked_trade_rows": 0,
+      "killzone_dropped_alerts": 127,
+      "score_floor": 4.0,
+      "below_score_floor_trade_rows": 0,
+      "html_file": "report_forex.html",
+      "excel_file": "forex_trades.xlsx"
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "run_id": "h1only_20200101_20200331",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-07-21T15:37:14.314745+00:00",
+  "git_sha": "7716806d-dirty",
+  "risk_usd": 250.0,
+  "min_warmup_bars": 150,
+  "fetch_pad_days": 35,
+  "pairs": [
+    {
+      "name": "EURUSD",
+      "symbol": "EURUSD=X",
+      "requested_start": "2020-01-01T00:00:00+00:00",
+      "requested_end": "2020-03-31T00:00:00+00:00",
+      "served_start": "2019-11-27T00:00:00+00:00",
+      "served_end": "2020-03-31T00:00:00+00:00",
+      "n_bars": 2071,
+      "fingerprint": "9975710bf67867bd",
+      "prox_cap_atr": 2.5
+    },
+    {
+      "name": "USDJPY",
+      "symbol": "JPY=X",
+      "requested_start": "2020-01-01T00:00:00+00:00",
+      "requested_end": "2020-03-31T00:00:00+00:00",
+      "served_start": "2019-11-27T00:00:00+00:00",
+      "served_end": "2020-03-31T00:00:00+00:00",
+      "n_bars": 2072,
+      "fingerprint": "9e7f6e8de8c15783",
+      "prox_cap_atr": 2.5
+    }
+  ],
+  "knobs": {
+    "EURUSD.atr_multiplier": 2.5,
+    "EURUSD.distal_invalidation_mode": "close",
+    "EURUSD.spread_pips": 2.0,
+    "USDJPY.atr_multiplier": 2.5,
+    "USDJPY.distal_invalidation_mode": "close",
+    "USDJPY.spread_pips": 2.0
+  },
+  "versions": {
+    "python": "3.14.5",
+    "pandas": "3.0.3",
+    "yfinance": "1.3.0"
+  }
+}
