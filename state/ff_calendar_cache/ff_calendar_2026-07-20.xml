@@ -171,14 +171,14 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/58-uk-unemployment-rate]]></url>
 	</event>
 	<event>
-		<title>Foreign Direct Investment ytd/y</title>
-		<country>CNY</country>
+		<title>German ZEW Economic Sentiment</title>
+		<country>EUR</country>
 		<date><![CDATA[07-21-2026]]></date>
-		<time><![CDATA[6:02am]]></time>
+		<time><![CDATA[9:00am]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast />
-		<previous><![CDATA[-8.6%]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/457-ch-foreign-direct-investment-ytdy]]></url>
+		<forecast><![CDATA[15.1]]></forecast>
+		<previous><![CDATA[10.5]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/313-ge-zew-economic-sentiment]]></url>
 	</event>
 	<event>
 		<title>ZEW Economic Sentiment</title>
@@ -189,16 +189,6 @@
 		<forecast><![CDATA[11.2]]></forecast>
 		<previous><![CDATA[9.5]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/314-ez-zew-economic-sentiment]]></url>
-	</event>
-	<event>
-		<title>German ZEW Economic Sentiment</title>
-		<country>EUR</country>
-		<date><![CDATA[07-21-2026]]></date>
-		<time><![CDATA[9:00am]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[15.1]]></forecast>
-		<previous><![CDATA[10.5]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/313-ge-zew-economic-sentiment]]></url>
 	</event>
 	<event>
 		<title>German Buba President Nagel Speaks</title>
@@ -319,6 +309,16 @@
 		<forecast><![CDATA[3.0%]]></forecast>
 		<previous><![CDATA[3.1%]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/84-uk-rpi-yy]]></url>
+	</event>
+	<event>
+		<title>Foreign Direct Investment ytd/y</title>
+		<country>CNY</country>
+		<date><![CDATA[07-22-2026]]></date>
+		<time><![CDATA[6:02am]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast />
+		<previous><![CDATA[-8.6%]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/457-ch-foreign-direct-investment-ytdy]]></url>
 	</event>
 	<event>
 		<title>HPI y/y</title>
