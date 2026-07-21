@@ -1,17 +1,14 @@
 {
-  "USDJPY|2026-07-20": {
+  "EURUSD|2026-07-21": {
+    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no external macro factors are expected to directly influence this EURUSD setup. The trade will likely be driven by technicals and sentiment alone."
+  },
+  "USDJPY|2026-07-21": {
     "macro_summary": "There are no scheduled high-impact events for JPY or USD today. Therefore, no scheduled events will directly influence the USDJPY pair's direction today."
   },
-  "USDCHF|2026-07-20": {
-    "macro_summary": "There are no scheduled high-impact events for CHF or USD today. Therefore, no external macro factors are expected to directly influence the USDCHF pair's direction today."
+  "NZDUSD|2026-07-21": {
+    "macro_summary": "There are no scheduled high-impact events for NZD or USD today. Therefore, no external macro factors are expected to directly influence the NZDUSD pair's direction today."
   },
-  "GOLD|2026-07-20": {
-    "macro_summary": "There are no scheduled high-impact events for USD today that could affect Gold. Therefore, the setup is free from immediate macroeconomic event risk. The trade's success will depend solely on technical factors and market sentiment."
-  },
-  "NZDUSD|2026-07-20": {
-    "macro_summary": "The NZD CPI q/q at 04:15 IST is the only high-impact event. A higher-than-expected CPI reading would help this LONG NZDUSD trade, while a lower reading would hurt it."
-  },
-  "EURUSD|2026-07-20": {
-    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no external macroeconomic factors are expected to directly influence this EURUSD short setup today."
+  "USDCHF|2026-07-21": {
+    "macro_summary": "There are no scheduled high-impact events for CHF or USD today. Therefore, no scheduled events will directly influence the USDCHF pair's direction today. The trade setup is free from immediate macro event risk."
   }
 }
