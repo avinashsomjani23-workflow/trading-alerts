@@ -290,3 +290,34 @@ never seed a CONCLUSION. Data-vs-SMC and C3 (thin ≠ decision) still apply.
   new-column stamp-time check, scaffold PASS on `1feb2db`). Then Step A. Nothing analytical
   starts until the gate passes.
 - **Not committed** (OneDrive commit-local policy; push only on "ship it").
+
+---
+
+## 8. CLOSED-STEP RESULTS (consolidated from the retired step-handoffs, 2026-07-21)
+
+The two per-step handoff files (`EDGE_LAB_STEP1_HANDOFF.md`, `EDGE_LAB_STEP2_HANDOFF.md`)
+were merged into this file and deleted. Git keeps the originals. Durable facts only:
+
+**Step 1 — Scaffold (correctness gate).**
+- `edge_lab.py` built: imports the live spine, has a 3-class timing wall + a schema guard
+  that rejects the old corrupted CSV. Green path proven on a synthetic clean CSV.
+- **Exit contract NOT yet signed on real data:** the scaffold PASS (guard + trust gate +
+  wall intact) must be re-run on the committed `1feb2db` CSV and confirmed before any
+  analysis. That is the first Step-1 action above.
+
+**Step 2 — Univariate pooled discovery. RESULT = NULL (done, code bug-fixed + test-guarded).**
+- **No single pre-entry feature turns the kept set positive.** Same null the instant-death,
+  OB-age, and trend-alignment probes already reached → **selection is the wrong lever.**
+- The only two features that cleared triage are both rejected:
+  - `alert_utc_hour` (+0.094R) — **MI = 0 → noise-rank, not signal. Do not build on it.**
+  - `ob_walkback_depth` (−0.194R) — monotonic in discovery but pre-registered as
+    non-persistent; the ship gate kills it later if noise.
+- The other 42 features = "interesting, not proven" — no reliable single-feature entry edge.
+- **Why Step 2 was blind to the trader's real signal:** the SL-sweep columns
+  (`sl_bar_was_sweep`, `sl_swept_then_tp1`, `sl_wick_depth_atr`,
+  `sl_max_adverse_after_sweep_atr`, `bars_sl_to_tp1_touch`, `sl_recovered_to_entry`) are
+  **outcome-time** → blocked by the look-ahead wall. They belong in the **exit track**
+  (Step B: survive these trades with wider/sweep-aware stops), not entry selection.
+- Carried-in facts (hypotheses, re-verify on clean data): instant death = 1-bar geometry,
+  92.9% die ≤1 bar; 53% of losers' stop candles are sweeps, 30% swept then touched TP1;
+  every "prize" number is a touch-based ceiling — only a real-order replay counts (C6).

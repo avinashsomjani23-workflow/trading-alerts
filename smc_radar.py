@@ -216,13 +216,13 @@ def log_p1_degrade(kind, **fields):
     Never raises — a logging failure must not break the scan.
     """
     try:
-        log = load_json_safe("p1_degrade_log.json", [])
+        log = load_json_safe(os.path.join("state", "p1_degrade_log.json"), [])
         if not isinstance(log, list):
             log = []
         entry = {"ts": get_ist_now().isoformat(), "kind": kind}
         entry.update(fields)
         log.append(entry)
-        save_json_atomic("p1_degrade_log.json", log[-200:])
+        save_json_atomic(os.path.join("state", "p1_degrade_log.json"), log[-200:])
     except Exception as e:
         print(f"  [LOG ERR] p1 degrade log: {e}")
 
@@ -3278,7 +3278,7 @@ def _fallback_narrative_with_atr(ob, name, dp, current_price, h1_atr,
 # ---------------------------------------------------------------------------
 # STATELESS EMAIL GATE (replaces emailed_zones.json)
 # ---------------------------------------------------------------------------
-EMAIL_GATE_FILE = "email_gate.json"
+EMAIL_GATE_FILE = os.path.join("state", "email_gate.json")
 
 # Pair-type-aware same-leg OB dedupe thresholds.
 # Matches ZONE_PROXIMITY_THRESHOLDS semantic but applied intra-scan

@@ -2054,7 +2054,7 @@ def emit_p1_stale_alert(ist_now, reason):
     Send a one-shot 'P1 stale' email and persist a flag so subsequent P2
     runs don't spam. Flag clears automatically on the next fresh scan.
     """
-    state = load_json("p1_stale_alert_state.json", {})
+    state = load_json(os.path.join("state", "p1_stale_alert_state.json"), {})
     if not isinstance(state, dict):
         state = {}
     if state.get("alerted"):
@@ -2087,15 +2087,15 @@ def emit_p1_stale_alert(ist_now, reason):
     state["alerted"] = True
     state["since_ist"] = ist_now.isoformat()
     state["reason"] = reason
-    save_json("p1_stale_alert_state.json", state)
+    save_json(os.path.join("state", "p1_stale_alert_state.json"), state)
     print(f"  [STALE] One-shot P1-stale alert sent: {reason}")
 
 
 def clear_p1_stale_flag():
     """Called once P1 is fresh again. Resets the one-shot alert flag."""
-    state = load_json("p1_stale_alert_state.json", {})
+    state = load_json(os.path.join("state", "p1_stale_alert_state.json"), {})
     if isinstance(state, dict) and state.get("alerted"):
-        save_json("p1_stale_alert_state.json", {"alerted": False})
+        save_json(os.path.join("state", "p1_stale_alert_state.json"), {"alerted": False})
         print("  [STALE] P1 fresh again — stale-alert flag cleared.")
 
 
@@ -2180,7 +2180,7 @@ def collect_heartbeat_diagnostics(ist_now, active_obs):
     _P1_DIAGNOSTIC_KINDS = {"dealing_range_legacy_fallback"}
     p1_degrades = {
         k: v for k, v in _count_recent_by_kind(
-            "p1_degrade_log.json", HEARTBEAT_WINDOW_HOURS, ist_now
+            os.path.join("state", "p1_degrade_log.json"), HEARTBEAT_WINDOW_HOURS, ist_now
         ).items()
         if k not in _P1_DIAGNOSTIC_KINDS
     }
@@ -2263,7 +2263,7 @@ def build_heartbeat_email_html(diag, ist_now):
 def send_heartbeat_if_due(ist_now, active_obs):
     """Check timestamp gate, run diagnostics, send email if due. Never raises."""
     try:
-        hb_state = load_json("heartbeat_state.json", {})
+        hb_state = load_json(os.path.join("state", "heartbeat_state.json"), {})
         last_iso = hb_state.get("last_sent_ist")
         if last_iso:
             try:
@@ -2282,7 +2282,7 @@ def send_heartbeat_if_due(ist_now, active_obs):
             email_sent = True
 
         hb_state["last_sent_ist"] = ist_now.isoformat()
-        save_json("heartbeat_state.json", hb_state)
+        save_json(os.path.join("state", "heartbeat_state.json"), hb_state)
 
         # --- Rolling diagnostic log: append snapshot of this heartbeat ---
         try:
@@ -2304,12 +2304,12 @@ def send_heartbeat_if_due(ist_now, active_obs):
                 "issue_count": len(diag["issues"]),
                 "issues": [{"title": i["title"], "action": i["action"]} for i in diag["issues"]],
             }
-            hb_log = load_json("heartbeat_log.json", [])
+            hb_log = load_json(os.path.join("state", "heartbeat_log.json"), [])
             if not isinstance(hb_log, list):
                 hb_log = []
             hb_log.append(log_entry)
             hb_log = hb_log[-50:]  # keep last 50 heartbeats (~6 days at 3h interval)
-            save_json("heartbeat_log.json", hb_log)
+            save_json(os.path.join("state", "heartbeat_log.json"), hb_log)
         except Exception as e:
             print(f"  [HEARTBEAT LOG ERR] {e}")
 
@@ -2347,7 +2347,7 @@ if __name__ == "__main__":
     rotate_scan_log(ist_now)
 
     active_obs = load_slate_as_pair_map("active_obs.json")
-    watch_state = load_json("active_watch_state.json", {})
+    watch_state = load_json(os.path.join("state", "active_watch_state.json"), {})
 
     # --- active_watch_state stale-entry GC ---
     # Evict watches whose first_seen_ist (or legacy alert_ist) is older than
@@ -2380,7 +2380,7 @@ if __name__ == "__main__":
         print(f"  [WATCH GC] Evicted {watch_evicted} watches older than {WATCH_STATE_RETENTION_DAYS}d.")
         # Persist eviction immediately so an orphaned key can't sneak back via
         # the end-of-scan concurrency-safe merge.
-        save_json("active_watch_state.json", watch_kept)
+        save_json(os.path.join("state", "active_watch_state.json"), watch_kept)
     watch_state = watch_kept
     # --- Phase 2 dedup state — lifetime model with daily re-send ---
     # Structure: { "day_id": "YYYY-MM-DD",  # informational only; no longer wipes
@@ -2410,7 +2410,7 @@ if __name__ == "__main__":
     # actually dropped ages out. Conservative window so a transient yfinance
     # hiccup that skips one P2 scan never evicts a live zone's dedup state.
     DEDUP_STALE_DAYS = 7
-    phase2_state = load_json("phase2_sent.json", {"day_id": None, "zones": {}})
+    phase2_state = load_json(os.path.join("state", "phase2_sent.json"), {"day_id": None, "zones": {}})
 
     # Defensive: handle legacy schema (flat zone_id -> iso) gracefully.
     if not isinstance(phase2_state, dict) or "zones" not in phase2_state:
@@ -3096,7 +3096,7 @@ if __name__ == "__main__":
                         # scan still re-detects and emails the zone.
                         if ist_now.hour != 11:
                             prior["last_seen_ist"] = ist_now.isoformat()
-                            save_json("phase2_sent.json", phase2_state)
+                            save_json(os.path.join("state", "phase2_sent.json"), phase2_state)
                             scan_record["final_action"] = (
                                 f"still_valid_deferred_to_1135 "
                                 f"(scan {ist_now.strftime('%H:%M')} IST)"
@@ -3117,7 +3117,7 @@ if __name__ == "__main__":
                             prior["still_valid_count"] = this_count
                             prior["last_email_day"] = today_id
                             prior["last_seen_ist"] = ist_now.isoformat()
-                            save_json("phase2_sent.json", phase2_state)
+                            save_json(os.path.join("state", "phase2_sent.json"), phase2_state)
                             scan_record["final_action"] = (
                                 f"still_valid_alternate_day_silent "
                                 f"(day {this_count} of zone life)"
@@ -3137,7 +3137,7 @@ if __name__ == "__main__":
                     # Refresh last_seen_ist so stale-entry GC doesn't evict
                     # a live silent zone.
                     prior["last_seen_ist"] = ist_now.isoformat()
-                    save_json("phase2_sent.json", phase2_state)
+                    save_json(os.path.join("state", "phase2_sent.json"), phase2_state)
                     scan_record["final_action"] = (
                         f"dedup_same_day_silent "
                         f"({prior_score_raw:.1f}->{current_score_raw:.1f})"
@@ -3254,12 +3254,12 @@ if __name__ == "__main__":
                 html, h1_chart, m15_chart
             )
             # Persist dedup state AFTER send. See comment above.
-            save_json("phase2_sent.json", phase2_state)
+            save_json(os.path.join("state", "phase2_sent.json"), phase2_state)
             print(f"  [OK] {print_label}")
             scan_record["final_action"] = log_action
             append_scan_log(scan_record)
 
-    save_json("phase2_sent.json", phase2_state)
+    save_json(os.path.join("state", "phase2_sent.json"), phase2_state)
 
     # CONCURRENCY-SAFE SAVE: re-read latest disk state, apply only our upserts.
     # If P3 deleted keys mid-run, those deletions are preserved.
@@ -3269,7 +3269,7 @@ if __name__ == "__main__":
     # 'tapped_ist'. Without this carry-over, every P2 hourly upsert would
     # reset Phase 3's sticky tap flag, defeating fix #5.
     STICKY_FROM_P3 = ("tapped", "tapped_ist")
-    fresh_disk = load_json("active_watch_state.json", {})
+    fresh_disk = load_json(os.path.join("state", "active_watch_state.json"), {})
     for k, v in watch_writes.items():
         prior = fresh_disk.get(k)
         if isinstance(prior, dict) and isinstance(v, dict):
@@ -3277,7 +3277,7 @@ if __name__ == "__main__":
                 if sf in prior and sf not in v:
                     v[sf] = prior[sf]
         fresh_disk[k] = v
-    save_json("active_watch_state.json", fresh_disk)
+    save_json(os.path.join("state", "active_watch_state.json"), fresh_disk)
     print(f"Phase 2 complete. Watch upserts: {len(watch_writes)}")
 
     # Heartbeat — runs after main scan is fully saved. Wrapped in try/except.
