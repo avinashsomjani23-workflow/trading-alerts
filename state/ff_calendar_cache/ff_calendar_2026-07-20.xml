@@ -214,7 +214,7 @@
 		<title>GDT Price Index</title>
 		<country>NZD</country>
 		<date><![CDATA[07-21-2026]]></date>
-		<time><![CDATA[2:50pm]]></time>
+		<time><![CDATA[3:16pm]]></time>
 		<impact><![CDATA[Low]]></impact>
 		<forecast />
 		<previous><![CDATA[-4.9%]]></previous>
@@ -336,7 +336,7 @@
 		<date><![CDATA[07-22-2026]]></date>
 		<time><![CDATA[2:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast />
+		<forecast><![CDATA[-2.0M]]></forecast>
 		<previous><![CDATA[-1.7M]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/10-us-crude-oil-inventories]]></url>
 	</event>
@@ -456,7 +456,7 @@
 		<date><![CDATA[07-23-2026]]></date>
 		<time><![CDATA[2:30pm]]></time>
 		<impact><![CDATA[Low]]></impact>
-		<forecast />
+		<forecast><![CDATA[29B]]></forecast>
 		<previous><![CDATA[41B]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/26-us-natural-gas-storage]]></url>
 	</event>
