@@ -38,6 +38,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 import smc_radar  # noqa: E402
+import paths  # noqa: E402  (single source of ROOT_KEEP allowlist)
 
 resolve = smc_radar.resolve_state_path
 
@@ -147,7 +148,7 @@ _ENGINE_FILES = ["smc_radar.py", "Phase2_Alert_Engine.py"]
 
 # Files ALLOWED bare at root — imported from the engine so the two allowlists
 # can never drift apart (single source of truth: smc_radar._ROOT_ALLOWLIST).
-_ROOT_OK = set(smc_radar._ROOT_ALLOWLIST)
+_ROOT_OK = set(paths.ROOT_KEEP)
 
 # A bare filename literal: quotes, no slash/backslash inside, ends .json/.jsonl.
 _BARE_LITERAL = re.compile(r"""['"]([A-Za-z0-9_\-.]+\.(?:json|jsonl))['"]""")

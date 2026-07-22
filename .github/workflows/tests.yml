@@ -75,6 +75,15 @@ jobs:
         # script (no test_* functions, so pytest collects 0 — must run directly).
         run: python tests/test_defended_polarity.py
 
+      - name: File-placement net (no misplaced file tracked at repo root)
+        # paths.py is the single source of truth for WHERE each kind of file
+        # belongs (state/ docs/ tests/ or root). Files the project creates route
+        # through it automatically. This net catches a file created BY HAND at the
+        # wrong place: it fails if any tracked root file is one paths.py would have
+        # put in a folder (a stray .md, a stray test_*.py, a stray state .json).
+        # Keeps the repo self-organising with no watcher and no local machinery.
+        run: python tests/test_repo_paths.py
+
       - name: Offline pytest suite (session DST, choch supersession, ...)
         # The pytest-style offline guards were never run in CI (this job listed
         # scripts by name and invoked no pytest). Wires them in so a regression in
