@@ -3,6 +3,21 @@ name: Backtest
 on:
   workflow_dispatch:
     inputs:
+      pair:
+        description: "Pair to backtest (one only)"
+        required: true
+        type: choice
+        options:
+          - EURUSD
+          - NZDUSD
+          - USDJPY
+          - USDCHF
+          - GOLD
+          - GBPUSD
+          - AUDUSD
+          - USDCAD
+          - EURJPY
+          - BTCUSD
       start_date:
         description: "Start date (YYYY-MM-DD)"
         required: true
@@ -84,12 +99,14 @@ jobs:
           # Regime auto-detected from backtest/WAR_REGIME_WEEKS.json -- no
           # workflow input. The detector reads the date range and tags the
           # run war/bau before any logging or reporting fires.
-          # Pairs: no workflow input -- run_backtest.py's own --pairs default
-          # (the 10-pair EURUSD/NZDUSD/USDJPY/USDCHF/GOLD/GBPUSD/AUDUSD/USDCAD/
-          # EURJPY/BTCUSD set, NAS100 dropped run-level) is always used.
+          # Pairs: exactly ONE pair, chosen from the workflow dropdown
+          # (inputs.pair). Pairwise per-pair tuning -- we never run all
+          # pairs together, so there is no "ALL" option and no multi-pair
+          # default. The value is one of the 10 config pair names.
           # Email: always sent -- --email is no longer conditional.
           python backtest/run_backtest.py \
             --start ${{ inputs.start_date }} --end ${{ inputs.end_date }} \
+            --pairs ${{ inputs.pair }} \
             --risk-usd ${{ inputs.risk_usd }} --email
 
       - name: Exit-lab (exit-recipe comparison -> Excel)
@@ -106,7 +123,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: backtest-h1_only-${{ inputs.start_date }}-${{ inputs.end_date }}
+          name: backtest-${{ inputs.pair }}-${{ inputs.start_date }}-${{ inputs.end_date }}
           path: backtest/results/
           retention-days: 30
 
