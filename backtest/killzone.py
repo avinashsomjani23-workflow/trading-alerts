@@ -1,9 +1,16 @@
-"""Per-pair killzone hard filter for the backtest.
+"""Per-pair killzone membership tag for the backtest.
 
 A killzone is the window in which institutional desks are active and SMC
 structure actually carries weight. Outside it, price drifts and OB tests
-are noise. We drop those alerts entirely -- they never enter the
-simulator, never appear in aggregates, never appear in the Excel.
+are noise.
+
+NOT a drop. This module only ANSWERS "is this ts in a killzone?" — it is a
+TAG, not a gate. run_backtest.py:209 sets `killzone_blocked` on the row and
+increments a counter, but the trade is still simulated and appended
+(run_backtest.py:219,246). Killzone never removes a trade from the run,
+the aggregates, or the Excel (the only real drop is the score floor; see
+memory Backtest Live Parity). The old header claimed "we drop those alerts
+entirely" — that was false and is corrected here.
 
 Windows live in config.json (pair_conf['killzones']) as SESSION-LOCAL time +
 an IANA timezone, e.g. {"tz": "America/New_York", "start": "07:00", "end":

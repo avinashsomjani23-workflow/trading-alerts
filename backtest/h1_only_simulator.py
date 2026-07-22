@@ -42,6 +42,27 @@ from backtest.run_logger import log_event
 MAX_HOLD_H1_BARS = 48
 DEFAULT_RISK_USD = 250.0
 
+# MSS (Market Structure Shift) displacement threshold, in RAW ATR body units.
+# is_mss = True on a CHoCH row when break_body_atr (the raw ATR body of the break
+# candle, smc_detector.compute_break_quality) >= this. DESCRIPTIVE ONLY — gates
+# nothing, scores nothing.
+#
+# DERIVED 2026-07-21 from the canonical CSV (backtest/results/CANONICAL.md,
+# h1only_20080102_20251231, 113 cols) as the MEDIAN raw break_body_atr of
+# eligible live-pair CHoCH rows (EURUSD/USDJPY/NZDUSD/USDCHF/GOLD, n=3493) =
+# 1.70 ATR — the empirical "typical vs above-typical displacement" split (~50/50).
+# NOT the old 1.5 gate constant and NOT keyed off break_excess (which divides by
+# a per-event reference — see MSS_AND_ATRFILL_HANDOFF.md A3).
+#
+# MEASURE-FIRST RESULT (do not treat as a proven edge): higher displacement did
+# NOT predict better reversals. At every candidate cut the high-body group had
+# WORSE expectancy than the low-body group (T=1.5 delta_exp=-0.163R, bootstrap
+# 95% CI [-0.260,-0.068] excludes 0 on the WRONG side; only 39% of 59 quarters
+# had high>low). So is_mss is logged descriptively; it is NOT yet a separator and
+# must NOT be wired into the score. Re-derive on the next canonical baseline (this
+# CSV predates the 2026-07-10 break-gate removal — detection columns are stale).
+MSS_BODY_ATR_MULT = 1.70
+
 # sl_swept_then_tp1 lookahead: bars after an SL exit to check for a reversal to
 # TP1 (only when the stop bar itself was a sweep). Matches the hold horizon so a
 # late reversal is still caught. Diagnostic only.
@@ -1360,6 +1381,18 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     #   break_close_atr = raw ATR multiple the close cleared the broken level by
     #   break_excess    = break body / body reference (BOS 1.0/CHoCH 1.5 ATR); NOT a gate (removed 2026-07-10)
     _bq = ob.get("break_quality") or {}
+    # MSS (Market Structure Shift) label — a CHoCH on a STRONG displacement candle
+    # (confirmed reversal) vs a CHoCH on a weak one (soft warning). The ONLY
+    # difference is displacement, so this keys off the RAW ATR break body
+    # (_bq['body_atr'] == the break_body_atr column), NEVER break_excess (which
+    # divides by a per-event reference — see MSS_AND_ATRFILL_HANDOFF.md A3). True
+    # only on CHoCH rows whose body >= MSS_BODY_ATR_MULT; None on non-CHoCH (a BOS
+    # has no reversal to displace). Descriptive — gates/scores nothing.
+    _break_body_atr = _bq.get("body_atr")
+    if bos_tag == "CHoCH" and _break_body_atr is not None:
+        is_mss = bool(_break_body_atr >= MSS_BODY_ATR_MULT)
+    else:
+        is_mss = None
     dr = ob.get("dealing_range")
     pd_zone = _pd_zone_from_dr(entry, dr)
     pd_alignment = _pd_alignment("LONG" if direction == "bullish" else "SHORT",
@@ -1458,6 +1491,21 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     # comparable raw; the engine normalizes it within-pair (vs the pair's typical
     # ATR) for a regime read. Logged because it's free and frozen.
     atr_at_ob = round(float(_h1_atr), 6) if _h1_atr else None
+
+    # Raw ATR at the FILL bar (price units) — the volatility we actually TRADE
+    # INTO, computed FRESH (NOT ob['h1_atr'], which is formation-time). An OB can
+    # form quiet and fill into a spike; atr_at_ob vs atr_at_fill is that regime
+    # comparison (no third column needed). POINT-IN-TIME: the slice ENDS at the
+    # fill bar (df_h1.loc[:fill_ts]) — a single look-ahead bar would poison the
+    # read. None when never_filled (fill_ts is None) or the slice is too short for
+    # ATR (compute_atr returns None for < period+1 bars). Rounded to 6dp to match
+    # atr_at_ob. Observe-only — gates/scores nothing.
+    if fill_ts is not None and df_h1 is not None:
+        _fill_slice = df_h1.loc[:fill_ts]
+        _atr_fill = smc_detector.compute_atr(_fill_slice)
+        atr_at_fill = round(float(_atr_fill), 6) if _atr_fill else None
+    else:
+        atr_at_fill = None
 
     # ── Derived columns (2026-07-08): encoded in CODE (were previously pasted into
     # the CSV from a sheet and got column-shift corrupted). All three are computed
@@ -1657,11 +1705,18 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "break_close_atr":   _bq.get("close_beyond_atr"),
         "break_excess":      _bq.get("excess"),
         "break_body_atr":    _bq.get("body_atr"),
+        # MSS label (2026-07-21): CHoCH break_body_atr >= MSS_BODY_ATR_MULT.
+        # Descriptive only (NOT a proven separator — see the constant's comment
+        # and the ledger). None on non-CHoCH rows.
+        "is_mss":            is_mss,
         # Setup-geometry features (ATR-normalized; observe-only edge-engine inputs).
         "ob_range_atr":      ob_range_atr,
         "fvg_size_atr":      fvg_size_atr,
         "impulse_leg_atr":   impulse_leg_atr,
         "atr_at_ob":         atr_at_ob,
+        # ATR at the fill bar (fresh, point-in-time) — entry-regime vol vs the
+        # formation-vol atr_at_ob. None on never_filled / short slice.
+        "atr_at_fill":       atr_at_fill,
         # Derived-in-code columns (2026-07-08). Replaces the previously PASTED
         # sheet columns (sl_distance_atr / r_capture_ratio / trend_pd_agree) that
         # were CSV-corrupted. r_capture_ratio is OUTCOME-time (exit track only).
@@ -1793,6 +1848,16 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # strictly at/before the alert (look-ahead-safe). Observation only, no
         # gate. Column list: setup_liq.SETUP_LIQ_FEATURE_COLUMNS.
         **_setup_liq_features(setup_liq_reads, alert.get("leg_extreme_swept")),
+        # ── SESSION H/L SWEEP + BREAK (SESSION_SWEEP_STUDY_SPEC, 2026-07-21) ────
+        # 3 columns from ONE helper: did price sweep or break the nearest prior
+        # Asia/London/NY session high/low before this trade filled. DST-honest
+        # session windows resolved PER CANDLE (session_levels, NOT the DST-broken
+        # smc_detector._session_hl_until); sweep-vs-break decided by REUSING
+        # pool_builder.pool_status (one implementation). ALERT-time, from bars
+        # strictly BEFORE alert_ts (look-ahead-safe). Pair-specific study — never
+        # pooled across pairs. Observation only, no gate/score/live consumer.
+        # Column list: session_levels.SESSION_LEVEL_FEATURE_COLUMNS.
+        **_session_level_features_at_alert(df_h1, alert_ts, entry, alert.get("pair")),
     }
 
 
@@ -1952,6 +2017,28 @@ def _weekly_pd_features_at_alert(df_h1, alert_ts, entry, h4_pd_position):
         ref_price=entry,
         h4_pd_position=h4_pd_position,
     )
+
+
+def _session_level_features_at_alert(df_h1, alert_ts, entry, pair):
+    """Session H/L sweep/break columns for one row
+    (session_levels.SESSION_LEVEL_FEATURE_COLUMNS).
+
+    Thin shim over session_levels.build_session_level_event, anchored at ALERT
+    time: bars strictly BEFORE alert_ts only (SESSION_SWEEP_STUDY_SPEC §3c/§4.3 —
+    frozen at alert, point-in-time, no future leak). ref_price = the placed entry,
+    used only to pick the NEAREST session level with an event. `pair` drives the
+    pair-relevance FLAG only (PAIR_SESSION_TAGS) — it never filters which sessions
+    are scanned. DST-honest session windows are resolved per candle inside
+    session_levels (NOT the DST-broken smc_detector._session_hl_until). Observation
+    only — no gate/score consumer.
+
+    Same deliberate placement as the pool / eq / sweep2 / weekly shims above
+    (defined after _build_row so the ledger's row-build line-refs never shift).
+    Never raises (session_levels guarantees the all-'none' dict on failure).
+    """
+    import session_levels
+    prior = df_h1[df_h1.index < pd.Timestamp(alert_ts)]
+    return session_levels.build_session_level_event(prior, alert_ts, entry, pair)
 
 
 def _approach_features_at_fill(df_h1, fill_ts, ob):

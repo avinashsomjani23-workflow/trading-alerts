@@ -1334,7 +1334,11 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "bos_verdict", "fvg_present", "fvg_mitigation", "sweep_present", "ob_touches",
         # Setup-geometry features (ATR-normalized) — edge-discovery engine inputs.
         "break_close_atr", "break_body_atr", "break_excess", "break_tier",
-        "ob_range_atr", "fvg_size_atr", "impulse_leg_atr", "atr_at_ob",
+        # is_mss (2026-07-21): descriptive MSS label — CHoCH break body >= the
+        # data-derived MSS_BODY_ATR_MULT. NOT a proven separator (see ledger), no
+        # gate/score. Sits by the break_* group it is derived from.
+        "is_mss",
+        "ob_range_atr", "fvg_size_atr", "impulse_leg_atr", "atr_at_ob", "atr_at_fill",
         # Walk-back geometry (A3, DECISION_GUARDRAILS.md) — logging only, no
         # gate. None for legacy zones built before this change.
         "ob_body_ratio", "ob_walkback_depth",
@@ -1392,6 +1396,13 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "setup_liq_stop_present", "setup_liq_stop_offset_atr", "setup_liq_stop_tier",
         "setup_liq_tp_present", "setup_liq_tp_offset_atr",
         "setup_liq_legextreme_swept",
+        # SESSION H/L sweep+break (SESSION_SWEEP_STUDY_SPEC, 2026-07-21) — 3 columns
+        # from session_levels._session_level_features_at_alert. DST-honest session
+        # windows resolved per candle; sweep/break via reused pool_builder.pool_status.
+        # ALERT-time, observation only, pair-specific study. See TRUTH_LEDGER
+        # session_level_* rows.
+        "session_level_event", "session_level_which", "session_level_side",
+        "session_level_pair_relevant",
     ]
     df = pd.DataFrame(trades)
     cols_present = [c for c in front_cols if c in df.columns]

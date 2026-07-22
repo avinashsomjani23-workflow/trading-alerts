@@ -804,6 +804,233 @@ def test_area_b_atr_source_uses_h1_atr():
     assert ok, "Area B source tripwire failed (see output above)"
 
 
+# ── MSS LABEL (is_mss) + ATR-AT-FILL (atr_at_fill) — 2026-07-21 ──────────────
+# Both are DESCRIPTIVE backtest columns (gate/score nothing). Tests drive LIVE
+# _build_row via simulate_h1_only_dual so a definition regression fails loudly
+# out-of-band, never in the live path.
+
+def _labelled_scenario(*, bos_tag="CHoCH", break_quality=None, atr=0.0010,
+                       fills=True):
+    """Drive the LIVE simulator to ONE trade row with a chosen bos_tag and a
+    chosen (pre-frozen) break_quality dict on the OB — mirrors how detection
+    freezes break_quality on the OB before the sim reads it. `fills=False`
+    builds an OB price never touches so the row is never_filled (fill_ts None).
+
+    Same Monday-open bullish OB geometry as _atr_sweep_scenario; here bar 4 fills
+    the proximal and bar 5+ runs to a clean TP so we get a resolved filled row.
+    """
+    base = pd.Timestamp("2026-04-06 00:00", tz="UTC")   # Monday
+    n = 60
+    idx = pd.date_range(base, periods=n, freq="h")
+    top = 1.0800
+    bot = top - 0.0018
+    ob = {
+        "direction": "bullish", "bos_tag": bos_tag, "bos_tier": "Major",
+        "high": top, "low": bot, "proximal_line": top, "distal_line": bot,
+        "ob_timestamp": idx[0].isoformat(), "touches": 0, "h1_atr": atr,
+        "impulse_start_price": bot - 0.0050, "bos_swing_price": top + 0.0030,
+        "fvg": {"exists": True, "fvg_top": top + 0.0009, "fvg_bottom": top + 0.0003},
+        "dealing_range": {"valid": True, "range_low": bot - 0.02,
+                          "range_high": top + 0.05},
+    }
+    if break_quality is not None:
+        ob["break_quality"] = break_quality
+    # Fill is delayed to bar 20 so the point-in-time df_h1[:fill_ts] slice has
+    # >= compute_atr's 15-bar minimum (else atr_at_fill is legitimately None).
+    closes = []
+    for i in range(n):
+        if not fills:
+            closes.append(top + 0.0050)          # price never returns to the zone
+        elif i < 20:
+            closes.append(top + 0.0010)          # linger above the zone (>=15 bars)
+        elif i < 22:
+            closes.append(top - 0.0002)          # dip -> fill at proximal
+        else:
+            closes.append(top + 0.0060)          # rally to TP (clean winner)
+    highs = [c + 0.0005 for c in closes]
+    lows = [c - 0.0005 for c in closes]
+    df = pd.DataFrame({"Open": closes, "High": highs, "Low": lows,
+                       "Close": closes, "Volume": [100] * n}, index=idx)
+    alert = {"pair": "TESTPAIR", "ts": idx[0], "current_price": top,
+             "h1_atr": atr, "ob": ob}
+    rows = h1_only_simulator.simulate_h1_only_dual(
+        alert, _synth_pair_conf(), df, risk_usd=250.0)
+    assert rows, "labelled scenario produced no trade row"
+    return rows[0]
+
+
+def test_session_level_columns_present_in_real_row():
+    """END-TO-END: the 3 session_level_* columns land on a REAL trade row built by
+    the live simulator (not just the session_levels unit fixtures), and carry the
+    'none'-or-vocabulary values the study reads. A missing key or a raw NaN/None
+    would fail here out-of-band — proving the _build_row wiring is live.
+
+    The synthetic scenario has no completed prior session pool near the entry, so
+    the honest value is 'none' on all three; the point is the KEYS exist and the
+    values are in-vocabulary (the varied-value proof is the unit suite +
+    tests/test_session_levels.py sweep/break fixtures)."""
+    print("\n== test_session_level_columns_present_in_real_row ==")
+    r = _labelled_scenario(bos_tag="CHoCH")
+    ok = True
+    import session_levels
+    for col in session_levels.SESSION_LEVEL_FEATURE_COLUMNS:
+        ok &= check(col in r, f"{col} present in real row")
+    ok &= check(r["session_level_event"] in ("sweep", "break", "none"),
+                f"session_level_event in-vocab (got {r['session_level_event']!r})")
+    ok &= check(r["session_level_which"] in ("asia", "london", "ny", "none"),
+                f"session_level_which in-vocab (got {r['session_level_which']!r})")
+    ok &= check(r["session_level_side"] in ("high", "low", "none"),
+                f"session_level_side in-vocab (got {r['session_level_side']!r})")
+    assert ok, "session_level columns missing/invalid on a real row"
+
+
+def test_is_mss_reads_body_atr_not_excess():
+    """SOURCE TRIPWIRE (A3 landmine): is_mss must key off the RAW break_body_atr,
+    NEVER break_excess. Drive two CHoCH rows whose body_atr and excess DISAGREE
+    across the threshold, and prove the label follows body_atr, not excess.
+
+    MSS_BODY_ATR_MULT = 1.70. Row 1: body_atr=2.0 (>=1.70 -> MSS True) but
+    excess=0.5 (< 1.70, so keying off excess would give False). Row 2: body_atr=
+    1.0 (<1.70 -> MSS False) but excess=3.0 (>=1.70, keying off excess -> True).
+    If the label ever reads excess, one of these flips and the test bites.
+    """
+    print("\n== test_is_mss_reads_body_atr_not_excess ==")
+    T = h1_only_simulator.MSS_BODY_ATR_MULT
+    ok = check(abs(T - 1.70) < 1e-9, f"MSS_BODY_ATR_MULT is 1.70 (got {T})")
+
+    r_hi = _labelled_scenario(bos_tag="CHoCH",
+        break_quality={"tier": "solid", "close_beyond_atr": 1.0,
+                       "body_atr": 2.0, "excess": 0.5})
+    ok &= check(r_hi["is_mss"] is True,
+                f"body_atr=2.0>=T -> MSS True (excess=0.5 would say False); got {r_hi['is_mss']}")
+
+    r_lo = _labelled_scenario(bos_tag="CHoCH",
+        break_quality={"tier": "strong", "close_beyond_atr": 1.0,
+                       "body_atr": 1.0, "excess": 3.0})
+    ok &= check(r_lo["is_mss"] is False,
+                f"body_atr=1.0<T -> MSS False (excess=3.0 would say True); got {r_lo['is_mss']}")
+
+    # Belt-and-braces: the source line reads body_atr, not excess.
+    src = Path(h1_only_simulator.__file__).read_text(encoding="utf-8")
+    ok &= check('_break_body_atr = _bq.get("body_atr")' in src,
+                "is_mss source binds _break_body_atr to _bq['body_atr']")
+    ok &= check("_break_body_atr >= MSS_BODY_ATR_MULT" in src,
+                "is_mss compares the RAW body against MSS_BODY_ATR_MULT")
+    assert ok, "is_mss source-tripwire failed (see output above)"
+
+
+def test_is_mss_none_on_non_choch():
+    """NON-CHoCH GUARD: a BOS (or any non-CHoCH) has no reversal to displace, so
+    is_mss must be None regardless of how large the break body is."""
+    print("\n== test_is_mss_none_on_non_choch ==")
+    r = _labelled_scenario(bos_tag="BOS",
+        break_quality={"tier": "strong", "close_beyond_atr": 1.0,
+                       "body_atr": 5.0, "excess": 5.0})   # huge body, still not MSS
+    ok = check(r["is_mss"] is None,
+               f"BOS row -> is_mss None even with body_atr=5.0 (got {r['is_mss']})")
+    # And a CHoCH with the same big body IS True (proves the guard is the tag).
+    r2 = _labelled_scenario(bos_tag="CHoCH",
+        break_quality={"tier": "strong", "close_beyond_atr": 1.0,
+                       "body_atr": 5.0, "excess": 5.0})
+    ok &= check(r2["is_mss"] is True,
+                f"CHoCH with body_atr=5.0 -> is_mss True (got {r2['is_mss']})")
+    assert ok, "is_mss non-CHoCH guard failed (see output above)"
+
+
+def test_is_mss_recompute_matches_csv():
+    """RECOMPUTE AUDIT (Area-C method): independently rebuild is_mss from the
+    canonical CSV's break_body_atr + bos_tag and assert it equals the emitted
+    column row-for-row, 0 mismatch over the full population.
+
+    SKIPPED (not failed) if the canonical CSV predates this column — is_mss rides
+    the NEXT baseline, so it is legitimately absent from the current file. The
+    guard becomes live the moment a run emits it.
+    """
+    print("\n== test_is_mss_recompute_matches_csv ==")
+    import csv
+    doc = (Path(__file__).resolve().parents[1] / "backtest" / "results"
+           / "CANONICAL.md").read_text(encoding="utf-8")
+    import re
+    m = re.search(r"^\s{2,}(backtest/results/\S+/trades\.csv)\s*$", doc, re.M)
+    assert m, "canonical trades.csv path not found in CANONICAL.md"
+    path = Path(__file__).resolve().parents[1] / m.group(1)
+    T = h1_only_simulator.MSS_BODY_ATR_MULT
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        if "is_mss" not in (reader.fieldnames or []):
+            print("  SKIP: canonical CSV predates is_mss (rides next baseline)")
+            return
+        bad = []
+        rows = 0
+        for i, r in enumerate(reader):
+            rows += 1
+            tag = r["bos_tag"]
+            body = r["break_body_atr"]
+            if tag == "CHoCH" and body not in ("", "None"):
+                exp = str(bool(float(body) >= T))
+            else:
+                exp = ""   # None serialises to blank
+            got = r["is_mss"] if r["is_mss"] != "None" else ""
+            if str(exp) != str(got):
+                bad.append((i, got, exp))
+                if len(bad) >= 5:
+                    break
+    assert not bad, f"is_mss recompute mismatches (row, csv, expected): {bad}"
+
+
+def test_atr_at_fill_point_in_time():
+    """POINT-IN-TIME (B4): atr_at_fill must use NO bar after fill_ts. Drive a
+    fixture where a huge POST-fill bar would change ATR and assert atr_at_fill
+    is computed as if that bar does not exist (slice ends at the fill bar).
+
+    Method: build df, find the row's fill_ts, recompute compute_atr on the
+    strict df_h1.loc[:fill_ts] slice, and assert atr_at_fill == that. Then append
+    a monster bar AFTER fill_ts to the slice and assert the value would DIFFER —
+    proving the emitted value excluded post-fill bars.
+    """
+    print("\n== test_atr_at_fill_point_in_time ==")
+    r = _labelled_scenario(bos_tag="CHoCH",
+        break_quality={"tier": "solid", "close_beyond_atr": 1.0,
+                       "body_atr": 1.8, "excess": 1.2})
+    ok = check(r["atr_at_fill"] is not None,
+               f"atr_at_fill populated on a filled row (got {r['atr_at_fill']})")
+    ok &= check(r["fill_ts"] not in (None, ""),
+                f"row filled (fill_ts={r['fill_ts']})")
+    # Rebuild the exact point-in-time slice and confirm the emitted value.
+    base = pd.Timestamp("2026-04-06 00:00", tz="UTC")
+    n = 60
+    idx = pd.date_range(base, periods=n, freq="h")
+    top = 1.0800
+    closes = ([top + 0.0010] * 20 + [top - 0.0002] * 2 + [top + 0.0060] * (n - 22))
+    df = pd.DataFrame({"Open": closes,
+                       "High": [c + 0.0005 for c in closes],
+                       "Low": [c - 0.0005 for c in closes],
+                       "Close": closes}, index=idx)
+    fill_ts = pd.Timestamp(r["fill_ts"])
+    if fill_ts.tzinfo is None:
+        fill_ts = fill_ts.tz_localize("UTC")
+    pit = smc_detector.compute_atr(df.loc[:fill_ts])
+    ok &= check(pit is not None and abs(round(float(pit), 6) - r["atr_at_fill"]) < 1e-9,
+                f"atr_at_fill == compute_atr(df[:fill_ts]) ({r['atr_at_fill']} vs {pit})")
+    # A monster bar AFTER the fill would change ATR — proving the emitted value
+    # (which excludes it) is genuinely point-in-time, not full-df.
+    with_future = smc_detector.compute_atr(df)   # whole df incl. post-fill bars
+    ok &= check(with_future is not None and abs(float(with_future) - float(pit)) > 1e-9,
+                "post-fill bars WOULD change ATR (so excluding them is meaningful)")
+    assert ok, "atr_at_fill point-in-time check failed (see output above)"
+
+
+def test_atr_at_fill_none_when_never_filled():
+    """never_filled -> atr_at_fill None (audit-only rows carry no fill ATR)."""
+    print("\n== test_atr_at_fill_none_when_never_filled ==")
+    r = _labelled_scenario(bos_tag="CHoCH", fills=False)
+    ok = check(r["fill_ts"] in (None, ""),
+               f"row is never_filled (fill_ts={r['fill_ts']!r})")
+    ok &= check(r["atr_at_fill"] is None,
+                f"never_filled -> atr_at_fill None (got {r['atr_at_fill']!r})")
+    assert ok, "atr_at_fill never_filled guard failed (see output above)"
+
+
 def _chop_day_df(bars, day_utc_start="2026-04-01 21:00"):
     """Build a small UTC-indexed H1 OHLC frame from (H,L,C) tuples, one bar/hour
     starting at day_utc_start (a server-day start = prev-day 21:00 UTC). Open is
@@ -1489,6 +1716,13 @@ def main():
          test_area_b_all_atr_cols_share_the_one_h1_atr_denominator),
         ("test_area_b_atr_source_uses_h1_atr",
          test_area_b_atr_source_uses_h1_atr),
+        ("test_is_mss_reads_body_atr_not_excess",
+         test_is_mss_reads_body_atr_not_excess),
+        ("test_is_mss_none_on_non_choch", test_is_mss_none_on_non_choch),
+        ("test_is_mss_recompute_matches_csv", test_is_mss_recompute_matches_csv),
+        ("test_atr_at_fill_point_in_time", test_atr_at_fill_point_in_time),
+        ("test_atr_at_fill_none_when_never_filled",
+         test_atr_at_fill_none_when_never_filled),
         ("test_exit_lab_atr_recipe",    test_exit_lab_atr_recipe),
         ("test_choppiness_index_math",  test_choppiness_index_math),
         ("test_choppiness_index_prev_day_fallback",

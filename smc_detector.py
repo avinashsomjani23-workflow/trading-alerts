@@ -443,23 +443,38 @@ ROUND_NUMBER_TOLERANCE = {
     "crypto":    50.0      # $50 on BTC
 }
 
-# INTERNAL — session windows in UTC. Asia wraps midnight (22 prev-day -> 07 same-day).
-# Phase 1 displays IST equivalents in the email but computes in UTC.
-# Asia    ~03:30-12:30 IST | London ~12:30-17:30 IST | NY ~17:30-22:30 IST
-SESSION_WINDOWS_UTC = {
-    "asia":   (22, 7),
-    "london": (7, 12),
-    "ny":     (12, 17)
+# INTERNAL — session windows as SESSION-LOCAL time + IANA tz, market-standard cash
+# hours. DST-HONEST: _session_hl_until resolves these to UTC per candle date via the
+# shared resolve_killzone_windows_utc machinery (the SAME resolver the killzones use),
+# so the UTC edge shifts automatically across the BST/GMT and EDT/EST switches.
+# Replaces the old frozen-UTC SESSION_WINDOWS_UTC (London (7,12)), which measured the
+# wrong bars for ~half the year AND used a non-standard 5-hour London window. Same
+# {tz,start,end} shape the config killzones use, so one resolver serves both.
+#   Asia   00:00-09:00 Tokyo (no DST) | London 08:00-16:00 (BST) | NY 08:00-17:00 (EDT)
+SESSION_WINDOWS_LOCAL = {
+    "asia":   {"tz": "Asia/Tokyo",       "start": "00:00", "end": "09:00"},
+    "london": {"tz": "Europe/London",    "start": "08:00", "end": "16:00"},
+    "ny":     {"tz": "America/New_York", "start": "08:00", "end": "17:00"},
 }
 
 # INTERNAL — per-pair session tags shown in Phase 1 sweep badge (handoff table).
+# ALL 11 configured instruments (config.json), not just the 5 live: the backtest
+# study (session_levels.session_level_pair_relevant) reads this map for every
+# backtest_only pair too, so an absent pair would silently flag every session
+# irrelevant. Sessions = the pair's own currency legs' home sessions (USD=NY;
+# EUR/GBP/CHF=London; JPY/AUD/NZD=Asia; CAD=NY; index/crypto=its main liquidity).
 PAIR_SESSION_TAGS = {
     "EURUSD": ["asia", "london"],
     "USDJPY": ["asia", "london"],
     "NZDUSD": ["asia"],
     "USDCHF": ["london"],
     "GOLD":   ["london", "ny"],
-    "NAS100": ["ny"]
+    "NAS100": ["ny"],
+    "GBPUSD": ["london", "ny"],
+    "AUDUSD": ["asia", "ny"],
+    "USDCAD": ["ny"],
+    "EURJPY": ["asia", "london"],
+    "BTCUSD": ["asia", "london", "ny"],  # 24/7 — no home session; all three eligible
 }
 
 # INTERNAL — scoring caps for the sweep score. Consumed by run_scorecard()
@@ -1179,44 +1194,50 @@ def _prior_trading_day_hl(df, anchor_ts):
 
 def _session_hl_until(df, anchor_ts, session_key):
     """
-    High/low of the named session on `anchor_ts`'s UTC date, clipped to
-    `anchor_ts` (we never include candles in the session's future relative
-    to the OB candle). Asia wraps midnight — we use the asia window that
-    *ends* on the anchor date.
+    High/low of the named session on `anchor_ts`'s session-LOCAL date, clipped to
+    `anchor_ts` (we never include candles in the session's future relative to the
+    OB candle).
+
+    DST-HONEST (fixed 2026-07-22): each candle is assigned to a session by
+    converting its UTC time into the SESSION'S OWN timezone (SESSION_WINDOWS_LOCAL)
+    for that candle's date, so the window's UTC edge shifts with BST/GMT and
+    EDT/EST — the SAME per-candle-date resolution the killzones use. The old code
+    keyed off frozen-UTC SESSION_WINDOWS_UTC (London (7,12)) and measured the wrong
+    bars for ~half the year. "On the anchor's date" is now the anchor's LOCAL date
+    in the session tz (Tokyo/London/NY), which also handles Asia without a manual
+    midnight-wrap: Tokyo 00:00-09:00 does not wrap in local time.
 
     Returns (high, low) or (None, None) if no candles fall in window.
     """
     if df is None or len(df) == 0 or anchor_ts is None:
         return None, None
-    if session_key not in SESSION_WINDOWS_UTC:
+    win = SESSION_WINDOWS_LOCAL.get(session_key)
+    if win is None:
         return None, None
     try:
+        tz = ZoneInfo(str(win["tz"]))
+        start_h = int(str(win["start"]).split(":")[0])
+        end_h = int(str(win["end"]).split(":")[0])
+
+        # Anchor in UTC, then in the session tz — its local date is the session-day
+        # we measure, and its UTC instant is the future-clip bound.
         anchor_dt = anchor_ts.to_pydatetime() if hasattr(anchor_ts, 'to_pydatetime') else anchor_ts
-        if hasattr(anchor_dt, 'tzinfo') and anchor_dt.tzinfo is not None:
-            anchor_dt = anchor_dt.replace(tzinfo=None)
-        start_h, end_h = SESSION_WINDOWS_UTC[session_key]
-        anchor_date = anchor_dt.date()
-        if session_key == 'asia':
-            # 22:00 (prev day) -> 07:00 (anchor date). If anchor_dt is before 07,
-            # use the window ending today; else use the window starting today 22:00
-            # which is in the FUTURE — instead use yesterday-22 -> today-07.
-            sess_start = datetime.combine(anchor_date, datetime.min.time()).replace(hour=start_h) - timedelta(days=1)
-            sess_end   = datetime.combine(anchor_date, datetime.min.time()).replace(hour=end_h)
-        else:
-            sess_start = datetime.combine(anchor_date, datetime.min.time()).replace(hour=start_h)
-            sess_end   = datetime.combine(anchor_date, datetime.min.time()).replace(hour=end_h)
-        # Clip end to anchor (we cannot see the future)
-        sess_end = min(sess_end, anchor_dt)
-        if sess_end <= sess_start:
-            return None, None
-        # Iterate the 'Datetime' column, not df.index — Phase 1's reset_index
-        # df has an integer index. See _row_timestamps.
+        anchor_utc = (anchor_dt.replace(tzinfo=_UTC) if getattr(anchor_dt, 'tzinfo', None) is None
+                      else anchor_dt.astimezone(_UTC))
+        anchor_local_date = anchor_utc.astimezone(tz).date()
+
         mask = []
         for ts in _row_timestamps(df):
             t = ts.to_pydatetime() if hasattr(ts, 'to_pydatetime') else ts
-            if hasattr(t, 'tzinfo') and t.tzinfo is not None:
-                t = t.replace(tzinfo=None)
-            mask.append(sess_start <= t < sess_end)
+            t_utc = (t.replace(tzinfo=_UTC) if getattr(t, 'tzinfo', None) is None
+                     else t.astimezone(_UTC))
+            if t_utc > anchor_utc:  # never see the future
+                mask.append(False)
+                continue
+            local = t_utc.astimezone(tz)
+            in_win = (start_h <= local.hour < end_h)  # window never wraps in local time
+            same_day = (local.date() == anchor_local_date)
+            mask.append(in_win and same_day)
         if not any(mask):
             return None, None
         sess_df = df[mask]
