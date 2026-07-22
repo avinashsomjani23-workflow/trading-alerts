@@ -1293,7 +1293,10 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "setup_id",
         "pair", "alert_ts", "fill_ts", "exit_ts", "session",
         "direction", "event", "entry_zone",
-        "entry", "sl_raw", "sl_initial", "tp1", "tp2", "tp1_rr", "tp2_rr",
+        # entry/tp1/tp2 = SPREAD-PLACED execution levels; *_raw = pre-placement OB/
+        # zone geometry (2026-07-22 spread shift audit, mirrors sl_raw/sl_initial).
+        "entry", "entry_raw", "sl_raw", "sl_initial",
+        "tp1", "tp1_raw", "tp2", "tp2_raw", "tp1_rr", "tp2_rr",
         # TP-placement audit (2026-07-15): tp1/tp2 above are the ZONE-EDGE
         # (traded) levels; these expose the raw swing wick they replaced, its RR,
         # and the source ("zone" opposing-OB edge used | "wick" fallback).
@@ -1319,6 +1322,7 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # Outcome-time exit-track columns (2026-07-08; NEVER entry features).
         "sl_max_adverse_after_sweep_atr", "bars_sl_to_tp1_touch",
         "sl_recovered_to_entry", "sl_distance_atr",
+        "sl_dist_atr_at_alert", "tp_dist_atr_at_alert",
         "bars_to_exit", "bars_to_tp1", "bars_to_tp2",
         "ob_to_fill_hours", "bars_break_to_pullback",
         "ob_age_h1_bars", "pd_zone",
@@ -1435,9 +1439,12 @@ _EXCEL_COL_NAMES = {
     "entry_zone":        "Entry Type",
     # levels
     "entry":             "Entry Price",
+    "entry_raw":         "Entry Price (raw)",
     "sl_initial":        "Stop Loss",
     "tp1":               "Take Profit 1",
+    "tp1_raw":           "Take Profit 1 (raw)",
     "tp2":               "Take Profit 2",
+    "tp2_raw":           "Take Profit 2 (raw)",
     "tp1_rr":            "TP1 Reward:Risk",
     "tp2_rr":            "TP2 Reward:Risk",
     # PD array

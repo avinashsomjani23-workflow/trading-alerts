@@ -2016,6 +2016,23 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
       - "50pct" (backtest only)    -> OB midpoint. Deeper fill, tighter R.
     Both entries share the same SL (OB distal +/- 1x spread).
 
+    SPREAD-AWARE EXECUTION PLACEMENT (2026-07-22): the chart is the BID; a LONG
+    fills at the ASK (= bid + spread) and exits by selling at the BID. So the raw
+    OB/swing levels are shifted by one spread to the price a live limit actually
+    fills at — placement, NOT a P&L cost bolted on:
+      - ENTRY shifts TOWARD price so the limit fills right at the intended zone
+        instead of needing price to travel one extra spread (LONG entry + spread,
+        SHORT entry - spread). Without this the ask/bid never reaches a limit sat
+        on the raw line and the fill is missed.
+      - TP shifts NEARER by one spread so it triggers before the reversal eats the
+        exit (LONG tp - spread, SHORT tp + spread). A LONG sells at the bid, so the
+        bid must reach TP; front-running by a spread makes it fill at the zone.
+      - SL keeps its OB-distal +/- spread buffer (unchanged).
+    Trade SELECTION is byte-identical to pre-2026-07-22: entry/risk/RR grading and
+    the TP1 band + TP2 pool logic run on the RAW geometry; only the FINAL emitted
+    execution prices are shifted (raw values logged as *_raw for audit). Live and
+    backtest apply the identical shift so the simulator fills where live would.
+
     SL: H1 OB distal +/- 1x spread.
 
     TP swings: H1 swings at lookback=3. Only UNBROKEN pools are targets — a swing
@@ -2072,6 +2089,20 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     # GOLD/NAS spread to 0.005/0.02 -- effectively no SL buffer.
     _pip_for_dp = {5: 0.0001, 3: 0.01, 2: 1.0}.get(dp, 0.0001)
     spread_val = pair_conf.get("spread_pips", 2) * _pip_for_dp
+
+    # Spread-aware execution placement (2026-07-22). These helpers are CALLED only
+    # at the final `out` dict — entry/risk/RR grading and TP selection below all run
+    # on the RAW geometry, so trade selection is unchanged. Entry shifts TOWARD price
+    # (LONG +, SHORT -) so a limit fills at the zone; TP shifts NEARER (LONG -,
+    # SHORT +) so it fills before the reversal. spread_val==0 -> no-op, so the *_raw
+    # and placed prices coincide and nothing changes.
+    def _place_entry(px):
+        return px + spread_val if bias == "LONG" else px - spread_val
+
+    def _place_tp(px):
+        if px is None:
+            return None
+        return px - spread_val if bias == "LONG" else px + spread_val
 
     # H1 OB geometry. Strict read -- schema drift returns invalid rather than guess.
     try:
@@ -2268,10 +2299,16 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
 
     out = {
         "valid": True,
-        "entry": round(entry, dp),
+        # entry/tp1 are the SPREAD-PLACED execution prices (the live limit / target
+        # actually sits here). entry_raw/tp1_raw are the raw OB/zone geometry the
+        # RR band was graded on — logged so the placement shift is a clean audit
+        # (same pattern as sl_raw/sl_initial in the simulator).
+        "entry": round(_place_entry(entry), dp),
+        "entry_raw": round(entry, dp),
         "sl": round(sl, dp),
-        "tp1": round(tp1, dp),          # zone-edge TP1 (the traded level)
-        "rr": round(tp1_rr, 2),         # RR of the traded (zone) level
+        "tp1": round(_place_tp(tp1), dp),   # spread-placed (fills before reversal)
+        "tp1_raw": round(tp1, dp),          # zone-edge TP1 pre-shift (RR graded here)
+        "rr": round(tp1_rr, 2),         # RR of the traded (zone) level, raw geometry
         "entry_source": entry_source,
         "tp1_source": tp1_source,       # "swing" | "fallback_1to1"
         # True when NO unbroken opposing pool landed in the [0.5, 4.0]R band and
@@ -2282,7 +2319,8 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         # Placement audit — lets the backtest separate "nearer TP" (zone vs wick)
         # from "lower floor" (0.5). tp1_zone_source: "zone" (opposing OB edge) |
         # "wick" (fallback, no opposing candle). For a 1:1 fallback TP, zone==wick.
-        "tp1_wick": round(tp1_wick, dp) if tp1_wick is not None else None,
+        "tp1_wick": round(_place_tp(tp1_wick), dp) if tp1_wick is not None else None,
+        "tp1_wick_raw": round(tp1_wick, dp) if tp1_wick is not None else None,
         "tp1_wick_rr": round(tp1_wick_rr, 2),
         "tp1_zone_source": tp1_zone_source,
     }
@@ -2295,12 +2333,17 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     # If that happens, drop TP2 -- the trade still has TP1 + BE-stop policy.
     if tp_targets != "triple":
         if tp2 is not None:
+            # Ordering guard on the RAW (pre-shift) prices: both tp1 and tp2 shift
+            # by the SAME spread in the SAME direction, so the raw check preserves
+            # the emitted ordering. Emit the spread-placed tp2 with the raw logged.
             tp1_r = round(tp1, dp)
             tp2_r = round(tp2, dp)
             if (bias == "LONG" and tp2_r > tp1_r) or (bias == "SHORT" and tp2_r < tp1_r):
-                out["tp2"] = tp2_r
-                out["tp2_rr"] = round(abs(tp2 - entry) / risk, 2)
-                out["tp2_wick"] = round(tp2_wick, dp) if tp2_wick is not None else None
+                out["tp2"] = round(_place_tp(tp2), dp)
+                out["tp2_raw"] = tp2_r
+                out["tp2_rr"] = round(abs(tp2 - entry) / risk, 2)   # raw-geometry RR
+                out["tp2_wick"] = round(_place_tp(tp2_wick), dp) if tp2_wick is not None else None
+                out["tp2_wick_raw"] = round(tp2_wick, dp) if tp2_wick is not None else None
                 out["tp2_zone_source"] = tp2_zone_source
             # else: tp2 collapsed onto tp1 (or wrong side) -> emit no tp2.
         return out
@@ -2351,9 +2394,13 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         if (bias == "LONG" and tp_wick <= tp1_r) or (bias == "SHORT" and tp_wick >= tp1_r):
             tp_wick = tp1_r
             tp2_collapsed_to_tp1 = True
-    tp_wick_rr = round(abs(tp_wick - entry) / risk, 2)
+    tp_wick_rr = round(abs(tp_wick - entry) / risk, 2)   # raw-geometry RR
 
-    out["tp_wick"] = tp_wick
+    # tp_wick is an execution target -> emit the spread-placed price, log the raw.
+    # Internal ordering (below) stays on the RAW tp_wick since the runner shifts by
+    # the same spread in the same direction.
+    out["tp_wick"] = round(_place_tp(tp_wick), dp)
+    out["tp_wick_raw"] = tp_wick
     out["tp_wick_rr"] = tp_wick_rr
     out["tp2_collapsed_to_tp1"] = tp2_collapsed_to_tp1
 
@@ -2365,10 +2412,11 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     out["tp_nextpool_zone_source"] = None
     if tp2 is not None:
         tp3_r = round(tp2, dp)
-        ref = tp_wick  # runner must be strictly PAST the wick target
+        ref = tp_wick  # runner must be strictly PAST the wick target (raw vs raw)
         if (bias == "LONG" and tp3_r > ref) or (bias == "SHORT" and tp3_r < ref):
-            out["tp_nextpool"] = tp3_r
-            out["tp_nextpool_rr"] = round(abs(tp2 - entry) / risk, 2)
+            out["tp_nextpool"] = round(_place_tp(tp2), dp)   # spread-placed runner
+            out["tp_nextpool_raw"] = tp3_r
+            out["tp_nextpool_rr"] = round(abs(tp2 - entry) / risk, 2)   # raw-geometry RR
             out["tp_nextpool_zone_source"] = tp2_zone_source
         # else: rounds onto tp_wick / wrong side -> drop the runner (rides tp_wick).
     return out

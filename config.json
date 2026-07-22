@@ -47,7 +47,7 @@
       "atr_multiplier": 2.5,
       "distal_invalidation_mode": "close",
       "decimal_places": 5,
-      "spread_pips": 4.0,
+      "spread_pips": 2.0,
       "killzones": [
         {"tz": "America/New_York", "start": "20:00", "end": "00:00", "label": "Asian Range"},
         {"tz": "America/New_York", "start": "07:00", "end": "10:00", "label": "New York (forex)"},

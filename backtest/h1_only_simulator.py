@@ -557,7 +557,14 @@ def _simulate_single_entry(
                   reason=levels.get("reason", "levels_invalid")
                          if isinstance(levels, dict) else "levels_none")
         return None
+    # entry = the SPREAD-PLACED execution price (the ask you pay on a LONG / bid on
+    # a SHORT) — used for R-distance, MFE/MAE anchor and all exit math. entry_raw =
+    # the raw OB edge the live limit sits behind. Backtest bars are BID (chart), so
+    # the FILL is triggered on entry_raw (bid must reach the OB line) while the fill
+    # PRICE is entry (the spread-placed level). Falls back to entry if a caller ever
+    # returns no entry_raw (spread==0 -> identical anyway). 2026-07-22.
     entry  = float(levels["entry"])
+    entry_raw = float(levels.get("entry_raw", levels["entry"]))
     sl     = float(levels["sl"])
     tp1    = float(levels["tp1"])
     # TRIPLE mode (backtest, 2026-07-17): compute_phase2_levels returns the 3-target
@@ -570,6 +577,13 @@ def _simulate_single_entry(
     #     recipes target them via walk_multileg string specs.
     tp_nextpool = levels.get("tp_nextpool")
     tp2    = float(tp_nextpool) if tp_nextpool is not None else None
+    # Raw (pre-spread-placement) execution levels, logged alongside the placed
+    # entry/tp1/tp2 so the 2026-07-22 spread shift is a clean per-row audit (same
+    # pattern as sl_raw vs sl_initial). tp2 local == the next-pool runner, so its
+    # raw comes from tp_nextpool_raw. None-safe: spread==0 -> raw == placed.
+    tp1_raw = levels.get("tp1_raw")
+    _tp_np_raw = levels.get("tp_nextpool_raw")
+    tp2_raw = float(_tp_np_raw) if _tp_np_raw is not None else None
     tp1_rr = float(levels.get("rr", 0.0))
     tp2_rr = float(levels.get("tp_nextpool_rr", 0.0)) if tp2 is not None else 0.0
     # TP-placement audit (2026-07-15): the zone-edge TP vs the raw swing wick it
@@ -599,9 +613,11 @@ def _simulate_single_entry(
     # 2-3dp instruments (USDJPY, GOLD, NAS100)   -> pip = 0.01
     # For a LONG, SL sits below entry; spread pushes SL further down (worse).
     # For a SHORT, SL sits above entry; spread pushes SL further up (worse).
-    # TP levels are NOT widened -- pessimistic, matches what the user gets
-    # at the bid/ask after entering. Slippage and swap are NOT modelled
-    # (user decision; revisit when needed). RCA #9.
+    # ENTRY and TP are already SPREAD-PLACED upstream in compute_phase2_levels
+    # (2026-07-22): entry shifted toward price (fills at the zone), TP shifted
+    # nearer (fills before the reversal). This block widens ONLY the SL, using the
+    # SAME spread_pips/pip_size convention, so all three legs share one spread
+    # model. Slippage and swap are NOT modelled (user decision). RCA #9.
     #
     # CRYPTO EXCEPTION: BTC is quoted in dollars and its spread is stated in
     # dollars (~$20), not in 0.01 "pips". Using pip_size=0.01 would shrink a $20
@@ -812,11 +828,14 @@ def _simulate_single_entry(
             # Monday rather than being killed -- same as any other no-touch bar.
             friday_evening = (WEEKEND_FLAT and ts.dayofweek == 4
                               and ts.hour >= WEEKEND_FLAT_HOUR_UTC)
-            # Pending limit fill: long fills when bar.low <= entry,
-            # short fills when bar.high >= entry (pre-placed limit semantics).
+            # Pending limit fill: the FILL TRIGGER is the raw OB line (bars are BID;
+            # a LONG limit sat at entry_raw+spread fills when the ASK reaches it, i.e.
+            # the bid/chart reaches entry_raw). Long triggers when bar.low <= entry_raw,
+            # short when bar.high >= entry_raw. The recorded fill PRICE is `entry` (the
+            # spread-placed ask/bid actually paid) — set as mfe/mae anchor below.
             if not friday_evening and (
-                    (bias == "LONG" and bar_lo <= entry) or
-                    (bias == "SHORT" and bar_hi >= entry)):
+                    (bias == "LONG" and bar_lo <= entry_raw) or
+                    (bias == "SHORT" and bar_hi >= entry_raw)):
                 filled = True
                 fill_ts = ts
                 fill_bar_idx = i
@@ -942,7 +961,8 @@ def _simulate_single_entry(
         bars_to_exit = bars_walked_post_fill
         return _build_row(
             alert=alert, pair_conf=pair_conf, ob=ob,
-            entry_zone=entry_zone, entry=entry, sl=sl, sl_raw=sl_raw, tp1=tp1, tp2=tp2,
+            entry_zone=entry_zone, entry=entry, entry_raw=entry_raw,
+            sl=sl, sl_raw=sl_raw, tp1=tp1, tp1_raw=tp1_raw, tp2=tp2, tp2_raw=tp2_raw,
             tp1_rr=tp1_rr, tp2_rr=tp2_rr,
             tp1_wick=tp1_wick, tp1_wick_rr=tp1_wick_rr, tp1_zone_source=tp1_zone_source,
             tp2_wick=tp2_wick, tp2_zone_source=tp2_zone_source,
@@ -1210,7 +1230,8 @@ def _simulate_single_entry(
 
     return _build_row(
         alert=alert, pair_conf=pair_conf, ob=ob,
-        entry_zone=entry_zone, entry=entry, sl=sl, sl_raw=sl_raw, tp1=tp1, tp2=tp2,
+        entry_zone=entry_zone, entry=entry, entry_raw=entry_raw,
+        sl=sl, sl_raw=sl_raw, tp1=tp1, tp1_raw=tp1_raw, tp2=tp2, tp2_raw=tp2_raw,
         tp1_rr=tp1_rr, tp2_rr=tp2_rr,
         tp1_wick=tp1_wick, tp1_wick_rr=tp1_wick_rr, tp1_zone_source=tp1_zone_source,
         tp2_wick=tp2_wick, tp2_zone_source=tp2_zone_source,
@@ -1351,6 +1372,7 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                r_realised, r_if_exit_tp1, r_if_exit_tp2,
                mfe_r, mae_r, bars_to_exit, bars_to_tp1, bars_to_tp2,
                sl_collision, risk_usd, sl_raw=None,
+               entry_raw=None, tp1_raw=None, tp2_raw=None,
                sl_bar_was_sweep=None, sl_swept_then_tp1=None,
                sl_wick_depth_atr=None, sl_max_adverse_after_sweep_atr=None,
                bars_sl_to_tp1_touch=None, sl_recovered_to_entry=None,
@@ -1519,6 +1541,30 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     sl_distance_atr = round(abs(entry - sl) / _h1_atr, 3) \
         if (_h1_atr and entry is not None and sl is not None) else None
 
+    #   sl_dist_atr_at_alert / tp_dist_atr_at_alert : how big is this trade's stop /
+    #     target vs NORMAL recent movement, at the ALERT moment. DELIBERATELY unlike
+    #     sl_distance_atr above (which anchors ENTRY and divides by OB-formation
+    #     _h1_atr, stale by alert). Here:
+    #       - anchor = OB PROXIMAL line (the live system's reference; no fill exists
+    #         at alert), matching live Phase2_Alert_Engine.
+    #       - ruler = a FRESH ATR(14) on the last 14 CLOSED H1 candles as of the
+    #         alert (_closed_bars_at_alert already drops the forming bar), NOT the
+    #         formation ATR. Backtest/live identical (same anchor, same closed-bar
+    #         fresh ATR, same period).
+    #     Point-in-time clean: proximal + SL + TP1 + alert-time bars all known at
+    #     alert. Observe-only. None when the ATR slice is too short or a level missing.
+    _prox_alert = ob.get("proximal_line")
+    _alert_slice = _closed_bars_at_alert(df_h1, alert_ts) if df_h1 is not None else None
+    _atr_alert = smc_detector.compute_atr(_alert_slice, period=14) if _alert_slice is not None else None
+    if _atr_alert and _atr_alert > 0 and _prox_alert is not None:
+        sl_dist_atr_at_alert = round(abs(_prox_alert - sl) / _atr_alert, 3) \
+            if sl is not None else None
+        tp_dist_atr_at_alert = round(abs(_prox_alert - tp1) / _atr_alert, 3) \
+            if tp1 is not None else None
+    else:
+        sl_dist_atr_at_alert = None
+        tp_dist_atr_at_alert = None
+
     #   r_capture_ratio : r_realised / mfe_r. How much of the best favorable move
     #     we actually kept. 1.0 = rode the full excursion to exit; 0.0 = gave the
     #     whole move back (the BE-sweep signature); can be negative on a loser that
@@ -1584,14 +1630,21 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "model":         "h1_only",
         "event":         _event_label(bos_tag, bos_tier),
         "entry_zone":    entry_zone,
+        # entry/tp1/tp2 are the SPREAD-PLACED execution levels (the price the trade
+        # actually fills/exits at). entry_raw/tp1_raw/tp2_raw are the raw OB/zone
+        # geometry before the 2026-07-22 placement shift — logged so the shift is a
+        # clean per-row diff (same rationale as sl_raw vs sl_initial). None-safe.
         "entry":         entry,
+        "entry_raw":     entry_raw,
         # sl_raw = the raw OB distal (pre-spread) stop. sl_initial = sl_raw widened
         # by one spread (the stop actually traded). Logging both makes a spread
         # audit a clean diff instead of reconstructing sl_raw from sl_initial.
         "sl_raw":        sl_raw,
         "sl_initial":    sl,
         "tp1":           tp1,
+        "tp1_raw":       tp1_raw,
         "tp2":           tp2,
+        "tp2_raw":       tp2_raw,
         "tp1_rr":        round(tp1_rr, 3),
         "tp2_rr":        round(tp2_rr, 3) if tp2 is not None else None,
         # TP-placement audit (2026-07-15). tp1/tp2 above are the ZONE-EDGE
@@ -1721,6 +1774,10 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # sheet columns (sl_distance_atr / r_capture_ratio / trend_pd_agree) that
         # were CSV-corrupted. r_capture_ratio is OUTCOME-time (exit track only).
         "sl_distance_atr":   sl_distance_atr,
+        # SL/TP distance vs NORMAL recent movement, at alert: proximal-anchored,
+        # divided by a FRESH closed-bar ATR(14) (not formation ATR). See derivation.
+        "sl_dist_atr_at_alert": sl_dist_atr_at_alert,
+        "tp_dist_atr_at_alert": tp_dist_atr_at_alert,
         "r_capture_ratio":   r_capture_ratio,
         "trend_pd_agree":    trend_pd_agree,
         # Walk-back geometry (A3) — None for legacy zones built before this change.

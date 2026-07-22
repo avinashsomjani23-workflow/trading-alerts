@@ -90,3 +90,5 @@
 {"ts": "2026-07-22T15:19:43.280901+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "NZDUSD", "trades": 105, "news_blocked": 0, "ist_blocked": 41, "killzone_dropped_alerts": 56}
 {"ts": "2026-07-22T15:19:52.612544+00:00", "level": "info", "event": "report_written", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20240101_20240331", "total_alerts": 145, "total_trades": 105}
 {"ts": "2026-07-22T15:19:52.617417+00:00", "level": "info", "event": "exit_lab_sink_persisted", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20240101_20240331\\exit_lab_sink.jsonl", "rows": 755}
+{"ts": "2026-07-22T15:19:53.203435+00:00", "level": "info", "event": "logs_committed_local_only", "run_id": "h1only_20240101_20240331", "sha": "f291d3ef"}
+{"ts": "2026-07-22T15:19:53.204495+00:00", "level": "info", "event": "run_end", "wall_s": 351.8, "active_s": 16.3, "idle_s": 335.5, "max_gap_s": 335.5, "wall_min": 5.86, "active_min": 0.27}

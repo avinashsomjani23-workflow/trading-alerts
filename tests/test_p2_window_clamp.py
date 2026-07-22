@@ -86,7 +86,10 @@ def _tp1(frame):
     res = smc_detector.compute_phase2_levels(
         pair_conf, "LONG", ob, 1.0000, frame,
         entry_zone="proximal", tp1_min_rr=1.5)
-    return res.get("valid"), res.get("tp1"), res.get("tp1_source")
+    # tp1_raw = the raw zone-edge selection (the swing that was picked), BEFORE the
+    # spread placement shift (2026-07-22). This test asserts WHICH swing was chosen,
+    # so it reads the raw price; `tp1` carries the spread-placed execution level.
+    return res.get("valid"), res.get("tp1_raw"), res.get("tp1_source")
 
 
 # --- 1) constant is 200 and lives in smc_detector ---------------------------

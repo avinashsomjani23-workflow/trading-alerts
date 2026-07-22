@@ -1502,9 +1502,21 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
         scorecard_rows, total_score, total_max_for_card, display_total=display_total
     )
 
+    # STOP / TARGET size in "normal recent moves". Both are proximal-anchored
+    # distances divided by a FRESH closed-bar ATR(14) at this alert (data carries
+    # the frozen scan_record values). A stop near 1 = one normal move away (tight);
+    # a target near 4 = four normal moves (ambitious). None -> em-dash.
+    _sl_datr = data.get("sl_dist_atr_at_alert")
+    _tp_datr = data.get("tp_dist_atr_at_alert")
+    _sl_datr_str = f"{_sl_datr:.1f}&times; ATR" if _sl_datr is not None else "&mdash;"
+    _tp_datr_str = f"{_tp_datr:.1f}&times; ATR" if _tp_datr is not None else "&mdash;"
+
     distance_html = f"""
     <div style="margin-bottom:12px;padding:8px 12px;background:#0d0d1a;border-left:3px solid #00bcd4;border-radius:4px;font-size:12px;color:#bbb;">
         <b style="color:#eee;">Distance:</b> {distance_str} &nbsp;&middot;&nbsp; {atr_label}
+        <br><b style="color:#eee;">Stop:</b> {_sl_datr_str}
+        &nbsp;&middot;&nbsp; <b style="color:#eee;">Target:</b> {_tp_datr_str}
+        <span style="color:#777;">(vs normal recent move)</span>
     </div>"""
 
     # Killzone annotation. OB-side is SCORED (zone formed in institutional
@@ -2806,6 +2818,32 @@ if __name__ == "__main__":
                 "rr":    levels.get("rr"),
             }
 
+            # SL/TP DISTANCE IN ATR (SESSION_SWEEP not related; own feature).
+            # How big is this trade's stop / target vs NORMAL recent movement?
+            # Ruler = a FRESH ATR(14) computed at ALERT-TIME on the last 14
+            # CLOSED H1 candles (df_h1.iloc[:-1] drops the still-forming bar ->
+            # no flicker, backtest/live identical). This is DELIBERATELY separate
+            # from ob['h1_atr'] (OB-formation ATR, stale by alert) and from the
+            # line-2516 h1_atr (that one feeds the proximity cap and includes the
+            # forming bar — out of scope, left untouched). Anchor = OB proximal
+            # line (the live system's reference; no fill price exists at alert).
+            #   sl_dist_atr_at_alert = |proximal - SL|  / fresh_atr
+            #   tp_dist_atr_at_alert = |proximal - TP1| / fresh_atr
+            # Frozen *_at_alert: computed once here at the yield, never re-read.
+            _alert_atr = smc_detector.compute_atr(df_h1.iloc[:-1], period=14)
+            _sl = levels.get("sl")
+            _tp1 = levels.get("tp1")
+            if _alert_atr and _alert_atr > 0:
+                scan_record["sl_dist_atr_at_alert"] = (
+                    abs(proximal - _sl) / _alert_atr if _sl is not None else None
+                )
+                scan_record["tp_dist_atr_at_alert"] = (
+                    abs(proximal - _tp1) / _alert_atr if _tp1 is not None else None
+                )
+            else:
+                scan_record["sl_dist_atr_at_alert"] = None
+                scan_record["tp_dist_atr_at_alert"] = None
+
             # Score + levels passed. NOW build news context — only spent on
             # zones that will actually email. The deterministic scheduled-event
             # context (blackout + next event) comes from the shared FF calendar;
@@ -2997,6 +3035,12 @@ if __name__ == "__main__":
                 "current_price": current_price,
                 "distance_to_proximal": distance,
                 "h1_atr": h1_atr,
+                # STOP / TARGET size vs NORMAL recent movement, at this alert:
+                # proximal-anchored distance / a FRESH closed-bar ATR(14). Computed
+                # once into scan_record at the yield above (frozen), read back here
+                # so the email shows the SAME number the backtest column logs.
+                "sl_dist_atr_at_alert": scan_record.get("sl_dist_atr_at_alert"),
+                "tp_dist_atr_at_alert": scan_record.get("tp_dist_atr_at_alert"),
                 "alert_ist": ist_now.isoformat(),
                 "scorecard_version": "v2",
                 "trend_alignment": trend_alignment,
