@@ -171,16 +171,6 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/58-uk-unemployment-rate]]></url>
 	</event>
 	<event>
-		<title>German ZEW Economic Sentiment</title>
-		<country>EUR</country>
-		<date><![CDATA[07-21-2026]]></date>
-		<time><![CDATA[9:00am]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast><![CDATA[15.1]]></forecast>
-		<previous><![CDATA[10.5]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/313-ge-zew-economic-sentiment]]></url>
-	</event>
-	<event>
 		<title>ZEW Economic Sentiment</title>
 		<country>EUR</country>
 		<date><![CDATA[07-21-2026]]></date>
@@ -189,6 +179,16 @@
 		<forecast><![CDATA[11.2]]></forecast>
 		<previous><![CDATA[9.5]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/314-ez-zew-economic-sentiment]]></url>
+	</event>
+	<event>
+		<title>German ZEW Economic Sentiment</title>
+		<country>EUR</country>
+		<date><![CDATA[07-21-2026]]></date>
+		<time><![CDATA[9:00am]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast><![CDATA[15.1]]></forecast>
+		<previous><![CDATA[10.5]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/313-ge-zew-economic-sentiment]]></url>
 	</event>
 	<event>
 		<title>German Buba President Nagel Speaks</title>
@@ -254,7 +254,7 @@
 		<title>Credit Card Spending y/y</title>
 		<country>NZD</country>
 		<date><![CDATA[07-22-2026]]></date>
-		<time><![CDATA[3:00am]]></time>
+		<time><![CDATA[3:03am]]></time>
 		<impact><![CDATA[Low]]></impact>
 		<forecast />
 		<previous><![CDATA[5.1%]]></previous>
@@ -339,6 +339,16 @@
 		<forecast><![CDATA[-2.0M]]></forecast>
 		<previous><![CDATA[-1.7M]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/10-us-crude-oil-inventories]]></url>
+	</event>
+	<event>
+		<title>President Trump Speaks</title>
+		<country>USD</country>
+		<date><![CDATA[07-22-2026]]></date>
+		<time><![CDATA[7:00pm]]></time>
+		<impact><![CDATA[Medium]]></impact>
+		<forecast />
+		<previous />
+		<url><![CDATA[https://www.forexfactory.com/calendar/645-us-president-trump-speaks]]></url>
 	</event>
 	<event>
 		<title>Employment Change</title>
