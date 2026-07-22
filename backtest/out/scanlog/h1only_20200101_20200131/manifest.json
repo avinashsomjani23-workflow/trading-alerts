@@ -1,10 +1,10 @@
 {
   "run_id": "h1only_20200101_20200131",
   "schema_version": "1.0.0",
-  "generated_utc": "2026-07-03T04:30:05.123569+00:00",
-  "git_sha": "f6e5b1d",
+  "generated_utc": "2026-07-22T05:15:31.960012+00:00",
+  "git_sha": "a07367af-dirty",
   "risk_usd": 250.0,
-  "min_warmup_bars": 50,
+  "min_warmup_bars": 150,
   "fetch_pad_days": 35,
   "pairs": [
     {
@@ -17,54 +17,12 @@
       "n_bars": 1065,
       "fingerprint": "1b781008aa9841a0",
       "prox_cap_atr": 2.5
-    },
-    {
-      "name": "USDJPY",
-      "symbol": "JPY=X",
-      "requested_start": "2020-01-01T00:00:00+00:00",
-      "requested_end": "2020-01-31T00:00:00+00:00",
-      "served_start": "2019-11-27T00:00:00+00:00",
-      "served_end": "2020-01-31T00:00:00+00:00",
-      "n_bars": 1066,
-      "fingerprint": "8c77149d8fbdf8fe",
-      "prox_cap_atr": 2.5
-    },
-    {
-      "name": "NZDUSD",
-      "symbol": "NZDUSD=X",
-      "requested_start": "2020-01-01T00:00:00+00:00",
-      "requested_end": "2020-01-31T00:00:00+00:00",
-      "served_start": "2019-11-27T00:00:00+00:00",
-      "served_end": "2020-01-31T00:00:00+00:00",
-      "n_bars": 1066,
-      "fingerprint": "1e275bd8c63ce45f",
-      "prox_cap_atr": 2.5
-    },
-    {
-      "name": "USDCHF",
-      "symbol": "CHF=X",
-      "requested_start": "2020-01-01T00:00:00+00:00",
-      "requested_end": "2020-01-31T00:00:00+00:00",
-      "served_start": "2019-11-27T00:00:00+00:00",
-      "served_end": "2020-01-31T00:00:00+00:00",
-      "n_bars": 1065,
-      "fingerprint": "9acf9fbbb82738bd",
-      "prox_cap_atr": 2.5
     }
   ],
   "knobs": {
     "EURUSD.atr_multiplier": 2.5,
     "EURUSD.distal_invalidation_mode": "close",
-    "EURUSD.spread_pips": 2.0,
-    "USDJPY.atr_multiplier": 2.5,
-    "USDJPY.distal_invalidation_mode": "close",
-    "USDJPY.spread_pips": 2.0,
-    "NZDUSD.atr_multiplier": 2.5,
-    "NZDUSD.distal_invalidation_mode": "close",
-    "NZDUSD.spread_pips": 4.0,
-    "USDCHF.atr_multiplier": 2.5,
-    "USDCHF.distal_invalidation_mode": "close",
-    "USDCHF.spread_pips": 2.0
+    "EURUSD.spread_pips": 2.0
   },
   "versions": {
     "python": "3.14.5",
