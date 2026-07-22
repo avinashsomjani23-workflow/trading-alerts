@@ -1,0 +1,92 @@
+{"ts": "2026-07-22T15:14:01.409056+00:00", "level": "info", "event": "run_start", "regime": "bau", "regime_label": null, "mode": "h1_only", "start": "2024-01-01", "end": "2024-03-31", "pairs": ["NZDUSD"], "risk_usd": 250.0, "send_email": false}
+{"ts": "2026-07-22T15:14:01.409237+00:00", "level": "info", "event": "backtest_atr_cap", "pair": "NZDUSD", "pair_type": "forex", "live": 2.5, "backtest": 2.5}
+{"ts": "2026-07-22T15:14:07.333281+00:00", "level": "info", "event": "news_fetched", "events": 0, "coverage": {"ff": false}, "range": "2023-12-31T00:00:00+00:00..2024-04-01T00:00:00+00:00"}
+{"ts": "2026-07-22T15:14:07.788997+00:00", "level": "info", "event": "pair_data_loaded", "pair": "NZDUSD", "h1_rows": 2117, "h1_first": "2023-11-27 00:00:00+00:00", "h1_last": "2024-03-29 20:00:00+00:00"}
+{"ts": "2026-07-22T15:15:36.413818+00:00", "level": "info", "event": "pair_funnel", "pair": "NZDUSD", "bars_walked": 1533, "warmup_skipped": 0, "dr_errors": 0, "radar_errors": 0, "bars_with_events": 1533, "bars_with_obs": 1380, "new_obs": 92, "prox_checks": 6061, "closest_dist_atr": 0.0, "atr_multiplier_cap": 2.5, "alerts": 145, "alerts_resuppressed": 0, "alerts_rearmed": 69, "obs_aged_out": 11}
+{"ts": "2026-07-22T15:15:36.903989+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:38.284628+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:39.308770+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:40.470119+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:41.085544+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:41.715887+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:42.345579+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:42.984591+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:43.690865+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:44.438254+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:45.182539+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "NZDUSD", "entry_zone": "proximal", "alert_ts": "2024-01-11 03:00:00+00:00", "reason": "Entry 0.62355 is below current price 0.62385 -- SHORT limit would chase price."}
+{"ts": "2026-07-22T15:15:45.187551+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "NZDUSD", "entry_zone": "proximal", "alert_ts": "2024-01-11 14:00:00+00:00", "reason": "alert_candle_touched_distal", "distal": 0.62546, "bias": "SHORT"}
+{"ts": "2026-07-22T15:15:45.192223+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "NZDUSD", "entry_zone": "proximal", "alert_ts": "2024-01-12 14:00:00+00:00", "reason": "alert_candle_touched_distal", "distal": 0.62312, "bias": "LONG"}
+{"ts": "2026-07-22T15:15:48.425464+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:49.283939+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:50.235027+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:51.192684+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:52.141722+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:53.155554+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:54.180800+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:55.218311+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:56.328479+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:57.472074+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:58.667959+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:15:59.913316+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:01.206428+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:02.622176+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:03.980947+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:05.373532+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:06.844978+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:08.345020+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:09.873330+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:11.466378+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "NZDUSD", "entry_zone": "proximal", "alert_ts": "2024-02-02 14:00:00+00:00", "reason": "alert_candle_touched_distal", "distal": 0.61585, "bias": "SHORT"}
+{"ts": "2026-07-22T15:16:11.486599+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:13.155330+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:14.767941+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:18.205016+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:19.962935+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:25.476944+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:27.399860+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:29.237759+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:31.193533+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:35.242754+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "NZDUSD", "entry_zone": "proximal", "alert_ts": "2024-02-13 14:00:00+00:00", "reason": "Entry 0.60652 is above current price 0.6061 -- LONG limit would chase price."}
+{"ts": "2026-07-22T15:16:35.251756+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:37.440808+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:39.535438+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:41.922660+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:44.331110+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "NZDUSD", "entry_zone": "proximal", "alert_ts": "2024-02-16 16:00:00+00:00", "reason": "alert_candle_touched_distal", "distal": 0.61042, "bias": "LONG"}
+{"ts": "2026-07-22T15:16:46.609487+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:16:51.384190+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "NZDUSD", "entry_zone": "proximal", "alert_ts": "2024-02-20 02:00:00+00:00", "reason": "Entry 0.61444 is above current price 0.61362 -- LONG limit would chase price."}
+{"ts": "2026-07-22T15:17:01.850534+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:04.469574+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "NZDUSD", "entry_zone": "proximal", "alert_ts": "2024-02-23 07:00:00+00:00", "reason": "alert_candle_touched_distal", "distal": 0.61971, "bias": "LONG"}
+{"ts": "2026-07-22T15:17:04.476886+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:12.380173+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:15.067941+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:17.850621+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:26.288138+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:32.114004+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:35.215815+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:38.457024+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:41.682472+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:45.022039+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:48.359186+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:54.900981+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:17:58.219047+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "NZDUSD", "entry_zone": "proximal", "alert_ts": "2024-03-12 04:00:00+00:00", "reason": "Entry 0.61687 is below current price 0.61738 -- SHORT limit would chase price."}
+{"ts": "2026-07-22T15:17:58.232417+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:18:01.788604+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:18:05.344738+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:18:08.932182+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:18:20.088507+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:18:27.944318+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:18:31.976415+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:18:36.290481+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:18:44.906619+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "NZDUSD", "entry_zone": "proximal", "alert_ts": "2024-03-22 02:00:00+00:00", "reason": "Entry 0.60365 is above current price 0.60286 -- LONG limit would chase price."}
+{"ts": "2026-07-22T15:18:49.293008+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:18:53.768880+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:18:58.165395+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:19:07.587466+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:19:12.333980+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:19:17.301527+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:19:22.235726+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:19:32.219208+00:00", "level": "warn", "event": "exit_lab_error", "pair": "NZDUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-22T15:19:42.994282+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "NZDUSD", "entry_zone": "proximal", "alert_ts": "2024-03-29 13:00:00+00:00", "reason": "alert_candle_touched_distal", "distal": 0.59764, "bias": "LONG"}
+{"ts": "2026-07-22T15:19:43.280842+00:00", "level": "info", "event": "pair_alerts_collected", "pair": "NZDUSD", "alerts": 145, "mode": "h1_only"}
+{"ts": "2026-07-22T15:19:43.280901+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "NZDUSD", "trades": 105, "news_blocked": 0, "ist_blocked": 41, "killzone_dropped_alerts": 56}
+{"ts": "2026-07-22T15:19:52.612544+00:00", "level": "info", "event": "report_written", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20240101_20240331", "total_alerts": 145, "total_trades": 105}
+{"ts": "2026-07-22T15:19:52.617417+00:00", "level": "info", "event": "exit_lab_sink_persisted", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20240101_20240331\\exit_lab_sink.jsonl", "rows": 755}
