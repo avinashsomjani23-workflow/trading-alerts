@@ -3,25 +3,25 @@
   "overall": "PASS",
   "exit_code": 0,
   "warnings_present": false,
-  "headline_pnl_usd": 375.0,
-  "live_proximal_headline_usd": 375.0,
+  "headline_pnl_usd": 2870.5,
+  "live_proximal_headline_usd": 2870.5,
   "study_fifty_pct_headline_usd": 0.0,
-  "content_hash": "cc3c422471ea80df40f85c6e9613e1f4bd4d6897ea0f628d8572d562362b7fb2",
+  "content_hash": "256ac283edda86a3618b6800fd599531714ebd52eedf109ae59c194b1dc58926",
   "condition_counts": {},
   "event_counts": {
-    "ob_seen": 70,
-    "alert": 114,
-    "ob_mitigated": 49,
-    "re_arm": 63,
-    "ob_aged_out": 15,
-    "trade_fill": 50,
-    "trade_exit": 79
+    "ob_seen": 84,
+    "alert": 154,
+    "re_arm": 75,
+    "ob_mitigated": 74,
+    "ob_aged_out": 5,
+    "trade_fill": 75,
+    "trade_exit": 89
   },
   "outcome_counts": {
-    "ALERT": 98,
-    "RE_ARM_WAIT": 808,
-    "OUT_OF_RANGE": 90,
-    "NO_ZONE": 6
+    "OUT_OF_RANGE": 70,
+    "ALERT": 125,
+    "RE_ARM_WAIT": 752,
+    "NO_ZONE": 55
   },
   "gates": [
     {
@@ -29,8 +29,8 @@
       "description": "Sum pnl_usd == Sum r_realised*risk, and equals reporting headline",
       "threshold": "rel_tol 1e-09",
       "observed": {
-        "headline_usd": 375.0,
-        "reported": 375.0,
+        "headline_usd": 2870.5,
+        "reported": 2870.5,
         "row_mismatches": 0
       },
       "verdict": "PASS"
@@ -76,8 +76,8 @@
       "description": "headline recomputed from r_realised only; tp1/tp2 excluded",
       "threshold": "independent recompute",
       "observed": {
-        "realised_headline": 375.0,
-        "tp2_headline_for_contrast": 5179.25
+        "realised_headline": 2870.5,
+        "tp2_headline_for_contrast": 1468.75
       },
       "verdict": "PASS"
     },
@@ -85,7 +85,7 @@
       "id": "G7",
       "description": "content hash of scan_log + events recorded for re-run compare",
       "threshold": "recorded",
-      "observed": "cc3c422471ea80df40f85c6e9613e1f4bd4d6897ea0f628d8572d562362b7fb2",
+      "observed": "256ac283edda86a3618b6800fd599531714ebd52eedf109ae59c194b1dc58926",
       "verdict": "PASS"
     },
     {
@@ -93,7 +93,7 @@
       "description": "NAN_ATR_SKIP <= 1% post-warmup per pair (WARN >1%, FAIL >5%)",
       "threshold": "<=1% warn, >5% fail",
       "observed": {
-        "NZDUSD": 0.0
+        "GBPUSD": 0.0
       },
       "verdict": "PASS"
     },
