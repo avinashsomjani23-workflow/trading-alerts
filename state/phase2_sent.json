@@ -4119,11 +4119,11 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-23T10:36:00.605204",
-      "last_seen_ist": "2026-07-23T20:36:07.646251",
+      "last_seen_ist": "2026-07-23T21:36:26.677352",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": true,
-      "max_exit_distance": 0.0035399999999999876,
+      "max_exit_distance": 0.004249999999999976,
       "bias": "LONG",
       "pair": "USDCHF",
       "ob_snapshot": {
@@ -4542,7 +4542,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T13:36:05.906421",
-      "last_seen_ist": "2026-07-23T20:36:07.646251",
+      "last_seen_ist": "2026-07-23T21:36:26.677352",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": true,
@@ -4683,7 +4683,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T13:36:05.906421",
-      "last_seen_ist": "2026-07-23T20:36:07.646251",
+      "last_seen_ist": "2026-07-23T21:36:26.677352",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4824,7 +4824,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T17:36:06.800340",
-      "last_seen_ist": "2026-07-23T20:36:07.646251",
+      "last_seen_ist": "2026-07-23T21:36:26.677352",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
