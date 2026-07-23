@@ -3942,11 +3942,11 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-23T10:36:00.605204",
-      "last_seen_ist": "2026-07-23T13:36:05.906421",
+      "last_seen_ist": "2026-07-23T14:36:02.883657",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.0024800000000000377,
       "bias": "SHORT",
       "pair": "EURUSD",
       "ob_snapshot": {
@@ -4365,7 +4365,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-23T10:36:00.605204",
-      "last_seen_ist": "2026-07-23T13:36:05.906421",
+      "last_seen_ist": "2026-07-23T14:36:02.883657",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": true,
@@ -4506,7 +4506,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T10:36:00.605204",
-      "last_seen_ist": "2026-07-23T13:36:05.906421",
+      "last_seen_ist": "2026-07-23T14:36:02.883657",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4638,7 +4638,7 @@
       "score_int": 7,
       "score_raw": 7.0,
       "score_high_water": 7.0,
-      "score_low_water": 7.0,
+      "score_low_water": 4.0,
       "breakdown": {
         "structure": 3,
         "sweep": 0.0,
@@ -4647,7 +4647,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T12:36:00.900248",
-      "last_seen_ist": "2026-07-23T13:36:05.906421",
+      "last_seen_ist": "2026-07-23T14:36:02.883657",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4778,7 +4778,7 @@
     "NZDUSD_SHORT_BOS_0.5809_2026-07-23T05": {
       "score_int": 5,
       "score_raw": 5.0,
-      "score_high_water": 5.0,
+      "score_high_water": 7.0,
       "score_low_water": 5.0,
       "breakdown": {
         "structure": 3,
@@ -4788,7 +4788,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T13:36:05.906421",
-      "last_seen_ist": "2026-07-23T13:36:05.906421",
+      "last_seen_ist": "2026-07-23T14:36:02.883657",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4919,7 +4919,7 @@
     "GOLD_SHORT_CHoCH_4112.7_2026-07-23T02": {
       "score_int": 5,
       "score_raw": 5.0,
-      "score_high_water": 5.0,
+      "score_high_water": 7.0,
       "score_low_water": 5.0,
       "breakdown": {
         "structure": 4,
@@ -4929,7 +4929,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T13:36:05.906421",
-      "last_seen_ist": "2026-07-23T13:36:05.906421",
+      "last_seen_ist": "2026-07-23T14:36:02.883657",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
