@@ -3942,11 +3942,11 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-23T10:36:00.605204",
-      "last_seen_ist": "2026-07-23T14:36:02.883657",
+      "last_seen_ist": "2026-07-23T15:35:58.868740",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0024800000000000377,
+      "max_exit_distance": 0.0025900000000000922,
       "bias": "SHORT",
       "pair": "EURUSD",
       "ob_snapshot": {
@@ -4365,7 +4365,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-23T10:36:00.605204",
-      "last_seen_ist": "2026-07-23T14:36:02.883657",
+      "last_seen_ist": "2026-07-23T15:35:58.868740",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": true,
@@ -4506,7 +4506,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T10:36:00.605204",
-      "last_seen_ist": "2026-07-23T14:36:02.883657",
+      "last_seen_ist": "2026-07-23T15:35:58.868740",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4647,7 +4647,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T12:36:00.900248",
-      "last_seen_ist": "2026-07-23T14:36:02.883657",
+      "last_seen_ist": "2026-07-23T15:35:58.868740",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4788,7 +4788,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T13:36:05.906421",
-      "last_seen_ist": "2026-07-23T14:36:02.883657",
+      "last_seen_ist": "2026-07-23T15:35:58.868740",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4929,7 +4929,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T13:36:05.906421",
-      "last_seen_ist": "2026-07-23T14:36:02.883657",
+      "last_seen_ist": "2026-07-23T15:35:58.868740",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
