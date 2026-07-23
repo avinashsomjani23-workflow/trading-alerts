@@ -361,6 +361,16 @@
 		<url><![CDATA[https://www.forexfactory.com/calendar/64-au-unemployment-rate]]></url>
 	</event>
 	<event>
+		<title>Foreign Direct Investment ytd/y</title>
+		<country>CNY</country>
+		<date><![CDATA[07-23-2026]]></date>
+		<time><![CDATA[8:56am]]></time>
+		<impact><![CDATA[Low]]></impact>
+		<forecast />
+		<previous><![CDATA[-8.6%]]></previous>
+		<url><![CDATA[https://www.forexfactory.com/calendar/457-ch-foreign-direct-investment-ytdy]]></url>
+	</event>
+	<event>
 		<title>CBI Industrial Order Expectations</title>
 		<country>GBP</country>
 		<date><![CDATA[07-23-2026]]></date>
@@ -539,16 +549,6 @@
 		<forecast><![CDATA[-0.3%]]></forecast>
 		<previous><![CDATA[1.2%]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/105-uk-retail-sales-mm]]></url>
-	</event>
-	<event>
-		<title>Foreign Direct Investment ytd/y</title>
-		<country>CNY</country>
-		<date><![CDATA[07-24-2026]]></date>
-		<time><![CDATA[6:02am]]></time>
-		<impact><![CDATA[Low]]></impact>
-		<forecast />
-		<previous><![CDATA[-8.6%]]></previous>
-		<url><![CDATA[https://www.forexfactory.com/calendar/457-ch-foreign-direct-investment-ytdy]]></url>
 	</event>
 	<event>
 		<title>French Flash Manufacturing PMI</title>
