@@ -3942,7 +3942,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-23T10:36:00.605204",
-      "last_seen_ist": "2026-07-23T10:36:00.605204",
+      "last_seen_ist": "2026-07-23T11:35:56.195466",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4083,7 +4083,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T10:36:00.605204",
-      "last_seen_ist": "2026-07-23T10:36:00.605204",
+      "last_seen_ist": "2026-07-23T11:35:56.195466",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4224,7 +4224,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-23T10:36:00.605204",
-      "last_seen_ist": "2026-07-23T10:36:00.605204",
+      "last_seen_ist": "2026-07-23T11:35:56.195466",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4365,7 +4365,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-23T10:36:00.605204",
-      "last_seen_ist": "2026-07-23T10:36:00.605204",
+      "last_seen_ist": "2026-07-23T11:35:56.195466",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4506,11 +4506,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-23T10:36:00.605204",
-      "last_seen_ist": "2026-07-23T10:36:00.605204",
+      "last_seen_ist": "2026-07-23T11:35:56.195466",
       "last_email_day": "2026-07-23",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 35.2833099999998,
       "bias": "LONG",
       "pair": "GOLD",
       "ob_snapshot": {
