@@ -27,7 +27,11 @@ jobs:
           # P1 owns these files. yfinance_stale_log is shared with P2/P3 (append-only).
           # state/phase1_scans/ is a directory of monthly .jsonl diagnostic logs —
           # we stage anything under it so new/modified files all get committed.
-          ALL_FILES="active_obs.json email_gate.json yfinance_stale_log.json p1_degrade_log.json state/structure_state.json"
+          # Paths MUST match where smc_radar actually writes: everything routes
+          # through paths.resolve_repo_path -> state/ EXCEPT active_obs.json, which
+          # is a ROOT_KEEP file and stays at root. A bare name the engine writes to
+          # state/ silently commits nothing (fixed 2026-07-23).
+          ALL_FILES="active_obs.json state/email_gate.json state/yfinance_stale_log.json state/p1_degrade_log.json state/structure_state.json"
           FILES=""
           for f in $ALL_FILES; do
             if [ -e "$f" ]; then FILES="$FILES $f"; fi
