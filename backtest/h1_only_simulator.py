@@ -1042,15 +1042,20 @@ def _simulate_single_entry(
     #                        fired (cur_sl — the initial SL, or entry once BE armed).
     #                        Long : Low <= cur_sl AND Close > cur_sl.
     #                        Short: High >= cur_sl AND Close < cur_sl.
-    #   sl_swept_then_tp1  : sl_bar_was_sweep is True AND, within
-    #                        SL_SWEEP_LOOKBACK_BARS bars AFTER the stop bar, price
-    #                        reached TP1 in our direction. This is the honest
-    #                        "a wider stop plausibly wins" signal.
+    #   sl_swept_then_tp1  : STRICT (2026-07-23). sl_bar_was_sweep is True AND,
+    #                        walking the post-stop bars in order within
+    #                        SL_SWEEP_LOOKBACK_BARS, price reached TP1 BEFORE it
+    #                        ever traded back to the fired stop level cur_sl.
+    #                        Swept once, HELD the stop, then ran to target. A bar
+    #                        that re-hits cur_sl first (or spans both cur_sl and
+    #                        TP1) = False. None when the stop bar was not a sweep.
     #
-    # HONEST CAVEAT (peak-vs-fill law): sl_swept_then_tp1 still ends on a TOUCH
-    # check of a later bar, not a real-order replay — that later TP1 tag could be
+    # HONEST CAVEAT (peak-vs-fill law): sl_swept_then_tp1 is now PATH-aware (it
+    # requires the stop to HOLD until TP1), but the TP1 leg is still a TOUCH
+    # check on the winning bar, not a real-order replay — that TP1 tag could be
     # its own spike-and-fade. Read it as a strong HINT ("would a wider stop have
-    # saved us"), never as bankable "free money". Both are None for non-SL exits.
+    # saved us"), never as bankable "free money". Both are None for non-SL /
+    # non-sweep exits.
     # cur_sl at this point is the level that actually stopped the trade (BE-aware).
     sl_bar_was_sweep = None
     sl_swept_then_tp1 = None
@@ -1074,12 +1079,16 @@ def _simulate_single_entry(
     # "would a wider stop have survived" question to answer).
     #   sl_max_adverse_after_sweep_atr : furthest price ran AGAINST us BEYOND the
     #     fired stop, over SL_SWEEP_LOOKBACK_BARS after the stop bar, in OB-formation
-    #     ATR. Distinguishes "shallow wick, recovered" (small) from "wick was the
-    #     start of a bigger move" (large) — the recovered-vs-kept-losing question.
-    #     0.0 = never traded further against us past the stop. None = non-sweep/no ATR.
-    #   bars_sl_to_tp1_touch : H1 bars from the stop bar to the FIRST bar that
-    #     touched TP1 in our direction (None if TP1 never touched in the lookback).
-    #     Sizes how long a wider stop would have had to endure to reach target.
+    #     ATR. RAW measure only (2026-07-23): it no longer drives the recovery
+    #     question — sl_swept_then_tp1 now answers "held then ran to target"
+    #     directly. Distinguishes "shallow wick" (small) from "start of a bigger
+    #     move" (large). 0.0 = never past the stop. None = non-sweep/no ATR.
+    #   bars_sl_to_tp1_touch : STRICT (2026-07-23). Defined ONLY for the clean
+    #     swept-then-HELD-then-TP case: 1-indexed H1 bars from the stop bar to the
+    #     bar that reached TP1, when TP1 was reached BEFORE price traded back to
+    #     the fired stop cur_sl. None whenever sl_swept_then_tp1 is not True
+    #     (non-sweep, re-hit the stop first, or TP1 never reached in the lookback).
+    #     Sizes how long a wider stop would have had to hold to reach target.
     #   sl_recovered_to_entry : after a sweep, did price trade back to ENTRY
     #     (breakeven) within the lookback, even if TP1 was never reached? Catches
     #     the "a wider stop would have SCRATCHED, not won" middle case (BE-sweep).
@@ -1108,50 +1117,65 @@ def _simulate_single_entry(
             post_sl = future.loc[future.index > exit_ts]
             horizon = post_sl.iloc[:SL_SWEEP_LOOKBACK_BARS]
 
-            # bars_sl_to_tp1_touch: applies to EVERY sl exit (not just sweeps) —
-            # tells us if/when a target was reachable after the stop. 1-indexed
-            # bars from the stop bar (the first post-stop bar = 1).
-            if len(horizon):
-                if bias == "LONG":
-                    _tp1_hits = horizon.index[horizon["High"] >= tp1]
-                else:
-                    _tp1_hits = horizon.index[horizon["Low"] <= tp1]
-                if len(_tp1_hits):
-                    bars_sl_to_tp1_touch = int(
-                        horizon.index.get_loc(_tp1_hits[0])) + 1
-
-            # Later-reversal checks only matter when the stop bar was a sweep.
+            # sl_swept_then_tp1 (STRICT, 2026-07-23) + bars_sl_to_tp1_touch are
+            # BOTH defined ONLY for a swept stop bar. A non-sweep (clean
+            # close-through) has no "held the stop then ran to target" story to
+            # tell, so both stay None. Walk the post-stop bars IN ORDER and, at
+            # each bar, test in this priority:
+            #   FAIL first: price traded back to the fired stop level cur_sl
+            #     (LONG Low <= cur_sl / SHORT High >= cur_sl) -> the stop was hit
+            #     again -> False, bars = None, stop the walk.
+            #   WIN  first: price reached TP1 in our direction
+            #     (LONG High >= tp1 / SHORT Low <= tp1) -> True, bars = 1-indexed
+            #     count from the stop bar, stop the walk.
+            # Whichever fires on the EARLIER bar wins. Edge case: a single bar
+            # that both breaches cur_sl AND touches tp1 (wick spans both) is a
+            # FAIL — the stop level was hit, we can't know the intrabar order, so
+            # take the conservative read. Neither in the lookback -> False / None.
             if sl_bar_was_sweep:
-                if len(horizon):
+                sl_swept_then_tp1 = False  # default: swept but never cleanly ran
+                for _i in range(len(horizon)):
+                    _bar = horizon.iloc[_i]
+                    _bhi = float(_bar["High"])
+                    _blo = float(_bar["Low"])
                     if bias == "LONG":
-                        sl_swept_then_tp1 = bool((horizon["High"] >= tp1).any())
+                        _hit_stop = _blo <= cur_sl
+                        _hit_tp1 = _bhi >= tp1
                     else:
-                        sl_swept_then_tp1 = bool((horizon["Low"] <= tp1).any())
+                        _hit_stop = _bhi >= cur_sl
+                        _hit_tp1 = _blo <= tp1
+                    if _hit_stop:                       # fail wins ties
+                        sl_swept_then_tp1 = False
+                        bars_sl_to_tp1_touch = None
+                        break
+                    if _hit_tp1:
+                        sl_swept_then_tp1 = True
+                        bars_sl_to_tp1_touch = _i + 1   # 1-indexed from stop bar
+                        break
 
-                    # Max adverse excursion BEYOND the fired stop, after the stop
-                    # bar (how much further it ran against us). LONG stop is below,
-                    # so "against" = further DOWN (lower Low); SHORT = further UP.
-                    if _h1_atr_sl:
-                        if bias == "LONG":
-                            _worst = float(horizon["Low"].min())
-                            _adverse = cur_sl - _worst
-                        else:
-                            _worst = float(horizon["High"].max())
-                            _adverse = _worst - cur_sl
-                        sl_max_adverse_after_sweep_atr = round(
-                            max(0.0, _adverse) / _h1_atr_sl, 3)
+                # Max adverse excursion BEYOND the fired stop, after the stop
+                # bar (how much further it ran against us). RAW measure only —
+                # kept for context, no longer drives the recovery question.
+                # LONG stop is below, so "against" = further DOWN (lower Low);
+                # SHORT = further UP.
+                if len(horizon) and _h1_atr_sl:
+                    if bias == "LONG":
+                        _worst = float(horizon["Low"].min())
+                        _adverse = cur_sl - _worst
+                    else:
+                        _worst = float(horizon["High"].max())
+                        _adverse = _worst - cur_sl
+                    sl_max_adverse_after_sweep_atr = round(
+                        max(0.0, _adverse) / _h1_atr_sl, 3)
 
-                    # Did price return to ENTRY (breakeven) within the lookback?
+                # Did price return to ENTRY (breakeven) within the lookback?
+                if len(horizon):
                     if bias == "LONG":
                         sl_recovered_to_entry = bool((horizon["High"] >= entry).any())
                     else:
                         sl_recovered_to_entry = bool((horizon["Low"] <= entry).any())
                 else:
-                    sl_swept_then_tp1 = False
-                    sl_max_adverse_after_sweep_atr = None
                     sl_recovered_to_entry = False
-            else:
-                sl_swept_then_tp1 = False
         except Exception:
             sl_bar_was_sweep = None
             sl_swept_then_tp1 = None
@@ -1498,16 +1522,10 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     else:
         fvg_size_atr = None
 
-    # Impulse-leg size in ATR — the displacement that broke structure and left
-    # the OB behind: origin (impulse_start) -> the swing it broke (bos_swing).
-    # FVG-INDEPENDENT by construction (defined on the swing structure, not the
-    # gap), per the SMC definition. Measures the leg up to the break level; a
-    # full-extreme variant (origin -> leg high/low) is a future refinement but
-    # needs the detection-frame bars, so it can't be done cross-fetch here.
-    _isp = ob.get("impulse_start_price")
-    _bsp = ob.get("bos_swing_price")
-    impulse_leg_atr = _atr_norm(abs(float(_bsp) - float(_isp))) \
-        if (_isp is not None and _bsp is not None) else None
+    # (impulse_leg_to_extreme_atr — the leg-size-in-ATR column — is computed
+    # below in the S3 block, where its source leg_extreme_at_alert is read. It
+    # REPLACED the frozen impulse_leg_atr, which measured to the broken level and
+    # anchored on the untrustworthy impulse-start walk-back candle.)
 
     # Raw OB-formation ATR (price units) — volatility context. NOT cross-instrument
     # comparable raw; the engine normalizes it within-pair (vs the pair's typical
@@ -1602,6 +1620,28 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     leg_er_at_alert = alert.get("leg_er_at_alert")
     leg_extreme_clipped = alert.get("leg_extreme_clipped")
 
+    # impulse_leg_to_extreme_atr — the displacement leg's size in ATR, measured
+    # from the OB to the leg's ACTUAL structural extreme. REPLACES the frozen
+    # impulse_leg_atr, which (a) measured only to the broken level (bos_swing),
+    # not the leg's real extreme, and (b) anchored on the untrustworthy
+    # impulse_start walk-back candle.
+    #   anchor = ob['proximal_line'] (OB high for bullish / OB low for bearish,
+    #     smc_radar.py:1287). CONSISTENT with leg_extreme_at_alert: that extreme
+    #     is the max High / min Low over the span [ob_idx, extreme_end_idx] which
+    #     STARTS at the OB candle, so the OB's own proximal edge is inside the
+    #     span and the extreme is guaranteed on the same side -> the distance is
+    #     always >= 0 (the far end pushed at least to the OB's near edge).
+    #   far end = leg_extreme_at_alert (the ONE structural extreme; never
+    #     recomputed a second way — one source).
+    # ALERT-TIME + MUTABLE: leg_extreme_at_alert is a payload scalar re-stamped on
+    # every re-fire (replay_engine.py:696), so this rides the LATEST alert's
+    # extreme — never read off the shared ob dict. None when leg_extreme_at_alert
+    # is None (unmeasurable leg), proximal missing, or ATR missing (never 0.0).
+    # Observe-only — gates/scores/filters NOTHING.
+    _leg_prox = ob.get("proximal_line")
+    impulse_leg_to_extreme_atr = _atr_norm(abs(float(leg_extreme_at_alert) - float(_leg_prox))) \
+        if (leg_extreme_at_alert is not None and _leg_prox is not None) else None
+
     pnl_usd = round(r_realised * risk_usd, 2)
 
     # Setup badge (Phase 2 email banner) — same classifier live fires
@@ -1680,9 +1720,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # Sweep diagnostics (SL exits only; None otherwise).
         #   sl_bar_was_sweep  : stop candle wicked the stop but closed back on our
         #                       side (SMC grab-then-reject) vs a clean close-through.
-        #   sl_swept_then_tp1 : sweep bar AND price later reached TP1 — the honest
-        #                       "wider stop plausibly wins" HINT (still a touch
-        #                       check, not a real-order replay; never free money).
+        #   sl_swept_then_tp1 : STRICT — sweep bar AND price reached TP1 BEFORE
+        #                       re-hitting the fired stop cur_sl (swept, held,
+        #                       ran). None on non-sweep. HINT only, not a replay.
         #   sl_wick_depth_atr : how far the stop candle's wick pierced BEYOND the
         #                       fired stop, in OB-formation ATR. The missing input
         #                       for sizing a "distal + X·ATR" wider-stop replay.
@@ -1692,8 +1732,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "sl_wick_depth_atr": sl_wick_depth_atr,
         # Outcome-time exit-track columns (2026-07-08; NEVER entry features).
         #   sl_max_adverse_after_sweep_atr : furthest run against us BEYOND the
-        #     stop after a sweep, in ATR — recovered (small) vs kept-losing (large).
-        #   bars_sl_to_tp1_touch : bars from stop bar to first TP1 touch (None=never).
+        #     stop after a sweep, in ATR — RAW context (no longer the recovery test).
+        #   bars_sl_to_tp1_touch : STRICT — 1-indexed bars from stop bar to TP1,
+        #     ONLY when swept-then-held-then-TP (sl_swept_then_tp1 True); else None.
         #   sl_recovered_to_entry : after a sweep, did price return to entry (BE)?
         "sl_max_adverse_after_sweep_atr": sl_max_adverse_after_sweep_atr,
         "bars_sl_to_tp1_touch":           bars_sl_to_tp1_touch,
@@ -1765,7 +1806,10 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # Setup-geometry features (ATR-normalized; observe-only edge-engine inputs).
         "ob_range_atr":      ob_range_atr,
         "fvg_size_atr":      fvg_size_atr,
-        "impulse_leg_atr":   impulse_leg_atr,
+        # Displacement leg size in ATR, OB proximal -> the leg's structural
+        # extreme (leg_extreme_at_alert). Alert-time, re-stamped on every re-fire.
+        # Replaced the frozen impulse_leg_atr. Observe-only.
+        "impulse_leg_to_extreme_atr": impulse_leg_to_extreme_atr,
         "atr_at_ob":         atr_at_ob,
         # ATR at the fill bar (fresh, point-in-time) — entry-regime vol vs the
         # formation-vol atr_at_ob. None on never_filled / short slice.

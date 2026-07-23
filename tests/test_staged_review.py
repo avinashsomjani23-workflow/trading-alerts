@@ -70,7 +70,7 @@ def _build_trades(seed: int = 42) -> pd.DataFrame:
                 # the CANDIDATE feature
                 "break_close_atr": round(float(x), 4),
                 # a NOISE continuous feature
-                "impulse_leg_atr": round(float(rng.uniform(0, 1)), 4),
+                "impulse_leg_to_extreme_atr": round(float(rng.uniform(0, 1)), 4),
                 # score: gates-off proof needs >= MIN_BELOW_FLOOR_N below floor
                 "score": 2 if i < ee.MIN_BELOW_FLOOR_N else 6,
             })

@@ -123,8 +123,8 @@ def test_continuous_spearman_sign_positive():
     """A monotonically increasing r-vs-x relationship -> positive Spearman rho."""
     x = list(range(400))
     r = [0.001 * i for i in range(400)]   # r rises with x
-    df = _frame("impulse_leg_atr", x, r)
-    row = s2.score_feature(df, "impulse_leg_atr", pooled_mean=float(np.mean(r)))
+    df = _frame("impulse_leg_to_extreme_atr", x, r)
+    row = s2.score_feature(df, "impulse_leg_to_extreme_atr", pooled_mean=float(np.mean(r)))
     assert row["kind"] == "continuous"
     assert row["spearman_rho"] > 0.9
     assert row["p_value"] < 0.01

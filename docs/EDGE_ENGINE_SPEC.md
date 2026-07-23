@@ -156,7 +156,7 @@ output dir: backtest/results/<run_id>/edge_engine/
 
 ### 5.1 The feature list (exactly this; the engine's manifest)
 
-- Continuous: `break_close_atr`, `break_body_atr`, `impulse_leg_atr`, `fvg_size_atr`,
+- Continuous: `break_close_atr`, `break_body_atr`, `impulse_leg_to_extreme_atr`, `fvg_size_atr`,
   `ob_range_atr`, `atr_at_ob`, `pd_pct`, `reversal_pct`, `ob_age_h1_bars`, `ob_to_fill_hours`,
   `bars_break_to_pullback`, `bos_sequence_count`, `score` (legacy score, tested as a feature —
   expected noise, prove it), `alert_utc_hour` (treat as categorical via 4 session bins? NO —
@@ -208,7 +208,7 @@ output dir: backtest/results/<run_id>/edge_engine/
   candle marks weak displacement → worse expR. Test: `bars_break_to_pullback` binned
   {1–2, 3–5, 6–12, >12} (in addition to its quintile screen; both enter the same BH-FDR
   family). SMC mechanism exists (no conviction behind the break), so a survivor here is a
-  finding, not a fish. Expect collinearity with `break_body_atr`/`impulse_leg_atr` — if both
+  finding, not a fish. Expect collinearity with `break_body_atr`/`impulse_leg_to_extreme_atr` — if both
   survive, §6.2 VIF decides which carries the signal.
 - CAVEAT for the 1–2 bin: the backtest alerts ~1 bar later than live (closed-bar vs live
   forming-bar proximity) — the fastest snapbacks may be under-sampled (alerted late or

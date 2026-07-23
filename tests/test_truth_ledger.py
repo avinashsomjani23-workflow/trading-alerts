@@ -553,8 +553,30 @@ def test_every_csv_column_has_a_ledger_row():
     )
 
 
+def test_canonical_stated_column_count_matches_its_file():
+    """CANONICAL.md's stated `NNN columns` must equal the header count of the
+    trades.csv it names. Makes the run-swap mechanical: when a fresh baseline
+    replaces the canonical file, an un-updated column count (e.g. left at 113
+    after a 186-col run lands) turns CI red instead of silently misleading every
+    later column question. Complements test_every_csv_column_has_a_ledger_row
+    (which guards the ledger side); this guards the CANONICAL header side.
+    """
+    doc = (_ROOT / "backtest" / "results" / "CANONICAL.md").read_text(encoding="utf-8")
+    m = re.search(r"(\d+)\s+columns", doc)
+    assert m, "CANONICAL.md does not state a `NNN columns` count — format changed"
+    stated = int(m.group(1))
+    with _canonical_csv().open(newline="", encoding="utf-8") as fh:
+        header = next(csv.reader(fh))
+    assert stated == len(header), (
+        f"CANONICAL.md says {stated} columns but its named trades.csv has "
+        f"{len(header)}. Update the count IN THE SAME COMMIT that swaps the "
+        "canonical file (CANONICAL.md rule)."
+    )
+
+
 if __name__ == "__main__":
     test_every_csv_column_has_a_ledger_row()
+    test_canonical_stated_column_count_matches_its_file()
     test_row_build_ledger_line_refs_point_at_the_column()
     test_baseline_ex_corrupted_columns_are_real()
     print("truth-ledger gate: OK")

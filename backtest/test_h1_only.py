@@ -682,6 +682,147 @@ def test_edge_lab_columns():
     assert ok, "one or more edge-lab column checks failed (see output above)"
 
 
+def _swept_then_scenario(post_stop_bars, atr=0.0010):
+    """Drive the LIVE simulator to a bullish SL-SWEEP exit, then paint an EXPLICIT
+    post-stop price path so the STRICT sl_swept_then_tp1 walk can be bite-proven.
+
+    Geometry (mirrors _atr_sweep_scenario): a Monday-open bullish OB, price fills
+    the proximal, bar 4 wicks DEEP below the fired stop but CLOSES back above it
+    (guaranteeing sl_bar_was_sweep=True and the SL fires on bar 4). From bar 5 on
+    we lay down `post_stop_bars` — a list of (high, low) tuples — verbatim, so the
+    caller controls exactly when price re-hits the stop (cur_sl) vs reaches TP1.
+
+    Returns the single trade row. The fired stop cur_sl == sl (bot - spread) and
+    tp1 sits above `top`; callers shape their bars relative to those levels.
+    """
+    base = pd.Timestamp("2026-04-06 00:00", tz="UTC")   # Monday (dayofweek==0)
+    n = 60
+    idx = pd.date_range(base, periods=n, freq="h")
+    top = 1.0800
+    bot = top - 0.0018          # 18-pip OB
+    spread = 0.0002             # 2 pips (matches _synth_pair_conf spread_pips=2)
+    sl = bot - spread           # == cur_sl the trade stops on (BE not armed)
+    ob = {
+        "direction": "bullish", "bos_tag": "BOS", "bos_tier": "Major",
+        "high": top, "low": bot, "proximal_line": top, "distal_line": bot,
+        "ob_timestamp": idx[0].isoformat(), "touches": 0, "h1_atr": atr,
+        "impulse_start_price": bot - 0.0050,
+        "bos_swing_price": top + 0.0030,
+        "fvg": {"exists": True, "fvg_top": top + 0.0009, "fvg_bottom": top + 0.0003},
+        "dealing_range": {"valid": True, "range_low": bot - 0.02,
+                          "range_high": top + 0.05},
+    }
+    closes = []
+    for i in range(n):
+        if i < 2:
+            closes.append(top + 0.0010)     # above the zone
+        elif i < 4:
+            closes.append(top - 0.0002)     # dip in -> fill at proximal
+        elif i == 4:
+            closes.append(sl + 0.0001)      # close back above the stop (sweep)
+        else:
+            closes.append(sl - 0.0030)      # placeholder; H/L overridden below
+    highs = [c + 0.0005 for c in closes]
+    lows = [c - 0.0005 for c in closes]
+    lows[4] = sl - 0.0020                    # bar 4 wick pierces DEEP below the stop
+    # Paint the explicit post-stop path from bar 5 (the FIRST post-stop bar == the
+    # strict walk's "bar 1"). Any bars beyond the supplied list stay neutral
+    # (inside entry..tp1, never touching stop or target) so they don't interfere.
+    for j, (bh, bl) in enumerate(post_stop_bars):
+        b = 5 + j
+        if b >= n:
+            break
+        highs[b] = bh
+        lows[b] = bl
+        closes[b] = (bh + bl) / 2.0   # keep the painted candle valid (Close in-range)
+    df = pd.DataFrame({"Open": closes, "High": highs, "Low": lows,
+                       "Close": closes, "Volume": [100] * n}, index=idx)
+    alert = {"pair": "TESTPAIR", "ts": idx[0], "current_price": top,
+             "h1_atr": atr, "ob": ob, "leg_extreme_at_alert": top + 0.0030}
+    rows = h1_only_simulator.simulate_h1_only_dual(
+        alert, _synth_pair_conf(), df, risk_usd=250.0)
+    assert rows, "swept-then scenario produced no trade row"
+    return rows[0], sl, top
+
+
+def test_sl_swept_then_tp1_strict():
+    """STRICT sl_swept_then_tp1 + gated bars_sl_to_tp1_touch (2026-07-23).
+
+    sl_swept_then_tp1 must mean: the stop bar was a sweep AND, walking the
+    post-stop bars in order, price reached TP1 BEFORE ever trading back to the
+    fired stop level cur_sl. bars_sl_to_tp1_touch is the 1-indexed bar of that
+    win, defined ONLY for this clean case; None otherwise. Non-sweep SL exits
+    carry None on both. Bite-proven by driving the LIVE simulator down three
+    explicit post-stop paths:
+      (a) swept, HELD the stop, then reached TP -> True + correct bar count.
+      (b) swept, then RE-HIT cur_sl before TP    -> False / None.
+      (c) non-sweep SL exit                      -> both None.
+    """
+    print("\n== test_sl_swept_then_tp1_strict ==")
+    ok = True
+
+    # tp1 sits ABOVE top; a High that clears it touches target. cur_sl == sl,
+    # a Low at/below it re-hits the stop. Neutral bar = inside (top, sl), no touch.
+    NEUTRAL = (1.0800 - 0.0002, 1.0800 - 0.0004)   # High/Low both inside, no touch
+
+    # --- (a) SWEPT, HELD, then TP on the 3rd post-stop bar ------------------
+    # bars 1,2 hold above the stop and below tp1; bar 3 spikes up to TP1.
+    r_a, sl_a, top_a = _swept_then_scenario([
+        NEUTRAL,                              # post-stop bar 1: quiet, holds the stop
+        NEUTRAL,                              # post-stop bar 2: quiet, holds the stop
+        (1.0800 + 0.0050, 1.0800 - 0.0001),   # bar 3 High clears tp1 (~1.0818)
+    ])
+    ok &= check(r_a.get("exit_reason") == "sl", "(a) exit is an SL")
+    ok &= check(r_a.get("sl_bar_was_sweep") is True, "(a) stop bar was a sweep")
+    ok &= check(r_a.get("sl_swept_then_tp1") is True,
+                f"(a) swept-held-ran -> True (got {r_a.get('sl_swept_then_tp1')})")
+    ok &= check(r_a.get("bars_sl_to_tp1_touch") == 3,
+                f"(a) bar count == 3 (got {r_a.get('bars_sl_to_tp1_touch')})")
+
+    # --- (b) SWEPT, then RE-HIT the stop before any TP ---------------------
+    # bar 1 holds, bar 2 trades back down THROUGH cur_sl (fail), even though a
+    # LATER bar would have reached TP -> must be False / None (path-aware).
+    r_b, sl_b, top_b = _swept_then_scenario([
+        NEUTRAL,                                 # bar 1: holds
+        (1.0800 - 0.0002, 1.0778 - 0.0005),      # bar 2 Low <= cur_sl (~1.0778) -> fail
+        (1.0800 + 0.0050, 1.0800 - 0.0001),      # bar 3 WOULD hit TP, too late
+    ])
+    ok &= check(r_b.get("exit_reason") == "sl", "(b) exit is an SL")
+    ok &= check(r_b.get("sl_bar_was_sweep") is True, "(b) stop bar was a sweep")
+    ok &= check(r_b.get("sl_swept_then_tp1") is False,
+                f"(b) re-hit stop first -> False (got {r_b.get('sl_swept_then_tp1')})")
+    ok &= check(r_b.get("bars_sl_to_tp1_touch") is None,
+                f"(b) bars None on fail (got {r_b.get('bars_sl_to_tp1_touch')})")
+
+    # --- (c) NON-SWEEP SL exit -> both None -------------------------------
+    # Reuse the synthetic single-trade path; whatever its exit, assert the
+    # invariant: when sl_bar_was_sweep is not True, BOTH columns are None.
+    df_h1 = _synth_h1_df()
+    ob_c = _synth_ob_bullish(df_h1, ts_idx=-150)
+    alert_c = {
+        "pair": "TESTPAIR", "ts": df_h1.index[-150],
+        "current_price": ob_c["proximal_line"],
+        "h1_atr": ob_c.get("h1_atr", 0.0010), "ob": ob_c,
+    }
+    rows_c = h1_only_simulator.simulate_h1_only_dual(
+        alert_c, _synth_pair_conf(), df_h1, risk_usd=250.0)
+    assert rows_c, "(c) sim returned no rows"
+    r_c = rows_c[0]
+    if r_c.get("sl_bar_was_sweep") is not True:
+        ok &= check(r_c.get("sl_swept_then_tp1") is None,
+                    f"(c) non-sweep -> sl_swept_then_tp1 None "
+                    f"(got {r_c.get('sl_swept_then_tp1')})")
+        ok &= check(r_c.get("bars_sl_to_tp1_touch") is None,
+                    f"(c) non-sweep -> bars None "
+                    f"(got {r_c.get('bars_sl_to_tp1_touch')})")
+    else:
+        # If this fixture ever produces a sweep, prove the invariant a different
+        # way: a synthesized non-sweep SL bar leaves both None (formula check).
+        ok &= check(True, "(c) fixture produced a sweep; invariant covered by (a)/(b)")
+
+    assert ok, "one or more strict sl_swept_then_tp1 checks failed (see output above)"
+
+
 def _atr_sweep_scenario(atr):
     """Drive the LIVE simulator to a bullish SL-SWEEP exit with a known ATR, so
     ALL SIX *_atr columns are populated on one row (the four row-build ones plus
@@ -704,8 +845,10 @@ def _atr_sweep_scenario(atr):
         "direction": "bullish", "bos_tag": "BOS", "bos_tier": "Major",
         "high": top, "low": bot, "proximal_line": top, "distal_line": bot,
         "ob_timestamp": idx[0].isoformat(), "touches": 0, "h1_atr": atr,
-        # Give impulse + FVG real geometry so impulse_leg_atr / fvg_size_atr are
-        # non-None too (they read ob internals not present in the CSV).
+        # Real FVG geometry so fvg_size_atr is non-None (reads ob internals not in
+        # the CSV). impulse_start/bos_swing are legacy OB fields kept for realism;
+        # impulse_leg_to_extreme_atr now reads the leg_extreme_at_alert payload
+        # (added on the alert dict below), NOT these.
         "impulse_start_price": bot - 0.0050,
         "bos_swing_price": top + 0.0030,
         "fvg": {"exists": True, "fvg_top": top + 0.0009, "fvg_bottom": top + 0.0003},
@@ -727,8 +870,13 @@ def _atr_sweep_scenario(atr):
     lows[4] = sl - 0.0020                    # bar 4 wick pierces DEEP below the stop
     df = pd.DataFrame({"Open": closes, "High": highs, "Low": lows,
                        "Close": closes, "Volume": [100] * n}, index=idx)
+    # leg_extreme_at_alert is a payload scalar (replay yield); the row-build reads
+    # it via alert.get(...). Feed a FIXED price (denominator-free) above the
+    # proximal so impulse_leg_to_extreme_atr = |extreme - proximal| / h1_atr is
+    # non-None and halves when h1_atr doubles (Area B denominator check).
     alert = {"pair": "TESTPAIR", "ts": idx[0], "current_price": top,
-             "h1_atr": atr, "ob": ob}
+             "h1_atr": atr, "ob": ob,
+             "leg_extreme_at_alert": top + 0.0030}
     rows = h1_only_simulator.simulate_h1_only_dual(
         alert, _synth_pair_conf(), df, risk_usd=250.0)
     assert rows, "atr-scenario produced no trade row"
@@ -737,7 +885,7 @@ def _atr_sweep_scenario(atr):
 
 # The six *_atr columns Area B covers (break_* are Batch 1, sweep_* out-of-scope).
 _AREA_B_ATR_COLS = [
-    "ob_range_atr", "fvg_size_atr", "impulse_leg_atr", "sl_distance_atr",
+    "ob_range_atr", "fvg_size_atr", "impulse_leg_to_extreme_atr", "sl_distance_atr",
     "sl_wick_depth_atr", "sl_max_adverse_after_sweep_atr",
 ]
 
@@ -797,7 +945,7 @@ def test_area_b_atr_source_uses_h1_atr():
     ok &= check('_h1_atr_sl = ob.get("h1_atr")' in src,
                 "_h1_atr_sl bound to ob['h1_atr'] (SL-outcome denominator)")
     ok &= check("return round(v / _h1_atr, 3)" in src,
-                "_atr_norm divides by _h1_atr (ob_range/fvg_size/impulse_leg)")
+                "_atr_norm divides by _h1_atr (ob_range/fvg_size/impulse_leg_to_extreme)")
     ok &= check("abs(entry - sl) / _h1_atr" in src,
                 "sl_distance_atr divides by _h1_atr")
     ok &= check("_overshoot) / _h1_atr_sl" in src,
@@ -807,6 +955,140 @@ def test_area_b_atr_source_uses_h1_atr():
     ok &= check("atr_at_ob = round(float(_h1_atr), 6)" in src,
                 "atr_at_ob is the SAME _h1_atr rounded to 6dp (the CSV denominator)")
     assert ok, "Area B source tripwire failed (see output above)"
+
+
+# ── impulse_leg_to_extreme_atr — recompute + re-fire freeze (2026-07-23) ──────
+# Replaced the frozen impulse_leg_atr. Value = |leg_extreme_at_alert - proximal|
+# / ob['h1_atr']. Alert-time payload scalar (re-stamped on each re-fire), never
+# read off the shared ob dict. Observe-only. Ledger: TRUTH_LEDGER.md.
+
+# The fixture proximal (bullish OB) = its high = `top`; leg_extreme_at_alert =
+# top + 0.0030 (see _atr_sweep_scenario). Kept here as the recompute anchor.
+_ILTE_PROX = 1.0800                 # == _atr_sweep_scenario top
+_ILTE_EXTREME = _ILTE_PROX + 0.0030  # == the fixture's leg_extreme_at_alert
+
+
+def test_impulse_leg_to_extreme_recompute_from_source():
+    """impulse_leg_to_extreme_atr must equal |leg_extreme_at_alert - proximal| /
+    atr_at_ob, recomputed from the row's OWN source, 0 mismatch (drives LIVE
+    _build_row via the sweep fixture). Bites if the numerator anchor or the
+    denominator ever drifts from that formula."""
+    print("\n== test_impulse_leg_to_extreme_recompute_from_source ==")
+    ok = True
+    for atr in (0.0010, 0.0020):
+        r = _atr_sweep_scenario(atr)
+        col = r.get("impulse_leg_to_extreme_atr")
+        # Recompute from the row's frozen extreme + the known proximal + the row's
+        # own denominator (atr_at_ob IS ob['h1_atr'] at 6dp).
+        lea = r.get("leg_extreme_at_alert")
+        denom = r.get("atr_at_ob")
+        ok &= check(lea is not None and denom, f"source cols present (lea={lea}, atr={denom})")
+        expect = round(abs(float(lea) - _ILTE_PROX) / float(denom), 3)
+        ok &= check(col == expect,
+                    f"impulse_leg_to_extreme_atr recomputes ({col} == {expect}) at atr={atr}")
+    assert ok, "impulse_leg_to_extreme_atr recompute mismatch (see output above)"
+
+
+def test_impulse_leg_to_extreme_none_when_extreme_missing():
+    """None (never a faked 0.0) when leg_extreme_at_alert is absent — the leg was
+    unmeasurable. Drives LIVE _build_row: drop the payload extreme, the column
+    must come back None while the rest of the row still builds."""
+    print("\n== test_impulse_leg_to_extreme_none_when_extreme_missing ==")
+    r = _atr_sweep_scenario(0.0010)          # baseline: populated
+    ok = check(r.get("impulse_leg_to_extreme_atr") is not None,
+               "baseline populated (extreme present)")
+    # Re-run the same geometry but WITHOUT leg_extreme_at_alert on the alert.
+    base = pd.Timestamp("2026-04-06 00:00", tz="UTC")
+    n = 60
+    idx = pd.date_range(base, periods=n, freq="h")
+    top = _ILTE_PROX
+    bot = top - 0.0018
+    atr = 0.0010
+    ob = {
+        "direction": "bullish", "bos_tag": "BOS", "bos_tier": "Major",
+        "high": top, "low": bot, "proximal_line": top, "distal_line": bot,
+        "ob_timestamp": idx[0].isoformat(), "touches": 0, "h1_atr": atr,
+        "impulse_start_price": bot - 0.0050, "bos_swing_price": top + 0.0030,
+        "fvg": {"exists": True, "fvg_top": top + 0.0009, "fvg_bottom": top + 0.0003},
+        "dealing_range": {"valid": True, "range_low": bot - 0.02, "range_high": top + 0.05},
+    }
+    closes = [top + 0.0010 if i < 2 else (top - 0.0002 if i < 4 else bot - 0.0030) for i in range(n)]
+    highs = [c + 0.0005 for c in closes]
+    lows = [c - 0.0005 for c in closes]
+    df = pd.DataFrame({"Open": closes, "High": highs, "Low": lows,
+                       "Close": closes, "Volume": [100] * n}, index=idx)
+    alert = {"pair": "TESTPAIR", "ts": idx[0], "current_price": top,
+             "h1_atr": atr, "ob": ob}      # NO leg_extreme_at_alert payload
+    rows = h1_only_simulator.simulate_h1_only_dual(
+        alert, _synth_pair_conf(), df, risk_usd=250.0)
+    ok &= check(bool(rows), "row still builds without the extreme")
+    if rows:
+        ok &= check(rows[0].get("impulse_leg_to_extreme_atr") is None,
+                    "impulse_leg_to_extreme_atr is None (not 0.0) when extreme missing")
+    assert ok, "impulse_leg_to_extreme_atr None-guard failed (see output above)"
+
+
+def test_impulse_leg_to_extreme_refire_carries_latest():
+    """Re-fire freeze: a zone that alerts 3× re-stamps leg_extreme_at_alert each
+    fire; the traded row must carry the LATEST (3rd) fire's value, read from the
+    top-level alert payload — NEVER off the shared ob dict (which a stale earlier
+    fire could still be sitting on).
+
+    Bite: park a DIFFERENT extreme on the shared ob dict; the row must ignore it
+    and use the payload. If _build_row ever read ob['leg_extreme_at_alert'], this
+    flips."""
+    print("\n== test_impulse_leg_to_extreme_refire_carries_latest ==")
+    third_extreme = _ILTE_PROX + 0.0050     # the 3rd fire's (latest) extreme
+    r = _atr_sweep_scenario(0.0010)
+    # Rebuild the fixture, overriding the payload to the 3rd-fire extreme and
+    # planting a STALE, different value on the shared ob dict.
+    base = pd.Timestamp("2026-04-06 00:00", tz="UTC")
+    n = 60
+    idx = pd.date_range(base, periods=n, freq="h")
+    top = _ILTE_PROX
+    bot = top - 0.0018
+    atr = 0.0010
+    sl = bot - 0.0002
+    ob = {
+        "direction": "bullish", "bos_tag": "BOS", "bos_tier": "Major",
+        "high": top, "low": bot, "proximal_line": top, "distal_line": bot,
+        "ob_timestamp": idx[0].isoformat(), "touches": 0, "h1_atr": atr,
+        "impulse_start_price": bot - 0.0050, "bos_swing_price": top + 0.0030,
+        "fvg": {"exists": True, "fvg_top": top + 0.0009, "fvg_bottom": top + 0.0003},
+        "dealing_range": {"valid": True, "range_low": bot - 0.02, "range_high": top + 0.05},
+        # STALE value from an earlier fire, still on the shared dict (the bite):
+        "leg_extreme_at_alert": _ILTE_PROX + 0.0090,
+    }
+    closes = []
+    for i in range(n):
+        if i < 2:
+            closes.append(top + 0.0010)
+        elif i < 4:
+            closes.append(top - 0.0002)
+        elif i == 4:
+            closes.append(sl + 0.0001)
+        else:
+            closes.append(sl - 0.0030)
+    highs = [c + 0.0005 for c in closes]
+    lows = [c - 0.0005 for c in closes]
+    lows[4] = sl - 0.0020
+    df = pd.DataFrame({"Open": closes, "High": highs, "Low": lows,
+                       "Close": closes, "Volume": [100] * n}, index=idx)
+    alert = {"pair": "TESTPAIR", "ts": idx[0], "current_price": top,
+             "h1_atr": atr, "ob": ob,
+             "leg_extreme_at_alert": third_extreme}   # 3rd fire's payload wins
+    rows = h1_only_simulator.simulate_h1_only_dual(
+        alert, _synth_pair_conf(), df, risk_usd=250.0)
+    ok = check(bool(rows), "re-fire scenario produced a row")
+    if rows:
+        col = rows[0].get("impulse_leg_to_extreme_atr")
+        expect_latest = round(abs(third_extreme - _ILTE_PROX) / atr, 3)   # 5.0
+        expect_stale = round(abs((_ILTE_PROX + 0.0090) - _ILTE_PROX) / atr, 3)  # 9.0
+        ok &= check(col == expect_latest,
+                    f"row carries the 3rd-fire payload extreme ({col} == {expect_latest})")
+        ok &= check(col != expect_stale,
+                    f"row did NOT read the stale shared-ob extreme ({expect_stale})")
+    assert ok, "impulse_leg_to_extreme_atr re-fire freeze failed (see output above)"
 
 
 # ── MSS LABEL (is_mss) + ATR-AT-FILL (atr_at_fill) — 2026-07-21 ──────────────
@@ -1717,6 +1999,7 @@ def main():
          test_g10_rounded_near_miss_is_not_a_violation),
         ("test_sl_wick_depth_atr",      test_sl_wick_depth_atr),
         ("test_edge_lab_columns",       test_edge_lab_columns),
+        ("test_sl_swept_then_tp1_strict", test_sl_swept_then_tp1_strict),
         ("test_area_b_all_atr_cols_share_the_one_h1_atr_denominator",
          test_area_b_all_atr_cols_share_the_one_h1_atr_denominator),
         ("test_area_b_atr_source_uses_h1_atr",

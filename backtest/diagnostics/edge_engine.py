@@ -128,7 +128,7 @@ BTC_STANDALONE_MIN_N = 300
 # ═══════════════════════════════════════════════════════════════════════════
 
 CONTINUOUS_FEATURES = [
-    "break_close_atr", "break_body_atr", "impulse_leg_atr", "fvg_size_atr",
+    "break_close_atr", "break_body_atr", "impulse_leg_to_extreme_atr", "fvg_size_atr",
     "ob_range_atr", "atr_at_ob", "pd_pct", "reversal_pct", "ob_age_h1_bars",
     "ob_to_fill_hours", "bars_break_to_pullback", "bos_sequence_count",
     "score", "alert_utc_hour", "ob_body_ratio", "chop_at_alert",
@@ -1101,7 +1101,7 @@ def _actionable_class(feat: str, rec: Dict[str, Any]) -> str:
     if _classify_timing(feat) == "fill_time":
         return "order_rule"
     detection_features = {
-        "break_close_atr", "break_body_atr", "impulse_leg_atr", "fvg_size_atr",
+        "break_close_atr", "break_body_atr", "impulse_leg_to_extreme_atr", "fvg_size_atr",
         "ob_range_atr", "bos_tag", "bos_tier", "bos_verdict", "event",
         "reversed_from_extreme", "reversal_pct", "bos_sequence_count",
         "fvg_present", "fvg_mitigation", "fvg_state",

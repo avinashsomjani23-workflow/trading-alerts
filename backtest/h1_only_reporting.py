@@ -807,7 +807,7 @@ _DRIVER_CONTINUOUS = [
     ("break_body_atr",    "Break body (ATR)"),
     ("ob_range_atr",      "OB range / stop (ATR)"),
     ("fvg_size_atr",      "FVG size (ATR)"),
-    ("impulse_leg_atr",   "Impulse leg (ATR)"),
+    ("impulse_leg_to_extreme_atr", "Impulse leg to extreme (ATR)"),
     ("ob_age_h1_bars",    "OB age (H1 bars)"),
     ("tp1_rr",            "TP1 distance (R)"),
     ("score",             "Confidence score"),
@@ -1342,7 +1342,7 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         # data-derived MSS_BODY_ATR_MULT. NOT a proven separator (see ledger), no
         # gate/score. Sits by the break_* group it is derived from.
         "is_mss",
-        "ob_range_atr", "fvg_size_atr", "impulse_leg_atr", "atr_at_ob", "atr_at_fill",
+        "ob_range_atr", "fvg_size_atr", "impulse_leg_to_extreme_atr", "atr_at_ob", "atr_at_fill",
         # Walk-back geometry (A3, DECISION_GUARDRAILS.md) — logging only, no
         # gate. None for legacy zones built before this change.
         "ob_body_ratio", "ob_walkback_depth",
@@ -1479,7 +1479,7 @@ _EXCEL_COL_NAMES = {
     "break_tier":        "Break Quality",
     "ob_range_atr":      "OB Range / Stop (ATR)",
     "fvg_size_atr":      "FVG Size (ATR)",
-    "impulse_leg_atr":   "Impulse Leg (ATR)",
+    "impulse_leg_to_extreme_atr": "Impulse Leg to Extreme (ATR)",
     "atr_at_ob":         "ATR at OB (price)",
     "chop_at_alert":     "Market Regime (chop 0-100)",
     "vet_review":        "Worth Reviewing",
