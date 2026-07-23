@@ -17,9 +17,12 @@ the leg began, and the raid resolved as a rejection (not a break):
            weakest tier — the normal-swing fuel read folded in from the
            retired legacy observer (2026-07-20): it shows the leg ran a stop,
            just not a mapped pool. Sub-1.5-ATR triangles still never qualify.
-  EVENT    pool_builder.pool_status walked over the leg window — the ONE
-           existing sweep judge (wick+close-back = swept, failed break =
-           swept, close-and-hold = broken -> excluded). No second judge.
+  EVENT    _first_sweep_ts walks the leg window — the ONE sweep judge. The
+           sweep is the FIRST touch of the level (later touches are ghosts on
+           already-taken liquidity), kept only if the level was not
+           broken-and-held first (unbroken AND unspent). A single close-beyond
+           that reverses next bar is a FAILED break = a real sweep and is kept;
+           a break that held its confirm bar is excluded.
   REJECTION raw wick:body ratio of the sweep bar (logged raw, never tiered).
   FOLLOW-THROUGH displacement beyond the swept level from the sweep bar to
            the break-confirmation bar, in formation ATR.
@@ -173,6 +176,63 @@ def _rn_key(pair_name, pair_type):
     return smc_detector._round_number_key(pair_name, pair_type)
 
 
+def _first_sweep_ts(leg_bars, level, side):
+    """Timestamp of the ONE valid sweep of `level` inside the leg window, or
+    None if there is no valid sweep.
+
+    WHY THIS GUARD EXISTS (2026-07-23): a sweep is only valid on a swing/pool
+    that is still UNBROKEN **and UNSPENT**. Two ways the old code broke that:
+
+      1. BROKEN — price closed beyond the level and HELD there (a real break).
+         pool_status's reclaim rule (pool_builder.py:342) later downgrades that
+         broken level to 'swept' the moment price closes back across it, so a
+         decisive break read as a fresh sweep. (EURUSD 2026-07-23: swing highs
+         closed above for six straight H1 bars, then were tagged swept.)
+
+      2. SPENT — a sweep takes the resting liquidity ONCE. The first
+         wick-through-and-reject fills those stops; the level is spent. But
+         pool_status returns last_sweep_ts = the LATEST touch, so if price
+         poked the level, rejected, drifted back and poked it AGAIN, the SECOND
+         (ghost) poke was reported as the sweep. There is no liquidity left on a
+         re-poke — it is not a sweep.
+
+    So the ONLY valid sweep is the FIRST touch of the level in the leg. This
+    helper finds that first touch and returns its timestamp — UNLESS the level
+    was truly broken (closed-beyond-and-held) at or before that first touch, in
+    which case the level was never resting liquidity to raid and None is
+    returned.
+
+    A single close-beyond that reverses on the very next bar is a FAILED break =
+    a real sweep and is kept (that is the wick/failed-break case). Only a break
+    that HELD for its confirm bar disqualifies.
+    """
+    if leg_bars is None or len(leg_bars) == 0 or level is None:
+        return None
+    highs = leg_bars["High"].to_numpy()
+    lows = leg_bars["Low"].to_numpy()
+    closes = leg_bars["Close"].to_numpy()
+    index = leg_bars.index
+    n = len(closes)
+    for i in range(n):
+        if side == "above":
+            touched = highs[i] > level        # wick pierced the high pool
+            closed_beyond = closes[i] > level
+            held = closed_beyond and (i + 1 < n) and closes[i + 1] > level
+        else:
+            touched = lows[i] < level         # wick pierced the low pool
+            closed_beyond = closes[i] < level
+            held = closed_beyond and (i + 1 < n) and closes[i + 1] < level
+        if held:
+            # Level truly broke and held before any valid sweep — spent as a
+            # break, no resting liquidity to raid.
+            return None
+        if touched:
+            # First touch of the level. This is the one and only sweep; every
+            # later touch is a ghost on already-taken liquidity.
+            return index[i]
+    return None
+
+
 def _pw_pd_candidates(h1, lo_pos, leg_bars, side, frame_start_ts):
     """PW/PD fuel-side pools swept by the leg + which tiers were provable.
 
@@ -208,10 +268,14 @@ def _pw_pd_candidates(h1, lo_pos, leg_bars, side, frame_start_ts):
         pre_bars = h1.loc[(h1.index >= life_start) & (h1.index < lo_ts)]
         if pool_status(pre_bars, level, side)["status"] != "intact":
             continue  # already drained before the leg — not resting liquidity
-        st = pool_status(leg_bars, level, side)
-        if st["status"] == "swept" and st["last_sweep_ts"] is not None:
+        # The ONE valid sweep = FIRST touch of the level, and only if the level
+        # was not broken-and-held first (unbroken AND unspent). See
+        # _first_sweep_ts. Replaces trusting pool_status' last_sweep_ts (which
+        # points at the latest/ghost touch on already-taken liquidity).
+        sweep_ts = _first_sweep_ts(leg_bars, level, side)
+        if sweep_ts is not None:
             candidates.append({"tier": tier, "level": float(level),
-                               "sweep_ts": st["last_sweep_ts"],
+                               "sweep_ts": sweep_ts,
                                "eq_size": None})
     return candidates, checked
 
@@ -229,10 +293,10 @@ def _eq_candidates(h1, lo_pos, leg_bars, side, atr, swings):
     for cl in clusters:
         if cl["side"] != want_type or cl["status"] != "intact":
             continue
-        st = pool_status(leg_bars, cl["level"], side)
-        if st["status"] == "swept" and st["last_sweep_ts"] is not None:
+        sweep_ts = _first_sweep_ts(leg_bars, cl["level"], side)
+        if sweep_ts is not None:
             out.append({"tier": "EQ", "level": float(cl["level"]),
-                        "sweep_ts": st["last_sweep_ts"],
+                        "sweep_ts": sweep_ts,
                         "eq_size": int(cl["size"])})
     return out, True
 
@@ -248,8 +312,10 @@ def _sw_candidates(h1, lo_pos, leg_bars, side, atr, pair_type):
         before_idx=lo_pos) — the same "resting liquidity when the leg began"
         rule the PW/PD/EQ tiers enforce, so a swing already drained pre-leg is
         not counted, and
-      - was SWEPT inside the leg window by pool_status (the ONE sweep judge —
-        wick+close-back / failed break; close-and-hold is a break, excluded).
+      - was SWEPT inside the leg window by _first_sweep_ts (the ONE sweep
+        judge): the FIRST touch of the swing, kept only if it was not
+        broken-and-held first. A re-poke on the same swing later in the leg is a
+        ghost on already-taken liquidity, not a sweep.
 
     Ranked BELOW EQ (weakest fuel: a local stop-run on no mapped pool). This is
     the observation the retired legacy observe_phase1_sweep used to make; folded
@@ -272,10 +338,14 @@ def _sw_candidates(h1, lo_pos, leg_bars, side, atr, pair_type):
         # Resting when the leg began: unbroken AND unswept up to the leg start.
         if not smc_detector.is_swing_active(s, h1, pierce_min, before_idx=lo_pos):
             continue
-        st = pool_status(leg_bars, float(s["price"]), side)
-        if st["status"] == "swept" and st["last_sweep_ts"] is not None:
+        # The ONE valid sweep = FIRST touch of the swing, and only if it was not
+        # broken-and-held first (unbroken AND unspent). This is the EURUSD
+        # 2026-07-23 bug: the swing highs closed above for six bars (broken)
+        # before price fell back, and pool_status still reported them swept.
+        sweep_ts = _first_sweep_ts(leg_bars, float(s["price"]), side)
+        if sweep_ts is not None:
             out.append({"tier": "SW", "level": float(s["price"]),
-                        "sweep_ts": st["last_sweep_ts"],
+                        "sweep_ts": sweep_ts,
                         "eq_size": None})
     return out
 
