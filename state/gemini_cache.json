@@ -1,17 +1,17 @@
 {
-  "EURUSD|2026-07-22": {
-    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no external macro factors are expected to directly influence the EURUSD pair today. The trade setup will be driven by technicals and sentiment."
+  "EURUSD|2026-07-23": {
+    "macro_summary": "The EURUSD SHORT setup faces significant event risk today. The Main Refinancing Rate, Monetary Policy Statement, and ECB Press Conference at 17:45 and 18:15 IST will help this trade if they signal a hawkish ECB stance, but hurt it if they signal dovishness. US Unemployment Claims at 18:00 IST will help if higher than expected, and hurt if lower."
   },
-  "NZDUSD|2026-07-22": {
-    "macro_summary": "There are no scheduled high-impact events for NZD or USD today. Therefore, no external macro factors are expected to directly influence the NZDUSD pair's direction today."
+  "USDJPY|2026-07-23": {
+    "macro_summary": "The only scheduled high-impact event is US Unemployment Claims at 18:00 IST. Higher claims would help this short USDJPY trade, while lower claims would hurt it. No other high-impact events are scheduled for today."
   },
-  "USDCHF|2026-07-22": {
-    "macro_summary": "There are no scheduled high-impact events for CHF or USD today. Therefore, no external macro factors are expected to directly influence the USDCHF pair's direction today. The trade setup will rely solely on technical factors and intermarket correlations."
+  "NZDUSD|2026-07-23": {
+    "macro_summary": "The only high-impact event today is US Unemployment Claims at 18:00 IST. Higher claims would help this SHORT NZDUSD trade, while lower claims would hurt it. This event is scheduled for the future."
   },
-  "GOLD|2026-07-22": {
-    "macro_summary": "The only high-impact event today is President Trump Speaks at 00:30 IST. Hawkish commentary would hurt this long gold trade, while dovish remarks or comments on trade disputes would help. This event is scheduled for the future."
+  "USDCHF|2026-07-23": {
+    "macro_summary": "The only scheduled high-impact event is US Unemployment Claims at 18:00 IST. Better-than-expected claims would help this USDCHF long trade, while significantly worse claims would hurt it."
   },
-  "USDJPY|2026-07-22": {
-    "macro_summary": "The only high-impact event today is President Trump Speaks at 00:30 IST. Hawkish commentary would help this USDJPY short trade, while dovish remarks would hurt it. This event is scheduled for the future."
+  "GOLD|2026-07-23": {
+    "macro_summary": "The only scheduled high-impact event today is US Unemployment Claims at 18:00 IST. Better-than-expected claims would help this long GOLD trade, while worse-than-expected claims would hurt it."
   }
 }
