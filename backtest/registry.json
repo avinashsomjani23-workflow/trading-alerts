@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-22T15:19:52.749790+00:00",
+  "updated_at": "2026-07-24T09:32:14.406769+00:00",
   "runs": [
     {
       "run_id": "h1only_20080102_20251231",
@@ -1076,6 +1076,80 @@
       },
       "notes": "",
       "recorded_at": "2026-07-21T17:13:52.075838+00:00"
+    },
+    {
+      "run_id": "h1only_20200201_20200229",
+      "start": "2020-02-01",
+      "end": "2020-02-29",
+      "group": 0,
+      "regime": "bau",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 31,
+        "filled_trades": 18,
+        "win_rate_pct": 33.3,
+        "expectancy_r": -0.472,
+        "max_dd_r": 7.503,
+        "longest_losing_streak": 4,
+        "fill_rate_proximal_pct": 58.1,
+        "per_pair": [
+          {
+            "pair": "EURUSD",
+            "trades": 18,
+            "win_rate_pct": 33.3,
+            "expectancy_r": -0.472,
+            "total_pnl_usd": -2125.75,
+            "verdict": "loser"
+          }
+        ],
+        "by_session": {
+          "Asia": {
+            "trades": 1,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
+          },
+          "London": {
+            "trades": 8,
+            "win_rate_pct": 25.0,
+            "expectancy_r": -0.663
+          },
+          "NY": {
+            "trades": 9,
+            "win_rate_pct": 44.4,
+            "expectancy_r": -0.244
+          }
+        },
+        "score_buckets": [
+          {
+            "score_bucket": "4-5",
+            "trades": 1,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
+          },
+          {
+            "score_bucket": "5-6",
+            "trades": 2,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
+          },
+          {
+            "score_bucket": "6-7",
+            "trades": 9,
+            "win_rate_pct": 55.6,
+            "expectancy_r": -0.096
+          },
+          {
+            "score_bucket": "7+",
+            "trades": 6,
+            "win_rate_pct": 16.7,
+            "expectancy_r": -0.773
+          }
+        ],
+        "score_verdict": "BROKEN \u2014 score does not predict outcome"
+      },
+      "notes": "",
+      "recorded_at": "2026-07-24T09:32:14.405994+00:00"
     },
     {
       "run_id": "h1only_20210201_20210630",
