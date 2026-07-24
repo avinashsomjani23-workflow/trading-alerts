@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-24T09:32:14.406769+00:00",
+  "updated_at": "2026-07-24T11:57:17.679836+00:00",
   "runs": [
     {
       "run_id": "h1only_20080102_20251231",
@@ -746,6 +746,86 @@
       },
       "notes": "",
       "recorded_at": "2026-07-20T04:41:35.261690+00:00"
+    },
+    {
+      "run_id": "h1only_20190101_20190131",
+      "start": "2019-01-01",
+      "end": "2019-01-31",
+      "group": 0,
+      "regime": "bau",
+      "condition": "",
+      "risk_usd": 250.0,
+      "metrics": {
+        "total_rows": 44,
+        "filled_trades": 32,
+        "win_rate_pct": 26.7,
+        "expectancy_r": -0.493,
+        "max_dd_r": 15.408,
+        "longest_losing_streak": 7,
+        "fill_rate_proximal_pct": 72.7,
+        "per_pair": [
+          {
+            "pair": "EURUSD",
+            "trades": 32,
+            "win_rate_pct": 26.7,
+            "expectancy_r": -0.493,
+            "total_pnl_usd": -3941.75,
+            "verdict": "loser"
+          }
+        ],
+        "by_session": {
+          "Asia": {
+            "trades": 11,
+            "win_rate_pct": 27.3,
+            "expectancy_r": -0.578
+          },
+          "London": {
+            "trades": 8,
+            "win_rate_pct": 12.5,
+            "expectancy_r": -0.787
+          },
+          "NY": {
+            "trades": 13,
+            "win_rate_pct": 36.4,
+            "expectancy_r": -0.239
+          }
+        },
+        "score_buckets": [
+          {
+            "score_bucket": "3-4",
+            "trades": 3,
+            "win_rate_pct": 33.3,
+            "expectancy_r": -0.433
+          },
+          {
+            "score_bucket": "4-5",
+            "trades": 1,
+            "win_rate_pct": 0.0,
+            "expectancy_r": -1.0
+          },
+          {
+            "score_bucket": "5-6",
+            "trades": 7,
+            "win_rate_pct": 28.6,
+            "expectancy_r": -0.539
+          },
+          {
+            "score_bucket": "6-7",
+            "trades": 6,
+            "win_rate_pct": 16.7,
+            "expectancy_r": -0.505
+          },
+          {
+            "score_bucket": "7+",
+            "trades": 15,
+            "win_rate_pct": 30.8,
+            "expectancy_r": -0.444
+          }
+        ],
+        "score_verdict": "WORKS \u2014 higher score leads to better trades"
+      },
+      "notes": "",
+      "recorded_at": "2026-07-24T11:57:17.679206+00:00"
     },
     {
       "run_id": "h1only_20190101_20190630",

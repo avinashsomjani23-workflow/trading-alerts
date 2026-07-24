@@ -1,0 +1,50 @@
+{"ts": "2026-07-24T11:56:16.374426+00:00", "level": "info", "event": "run_start", "regime": "bau", "regime_label": null, "mode": "h1_only", "start": "2019-01-01", "end": "2019-01-31", "pairs": ["EURUSD"], "risk_usd": 250.0, "send_email": false}
+{"ts": "2026-07-24T11:56:16.374574+00:00", "level": "info", "event": "backtest_atr_cap", "pair": "EURUSD", "pair_type": "forex", "live": 2.5, "backtest": 2.5}
+{"ts": "2026-07-24T11:56:17.900018+00:00", "level": "info", "event": "news_fetched", "events": 0, "coverage": {"ff": false}, "range": "2018-12-31T00:00:00+00:00..2019-02-01T00:00:00+00:00"}
+{"ts": "2026-07-24T11:56:18.379101+00:00", "level": "info", "event": "pair_data_loaded", "pair": "EURUSD", "h1_rows": 1065, "h1_first": "2018-11-27 00:00:00+00:00", "h1_last": "2019-01-31 00:00:00+00:00"}
+{"ts": "2026-07-24T11:56:37.076565+00:00", "level": "info", "event": "pair_funnel", "pair": "EURUSD", "bars_walked": 501, "warmup_skipped": 0, "dr_errors": 0, "radar_errors": 0, "bars_with_events": 501, "bars_with_obs": 453, "new_obs": 51, "prox_checks": 2562, "closest_dist_atr": 0.0, "atr_multiplier_cap": 2.5, "alerts": 78, "alerts_resuppressed": 0, "alerts_rearmed": 33, "obs_aged_out": 7}
+{"ts": "2026-07-24T11:56:37.093537+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:37.485614+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:37.827253+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:38.159255+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:38.494682+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:39.174834+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:39.908831+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:40.669006+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:41.859851+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:43.157767+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:43.607015+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "EURUSD", "entry_zone": "proximal", "alert_ts": "2019-01-09 03:00:00+00:00", "reason": "Entry 1.1447 is below current price 1.14516 -- SHORT limit would chase price."}
+{"ts": "2026-07-24T11:56:43.615949+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:44.130676+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:44.631827+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:45.149450+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:45.663394+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:48.038754+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:48.674135+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:50.650171+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:51.982907+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:52.685401+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "EURUSD", "entry_zone": "proximal", "alert_ts": "2019-01-16 09:00:00+00:00", "reason": "alert_candle_touched_distal", "distal": 1.13964, "bias": "LONG"}
+{"ts": "2026-07-24T11:56:52.686098+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "EURUSD", "entry_zone": "proximal", "alert_ts": "2019-01-16 17:00:00+00:00", "reason": "Entry 1.13928 is below current price 1.14071 -- SHORT limit would chase price."}
+{"ts": "2026-07-24T11:56:52.694228+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:53.410673+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:54.862735+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:55.618237+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:56.389118+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:57.175108+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:57.995291+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "EURUSD", "entry_zone": "proximal", "alert_ts": "2019-01-22 16:00:00+00:00", "reason": "Entry 1.13496 is below current price 1.13559 -- SHORT limit would chase price."}
+{"ts": "2026-07-24T11:56:58.012074+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:58.850703+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:56:59.734678+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:57:00.620656+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:57:01.542311+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:57:02.477260+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:57:03.473682+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:57:05.394414+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:57:06.381070+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "EURUSD", "entry_zone": "proximal", "alert_ts": "2019-01-28 15:00:00+00:00", "reason": "alert_candle_touched_distal", "distal": 1.14063, "bias": "LONG"}
+{"ts": "2026-07-24T11:57:06.386921+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:57:07.459901+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:57:08.510586+00:00", "level": "warn", "event": "exit_lab_error", "pair": "EURUSD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-24T11:57:10.954323+00:00", "level": "info", "event": "pair_alerts_collected", "pair": "EURUSD", "alerts": 78, "mode": "h1_only"}
+{"ts": "2026-07-24T11:57:10.954387+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "EURUSD", "trades": 52, "news_blocked": 0, "ist_blocked": 8, "killzone_dropped_alerts": 33}
+{"ts": "2026-07-24T11:57:17.560865+00:00", "level": "info", "event": "report_written", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20190101_20190131", "total_alerts": 78, "total_trades": 52}
+{"ts": "2026-07-24T11:57:17.564040+00:00", "level": "info", "event": "exit_lab_sink_persisted", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20190101_20190131\\exit_lab_sink.jsonl", "rows": 383}
