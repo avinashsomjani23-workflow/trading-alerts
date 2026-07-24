@@ -1,17 +1,8 @@
 {
-  "EURUSD|2026-07-23": {
-    "macro_summary": "The EURUSD SHORT setup faces significant event risk today. The Main Refinancing Rate, Monetary Policy Statement, and ECB Press Conference at 17:45 and 18:15 IST will help this trade if they signal a hawkish ECB stance, but hurt it if they signal dovishness. US Unemployment Claims at 18:00 IST will help if higher than expected, and hurt if lower."
+  "EURUSD|2026-07-24": {
+    "macro_summary": "French and German Flash PMIs at 12:45 and 13:00 IST are scheduled. Stronger than expected PMIs would help this EURUSD long, while weaker readings would hurt it. All events are upcoming."
   },
-  "USDJPY|2026-07-23": {
-    "macro_summary": "The only scheduled high-impact event is US Unemployment Claims at 18:00 IST. Higher claims would help this short USDJPY trade, while lower claims would hurt it. No other high-impact events are scheduled for today."
-  },
-  "NZDUSD|2026-07-23": {
-    "macro_summary": "The only high-impact event today is US Unemployment Claims at 18:00 IST. Higher claims would help this SHORT NZDUSD trade, while lower claims would hurt it. This event is scheduled for the future."
-  },
-  "USDCHF|2026-07-23": {
-    "macro_summary": "The only scheduled high-impact event is US Unemployment Claims at 18:00 IST. Better-than-expected claims would help this USDCHF long trade, while significantly worse claims would hurt it."
-  },
-  "GOLD|2026-07-23": {
-    "macro_summary": "The only scheduled high-impact event today is US Unemployment Claims at 18:00 IST. Better-than-expected claims would help this long GOLD trade, while worse-than-expected claims would hurt it."
+  "GOLD|2026-07-24": {
+    "macro_summary": "No scheduled high-impact events for USD today that would directly influence Gold. Therefore, this short Gold setup is primarily driven by technical factors and sentiment, with no immediate macro catalysts expected to help or hurt the trade."
   }
 }
