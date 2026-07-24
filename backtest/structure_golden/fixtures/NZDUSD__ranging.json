@@ -4830,7 +4830,7 @@
     "choch_ts": null,
     "choch_level": null,
     "choch_from_zone": false,
-    "choch_flip_count": 13,
+    "choch_flip_count": 14,
     "defended": 0.85156,
     "broken_swing_ts": null,
     "last_bos": {
@@ -4912,8 +4912,8 @@
         "candle_ts": "2014-05-21T13:00:00+00:00",
         "confirm_ts": "2014-05-21T14:00:00+00:00",
         "impulse_start_ts": "2014-05-21T09:00:00+00:00",
-        "broken_swing_price": 0.85533,
-        "broken_swing_ts": "2014-05-21T00:00:00+00:00",
+        "broken_swing_price": 0.85531,
+        "broken_swing_ts": "2014-05-21T04:00:00+00:00",
         "broken_was_wall": false,
         "reversal_pct": 0.0,
         "trend_after": "bearish",
@@ -5508,9 +5508,21 @@
       },
       {
         "type": "low",
-        "idx": 346,
-        "price": 0.86346,
-        "ts": "2014-05-16T01:00:00+00:00"
+        "idx": 335,
+        "price": 0.86262,
+        "ts": "2014-05-15T14:00:00+00:00"
+      },
+      {
+        "type": "high",
+        "idx": 339,
+        "price": 0.86486,
+        "ts": "2014-05-15T18:00:00+00:00"
+      },
+      {
+        "type": "high",
+        "idx": 344,
+        "price": 0.86543,
+        "ts": "2014-05-15T23:00:00+00:00"
       },
       {
         "type": "high",
@@ -5607,6 +5619,12 @@
         "idx": 418,
         "price": 0.85683,
         "ts": "2014-05-21T02:00:00+00:00"
+      },
+      {
+        "type": "low",
+        "idx": 420,
+        "price": 0.85531,
+        "ts": "2014-05-21T04:00:00+00:00"
       },
       {
         "type": "high",

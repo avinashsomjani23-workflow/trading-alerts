@@ -233,7 +233,8 @@ def _first_sweep_ts(leg_bars, level, side):
     return None
 
 
-def _pw_pd_candidates(h1, lo_pos, leg_bars, side, frame_start_ts):
+def _pw_pd_candidates(h1, lo_pos, leg_bars, side, frame_start_ts,
+                      days=None, weeks=None):
     """PW/PD fuel-side pools swept by the leg + which tiers were provable.
 
     A tier is PROVABLE only when the frame's first bar is at or before the
@@ -241,10 +242,15 @@ def _pw_pd_candidates(h1, lo_pos, leg_bars, side, frame_start_ts):
     otherwise the level computed from partial bars would be silently wrong
     (the 150-bar frame rarely covers a full prior week). Unprovable tiers are
     reported in `checked` as absent, never guessed.
+
+    `days`/`weeks`, when passed, are the full-frame resample precomputed once
+    per bar; levels_at selects periods strictly-before lo_ts internally, so the
+    result is byte-identical to rebuilding them from a truncated frame here.
+    None => levels_at rebuilds them (live path).
     """
     candidates, checked = [], []
     lo_ts = h1.index[lo_pos]
-    lv = levels_at(h1, lo_ts)
+    lv = levels_at(h1, lo_ts, days=days, weeks=weeks)
 
     key_map = {"PD": ("pdl" if side == "below" else "pdh", "prev_day"),
                "PW": ("pwl" if side == "below" else "pwh", "prev_week")}
@@ -301,7 +307,7 @@ def _eq_candidates(h1, lo_pos, leg_bars, side, atr, swings):
     return out, True
 
 
-def _sw_candidates(h1, lo_pos, leg_bars, side, atr, pair_type):
+def _sw_candidates(h1, lo_pos, leg_bars, side, atr, pair_type, swings=None):
     """Bare-swing (tier SW) fuel-side pivots swept by the leg — the normal-swing
     fuel read the ranked tiers (PW/PD/EQ) can't see (2026-07-20, owner).
 
@@ -321,9 +327,12 @@ def _sw_candidates(h1, lo_pos, leg_bars, side, atr, pair_type):
     the observation the retired legacy observe_phase1_sweep used to make; folded
     in here so there is ONE sweep detector, one window, one judge.
     """
-    # The single H1 swing definition (lb-3 + 1.5-ATR). Computed locally and used
-    # only here — never touches the eq_pools per-frame cache (perf trap).
-    swings = dealing_range.detect_swings(h1, lookback=dealing_range.SWING_LOOKBACK)
+    # The single H1 swing definition (lb-3 + 1.5-ATR). Never touches the
+    # eq_pools per-frame cache (perf trap). The caller may pass this same
+    # window-constant set in via `swings` (within-bar reuse); identical values,
+    # computed once per bar instead of once per event.
+    if swings is None:
+        swings = dealing_range.detect_swings(h1, lookback=dealing_range.SWING_LOOKBACK)
     if not swings:
         return []
     want_type = "low" if side == "below" else "high"
@@ -352,7 +361,8 @@ def _sw_candidates(h1, lo_pos, leg_bars, side, atr, pair_type):
 
 def observe_pool_sweep(df, ob_idx, impulse_start_idx, direction, tf_atr,
                        pair_type, pair_name, prior_event_idx=None,
-                       break_idx=None):
+                       break_idx=None, days=None, weeks=None,
+                       eq_swings=None, sw_swings=None):
     """The sweep-v2 observation for one OB. Returns the ob['sweep_v2'] dict.
 
     Args mirror the legacy observer's call site in detect_smc_radar:
@@ -367,6 +377,16 @@ def observe_pool_sweep(df, ob_idx, impulse_start_idx, direction, tf_atr,
       break_idx         — break-confirmation candle position; follow-through
                           is measured sweep bar -> this bar. Falls back to
                           ob_idx when absent/invalid.
+      days/weeks        — PERF (within-bar reuse): the daily/weekly resample
+                          FRAME, precomputed ONCE on the whole df window by the
+                          caller and shared across every event in this bar.
+                          levels_at still selects periods strictly-before each
+                          event's asof internally, so the PDH/PDL/PWH/PWL are
+                          byte-identical to the per-event rebuild — nothing is
+                          stamped or frozen. None => rebuild locally (live path).
+      eq_swings/sw_swings — the EQ-lookback and lb-3 swing sets, likewise
+                          window-constant across this bar's events, precomputed
+                          once by the caller. None => compute locally.
 
     Never raises on degraded input — returns snapshot_failed() so a sweep bug
     can never kill an OB build (guard lives OUT of the live alert path).
@@ -411,22 +431,28 @@ def observe_pool_sweep(df, ob_idx, impulse_start_idx, direction, tf_atr,
         leg_bars = h1.iloc[lo_pos: ob_pos + 1]
 
         # Raw-geometry swings for the EQ reference (approved for the sweep/EQ
-        # use-case only). Computed locally and PASSED IN so this per-OB call
-        # never touches eq_pools' per-frame cache — evicting that cache with a
-        # 150-bar detection frame would force the backtest row build to
-        # re-derive full-frame swings per row (the proven perf trap).
-        swings = dealing_range.detect_swings(h1, lookback=EQ_SWING_LOOKBACK,
-                                             min_leg_atr_mult=None)
+        # use-case only). Computed locally and PASSED IN to _eq_candidates so
+        # this call never touches eq_pools' per-frame cache — evicting that cache
+        # with a 150-bar detection frame would force the backtest row build to
+        # re-derive full-frame swings per row (the proven perf trap). The caller
+        # may hand this same window-constant set in via eq_swings (within-bar
+        # reuse); identical values, just computed once per bar instead of once
+        # per event.
+        swings = eq_swings
+        if swings is None:
+            swings = dealing_range.detect_swings(h1, lookback=EQ_SWING_LOOKBACK,
+                                                 min_leg_atr_mult=None)
 
         pwpd, checked = _pw_pd_candidates(h1, lo_pos, leg_bars, side,
-                                          h1.index[0])
+                                          h1.index[0], days=days, weeks=weeks)
         eq, eq_ran = _eq_candidates(h1, lo_pos, leg_bars, side, tf_atr, swings)
         if eq_ran:
             checked.append("eq")
         # Tier SW — bare lb-3+1.5-ATR swings (the normal-swing fuel read the
         # ranked tiers can't see). Always checkable on H1 (no provability gate),
         # so it always joins tiers_checked.
-        sw = _sw_candidates(h1, lo_pos, leg_bars, side, tf_atr, pair_type)
+        sw = _sw_candidates(h1, lo_pos, leg_bars, side, tf_atr, pair_type,
+                            swings=sw_swings)
         checked.append("sw")
         candidates = pwpd + eq + sw
         tiers_checked = ",".join(checked)

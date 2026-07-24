@@ -18,6 +18,14 @@ entry/tp (+ *_raw twins, 07-22), sl_dist_atr_at_alert / tp_dist_atr_at_alert
 (07-19), sweep2_* + SW tier + score rewire (07-18→20), setup_liq_* (SWING_SWEEP),
 session_level_* (07-21→22). All carry their own dated rows + guards below.
 Structural-audit baseline: 2026-07-10 (Deep Value Pass Areas A/B/C/D; canonical run `1feb2db`, 2026-07-09).
+**2026-07-24 Fix A (backtest speed, byte-identical, NO column change):** in the
+backtest replay ONLY, `detect_smc_radar(known_frozen=...)` REUSES the first-detection
+frozen birth facts `sweep_observed` / `sweep_v2` (+ all `sweep2_*` derived from it) /
+`break_quality` for a known `ob_timestamp` instead of recomputing them each bar. The
+replay merge already discarded those recomputes (replay_engine.py:427), so every value
+in trades.csv is unchanged — proven sha-identical on the 2019-01 window (equivalence
+harness) + guarded by tests/test_h1_only.py::test_frozen_reuse_backtest_only_equivalence.
+Live path never passes `known_frozen` and is byte-identical.
 DETECTION_FIXES_SPEC.md Fixes 1/2/3 **LANDED**; TRUTH_FIXES_SPEC.md T1/T2/T3
 **SHIPPED**; TRUTH_FIXES_SPEC_2.md T4/T5 **SHIPPED**. Guards green
 (tests/test_dedupe.py, test_ob_alert_freeze.py, test_aggregate_eligibility.py,
@@ -352,6 +360,43 @@ Two consumers, two populations — this matters:
 | recipe ranking | h1_only_reporting.py (recipe table) | exit-lab sink (block-stamped, run_backtest.py) | verified (population) | sink rows carry ist/weekend flags so the table drops what the headline drops (826-vs-668 RCA fix) |
 | zone register | h1_only_reporting.py:1133 (_build_zone_register_df) | trades_all | verified (population) | |
 | Excel tabs (confluences/badges/pair-session/break-ladder) | h1_only_reporting.py:1411 (reference tabs §10), :1475 (_break_ladder_tab_df) | trades_all, written at :3480 (_try_excel(trades_all)); each tab filters to _is_real_filled internally | verified (population) | 2026-07-10 un-voided: confluence/badge/break-ladder tabs' source columns all populated in 07-09 baseline. NOTE: break-ladder reads break_* which are DETECTION-sourced — the break gates were removed 07-10, so break-ladder VALUES are stale until the fresh run (population/plumbing clean, values pending Batch 1). Tab construction re-audited Batch 3 |
+
+## OB FIELD FREEZE / LIVE / RE-READ CLASSIFICATION (canonical list — Fix D, 2026-07-24)
+
+The ONE place that answers "is this OB field frozen at birth, live, or re-read?"
+Source of truth = `Zone.refresh` ([zone.py:235-312](zone.py#L235)). This list is kept
+honest by tests/test_zone_freeze_classification.py, which reads the actual freeze
+rules out of that method and FAILS if this list and the code disagree — so it cannot
+drift silently. Consumers carry a one-line pointer back here (smc_radar OB build,
+Phase2 email build, h1_only_simulator row build).
+
+Four buckets. A field is in exactly one.
+
+**FROZEN — identity** (never assigned in refresh; defines *which* OB):
+`zone_id`, `first_seen_iso`, `first_seen_label`, `ob_timestamp`, `direction`,
+`bos_tag`, `bos_tier`.
+
+**FROZEN — birth facts** (locked at formation; one-time back-fill only for legacy zones):
+`body_ratio` (zone.py:259), `walkback_depth` (zone.py:261), `h1_atr`/atr_at_ob
+(zone.py:284), `sweep_v2` (zone.py:295), `bos_timestamp` (zone.py:309).
+
+**LIVE — changes every scan** (must NOT go stale):
+`last_seen_iso`/`last_seen_label` (zone.py:244), `is_new_this_scan` (zone.py:246),
+`bos_idx`/`ob_idx`/`impulse_start_idx` (zone.py:265-267, position in the rolling
+window), `touches` (zone.py:274), `status_label`/`status` (zone.py:275),
+`current_price_at_scan` (zone.py:286), `distance_to_proximal_pips` (zone.py:287),
+`drop_reason` (drop path).
+
+**RE-READ each scan but a fixed birth fact** (grey zone — mechanically re-read, tracks
+a fixed candle/leg so value does not change today; the freeze-risk class):
+`proximal_line`/`distal_line`/`high`/`low`/`ob_body` (zone.py:248-252),
+`median_leg_body` (zone.py:253), `impulse_start_price`/`bos_swing_price`
+(zone.py:268-269), `bos_sequence_count` (zone.py:271), `break_quality` (zone.py:273),
+`broken_was_wall`/`reversal_pct` (zone.py:307-308).
+
+**RE-STAMPED by design** (re-read AND meant to update):
+`fvg` (zone.py:289), `sweep_observed` (zone.py:290), `dealing_range` (zone.py:297),
+`role` (zone.py:311).
 
 ## Rules
 

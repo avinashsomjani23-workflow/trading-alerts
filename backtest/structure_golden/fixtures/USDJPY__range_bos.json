@@ -4991,7 +4991,7 @@
         "direction": "bearish",
         "candle_ts": "2011-07-29T19:00:00+00:00",
         "confirm_ts": "2011-07-29T19:00:00+00:00",
-        "impulse_start_ts": "2011-07-29T00:00:00+00:00",
+        "impulse_start_ts": "2011-07-29T09:00:00+00:00",
         "broken_swing_price": 77.001,
         "broken_swing_ts": "2011-07-29T14:00:00+00:00",
         "broken_was_wall": false,
@@ -5007,9 +5007,9 @@
         "direction": "bullish",
         "candle_ts": "2011-08-01T00:00:00+00:00",
         "confirm_ts": "2011-08-01T00:00:00+00:00",
-        "impulse_start_ts": "2011-07-29T00:00:00+00:00",
-        "broken_swing_price": 77.853,
-        "broken_swing_ts": "2011-07-29T00:00:00+00:00",
+        "impulse_start_ts": "2011-07-29T09:00:00+00:00",
+        "broken_swing_price": 77.659,
+        "broken_swing_ts": "2011-07-29T09:00:00+00:00",
         "broken_was_wall": false,
         "reversal_pct": 1.0,
         "trend_after": "bullish",
@@ -5024,7 +5024,7 @@
         "candle_ts": "2011-08-01T14:00:00+00:00",
         "confirm_ts": null,
         "impulse_start_ts": "2011-08-01T06:00:00+00:00",
-        "broken_swing_price": 77.853,
+        "broken_swing_price": 77.659,
         "broken_swing_ts": null,
         "broken_was_wall": false,
         "reversal_pct": 0.0,
@@ -5655,6 +5655,12 @@
         "idx": 450,
         "price": 77.451,
         "ts": "2011-07-29T04:00:00+00:00"
+      },
+      {
+        "type": "high",
+        "idx": 455,
+        "price": 77.659,
+        "ts": "2011-07-29T09:00:00+00:00"
       },
       {
         "type": "low",

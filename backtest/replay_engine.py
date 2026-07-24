@@ -292,6 +292,33 @@ def replay_pair(
         # info in the returned `ob_build_diagnostics` dict (currently unused
         # downstream — no consumer reads them today). Pure I/O reduction, no
         # logic change to the live function.
+        # SPEED (backtest-only): reuse FORMATION-FROZEN birth facts for OBs we
+        # already carry. detect_smc_radar rebuilds every OB from scratch each bar,
+        # but the merge below (existing_by_ts, ~L427) keeps ONLY fvg from a re-
+        # surfaced OB and discards its recomputed sweep_observed / sweep_v2 /
+        # break_quality. So handing detection the stamped values lets it skip
+        # those three heavy recomputes with ZERO effect on any consumed value —
+        # byte-identical by construction. Keyed by ob_timestamp (frozen identity).
+        # state.active_obs still holds the PRIOR-bar OBs here (merge runs after
+        # this call), which carry the first-detection frozen values — the exact
+        # values downstream already uses. Live never passes known_frozen.
+        # Equivalence-harness escape hatch: BT_DISABLE_FROZEN_REUSE=1 forces the
+        # pre-Fix-A behaviour (empty dict => detection recomputes everything), so
+        # the harness can diff on-vs-off over the SAME window. Unset on live and
+        # on normal runs; pure test scaffolding, no effect when absent.
+        if os.environ.get("BT_DISABLE_FROZEN_REUSE") == "1":
+            known_frozen = {}
+        else:
+            known_frozen = {
+                o.get("ob_timestamp"): {
+                    "sweep_observed": o["sweep_observed"],
+                    "sweep_v2":       o["sweep_v2"],
+                    "break_quality":  o["break_quality"],
+                }
+                for o in state.active_obs[pair_name]
+                if o.get("ob_timestamp")
+                and "sweep_observed" in o and "sweep_v2" in o and "break_quality" in o
+            }
         try:
             with contextlib.redirect_stdout(io.StringIO()):
                 obs_result = smc_radar.detect_smc_radar(
@@ -301,6 +328,7 @@ def replay_pair(
                     walls=walls,
                     pair_name=pair_name,
                     cap_zones=False,   # backtest sees EVERY OB (no 2-OB live cap)
+                    known_frozen=known_frozen,
                 )
         except Exception as e:
             diag["radar_errors"] += 1

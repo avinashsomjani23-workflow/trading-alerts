@@ -750,7 +750,7 @@ def _dedupe_same_leg_impl(obs, thresh):
 
 
 def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=None,
-                     cap_zones=True):
+                     cap_zones=True, known_frozen=None):
     """
     Build OB zones from BOS / CHoCH events emitted by dealing_range.py.
 
@@ -777,6 +777,18 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                 placeholder/fallback flags). Used for the PD-array gate
                 (bullish OBs only valid in discount, bearish in premium).
                 When None or fallback is active, the gate fails open.
+        known_frozen: BACKTEST-REPLAY-ONLY speed reuse. None on the live path
+                (live recomputes everything, cost is irrelevant hourly). When
+                the backtest passes a dict {ob_timestamp_str: {'sweep_observed',
+                'sweep_v2', 'break_quality'}} of already-formed OBs, this
+                function REUSES those FORMATION-FROZEN birth facts for a matching
+                ob_timestamp instead of recomputing them, and skips the three
+                heavy calls (observe_phase1_sweep, observe_pool_sweep,
+                compute_break_quality). Byte-identical by construction: the
+                replay merge keeps only these frozen values from FIRST detection
+                and discards every later recompute (replay_engine.py:427), so the
+                reused value IS the only value downstream ever sees. fvg and
+                dealing_range are NOT reused here — the replay re-stamps both.
     """
     n = len(df)
     O = df['Open'].values
@@ -899,6 +911,30 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         if _ev.get('type') in ('BOS', 'CHoCH'):
             last_event_ts = _ev.get('candle_ts')
             break
+
+    # PERF (within-bar frame reuse): the daily/weekly resample FRAME and the two
+    # swing sets that sweep-v2 needs are IDENTICAL for every event in this scan
+    # (all events share this one df window). Build them ONCE here and thread them
+    # into every observe_pool_sweep call in the loop, instead of rebuilding them
+    # per event (~7×/bar). This is observation only — levels_at still selects
+    # periods strictly-before each event's asof internally (pool_builder.py:270),
+    # so every event still computes its OWN PDH/PDL/PWH/PWL fresh: nothing is
+    # stamped or frozen, D1/W1 is re-read live every bar. Byte-identical to the
+    # per-event rebuild (proven via the sweep equivalence harness); same
+    # _cached_days_weeks precedent features_at_alert already relies on. On any
+    # failure, fall back to None so each call rebuilds locally (live behaviour).
+    _sweep_days = _sweep_weeks = _sweep_eq_swings = _sweep_sw_swings = None
+    try:
+        _sweep_dw = pool_builder._cached_days_weeks(df)
+        _sweep_days, _sweep_weeks = _sweep_dw["days"], _sweep_dw["weeks"]
+        _sweep_h1n = _sweep_dw["h1"]
+        _sweep_eq_swings = dealing_range.detect_swings(
+            _sweep_h1n, lookback=eq_pools.EQ_SWING_LOOKBACK,
+            min_leg_atr_mult=None)
+        _sweep_sw_swings = dealing_range.detect_swings(
+            _sweep_h1n, lookback=dealing_range.SWING_LOOKBACK)
+    except Exception:
+        _sweep_days = _sweep_weeks = _sweep_eq_swings = _sweep_sw_swings = None
 
     for ev_pos, ev in enumerate(events):
         ev_type = ev.get('type')           # 'BOS' | 'CHoCH'
@@ -1117,6 +1153,13 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         ob_timestamp_str  = _ts_for_idx(ob_idx)
         bos_timestamp_str = _ts_for_idx(bos_idx)
 
+        # BACKTEST-REPLAY-ONLY frozen-fact reuse (see known_frozen in Args).
+        # None on live => _reuse stays None => every branch below recomputes as
+        # before (live byte-identical). In the backtest, a matching ob_timestamp
+        # supplies the FIRST-detection sweep_observed / sweep_v2 / break_quality
+        # so we skip the three heavy recomputes and reuse the frozen value.
+        _reuse = known_frozen.get(ob_timestamp_str) if known_frozen else None
+
         fvg_dict = {
             'exists':       fvg_result.get('exists', False),
             'fvg_top':      fvg_result.get('fvg_top'),
@@ -1180,16 +1223,21 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         # is still passed for signature compatibility but no longer sets the lower
         # bound — see observe_phase1_sweep's window comment for why the prior
         # opposing/same-direction event anchors were wrong on continuation BOS.
-        try:
-            sweep_obs = smc_detector.observe_phase1_sweep(
-                df, ob_idx, impulse_start_idx, ev_dir,
-                h1_atr_for_leg, pair_type, pair_name, tf_label='H1',
-                event_type=ev_type,
-                prior_event_idx=prior_event_idx,
-            )
-        except Exception as _sweep_err:
-            logging.warning(f"[sweep_observed] OB build failed sweep observation: {_sweep_err}")
-            sweep_obs = {'exists': False}
+        if _reuse is not None and 'sweep_observed' in _reuse:
+            # Reuse FIRST-detection sweep_observed (backtest replay). The live
+            # recompute below is discarded by the replay merge; this skips it.
+            sweep_obs = _reuse['sweep_observed']
+        else:
+            try:
+                sweep_obs = smc_detector.observe_phase1_sweep(
+                    df, ob_idx, impulse_start_idx, ev_dir,
+                    h1_atr_for_leg, pair_type, pair_name, tf_label='H1',
+                    event_type=ev_type,
+                    prior_event_idx=prior_event_idx,
+                )
+            except Exception as _sweep_err:
+                logging.warning(f"[sweep_observed] OB build failed sweep observation: {_sweep_err}")
+                sweep_obs = {'exists': False}
 
         # Sweep v2 — rebuilt pool-anchored sweep (liquidity_sweep.py). Same
         # leg window, but the target must be a RANKED pool (PW/PD/EQ shelf)
@@ -1198,16 +1246,23 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         # feeding the score/OB2-rank unchanged. Snapshot is FORMATION-FROZEN
         # on the zone (Zone.refresh never re-stamps it). Follow-through is
         # measured to the break-confirmation candle (_confirm_idx_bq).
-        try:
-            sweep_v2 = liquidity_sweep.observe_pool_sweep(
-                df, ob_idx, impulse_start_idx, ev_dir,
-                h1_atr_for_leg, pair_type, pair_name,
-                prior_event_idx=prior_event_idx,
-                break_idx=_confirm_idx_bq,
-            )
-        except Exception as _sweep2_err:
-            logging.warning(f"[sweep_v2] OB build failed pool-sweep observation: {_sweep2_err}")
-            sweep_v2 = liquidity_sweep.snapshot_failed()
+        if _reuse is not None and 'sweep_v2' in _reuse:
+            # Reuse FIRST-detection sweep_v2 (backtest replay). Same rationale as
+            # sweep_observed above: the recompute is discarded by the replay merge.
+            sweep_v2 = _reuse['sweep_v2']
+        else:
+            try:
+                sweep_v2 = liquidity_sweep.observe_pool_sweep(
+                    df, ob_idx, impulse_start_idx, ev_dir,
+                    h1_atr_for_leg, pair_type, pair_name,
+                    prior_event_idx=prior_event_idx,
+                    break_idx=_confirm_idx_bq,
+                    days=_sweep_days, weeks=_sweep_weeks,
+                    eq_swings=_sweep_eq_swings, sw_swings=_sweep_sw_swings,
+                )
+            except Exception as _sweep2_err:
+                logging.warning(f"[sweep_v2] OB build failed pool-sweep observation: {_sweep2_err}")
+                sweep_v2 = liquidity_sweep.snapshot_failed()
 
         # Dealing range snapshot — Phase 1 is the single source of truth
         # for DR. Computed once at OB build time using this scan's H1 frame,
@@ -1248,6 +1303,17 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             log_p1_degrade('dealing_range_legacy_fallback',
                            pair=pair_name, source=_dr_src)
 
+        # break_quality is FORMATION-FROZEN. Reuse the FIRST-detection value in
+        # the backtest replay (see known_frozen); recompute on live and on the
+        # first sighting of an OB. Hoisted out of the dict literal below so the
+        # reuse branch has a single assignment site.
+        if _reuse is not None and 'break_quality' in _reuse:
+            break_quality = _reuse['break_quality']
+        else:
+            break_quality = smc_detector.compute_break_quality(
+                df, _confirm_idx_bq, bos_swing_price, ev_dir,
+                h1_atr_for_leg, event_type=ev_type)
+
         # 'bos_tag' is the legacy field name for the structural event type
         # ('BOS' | 'CHoCH'). Kept for backwards compatibility with chart /
         # scoring / dedupe code.
@@ -1279,9 +1345,7 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             # confirmation/fire candle (_confirm_idx_bq), NOT the true-break anchor
             # (bos_idx). 2026-07-10: gates removed, so the two coincide except
             # across a weekend gap; grading anchor kept distinct for re-arm safety.
-            'break_quality':      smc_detector.compute_break_quality(
-                                      df, _confirm_idx_bq, bos_swing_price, ev_dir,
-                                      h1_atr_for_leg, event_type=ev_type),
+            'break_quality':      break_quality,
             'high':               ob_high,
             'low':                ob_low,
             'proximal_line':      ob_high if ev_dir == 'bullish' else ob_low,
@@ -2161,12 +2225,19 @@ def generate_h1_chart(df, ob, dp, pair_name, ist_timestamp, walls=None,
                             ax.plot([lvl_x_start, sw_local], [sw_level, sw_level],
                                     color=SWEEP_COLOR, linewidth=1.0,
                                     linestyle=(0, (3, 2)), alpha=0.8, zorder=4)
-                    ax.scatter([sw_local], [wick_tip], marker='*', s=140,
+                    # Offset the star OFF the wick tip (below the low for a
+                    # bullish raid, above the high for a bearish raid) so the
+                    # actual sweep wick stays fully visible and isn't hidden
+                    # under the marker. Annotation stays anchored to the real tip.
+                    star_gap = (y_max - y_min) * 0.02
+                    star_y = (wick_tip - star_gap) if ob['direction'] == 'bullish' \
+                             else (wick_tip + star_gap)
+                    ax.scatter([sw_local], [star_y], marker='*', s=140,
                                color=SWEEP_COLOR, edgecolors='#001f24',
                                linewidths=0.8, zorder=8)
                     label_dy = -14 if ob['direction'] == 'bullish' else 14
                     label_va = 'top' if ob['direction'] == 'bullish' else 'bottom'
-                    ax.annotate('Sweep', xy=(sw_local, wick_tip),
+                    ax.annotate('Sweep', xy=(sw_local, star_y),
                                 xytext=(0, label_dy), textcoords='offset points',
                                 color=SWEEP_COLOR, fontsize=8, fontweight='bold',
                                 ha='center', va=label_va, zorder=8)

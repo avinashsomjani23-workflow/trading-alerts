@@ -2043,6 +2043,8 @@ def main():
          test_triple_mode_1to1_fallback_has_no_wick_or_nextpool),
         ("test_exit_engine_triple_leg_recipe",
          test_exit_engine_triple_leg_recipe),
+        ("test_frozen_reuse_backtest_only_equivalence",
+         test_frozen_reuse_backtest_only_equivalence),
     ]
     results = [(name, _run(name, fn)) for name, fn in tests]
     print("\n=== SUMMARY ===")
@@ -2055,6 +2057,114 @@ def main():
         print(f"\n{fail}/{len(results)} test(s) failed.")
         sys.exit(1)
     print(f"\nAll {len(results)} tests passed.")
+
+
+def test_frozen_reuse_backtest_only_equivalence():
+    """Guard Fix A: the backtest-replay frozen-fact reuse in detect_smc_radar.
+
+    Fix A adds an optional `known_frozen` arg to smc_radar.detect_smc_radar. When
+    the backtest passes it, detection REUSES the FIRST-detection FORMATION-FROZEN
+    birth facts (sweep_observed / sweep_v2 / break_quality) for a known
+    ob_timestamp and skips the three heavy recomputes. Live never passes it.
+
+    Two silent-failure modes this bites (both OUT of the live path — this is an
+    offline test driving the live functions on real cached data):
+
+      (a) A FROZEN field silently stops being reused (someone unwires the branch,
+          or a birth fact drifts). Bite: plant a SENTINEL frozen value in
+          known_frozen; the returned OB MUST carry the sentinel. If detection
+          recomputed instead, the sentinel is gone -> FAIL.
+
+      (b) A LIVE field silently starts flowing from known_frozen (window indices,
+          geometry, touches). Bite: with the sentinel known_frozen, EVERY non-
+          frozen field of the matched OB MUST be byte-identical to the no-arg
+          recompute on the SAME frame. If any live field changed, reuse leaked
+          past the three frozen fields -> FAIL.
+
+    Also asserts the no-arg path genuinely recomputes (frozen fields != sentinel),
+    so the test cannot pass by the pipeline going inert.
+    """
+    import smc_radar
+
+    # Real cached H1 slice — drive the live Phase-1 pipeline, not a synthetic OB,
+    # so the guard exercises the exact code the backtest runs.
+    cache_p = _REPO_ROOT / "backtest" / "cache" / "EURUSD_X_1h.parquet"
+    assert cache_p.exists(), f"missing cache for the guard: {cache_p}"
+    df_all = pd.read_parquet(cache_p)
+    if df_all.index.tz is None:
+        df_all.index = df_all.index.tz_localize("UTC")
+
+    # Walk a few windows until one yields at least one OB. A window that never
+    # yields an OB is itself a detection regression, so we fail loud if none do.
+    def _detect(df_slice, known_frozen):
+        walls = smc_radar.compute_pair_walls(df_slice, "EURUSD")
+        res = smc_radar.detect_smc_radar(
+            df_slice, pair_type="forex", events=walls.get("events", []),
+            walls=walls, pair_name="EURUSD", cap_zones=False,
+            known_frozen=known_frozen,
+        )
+        zones = res.get("active_zones", []) if isinstance(res, dict) else []
+        return [z for z in zones if z.get("ob_timestamp")]
+
+    obs_base = []
+    for offset in range(0, len(df_all) - 400, 400):
+        sl = df_all.iloc[offset:offset + 400]
+        obs_base = _detect(sl, None)
+        if obs_base:
+            df_slice = sl
+            break
+    assert obs_base, "no OB produced by any window — detection pipeline is inert"
+
+    # SENTINEL known_frozen: deliberately-wrong frozen values keyed by identity.
+    SENT_V1 = {"exists": False, "_sentinel": "v1"}
+    SENT_V2 = {"_sentinel": "v2"}
+    SENT_BQ = -999.0
+    known_frozen = {
+        ob["ob_timestamp"]: {
+            "sweep_observed": SENT_V1,
+            "sweep_v2":       SENT_V2,
+            "break_quality":  SENT_BQ,
+        }
+        for ob in obs_base
+    }
+    obs_reuse = _detect(df_slice, known_frozen)
+    reuse_by_ts = {o["ob_timestamp"]: o for o in obs_reuse}
+
+    # Non-frozen keys that must be byte-identical across the two runs (same frame).
+    _FROZEN_KEYS = {"sweep_observed", "sweep_v2", "break_quality"}
+    checked = 0
+    for base in obs_base:
+        ts = base["ob_timestamp"]
+        reuse = reuse_by_ts.get(ts)
+        if reuse is None:
+            continue  # OB dropped for a non-reuse reason across identical frames — n/a
+        checked += 1
+
+        # (a) frozen fields REUSED -> carry the sentinel (recompute was skipped).
+        assert reuse["sweep_observed"] == SENT_V1, \
+            f"sweep_observed not reused for {ts}: {reuse['sweep_observed']}"
+        assert reuse["sweep_v2"] == SENT_V2, \
+            f"sweep_v2 not reused for {ts}: {reuse['sweep_v2']}"
+        assert reuse["break_quality"] == SENT_BQ, \
+            f"break_quality not reused for {ts}: {reuse['break_quality']}"
+
+        # (b) every OTHER field byte-identical to the recompute -> reuse did NOT
+        #     leak into any live/geometry field.
+        for k in base:
+            if k in _FROZEN_KEYS or k == "_diag_ref":
+                continue
+            assert reuse.get(k) == base.get(k), (
+                f"LIVE field '{k}' changed under frozen-reuse for {ts}: "
+                f"{base.get(k)!r} -> {reuse.get(k)!r} (reuse leaked past frozen fields)"
+            )
+
+        # no-arg path genuinely recomputes (not accidentally already the sentinel)
+        assert base["break_quality"] != SENT_BQ, \
+            "no-arg recompute produced the sentinel — test is inert"
+
+    assert checked > 0, "no matched OB across the two identical-frame runs to verify"
+    print(f"\n== frozen-reuse equivalence: {checked} OB(s) verified "
+          f"(frozen reused, all live fields byte-identical) ==")
 
 
 def test_exit_lab_atr_recipe():
