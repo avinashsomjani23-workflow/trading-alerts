@@ -773,6 +773,14 @@ def _simulate_single_entry(
     tp2_hit_bar_idx = -1
     mfe_price = entry
     mae_price = entry
+    # OUTCOME-side descriptors (2026-07-26): H1 bars from fill (bar 0) to the bar
+    # that SET the running MFE/MAE extreme. Tracked O(1) inside the SAME walk that
+    # finds mfe_r/mae_r — no second pass. First bar to reach an extreme wins ties
+    # (strict >/< below keeps the earliest). Anchor bar is the fill bar, so both
+    # default to 0 (mfe/mae anchor at `entry` on the fill bar). NEVER a model/entry
+    # feature — pure look-ahead. See bars_to_mfe/bars_to_mae in TRUTH_LEDGER.md.
+    mfe_bar_idx = 0
+    mae_bar_idx = 0
     sl_collision = False
     bars_walked_post_fill = 0
     bars_to_tp1 = -1
@@ -886,22 +894,33 @@ def _simulate_single_entry(
             #     order-ambiguous (before or after the touch) -> no MAE update.
             # None of these bars lets us infer the intra-bar sequence.
             if not sl_hit_in_bar and not is_fill_bar_this_iter:
-                if tp1_hit_in_bar:
-                    mfe_price = max(mfe_price, tp1)
-                else:
-                    mfe_price = max(mfe_price, bar_hi)
-                    mae_price = min(mae_price, bar_lo)
+                # Compare-then-record (not max/min) so bars_to_mfe/mae capture the
+                # bar index of the extreme with strict >/< (first bar wins ties).
+                # Identical numeric result to the old max/min — same bars, same cap.
+                cand_mfe = tp1 if tp1_hit_in_bar else bar_hi
+                if cand_mfe > mfe_price:
+                    mfe_price = cand_mfe
+                    mfe_bar_idx = i - fill_bar_idx
+                if not tp1_hit_in_bar and bar_lo < mae_price:
+                    mae_price = bar_lo
+                    mae_bar_idx = i - fill_bar_idx
         else:
             sl_hit_in_bar = bar_hi >= cur_sl
             tp1_hit_in_bar = bar_lo <= tp1
             tp2_hit_in_bar = (tp2 is not None) and (bar_lo <= tp2)
             be_reached_in_bar = bar_lo <= be_trigger + be_eps
             if not sl_hit_in_bar and not is_fill_bar_this_iter:
-                if tp1_hit_in_bar:
-                    mfe_price = min(mfe_price, tp1)
-                else:
-                    mfe_price = min(mfe_price, bar_lo)
-                    mae_price = max(mae_price, bar_hi)
+                # SHORT: favourable = lower price (MFE), adverse = higher (MAE).
+                # Compare-then-record (not min/max) so bars_to_mfe/mae capture the
+                # extreme's bar index; strict </> keeps the first bar on ties.
+                # Numerically identical to the old min/max — same bars, same cap.
+                cand_mfe = tp1 if tp1_hit_in_bar else bar_lo
+                if cand_mfe < mfe_price:
+                    mfe_price = cand_mfe
+                    mfe_bar_idx = i - fill_bar_idx
+                if not tp1_hit_in_bar and bar_hi > mae_price:
+                    mae_price = bar_hi
+                    mae_bar_idx = i - fill_bar_idx
 
         # Fill-bar rule (2026-05-25):
         # On the bar where the limit just filled, we cannot infer intra-bar
@@ -976,7 +995,8 @@ def _simulate_single_entry(
             fill_ts=None, exit_ts=None, exit_reason="never_filled",
             exit_price=None,
             r_realised=0.0, r_if_exit_tp1=0.0, r_if_exit_tp2=0.0,
-            mfe_r=0.0, mae_r=0.0, bars_to_exit=0,
+            mfe_r=0.0, mae_r=0.0, bars_to_mfe=None, bars_to_mae=None,
+            bars_to_exit=0,
             bars_to_tp1=-1, bars_to_tp2=-1,
             sl_collision=False, risk_usd=risk_usd,
             sl_bar_was_sweep=None, sl_swept_then_tp1=None, ob_to_fill_hours=None,
@@ -1000,6 +1020,19 @@ def _simulate_single_entry(
         r_realised = (entry - exit_price) / r_distance
         mfe_r = (entry - mfe_price) / r_distance
         mae_r = -(mae_price - entry) / r_distance
+
+    # bars_to_mfe / bars_to_mae: bar index (fill = 0) of the running extreme,
+    # captured O(1) in the walk above. If a filled trade had NO post-fill bar
+    # (filled on the last window bar -> window_end with nothing walked), the
+    # extremes never moved off the fill anchor and the index is meaningless ->
+    # emit NULL, never 0 (spec 2026-07-26). bars_walked_post_fill is the last
+    # i - fill_bar_idx reached; 0 means no forward bar contributed.
+    if bars_walked_post_fill > 0:
+        bars_to_mfe = mfe_bar_idx
+        bars_to_mae = mae_bar_idx
+    else:
+        bars_to_mfe = None
+        bars_to_mae = None
 
     # ── Reference columns (study only — never traded). Computed from an
     # independent legacy walk (original SL, TP1->BE->TP2 ride) so they answer
@@ -1272,6 +1305,7 @@ def _simulate_single_entry(
         r_if_exit_tp1=r_if_exit_tp1,
         r_if_exit_tp2=r_if_exit_tp2,
         mfe_r=round(mfe_r, 3), mae_r=round(mae_r, 3),
+        bars_to_mfe=bars_to_mfe, bars_to_mae=bars_to_mae,
         bars_to_exit=bars_to_exit,
         bars_to_tp1=tp1_hit_bar_idx,
         bars_to_tp2=tp2_hit_bar_idx,
@@ -1395,6 +1429,7 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                fill_ts, exit_ts, exit_reason, exit_price,
                r_realised, r_if_exit_tp1, r_if_exit_tp2,
                mfe_r, mae_r, bars_to_exit, bars_to_tp1, bars_to_tp2,
+               bars_to_mfe=None, bars_to_mae=None,
                sl_collision, risk_usd, sl_raw=None,
                entry_raw=None, tp1_raw=None, tp2_raw=None,
                sl_bar_was_sweep=None, sl_swept_then_tp1=None,
@@ -1549,6 +1584,14 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         atr_at_fill = round(float(_atr_fill), 6) if _atr_fill else None
     else:
         atr_at_fill = None
+
+    # Era-stable volatility-regime read at the FILL bar (2026-07-25). fill-bar
+    # ATR(14) vs its OWN trailing-90-day distribution: percentile rank (0-100,
+    # robust) + ratio-to-mean (magnitude). CAUSAL (bars strictly BEFORE fill,
+    # mirrors exit_lab._atr_at_fill). Both None on never_filled / <30 calendar
+    # days of prior history. Precomputed series -> O(1) lookup. See the
+    # _atr_regime_at_fill section for the full contract. Observe-only.
+    _atr_regime = _atr_regime_at_fill(df_h1, fill_ts)
 
     # ── Derived columns (2026-07-08): encoded in CODE (were previously pasted into
     # the CSV from a sheet and got column-shift corrupted). All three are computed
@@ -1720,6 +1763,14 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "pnl_usd":       pnl_usd,
         "mfe_r":         mfe_r,
         "mae_r":         mae_r,
+        # OUTCOME-side descriptors (2026-07-26; NEVER entry/model features — pure
+        # look-ahead). H1 bars from fill (bar 0) to the bar that SET mfe_r / mae_r,
+        # captured O(1) inside the same walk. First bar to reach the extreme wins
+        # ties. Loser autopsy: separates "died in 3 bars" from "bled for 40" and
+        # powers the time-stop question. NULL (not 0) when a filled trade had no
+        # post-fill bar. never_filled rows carry None.
+        "bars_to_mfe":   bars_to_mfe,
+        "bars_to_mae":   bars_to_mae,
         # Sweep diagnostics (SL exits only; None otherwise).
         #   sl_bar_was_sweep  : stop candle wicked the stop but closed back on our
         #                       side (SMC grab-then-reject) vs a clean close-through.
@@ -1817,6 +1868,11 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # ATR at the fill bar (fresh, point-in-time) — entry-regime vol vs the
         # formation-vol atr_at_ob. None on never_filled / short slice.
         "atr_at_fill":       atr_at_fill,
+        # Era-stable fill-bar volatility regime (2026-07-25): fill-bar ATR(14)
+        # ranked (pct) and ratio'd against its own trailing-90-day distribution
+        # (bars strictly before fill). None on never_filled / <30d history.
+        "atr_regime_pct_at_fill":   _atr_regime["atr_regime_pct_at_fill"],
+        "atr_regime_ratio_at_fill": _atr_regime["atr_regime_ratio_at_fill"],
         # Derived-in-code columns (2026-07-08). Replaces the previously PASTED
         # sheet columns (sl_distance_atr / r_capture_ratio / trend_pd_agree) that
         # were CSV-corrupted. r_capture_ratio is OUTCOME-time (exit track only).
@@ -2174,3 +2230,117 @@ def _approach_features_at_fill(df_h1, fill_ts, ob):
         direction=ob.get("direction"),
         atr=ob.get("h1_atr"),
     )
+
+
+# ── ATR VOLATILITY-REGIME AT FILL (2026-07-25) ──────────────────────────────
+# atr_regime_pct_at_fill / atr_regime_ratio_at_fill: an ERA-STABLE volatility
+# read. Raw ATR is era-dependent (a "normal" 2019 ATR dwarfs a "normal" 2008
+# one), so a raw number means different things in different years. These two
+# express the fill-bar ATR RELATIVE to that pair's own recent behaviour, so the
+# read means the same thing in 2008 and 2019:
+#   pct   = percentile rank (0-100) of the fill-bar ATR(14) within the SAME
+#           ATR(14) sampled over the trailing 90 CALENDAR days before the fill.
+#           Robust to freak spikes — the PRIMARY read.
+#   ratio = fill-bar ATR(14) / mean of that 90-day ATR(14) distribution. Keeps
+#           magnitude; logged alongside so analysis can pick which separates
+#           winners better.
+#
+# CAUSAL — the fill bar is still FORMING when a live order fills, so only bars
+# STRICTLY BEFORE fill_ts are closed and known. Both the fill-bar ATR and the
+# 90-day distribution obey `< fill_ts` (strict), mirroring
+# backtest/diagnostics/exit_lab.py _atr_at_fill (the same look-ahead ban).
+#
+# ATR = smc_detector.compute_atr's definition (simple mean of the last `period`
+# true ranges, TR = max(H-L, |H-prevClose|, |L-prevClose|)) — ONE ATR
+# definition system-wide. Here it is vectorized into a full rolling series so
+# the read is O(1) per trade, not recomputed from scratch each row.
+#
+# BASELINE COMPOSITION: the 90-day baseline is EVERY H1 candle the feed has in
+# the trailing 90 calendar days (continuous rolling window, no time-of-day
+# filtering, no resampling). Weekend gaps are simply absent, not filled. This is
+# the simple whole-window average — NOT bucketed by session or hour-of-day.
+#
+# NULL POLICY: fewer than 30 calendar days of H1 history strictly before the
+# fill -> BOTH None (never a faked value). Also None when fill_ts is None
+# (never_filled) or the fill-bar ATR itself is undefined (<15 prior bars).
+#
+# PERFORMANCE: the rolling ATR series is built ONCE per pair frame and memoized
+# on the frame's content fingerprint (first_ts, last_ts, len) — the same
+# frame object is reused across every alert on that pair within a run, so the
+# series is computed once per pair per run and each trade does one lookup.
+_ATR_REGIME_MIN_DAYS = 30           # min calendar-days of prior history -> else null
+_ATR_REGIME_WINDOW_DAYS = 90        # trailing distribution window
+_ATR_REGIME_SERIES_CACHE: Dict[Any, pd.Series] = {}
+
+
+def _atr_regime_series(df_h1: pd.DataFrame, period: int = 14) -> Optional[pd.Series]:
+    """CAUSAL rolling ATR(period) series aligned to bar timestamps.
+
+    The value at bar t is the ATR computed on the bars UP TO AND INCLUDING t
+    (mean of the 14 true ranges ending at t) — identical to what
+    smc_detector.compute_atr(df.loc[:t]) returns, but vectorized. Bars before
+    enough history (< period+1 bars, i.e. < period true ranges) are NaN.
+
+    Memoized on the frame's content fingerprint so it is built once per pair
+    per run. Returns None if the frame is too short for any ATR at all.
+    """
+    if df_h1 is None or len(df_h1) < period + 1:
+        return None
+    key = (df_h1.index[0], df_h1.index[-1], len(df_h1), period)
+    cached = _ATR_REGIME_SERIES_CACHE.get(key)
+    if cached is not None:
+        return cached
+    high = df_h1["High"].astype(float)
+    low = df_h1["Low"].astype(float)
+    prev_close = df_h1["Close"].astype(float).shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    # tr.iloc[0] has no prev close -> NaN, matching compute_atr skipping bar 0.
+    # min_periods=period so the first `period` closed TRs are required (== the
+    # period+1 bars compute_atr demands); earlier bars stay NaN (undefined ATR).
+    atr = tr.rolling(window=period, min_periods=period).mean()
+    if len(_ATR_REGIME_SERIES_CACHE) > 64:   # a run touches <=~11 pair frames
+        _ATR_REGIME_SERIES_CACHE.clear()
+    _ATR_REGIME_SERIES_CACHE[key] = atr
+    return atr
+
+
+def _atr_regime_at_fill(df_h1: pd.DataFrame, fill_ts, period: int = 14) -> Dict[str, Any]:
+    """{'atr_regime_pct_at_fill', 'atr_regime_ratio_at_fill'} for one trade.
+
+    O(1)-ish: one lookup into the pre-built causal ATR series. See the section
+    header above for the full contract (causality, ATR definition, null policy,
+    performance). Both None on: never_filled, <period+1 prior bars (fill-bar ATR
+    undefined), or < _ATR_REGIME_MIN_DAYS calendar-days of history before fill.
+    """
+    none = {"atr_regime_pct_at_fill": None, "atr_regime_ratio_at_fill": None}
+    if fill_ts is None or df_h1 is None:
+        return none
+    series = _atr_regime_series(df_h1, period)
+    if series is None:
+        return none
+    fill_ts = pd.Timestamp(fill_ts)
+    if fill_ts.tzinfo is None and series.index.tz is not None:
+        fill_ts = fill_ts.tz_localize("UTC")
+    # CAUSAL cutoff: only bars STRICTLY BEFORE the still-forming fill bar.
+    prior = series.loc[series.index < fill_ts].dropna()
+    if prior.empty:
+        return none
+    # Need >= _ATR_REGIME_MIN_DAYS calendar-days of history before the fill,
+    # measured on the ATR series' own defined span (first non-NaN .. last prior
+    # bar). Too thin a history -> null, never a faked regime read.
+    span_days = (prior.index[-1] - prior.index[0]).total_seconds() / 86400.0
+    if span_days < _ATR_REGIME_MIN_DAYS:
+        return none
+    fill_atr = float(prior.iloc[-1])          # ATR known at the fill bar
+    window_start = fill_ts - pd.Timedelta(days=_ATR_REGIME_WINDOW_DAYS)
+    dist = prior.loc[prior.index >= window_start]
+    if dist.empty:
+        return none
+    pct = round(float((dist <= fill_atr).sum()) / len(dist) * 100.0, 2)
+    mean = float(dist.mean())
+    ratio = round(fill_atr / mean, 4) if mean > 0 else None
+    return {"atr_regime_pct_at_fill": pct, "atr_regime_ratio_at_fill": ratio}

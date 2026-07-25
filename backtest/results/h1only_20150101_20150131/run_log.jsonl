@@ -40,3 +40,5 @@
 {"ts": "2026-07-25T18:15:19.203710+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "EURUSD", "trades": 40, "news_blocked": 0, "ist_blocked": 6, "killzone_dropped_alerts": 23}
 {"ts": "2026-07-25T18:15:25.142512+00:00", "level": "info", "event": "report_written", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20150101_20150131", "total_alerts": 61, "total_trades": 40}
 {"ts": "2026-07-25T18:15:25.145640+00:00", "level": "info", "event": "exit_lab_sink_persisted", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20150101_20150131\\exit_lab_sink.jsonl", "rows": 284}
+{"ts": "2026-07-25T18:15:25.770680+00:00", "level": "info", "event": "logs_committed_local_only", "run_id": "h1only_20150101_20150131", "sha": "2d36ca54"}
+{"ts": "2026-07-25T18:15:25.771121+00:00", "level": "info", "event": "run_end", "wall_s": 51.5, "active_s": 51.5, "idle_s": 0.0, "max_gap_s": 41.4, "wall_min": 0.86, "active_min": 0.86}

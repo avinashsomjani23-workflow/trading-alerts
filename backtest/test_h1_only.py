@@ -1318,6 +1318,92 @@ def test_atr_at_fill_none_when_never_filled():
     assert ok, "atr_at_fill never_filled guard failed (see output above)"
 
 
+def _flat_close_range_df(ranges, start="2026-01-01 00:00"):
+    """Build a UTC H1 OHLC frame with a FLAT close (=100.0) and a chosen per-bar
+    TRUE RANGE. Close constant => prevClose == 100 for every bar; with
+    High=100+r/2, Low=100-r/2 the true range max(H-L, |H-prevC|, |L-prevC|)
+    is exactly r (H-L=r, the two gap terms = r/2). So the ATR(14) series is a
+    plain rolling mean of the `ranges` list — hand-computable. One bar/hour."""
+    idx = pd.date_range(pd.Timestamp(start, tz="UTC"), periods=len(ranges), freq="h")
+    close = 100.0
+    df = pd.DataFrame({
+        "Open":  [close] * len(ranges),
+        "High":  [close + r / 2.0 for r in ranges],
+        "Low":   [close - r / 2.0 for r in ranges],
+        "Close": [close] * len(ranges),
+    }, index=idx)
+    return df, idx
+
+
+def test_atr_regime_at_fill_handcomputed():
+    """OUT-OF-BAND guard for atr_regime_pct_at_fill + atr_regime_ratio_at_fill.
+
+    Drives h1_only_simulator._atr_regime_at_fill directly on a synthetic series
+    whose ATR(14), percentile AND ratio are hand-computable — nothing here
+    touches the live trade path.
+
+    Construction (see _flat_close_range_df): TR == the chosen per-bar range, one
+    bar per hour continuously (so N hours == N/24 calendar days of span).
+      - First 1440 bars (60 days): range 1.0  -> ATR(14) == 1.0 from bar 14 on.
+      - Next  120 bars ( 5 days):  range 3.0  -> ATR(14) == 3.0 once 14 all-3.0
+        TRs have accumulated (bar 1440+13 = 1453 onward).
+    Total 1560 bars; the fill is at bar 1560 (one bar after the last), so the
+    CAUSAL prior series is bars 0..1559 and the fill-bar ATR == 3.0. The prior
+    span is 1559h ~= 65 days (>= 30) so the null gate passes.
+
+    The 90-day (2160h) window covers the whole 1560h history, so the
+    distribution is every DEFINED ATR value (bars 14..1559). fill_atr == 3.0 is
+    the window MAX, so (dist <= 3.0) is ALL values -> pct == 100.0. ratio =
+    3.0 / mean(dist). We recompute pct + ratio the same way and assert equality.
+    """
+    print("\n== test_atr_regime_at_fill_handcomputed ==")
+    # 1560 bars (indices 0..1559): 1440 at range 1.0 (60 days) then 120 at 3.0
+    # (5 days). Fill at bar 1560; the last prior bar (1559) is in the 3.0 block
+    # -> fill-bar ATR == 3.0, and the ~65-day prior span clears the 30-day gate.
+    ranges = [1.0] * 1440 + [3.0] * 120
+    df, idx = _flat_close_range_df(ranges)
+    fill_ts = idx[-1] + pd.Timedelta(hours=1)
+
+    out = h1_only_simulator._atr_regime_at_fill(df, fill_ts)
+    pct = out["atr_regime_pct_at_fill"]
+    ratio = out["atr_regime_ratio_at_fill"]
+    ok = check(pct is not None and ratio is not None,
+               f"both columns populated (pct={pct}, ratio={ratio})")
+
+    # Recompute the causal distribution EXACTLY as the code should: rolling
+    # mean(14) of TR, bars strictly before fill, dropna, 90-day window.
+    tr = pd.Series(ranges, index=idx)           # TR == range by construction
+    atr = tr.rolling(14, min_periods=14).mean()
+    prior = atr.loc[atr.index < fill_ts].dropna()
+    fill_atr = float(prior.iloc[-1])
+    ok &= check(abs(fill_atr - 3.0) < 1e-9,
+                f"fill-bar ATR == 3.0 (got {fill_atr})")
+    dist = prior.loc[prior.index >= fill_ts - pd.Timedelta(days=90)]
+    exp_pct = round(float((dist <= fill_atr).sum()) / len(dist) * 100.0, 2)
+    exp_ratio = round(fill_atr / float(dist.mean()), 4)
+    ok &= check(pct == 100.0 and pct == exp_pct,
+                f"pct == 100.0 (fill ATR is the window max) (got {pct}, exp {exp_pct})")
+    ok &= check(ratio == exp_ratio,
+                f"ratio == fill_atr/mean == {exp_ratio} (got {ratio})")
+
+    # NULL POLICY: <30 calendar-days of prior history -> both None. 40 bars = 40h
+    # << 30 days, so a fill just after a short frame must yield None (never faked).
+    short_ranges = [1.0] * 40
+    sdf, sidx = _flat_close_range_df(short_ranges)
+    short_out = h1_only_simulator._atr_regime_at_fill(
+        sdf, sidx[-1] + pd.Timedelta(hours=1))
+    ok &= check(short_out["atr_regime_pct_at_fill"] is None
+                and short_out["atr_regime_ratio_at_fill"] is None,
+                "<30 days of history -> both None (null policy)")
+
+    # never_filled -> both None (mirrors atr_at_fill).
+    nf = h1_only_simulator._atr_regime_at_fill(df, None)
+    ok &= check(nf["atr_regime_pct_at_fill"] is None
+                and nf["atr_regime_ratio_at_fill"] is None,
+                "fill_ts None -> both None")
+    assert ok, "atr_regime_at_fill hand-computed guard failed (see output above)"
+
+
 def _chop_day_df(bars, day_utc_start="2026-04-01 21:00"):
     """Build a small UTC-indexed H1 OHLC frame from (H,L,C) tuples, one bar/hour
     starting at day_utc_start (a server-day start = prev-day 21:00 UTC). Open is
@@ -1974,6 +2060,91 @@ def test_exit_engine_triple_leg_recipe():
     assert ok, "exit-engine triple-leg checks failed (see output above)"
 
 
+def test_bars_to_mfe_mae_hand_path():
+    """bars_to_mfe / bars_to_mae (2026-07-26): H1 bars from fill (bar 0) to the bar
+    that SET mfe_r / mae_r, captured O(1) inside the SAME walk that finds the
+    excursions. OUTCOME-side descriptors — NEVER model/entry features.
+
+    Guard drives the LIVE sim (simulate_h1_only_dual) on a hand-built future path,
+    then verifies the two answers against the recorded excursions independently —
+    no re-derivation of the walk.
+
+    Hand path (LONG, fill on bar 0; earlier fill-bar high is pre-fill, excluded):
+      post-fill bars    high     low
+        bar 1          1.2395   1.2372   <- LOWEST low  => MAE bar (bars_to_mae=1)
+        bar 2          1.2394   1.2375
+        bar 3          1.2405   1.2378   <- HIGHEST high => MFE bar (bars_to_mfe=3)
+    First bar to reach an extreme wins ties (strict >/<); here each extreme is
+    unique, so the answers are unambiguous: bars_to_mfe=3, bars_to_mae=1.
+    """
+    print("\n== test_bars_to_mfe_mae_hand_path ==")
+    ok = True
+
+    pc = _synth_pair_conf()
+    df = _synth_h1_df(200).copy()
+    ts_idx = -8                       # alert 8 bars from the end -> 8 future bars I own
+    ob = _synth_ob_bullish(df, ts_idx=ts_idx)
+    # Overwrite the future window (alert bar onward) with the hand path above.
+    # bar0 fills (low <= entry_raw); its high 1.2400 is PRE-fill and must not count.
+    hand = {
+        "Open":  [1.2389, 1.2385, 1.2385, 1.2390, 1.2390, 1.2390, 1.2390, 1.2390],
+        "High":  [1.2400, 1.2395, 1.2394, 1.2405, 1.2392, 1.2392, 1.2392, 1.2392],
+        "Low":   [1.2380, 1.2372, 1.2375, 1.2378, 1.2385, 1.2385, 1.2385, 1.2385],
+        "Close": [1.2388, 1.2390, 1.2390, 1.2390, 1.2390, 1.2390, 1.2390, 1.2390],
+    }
+    for col, arr in hand.items():
+        df.iloc[ts_idx:, df.columns.get_loc(col)] = arr
+    alert = {
+        "pair": "TESTPAIR", "ts": df.index[ts_idx],
+        "current_price": ob["proximal_line"],
+        "h1_atr": ob.get("h1_atr", 0.0010), "ob": ob,
+    }
+    rows = h1_only_simulator.simulate_h1_only_dual(alert, pc, df, risk_usd=250.0)
+    assert rows, "sim returned no rows"
+    r = rows[0]
+
+    ok &= check("bars_to_mfe" in r and "bars_to_mae" in r,
+                "both columns present in the row")
+    ok &= check(r.get("bars_to_mfe") == 3,
+                f"bars_to_mfe == 3 (highest high on bar 3) (got {r.get('bars_to_mfe')})")
+    ok &= check(r.get("bars_to_mae") == 1,
+                f"bars_to_mae == 1 (lowest low on bar 1) (got {r.get('bars_to_mae')})")
+
+    # Independent cross-check (no walk re-derivation): the reported bar index must
+    # land on the earliest post-fill bar whose high/low realises the recorded
+    # mfe_r/mae_r extreme. Rebuild the post-fill slice from the SAME frame.
+    entry = r["entry"]
+    fut = df.loc[pd.Timestamp(r["fill_ts"]):pd.Timestamp(r["exit_ts"])]
+    highs = [float(b["High"]) for _, b in fut.iterrows()]
+    lows = [float(b["Low"]) for _, b in fut.iterrows()]
+    # Post-fill only (drop bar 0 = fill bar; its extremes are excluded by the sim).
+    # MAE = the lowest post-fill low; its earliest index is bars_to_mae.
+    mae_idx = min(range(1, len(lows)), key=lambda i: (lows[i], i))
+    ok &= check(r.get("bars_to_mae") == mae_idx,
+                f"bars_to_mae indexes the earliest lowest-low bar (got "
+                f"{r.get('bars_to_mae')} vs {mae_idx})")
+    ok &= check(lows[r["bars_to_mae"]] <= entry,
+                "MAE bar low is at/below entry (adverse)")
+
+    # --- NULL, never 0: a filled trade with NO post-fill bar. Alert on the LAST
+    # bar so the only fill IS the last bar; the walk breaks with nothing ahead.
+    df2 = _synth_h1_df(200).copy()
+    ob2 = _synth_ob_bullish(df2, ts_idx=-1)
+    df2.iloc[-1, df2.columns.get_loc("Low")] = ob2["proximal_line"] - 0.0010  # force fill
+    alert2 = {
+        "pair": "TESTPAIR", "ts": df2.index[-1],
+        "current_price": ob2["proximal_line"],
+        "h1_atr": ob2.get("h1_atr", 0.0010), "ob": ob2,
+    }
+    r2 = h1_only_simulator.simulate_h1_only_dual(alert2, pc, df2, risk_usd=250.0)[0]
+    ok &= check(r2.get("fill_ts") is not None, "no-post-fill case DID fill")
+    ok &= check(r2.get("bars_to_mfe") is None and r2.get("bars_to_mae") is None,
+                f"no post-fill bar -> NULL, never 0 (got "
+                f"{r2.get('bars_to_mfe')}, {r2.get('bars_to_mae')})")
+
+    assert ok, "bars_to_mfe/mae checks failed (see output above)"
+
+
 def main():
     # Robust to BOTH styles: assert-based tests (return None on pass, raise on
     # fail — the pytest-visible ones) and legacy bool-returning tests. A raised
@@ -2011,6 +2182,8 @@ def main():
         ("test_atr_at_fill_point_in_time", test_atr_at_fill_point_in_time),
         ("test_atr_at_fill_none_when_never_filled",
          test_atr_at_fill_none_when_never_filled),
+        ("test_atr_regime_at_fill_handcomputed",
+         test_atr_regime_at_fill_handcomputed),
         ("test_exit_lab_atr_recipe",    test_exit_lab_atr_recipe),
         ("test_choppiness_index_math",  test_choppiness_index_math),
         ("test_choppiness_index_prev_day_fallback",
@@ -2043,6 +2216,8 @@ def main():
          test_triple_mode_1to1_fallback_has_no_wick_or_nextpool),
         ("test_exit_engine_triple_leg_recipe",
          test_exit_engine_triple_leg_recipe),
+        ("test_bars_to_mfe_mae_hand_path",
+         test_bars_to_mfe_mae_hand_path),
         ("test_frozen_reuse_backtest_only_equivalence",
          test_frozen_reuse_backtest_only_equivalence),
     ]

@@ -25,6 +25,22 @@ Any analysis, finding, or column question uses THIS file and no other:
 > RETRACTED — break_dist_atr == break_close_atr, owner-confirmed; no new column, stays
 > 108 unless something else is added.)
 
+> **PENDING SCHEMA (+2 cols) as of 2026-07-25.** Two new BACKTEST-ONLY fill-time
+> columns were added to `_build_row` — `atr_regime_pct_at_fill` and
+> `atr_regime_ratio_at_fill` (era-stable volatility-regime read; see TRUTH_LEDGER.md).
+> They are NOT in THIS frozen CSV. The NEXT fresh canonical run is the first to
+> emit them: when it lands, update the shape line above to the new count in the
+> SAME commit that produces it. (The two columns land next to `atr_at_fill`.)
+
+> **PENDING SCHEMA (+2 more cols) as of 2026-07-26.** Two new BACKTEST-ONLY
+> OUTCOME-time columns were added to `_build_row` — `bars_to_mfe` and `bars_to_mae`
+> (H1 bars from fill to the MFE/MAE bar; loser autopsy / time-stop input; see
+> TRUTH_LEDGER.md). They are NOT in THIS frozen CSV. **NEVER a model/entry feature —
+> pure look-ahead** (walled in `edge_lab.OUTCOME_TIME_FEATURES`). Combined with the
+> +2 atr_regime note above, the next fresh canonical run emits **113 → 117 columns**:
+> update the shape line and the header-count rule below to 117 in the SAME commit
+> that produces it. (The two columns land next to `bars_to_exit`.)
+
 ## Rules (non-negotiable)
 
 - NEVER `glob` for `trades.csv` and use whatever turns up. There is exactly one truth file — this one.

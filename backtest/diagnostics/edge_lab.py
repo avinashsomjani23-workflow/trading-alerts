@@ -131,6 +131,9 @@ OUTCOME_TIME_FEATURES = {
     "sl_recovered_to_entry",
     # bars-to-* are all measured after the trade runs → outcome-time
     "bars_to_exit", "bars_to_tp1", "bars_to_tp2",
+    # bars from fill to the MFE/MAE bar (2026-07-26 loser autopsy). Pure
+    # look-ahead — descriptor of how the trade ran, never an entry input.
+    "bars_to_mfe", "bars_to_mae",
     "exit_reason", "exit_price", "exit_ts",
     "r_realised", "r_if_exit_tp1", "r_if_exit_tp2", "pnl_usd",
 }

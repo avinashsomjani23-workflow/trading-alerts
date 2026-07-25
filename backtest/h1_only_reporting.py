@@ -1324,6 +1324,8 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "sl_recovered_to_entry", "sl_distance_atr",
         "sl_dist_atr_at_alert", "tp_dist_atr_at_alert",
         "bars_to_exit", "bars_to_tp1", "bars_to_tp2",
+        # OUTCOME-side (NEVER entry features): bars from fill to the MFE/MAE bar.
+        "bars_to_mfe", "bars_to_mae",
         "ob_to_fill_hours", "bars_break_to_pullback",
         "ob_age_h1_bars", "pd_zone",
         # Reversal book: exact CHoCH-origin-in-extreme flag (raw) + derived bool.
