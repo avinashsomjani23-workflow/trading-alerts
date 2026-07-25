@@ -700,4 +700,14 @@
 		<previous><![CDATA[580K]]></previous>
 		<url><![CDATA[https://www.forexfactory.com/calendar/231-us-new-home-sales]]></url>
 	</event>
+	<event>
+		<title>President Trump Speaks</title>
+		<country>USD</country>
+		<date><![CDATA[07-25-2026]]></date>
+		<time><![CDATA[12:55am]]></time>
+		<impact><![CDATA[Medium]]></impact>
+		<forecast />
+		<previous />
+		<url><![CDATA[https://www.forexfactory.com/calendar/645-us-president-trump-speaks]]></url>
+	</event>
 </weeklyevents>
