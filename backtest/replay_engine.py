@@ -293,8 +293,8 @@ def replay_pair(
         # downstream — no consumer reads them today). Pure I/O reduction, no
         # logic change to the live function.
         # SPEED (backtest-only): reuse FORMATION-FROZEN birth facts for OBs we
-        # already carry. detect_smc_radar rebuilds every OB from scratch each bar,
-        # but the merge below (existing_by_ts, ~L427) keeps ONLY fvg from a re-
+        # already carry. detect_smc_radar re-derives OBs from the H1 slice each
+        # bar; the merge below (existing_by_ts, ~L427) keeps ONLY fvg from a re-
         # surfaced OB and discards its recomputed sweep_v2 / break_quality. So
         # handing detection the stamped values lets it skip those two heavy
         # recomputes with ZERO effect on any consumed value — byte-identical by
