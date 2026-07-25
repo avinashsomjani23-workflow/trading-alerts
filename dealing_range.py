@@ -344,13 +344,24 @@ def detect_swings(df, lookback: int = SWING_LOOKBACK,
     Find confirmed swing highs and swing lows over the entire df.
 
     A candle at idx i is:
-      - a swing high if H[i] is STRICTLY GREATER than every other high in
-        the window [i-lookback, i+right_lookback].
-      - a swing low  if L[i] is STRICTLY LESS than every other low in
-        the window [i-lookback, i+right_lookback].
+      - a swing high if H[i] is STRICTLY GREATER than every high to its LEFT
+        [i-lookback, i-1] AND GREATER-OR-EQUAL to every high to its RIGHT
+        [i+1, i+right_lookback].
+      - a swing low  if L[i] is STRICTLY LESS than every low to its LEFT AND
+        LESS-OR-EQUAL to every low to its RIGHT.
 
-    Strict comparison: equal highs / equal lows do NOT register as swings.
-    A flat top / flat bottom across the window correctly produces no swing.
+    Tie handling (asymmetric, deliberate): equal highs / equal lows DO register,
+    but only the FIRST bar of a flat top / flat bottom wins. Strict `>` on the
+    left admits the first bar of the tie (its left neighbours are lower) and
+    rejects every LATER equal bar (their left neighbour equals them); `>=` on the
+    right lets that first bar clear a right side that ties it. A flat top of N
+    equal bars therefore yields EXACTLY ONE swing (the first), not N and not zero.
+    This was `>`/`<` on both sides until 2026-07-24: equal-high/equal-low pivots
+    (common on the live TwelveData feed, ~5x more than MT5, and real at round
+    numbers) were silently dropped, so a genuine structure high that happened to
+    tie an adjacent bar never formed a pivot and no BOS/CHoCH could confirm off it.
+    (Note: in a rising staircase the "last bar" has no strict-greater right side
+    to clear, so first-wins is the only rule that surfaces such a pivot at all.)
 
     right_lookback (default = lookback): how many bars to the RIGHT a pivot
     must dominate to be detected. The left side stays = lookback (the real
@@ -377,14 +388,15 @@ def detect_swings(df, lookback: int = SWING_LOOKBACK,
     L = df['Low'].values.astype(float)
     n = len(df)
 
-    # --- Vectorized geometry (PERF; byte-identical to the old per-bar loop) ---
-    # A candle i is a swing high iff H[i] is STRICTLY greater than every
-    # neighbour in [i-lookback, i+rb] (excluding i); swing low symmetric. We
-    # build the per-index neighbour max/min with `lookback`+`rb` shifted
-    # numpy comparisons (both are tiny: 1 or 3) instead of a Python max()/min()
-    # over slices on every bar. The emit window [lookback, n-rb) and the STRICT
-    # `>` / `<` comparison are preserved exactly. Verified identical (incl. the
-    # right_lookback=1 early pass) across EURUSD / NZDUSD / GOLD up to 80k bars.
+    # --- Vectorized geometry (PERF) ---
+    # A candle i is a swing high iff H[i] is STRICTLY greater than every high to
+    # its LEFT [i-lookback, i-1] AND GREATER-OR-EQUAL to every high to its RIGHT
+    # [i+1, i+rb]; swing low symmetric (strict left, `<=` right). The left/right
+    # neighbour max/min are kept SEPARATE (not merged) precisely so the two sides
+    # can use different comparisons — that asymmetry is what makes the FIRST bar of
+    # a flat top the sole pivot (see docstring). We build them with `lookback`+`rb`
+    # shifted numpy comparisons (both tiny: 1 or 3) instead of a Python max()/min()
+    # over slices on every bar. The emit window is [lookback, n-rb).
     neg_inf = -_np.inf
     pos_inf = _np.inf
     left_max_h = _np.full(n, neg_inf); right_max_h = _np.full(n, neg_inf)
@@ -395,12 +407,11 @@ def detect_swings(df, lookback: int = SWING_LOOKBACK,
     for d in range(1, rb + 1):
         right_max_h[:-d] = _np.maximum(right_max_h[:-d], H[d:])
         right_min_l[:-d] = _np.minimum(right_min_l[:-d], L[d:])
-    neigh_max_h = _np.maximum(left_max_h, right_max_h)
-    neigh_min_l = _np.minimum(left_min_l, right_min_l)
     valid = _np.zeros(n, dtype=bool)
     valid[lookback: n - rb] = True
-    is_high = (H > neigh_max_h) & valid
-    is_low  = (L < neigh_min_l) & valid
+    # Strict LEFT, tie-tolerant RIGHT: the first bar of a flat top/bottom wins.
+    is_high = (H > left_max_h) & (H >= right_max_h) & valid
+    is_low  = (L < left_min_l) & (L <= right_min_l) & valid
     hi_idx = _np.nonzero(is_high)[0]
     lo_idx = _np.nonzero(is_low)[0]
 

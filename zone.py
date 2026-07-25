@@ -24,7 +24,7 @@ Contract (LOCKED, behaviour-neutral):
 - Phase 2, Phase 3 and the backtest read zones as PLAIN DICTS straight from
   JSON. They never see a Zone object. Only smc_radar (the sole slate writer)
   uses this class. So this change is contained to one module.
-- Nested snapshots (fvg, sweep_observed, dealing_range, break_quality) are
+- Nested snapshots (fvg, sweep_v2, dealing_range, break_quality) are
   carried THROUGH unchanged — Zone does not reshape them; it owns the top-level
   field list and the create/refresh rules only.
 
@@ -49,16 +49,15 @@ def _default_break_quality() -> Dict[str, Any]:
     return {"tier": "marginal"}
 
 
-def _default_sweep() -> Dict[str, Any]:
-    return {"exists": False}
-
-
 def _default_dealing_range() -> Dict[str, Any]:
     return {"valid": False}
 
 
 # The on-disk field order (verified against fresh_to_slate_zone, smc_radar.py).
 # to_dict() emits in THIS order so active_obs.json stays byte-identical.
+# Field freeze/live/re-read classification: see the "OB FIELD FREEZE / LIVE /
+# RE-READ CLASSIFICATION" section in TRUTH_LEDGER.md (source of truth = Zone.refresh
+# below; kept honest by tests/test_zone_freeze_classification.py).
 _FIELD_ORDER = [
     "zone_id", "status", "drop_reason",
     "first_seen_iso", "first_seen_label", "last_seen_iso", "last_seen_label",
@@ -69,7 +68,7 @@ _FIELD_ORDER = [
     "bos_idx", "ob_idx", "impulse_start_idx", "impulse_start_price",
     "bos_swing_price", "bos_sequence_count", "break_quality", "touches",
     "status_label", "h1_atr", "current_price_at_scan",
-    "distance_to_proximal_pips", "fvg", "sweep_observed", "dealing_range",
+    "distance_to_proximal_pips", "fvg", "dealing_range",
     "role",
     # Appended 2026-07-18 (sweep v2). Appending keeps legacy on-disk zones
     # byte-stable: they gain the key as an additive null on their next write
@@ -140,7 +139,6 @@ class Zone:
 
     # frozen Phase-1 snapshots (carried through unchanged)
     fvg: Dict[str, Any] = field(default_factory=dict)
-    sweep_observed: Dict[str, Any] = field(default_factory=_default_sweep)
     dealing_range: Dict[str, Any] = field(default_factory=_default_dealing_range)
 
     # two-OB role
@@ -203,7 +201,6 @@ class Zone:
             current_price_at_scan=current_price,
             distance_to_proximal_pips=dist_pips,
             fvg=fresh["fvg"],
-            sweep_observed=fresh.get("sweep_observed", _default_sweep()),
             dealing_range=fresh.get("dealing_range", _default_dealing_range()),
             role=fresh.get("role", "primary"),
             # Formation-frozen sweep-v2 snapshot — stamped once here (A3-style).
@@ -223,7 +220,14 @@ class Zone:
         zone was created). To keep the on-disk file byte-identical across a
         no-op refresh, we record the incoming key order and replay it in to_dict.
         Only brand-new zones (from_fresh) use the canonical _FIELD_ORDER.
+
+        RETIRED-FIELD SHED: sweep_observed (sweep v1) was retired 2026-07-24. An
+        old on-disk zone still carrying it must NOT persist it as _extra (that
+        would keep the dead key alive forever). We drop it here so the zone sheds
+        it on its next write — the mirror of the additive-null migration that
+        added sweep_v2.
         """
+        d = {k: v for k, v in d.items() if k != "sweep_observed"}
         known = {k: d[k] for k in _FIELD_ORDER if k in d}
         z = cls(**known)  # type: ignore[arg-type]
         z._extra = {k: v for k, v in d.items() if k not in _FIELD_ORDER}
@@ -287,11 +291,11 @@ class Zone:
         self.distance_to_proximal_pips = round(
             abs(current_price - fresh["proximal_line"]) / _pip_unit(dp), 1)
         self.fvg = fresh["fvg"]
-        self.sweep_observed = fresh.get("sweep_observed", self.sweep_observed)
-        # sweep_v2 is FORMATION-FROZEN (unlike sweep_observed above, which
-        # re-stamps each scan): a later re-compute runs on a rolled frame with
-        # truncated history and can silently differ — the exact re-grade bug
-        # class the freeze kills. One-time back-fill only (legacy zones).
+        # sweep_v2 is FORMATION-FROZEN and the SOLE sweep snapshot (v1
+        # sweep_observed retired 2026-07-24). A later re-compute runs on a rolled
+        # frame with truncated history and can silently differ — the exact
+        # re-grade bug class the freeze kills. One-time back-fill only (legacy
+        # zones that predate the snapshot).
         if self.sweep_v2 is None:
             self.sweep_v2 = fresh.get("sweep_v2")
         self.dealing_range = fresh.get("dealing_range", self.dealing_range)

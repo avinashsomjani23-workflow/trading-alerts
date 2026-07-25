@@ -295,10 +295,12 @@ def replay_pair(
         # SPEED (backtest-only): reuse FORMATION-FROZEN birth facts for OBs we
         # already carry. detect_smc_radar rebuilds every OB from scratch each bar,
         # but the merge below (existing_by_ts, ~L427) keeps ONLY fvg from a re-
-        # surfaced OB and discards its recomputed sweep_observed / sweep_v2 /
-        # break_quality. So handing detection the stamped values lets it skip
-        # those three heavy recomputes with ZERO effect on any consumed value —
-        # byte-identical by construction. Keyed by ob_timestamp (frozen identity).
+        # surfaced OB and discards its recomputed sweep_v2 / break_quality. So
+        # handing detection the stamped values lets it skip those two heavy
+        # recomputes with ZERO effect on any consumed value — byte-identical by
+        # construction. Keyed by ob_timestamp (frozen identity).
+        # (sweep_observed / sweep v1 was retired 2026-07-24 — sweep_v2 is the sole
+        # sweep birth fact reused here.)
         # state.active_obs still holds the PRIOR-bar OBs here (merge runs after
         # this call), which carry the first-detection frozen values — the exact
         # values downstream already uses. Live never passes known_frozen.
@@ -311,13 +313,12 @@ def replay_pair(
         else:
             known_frozen = {
                 o.get("ob_timestamp"): {
-                    "sweep_observed": o["sweep_observed"],
                     "sweep_v2":       o["sweep_v2"],
                     "break_quality":  o["break_quality"],
                 }
                 for o in state.active_obs[pair_name]
                 if o.get("ob_timestamp")
-                and "sweep_observed" in o and "sweep_v2" in o and "break_quality" in o
+                and "sweep_v2" in o and "break_quality" in o
             }
         try:
             with contextlib.redirect_stdout(io.StringIO()):

@@ -1384,15 +1384,30 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "eq_sl_gap_atr", "eq_sl_at_risk",
         "eq_last_sweep_age_h1", "eq_last_sweep_side",
         "eq_intact_above_count", "eq_intact_below_count",
-        # Sweep v2 (rebuilt pool-anchored sweep, 2026-07-18) — observation
-        # only, re-labelled from the FROZEN ob['sweep_v2'] snapshot stamped at
-        # OB build. One source: liquidity_sweep.SWEEP2_FEATURE_COLUMNS via
-        # _sweep2_features. Legacy sweep_pts / sweep_present stay unchanged
-        # (score parity); superseded for ANALYSIS by these columns.
-        "sweep2_present", "sweep2_tier", "sweep2_level",
-        "sweep2_pierce_atr", "sweep2_rejection_ratio", "sweep2_follow_atr",
-        "sweep2_pools_swept", "sweep2_rn_aligned", "sweep2_rn_dist_atr",
-        "sweep2_eq_size", "sweep2_age_at_alert_h1", "sweep2_tiers_checked",
+        # Sweep v2 (rebuilt pool-anchored sweep, 2026-07-18) — observation only,
+        # from liquidity_sweep.SWEEP2_FEATURE_COLUMNS via _sweep2_features. WS2
+        # (2026-07-25) reshaped to a FOUR-BLOCK per-tier layout: the redundant
+        # birth WINNER cols (tier/level/pierce/rejection/follow/rn_aligned/
+        # rn_dist_atr) were DROPPED (reconstructable from the blocks); the winner
+        # still serves the LIVE email/score off the frozen snapshot (parity note
+        # in liquidity_sweep docstring). SW+EQ blocks are birth-frozen; PW+PD
+        # blocks are re-judged at the FILL bar (rolling levels / un-happening
+        # sweeps). Keep this list byte-in-order with SWEEP2_FEATURE_COLUMNS.
+        # Roll-ups:
+        "sweep2_present", "sweep2_pools_swept",
+        "sweep2_age_at_fill_h1", "sweep2_tiers_checked",
+        # SW block (birth-frozen):
+        "sweep2_sw_present", "sweep2_sw_pierce_atr", "sweep2_sw_rejection_ratio",
+        "sweep2_sw_follow_atr", "sweep2_sw_rn_aligned",
+        # EQ block (birth-frozen):
+        "sweep2_eq_present", "sweep2_eq_pierce_atr", "sweep2_eq_rejection_ratio",
+        "sweep2_eq_follow_atr", "sweep2_eq_rn_aligned", "sweep2_eq_size",
+        # PW block (fill-anchored):
+        "sweep2_pw_present", "sweep2_pw_pierce_atr", "sweep2_pw_rejection_ratio",
+        "sweep2_pw_follow_atr", "sweep2_pw_rn_aligned",
+        # PD block (fill-anchored):
+        "sweep2_pd_present", "sweep2_pd_pierce_atr", "sweep2_pd_rejection_ratio",
+        "sweep2_pd_follow_atr", "sweep2_pd_rn_aligned",
         # SETUP-LIQ (this trade's own stop/target vs swing liquidity, 2026-07-20)
         # — 6 columns from setup_liq._setup_liq_features. Reads 1 & 2 anchor on
         # the trade SL/TP1 (level-calc, not OB-build-frozen); Read 3.2 is the

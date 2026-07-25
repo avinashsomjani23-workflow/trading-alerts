@@ -37,20 +37,56 @@ OBSERVATION ONLY. Nothing here gates, scores, ranks, or filters (guardrail A5
 discipline; handoff rule 4). The legacy detector keeps running untouched for
 the score leg / OB2 ranking / chart overlays — live behaviour is byte-identical.
 
-ANCHORING. observe_pool_sweep runs ONCE at OB build inside detect_smc_radar
-(live scan AND backtest replay — the replay drives the same function on the
-same 150-bar clamped frame, so the two paths see the same picture). The
-returned snapshot is stamped ob['sweep_v2'] and is FORMATION-FROZEN: live
-Zone.refresh never re-stamps it (one-time back-fill only) and the replay's
-zone merge refreshes only fvg. A later re-compute would see a rolled frame
-with truncated history and could silently differ — that is the re-grade bug
-class the freeze kills.
+ANCHORING — SPLIT FREEZE (WS2, 2026-07-25). Two different clocks, on purpose:
+
+  SW + EQ — FORMATION-FROZEN. observe_pool_sweep runs ONCE at OB build inside
+    detect_smc_radar (live scan AND backtest replay — same function, same
+    150-bar clamped frame, same picture). The SW/EQ result is stamped
+    ob['sweep_v2'] and never re-graded: live Zone.refresh only back-fills it
+    once, the replay zone merge refreshes only fvg. SW is the OB's own leg
+    swing and EQ a formation-time shelf — neither ROLLS forward in time, so
+    freezing them is truthful. A later re-compute of SW/EQ would see a rolled,
+    truncated frame and could silently differ — that is the re-grade bug class
+    the SW/EQ freeze kills.
+
+  PW + PD — FILL-ANCHORED FOR THE BACKTEST CSV; birth-frozen for LIVE.
+    "Yesterday's low" / "last week's low" ROLL as days/weeks pass; a formation-
+    frozen PW/PD reads the wrong price by fill time, and a sweep can UN-happen
+    (wick-reject at formation that price later closes back through). So for the
+    BACKTEST feature-usability read, PW/PD are re-judged at the FILL bar in
+    features_from_snapshot -> pw_pd_at_fill, on the SAME fuel window (the frozen
+    leg anchors below), using level values + validity as they stood at fill,
+    reading ONLY closed bars strictly before fill_ts. No look-ahead: the window
+    is not widened and no post-fill bar is read; a live trader at fill genuinely
+    knows where the pool sits and whether it is still taken.
+
+    *** LIVE-vs-BACKTEST PARITY NOTE (WS2, 2026-07-25) — READ BEFORE "FIXING" ***
+    This is a DELIBERATE, permanent split, not a bug:
+      - LIVE (email describe_pool + score_inputs off ob['sweep_v2'],
+        Phase2_Alert_Engine) reads the BIRTH-FROZEN winner, which DOES include
+        PW/PD computed at formation. Live is byte-identical to before WS2.
+      - The BACKTEST CSV IGNORES the frozen winner cols (sweep2_tier/level/
+        pierce/rejection/follow/rn/eq_size were DROPPED from the CSV in WS2) and
+        instead reads fill-anchored per-tier blocks (sweep2_{sw,eq,pw,pd}_*).
+    So PW/PD ARE computed twice by design: once at birth (for live), once at
+    fill (for the backtest feature test). They answer DIFFERENT questions at
+    DIFFERENT times — one frozen fact, one live-at-fill read — and cannot be a
+    single number. Do NOT "de-duplicate" them; that reintroduces the exact
+    live-behaviour change WS2 was built to avoid. observe-only (A5) — nothing
+    here gates/scores/ranks in the backtest.
+
+  LEG ANCHORS on the snapshot — impulse_start_idx / ob_idx / prior_event_idx /
+    break_idx / direction / pair_type / pair_name are frozen onto the snapshot
+    at birth so the fill-time PW/PD recompute rebuilds the EXACT same fuel
+    window. These are point-in-time integers/strings fixed at formation — they
+    do not roll, so freezing them carries no re-grade risk.
 
 HONESTY BOUNDS (150-bar detection frame, identical live and backtest):
   - PD is provable almost always; PW only when the frame covers the FULL
     prior week. Provability is checked geometrically (frame start <= pool
     birth) and logged in tiers_checked — an unprovable tier is labelled,
-    never silently mis-measured.
+    never silently mis-measured. The fill-time PW/PD recompute re-runs this
+    same provability gate against the fill frame.
   - Pools are referenced as they existed at the LEG START (the resting
     liquidity the raid took). A leg spanning the 21:00 UTC day-roll checks
     the pre-roll generation; EQ/PW cover most of the sliver this misses.
@@ -113,19 +149,52 @@ _TIER_RANK = {"PW": 0, "PD": 1, "EQ": 2, "SW": 3}
 
 # The trades.csv column set this module owns. One list, one implementation —
 # the backtest row build and the None-fallback both key off it (EQ precedent).
+#
+# WS2 (2026-07-25) reshaped this to a FOUR-BLOCK per-tier layout:
+#   - The old birth-frozen WINNER cols (sweep2_tier/level/pierce_atr/
+#     rejection_ratio/follow_atr/rn_aligned/rn_dist_atr/eq_size) were DROPPED —
+#     they are fully reconstructable from the four always-on per-tier blocks
+#     below (winner = highest-ranked present tier, PW>PD>EQ>SW), so keeping them
+#     was pure redundancy in the CSV. The winner still exists on the FROZEN
+#     snapshot for the LIVE email/score read (see docstring parity note); it is
+#     just no longer a CSV column.
+#   - Kept roll-ups NOT derivable from one tier block: sweep2_present (any tier),
+#     sweep2_pools_swept (birth count), sweep2_tiers_checked, sweep2_age_at_fill.
+#   - SW + EQ blocks are BIRTH-FROZEN; PW + PD blocks are re-judged at the FILL
+#     bar (pw_pd_at_fill) on the same fuel window. All four blocks are always-on
+#     (present even when hidden behind a higher tier), so no per-tier signal is
+#     collapsed by a winner pick.
 SWEEP2_FEATURE_COLUMNS = (
-    "sweep2_present",
-    "sweep2_tier",
-    "sweep2_level",
-    "sweep2_pierce_atr",
-    "sweep2_rejection_ratio",
-    "sweep2_follow_atr",
-    "sweep2_pools_swept",
-    "sweep2_rn_aligned",
-    "sweep2_rn_dist_atr",
-    "sweep2_eq_size",
-    "sweep2_age_at_alert_h1",
-    "sweep2_tiers_checked",
+    # Roll-ups.
+    "sweep2_present",         # any tier swept (birth: SW/EQ/PW/PD; see note)
+    "sweep2_pools_swept",     # birth-time count of swept candidates
+    "sweep2_age_at_fill_h1",  # winner sweep_ts -> fill bar, closed H1 bars
+    "sweep2_tiers_checked",   # provability/ran labels, incl. fill pw/pd tags
+    # SW block — BIRTH-FROZEN (OB's own leg swing; never rolls). Always-on.
+    "sweep2_sw_present",
+    "sweep2_sw_pierce_atr",
+    "sweep2_sw_rejection_ratio",
+    "sweep2_sw_follow_atr",
+    "sweep2_sw_rn_aligned",
+    # EQ block — BIRTH-FROZEN (formation-time shelf; never rolls). Always-on.
+    "sweep2_eq_present",
+    "sweep2_eq_pierce_atr",
+    "sweep2_eq_rejection_ratio",
+    "sweep2_eq_follow_atr",
+    "sweep2_eq_rn_aligned",
+    "sweep2_eq_size",         # cluster touch count (EQ-only geometry)
+    # PW block — FILL-ANCHORED (last week's H/L rolls; re-judged at fill).
+    "sweep2_pw_present",
+    "sweep2_pw_pierce_atr",
+    "sweep2_pw_rejection_ratio",
+    "sweep2_pw_follow_atr",
+    "sweep2_pw_rn_aligned",
+    # PD block — FILL-ANCHORED (yesterday's H/L rolls; re-judged at fill).
+    "sweep2_pd_present",
+    "sweep2_pd_pierce_atr",
+    "sweep2_pd_rejection_ratio",
+    "sweep2_pd_follow_atr",
+    "sweep2_pd_rn_aligned",
 )
 
 
@@ -359,6 +428,70 @@ def _sw_candidates(h1, lo_pos, leg_bars, side, atr, pair_type, swings=None):
     return out
 
 
+# ---------------------------------------------------------------------------
+# Per-tier ALWAYS-ON metric block — ONE implementation, reused by every tier
+# (SW/EQ at birth, PW/PD at fill). "Best" candidate = the EARLIEST swept one
+# (chronological fact, "first touch is the sweep"; matches _first_sweep_ts —
+# NOT a quality pick). pierce/rn are stamped per-candidate before this call;
+# rejection + follow are computed here with the SAME helpers/span the winner
+# uses, so a tier's block equals the winner cols when that tier wins.
+# ---------------------------------------------------------------------------
+
+def _tier_block(tier_candidates, h1, side, swept_type, tf_atr, ft_end, H, L):
+    """Return the always-on (present, pierce_atr, rejection_ratio, follow_atr,
+    rn_aligned) dict for one tier's candidate list. Empty list -> all None/False.
+    Every candidate must already carry sweep_pos / pierce_atr / rn_aligned
+    (stamped by the per-candidate loop in observe_pool_sweep / pw_pd_at_fill)."""
+    if not tier_candidates:
+        return {"present": False, "pierce_atr": None, "rejection_ratio": None,
+                "follow_atr": None, "rn_aligned": None, "sweep_ts": None}
+    best = min(tier_candidates, key=lambda c: pd.Timestamp(c["sweep_ts"]))
+    b_pos = best["sweep_pos"]
+    _, rej = smc_detector._rejection_score(h1, b_pos, swept_type, tf_atr)
+    follow = None
+    if b_pos + 1 <= ft_end:
+        if side == "below":
+            exc = float(H[b_pos + 1: ft_end + 1].max()) - best["level"]
+        else:
+            exc = best["level"] - float(L[b_pos + 1: ft_end + 1].min())
+        follow = round(exc / tf_atr, 3)
+    # sweep_ts carried for the fill-age anchor (earliest sweep across tiers).
+    return {"present": True, "pierce_atr": best["pierce_atr"],
+            "rejection_ratio": round(float(rej), 3), "follow_atr": follow,
+            "rn_aligned": best["rn_aligned"],
+            "sweep_ts": pd.Timestamp(best["sweep_ts"]).isoformat()}
+
+
+def _stamp_candidate_metrics(candidates, h1, side, tf_atr, pair_name, pair_type):
+    """Stamp sweep_pos / pierce_atr / rn_aligned / rn_dist_atr on each candidate
+    IN PLACE. Shared by birth (observe_pool_sweep) and fill (pw_pd_at_fill) so
+    the two paths grade a swept level identically."""
+    rn_bucket = _rn_key(pair_name, pair_type)
+    grid = smc_detector.ROUND_NUMBER_GRID.get(rn_bucket, 0.0)
+    rn_tol = RN_TOLERANCE_BUFFERED.get(rn_bucket, 0.0)
+    H = h1["High"].values
+    L = h1["Low"].values
+    for c in candidates:
+        ts = pd.Timestamp(c["sweep_ts"])
+        pos = int(h1.index.searchsorted(ts))
+        c["sweep_pos"] = pos
+        if side == "below":
+            pierce = c["level"] - float(L[pos])
+        else:
+            pierce = float(H[pos]) - c["level"]
+        # A reclaim-bar sweep (broken then given back inside the window) stamps
+        # a bar that need not wick beyond the level — clamp to 0.
+        c["pierce_atr"] = round(max(pierce, 0.0) / tf_atr, 3)
+        if grid > 0:
+            nearest = smc_detector._nearest_round_number(c["level"], grid)
+            rn_dist = c["level"] - nearest
+            c["rn_aligned"] = bool(abs(rn_dist) <= rn_tol)
+            c["rn_dist_atr"] = round(rn_dist / tf_atr, 3)
+        else:
+            c["rn_aligned"] = None
+            c["rn_dist_atr"] = None
+
+
 def observe_pool_sweep(df, ob_idx, impulse_start_idx, direction, tf_atr,
                        pair_type, pair_name, prior_event_idx=None,
                        break_idx=None, days=None, weeks=None,
@@ -430,6 +563,30 @@ def observe_pool_sweep(df, ob_idx, impulse_start_idx, direction, tf_atr,
         side = "below" if direction == "bullish" else "above"
         leg_bars = h1.iloc[lo_pos: ob_pos + 1]
 
+        # WS2 leg anchors — TIMESTAMPS (not birth-frame index positions), so the
+        # BACKTEST fill-time PW/PD recompute can re-find the SAME fuel window
+        # inside the DIFFERENT fill frame by searchsorting these boundaries.
+        # Frozen point-in-time facts; they do not roll. leg_end_ts is the OB
+        # candle (window is [leg_start, ob] inclusive); break_ts anchors
+        # follow-through at fill. LIVE ignores these — it reads the birth winner.
+        break_pos = ob_pos
+        if break_idx is not None:
+            try:
+                bi = int(break_idx)
+                if ob_pos <= bi < n:
+                    break_pos = bi
+            except (TypeError, ValueError):
+                pass
+        leg_anchors = {
+            "leg_start_ts": h1.index[lo_pos].isoformat(),
+            "leg_end_ts": h1.index[ob_pos].isoformat(),
+            "break_ts": h1.index[break_pos].isoformat(),
+            "direction": direction,
+            "pair_type": pair_type,
+            "pair_name": pair_name,
+            "tf_atr": float(tf_atr),
+        }
+
         # Raw-geometry swings for the EQ reference (approved for the sweep/EQ
         # use-case only). Computed locally and PASSED IN to _eq_candidates so
         # this call never touches eq_pools' per-frame cache — evicting that cache
@@ -443,6 +600,12 @@ def observe_pool_sweep(df, ob_idx, impulse_start_idx, direction, tf_atr,
             swings = dealing_range.detect_swings(h1, lookback=EQ_SWING_LOOKBACK,
                                                  min_leg_atr_mult=None)
 
+        # Birth-time candidates — ALL FOUR tiers (PW/PD/EQ/SW). This frozen
+        # snapshot is what the LIVE path reads (email describe_pool + score_inputs
+        # off ob['sweep_v2']); it must keep its full birth winner so live stays
+        # byte-identical (WS2 parity note — see leg_anchors comment above and the
+        # module docstring). The BACKTEST CSV re-judges PW/PD at fill separately
+        # (pw_pd_at_fill) and does NOT read these frozen winner cols.
         pwpd, checked = _pw_pd_candidates(h1, lo_pos, leg_bars, side,
                                           h1.index[0], days=days, weeks=weeks)
         eq, eq_ran = _eq_candidates(h1, lo_pos, leg_bars, side, tf_atr, swings)
@@ -457,37 +620,24 @@ def observe_pool_sweep(df, ob_idx, impulse_start_idx, direction, tf_atr,
         candidates = pwpd + eq + sw
         tiers_checked = ",".join(checked)
         if not candidates:
-            return snapshot_none(tiers_checked)
+            # Nothing swept at birth — but PW/PD are re-judged at FILL for the
+            # backtest, so the snapshot still carries the leg anchors so
+            # pw_pd_at_fill can run there.
+            snap = snapshot_none(tiers_checked)
+            snap["_leg"] = leg_anchors
+            return snap
 
-        # Stamp RN alignment + sweep-bar metrics per candidate.
-        rn_bucket = _rn_key(pair_name, pair_type)
-        grid = smc_detector.ROUND_NUMBER_GRID.get(rn_bucket, 0.0)
-        rn_tol = RN_TOLERANCE_BUFFERED.get(rn_bucket, 0.0)
+        # Stamp RN alignment + sweep-bar metrics per candidate (shared helper —
+        # birth and fill grade a swept level identically).
+        _stamp_candidate_metrics(candidates, h1, side, tf_atr,
+                                 pair_name, pair_type)
         H = h1["High"].values
         L = h1["Low"].values
-        for c in candidates:
-            ts = pd.Timestamp(c["sweep_ts"])
-            pos = int(h1.index.searchsorted(ts))
-            c["sweep_pos"] = pos
-            if side == "below":
-                pierce = c["level"] - float(L[pos])
-            else:
-                pierce = float(H[pos]) - c["level"]
-            # A reclaim-bar sweep (broken then given back inside the window)
-            # stamps a bar that need not wick beyond the level — clamp to 0.
-            c["pierce_atr"] = round(max(pierce, 0.0) / tf_atr, 3)
-            if grid > 0:
-                nearest = smc_detector._nearest_round_number(c["level"], grid)
-                rn_dist = c["level"] - nearest
-                c["rn_aligned"] = bool(abs(rn_dist) <= rn_tol)
-                c["rn_dist_atr"] = round(rn_dist / tf_atr, 3)
-            else:
-                c["rn_aligned"] = None
-                c["rn_dist_atr"] = None
 
         # Winner = biggest pool (PW>PD>EQ), tie broken by deepest pierce.
         # Round-number alignment is NOT in the key (see _TIER_RANK comment) —
-        # it stays a logged fact, never a ranking thumb.
+        # it stays a logged fact, never a ranking thumb. This BIRTH winner is
+        # what LIVE reads (email/score); the backtest ignores it (WS2 parity).
         def _rank_key(c):
             return (_TIER_RANK.get(c["tier"], 9), -c["pierce_atr"])
 
@@ -519,8 +669,24 @@ def observe_pool_sweep(df, ob_idx, impulse_start_idx, direction, tf_atr,
                 excursion = winner["level"] - float(L[w_pos + 1: ft_end + 1].min())
             follow_atr = round(excursion / tf_atr, 3)
 
+        # ── BIRTH-FROZEN per-tier ALWAYS-ON blocks: SW + EQ (2026-07-25) ─────
+        # SW and EQ never roll (own-leg swing / formation shelf), so they freeze
+        # here. Each block is surfaced even when hidden behind a higher-tier
+        # winner (best = earliest swept; ONE _tier_block implementation). PW/PD
+        # are NOT blocked here — they are re-judged at fill (pw_pd_at_fill).
+        sw_blk = _tier_block(sw, h1, side, swept_type, tf_atr, ft_end, H, L)
+        eq_blk = _tier_block(eq, h1, side, swept_type, tf_atr, ft_end, H, L)
+        # EQ cluster touch-count (EQ-only geometry) — earliest swept EQ, matching
+        # the _tier_block "best" pick so size lines up with the block metrics.
+        eq_size_out = None
+        if eq:
+            eq_size_out = min(eq, key=lambda c: pd.Timestamp(c["sweep_ts"]))["eq_size"]
+
         return {
             "exists": True,
+            # ── LIVE winner fields (birth-frozen) — read by describe_pool /
+            # score_inputs off ob['sweep_v2']. The backtest CSV IGNORES these
+            # (WS2 parity note in the module docstring). Kept byte-identical.
             "tier": winner["tier"],
             "side": swept_type,
             "level": winner["level"],
@@ -533,6 +699,16 @@ def observe_pool_sweep(df, ob_idx, impulse_start_idx, direction, tf_atr,
             "rn_dist_atr": winner["rn_dist_atr"],
             "eq_size": winner["eq_size"],
             "tiers_checked": tiers_checked,
+            # ── BIRTH-FROZEN per-tier blocks for the backtest CSV: SW + EQ.
+            # Always-on (present even when hidden behind a higher-tier winner).
+            # Nested dicts so features_from_snapshot re-labels them straight,
+            # never re-detects. PW/PD are absent here — added at fill.
+            "sw_block": sw_blk,
+            "eq_block": eq_blk,
+            "eq_block_size": eq_size_out,
+            # WS2 leg anchors — backtest-only, for pw_pd_at_fill's window rebuild.
+            # Live never reads this; the frozen winner cols above serve live.
+            "_leg": leg_anchors,
             "observed_at": datetime.now(timezone.utc).isoformat(),
         }
     except Exception as e:
@@ -552,51 +728,174 @@ def features_none():
     return {col: None for col in SWEEP2_FEATURE_COLUMNS}
 
 
-def features_from_snapshot(snap, df_h1, alert_ts):
-    """SWEEP2_FEATURE_COLUMNS dict from the FROZEN ob['sweep_v2'] snapshot.
+def _naive_fill_ts(fill_ts):
+    """Coerce fill_ts to a tz-naive UTC Timestamp (searchsort key), or None."""
+    if fill_ts is None:
+        return None
+    f = pd.Timestamp(fill_ts)
+    if f.tzinfo is not None:
+        f = f.tz_convert("UTC").tz_localize(None)
+    return f
 
-    Pure re-labelling of frozen fields — nothing is re-detected or re-graded
-    post-alert. The one derived value, sweep2_age_at_alert_h1, is arithmetic
-    on the frozen sweep_ts against the alert bar (same class as
-    ob_age_h1_bars): closed H1 bars strictly before alert_ts, minus one, minus
-    the sweep bar's position. Never raises — returns the all-None dict on any
-    failure so a sweep bug can never kill a run row.
+
+def pw_pd_at_fill(snap, df_h1, fill_ts):
+    """Re-judge the PW/PD tiers AT THE FILL BAR on the OB's frozen fuel window.
+
+    Returns (pw_block, pd_block, pw_pd_tags, first_sweep_ts) where each block is
+    the _tier_block always-on dict and pw_pd_tags is the list of provable tiers
+    ('pw'/'pd') to fold into tiers_checked. first_sweep_ts is the EARLIEST swept
+    PW/PD sweep_ts (for the age anchor), or None.
+
+    WHY FILL, NOT BIRTH (WS2): "yesterday's / last week's low" ROLL as time
+    passes and a sweep can UN-happen (price closes back through). This reads the
+    pool levels + validity as they stood at the fill bar. NO LOOK-AHEAD: only
+    closed bars STRICTLY BEFORE fill_ts are used (df_h1 sliced < fill_ts), and
+    the fuel window is the SAME [leg_start, leg_end] the OB froze — never widened.
+
+    Never raises — returns empty blocks on any failure (a sweep bug can't kill a
+    run row). Empty blocks when: no _leg anchors (legacy/no-window snapshot),
+    never_filled (fill_ts None), or the anchors fall outside the fill frame.
+    """
+    empty = {"present": False, "pierce_atr": None, "rejection_ratio": None,
+             "follow_atr": None, "rn_aligned": None}
+    try:
+        leg = snap.get("_leg") if isinstance(snap, dict) else None
+        f_ts = _naive_fill_ts(fill_ts)
+        if leg is None or f_ts is None or df_h1 is None:
+            return dict(empty), dict(empty), [], None
+
+        # Closed bars strictly before the fill bar — the no-look-ahead clamp.
+        h1 = _naive_utc_index(df_h1)
+        if not isinstance(h1.index, pd.DatetimeIndex):
+            return dict(empty), dict(empty), [], None
+        h1 = h1[h1.index < f_ts]
+        if len(h1) == 0:
+            return dict(empty), dict(empty), [], None
+
+        # Re-find the frozen fuel window inside the fill frame by timestamp.
+        side = "below" if leg["direction"] == "bullish" else "above"
+        tf_atr = float(leg["tf_atr"])
+        start_ts = _naive_fill_ts(leg["leg_start_ts"])
+        end_ts = _naive_fill_ts(leg["leg_end_ts"])
+        break_ts = _naive_fill_ts(leg["break_ts"])
+        lo_pos = int(h1.index.searchsorted(start_ts))
+        ob_pos = int(h1.index.searchsorted(end_ts))
+        # The window must sit fully inside the (pre-fill) frame. A fill so soon
+        # after formation that the OB bar itself is not yet closed cannot carry a
+        # fill-anchored PW/PD read — honest empty, not a guess.
+        if not (0 <= lo_pos <= ob_pos < len(h1)):
+            return dict(empty), dict(empty), [], None
+        leg_bars = h1.iloc[lo_pos: ob_pos + 1]
+        ft_end = ob_pos
+        bpos = int(h1.index.searchsorted(break_ts))
+        if ob_pos <= bpos < len(h1):
+            ft_end = bpos
+
+        # Same PW/PD detector as birth, but on the fill frame: levels_at picks
+        # yesterday's/last week's H/L as of the leg start relative to THIS frame,
+        # re-runs the provability gate, and _first_sweep_ts re-judges validity
+        # (a sweep that later un-happened no longer qualifies).
+        pwpd, checked = _pw_pd_candidates(h1, lo_pos, leg_bars, side,
+                                          h1.index[0])
+        _stamp_candidate_metrics(pwpd, h1, side, tf_atr,
+                                 leg["pair_name"], leg["pair_type"])
+        H = h1["High"].values
+        L = h1["Low"].values
+        swept_type = "low" if side == "below" else "high"
+        pw = [c for c in pwpd if c["tier"] == "PW"]
+        pd_ = [c for c in pwpd if c["tier"] == "PD"]
+        pw_blk = _tier_block(pw, h1, side, swept_type, tf_atr, ft_end, H, L)
+        pd_blk = _tier_block(pd_, h1, side, swept_type, tf_atr, ft_end, H, L)
+        first_ts = None
+        if pwpd:
+            first_ts = min(pwpd, key=lambda c: pd.Timestamp(c["sweep_ts"]))["sweep_ts"]
+        return pw_blk, pd_blk, checked, first_ts
+    except Exception as e:
+        print(f"  [SWEEP2 WARN] pw_pd_at_fill failed: {type(e).__name__}: {e}")
+        return dict(empty), dict(empty), [], None
+
+
+def _block_cols(out, prefix, blk):
+    """Re-label one _tier_block dict into the sweep2_<prefix>_* CSV columns."""
+    out[f"sweep2_{prefix}_present"] = bool(blk.get("present"))
+    out[f"sweep2_{prefix}_pierce_atr"] = blk.get("pierce_atr")
+    out[f"sweep2_{prefix}_rejection_ratio"] = blk.get("rejection_ratio")
+    out[f"sweep2_{prefix}_follow_atr"] = blk.get("follow_atr")
+    out[f"sweep2_{prefix}_rn_aligned"] = blk.get("rn_aligned")
+
+
+def features_from_snapshot(snap, df_h1, fill_ts):
+    """SWEEP2_FEATURE_COLUMNS dict — FOUR always-on per-tier blocks + roll-ups.
+
+    WS2 (2026-07-25) split freeze:
+      - SW + EQ blocks: re-labelled STRAIGHT off the birth-frozen snapshot
+        (snap['sw_block'] / snap['eq_block']) — never re-detected.
+      - PW + PD blocks: RE-JUDGED at the fill bar (pw_pd_at_fill) on the OB's
+        frozen fuel window, closed bars strictly before fill_ts only. No
+        look-ahead (see pw_pd_at_fill).
+      - The old birth-frozen WINNER cols are NOT emitted — dropped in WS2 as
+        redundant (reconstructable from the four blocks). The winner still lives
+        on the snapshot for the LIVE read; it is just not a CSV column.
+
+    sweep2_age_at_fill_h1 = closed H1 bars from the EARLIEST sweep across all
+    present tiers (SW/EQ frozen + PW/PD at fill) to the fill bar — the first
+    stop-run that fuelled the setup. None when never_filled or no sweep.
+    sweep2_tiers_checked folds the birth eq/sw tags with the fill pw/pd tags.
+    Never raises — all-None dict on any failure so a sweep bug can't kill a row.
     """
     out = features_none()
     try:
         if not isinstance(snap, dict):
             return out  # legacy zone / no snapshot at all — every column None
         if snap.get("pools_swept") is None:
-            # Layer failed to run. Numeric columns stay None (no real values
-            # exist), but the honesty label carries the explicit 'failed' word
-            # so the failure is never a silent blank in the CSV.
+            # Layer failed at birth. Numeric columns stay None; the honesty
+            # label carries the explicit 'failed' word so it is never a silent
+            # blank. PW/PD cannot be re-judged (no leg anchors) — stay None.
             out["sweep2_tiers_checked"] = snap.get("tiers_checked")
             return out
-        out["sweep2_present"] = bool(snap.get("exists"))
-        out["sweep2_tier"] = snap.get("tier")
-        out["sweep2_level"] = snap.get("level")
-        out["sweep2_pierce_atr"] = snap.get("pierce_atr")
-        out["sweep2_rejection_ratio"] = snap.get("rejection_ratio")
-        out["sweep2_follow_atr"] = snap.get("follow_atr")
+
         out["sweep2_pools_swept"] = snap.get("pools_swept")
-        out["sweep2_rn_aligned"] = snap.get("rn_aligned")
-        out["sweep2_rn_dist_atr"] = snap.get("rn_dist_atr")
-        out["sweep2_eq_size"] = snap.get("eq_size")
-        out["sweep2_tiers_checked"] = snap.get("tiers_checked")
-        sweep_ts = snap.get("sweep_ts")
-        if sweep_ts is not None and df_h1 is not None and alert_ts is not None:
+
+        # Frozen SW/EQ blocks (birth). Missing block => absent tier (None/False).
+        sw_blk = snap.get("sw_block") or {}
+        eq_blk = snap.get("eq_block") or {}
+        _block_cols(out, "sw", sw_blk)
+        _block_cols(out, "eq", eq_blk)
+        out["sweep2_eq_size"] = snap.get("eq_block_size")
+
+        # Fill-anchored PW/PD blocks (re-judged on the fill frame).
+        pw_blk, pd_blk, pwpd_tags, pwpd_first_ts = pw_pd_at_fill(
+            snap, df_h1, fill_ts)
+        _block_cols(out, "pw", pw_blk)
+        _block_cols(out, "pd", pd_blk)
+
+        # sweep2_present = any tier present (birth SW/EQ OR fill PW/PD).
+        out["sweep2_present"] = bool(
+            sw_blk.get("present") or eq_blk.get("present")
+            or pw_blk.get("present") or pd_blk.get("present"))
+
+        # tiers_checked = birth eq/sw tags (from the snapshot) folded with the
+        # fill pw/pd provability tags. Birth tags already carry eq/sw; strip any
+        # stale pw/pd from the frozen string (birth ran them for the live winner)
+        # and replace with the fill-frame provability verdict.
+        birth_tags = [t for t in (snap.get("tiers_checked") or "").split(",")
+                      if t and t not in ("pw", "pd")]
+        out["sweep2_tiers_checked"] = ",".join(birth_tags + list(pwpd_tags))
+
+        # Age — earliest sweep across ALL present tiers to the fill bar.
+        sweep_tss = [b.get("sweep_ts") for b in (sw_blk, eq_blk)
+                     if b.get("sweep_ts")]
+        if pwpd_first_ts:
+            sweep_tss.append(pwpd_first_ts)
+        f_ts = _naive_fill_ts(fill_ts)
+        if sweep_tss and df_h1 is not None and f_ts is not None:
             h1 = _naive_utc_index(df_h1)
             if isinstance(h1.index, pd.DatetimeIndex):
-                a_ts = pd.Timestamp(alert_ts)
-                if a_ts.tzinfo is not None:
-                    a_ts = a_ts.tz_convert("UTC").tz_localize(None)
-                s_ts = pd.Timestamp(sweep_ts)
-                if s_ts.tzinfo is not None:
-                    s_ts = s_ts.tz_convert("UTC").tz_localize(None)
-                a_pos = int(h1.index.searchsorted(a_ts))  # bars before alert
-                s_pos = int(h1.index.searchsorted(s_ts))
-                if a_pos > s_pos:
-                    out["sweep2_age_at_alert_h1"] = int(a_pos - 1 - s_pos)
+                earliest = min(_naive_fill_ts(t) for t in sweep_tss)
+                f_pos = int(h1.index.searchsorted(f_ts))  # bars before fill
+                s_pos = int(h1.index.searchsorted(earliest))
+                if f_pos > s_pos:
+                    out["sweep2_age_at_fill_h1"] = int(f_pos - 1 - s_pos)
         return out
     except Exception as e:
         print(f"  [SWEEP2 WARN] features_from_snapshot failed: "
@@ -625,8 +924,10 @@ _POOL_PHRASE = {
 # grading a sweep's *quality* beyond "which pool" was noise/inverse, so folding
 # those back in as score would re-introduce the exact tuned thumb that rebuild
 # removed. Tier (pool meaningfulness) IS the quality signal; the raw metrics stay
-# logged (sweep2_rejection_ratio / sweep2_follow_atr) for the full run to judge,
-# never scored. PW(3) > PD(2.5) > EQ(2) > SW(1): a bigger raided pool is stronger
+# logged (the per-tier sweep2_{sw,eq,pw,pd}_rejection_ratio / _follow_atr blocks)
+# for the full run to judge, never scored. This grade serves the LIVE score leg
+# only (score_inputs off the frozen snapshot) — unchanged by the WS2 CSV reshape.
+# PW(3) > PD(2.5) > EQ(2) > SW(1): a bigger raided pool is stronger
 # fuel; SW (a bare swing, weakest tier) grades lowest but non-zero (it is a real,
 # if minor, stop-run).
 _TIER_GRADE_0_3 = {"PW": 3.0, "PD": 2.5, "EQ": 2.0, "SW": 1.0}

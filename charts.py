@@ -44,6 +44,11 @@ BG          = "#131722"   # chart background (TradingView dark)
 SPINE       = "#2a2a3e"   # axis spine colour
 CANDLE_UP   = "#26a69a"   # bullish candle (close >= open)
 CANDLE_DOWN = "#ef5350"   # bearish candle
+# Wick colour: a brighter, lighter shade of each body colour so a long thin wick
+# NEVER blends into the same-colour body and read as one solid "pipe". This is
+# what lets a sweep (long wick) be told apart from a plain candle at a glance.
+WICK_UP     = "#7fe3d6"   # lighter teal — bullish wick
+WICK_DOWN   = "#ff9d9b"   # lighter red  — bearish wick
 
 # Zone (Order Block) band
 ZONE_FACE   = "#9b59b6"
@@ -96,8 +101,11 @@ PRICE_WHITE = "#ffffff"
 # Phase 2 used body 0.8 / wick 1.2 / alpha 0.9 (squat). We standardise on
 # Phase 1's so candles match across both emails.
 BODY_W      = 0.55
-WICK_W      = 1.5
-BODY_ALPHA  = 0.95
+WICK_W      = 1.5   # points — a wick is a THIN line; it reads because the body
+                    # is opaque and the wick pokes out beyond the body's edge
+BODY_ALPHA  = 1.0    # OPAQUE body: a see-through body let the same-colour wick
+                     # bleed through, blurring the body/wick edge into one blob.
+                     # Opaque = crisp edge = the wick clearly pokes out beyond it.
 MIN_BODY_FR = 0.02   # doji floor: a zero-range body still draws this fraction
 
 # Figure
@@ -145,7 +153,8 @@ def adaptive_height(required_range: float, candle_range: float) -> float:
 # COLOURS are shared; only the geometry differs, and only for the zoom.
 BODY_W_ZOOM  = 0.70
 WICK_W_ZOOM  = 1.6
-BODY_ALPHA_ZOOM = 0.92
+BODY_ALPHA_ZOOM = 1.0   # opaque — same reason as BODY_ALPHA: a crisp body edge
+                        # so the wick reads as a line poking out, not a blob
 
 
 def draw_candles(ax, O, H, L, C, *, body_w=BODY_W, wick_w=WICK_W,
@@ -167,8 +176,15 @@ def draw_candles(ax, O, H, L, C, *, body_w=BODY_W, wick_w=WICK_W,
         o, h, l, c = float(O[i]), float(H[i]), float(L[i]), float(C[i])
         if np.isnan(o) or np.isnan(h) or np.isnan(l) or np.isnan(c):
             continue
-        col = CANDLE_UP if c >= o else CANDLE_DOWN
-        ax.plot([i, i], [l, h], color=col, linewidth=wick_w, zorder=2,
+        up = c >= o
+        col = CANDLE_UP if up else CANDLE_DOWN
+        wick_col = WICK_UP if up else WICK_DOWN
+        # Wick is a THIN line, drawn UNDER the body (zorder 2 < body 3). The body
+        # is opaque, so wherever the body covers the wick you see a solid block,
+        # and only the part of the wick OUTSIDE the body sticks out as a thin
+        # line. That crisp body-edge is what lets the eye separate wick from body
+        # — a long sweep wick reads as a line poking out of a solid block.
+        ax.plot([i, i], [l, h], color=wick_col, linewidth=wick_w, zorder=2,
                 solid_capstyle=cap)
         body = abs(c - o) or (h - l) * MIN_BODY_FR
         ax.add_patch(patches.Rectangle(

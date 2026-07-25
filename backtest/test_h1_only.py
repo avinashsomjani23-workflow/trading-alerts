@@ -2064,8 +2064,9 @@ def test_frozen_reuse_backtest_only_equivalence():
 
     Fix A adds an optional `known_frozen` arg to smc_radar.detect_smc_radar. When
     the backtest passes it, detection REUSES the FIRST-detection FORMATION-FROZEN
-    birth facts (sweep_observed / sweep_v2 / break_quality) for a known
-    ob_timestamp and skips the three heavy recomputes. Live never passes it.
+    birth facts (sweep_v2 / break_quality) for a known ob_timestamp and skips the
+    two heavy recomputes. Live never passes it. (sweep v1 / sweep_observed was
+    retired 2026-07-24 — sweep_v2 is the sole reused sweep birth fact.)
 
     Two silent-failure modes this bites (both OUT of the live path — this is an
     offline test driving the live functions on real cached data):
@@ -2079,7 +2080,7 @@ def test_frozen_reuse_backtest_only_equivalence():
           geometry, touches). Bite: with the sentinel known_frozen, EVERY non-
           frozen field of the matched OB MUST be byte-identical to the no-arg
           recompute on the SAME frame. If any live field changed, reuse leaked
-          past the three frozen fields -> FAIL.
+          past the two frozen fields -> FAIL.
 
     Also asserts the no-arg path genuinely recomputes (frozen fields != sentinel),
     so the test cannot pass by the pipeline going inert.
@@ -2116,12 +2117,10 @@ def test_frozen_reuse_backtest_only_equivalence():
     assert obs_base, "no OB produced by any window — detection pipeline is inert"
 
     # SENTINEL known_frozen: deliberately-wrong frozen values keyed by identity.
-    SENT_V1 = {"exists": False, "_sentinel": "v1"}
     SENT_V2 = {"_sentinel": "v2"}
     SENT_BQ = -999.0
     known_frozen = {
         ob["ob_timestamp"]: {
-            "sweep_observed": SENT_V1,
             "sweep_v2":       SENT_V2,
             "break_quality":  SENT_BQ,
         }
@@ -2131,7 +2130,7 @@ def test_frozen_reuse_backtest_only_equivalence():
     reuse_by_ts = {o["ob_timestamp"]: o for o in obs_reuse}
 
     # Non-frozen keys that must be byte-identical across the two runs (same frame).
-    _FROZEN_KEYS = {"sweep_observed", "sweep_v2", "break_quality"}
+    _FROZEN_KEYS = {"sweep_v2", "break_quality"}
     checked = 0
     for base in obs_base:
         ts = base["ob_timestamp"]
@@ -2141,8 +2140,6 @@ def test_frozen_reuse_backtest_only_equivalence():
         checked += 1
 
         # (a) frozen fields REUSED -> carry the sentinel (recompute was skipped).
-        assert reuse["sweep_observed"] == SENT_V1, \
-            f"sweep_observed not reused for {ts}: {reuse['sweep_observed']}"
         assert reuse["sweep_v2"] == SENT_V2, \
             f"sweep_v2 not reused for {ts}: {reuse['sweep_v2']}"
         assert reuse["break_quality"] == SENT_BQ, \

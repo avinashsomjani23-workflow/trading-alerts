@@ -63,17 +63,31 @@ def _iter_live_zones():
 # migration field here.
 _ADDITIVE_MIGRATION_FIELDS = {"body_ratio", "walkback_depth", "sweep_v2"}
 
+# Fields REMOVED from the schema — an on-disk zone still carrying one sheds it on
+# its next write (Zone.from_dict drops it, so it never persists as _extra). This
+# is the mirror of the additive migration and is likewise intended, not the
+# silent-drop bug this test guards.
+# NOTE: sweep_observed (sweep v1) was retired 2026-07-24 — v2 is the sole sweep.
+_REMOVED_MIGRATION_FIELDS = {"sweep_observed"}
 
-def _diff_is_only_additive_nulls(original: dict, roundtripped: dict) -> bool:
-    """True iff roundtripped == original plus one-or-more allowed migration keys,
-    each carrying null, and nothing else changed."""
+
+def _diff_is_only_migration(original: dict, roundtripped: dict) -> bool:
+    """True iff the only differences are allowed migrations: additive keys
+    appearing (each null) and/or removed keys disappearing, with every surviving
+    shared key byte-identical in value AND relative order."""
     added = set(roundtripped) - set(original)
-    if not added or not added.issubset(_ADDITIVE_MIGRATION_FIELDS):
+    dropped = set(original) - set(roundtripped)
+    if not added and not dropped:
+        return False  # no migration diff — caller handles the byte-identical case
+    if not added.issubset(_ADDITIVE_MIGRATION_FIELDS):
+        return False
+    if not dropped.issubset(_REMOVED_MIGRATION_FIELDS):
         return False
     if any(roundtripped[k] is not None for k in added):
         return False  # a migration key that came back non-null is a real change
-    # Every shared key must be byte-identical in value AND relative order.
-    if {k: original[k] for k in original} != {k: roundtripped[k] for k in original}:
+    # Every SHARED key must be byte-identical in value AND relative order.
+    shared = [k for k in original if k in roundtripped]
+    if {k: original[k] for k in shared} != {k: roundtripped[k] for k in shared}:
         return False
     return True
 
@@ -85,10 +99,12 @@ def test_live_roundtrip():
         rt = Zone.from_dict(zdict).to_dict()
         if _canon(rt) == _canon(zdict):
             _ok(f"{pair} {zdict.get('zone_id')} round-trips byte-identical")
-        elif _diff_is_only_additive_nulls(zdict, rt):
+        elif _diff_is_only_migration(zdict, rt):
             added = sorted(set(rt) - set(zdict))
-            _ok(f"{pair} {zdict.get('zone_id')} gains additive null field(s) "
-                f"{added} — intended schema migration, not a drop")
+            dropped = sorted(set(zdict) - set(rt))
+            _ok(f"{pair} {zdict.get('zone_id')} migrates "
+                f"(+{added} null / -{dropped} retired) — intended schema "
+                f"migration, not the silent-drop bug")
         else:
             _bad(f"{pair} {zdict.get('zone_id')} DIFFERS after round-trip")
             a = _canon(zdict).splitlines()

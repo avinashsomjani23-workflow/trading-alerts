@@ -104,6 +104,12 @@ LIVE_DETECTION_BARS = 150
 # (max span 3.14 ATR) were measured and are prevented by the span cap.
 DEDUPE_PROXIMAL_ATR_MULT = 1.0
 
+# PERF (deferred sweep compute) — sentinel meaning "sweep_v2 not yet computed;
+# compute it post-dedupe for this survivor". A unique object so it can never
+# collide with a real snapshot dict / None / snapshot_failed(). See the OB build
+# loop and the post-dedupe sweep pass in detect_smc_radar.
+_SWEEP_DEFERRED = object()
+
 # ---------------------------------------------------------------------------
 # RANGING (INFORMATION ONLY — gates nothing). Two-component definition:
 #   1. Structure stalled: structure_v2 'ranging' flag (no new extreme for
@@ -268,7 +274,7 @@ def log_p1_degrade(kind, **fields):
 #     "last_event": {type, tier, direction, ts, chop},
 #     "active_zones": [{id, direction, status, touches, fvg_mitigation,
 #                       proximal, distal, distance_to_proximal_pips,
-#                       sweep_observed: {exists, tier, price} | null}],
+#                       sweep_v2: {exists, tier, level, rn_aligned, pools_swept} | null}],
 #     "dropped_this_scan": [{id, reason}],
 #     "diagnostics": [str]   # optional one-line notes
 #   }
@@ -372,7 +378,6 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
     for sz in slate_zones:
         if sz.get('status') != 'active':
             continue
-        sw = sz.get('sweep_observed') or {}
         sw2 = sz.get('sweep_v2')
         active.append({
             'id': sz.get('zone_id'),
@@ -392,13 +397,9 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
                        or (sz.get('fvg') or {}).get('ghost_top'),
             'fvg_bottom': (sz.get('fvg') or {}).get('fvg_bottom')
                           or (sz.get('fvg') or {}).get('ghost_bottom'),
-            'sweep_observed': {
-                'exists': bool(sw.get('exists')),
-                'tier': sw.get('tier'),
-                'price': sw.get('price'),
-            } if sw else None,
-            # Sweep v2 (pool-anchored) — the rebuilt read. Summary only; the
-            # full frozen snapshot lives on the zone (active_obs.json).
+            # Sweep v2 (pool-anchored) — the SOLE sweep read (v1 retired
+            # 2026-07-24). Summary only; the full frozen snapshot lives on the
+            # zone (active_obs.json).
             'sweep_v2': {
                 'exists': bool(sw2.get('exists')),
                 'tier': sw2.get('tier'),
@@ -779,12 +780,11 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                 When None or fallback is active, the gate fails open.
         known_frozen: BACKTEST-REPLAY-ONLY speed reuse. None on the live path
                 (live recomputes everything, cost is irrelevant hourly). When
-                the backtest passes a dict {ob_timestamp_str: {'sweep_observed',
-                'sweep_v2', 'break_quality'}} of already-formed OBs, this
-                function REUSES those FORMATION-FROZEN birth facts for a matching
-                ob_timestamp instead of recomputing them, and skips the three
-                heavy calls (observe_phase1_sweep, observe_pool_sweep,
-                compute_break_quality). Byte-identical by construction: the
+                the backtest passes a dict {ob_timestamp_str: {'sweep_v2',
+                'break_quality'}} of already-formed OBs, this function REUSES
+                those FORMATION-FROZEN birth facts for a matching ob_timestamp
+                instead of recomputing them, and skips the two heavy calls
+                (observe_pool_sweep, compute_break_quality). Byte-identical by construction: the
                 replay merge keeps only these frozen values from FIRST detection
                 and discards every later recompute (replay_engine.py:427), so the
                 reused value IS the only value downstream ever sees. fvg and
@@ -915,8 +915,10 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     # PERF (within-bar frame reuse): the daily/weekly resample FRAME and the two
     # swing sets that sweep-v2 needs are IDENTICAL for every event in this scan
     # (all events share this one df window). Build them ONCE here and thread them
-    # into every observe_pool_sweep call in the loop, instead of rebuilding them
-    # per event (~7×/bar). This is observation only — levels_at still selects
+    # into every observe_pool_sweep call, instead of rebuilding them per event
+    # (~7×/bar). The sweep call is now DEFERRED to the post-dedupe survivor pass
+    # (see _SWEEP_DEFERRED), which reads these same scan-constant frames from this
+    # enclosing scope. This is observation only — levels_at still selects
     # periods strictly-before each event's asof internally (pool_builder.py:270),
     # so every event still computes its OWN PDH/PDL/PWH/PWL fresh: nothing is
     # stamped or frozen, D1/W1 is re-read live every bar. Byte-identical to the
@@ -1156,8 +1158,8 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
         # BACKTEST-REPLAY-ONLY frozen-fact reuse (see known_frozen in Args).
         # None on live => _reuse stays None => every branch below recomputes as
         # before (live byte-identical). In the backtest, a matching ob_timestamp
-        # supplies the FIRST-detection sweep_observed / sweep_v2 / break_quality
-        # so we skip the three heavy recomputes and reuse the frozen value.
+        # supplies the FIRST-detection sweep_v2 / break_quality
+        # so we skip the two heavy recomputes and reuse the frozen value.
         _reuse = known_frozen.get(ob_timestamp_str) if known_frozen else None
 
         fvg_dict = {
@@ -1216,53 +1218,44 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                 print(_diag_short(diag))
                 continue
 
-        # Phase 1 sweep observation — snapshot semantics. Window is the OB's
-        # OWN impulse leg [impulse_start_idx, ob_idx] (LOCKED 2026-06): the
-        # validating sweep is the local liquidity run that fuels the displacement
-        # which built this zone, so it can only live inside the leg. prior_event_idx
-        # is still passed for signature compatibility but no longer sets the lower
-        # bound — see observe_phase1_sweep's window comment for why the prior
-        # opposing/same-direction event anchors were wrong on continuation BOS.
-        if _reuse is not None and 'sweep_observed' in _reuse:
-            # Reuse FIRST-detection sweep_observed (backtest replay). The live
-            # recompute below is discarded by the replay merge; this skips it.
-            sweep_obs = _reuse['sweep_observed']
-        else:
-            try:
-                sweep_obs = smc_detector.observe_phase1_sweep(
-                    df, ob_idx, impulse_start_idx, ev_dir,
-                    h1_atr_for_leg, pair_type, pair_name, tf_label='H1',
-                    event_type=ev_type,
-                    prior_event_idx=prior_event_idx,
-                )
-            except Exception as _sweep_err:
-                logging.warning(f"[sweep_observed] OB build failed sweep observation: {_sweep_err}")
-                sweep_obs = {'exists': False}
-
-        # Sweep v2 — rebuilt pool-anchored sweep (liquidity_sweep.py). Same
-        # leg window, but the target must be a RANKED pool (PW/PD/EQ shelf)
-        # that was intact when the leg began; event judged by the ONE pool
-        # status machine. Observation only — the legacy sweep_obs above keeps
-        # feeding the score/OB2-rank unchanged. Snapshot is FORMATION-FROZEN
-        # on the zone (Zone.refresh never re-stamps it). Follow-through is
-        # measured to the break-confirmation candle (_confirm_idx_bq).
+        # Sweep v2 — the SOLE sweep detector (v1 retired 2026-07-24;
+        # liquidity_sweep.py). Window is the OB's OWN impulse leg
+        # [impulse_start_idx, ob_idx] (LOCKED 2026-06): the validating sweep is
+        # the local liquidity run that fuels the displacement which built this
+        # zone, so it can only live inside the leg. The target must be a RANKED
+        # pool (PW/PD/EQ shelf) or a bare SW swing that was intact when the leg
+        # began; event judged by the ONE pool status machine. Feeds the score,
+        # OB2 rank, setup badge, chart overlay and email narration — one source
+        # for every surface. Snapshot is FORMATION-FROZEN on the zone
+        # (Zone.refresh never re-stamps it). Follow-through is measured to the
+        # break-confirmation candle (_confirm_idx_bq). prior_event_idx floors the
+        # window at the prior structural event.
+        #
+        # PERF (deferred sweep compute, 2026-07-25): observe_pool_sweep is the
+        # heaviest per-event call (~45% of replay). Two drop gates run AFTER this
+        # point in the scan — post_build_mitigation (kills mitigated OBs) and
+        # same-leg dedupe (keeps one OB per cluster) — so an OB computed here can
+        # be discarded before ANY consumer reads its sweep_v2. Nothing between the
+        # append below and those gates reads sweep_v2 (verified: the mitigation
+        # pass reads only distal/proximal, dedupe ranks on touches/fvg; the first
+        # reader is _count_confluences inside _split_primary_alternative, which
+        # runs AFTER dedupe). So we DEFER the compute: stamp the sentinel
+        # _SWEEP_DEFERRED here and run observe_pool_sweep ONCE, post-dedupe, only
+        # for the OBs that actually survive. Byte-identical by the same argument
+        # Fix A used — a value that is never read cannot change the output. The
+        # per-OB args the deferred call needs that aren't already on the dict
+        # (prior_event_idx, break_idx) are captured onto it at append time; the
+        # rest (days/weeks/eq/sw swings, pair_type/name) are scan-constant and
+        # read from the enclosing scope by the deferred pass.
         if _reuse is not None and 'sweep_v2' in _reuse:
-            # Reuse FIRST-detection sweep_v2 (backtest replay). Same rationale as
-            # sweep_observed above: the recompute is discarded by the replay merge.
+            # Reuse FIRST-detection sweep_v2 (backtest replay). The live recompute
+            # is discarded by the replay merge, so reusing the frozen value is
+            # byte-identical and skips the heavy recompute. Reuse is a free dict
+            # read, so it stays here (never deferred) — only the compute defers.
             sweep_v2 = _reuse['sweep_v2']
         else:
-            try:
-                sweep_v2 = liquidity_sweep.observe_pool_sweep(
-                    df, ob_idx, impulse_start_idx, ev_dir,
-                    h1_atr_for_leg, pair_type, pair_name,
-                    prior_event_idx=prior_event_idx,
-                    break_idx=_confirm_idx_bq,
-                    days=_sweep_days, weeks=_sweep_weeks,
-                    eq_swings=_sweep_eq_swings, sw_swings=_sweep_sw_swings,
-                )
-            except Exception as _sweep2_err:
-                logging.warning(f"[sweep_v2] OB build failed pool-sweep observation: {_sweep2_err}")
-                sweep_v2 = liquidity_sweep.snapshot_failed()
+            # Deferred — computed post-dedupe for survivors only (see PERF note).
+            sweep_v2 = _SWEEP_DEFERRED
 
         # Dealing range snapshot — Phase 1 is the single source of truth
         # for DR. Computed once at OB build time using this scan's H1 frame,
@@ -1370,8 +1363,15 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             # frozen on the OB dict.
             'h1_atr':             float(h1_atr_for_leg) if h1_atr_for_leg else 0.0,
             'fvg':                fvg_dict,
-            'sweep_observed':     sweep_obs,
             'sweep_v2':           sweep_v2,
+            # PERF (deferred sweep compute) — per-OB args the post-dedupe sweep
+            # pass needs and that live nowhere else on the dict. Loop-local when
+            # the OB is built (prior_event_idx floors the sweep window; break_idx
+            # is the follow-through anchor). Stripped before the dict is returned
+            # (same cleanup as _diag_ref). Present ONLY when sweep_v2 is deferred;
+            # a reuse-hit or a live compute already holds the final value.
+            '_sweep_prior_event_idx': prior_event_idx,
+            '_sweep_break_idx':       _confirm_idx_bq,
             'dealing_range':      dealing_range_snapshot,
             # OB BUILD LEDGER — back-reference so post-build mitigation can amend
             # the right diag entry. Stripped before returning.
@@ -1434,6 +1434,32 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
                       if h1_atr_for_leg and h1_atr_for_leg > 0 else 0.00030)
     filtered = _dedupe_same_leg_impl(filtered, _dedupe_thresh)
 
+    # PERF (deferred sweep compute) — run observe_pool_sweep NOW, on the final
+    # survivor set only. Every OB that reached here passed post_build_mitigation
+    # AND dedupe; the mitigated/deduped OBs whose sweep we skipped were never
+    # going to have their sweep_v2 read (verified: first reader is
+    # _count_confluences in _split_primary_alternative, below). Only OBs still
+    # carrying the _SWEEP_DEFERRED sentinel need a compute — a replay reuse-hit
+    # already holds its frozen value. Args mirror the original in-loop call
+    # exactly: the per-OB floor/anchor were captured on the dict at build time;
+    # days/weeks/eq/sw swings + pair_type/name are scan-constant here. The
+    # snapshot_failed() guard is unchanged so a sweep bug still can't kill an OB.
+    for ob in filtered:
+        if ob.get('sweep_v2') is not _SWEEP_DEFERRED:
+            continue
+        try:
+            ob['sweep_v2'] = liquidity_sweep.observe_pool_sweep(
+                df, ob['ob_idx'], ob['impulse_start_idx'], ob['direction'],
+                ob['h1_atr'], pair_type, pair_name,
+                prior_event_idx=ob.get('_sweep_prior_event_idx'),
+                break_idx=ob.get('_sweep_break_idx'),
+                days=_sweep_days, weeks=_sweep_weeks,
+                eq_swings=_sweep_eq_swings, sw_swings=_sweep_sw_swings,
+            )
+        except Exception as _sweep2_err:
+            logging.warning(f"[sweep_v2] OB build failed pool-sweep observation: {_sweep2_err}")
+            ob['sweep_v2'] = liquidity_sweep.snapshot_failed()
+
     # Select which OBs to surface. cap_zones=True (LIVE): 2-OB shortlist —
     # OB1 last-event + OB2 best-in-window, WITH-TREND > nearest > least-touched.
     # cap_zones=False (BACKTEST): every un-mitigated OB, no cap/rank/role.
@@ -1446,6 +1472,8 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     # Strip the private dedupe hint before returning.
     for o in filtered:
         o.pop('_diag_ref', None)  # OB BUILD LEDGER — internal back-reference
+        o.pop('_sweep_prior_event_idx', None)  # PERF deferred-sweep temp arg
+        o.pop('_sweep_break_idx', None)         # PERF deferred-sweep temp arg
 
     return {
         "current_price": cur_price,
@@ -1539,8 +1567,8 @@ def _count_confluences(ob):
 
     Confluences considered (each contributes 1 to the count):
       - FVG exists (any state — pristine or partial; ghost does not count)
-      - Sweep observed (active/unbroken target — already filtered by
-        observe_phase1_sweep, so any sweep present here qualifies)
+      - Sweep v2 exists (a ranked, intact pool was raided + rejected inside the
+        OB's leg — sweep v2 is the sole sweep detector, v1 retired 2026-07-24)
       - broken_was_wall (the BOS that birthed this OB broke a dealing-range
         wall — meaningful structural displacement)
 
@@ -1551,7 +1579,7 @@ def _count_confluences(ob):
     fvg = ob.get('fvg') or {}
     if fvg.get('exists'):
         n += 1
-    sw = ob.get('sweep_observed') or {}
+    sw = ob.get('sweep_v2') or {}
     if sw.get('exists'):
         n += 1
     if ob.get('broken_was_wall'):
@@ -2946,10 +2974,9 @@ def _slate_zone_to_ob_shape(sz):
         "touches":   sz.get("touches", 0),
         "status":    sz.get("status_label", "Pristine"),
         "h1_atr":    sz.get("h1_atr", 0.0),
-        # Sweep v2 — the chart overlay's source (pool-anchored read). The
-        # legacy sweep_observed carry was dropped 2026-07-19: the chart no
-        # longer reads it (the legacy snapshot stays on the ZONE for the
-        # score/OB2-rank; this adaptor feeds charts only).
+        # Sweep v2 — the chart overlay's source (pool-anchored read), and the
+        # SOLE sweep read everywhere (v1 retired 2026-07-24). Same frozen zone
+        # snapshot the score, OB2 rank, badge and emails read — one definition.
         "sweep_v2": sz.get("sweep_v2"),
     }
 
@@ -3736,18 +3763,9 @@ def resync_slate_zone_indices(slate_zone, df, pair_name=""):
             continue
         fvg[key] = shifted if 0 <= shifted < len(df) else None
     slate_zone["fvg"] = fvg
-    # Sweep observation idx fields — these are absolute df indices too.
-    sw = slate_zone.get("sweep_observed") or {}
-    for key in ("sweep_idx", "swept_swing_idx"):
-        v = sw.get(key)
-        if v is None:
-            continue
-        try:
-            shifted = int(v) + delta
-        except (TypeError, ValueError):
-            continue
-        sw[key] = shifted if 0 <= shifted < len(df) else None
-    slate_zone["sweep_observed"] = sw
+    # Sweep v2 anchors on a TIMESTAMP (sweep_ts), not an absolute df index, so it
+    # survives a window shift untouched — no resync needed (v1's index fields were
+    # retired 2026-07-24).
     logging.info(
         f"[resync] {pair_name} zone {slate_zone.get('zone_id')} — "
         f"shifted indices by {delta} (ob_idx {old_ob_idx} -> {new_ob_idx})."

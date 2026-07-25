@@ -477,15 +477,6 @@ PAIR_SESSION_TAGS = {
     "BTCUSD": ["asia", "london", "ny"],  # 24/7 — no home session; all three eligible
 }
 
-# INTERNAL — scoring caps for the sweep score. Consumed by run_scorecard()
-# (Phase 2 only). Sums to 3.0 by construction. Vet's allocation: Presence
-# carries the trade (1.5), Rejection confirms it (1.0), Equal Levels is the
-# "nice to have" bigger-pool bonus (0.5).
-SWEEP_SCORE_BASE_MAX        = 1.5   # presence (wick + close-back, bias-aligned, within recency)
-SWEEP_SCORE_EQUAL_LEVEL_MAX = 0.5   # 0 / 0.25 / 0.5 for 0 / 1 / 2 prior matches in last 3 swings
-SWEEP_SCORE_REJECTION_MAX   = 1.0   # 0 / 0.33 / 0.66 / 1.0 for wick:body ratio < 1 / 1-2 / 2-3 / >3
-
-
 def trading_hours_between(ts_earlier, ts_later):
     """
     Count Mon–Fri hours between two timestamps. Both treated as naive UTC.
@@ -1012,72 +1003,6 @@ def is_swing_active(swing, df, pierce_min, before_idx=None):
     return True
 
 
-def _equal_levels_score(swept_swing, all_swings, pair_type, tf_atr,
-                        df=None, before_idx=None,
-                        recency_floor_idx=None):
-    """
-    Score the 'equal highs/lows' confluence around the swept swing.
-
-    SMC-faithful rules (rewritten):
-      - Pool: same-type swings within recency window. If `recency_floor_idx`
-        is provided, includes swings with idx >= recency_floor_idx. Else
-        includes swings within the last 50 candles before the swept swing.
-      - ONLY counts swings that are ACTIVE (unbroken AND unswept) as of
-        the swept swing's idx. Drained equal-level swings have no
-        liquidity left and don't add confluence.
-      - Counts how many active swings sit within the pair-aware
-        equal-level tolerance of the swept swing's price.
-      - Score is capped at 2 matches → max score 0.5 (unchanged tier semantics).
-
-    `df` is required to evaluate active-ness. If not provided, falls back
-    to the old "last 3 swings, no active filter" behaviour for backwards
-    compat with any callers that don't yet pass df (defensive).
-
-    Returns:
-      (score, match_count)  where score in {0.0, 0.25, 0.5}
-                            and match_count in {0, 1, 2}.
-    """
-    if not swept_swing or not all_swings or tf_atr is None or tf_atr <= 0:
-        return 0.0, 0
-    tol_mult = SWEEP_EQUAL_LEVEL_TOLERANCE_ATR.get(pair_type, 0.25)
-    tolerance = tol_mult * tf_atr
-    pierce_min = SWEEP_WICK_PIERCE_MIN_ATR.get(pair_type, 0.05) * tf_atr
-
-    swept_idx   = int(swept_swing['idx'])
-    anchor_price = float(swept_swing['price'])
-
-    # Recency window for the pool.
-    if recency_floor_idx is None:
-        recency_floor_idx = max(0, swept_idx - 50)
-
-    same_type = [s for s in all_swings
-                 if s['type'] == swept_swing['type']
-                 and recency_floor_idx <= s['idx'] <= swept_idx
-                 and s['idx'] != swept_idx]
-
-    if not same_type:
-        return 0.0, 0
-
-    # Filter to active (unbroken + unswept) up to the swept swing's idx.
-    # `df` is the active-ness oracle. Without df, skip the filter
-    # (degraded mode — preserves old behaviour for legacy callers).
-    if df is not None:
-        same_type = [s for s in same_type
-                     if is_swing_active(s, df, pierce_min, before_idx=swept_idx)]
-
-    if not same_type:
-        return 0.0, 0
-
-    matches = sum(1 for s in same_type if abs(s['price'] - anchor_price) <= tolerance)
-    matches = min(matches, 2)
-
-    if matches == 0:
-        return 0.0, 0
-    if matches == 1:
-        return 0.25, 1
-    return 0.5, 2
-
-
 def _rejection_score(df, sweep_idx, swept_type, tf_atr):
     """
     Score the rejection quality of the sweep candle.
@@ -1122,24 +1047,14 @@ def _rejection_score(df, sweep_idx, swept_type, tf_atr):
         return 0.66, ratio
     return 1.0, ratio
 
-def _sweep_tier(score):
-    """Classify final sweep score into a label for narration. Max 3.0."""
-    if score >= 2.4:
-        return 'textbook'
-    if score >= 1.8:
-        return 'decent'
-    if score > 0.0:
-        return 'weak'
-    return 'none'
-
 
 # ============================================================================
-# Phase 1 sweep observation (display-only, snapshot semantics)
-# ============================================================================
-# Anchored to the leg `[impulse_start_idx, ob_idx]` already on every OB. Scans
-# the most-recent qualifying sweep in that leg (newest first). Records a
-# snapshot onto ob['sweep_observed']. Phase 2 consumes the snapshot — it does
-# NOT re-grade. Past observations are not re-evaluated when yfinance revises.
+# Sweep context helpers — round-number / prior-day / session-H&L reads.
+# Shared: _round_number_key / _nearest_round_number feed sweep v2's RN
+# alignment (liquidity_sweep.py); _session_hl_until is its own DST-honest
+# reference (guarded by tests/test_session_hl_dst.py). The v1 sweep detector
+# (observe_phase1_sweep) that consumed _prior_trading_day_hl / _compute_context_tags
+# was retired 2026-07-24 — sweep v2 (liquidity_sweep.py) is the sole detector.
 # ----------------------------------------------------------------------------
 
 def _round_number_key(pair_name, pair_type):
@@ -1154,42 +1069,6 @@ def _nearest_round_number(price, grid):
     if grid <= 0:
         return price
     return round(price / grid) * grid
-
-
-def _prior_trading_day_hl(df, anchor_ts):
-    """
-    Return (high, low) of the prior trading day for the candle containing
-    `anchor_ts`. Trading day = Mon-Fri UTC. Sunday's "prior day" is Friday.
-
-    Returns (None, None) if df has no candles in the prior trading day.
-    """
-    if df is None or len(df) == 0 or anchor_ts is None:
-        return None, None
-    try:
-        anchor_dt = anchor_ts.to_pydatetime() if hasattr(anchor_ts, 'to_pydatetime') else anchor_ts
-        if hasattr(anchor_dt, 'tzinfo') and anchor_dt.tzinfo is not None:
-            anchor_dt = anchor_dt.replace(tzinfo=None)
-        cursor = anchor_dt - timedelta(days=1)
-        # Walk back across weekend if needed (Sat=5, Sun=6)
-        while cursor.weekday() >= 5:
-            cursor = cursor - timedelta(days=1)
-        target_date = cursor.date()
-        # Slice df rows whose timestamp falls on target_date. Iterate the
-        # 'Datetime' column (not df.index) — Phase 1's reset_index df has an
-        # integer index that would make every .date() below throw. See
-        # _row_timestamps.
-        prior_mask = []
-        for ts in _row_timestamps(df):
-            t = ts.to_pydatetime() if hasattr(ts, 'to_pydatetime') else ts
-            if hasattr(t, 'tzinfo') and t.tzinfo is not None:
-                t = t.replace(tzinfo=None)
-            prior_mask.append(t.date() == target_date)
-        if not any(prior_mask):
-            return None, None
-        prior_df = df[prior_mask]
-        return float(prior_df['High'].max()), float(prior_df['Low'].min())
-    except Exception:
-        return None, None
 
 
 def _session_hl_until(df, anchor_ts, session_key):
@@ -1246,365 +1125,6 @@ def _session_hl_until(df, anchor_ts, session_key):
         return None, None
 
 
-def _compute_context_tags(swept_price, swept_type, df, anchor_ts,
-                          pair_name, pair_type, tf_atr):
-    """
-    Return list of human-readable tags describing what the swept level is
-    aligned with. Tags use the same widened ATR tolerance as equal-levels,
-    except round-number which uses its own tight bucket.
-    """
-    tags = []
-    if tf_atr is None or tf_atr <= 0:
-        return tags
-    tol = SWEEP_EQUAL_LEVEL_TOLERANCE_ATR.get(pair_type, 0.30) * tf_atr
-
-    # Round number
-    rn_key = _round_number_key(pair_name, pair_type)
-    grid   = ROUND_NUMBER_GRID.get(rn_key, 0.0)
-    rn_tol = ROUND_NUMBER_TOLERANCE.get(rn_key, 0.0)
-    if grid > 0:
-        nearest = _nearest_round_number(swept_price, grid)
-        if abs(swept_price - nearest) <= rn_tol:
-            tags.append('round_number')
-
-    # Prior day H/L
-    pd_high, pd_low = _prior_trading_day_hl(df, anchor_ts)
-    if swept_type == 'low' and pd_low is not None:
-        if abs(swept_price - pd_low) <= tol:
-            tags.append('prior_day_low')
-    if swept_type == 'high' and pd_high is not None:
-        if abs(swept_price - pd_high) <= tol:
-            tags.append('prior_day_high')
-
-    # Per-pair session H/L
-    for sess in PAIR_SESSION_TAGS.get(pair_name, []):
-        s_high, s_low = _session_hl_until(df, anchor_ts, sess)
-        if swept_type == 'low' and s_low is not None:
-            if abs(swept_price - s_low) <= tol:
-                tags.append(f'{sess}_low')
-        if swept_type == 'high' and s_high is not None:
-            if abs(swept_price - s_high) <= tol:
-                tags.append(f'{sess}_high')
-
-    return tags
-
-
-# PHASE 1 ONLY — Phase 1 sweep observation (display badge in scout email).
-# Called only by smc_radar.py.
-def observe_phase1_sweep(df, ob_idx, impulse_start_idx, direction,
-                         tf_atr, pair_type, pair_name, tf_label='H1',
-                         event_type='BOS', prior_event_idx=None,
-                         fallback_lookback=48):
-    """
-    Sweep observation — uniform detection used by BOTH Phase 1 (H1 snapshot
-    at OB formation) and Phase 2 (M15 entry-time sweep).
-
-    Swings are computed on the FULL df at lookback=3 and filtered to the
-    search window. Full-df detection gives every candle in the window its
-    true neighbours (computing on the slice silently drops 3 candidates at
-    each edge).
-
-    Search window:
-      - CHoCH: `[prior_event_idx, ob_idx]` when prior_event_idx is given.
-        Falls back to leg-anchored when no prior event exists.
-      - BOS:   `[prior_event_idx, ob_idx]` when prior_event_idx is given
-        (symmetric with CHoCH — covers the entire trend leg the BOS is
-        continuing). Caller passes the most recent OPPOSING-direction
-        structural event (a BOS / Range BOS / CHoCH that reversed the
-        trend; v2 has no Major/Minor). Fallback when prior_event_idx is None or
-        unresolvable: `max(0, ob_idx - fallback_lookback)`.
-
-    `fallback_lookback`: candle count used when no structural anchor is
-    available. Phase 1 (H1) uses default 6 (≈6 trading hours). Phase 2 (M15)
-    has no structural events of its own, so it always hits this fallback —
-    callers should pass a larger value (e.g. 20 M15 candles = ~5 hours).
-
-    A qualifying sweep candle:
-      - Bullish OB: candle's low pierces a prior pivot LOW by at least the
-        pair's wick-pierce minimum, AND closes back above that low.
-      - Bearish OB: candle's high pierces a prior pivot HIGH by the pierce
-        minimum, AND closes back below that high.
-
-    Target eligibility (SMC-faithful, NEW):
-      - Only ACTIVE swings qualify as sweep targets. Active = unbroken AND
-        unswept by any candle between the swing's birth and the candidate
-        sweep candle's idx. Drained / broken swings have no liquidity left.
-      - If no active target exists in the window for any candidate, the
-        snapshot returns `exists=False`. No fallback to swept targets.
-
-    Selection:
-      - For each candidate candle in the window, find the deepest pierce
-        among all ACTIVE prior same-type pivots. Score the candidate.
-      - Across all candidates with a qualifying active target, the
-        HIGHEST-SCORED candidate wins. Tie-break: more recent.
-      - The OB candle itself is allowed to be the sweep candle (per ICT
-        methodology — engulfing / rejection-block patterns).
-
-    Returns the snapshot dict written to ob['sweep_observed'] (Phase 1) or
-    consumed live by Phase 2's M15 detection. Canonical empty shape carries
-    `components` and `hours_before_anchor` so downstream consumers can read
-    a uniform schema regardless of whether a sweep was found.
-    """
-    not_observed = {
-        'exists': False, 'tf': tf_label, 'tier': 'none', 'score': 0.0,
-        'price': None, 'sweep_idx': None,
-        'swept_swing_idx': None, 'swept_swing_ts': None,
-        'timestamp': None,
-        'wick_distance_pips': 0.0, 'wick_body_ratio': 0.0,
-        'equal_levels_count': 0, 'context_tags': [],
-        'components': {
-            'base': 0.0,
-            'equal_levels': 0.0, 'equal_levels_matches': 0,
-            'rejection': 0.0, 'wick_body_ratio': 0.0,
-        },
-        'hours_before_anchor': None,
-    }
-
-    if df is None or len(df) == 0:
-        return not_observed
-    if ob_idx is None or impulse_start_idx is None:
-        return not_observed
-    if direction not in ('bullish', 'bearish'):
-        return not_observed
-    if tf_atr is None or tf_atr <= 0:
-        return not_observed
-    if impulse_start_idx < 0 or ob_idx >= len(df) or impulse_start_idx > ob_idx:
-        return not_observed
-
-    H = df['High'].values.astype(float)
-    L = df['Low'].values.astype(float)
-    C = df['Close'].values.astype(float)
-
-    bias_low = (direction == 'bullish')  # bullish OB -> hunt low sweeps
-    swing_type_we_want = 'low' if bias_low else 'high'
-    pierce_min = SWEEP_WICK_PIERCE_MIN_ATR.get(pair_type, 0.05) * tf_atr
-
-    # Swing pool — computed once on the full df at lookback=3.
-    all_swings = get_swing_points(df, lookback=3)
-    if not all_swings:
-        return not_observed
-
-    # Search window low bound.
-    #
-    # LOCKED 2026-06 (decided with the trader, verified on real USDJPY swings):
-    # the sweep that VALIDATES an order block is the local liquidity run inside
-    # that OB's OWN impulse leg PLUS a small lookback before it — the stop-run
-    # price took immediately before the displacement that built the zone. The OB
-    # is the origin of this leg, so its fueling sweep lives in
-    # [impulse_start - SWEEP_LOOKBACK_BEFORE_IMPULSE, ob_idx], FLOORED at the prior
-    # structural event. The lookback (2026-06) catches the common case where the
-    # sweep candle is a candle or two BEFORE the impulse start (sweep -> base ->
-    # impulse); the prior-event floor keeps it from reaching an earlier leg.
-    #
-    # WHY THE OLD UNBOUNDED PRIOR ANCHORS WERE WRONG (tested + rejected on USDJPY):
-    #   - prior OPPOSING event: on a continuation BOS deep in a trend this reached
-    #     back to the trend's origin and grabbed unrelated old liquidity (picked
-    #     159.09 / 159.531, candles before this leg existed).
-    #   - prior SAME-direction break: still sat before this leg (159.574).
-    #   The fix is NOT "impulse leg only" but "impulse leg + a few candles, hard-
-    #   floored at the prior event" — local enough to stay on the fueling run
-    #   (159.706), bounded enough to never reach the earlier leg.
-    #
-    # `prior_event_idx` is now used as the LOWER-BOUND FLOOR (not the anchor):
-    # the lookback can extend before impulse_start but never past the prior event.
-    #
-    # REGRESSION NOTE (still relevant): get_swing_points tags the sweep candle
-    # itself (the leg's terminal extreme) as a swing. That does NOT break the
-    # leg-bounded window: the candidate loop below requires the swept target to
-    # be a swing with idx STRICTLY less than the candidate candle (s['idx'] < i),
-    # so a sweep candle can never sweep its own level. The earlier failure was a
-    # backward "find pullback before impulse_start" walk that latched search_lo
-    # ONTO the sweep candle; a forward leg window has no such collision.
-    #
-    # `fallback_lookback` is retained for Phase 2 (M15), which has no structural
-    # impulse leg of its own and walks back from impulse_start by this many
-    # candles. Phase 1 (H1) always has the leg, so it never hits the fallback.
-    if impulse_start_idx is not None:
-        # Extend a few candles BEFORE the impulse start to catch the sweep that
-        # turned the market (sweep -> base -> impulse). FLOOR at the prior
-        # structural event (prior_event_idx + 1) so the window can never reach an
-        # earlier leg's unrelated liquidity — the exact over-reach the
-        # impulse-leg-only lock fixed. With no prior event, just clamp at 0.
-        search_lo = int(impulse_start_idx) - SWEEP_LOOKBACK_BEFORE_IMPULSE
-        if prior_event_idx is not None:
-            try:
-                search_lo = max(search_lo, int(prior_event_idx) + 1)
-            except (TypeError, ValueError):
-                pass
-    else:
-        search_lo = max(0, int(ob_idx) - int(fallback_lookback))
-
-    if search_lo < 0:
-        search_lo = 0
-    if search_lo > ob_idx:
-        return not_observed
-
-    # Filter swings to the search window (same-type only). idx is absolute.
-    swings_in_window = [
-        s for s in all_swings
-        if s['type'] == swing_type_we_want
-        and search_lo <= s['idx'] <= ob_idx
-    ]
-    if not swings_in_window:
-        return not_observed
-
-    swept_type = 'low' if bias_low else 'high'
-
-    # Score every candidate. The HIGHEST-SCORED candidate with an ACTIVE
-    # (unbroken + unswept) target wins. NOT first-match.
-    # Tie-break: more recent (higher candidate idx).
-    best = None  # (total, candidate_idx, payload_dict)
-
-    for i in range(search_lo, ob_idx + 1):
-        prior_swings = [s for s in swings_in_window if s['idx'] < i]
-        if not prior_swings:
-            continue
-
-        # Find the deepest pierce among all ACTIVE prior same-type pivots.
-        # `before_idx=i` ensures the candidate doesn't disqualify its own
-        # target by counting itself as a sweep of the level.
-        winning_swing = None
-        winning_depth = 0.0
-        for s in prior_swings:
-            level = s['price']
-            if bias_low:
-                pierced = (L[i] < level - pierce_min) and (C[i] > level)
-                depth   = level - L[i] if pierced else 0.0
-            else:
-                pierced = (H[i] > level + pierce_min) and (C[i] < level)
-                depth   = H[i] - level if pierced else 0.0
-            if not pierced:
-                continue
-            if not is_swing_active(s, df, pierce_min, before_idx=i):
-                continue
-            if depth > winning_depth:
-                winning_swing = s
-                winning_depth = depth
-
-        if winning_swing is None:
-            continue
-
-        # ------------------------------------------------------------------
-        # Sweep-candle survivorship — SMC-faithful right-side check.
-        #
-        # The sweep candle's pierce extreme must remain the extreme of the
-        # leg from the sweep candle through to the OB candle (inclusive).
-        # If any later candle in [i+1, ob_idx] wicks STRICTLY deeper than
-        # the sweep candle's pierce extreme, the original "sweep" was just
-        # a wick on the way to a real extreme — fresh liquidity has been
-        # parked beyond it and the impulse into the OB is not fueled by
-        # this candidate's stop-run. Reject and let the loop find the
-        # genuine sweep candle (which may be the OB candle itself —
-        # engulfing / rejection-block pattern, already supported).
-        #
-        # Strictly deeper only: equal-depth later candles are allowed
-        # (they form the "equal levels" confluence the scorer rewards).
-        # ------------------------------------------------------------------
-        if bias_low:
-            sweep_extreme = L[i]
-            disqualified  = any(L[j] < sweep_extreme for j in range(i + 1, ob_idx + 1))
-        else:
-            sweep_extreme = H[i]
-            disqualified  = any(H[j] > sweep_extreme for j in range(i + 1, ob_idx + 1))
-        if disqualified:
-            continue
-
-        level = winning_swing['price']
-        eq_score, eq_matches = _equal_levels_score(
-            winning_swing, swings_in_window, pair_type, tf_atr,
-            df=df, before_idx=i,
-            recency_floor_idx=search_lo,
-        )
-        rej_score, wb_ratio  = _rejection_score(df, i, swept_type, tf_atr)
-        total = SWEEP_SCORE_BASE_MAX + eq_score + rej_score
-        tier  = _sweep_tier(total)
-
-        # Pierce distance in display units (pips for forex, points/$ for others).
-        if pair_type == 'forex':
-            pip_unit = 0.01 if pair_name == 'USDJPY' else 0.0001
-        elif pair_type == 'index':
-            pip_unit = 1.0
-        elif pair_type == 'crypto':
-            pip_unit = 1.0   # $1 = 1 "pip" on BTC (display only; ATR drives gates)
-        else:  # commodity (Gold)
-            pip_unit = 1.0
-        if bias_low:
-            raw_distance = level - L[i]
-        else:
-            raw_distance = H[i] - level
-        wick_distance_pips = round(max(raw_distance, 0.0) / pip_unit, 2)
-
-        # Resolve timestamps from the 'Datetime' COLUMN (Phase 1 passes a
-        # reset_index df whose .index is an integer RangeIndex — reading it
-        # would stamp row numbers, poisoning every downstream overlay). See
-        # _ts_for_idx / _iso_for_idx.
-        sweep_ts = _ts_for_idx(df, i)
-        if sweep_ts is None:
-            sweep_ts = df.index[i]
-        sweep_ts_iso = _iso_for_idx(df, i) or str(sweep_ts)
-        swept_swing_ts_iso = _iso_for_idx(df, int(winning_swing['idx']))
-
-        context_tags = _compute_context_tags(
-            level, swept_type, df, sweep_ts, pair_name, pair_type, tf_atr
-        )
-
-        # Hours from the sweep candle to the OB anchor. Trading-hours
-        # (Mon-Fri) so weekends don't inflate the gap. Used by Phase 2 to
-        # narrate sweep recency in the email.
-        try:
-            ob_ts_for_hours = _ts_for_idx(df, int(ob_idx))
-            if ob_ts_for_hours is None:
-                ob_ts_for_hours = df.index[int(ob_idx)]
-            if hasattr(ob_ts_for_hours, 'to_pydatetime'):
-                ob_dt_for_hours = ob_ts_for_hours.to_pydatetime()
-            else:
-                ob_dt_for_hours = ob_ts_for_hours
-            if hasattr(ob_dt_for_hours, 'tzinfo') and ob_dt_for_hours.tzinfo is not None:
-                ob_dt_for_hours = ob_dt_for_hours.replace(tzinfo=None)
-            sw_dt_for_hours = sweep_ts.to_pydatetime() if hasattr(sweep_ts, 'to_pydatetime') else sweep_ts
-            if hasattr(sw_dt_for_hours, 'tzinfo') and sw_dt_for_hours.tzinfo is not None:
-                sw_dt_for_hours = sw_dt_for_hours.replace(tzinfo=None)
-            hrs_before = trading_hours_between(sw_dt_for_hours, ob_dt_for_hours)
-            hrs_before = round(hrs_before, 1) if hrs_before is not None else None
-        except Exception:
-            hrs_before = None
-
-        payload = {
-            'exists':              True,
-            'tf':                  tf_label,
-            'tier':                tier,
-            'score':               round(total, 3),
-            'price':               float(level),
-            'sweep_idx':           int(i),
-            'swept_swing_idx':     int(winning_swing['idx']),
-            'swept_swing_ts':      swept_swing_ts_iso,
-            'timestamp':           sweep_ts_iso,
-            'wick_distance_pips':  wick_distance_pips,
-            'wick_body_ratio':     round(wb_ratio, 2),
-            'equal_levels_count':  int(eq_matches),
-            'context_tags':        context_tags,
-            'observed_at':         datetime.utcnow().isoformat(),
-            # Uniform-schema fields for Phase 2 consumers.
-            'components': {
-                'base':                 SWEEP_SCORE_BASE_MAX,
-                'equal_levels':         eq_score,
-                'equal_levels_matches': int(eq_matches),
-                'rejection':            rej_score,
-                'wick_body_ratio':      round(wb_ratio, 2),
-            },
-            'hours_before_anchor': hrs_before,
-        }
-
-        if best is None or total > best[0] or (total == best[0] and i > best[1]):
-            best = (total, i, payload)
-
-    if best is None:
-        return not_observed
-    return best[2]
-
-
-# NEW
-# NEW
 # SHARED P1+P2+P3 — 3-candle FVG detection inside a zone. Called by:
 #   Phase 1 (H1 FVG inside dealing range), Phase 2 (M15 FVG for scorecard input),
 #   Phase 3 (M5 FVG for chart context). Timeframe determined by caller's df.
@@ -2673,79 +2193,46 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
         bd = {"structure": 1 if bos_verdict == 'fading' else 3}
 
     # ------------------------------------------------------------------
-    # Sweep — H1-only (M15 removed 2026-05-26 in H1-only migration).
-    #   H1: consumed from ob['sweep_observed'] (frozen by Phase 1 at OB
-    #       formation). Phase 2 does NOT re-detect; Phase 1 is source of truth.
+    # Sweep — H1-only, SOLE SOURCE = ob['sweep_v2'] (pool-anchored, frozen by
+    # Phase 1 at OB formation; liquidity_sweep.py). Sweep v1 was retired
+    # 2026-07-24 — v2 is now the only sweep detector, the only score input, and
+    # the only read for narration/badge/OB2-rank. Phase 2 does NOT re-detect.
     #
-    # If the H1 snapshot is missing from the zone, treat as zero — this is a
-    # schema-drift signal worth investigating, not a reason to fabricate one.
+    # A missing/failed snapshot -> presence-False, grade 0 (score_inputs handles
+    # the (False, 0.0) fallback) — schema-drift is treated as "no sweep", never a
+    # fabricated one.
     # ------------------------------------------------------------------
     ob_ts_iso = ob.get('ob_timestamp')
 
-    sweep_obs_snapshot = ob.get('sweep_observed')
-    if isinstance(sweep_obs_snapshot, dict) and sweep_obs_snapshot.get('exists'):
-        # Consume P1's frozen H1 sweep. We also carry the sweep TIMESTAMP
-        # because P1's sweep_idx points into P1's H1 dataframe, NOT P2's
-        # (different fetches, indices don't align). Chart rendering must
-        # resolve the candle by timestamp on P2's frame.
-        h1_sweep = {
-            'score':               float(sweep_obs_snapshot.get('score', 0.0)),
-            'tier':                sweep_obs_snapshot.get('tier', 'none'),
-            'price':               sweep_obs_snapshot.get('price'),
-            'sweep_idx':           sweep_obs_snapshot.get('sweep_idx'),
-            'sweep_timestamp_iso': sweep_obs_snapshot.get('timestamp'),
-            'tf':                  'H1',
-            'components':          sweep_obs_snapshot.get('components', {
-                'base': 0.0, 'equal_levels': 0.0, 'equal_levels_matches': 0,
-                'rejection': 0.0, 'wick_body_ratio': 0.0,
-            }),
-            'hours_before_anchor': sweep_obs_snapshot.get('hours_before_anchor'),
-        }
-    else:
-        h1_sweep = {
-            'score': 0.0, 'tier': 'none', 'price': None, 'sweep_idx': None,
-            'sweep_timestamp_iso': None, 'tf': 'H1',
-            'components': {'base': 0.0, 'equal_levels': 0.0, 'equal_levels_matches': 0,
-                           'rejection': 0.0, 'wick_body_ratio': 0.0},
-            'hours_before_anchor': None,
-        }
-
-    chosen_sweep = h1_sweep
-    # Non-JPY forex collapse: sweep is presence-only (1.0 if a qualifying
-    # sweep exists, else 0.0). Equal-levels and rejection-quality components
-    # are detected and rendered but do NOT add points on these pairs.
-    # Rationale: spot forex has no centralized stop pool, so a qualifying
-    # sweep's *fact* carries some signal but its quality grading is noise.
-    # JPY / Gold / NAS keep the QUALITY grade but on a 2-point budget (2026-06-18:
-    # cut 3->2 so killzone +1 keeps these pairs at 10). The raw grade is a 0-3
-    # score; we scale it to 0-2 so the quality gradient survives -- a clean clip
-    # at 2 would flatten every mid/high sweep to the same number and discard the
-    # resolution we keep these pairs graded for.
-    pair_name_for_sweep_scoring = pair_conf.get('name', '') if pair_conf else ''
-    is_non_jpy_forex = (pair_type == 'forex' and 'JPY' not in pair_name_for_sweep_scoring)
-    # SCORE INPUT REWIRE (2026-07-20, owner "Option 1"): the sweep score leg now
-    # reads the MERGED sweep v2 snapshot (ob['sweep_v2'] — pool-anchored PW/PD/EQ
-    # plus the folded-in tier SW bare-swing) instead of the legacy sweep_observed.
-    # This is a LIVE-BEHAVIOUR CHANGE: sweep v2 judges differently, so FX presence
-    # and JPY/Gold grade shift on some OBs -> a few alerts flip. ONLY the score is
-    # rewired; the setup badge, OB2 ranking, sweep_present column and zone
-    # plumbing STILL read sweep_observed (legacy stays alive, not dead code).
-    # chosen_sweep (legacy) is still used below for the sweep_price / sweep_tf /
-    # narration fields — only bd["sweep"] moves to the new source.
     # Local import: liquidity_sweep imports smc_detector at module top, so a
     # top-level import here would be circular. Same pattern as the backtest's
     # _sweep2_features shim.
     import liquidity_sweep
-    _sweep2_exists, _sweep2_grade_0_3 = liquidity_sweep.score_inputs(
-        ob.get('sweep_v2'))
+    sweep_v2_snap = ob.get('sweep_v2') if isinstance(ob.get('sweep_v2'), dict) else {}
+
+    # Non-JPY forex collapse: sweep is presence-only (1.0 if a qualifying sweep
+    # exists, else 0.0). Rationale: spot forex has no centralized stop pool, so a
+    # qualifying sweep's *fact* carries some signal but its quality grading is
+    # noise. JPY / Gold / NAS keep the QUALITY grade but on a 2-point budget
+    # (2026-06-18: cut 3->2 so killzone +1 keeps these pairs at 10). The raw grade
+    # is a 0-3 tier score (liquidity_sweep._TIER_GRADE_0_3); we scale it to 0-2 so
+    # the quality gradient survives -- a clean clip at 2 would flatten every
+    # mid/high sweep to the same number and discard the resolution we keep these
+    # pairs graded for.
+    pair_name_for_sweep_scoring = pair_conf.get('name', '') if pair_conf else ''
+    is_non_jpy_forex = (pair_type == 'forex' and 'JPY' not in pair_name_for_sweep_scoring)
+    _sweep2_exists, _sweep2_grade_0_3 = liquidity_sweep.score_inputs(sweep_v2_snap)
     if is_non_jpy_forex:
         bd["sweep"] = 1.0 if _sweep2_exists else 0.0
     else:
-        # Same 0-3 -> 0-2 scaling the legacy grade used (2026-06-18 budget cut),
-        # so the JPY/Gold sweep leg keeps its 2-point ceiling and gradient.
         bd["sweep"] = round(_sweep2_grade_0_3 * (2.0 / 3.0), 2)
-    sweep_price  = chosen_sweep['price']
-    sweep_tf     = chosen_sweep['tf']
+
+    # Narration fields — the raided pool's level + plain-English name, straight
+    # off the same frozen v2 snapshot the score reads (one definition on every
+    # surface). tf stays 'H1' (the only entry timeframe). describe_pool -> None
+    # when no sweep, which the sweep row renders as "absent".
+    sweep_price = sweep_v2_snap.get('level') if _sweep2_exists else None
+    sweep_tf    = 'H1'
 
     # FVG — H1 only (2026-05-26 scoring rewrite — max 2):
     # H1 FVG = macro displacement at OB formation, the structural signal.
@@ -2822,18 +2309,21 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
 
     # Macro removed from scorecard. Still surfaced as email-only context.
 
+    # Sweep facts for the email/log — all off the frozen v2 snapshot (one
+    # definition). tier is v2's pool tier (PW/PD/EQ/SW), pool_name the plain-
+    # English raid target. 'present' mirrors the score's presence flag so the
+    # email sweep row reads the same truth the score used.
     return {
         "total": round(sum(bd.values()), 1),
         "breakdown": bd,
         "sweep_price": sweep_price,
         "sweep_tf": sweep_tf,
-        "sweep_idx": chosen_sweep.get('sweep_idx'),
         # Authoritative for chart rendering: timestamp survives the cross-
-        # phase / cross-fetch boundary, idx does not.
-        "sweep_timestamp_iso": chosen_sweep.get('sweep_timestamp_iso'),
-        "sweep_tier": chosen_sweep['tier'],
-        "sweep_components": chosen_sweep['components'],
-        "sweep_hours_before_ob": chosen_sweep['hours_before_anchor'],
+        # phase / cross-fetch boundary. v2 stamps sweep_ts as an ISO string.
+        "sweep_timestamp_iso": sweep_v2_snap.get('sweep_ts') if _sweep2_exists else None,
+        "sweep_present": _sweep2_exists,
+        "sweep_tier": sweep_v2_snap.get('tier') if _sweep2_exists else None,
+        "sweep_pool_name": liquidity_sweep.describe_pool(sweep_v2_snap),
         "dealing_range": dr,
         "pd_position": pd_position
     }
@@ -2842,7 +2332,8 @@ def run_scorecard(bias, df_h1, ob, fvg, current_price, pair_conf=None):
 # PHASE 2 ONLY — generates scorecard HTML rows for Phase 2 alert email.
 def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_conf,
                             dealing_range=None, fvg_source=None, pd_position=None,
-                            sweep_tier=None, sweep_components=None, fvg=None):
+                            sweep_tier=None, sweep_present=False,
+                            sweep_pool_name=None, fvg=None):
     """
     Return list of (label, score, max_score, status, explanation) for email rendering.
 
@@ -2907,26 +2398,24 @@ def generate_scorecard_rows(bias, breakdown, ob, sweep_price, sweep_tf, pair_con
     else:
         rows.append(("Structure", s, 4, "fail", "No confirmed BOS or CHoCH."))
 
-    # 2. Liquidity Sweep — LEGACY signal (any-minor-swing detector). The points
-    # still come from it (score parity holds until the edge engine rules on the
-    # rebuilt sweep2_* columns), but the row SAYS so and points the reader at
-    # the pool-based read (build_sweep_breakdown_html banner / sweep_v2), so
-    # the email speaks one definition. Max is 1 (presence-only) for non-JPY
-    # forex, 2 (quality-graded, scaled 0-3 -> 0-2) for JPY/Gold/NAS.
+    # 2. Liquidity Sweep — SOLE detector is sweep v2 (pool-anchored). Presence and
+    # points come from ob['sweep_v2']; the row names the raided pool (describe_pool
+    # -> sweep_pool_name), so the email, the score, the chart and the banner all
+    # speak ONE definition. Max is 1 (presence-only) for non-JPY forex, 2
+    # (quality-graded, scaled 0-3 -> 0-2) for JPY/Gold/NAS.
     s = breakdown.get("sweep", 0)
-    comps = sweep_components or {}
-    presence = comps.get('base', 0.0)
     pair_name_for_row = pair_conf.get('name', '') if pair_conf else ''
     pair_type_for_row = pair_conf.get('pair_type', 'forex') if pair_conf else 'forex'
     sweep_max = 1 if (pair_type_for_row == 'forex' and 'JPY' not in pair_name_for_row) else 2
-    if presence > 0 and sweep_price is not None:
-        rows.append(("Sweep (legacy pts)", s, sweep_max, "ok",
-                     "Old swing-sweep signal — points kept for score continuity. "
-                     "The real liquidity read is the Sweep banner below the charts."))
+    if sweep_present:
+        pool = sweep_pool_name or "a liquidity pool"
+        rows.append(("Liquidity Sweep", s, sweep_max, "ok",
+                     f"Swept {pool} inside the OB's own leg — a real stop-run "
+                     f"fuelling the displacement that built this zone."))
     else:
-        rows.append(("Sweep (legacy pts)", s, sweep_max, "fail",
-                     "Old swing-sweep signal absent — points unaffected elsewhere. "
-                     "The real liquidity read is the Sweep banner below the charts."))
+        rows.append(("Liquidity Sweep", s, sweep_max, "fail",
+                     "No qualifying pool raid in the OB's leg — the leg was not "
+                     "fuelled by a mapped stop-run."))
 
     # 3. FVG — H1 only (max 2). pristine 2 | partial 1 | none/mitigated 0
     s = breakdown.get("fvg", 0)
@@ -3068,9 +2557,10 @@ def classify_setup(ob, pd_position, trend_alignment):
         side" we can't prove), and is simply skipped for the caution.
       - reversal_pct is only meaningful on a CHoCH; the from-zone test is only
         reached on CHoCH events.
-      - sweep TIER is graded for every pair (the non-JPY-forex presence-only
-        collapse affects the SCORE, not the tier), so the tier test is valid
-        across instruments.
+      - sweep PRESENCE is the badge gate (any v2 tier), not a tier grade: sweep
+        v2's exists flag already means a ranked, intact pool was genuinely raided
+        and rejected, so the fact of the raid is the signal the badge needs. The
+        non-JPY-forex presence-only collapse affects the SCORE, not this read.
     """
     bos_tag   = ob.get('bos_tag')
     bos_tier  = ob.get('bos_tier')
@@ -3080,9 +2570,11 @@ def classify_setup(ob, pd_position, trend_alignment):
     fvg       = ob.get('fvg') or {}
     fvg_exists = bool(fvg.get('exists'))
     fvg_mit    = fvg.get('mitigation')
-    sweep      = ob.get('sweep_observed') or {}
+    # Sweep v2 is the SOLE sweep source (v1 retired 2026-07-24). Presence only —
+    # any tier (PW/PD/EQ/SW) counts, because exists already guarantees a real
+    # pool raid + rejection.
+    sweep      = ob.get('sweep_v2') or {}
     sweep_exists = bool(sweep.get('exists'))
-    sweep_tier   = (sweep.get('tier') or 'none')
     from_zone    = float(ob.get('reversal_pct') or 0.0) >= 1.0
 
     # --- A+ "Reversal at the Wall" -------------------------------------------
@@ -3090,7 +2582,7 @@ def classify_setup(ob, pd_position, trend_alignment):
     # zone, and a live gap. Every ingredient tells the SAME story: smart money
     # loaded at the extreme. The richest SMC reversal there is.
     if (bos_tag == 'CHoCH' and from_zone
-            and sweep_exists and sweep_tier in ('textbook', 'decent')
+            and sweep_exists
             and touches == 0
             and fvg_exists and fvg_mit != 'full'):
         return ("A+ Reversal at the Wall",

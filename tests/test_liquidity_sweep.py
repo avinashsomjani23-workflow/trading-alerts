@@ -393,17 +393,29 @@ def test_degraded_inputs_never_raise():
 # ── row-build column mapping ────────────────────────────────────────────────
 
 def test_features_from_snapshot_and_age():
+    """WS2 four-block layout: the PD raid surfaces in the FILL-anchored PD block
+    (sweep2_pd_present), not a dropped winner col. PD is re-judged at fill on the
+    frozen fuel window and finds the same 1.0932 raid here (level did not roll in
+    the fixture). The birth winner still exists on the snapshot for live."""
     df, *_ = build_scenario()
     snap = observe(df)
-    alert_ts = df.index[35]  # alert fires on the bar stamped i35
-    out = ls.features_from_snapshot(snap, df, alert_ts)
+    assert snap["tier"] == "PD"                 # birth winner (for LIVE) intact
+    fill_ts = df.index[35]  # fill happens on the bar stamped i35
+    out = ls.features_from_snapshot(snap, df, fill_ts)
     assert out["sweep2_present"] is True
-    assert out["sweep2_tier"] == "PD"
-    assert abs(out["sweep2_level"] - 1.0932) < 1e-9
-    assert out["sweep2_pools_swept"] == 1
-    assert out["sweep2_tiers_checked"] == snap["tiers_checked"]
-    # closed bars strictly before i35 = 35; last closed = i34; sweep bar i30
-    assert out["sweep2_age_at_alert_h1"] == 4
+    assert out["sweep2_pd_present"] is True      # PD surfaced via the fill block
+    assert out["sweep2_pools_swept"] == 1        # birth-time count roll-up
+    # tiers_checked folds birth eq/sw with the fill pw/pd verdict; pd provable.
+    assert "pd" in out["sweep2_tiers_checked"]
+    assert "sw" in out["sweep2_tiers_checked"]
+    # No winner col leaks into the CSV (dropped in WS2).
+    assert "sweep2_tier" not in out
+    assert "sweep2_level" not in out
+    # FILL-anchored age: earliest sweep i30, fill i35 -> 35 closed bars before
+    # fill, last closed i34; 34 - 30 = 4.
+    assert out["sweep2_age_at_fill_h1"] == 4
+    # never_filled -> None (no fill bar to measure to).
+    assert ls.features_from_snapshot(snap, df, None)["sweep2_age_at_fill_h1"] is None
 
 
 def test_features_none_on_legacy_or_failed():
@@ -443,3 +455,150 @@ def test_column_contract():
     df, *_ = build_scenario()
     out = ls.features_from_snapshot(observe(df), df, df.index[-1])
     assert tuple(out.keys()) == ls.SWEEP2_FEATURE_COLUMNS
+
+
+# ── SW always-on cols + fill-anchored age (2026-07-25) ──────────────────────
+
+def test_sw_always_on_metrics():
+    """The 5 sweep2_sw_* cols surface the BEST (earliest) swept SW even when a
+    RANKED pool wins — SW ranks last so it is usually present-but-hidden. And
+    the age column is FILL-anchored (renamed from *_at_alert), None when
+    never_filled. Option A (2026-07-25): 'best SW' is always the earliest SW,
+    even in the rare case a DIFFERENT (deepest-pierce) SW is the overall winner
+    — so sw cols are NOT asserted equal to winner cols. Winner cols are
+    untouched (separate keys) => no double-count."""
+    # EQ shelf wins the raid; the spike lows are ALSO lb-3 swings swept in the
+    # same leg -> a hidden SW. tail bumped so a later fill bar exists.
+    df, *_ = build_scenario(pdl=1.0900, sweep_low=1.0960,
+                            eq_lows=(1.0968, 1.0967), tail=6)
+    snap = observe(df)
+    assert snap["tier"] == "EQ"                 # a RANKED pool is the winner
+    # SW block is birth-frozen on snap['sw_block'] (WS2 layout).
+    sw_blk = snap["sw_block"]
+    assert sw_blk["present"] is True            # SW surfaced despite losing
+    assert abs(sw_blk["pierce_atr"] - 0.7) < 1e-6
+    assert abs(sw_blk["rejection_ratio"] - 20.0) < 1e-6
+    assert abs(sw_blk["follow_atr"] - 10.8) < 1e-6
+    assert sw_blk["rn_aligned"] is False
+
+    out = ls.features_from_snapshot(snap, df, df.index[36])
+    # SW cols re-labelled straight onto the row.
+    assert out["sweep2_sw_present"] is True
+    assert abs(out["sweep2_sw_pierce_atr"] - 0.7) < 1e-6
+    assert abs(out["sweep2_sw_follow_atr"] - 10.8) < 1e-6
+    # FILL-anchored age: sweep bar i30, fill i36 -> 36 closed bars before fill,
+    # last closed i35, minus sweep pos 30 = 5. (Alert-anchored at i35 would be
+    # 4 — proves the anchor moved to the fill bar.)
+    assert out["sweep2_age_at_fill_h1"] == 5
+    assert ls.features_from_snapshot(snap, df, df.index[35])["sweep2_age_at_fill_h1"] == 4
+    # never_filled -> None (no fill bar to measure to).
+    assert ls.features_from_snapshot(snap, df, None)["sweep2_age_at_fill_h1"] is None
+
+
+def test_sw_cols_none_when_no_sw_swept():
+    """No SW swept -> all 5 sw cols None/False (follow especially None). Asserts
+    on the ROW features (snapshot_none takes an early return without the sw_*
+    keys; features_from_snapshot fills every column from the SWEEP2 contract)."""
+    df, *_ = build_scenario(pdl=1.0900, sweep_low=1.0995)  # nothing pierced
+    snap = observe(df)
+    assert snap["exists"] is False
+    out = ls.features_from_snapshot(snap, df, df.index[-1])
+    assert out["sweep2_sw_present"] is False
+    assert out["sweep2_sw_pierce_atr"] is None
+    assert out["sweep2_sw_rejection_ratio"] is None
+    assert out["sweep2_sw_follow_atr"] is None      # follow-through especially
+    assert out["sweep2_sw_rn_aligned"] is None
+
+
+# ── WS2: PW/PD fill-anchored, SW/EQ frozen, closed-bar / no-look-ahead ───────
+
+def test_ws2_pd_block_populated_at_fill():
+    """The PD raid surfaces in the FILL-anchored PD block (re-judged on the
+    frozen fuel window). SW is also present (birth-frozen block). Neither the
+    winner cols nor a PW block exist (no full prior week in frame)."""
+    df, *_ = build_scenario(pdl=1.0930, sweep_low=1.0925, eq_lows=(1.0968, 1.0967))
+    snap = observe(df)
+    out = ls.features_from_snapshot(snap, df, df.index[35])
+    assert out["sweep2_pd_present"] is True          # PD via the fill block
+    assert abs(out["sweep2_pd_pierce_atr"] - 0.5) < 1e-6   # (1.0930-1.0925)/ATR
+    assert out["sweep2_eq_present"] is True           # EQ birth-frozen block
+    assert out["sweep2_eq_size"] == 2
+    assert out["sweep2_sw_present"] is True           # SW birth-frozen block
+    assert out["sweep2_pw_present"] is False          # no full prior week
+    assert "sweep2_tier" not in out                   # winner cols dropped
+
+
+def test_ws2_pd_no_lookahead_at_fill():
+    """A violent future AFTER the fill bar must NOT change the fill-anchored
+    PW/PD read — pw_pd_at_fill clamps to bars strictly before fill_ts."""
+    df, *_ = build_scenario(pdl=1.0930, sweep_low=1.0925)
+    snap = observe(df)
+    fill_ts = df.index[35]
+    base = ls.features_from_snapshot(snap, df, fill_ts)
+    # Append a dive through every level, all AFTER the fill bar.
+    future = [(df.index[-1] + pd.Timedelta(hours=i + 1), 1.0800, 1.0801,
+               1.0700, 1.0750) for i in range(24)]
+    df2 = frame([(t, r.Open, r.High, r.Low, r.Close)
+                 for t, r in df.iterrows()] + future)
+    after = ls.features_from_snapshot(snap, df2, fill_ts)
+    for c in ("sweep2_pd_present", "sweep2_pd_pierce_atr",
+              "sweep2_pd_rejection_ratio", "sweep2_pd_follow_atr",
+              "sweep2_pd_rn_aligned", "sweep2_age_at_fill_h1"):
+        assert base[c] == after[c], f"{c} moved on future append (look-ahead!)"
+
+
+def test_ws2_pd_unhappens_inside_leg_is_dropped():
+    """The un-happen that matters is WITHIN the fuel window (Option A): if price
+    closed-and-HELD through the PDL inside the leg, it was a real break, not a
+    resting-liquidity raid — _first_sweep_ts drops it, so the PD block is absent.
+    (Post-OB bars are IRRELEVANT by design — the leg window defines the raid; the
+    fill only prices the level. That is covered by test_ws2_pd_no_lookahead.)"""
+    # window_closes_below makes the leg CLOSE-AND-HOLD through the PDL -> broken,
+    # never a sweep. OB shifts to i32 in that layout; observe uses defaults.
+    df, ob, imp, brk = build_scenario(pdl=1.0932, window_closes_below=True)
+    snap = observe(df, ob=ob, imp=imp, brk=brk)
+    out = ls.features_from_snapshot(snap, df, df.index[35])
+    assert out["sweep2_pd_present"] is False   # broken-and-held is not a sweep
+
+
+def test_ws2_pool_status_agreement():
+    """THE anti-bullshit check the owner ordered: pool_status and sweep2 detect
+    the SAME event on the SAME level, so they must AGREE where they overlap.
+
+    Invariant (one-directional by design): when sweep2's fill-anchored PD block
+    says the PDL was swept, pool_status on that SAME level (over the SAME closed
+    bars up to fill) must ALSO call it swept — never 'intact'. The reverse need
+    NOT hold: pool_status can see a raid the leg never entered (the relevance
+    filter is exactly why sweep2 is leg-windowed). A sweep2 raid that pool_status
+    calls intact would mean the two disagree on the same level = the build is
+    wrong."""
+    import pool_builder
+    df, ob, imp, brk = build_scenario(pdl=1.0930, sweep_low=1.0925)
+    snap = observe(df)
+    fill_ts = df.index[35]
+    out = ls.features_from_snapshot(snap, df, fill_ts)
+    assert out["sweep2_pd_present"] is True     # sweep2 saw the PDL raid
+
+    # pool_status on the SAME PDL, same closed-before-fill bars.
+    h1 = ls._naive_utc_index(df)
+    f_ts = ls._naive_fill_ts(fill_ts)
+    pre_fill = h1[h1.index < f_ts]
+    st = pool_builder.pool_status(pre_fill, 1.0930, "below")
+    assert st["status"] in ("swept", "broken"), (
+        f"sweep2 says PDL swept but pool_status says {st['status']} — "
+        "the two disagree on the SAME level (bullshit case)")
+
+
+def test_ws2_frozen_sw_eq_identical_birth_to_fill():
+    """SW/EQ blocks are birth-frozen: the fill read re-labels them unchanged
+    regardless of the fill bar chosen (no re-detection)."""
+    df, *_ = build_scenario(pdl=1.0900, sweep_low=1.0960,
+                            eq_lows=(1.0968, 1.0967), tail=8)
+    snap = observe(df)
+    a = ls.features_from_snapshot(snap, df, df.index[35])
+    b = ls.features_from_snapshot(snap, df, df.index[39])
+    for c in ("sweep2_sw_present", "sweep2_sw_pierce_atr",
+              "sweep2_sw_rejection_ratio", "sweep2_sw_follow_atr",
+              "sweep2_sw_rn_aligned", "sweep2_eq_present",
+              "sweep2_eq_pierce_atr", "sweep2_eq_follow_atr", "sweep2_eq_size"):
+        assert a[c] == b[c], f"frozen {c} changed with fill bar"

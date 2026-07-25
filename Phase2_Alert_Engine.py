@@ -1113,12 +1113,21 @@ def generate_h1_chart(df_h1, ob, pair_conf, title, levels=None, dealing_range=No
                             ax.plot([x_lo, sw_local], [sw_level, sw_level],
                                     color=sw_color, linewidth=1.0,
                                     linestyle=(0, (3, 2)), alpha=0.8, zorder=4)
-                    ax.scatter([sw_local], [wick_tip], marker='*', s=140,
+                    # Offset the star OFF the wick tip (below the low for a
+                    # bullish raid, above the high for a bearish raid) so the
+                    # sweep wick stays fully visible instead of hidden under the
+                    # marker. Gap scales with the plotted price span. Annotation
+                    # stays anchored to the star's offset position.
+                    _plot_span = float(df_plot['High'].max() - df_plot['Low'].min())
+                    star_gap = _plot_span * 0.02
+                    star_y = (wick_tip - star_gap) if ob_dir == 'bullish' \
+                             else (wick_tip + star_gap)
+                    ax.scatter([sw_local], [star_y], marker='*', s=140,
                                color=sw_color, edgecolors='#001f24',
                                linewidths=0.8, zorder=8)
                     label_dy = -14 if ob_dir == 'bullish' else 14
                     label_va = 'top' if ob_dir == 'bullish' else 'bottom'
-                    ax.annotate('Sweep', xy=(sw_local, wick_tip),
+                    ax.annotate('Sweep', xy=(sw_local, star_y),
                                 xytext=(0, label_dy), textcoords='offset points',
                                 color=sw_color, fontsize=8, fontweight='bold',
                                 ha='center', va=label_va, zorder=8)
@@ -1461,6 +1470,9 @@ def build_trade_email(data, pair, pair_conf, state_msg, scorecard_rows, total_sc
     scan_ist = scan_start_ist.strftime('%H:%M IST')
     ist_time = f"Scanned {scan_ist} · Sent {sent_ist}"
     ob = data.get('ob', {})
+    # Field freeze/live/re-read classification (which ob[...] reads are frozen at
+    # birth vs live vs re-read): see the "OB FIELD FREEZE / LIVE / RE-READ
+    # CLASSIFICATION" section in TRUTH_LEDGER.md.
     levels = data.get('levels', {})
     # Freshness display handled by scorecard row alone; no separate context line.
     bos_tag = ob.get('bos_tag', 'BOS')
@@ -2852,14 +2864,16 @@ if __name__ == "__main__":
             )
             gemini_risk = call_gemini_flash(name, bias, fetch_macro_news(name, news_ctx))
 
-            # B2: Pass fvg_source, dealing_range, pd_position, plus new sweep
-            # tier + components + age into scorecard rows for richer narration.
+            # B2: Pass fvg_source, dealing_range, pd_position, plus the sweep-v2
+            # presence + pool-tier + pool-name into scorecard rows for narration
+            # (sweep v2 is the sole detector; v1 retired 2026-07-24).
             scorecard_rows = smc_detector.generate_scorecard_rows(
                 bias, score_res['breakdown'], ob,
                 score_res.get('sweep_price'), score_res.get('sweep_tf', 'H1'), pair_conf,
                 score_res.get('dealing_range'), fvg_source, score_res.get('pd_position'),
                 sweep_tier=score_res.get('sweep_tier'),
-                sweep_components=score_res.get('sweep_components'),
+                sweep_present=score_res.get('sweep_present', False),
+                sweep_pool_name=score_res.get('sweep_pool_name'),
                 fvg=fvg_data
             )
             # (Legacy ob['sweep_tf']/ob['sweep_timestamp'] chart injection
@@ -2995,14 +3009,15 @@ if __name__ == "__main__":
                 "bias": bias,
                 "score": score_res['total'],
                 "breakdown": score_res['breakdown'],
-                # Legacy sweep record fields — SCORE-side facts only (the sweep
-                # leg still feeds the score, so what it saw stays logged).
-                # sweep_hours_before_ob dropped 2026-07-19 with the old banner
-                # (write-only after the sweep-v2 narration replaced it).
+                # Sweep record fields — all off the frozen sweep-v2 snapshot
+                # (v1 retired 2026-07-24; v2 is the sole detector + score input).
+                # sweep_price = the raided pool level; sweep_tier = v2 pool tier
+                # (PW/PD/EQ/SW); sweep_pool_name = plain-English raid target.
                 "sweep_price": score_res.get('sweep_price'),
                 "sweep_tf": score_res.get('sweep_tf', 'H1'),
+                "sweep_present": score_res.get('sweep_present', False),
                 "sweep_tier": score_res.get('sweep_tier'),
-                "sweep_components": score_res.get('sweep_components'),
+                "sweep_pool_name": score_res.get('sweep_pool_name'),
                 "macro_summary": gemini_risk.get("macro_summary"),
                 "macro_unavailable": bool(gemini_risk.get("macro_unavailable", False)),
                 "news_ctx": news_ctx,

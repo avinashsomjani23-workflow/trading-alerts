@@ -180,7 +180,8 @@ def _ob_rec(o: Dict[str, Any]) -> ObRec:
         bos_tag=o.get("bos_tag"),
         bos_tier=o.get("bos_tier"),
         fvg_present=bool((o.get("fvg") or {}).get("exists")),
-        sweep_present=bool((o.get("sweep_observed") or {}).get("exists")),
+        # sweep v2 is the sole sweep source (v1 retired 2026-07-24).
+        sweep_present=bool((o.get("sweep_v2") or {}).get("exists")),
     )
 
 

@@ -1298,7 +1298,7 @@ def _simulate_single_entry(
 #     bos_sequence_count, last_choch_idx, event_candle_delta.
 #   FROZEN-BY-DESIGN, LIVE DOES THE SAME: dealing_range (incl. S4
 #     dr_ceiling_broken_at_ob / dr_floor_broken_at_ob, read off the frozen
-#     snapshot), sweep_observed.
+#     snapshot), sweep_v2 (v1 retired 2026-07-24).
 #   STAMPED AT ALERT (correct source): bos_verdict, touches_at_alert +
 #     fvg_at_alert, h1_trend / trend_alignment / alert_bar_*, and the S2/S3
 #     structure signals (structure_ranging_at_alert, flip_pending_at_alert,
@@ -1410,6 +1410,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
                tp2_collapsed_to_tp1=None, tp_targets=None,
                setup_liq_reads=None) -> Dict[str, Any]:
     """Assemble the final trade row dict in stable column order."""
+    # Field freeze/live/re-read classification (which ob[...] reads are frozen at
+    # birth vs live vs re-read): see the "OB FIELD FREEZE / LIVE / RE-READ
+    # CLASSIFICATION" section in TRUTH_LEDGER.md.
     direction = ob.get("direction", "?")
     # FIX 3d: mutable OB state (touches, fvg) is frozen at the replay yield into
     # touches_at_alert / fvg_at_alert. read_frozen_ob_fields is the ONE reader —
@@ -1842,7 +1845,10 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # replay yield (touches_at_alert); the live ob["touches"] keeps updating
         # for the rest of the walk, so it must never be read here (Fix 3d).
         "ob_touches":    _touches_at_alert,
-        "sweep_present": bool((ob.get("sweep_observed") or {}).get("exists")),
+        # sweep_present now reads ob['sweep_v2'] (v1 retired 2026-07-24) — it is
+        # the SAME value as sweep2_present below; the legacy column name is kept
+        # so the diagnostics/reporting that reference it keep working, now on v2.
+        "sweep_present": bool((ob.get("sweep_v2") or {}).get("exists")),
         # Session breakdown — OB formation vs fill, plus killzone alignment.
         # Fill session is the more honest label (when capital was actually
         # at work). OB session captures setup quality (institutional vs not).
@@ -1929,16 +1935,16 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # 12 columns spread from ONE helper, re-labelled off the FROZEN
         # ob['sweep_v2'] snapshot stamped at OB build inside detect_smc_radar
         # (the replay drives the same function — nothing is re-detected here).
-        # Only sweep2_age_at_alert_h1 is derived: arithmetic on the frozen
-        # sweep_ts against the alert bar (same class as ob_age_h1_bars).
-        # Legacy zones / failed layer -> all-None dict. Observation only.
-        # NOTE (2026-07-20): sweep_present above IS still byte-identical (it
-        # reads the legacy ob['sweep_observed']). sweep_pts is NOT — the score
-        # leg was rewired this same commit to read sweep_v2 (run_scorecard,
-        # owner "Option 1"), so sweep_pts now reflects the new sweep, not the
-        # legacy detector. Do NOT read this as score parity.
+        # Only sweep2_age_at_fill_h1 is derived: arithmetic on the frozen
+        # sweep_ts against the FILL bar (fill-anchored to match the pool/eq/
+        # approach columns; renamed from *_at_alert 2026-07-25). The 5
+        # sweep2_sw_* cols are the best-SW always-on metrics off the same frozen
+        # snapshot. Legacy zones / failed layer -> all-None dict. Observation only.
+        # NOTE (2026-07-24): sweep v1 is retired — sweep_present above, sweep_pts
+        # (the score leg) and every sweep2_* column now ALL read the one frozen
+        # ob['sweep_v2'] snapshot. sweep_present == sweep2_present by construction.
         # Column list: liquidity_sweep.SWEEP2_FEATURE_COLUMNS.
-        **_sweep2_features(ob, df_h1, alert_ts),
+        **_sweep2_features(ob, df_h1, fill_ts),
         # ── SETUP-LIQ (this trade's own stop/target vs swing liquidity) ────────
         # 6 columns from ONE helper. Reads 1 & 2 (stop-side / tp-side magnet)
         # were computed WITH the trade levels in _simulate_single_entry
@@ -2062,15 +2068,21 @@ def _eq_features_at_fill(df_h1, fill_ts, ob, entry, sl):
     )
 
 
-def _sweep2_features(ob, df_h1, alert_ts):
+def _sweep2_features(ob, df_h1, fill_ts):
     """Sweep-v2 columns for one row (liquidity_sweep.SWEEP2_FEATURE_COLUMNS).
 
-    Thin shim over liquidity_sweep.features_from_snapshot: pure re-labelling of
-    the FROZEN ob['sweep_v2'] snapshot (stamped once at OB build by
-    detect_smc_radar — the replay runs the same function, so the snapshot is
-    already point-in-time clean and immutable; the zone merge refreshes only
-    fvg). No re-detection, no re-grading. sweep2_age_at_alert_h1 is derived
-    arithmetic on the frozen sweep_ts vs the alert bar (ob_age_h1_bars class).
+    Shim over liquidity_sweep.features_from_snapshot. WS2 (2026-07-25) split:
+      - SW + EQ blocks: re-labelled straight off the BIRTH-FROZEN ob['sweep_v2']
+        snapshot (stamped once at OB build by detect_smc_radar; the replay runs
+        the same function so the snapshot is point-in-time clean; the zone merge
+        refreshes only fvg). No re-detection for these.
+      - PW + PD blocks: RE-JUDGED AT THE FILL BAR (pw_pd_at_fill) on the OB's
+        frozen fuel window, reading only closed bars strictly before fill_ts —
+        because "yesterday's / last week's" H/L roll as time passes. This is the
+        ONLY re-detection, and it is fill-anchored + look-ahead-clean by design.
+    sweep2_age_at_fill_h1 = closed H1 bars from the earliest raid across present
+    tiers to the FILL bar. Live parity: the frozen snapshot (and the LIVE winner
+    read off it) is untouched — see the liquidity_sweep docstring parity note.
 
     Legacy zones (no snapshot) / failed layer -> all-None dict.
 
@@ -2080,7 +2092,7 @@ def _sweep2_features(ob, df_h1, alert_ts):
     """
     import liquidity_sweep
     return liquidity_sweep.features_from_snapshot(
-        ob.get("sweep_v2"), df_h1, alert_ts)
+        ob.get("sweep_v2"), df_h1, fill_ts)
 
 
 def _setup_liq_features(setup_liq_reads, leg_extreme_swept):
