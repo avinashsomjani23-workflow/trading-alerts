@@ -279,6 +279,72 @@ def fetch_reuters_events(start_utc: datetime, end_utc: datetime) -> Tuple[List[D
 # Public API: fetch_events + is_news_blackout
 # ---------------------------------------------------------------------------
 
+# Local FF calendar CSV — the SAME file the report enrichment reads
+# (backtest/h1_only_reporting._NEWS_EVENTS_CSV). The backtest MUST read events
+# from this file, never the network: the per-week faireconomy.media XML 404s on
+# old weeks, so a multi-year run made ~1 request/week and hung on timeouts
+# (2026-07-26 fix). The CSV's `dateline` is a Unix epoch = unambiguous UTC, so
+# this path also sidesteps the XML feed's timezone ambiguity.
+_FF_CALENDAR_CSV = (
+    os.path.dirname(os.path.abspath(__file__))
+    + "/backtest/data/ff_calendar_2007_2026.csv"
+)
+
+
+def load_ff_events_from_csv(
+    start_utc: datetime,
+    end_utc: datetime,
+    csv_path: Optional[str] = None,
+) -> Tuple[List[Dict[str, Any]], bool]:
+    """Load FF High + Medium-impact events for [start_utc, end_utc] from the
+    local calendar CSV — zero network. Returns (events, coverage_complete).
+
+    Event dict shape is byte-identical to _parse_ff_xml's output
+    (ts_utc / currency / impact / title / source) so is_news_blackout and every
+    downstream consumer are unchanged. Impact set is High + Medium to preserve
+    the exact blackout population the XML path produced (is_news_blackout blocks
+    on any matching-currency event in the list; _parse_ff_xml kept high+medium).
+
+    coverage_complete = does the CSV span the requested window. False when the
+    file starts after start_utc or ends before end_utc — the caller flags a
+    partial-coverage run instead of silently returning a short list."""
+    import pandas as pd
+
+    path = csv_path or _FF_CALENDAR_CSV
+    df = pd.read_csv(path)
+    need = {"dateline", "currency", "impactName", "name"}
+    missing = need - set(df.columns)
+    if missing:
+        raise ValueError(f"ff calendar CSV missing columns: {missing}")
+
+    df["utc"] = pd.to_datetime(df["dateline"], unit="s", utc=True)
+    # High + Medium only, to match _parse_ff_xml's impact set exactly.
+    df = df[df["impactName"].astype(str).str.lower().isin(("high", "medium"))]
+
+    start_ts = pd.Timestamp(start_utc)
+    end_ts = pd.Timestamp(end_utc)
+    window = df[(df["utc"] >= start_ts) & (df["utc"] <= end_ts)]
+
+    # Dict access, not itertuples attributes: the "name" column collides with
+    # the reserved tuple `.name`, so read by key to stay unambiguous.
+    events: List[Dict[str, Any]] = [
+        {
+            "ts_utc":   rec["utc"].to_pydatetime(),
+            "currency": str(rec["currency"]).upper(),
+            "impact":   str(rec["impactName"]),
+            "title":    str(rec["name"]),
+            "source":   "ff",
+        }
+        for rec in window.to_dict("records")
+    ]
+    # Coverage: the file must bracket the requested window on both ends.
+    file_lo, file_hi = df["utc"].min(), df["utc"].max()
+    coverage_complete = bool(file_lo <= start_ts and file_hi >= end_ts)
+    logger.info("ff_csv_load events=%d coverage=%s file=%s..%s",
+                len(events), coverage_complete, file_lo, file_hi)
+    return events, coverage_complete
+
+
 def fetch_events(
     start_utc: datetime,
     end_utc: datetime,
@@ -288,12 +354,17 @@ def fetch_events(
     sources. Returns a dict with:
         events: List[event_dict]
         coverage: dict mapping source -> bool (True = complete)
-    """
+
+    The "ff" source reads the LOCAL calendar CSV (load_ff_events_from_csv), not
+    the network — the per-week XML fetch 404s on old weeks and hung multi-year
+    runs (2026-07-26). fetch_ff_events (the network path) is retained for LIVE
+    trading, which needs this week's real-time releases; the backtest must never
+    call it."""
     all_events: List[Dict[str, Any]] = []
     coverage: Dict[str, bool] = {}
     for src in sources:
         if src == "ff":
-            ev, ok = fetch_ff_events(start_utc, end_utc)
+            ev, ok = load_ff_events_from_csv(start_utc, end_utc)
         elif src == "reuters":
             ev, ok = fetch_reuters_events(start_utc, end_utc)
         else:

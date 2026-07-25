@@ -417,6 +417,51 @@ def test_tz_pad_helper_accepts_both():
 # Main
 # ---------------------------------------------------------------------------
 
+def test_backtest_news_is_offline():
+    """REGRESSION GUARD (2026-07-26): the backtest news path (fetch_events with
+    sources=("ff",)) must read the LOCAL calendar CSV and make ZERO network
+    calls. The per-week faireconomy.media XML 404s on old weeks, so the old
+    network-first fetch_ff_events hung multi-year runs on request timeouts.
+    This test fails loudly if fetch_events ever reaches for the network again.
+    """
+    print("\n== test_backtest_news_is_offline ==")
+    ok = True
+
+    # Any network attempt during fetch_events is a regression -> blow up.
+    original_http_get = nf._http_get
+
+    def _forbidden(*_a, **_k):
+        raise AssertionError("network call during backtest news fetch — "
+                             "fetch_events must read the local CSV, not HTTP")
+
+    nf._http_get = _forbidden
+    try:
+        res = nf.fetch_events(
+            datetime(2015, 1, 1, tzinfo=timezone.utc),
+            datetime(2015, 3, 31, tzinfo=timezone.utc),
+            sources=("ff",),
+        )
+    finally:
+        nf._http_get = original_http_get
+
+    ok &= check(len(res["events"]) > 0,
+                "CSV path returns events for 2015 Q1 (no network)")
+    ok &= check(res["coverage"].get("ff") is True,
+                "coverage complete when CSV brackets the window")
+    ok &= check(all(e["source"] == "ff" for e in res["events"]),
+                "every event tagged source=ff")
+    ok &= check(all(e["ts_utc"].tzinfo is not None for e in res["events"]),
+                "every event ts is tz-aware UTC")
+
+    # Coverage flag flips False when the window runs past the file's end.
+    _far = nf.load_ff_events_from_csv(
+        datetime(2015, 1, 1, tzinfo=timezone.utc),
+        datetime(2099, 1, 1, tzinfo=timezone.utc))
+    ok &= check(_far[1] is False,
+                "coverage False when window exceeds file span")
+    return ok
+
+
 def main():
     results = [
         ("test_currency_map",              test_currency_map()),
@@ -428,6 +473,7 @@ def main():
         ("test_naive_datetime_rejected",   test_naive_datetime_rejected()),
         ("test_tz_pad_helper_accepts_both", test_tz_pad_helper_accepts_both()),
         ("test_metric_exclusion_invariant", test_metric_exclusion_invariant()),
+        ("test_backtest_news_is_offline",  test_backtest_news_is_offline()),
     ]
     print("\n=== SUMMARY ===")
     fail = 0
