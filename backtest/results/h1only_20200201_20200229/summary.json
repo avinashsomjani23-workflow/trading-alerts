@@ -9,8 +9,8 @@
     "pairs": [
       "EURUSD"
     ],
-    "generated_utc": "2026-07-24T09:32:08.366785+00:00",
-    "code_sha": "4867f7c5-dirty",
+    "generated_utc": "2026-07-25T11:05:26.801656+00:00",
+    "code_sha": "3ede6e19-dirty",
     "news_coverage": {
       "ff": false
     },
@@ -56,7 +56,7 @@
       "avg_win_usd": 146.0,
       "avg_loss_usd": -250.0,
       "avg_mfe_r": 0.583,
-      "avg_mae_r": -0.514,
+      "avg_mae_r": -0.432,
       "win_capture_pct": 100.0
     },
     "proximal_exit_tp1": {
@@ -74,7 +74,7 @@
       "avg_win_usd": 295.0,
       "avg_loss_usd": -250.0,
       "avg_mfe_r": 0.583,
-      "avg_mae_r": -0.514,
+      "avg_mae_r": -0.432,
       "win_capture_pct": 202.0
     },
     "proximal_exit_tp2": {
@@ -92,7 +92,7 @@
       "avg_win_usd": 695.0,
       "avg_loss_usd": -250.0,
       "avg_mfe_r": 1.149,
-      "avg_mae_r": -0.514,
+      "avg_mae_r": -0.432,
       "win_capture_pct": 242.0
     }
   },
@@ -131,14 +131,8 @@
   ],
   "score_buckets_proximal_realised": [
     {
-      "score_bucket": "4-5",
-      "trades": 1,
-      "win_rate_pct": 0.0,
-      "expectancy_r": -1.0
-    },
-    {
       "score_bucket": "5-6",
-      "trades": 2,
+      "trades": 3,
       "win_rate_pct": 0.0,
       "expectancy_r": -1.0
     },
@@ -234,7 +228,7 @@
           "avg_win_usd": 146.0,
           "avg_loss_usd": -250.0,
           "avg_mfe_r": 0.583,
-          "avg_mae_r": -0.514,
+          "avg_mae_r": -0.432,
           "win_capture_pct": 100.0
         },
         "proximal_exit_tp1": {
@@ -252,7 +246,7 @@
           "avg_win_usd": 295.0,
           "avg_loss_usd": -250.0,
           "avg_mfe_r": 0.583,
-          "avg_mae_r": -0.514,
+          "avg_mae_r": -0.432,
           "win_capture_pct": 202.0
         },
         "proximal_exit_tp2": {
@@ -270,7 +264,7 @@
           "avg_win_usd": 695.0,
           "avg_loss_usd": -250.0,
           "avg_mfe_r": 1.149,
-          "avg_mae_r": -0.514,
+          "avg_mae_r": -0.432,
           "win_capture_pct": 242.0
         }
       },
