@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-25T11:05:36.698218+00:00",
+  "updated_at": "2026-07-25T11:06:30.465338+00:00",
   "runs": [
     {
       "run_id": "h1only_20080102_20251231",
@@ -756,76 +756,84 @@
       "condition": "",
       "risk_usd": 250.0,
       "metrics": {
-        "total_rows": 44,
-        "filled_trades": 32,
-        "win_rate_pct": 26.7,
-        "expectancy_r": -0.493,
-        "max_dd_r": 15.408,
-        "longest_losing_streak": 7,
-        "fill_rate_proximal_pct": 72.7,
+        "total_rows": 58,
+        "filled_trades": 33,
+        "win_rate_pct": 62.1,
+        "expectancy_r": 0.039,
+        "max_dd_r": 5.151,
+        "longest_losing_streak": 5,
+        "fill_rate_proximal_pct": 56.9,
         "per_pair": [
           {
-            "pair": "EURUSD",
-            "trades": 32,
-            "win_rate_pct": 26.7,
-            "expectancy_r": -0.493,
-            "total_pnl_usd": -3941.75,
-            "verdict": "loser"
+            "pair": "GOLD",
+            "trades": 16,
+            "win_rate_pct": 73.3,
+            "expectancy_r": 0.303,
+            "total_pnl_usd": 1211.25,
+            "verdict": "unproven"
+          },
+          {
+            "pair": "USDJPY",
+            "trades": 17,
+            "win_rate_pct": 50.0,
+            "expectancy_r": -0.21,
+            "total_pnl_usd": -893.0,
+            "verdict": "unproven"
           }
         ],
         "by_session": {
           "Asia": {
-            "trades": 11,
-            "win_rate_pct": 27.3,
-            "expectancy_r": -0.578
+            "trades": 10,
+            "win_rate_pct": 85.7,
+            "expectancy_r": 0.465
           },
           "London": {
-            "trades": 8,
-            "win_rate_pct": 12.5,
-            "expectancy_r": -0.787
+            "trades": 9,
+            "win_rate_pct": 66.7,
+            "expectancy_r": 0.081
           },
           "NY": {
-            "trades": 13,
-            "win_rate_pct": 36.4,
-            "expectancy_r": -0.239
+            "trades": 14,
+            "win_rate_pct": 46.2,
+            "expectancy_r": -0.293
           }
         },
         "score_buckets": [
           {
             "score_bucket": "3-4",
-            "trades": 3,
-            "win_rate_pct": 33.3,
-            "expectancy_r": -0.433
+            "trades": 2,
+            "win_rate_pct": 50.0,
+            "expectancy_r": -0.311
           },
           {
             "score_bucket": "4-5",
-            "trades": 1,
-            "win_rate_pct": 0.0,
-            "expectancy_r": -1.0
+            "trades": 7,
+            "win_rate_pct": 66.7,
+            "expectancy_r": 0.191
           },
           {
             "score_bucket": "5-6",
-            "trades": 7,
-            "win_rate_pct": 28.6,
-            "expectancy_r": -0.539
+            "trades": 10,
+            "win_rate_pct": 77.8,
+            "expectancy_r": 0.287
           },
           {
             "score_bucket": "6-7",
             "trades": 6,
-            "win_rate_pct": 16.7,
-            "expectancy_r": -0.505
+            "win_rate_pct": 50.0,
+            "expectancy_r": -0.322
           },
           {
             "score_bucket": "7+",
-            "trades": 15,
-            "win_rate_pct": 30.8,
-            "expectancy_r": -0.444
+            "trades": 8,
+            "win_rate_pct": 50.0,
+            "expectancy_r": -0.048
           }
         ],
         "score_verdict": "WORKS \u2014 higher score leads to better trades"
       },
       "notes": "",
-      "recorded_at": "2026-07-25T11:04:14.009863+00:00"
+      "recorded_at": "2026-07-25T11:06:30.464371+00:00"
     },
     {
       "run_id": "h1only_20190101_20190630",
