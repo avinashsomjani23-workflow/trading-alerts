@@ -59,8 +59,10 @@ POINT-IN-TIME (no future leak; SESSION_SWEEP_STUDY_SPEC §4.3)
   STRICTLY BEFORE alert_ts, then classified by pool_status over those same prior
   bars. A session's H/L is used only if that session has COMPLETED before the alert
   bar (its window's local end has passed on the pool's day) — a still-forming
-  session is not yet a pool. Only the nearest completed session level to entry is
-  reported (the level a real trader would have reacted to).
+  session is not yet a pool. Only the MOST-RECENTLY-CLOSED completed session is
+  reported (the last range a real trader was watching) — nothing older, so the pick
+  is bounded and point-in-time, never a nearest-in-price search across all history.
+  Same recency discipline as the PD/PW pools' previous-completed-period rule.
 """
 
 from datetime import datetime, timezone
@@ -254,26 +256,46 @@ def _event_for_level(bars_after_pool, level, side):
     return "none"
 
 
+# (2026-07-27) RECENCY-ONLY pick — the point-in-time fix.
+# build_session_level_event reports the event on the MOST-RECENTLY-CLOSED completed
+# session before the alert, and NOTHING older. Recency is what a trader watches: the
+# last Asia / London / NY range that closed is the live pool, exactly as the PD/PW
+# pools report the PREVIOUS completed day/week and nothing further back
+# (pool_builder.levels_at:270). This is naturally bounded — only the last day or two
+# of sessions can be "most recent" — so it is BOTH correct and O(window) fast (the
+# old code's O(history^2) all-history scan was THE backtest timeout hotspot).
+#
+# HISTORY (why there is no lookback_days knob any more): the original code scanned
+# EVERY session-day since 2008 and reported the level NEAREST IN PRICE to entry — a
+# 2019 level could win purely on price coincidence, which is meaningless. That was a
+# design bug (nearest-in-price across all history), not just slow. The recency pick
+# below replaces it outright: same discipline as every other study column (bounded,
+# point-in-time). The values CHANGE vs the old nearest-price pick — these columns have
+# never been in a canonical run, so nothing downstream is invalidated.
+
+
 def build_session_level_event(df_h1_prior, alert_ts, ref_price, pair=None):
     """SESSION_LEVEL_FEATURE_COLUMNS for one alert, from bars strictly before it.
 
     df_h1_prior : naive-UTC-indexed H1 OHLC, bars strictly BEFORE alert_ts only.
     alert_ts    : the alert bar timestamp (naive UTC).
-    ref_price   : the placed entry — used ONLY to pick the NEAREST session level
-                  (which pool a real trader would have been reacting to). It does
-                  NOT change whether a level was swept/broken.
+    ref_price   : the placed entry — used ONLY as a WITHIN-SESSION tiebreak: if the
+                  most-recent completed session had an event on BOTH its high and its
+                  low, the side nearer to entry is reported. It never reaches across
+                  sessions/history and never changes whether a level was swept/broken.
     pair        : instrument name, for the pair-relevance FLAG (PAIR_SESSION_TAGS).
-                  It never filters which sessions are scanned — all three always are.
+                  A recorded flag only — it never filters which sessions are scanned
+                  (all three always are) and never reorders the recency pick.
 
-    For every session (asia/london/ny) and every completed day-pool, classify its
-    high and its low with pool_status over the bars since that pool closed. Among
-    all levels that recorded an event (sweep or break), report ONE:
-      1. prefer a level in a session this PAIR trades (PAIR_SESSION_TAGS-relevant);
-      2. within that preference, the level NEAREST to ref_price.
-    So an off-tag event is still reported when it is the only event, but a relevant
-    event outranks an off-tag one even if slightly farther — the study can still see
-    off-tag events (via session_level_pair_relevant=False) to test whether they add
-    edge. If no level recorded an event, all columns are the 'none' dict.
+    RECENCY PICK (point-in-time, bounded — matches PD/PW):
+      1. Across asia/london/ny, take the ONE day-pool whose window CLOSED LATEST
+         before the alert (the last session a trader was watching). Nothing older is
+         considered — we NEVER scan back to find an event on an earlier session.
+      2. Classify that session's high and low with pool_status over the bars since it
+         closed. If neither fired, the answer is 'none' (we do NOT fall back to an
+         older session — that would be the "reach back for something interesting"
+         disease). If exactly one side fired, report it. If BOTH fired, report the
+         side nearer to ref_price.
 
     Pure of feed I/O beyond the frame passed in. Never raises — returns the all-
     'none' dict on any internal failure so a study bug can never kill a run row.
@@ -286,42 +308,48 @@ def build_session_level_event(df_h1_prior, alert_ts, ref_price, pair=None):
         if alert.tzinfo is not None:
             alert = alert.tz_convert("UTC").tz_localize(None)
 
-        # Rank key: (not relevant, distance) — relevant (False<True sorts first) wins,
-        # then nearest. best holds (relevant, event, which, side, dist).
-        best = None
+        # Collect every completed day-pool across the three sessions, then keep ONLY
+        # the single most-recently-closed one (max close_utc). All older pools are
+        # dropped unseen — recency, never a search for the nearest/most-interesting
+        # older level.
+        newest = None  # (close_utc, sess_key, high, low)
         for sess_key in ("asia", "london", "ny"):
-            relevant = _pair_relevant(pair, sess_key)
-            pools = _session_hl_pools(bars, sess_key, alert)
-            for p in pools:
-                # Bars strictly AFTER this pool closed, up to the alert. The pool
-                # is spent by bars that came after the session ended — never by the
-                # session's own bars (that would let the session sweep itself).
-                # PERF (§3.9 Stage B, 2026-07-26): bars.index is sorted (one H1
-                # frame), so searchsorted+iloc selects the SAME rows as the old
-                # `bars[bars.index >= close_utc]` boolean mask without copying the
-                # whole frame per pool. side='left' -> first row with index >=
-                # close_utc, identical to the >= mask.
-                _pos = bars.index.searchsorted(p["close_utc"], side="left")
-                after = bars.iloc[_pos:]
-                for side_key, side_arg, level in (
-                    ("high", "above", p["high"]),
-                    ("low", "below", p["low"]),
-                ):
-                    event = _event_for_level(after, level, side_arg)
-                    if event == "none":
-                        continue
-                    dist = abs(float(ref_price) - level)
-                    key = (not relevant, dist)
-                    if best is None or key < (not best[0], best[4]):
-                        best = (relevant, event, sess_key, side_key, dist)
+            for p in _session_hl_pools(bars, sess_key, alert):
+                if newest is None or p["close_utc"] > newest[0]:
+                    newest = (p["close_utc"], sess_key, p["high"], p["low"])
 
-        if best is None:
+        if newest is None:
             return features_none()
+
+        close_utc, sess_key, hi, lo = newest
+        # Bars strictly AFTER this pool closed, up to the alert. The pool is spent by
+        # bars that came after the session ended — never by the session's own bars
+        # (that would let the session sweep itself). bars.index is sorted, so
+        # searchsorted+iloc selects the same rows as a `>= close_utc` mask, no copy.
+        _pos = bars.index.searchsorted(close_utc, side="left")
+        after = bars.iloc[_pos:]
+
+        # Classify each side of THIS session only. Collect the ones that fired.
+        fired = []  # (side_key, event, dist_to_entry)
+        for side_key, side_arg, level in (
+            ("high", "above", hi),
+            ("low", "below", lo),
+        ):
+            event = _event_for_level(after, level, side_arg)
+            if event == "none":
+                continue
+            fired.append((side_key, event, abs(float(ref_price) - level)))
+
+        if not fired:
+            return features_none()
+        # One side fired -> that side. Both fired -> the side nearer to entry (a pure
+        # within-session tiebreak; ref_price never reaches across sessions/history).
+        best = min(fired, key=lambda f: f[2])
         return {
             "session_level_event": best[1],
-            "session_level_which": best[2],
-            "session_level_side": best[3],
-            "session_level_pair_relevant": bool(best[0]),
+            "session_level_which": sess_key,
+            "session_level_side": best[0],
+            "session_level_pair_relevant": _pair_relevant(pair, sess_key),
         }
     except Exception as e:  # never let the session-level study kill a backtest row
         print(f"  [SESSION_LEVEL WARN] build failed at {alert_ts}: "

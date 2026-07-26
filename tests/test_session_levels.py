@@ -6,15 +6,21 @@ The checks the spec demands for the four new session_level_* columns:
      UTC bars used SHIFT by one hour across the BST/GMT change. If they don't shift,
      DST is still broken and the whole study is polluted.
   2) RECOMPUTE AUDIT (§4.2): rebuild session_level_* from raw session H/L + entry
-     independently and assert it equals build_session_level_event.
+     independently (RECENCY pick) and assert it equals build_session_level_event.
   3) POINT-IN-TIME (§4.3): the answer never uses a bar at/after the alert.
   4) SWEEP-vs-BREAK (§4.4): wick-and-return -> 'sweep'; close-through-and-hold
      -> 'break' (reusing pool_builder.pool_status, so this also proves the reuse).
   5) COLUMN CONTRACT: features_none / build both emit exactly the four columns.
   6) PAIR RELEVANCE (flag, not filter): session_level_pair_relevant is True only
-     when the reported session is one the pair trades (PAIR_SESSION_TAGS), and a
-     relevant event is PREFERRED over a nearer off-tag one — but off-tag events are
-     still reported when they are the only event (so the study can measure them).
+     when the reported session is one the pair trades (PAIR_SESSION_TAGS). It is a
+     recorded FLAG — it does NOT reorder the pick (the reported session is always the
+     most-recently-closed one, on-tag or not, so the study can measure off-tag too).
+
+  RECENCY PICK (2026-07-27, the design fix): the reported session is the ONE whose
+  window closed LATEST before the alert — never an older session, never nearest-in-
+  price across history (the removed bug). If that session had no event -> 'none' (no
+  fall-back to an older session). If both its high and low fired -> the side nearer
+  to entry.
 
 Run:  python -m pytest tests/test_session_levels.py -q
 """
@@ -144,13 +150,22 @@ def test_london_close_boundary_is_utc_shifted():
 # ===========================================================================
 
 def _london_session_day(date_str, hi, lo):
-    """A London session (07:00-15:00 local) on `date_str` printing high `hi` at
-    its open bar and low `lo`, everything else flat at mid. Uses 08:00 UTC (safely
-    inside London in both seasons) for the range bar."""
+    """A London session printing high `hi` / low `lo`, filler flat at mid.
+
+    Emits bars ONLY on UTC hours 08:00-11:00 — inside the London window AND clear of
+    the NY and Asia windows in BOTH seasons, so London is the sole session this pool
+    creates:
+      - London: BST 08-16 local = 07-15 UTC / GMT = 08-16 UTC  -> 08-11 UTC always IN.
+      - NY:     EDT 08-17 local = 12-21 UTC / EST = 13-22 UTC  -> 08-11 UTC always OUT.
+      - Asia:   JST 00-09        = 15-24 UTC (prev day)         -> 08-11 UTC always OUT.
+    London and NY genuinely OVERLAP at midday (12-16 local), so any filler at/after
+    12:00 UTC would create a stray NY pool that closes LATER than London (21:00 UTC)
+    and steal the recency pick — that is exactly the pollution the old all-24-hour
+    helper hid behind the retired nearest-in-price pick. Keeping filler to 08-11 UTC
+    makes the recency pick unambiguous."""
     mid = (hi + lo) / 2.0
-    rows = _flat_hours(date_str, [0, 1, 2, 3, 4, 5, 6], mid)
-    rows.append(_bar(f"{date_str} 08:00", hi, lo, mid))  # 08/09 London -> IN
-    rows += _flat_hours(date_str, range(9, 24), mid)
+    rows = [_bar(f"{date_str} 08:00", hi, lo, mid)]      # 09:00 London -> IN
+    rows += _flat_hours(date_str, [9, 10, 11], mid)      # London-only filler
     return rows
 
 
@@ -251,50 +266,63 @@ def test_session_not_yet_closed_is_not_a_pool():
 # ===========================================================================
 
 def test_recompute_matches_independent_rebuild():
-    """Independently rebuild the nearest-event answer from the raw pools + the
-    entry, and assert it equals build_session_level_event (Area-C 0-mismatch
-    method), over a mixed multi-session frame."""
-    # Two sessions with events: a London high sweep and an Asia low break, at
-    # different distances from the entry, so 'nearest' actually decides.
+    """Independently rebuild the RECENCY answer from the raw pools + the entry, and
+    assert it equals build_session_level_event (Area-C 0-mismatch method), over a
+    mixed multi-session frame where recency (not price) must decide."""
+    # Two sessions with events, closing at DIFFERENT times so recency decides:
+    #   Asia 2026-07-15 (00-09 JST == 2026-07-14 15:00-24:00 UTC) closes EARLIER;
+    #   London 2026-07-15 (08-16 BST == 07:00-15:00 UTC) closes LATER (15:00 UTC).
+    # London is the MOST-RECENTLY-CLOSED completed session -> it must be reported,
+    # even though the Asia low is NEARER to entry (proves price no longer decides).
     rows = []
-    # London session with high = 2.0 (near the entry).
-    rows += _london_session_day("2026-07-15", hi=2.0, lo=1.8)
-    # Asia session (00-09 JST = 15:00-24:00 UTC prev day) with low = 0.5 (far).
-    # 2026-07-15 00:00-09:00 JST == 2026-07-14 15:00-24:00 UTC.
+    # London session: high = 2.0 (FAR from entry), low = 0.1 (parked below the whole
+    # price path so London's LOW is never touched — only its HIGH gets swept).
+    rows += _london_session_day("2026-07-15", hi=2.0, lo=0.1)
+    # Asia session with low = 0.5 (NEAR the entry).
     rows += _flat_hours("2026-07-14", range(15, 24), 1.5)
-    # overwrite one Asia bar to print the low 0.5
-    rows.append(_bar("2026-07-14 16:00", 1.6, 0.5, 1.5))
-    # After both sessions closed: sweep the London high (near) + break the Asia low (far).
-    rows.append(_bar("2026-07-16 08:00", 2.4, 1.9, 1.95))   # wick over London high 2.0, close back
+    rows.append(_bar("2026-07-14 16:00", 1.6, 0.5, 1.5))  # Asia low 0.5
+    # After both sessions closed (all bars on London-only UTC hours 08-11):
+    #   sweep the London HIGH (far from entry) + break the Asia LOW (near entry),
+    #   the down-move staying between London low 0.1 and Asia low 0.5.
+    rows.append(_bar("2026-07-16 08:00", 2.4, 1.9, 1.95))   # wick over London high 2.0, close back -> London high sweep
     rows.append(_bar("2026-07-16 09:00", 1.6, 0.4, 0.45))   # close below Asia low 0.5
     rows.append(_bar("2026-07-16 10:00", 0.6, 0.3, 0.42))   # holds below -> Asia break
     df = _frame(rows)
     alert = pd.Timestamp("2026-07-16 12:00")
-    entry = 2.05  # nearest to the London high (2.0), far from Asia low (0.5)
+    entry = 0.55  # NEAREST to the Asia low (0.5), FAR from London high (2.0)
     prior = df[df.index < alert]
 
     got = sl.build_session_level_event(prior, alert, ref_price=entry)
 
-    # --- Independent rebuild: enumerate every session pool, classify, pick nearest.
+    # --- Independent rebuild: find the most-recently-closed session, then classify
+    # ONLY its two sides; both-fired tiebreak = nearest to entry. Nothing older.
     bars = sl._naive_utc_index(prior)
-    best = None
+    newest = None  # (close_utc, sess, high, low)
     for sess in ("asia", "london", "ny"):
         for p in sl._session_hl_pools(bars, sess, pd.Timestamp(alert)):
-            after = bars[bars.index >= p["close_utc"]]
-            for side_key, side_arg, level in (("high", "above", p["high"]),
-                                              ("low", "below", p["low"])):
-                ev = sl._event_for_level(after, level, side_arg)
-                if ev == "none":
-                    continue
-                d = abs(entry - level)
-                if best is None or d < best[0]:
-                    best = (d, ev, sess, side_key)
-    # pair defaults to None here -> no session is relevant -> flag is False.
-    expected = (sl.features_none() if best is None else
-                {"session_level_event": best[1], "session_level_which": best[2],
-                 "session_level_side": best[3], "session_level_pair_relevant": False})
+            if newest is None or p["close_utc"] > newest[0]:
+                newest = (p["close_utc"], sess, p["high"], p["low"])
+    if newest is None:
+        expected = sl.features_none()
+    else:
+        close_utc, sess, hi, lo = newest
+        after = bars[bars.index >= close_utc]
+        fired = []
+        for side_key, side_arg, level in (("high", "above", hi),
+                                          ("low", "below", lo)):
+            ev = sl._event_for_level(after, level, side_arg)
+            if ev != "none":
+                fired.append((side_key, ev, abs(entry - level)))
+        if not fired:
+            expected = sl.features_none()
+        else:
+            b = min(fired, key=lambda f: f[2])
+            # pair defaults to None -> no session relevant -> flag False.
+            expected = {"session_level_event": b[1], "session_level_which": sess,
+                        "session_level_side": b[0],
+                        "session_level_pair_relevant": False}
     assert got == expected, (got, expected)
-    # And sanity: the NEAR London sweep should win over the FAR Asia break.
+    # Sanity: the MOST-RECENT (London) session wins on recency, NOT the nearer Asia low.
     assert got["session_level_which"] == "london", got
     assert got["session_level_event"] == "sweep", got
 
@@ -354,35 +382,56 @@ def test_pair_relevant_flag_reads_live_map():
     assert none_pair["session_level_pair_relevant"] is False, none_pair
 
 
-def test_relevant_session_preferred_over_nearer_offtag():
-    """When a relevant AND an off-tag session both have an event, the RELEVANT one is
-    reported even if the off-tag level is NEARER to entry. Uses two sessions the code
-    cleanly separates (London high vs Asia low, far apart) and a pair (USDCHF) that
-    trades London but NOT Asia, with entry placed NEAR the off-tag Asia level."""
-    # London high = 2.0 (FAR from entry); Asia low = 0.5 (NEAR entry).
-    rows = _london_session_day("2026-07-15", hi=2.0, lo=1.9)
-    # Asia 00-09 JST == prev-day 15:00-24:00 UTC. Print the Asia low 0.5.
-    rows += _flat_hours("2026-07-14", range(15, 24), 1.5)
+def test_older_session_event_is_not_reported_over_more_recent_quiet_session():
+    """RECENCY, not event-hunting: an OLDER session with an event must NOT be reported
+    when a MORE-RECENTLY-CLOSED session exists — even if the recent session had no
+    event. The pick is the last session that closed, full stop; we never reach back to
+    find something interesting (the removed disease)."""
+    # Asia 2026-07-15 (00-09 JST == 2026-07-14 15-24 UTC) prints a low that gets BROKEN.
+    rows = _flat_hours("2026-07-14", range(15, 24), 1.5)
     rows.append(_bar("2026-07-14 16:00", 1.6, 0.5, 1.5))  # Asia low 0.5
-    # After both close: sweep London high (far) + sweep Asia low (near).
-    rows.append(_bar("2026-07-16 08:00", 2.4, 1.95, 1.98))  # wick over London high 2.0, close back
-    rows.append(_bar("2026-07-16 09:00", 1.6, 0.4, 0.55))   # wick under Asia low 0.5, close back
-    rows += _flat_hours("2026-07-16", [10, 11], 1.2)
+    # London 2026-07-15 (closes 2026-07-15 15:00 UTC — LATER) prints high 2.0, low 0.1.
+    # London's low is placed WELL BELOW the Asia-break path (0.3-0.4) so the break
+    # bars pierce the Asia low without ever touching London's range — London stays quiet.
+    rows += _london_session_day("2026-07-15", hi=2.0, lo=0.1)
+    # After both close: BREAK the old Asia low (0.5), staying above London's low 0.1.
+    rows.append(_bar("2026-07-16 08:00", 0.6, 0.4, 0.45))  # close below Asia low, above London low
+    rows.append(_bar("2026-07-16 09:00", 0.55, 0.3, 0.42))  # holds below -> Asia break
+    rows += _flat_hours("2026-07-16", [10, 11], 0.45)      # London range never pierced
     df = _frame(rows)
     alert = pd.Timestamp("2026-07-16 13:00")
     prior = df[df.index < alert]
-    entry = 0.55  # NEAREST to the Asia low (0.5), FAR from London high (2.0)
 
-    # USDCHF trades London (relevant) but NOT Asia (off-tag). Relevant London must WIN
-    # despite the Asia low being nearer to entry.
-    chf = sl.build_session_level_event(prior, alert, ref_price=entry, pair="USDCHF")
-    assert chf["session_level_which"] == "london", chf
-    assert chf["session_level_pair_relevant"] is True, chf
+    # London is the most-recent completed session and had NO event -> 'none'. The
+    # older Asia break must NOT surface.
+    out = sl.build_session_level_event(prior, alert, ref_price=0.45)
+    assert out == sl.features_none(), (
+        "recency pick must report the most-recent (London, quiet) session as 'none', "
+        f"never reach back to the older Asia break — got {out}")
 
-    # NZDUSD trades Asia (relevant) — now the nearest relevant Asia low wins.
-    nzd = sl.build_session_level_event(prior, alert, ref_price=entry, pair="NZDUSD")
-    assert nzd["session_level_which"] == "asia", nzd
-    assert nzd["session_level_pair_relevant"] is True, nzd
+
+def test_both_sides_fired_reports_side_nearer_to_entry():
+    """When the most-recent session has an event on BOTH its high and its low, the
+    side NEARER to entry is reported (the ONLY place ref_price is used — a pure
+    within-session tiebreak, never a cross-history search)."""
+    # One London session with high 2.0 and low 1.0; both get swept after it closes.
+    rows = _london_session_day("2026-07-15", hi=2.0, lo=1.0)
+    rows.append(_bar("2026-07-16 08:00", 2.3, 1.6, 1.9))   # wick over high 2.0, close back -> sweep high
+    rows.append(_bar("2026-07-16 09:00", 1.4, 0.8, 1.1))   # wick under low 1.0, close back -> sweep low
+    rows += _flat_hours("2026-07-16", [10, 11], 1.5)
+    df = _frame(rows)
+    alert = pd.Timestamp("2026-07-16 13:00")
+    prior = df[df.index < alert]
+
+    # Entry near the HIGH -> high reported.
+    near_high = sl.build_session_level_event(prior, alert, ref_price=1.95)
+    assert near_high["session_level_side"] == "high", near_high
+    assert near_high["session_level_event"] == "sweep", near_high
+
+    # Entry near the LOW -> low reported (same frame, tiebreak flips).
+    near_low = sl.build_session_level_event(prior, alert, ref_price=1.05)
+    assert near_low["session_level_side"] == "low", near_low
+    assert near_low["session_level_event"] == "sweep", near_low
 
 
 def test_degraded_inputs_return_none_dict():

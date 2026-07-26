@@ -2194,10 +2194,11 @@ def _session_level_features_at_alert(df_h1, alert_ts, entry, pair):
 
     Thin shim over session_levels.build_session_level_event, anchored at ALERT
     time: bars strictly BEFORE alert_ts only (SESSION_SWEEP_STUDY_SPEC §3c/§4.3 —
-    frozen at alert, point-in-time, no future leak). ref_price = the placed entry,
-    used only to pick the NEAREST session level with an event. `pair` drives the
-    pair-relevance FLAG only (PAIR_SESSION_TAGS) — it never filters which sessions
-    are scanned. DST-honest session windows are resolved per candle inside
+    frozen at alert, point-in-time, no future leak). The reported session is the
+    MOST-RECENTLY-CLOSED one (recency, bounded — never an older nearest-in-price
+    level); ref_price = the placed entry is only a within-session tiebreak when both
+    the session high and low fired. `pair` drives the pair-relevance FLAG only
+    (PAIR_SESSION_TAGS) — it never filters which sessions are scanned. DST-honest session windows are resolved per candle inside
     session_levels (NOT the DST-broken smc_detector._session_hl_until). Observation
     only — no gate/score consumer.
 
