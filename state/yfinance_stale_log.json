@@ -1,0 +1,30 @@
+[
+  {
+    "ts": "2026-07-27T00:36:05.951872",
+    "symbol": "EURUSD=X",
+    "interval": "1h",
+    "reason": "stale data (age 44.10h, limit 2.0h)",
+    "age_hours": 44.1
+  },
+  {
+    "ts": "2026-07-27T00:36:06.150334",
+    "symbol": "NZDUSD=X",
+    "interval": "1h",
+    "reason": "stale data (age 44.10h, limit 2.0h)",
+    "age_hours": 44.1
+  },
+  {
+    "ts": "2026-07-27T00:36:06.359980",
+    "symbol": "CHF=X",
+    "interval": "1h",
+    "reason": "stale data (age 44.10h, limit 2.0h)",
+    "age_hours": 44.1
+  },
+  {
+    "ts": "2026-07-27T00:36:06.491966",
+    "symbol": "GC=F",
+    "interval": "1h",
+    "reason": "stale data (age 44.10h, limit 2.0h)",
+    "age_hours": 44.1
+  }
+]
