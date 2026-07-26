@@ -1,0 +1,34 @@
+{"ts": "2026-07-26T19:34:47.899377+00:00", "level": "info", "event": "run_start", "regime": "bau", "regime_label": null, "mode": "h1_only", "start": "2020-03-01", "end": "2020-03-31", "pairs": ["GOLD"], "risk_usd": 250.0, "send_email": false}
+{"ts": "2026-07-26T19:34:47.899633+00:00", "level": "info", "event": "backtest_atr_cap", "pair": "GOLD", "pair_type": "commodity", "live": 3.0, "backtest": 3.0}
+{"ts": "2026-07-26T19:34:48.180860+00:00", "level": "info", "event": "news_fetched", "events": 179, "coverage": {"ff": true}, "range": "2020-02-29T00:00:00+00:00..2020-04-01T00:00:00+00:00"}
+{"ts": "2026-07-26T19:34:48.844518+00:00", "level": "info", "event": "pair_data_loaded", "pair": "GOLD", "h1_rows": 1042, "h1_first": "2020-01-26 23:00:00+00:00", "h1_last": "2020-03-31 00:00:00+00:00"}
+{"ts": "2026-07-26T19:35:01.625504+00:00", "level": "info", "event": "pair_funnel", "pair": "GOLD", "bars_walked": 471, "warmup_skipped": 0, "dr_errors": 0, "radar_errors": 0, "bars_with_events": 471, "bars_with_obs": 392, "new_obs": 29, "prox_checks": 1674, "closest_dist_atr": 0.0, "atr_multiplier_cap": 3.0, "alerts": 41, "alerts_resuppressed": 0, "alerts_rearmed": 17, "obs_aged_out": 2}
+{"ts": "2026-07-26T19:35:01.651529+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:01.743766+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:01.798423+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:01.831960+00:00", "level": "info", "event": "h1only_sim_skip", "pair": "GOLD", "entry_zone": "proximal", "alert_ts": "2020-03-02 16:00:00+00:00", "reason": "Entry 1591.79 is below current price 1593.67 -- SHORT limit would chase price."}
+{"ts": "2026-07-26T19:35:01.851623+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:01.895191+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:01.942596+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:01.985746+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.033620+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.076716+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.146293+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.199481+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.238252+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.289869+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.349339+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.385482+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.493875+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.614183+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.699117+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.751705+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.799139+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.895206+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.939168+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:02.981792+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:03.066394+00:00", "level": "warn", "event": "exit_lab_error", "pair": "GOLD", "config": "E_atr_sl1.5_tp2.5", "error": "ValueError: unknown target spec 'atr_tp'"}
+{"ts": "2026-07-26T19:35:03.539897+00:00", "level": "info", "event": "pair_alerts_collected", "pair": "GOLD", "alerts": 41, "mode": "h1_only"}
+{"ts": "2026-07-26T19:35:03.539968+00:00", "level": "info", "event": "pair_trades_simulated", "pair": "GOLD", "trades": 31, "news_blocked": 4, "ist_blocked": 6, "killzone_dropped_alerts": 15}
+{"ts": "2026-07-26T19:35:13.419583+00:00", "level": "info", "event": "report_written", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20200301_20200331", "total_alerts": 41, "total_trades": 31}
+{"ts": "2026-07-26T19:35:13.423902+00:00", "level": "info", "event": "exit_lab_sink_persisted", "path": "C:\\Users\\aviso\\OneDrive\\Desktop\\trading-alerts\\backtest\\results\\h1only_20200301_20200331\\exit_lab_sink.jsonl", "rows": 241}
