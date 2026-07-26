@@ -1,0 +1,32 @@
+{
+  "run_id": "h1only_20080102_20161231",
+  "schema_version": "1.0.0",
+  "generated_utc": "2026-07-26T19:43:34.094304+00:00",
+  "git_sha": "7ade6a0-dirty",
+  "risk_usd": 250.0,
+  "min_warmup_bars": 150,
+  "fetch_pad_days": 35,
+  "pairs": [
+    {
+      "name": "EURUSD",
+      "symbol": "EURUSD=X",
+      "requested_start": "2008-01-02T00:00:00+00:00",
+      "requested_end": "2016-12-31T00:00:00+00:00",
+      "served_start": "2008-01-02T08:00:00+00:00",
+      "served_end": "2016-12-30T21:00:00+00:00",
+      "n_bars": 55666,
+      "fingerprint": "f6701c41cc18901c",
+      "prox_cap_atr": 2.5
+    }
+  ],
+  "knobs": {
+    "EURUSD.atr_multiplier": 2.5,
+    "EURUSD.distal_invalidation_mode": "close",
+    "EURUSD.spread_pips": 2.0
+  },
+  "versions": {
+    "python": "3.11.15",
+    "pandas": "3.0.5",
+    "yfinance": "1.5.2"
+  }
+}
