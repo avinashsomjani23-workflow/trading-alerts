@@ -1,0 +1,437 @@
+{
+  "run_id": "h1only_20140701_20140731",
+  "meta": {
+    "start": "2014-07-01",
+    "end": "2014-07-31",
+    "regime": "bau",
+    "regime_label": null,
+    "mode": "h1_only",
+    "pairs": [
+      "EURUSD"
+    ],
+    "generated_utc": "2026-07-26T19:34:15.448198+00:00",
+    "code_sha": "0b75a4f1-dirty",
+    "news_coverage": {
+      "ff": true
+    },
+    "news_events_fetched": 247,
+    "news_blocked_rows": 14,
+    "news_window_minutes": 30,
+    "ist_blocked_rows": 11,
+    "ist_window_forex": "UTC 03:30-18:30 (IST 09:00-24:00)",
+    "ist_window_index": "UTC 03:30-18:30 (IST 09:00-24:00)",
+    "killzone_dropped_alerts": 27,
+    "killzone_drops_by_pair": {
+      "EURUSD": 27
+    },
+    "killzone_windows_by_pair": {
+      "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
+    }
+  },
+  "risk_per_trade_usd": 250.0,
+  "total_trade_rows": 32,
+  "fill_rate_proximal": {
+    "alerts": 32,
+    "filled": 19,
+    "fill_rate_pct": 59.4
+  },
+  "exit_reason_counts_proximal": {
+    "tp1": 3,
+    "never_filled": 12,
+    "sl": 13,
+    "friday_flat": 3,
+    "timeout": 1
+  },
+  "scoreboards": {
+    "proximal_realised": {
+      "trades": 19,
+      "wins": 5,
+      "losses": 12,
+      "breakevens": 2,
+      "win_rate_pct": 29.4,
+      "expectancy_r": -0.504,
+      "expectancy_usd": -126.0,
+      "total_r": -9.576,
+      "total_pnl_usd": -2394.0,
+      "avg_win_r": 0.405,
+      "avg_loss_r": -0.967,
+      "avg_win_usd": 101.0,
+      "avg_loss_usd": -242.0,
+      "avg_mfe_r": 0.469,
+      "avg_mae_r": -0.188,
+      "win_capture_pct": 87.0
+    },
+    "proximal_exit_tp1": {
+      "trades": 19,
+      "wins": 3,
+      "losses": 16,
+      "breakevens": 0,
+      "win_rate_pct": 15.8,
+      "expectancy_r": -0.694,
+      "expectancy_usd": -173.42,
+      "total_r": -13.18,
+      "total_pnl_usd": -3295.0,
+      "avg_win_r": 0.94,
+      "avg_loss_r": -1.0,
+      "avg_win_usd": 235.0,
+      "avg_loss_usd": -250.0,
+      "avg_mfe_r": 0.606,
+      "avg_mae_r": -0.236,
+      "win_capture_pct": 155.0
+    },
+    "proximal_exit_tp2": {
+      "trades": 19,
+      "wins": 1,
+      "losses": 16,
+      "breakevens": 2,
+      "win_rate_pct": 5.9,
+      "expectancy_r": -0.66,
+      "expectancy_usd": -164.88,
+      "total_r": -12.531,
+      "total_pnl_usd": -3132.75,
+      "avg_win_r": 3.469,
+      "avg_loss_r": -1.0,
+      "avg_win_usd": 867.0,
+      "avg_loss_usd": -250.0,
+      "avg_mfe_r": 0.821,
+      "avg_mae_r": -0.236,
+      "win_capture_pct": 423.0
+    }
+  },
+  "per_pair_proximal_realised": [
+    {
+      "pair": "EURUSD",
+      "trades": 19,
+      "win_rate_pct": 29.4,
+      "expectancy_r": -0.504,
+      "total_pnl_usd": -2394.0,
+      "verdict": "loser"
+    }
+  ],
+  "per_session_proximal_realised": [
+    {
+      "session": "Asia",
+      "trades": 1,
+      "win_rate_pct": 0.0,
+      "expectancy_r": -1.0,
+      "total_pnl_usd": -250.0
+    },
+    {
+      "session": "London",
+      "trades": 12,
+      "win_rate_pct": 20.0,
+      "expectancy_r": -0.581,
+      "total_pnl_usd": -1744.25
+    },
+    {
+      "session": "NY",
+      "trades": 6,
+      "win_rate_pct": 50.0,
+      "expectancy_r": -0.267,
+      "total_pnl_usd": -399.75
+    }
+  ],
+  "score_buckets_proximal_realised": [
+    {
+      "score_bucket": "3-4",
+      "trades": 1,
+      "win_rate_pct": 0.0,
+      "expectancy_r": -1.0
+    },
+    {
+      "score_bucket": "5-6",
+      "trades": 6,
+      "win_rate_pct": 20.0,
+      "expectancy_r": -0.595
+    },
+    {
+      "score_bucket": "6-7",
+      "trades": 6,
+      "win_rate_pct": 40.0,
+      "expectancy_r": -0.203
+    },
+    {
+      "score_bucket": "7+",
+      "trades": 6,
+      "win_rate_pct": 33.3,
+      "expectancy_r": -0.632
+    }
+  ],
+  "news_blocked_trade_rows": 12,
+  "news_blocked_audit": [
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-03T08:00:00+00:00",
+      "entry_zone": "proximal",
+      "event_title": "Italian Services PMI",
+      "event_currency": "EUR",
+      "event_source": "ff",
+      "event_ts": "2014-07-03T07:45:00+00:00"
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-08T06:00:00+00:00",
+      "entry_zone": "proximal",
+      "event_title": "German Trade Balance",
+      "event_currency": "EUR",
+      "event_source": "ff",
+      "event_ts": "2014-07-08T06:00:00+00:00"
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-08T14:00:00+00:00",
+      "entry_zone": "proximal",
+      "event_title": "JOLTS Job Openings",
+      "event_currency": "USD",
+      "event_source": "ff",
+      "event_ts": "2014-07-08T14:00:00+00:00"
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-09T15:00:00+00:00",
+      "entry_zone": "proximal",
+      "event_title": "Crude Oil Inventories",
+      "event_currency": "USD",
+      "event_source": "ff",
+      "event_ts": "2014-07-09T14:30:00+00:00"
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-09T15:00:00+00:00",
+      "entry_zone": "proximal",
+      "event_title": "Crude Oil Inventories",
+      "event_currency": "USD",
+      "event_source": "ff",
+      "event_ts": "2014-07-09T14:30:00+00:00"
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-15T09:00:00+00:00",
+      "entry_zone": "proximal",
+      "event_title": "German ZEW Economic Sentiment",
+      "event_currency": "EUR",
+      "event_source": "ff",
+      "event_ts": "2014-07-15T09:00:00+00:00"
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-15T12:00:00+00:00",
+      "entry_zone": "proximal",
+      "event_title": "Core Retail Sales m/m",
+      "event_currency": "USD",
+      "event_source": "ff",
+      "event_ts": "2014-07-15T12:30:00+00:00"
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-16T18:00:00+00:00",
+      "entry_zone": "proximal",
+      "event_title": "Beige Book",
+      "event_currency": "USD",
+      "event_source": "ff",
+      "event_ts": "2014-07-16T18:00:00+00:00"
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-18T14:00:00+00:00",
+      "entry_zone": "proximal",
+      "event_title": "Prelim UoM Consumer Sentiment",
+      "event_currency": "USD",
+      "event_source": "ff",
+      "event_ts": "2014-07-18T13:55:00+00:00"
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-24T07:00:00+00:00",
+      "entry_zone": "proximal",
+      "event_title": "French Flash Manufacturing PMI",
+      "event_currency": "EUR",
+      "event_source": "ff",
+      "event_ts": "2014-07-24T07:00:00+00:00"
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-24T12:00:00+00:00",
+      "entry_zone": "proximal",
+      "event_title": "Unemployment Claims",
+      "event_currency": "USD",
+      "event_source": "ff",
+      "event_ts": "2014-07-24T12:30:00+00:00"
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-29T13:00:00+00:00",
+      "entry_zone": "proximal",
+      "event_title": "S&P/CS Composite-20 HPI y/y",
+      "event_currency": "USD",
+      "event_source": "ff",
+      "event_ts": "2014-07-29T13:00:00+00:00"
+    }
+  ],
+  "killzone_dropped_alerts": 27,
+  "killzone_drops_by_pair": {
+    "EURUSD": 27
+  },
+  "killzone_windows_by_pair": {
+    "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
+  },
+  "score_floor": 4.0,
+  "below_score_floor_trade_rows": 0,
+  "below_score_floor_audit": [],
+  "ist_blocked_trade_rows": 11,
+  "ist_blocked_audit": [
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-02T00:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 2.75
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-07T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-09T19:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-09T19:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-10T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-15T00:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-16T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.175
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-17T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp1",
+      "would_have_r": 0.316
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-21T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": 0.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-30T19:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-07-30T19:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    }
+  ],
+  "by_group": {
+    "forex": {
+      "label": "Original (FX majors + Gold)",
+      "pairs": [
+        "EURUSD"
+      ],
+      "scoreboards": {
+        "proximal_realised": {
+          "trades": 19,
+          "wins": 5,
+          "losses": 12,
+          "breakevens": 2,
+          "win_rate_pct": 29.4,
+          "expectancy_r": -0.504,
+          "expectancy_usd": -126.0,
+          "total_r": -9.576,
+          "total_pnl_usd": -2394.0,
+          "avg_win_r": 0.405,
+          "avg_loss_r": -0.967,
+          "avg_win_usd": 101.0,
+          "avg_loss_usd": -242.0,
+          "avg_mfe_r": 0.469,
+          "avg_mae_r": -0.188,
+          "win_capture_pct": 87.0
+        },
+        "proximal_exit_tp1": {
+          "trades": 19,
+          "wins": 3,
+          "losses": 16,
+          "breakevens": 0,
+          "win_rate_pct": 15.8,
+          "expectancy_r": -0.694,
+          "expectancy_usd": -173.42,
+          "total_r": -13.18,
+          "total_pnl_usd": -3295.0,
+          "avg_win_r": 0.94,
+          "avg_loss_r": -1.0,
+          "avg_win_usd": 235.0,
+          "avg_loss_usd": -250.0,
+          "avg_mfe_r": 0.606,
+          "avg_mae_r": -0.236,
+          "win_capture_pct": 155.0
+        },
+        "proximal_exit_tp2": {
+          "trades": 19,
+          "wins": 1,
+          "losses": 16,
+          "breakevens": 2,
+          "win_rate_pct": 5.9,
+          "expectancy_r": -0.66,
+          "expectancy_usd": -164.88,
+          "total_r": -12.531,
+          "total_pnl_usd": -3132.75,
+          "avg_win_r": 3.469,
+          "avg_loss_r": -1.0,
+          "avg_win_usd": 867.0,
+          "avg_loss_usd": -250.0,
+          "avg_mfe_r": 0.821,
+          "avg_mae_r": -0.236,
+          "win_capture_pct": 423.0
+        }
+      },
+      "fill_rate_proximal": {
+        "alerts": 32,
+        "filled": 19,
+        "fill_rate_pct": 59.4
+      },
+      "news_blocked_trade_rows": 12,
+      "ist_blocked_trade_rows": 0,
+      "killzone_dropped_alerts": 27,
+      "score_floor": 4.0,
+      "below_score_floor_trade_rows": 0,
+      "html_file": "report_forex.html",
+      "excel_file": "forex_trades.xlsx"
+    }
+  }
+}
