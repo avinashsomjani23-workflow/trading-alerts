@@ -17,6 +17,7 @@ from __future__ import annotations
 import sys
 import os
 import io
+import time
 import contextlib
 from pathlib import Path
 from datetime import datetime, timezone
@@ -224,14 +225,43 @@ def replay_pair(
     # visit so the health layer can prove every one produced a scan record.
     _scanlog().declare_walk(pair_name, len(h1_in_window.index))
 
-    for h1_ts in h1_in_window.index:
+    # PERF (§3.2, 2026-07-26): the per-bar closed-slice was
+    # `df[df.index < h1_ts]` (boolean-masks + COPIES all prior history every bar
+    # — tens of GB over a 9-yr walk) only to `.tail(detection_bars)` it. On a
+    # sorted index, searchsorted+iloc selects the SAME bars with no full copy.
+    # Assert sorted ONCE here so the per-bar searchsorted is valid; the mask was
+    # order-independent, so this assert only makes an already-relied-on
+    # precondition explicit (out of the live path, offline backtest only).
+    assert df_h1.index.is_monotonic_increasing, \
+        f"{pair_name}: df_h1 index not sorted — §3.2 searchsorted slice invalid"
+    _h1_index = df_h1.index
+
+    # §3.6 walk heartbeat: print progress every _HB_EVERY bars, flushed, so a CI
+    # run is no longer a black box during the multi-hour walk (run 30162233896
+    # emitted nothing between launch and timeout). Pure logging — no result
+    # impact. N=2000 bars fires ~ every 1-2 min at the observed walk rate.
+    _HB_EVERY = 2000
+    _hb_total = len(h1_in_window.index)
+    _hb_t0 = time.time()
+
+    for _hb_i, h1_ts in enumerate(h1_in_window.index):
         diag["bars_walked"] += 1
+        if _hb_i and _hb_i % _HB_EVERY == 0:
+            _el = time.time() - _hb_t0
+            _rate = _hb_i / _el if _el > 0 else 0.0
+            print(f"  [walk {pair_name}] {_hb_i}/{_hb_total} bars "
+                  f"({_el:.0f}s, {_rate:.0f} bars/s)", flush=True)
         # P1 sees only CLOSED bars. The bar opened at h1_ts is in progress.
-        h1_slice = _slice_closed_before(df_h1, h1_ts)
-        # FIX 1: clamp to live's window (the last detection_bars closed bars).
-        # tail() cannot introduce future bars, so the lookahead guard stays valid.
+        # searchsorted(side='left') -> first row with index >= h1_ts, so
+        # iloc[:pos] is exactly the rows with index < h1_ts (== the old mask).
+        _pos = _h1_index.searchsorted(h1_ts, side="left")
         if _clamped:
-            h1_slice = h1_slice.tail(detection_bars)
+            # FIX 1: clamp to live's window (the last detection_bars closed bars).
+            # This window cannot introduce future bars, so the lookahead guard
+            # stays valid — identical set to the old mask + .tail(detection_bars).
+            h1_slice = df_h1.iloc[max(0, _pos - detection_bars):_pos]
+        else:
+            h1_slice = df_h1.iloc[:_pos]
         _assert_no_lookahead(h1_slice, h1_ts, "H1")
         if len(h1_slice) < _min_warmup:
             diag["warmup_skipped"] += 1

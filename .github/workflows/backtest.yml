@@ -88,6 +88,12 @@ jobs:
 
       - name: Run backtest
         env:
+          # §3.6: force unbuffered stdout so the walk/sim heartbeat prints reach
+          # the CI log live. Without this the worker's block-buffered pipe can sit
+          # unflushed for hours — run 30162233896 showed ZERO output between
+          # launch and the timeout cancel, so we could not even tell if the walk
+          # finished. The heartbeat is worthless if it stays in a buffer.
+          PYTHONUNBUFFERED: "1"
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

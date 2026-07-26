@@ -912,31 +912,46 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
             last_event_ts = _ev.get('candle_ts')
             break
 
-    # PERF (within-bar frame reuse): the daily/weekly resample FRAME and the two
-    # swing sets that sweep-v2 needs are IDENTICAL for every event in this scan
-    # (all events share this one df window). Build them ONCE here and thread them
-    # into every observe_pool_sweep call, instead of rebuilding them per event
-    # (~7×/bar). The sweep call is now DEFERRED to the post-dedupe survivor pass
-    # (see _SWEEP_DEFERRED), which reads these same scan-constant frames from this
-    # enclosing scope. This is observation only — levels_at still selects
-    # periods strictly-before each event's asof internally (pool_builder.py:270),
-    # so every event still computes its OWN PDH/PDL/PWH/PWL fresh: nothing is
-    # stamped or frozen, D1/W1 is re-read live every bar. Byte-identical to the
-    # per-event rebuild (proven via the sweep equivalence harness); same
-    # _cached_days_weeks precedent features_at_alert already relies on. On any
-    # failure, fall back to None so each call rebuilds locally (live behaviour).
-    _sweep_days = _sweep_weeks = _sweep_eq_swings = _sweep_sw_swings = None
-    try:
-        _sweep_dw = pool_builder._cached_days_weeks(df)
-        _sweep_days, _sweep_weeks = _sweep_dw["days"], _sweep_dw["weeks"]
-        _sweep_h1n = _sweep_dw["h1"]
-        _sweep_eq_swings = dealing_range.detect_swings(
-            _sweep_h1n, lookback=eq_pools.EQ_SWING_LOOKBACK,
-            min_leg_atr_mult=None)
-        _sweep_sw_swings = dealing_range.detect_swings(
-            _sweep_h1n, lookback=dealing_range.SWING_LOOKBACK)
-    except Exception:
-        _sweep_days = _sweep_weeks = _sweep_eq_swings = _sweep_sw_swings = None
+    # PERF (within-bar frame reuse + §3.3 laziness): the daily/weekly resample
+    # FRAME and the two swing sets that sweep-v2 needs are IDENTICAL for every
+    # event in this scan (all events share this one df window), so they are built
+    # ONCE and threaded into every observe_pool_sweep call rather than rebuilt
+    # per event (~7×/bar). §3.3 (2026-07-26) makes that ONCE build LAZY: the sole
+    # consumer is the post-dedupe survivor pass (see _SWEEP_DEFERRED), which
+    # fires only when an OB survives mitigation+dedupe carrying the deferred
+    # sentinel — ~6% of bars build a new OB, so ~94% of bars skipped the resample
+    # + 2 swing scans entirely. _ensure_sweep_frames() builds on first use within
+    # THIS scan and memoises into _sweep_state; every call inside this scan sees
+    # the identical frames. Live calls this same path (builds on first survivor
+    # in the same scan) — a no-op change for live. This is observation only —
+    # levels_at still selects periods strictly-before each event's asof
+    # internally (pool_builder.py:270), so every event still computes its OWN
+    # PDH/PDL/PWH/PWL fresh: nothing is stamped or frozen, D1/W1 is re-read every
+    # bar. Byte-identical to the per-event rebuild (proven via the sweep
+    # equivalence harness + §4 EURUSD/GOLD proof). On any failure, frames fall
+    # back to None so each call rebuilds locally (live behaviour).
+    _sweep_state = {"built": False, "days": None, "weeks": None,
+                    "eq_swings": None, "sw_swings": None}
+
+    def _ensure_sweep_frames():
+        """Build the scan-constant sweep frames on first use, memoise for the
+        rest of this scan. Returns (days, weeks, eq_swings, sw_swings)."""
+        if not _sweep_state["built"]:
+            _sweep_state["built"] = True
+            try:
+                _dw = pool_builder._cached_days_weeks(df)
+                _h1n = _dw["h1"]
+                _sweep_state["days"], _sweep_state["weeks"] = _dw["days"], _dw["weeks"]
+                _sweep_state["eq_swings"] = dealing_range.detect_swings(
+                    _h1n, lookback=eq_pools.EQ_SWING_LOOKBACK,
+                    min_leg_atr_mult=None)
+                _sweep_state["sw_swings"] = dealing_range.detect_swings(
+                    _h1n, lookback=dealing_range.SWING_LOOKBACK)
+            except Exception:
+                _sweep_state["days"] = _sweep_state["weeks"] = None
+                _sweep_state["eq_swings"] = _sweep_state["sw_swings"] = None
+        return (_sweep_state["days"], _sweep_state["weeks"],
+                _sweep_state["eq_swings"], _sweep_state["sw_swings"])
 
     for ev_pos, ev in enumerate(events):
         ev_type = ev.get('type')           # 'BOS' | 'CHoCH'
@@ -1444,6 +1459,13 @@ def detect_smc_radar(df, pair_type="forex", events=None, walls=None, pair_name=N
     # exactly: the per-OB floor/anchor were captured on the dict at build time;
     # days/weeks/eq/sw swings + pair_type/name are scan-constant here. The
     # snapshot_failed() guard is unchanged so a sweep bug still can't kill an OB.
+    # §3.3: build the scan-constant sweep frames ONLY if a survivor actually needs
+    # them (any OB still carrying the deferred sentinel). On the ~94% of bars with
+    # no new survivor OB, _ensure_sweep_frames() is never called and the resample
+    # + 2 swing scans are skipped entirely. Frames are identical when built.
+    if any(ob.get('sweep_v2') is _SWEEP_DEFERRED for ob in filtered):
+        _sweep_days, _sweep_weeks, _sweep_eq_swings, _sweep_sw_swings = \
+            _ensure_sweep_frames()
     for ob in filtered:
         if ob.get('sweep_v2') is not _SWEEP_DEFERRED:
             continue

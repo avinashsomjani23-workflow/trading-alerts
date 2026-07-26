@@ -132,8 +132,10 @@ def _dp(pair_conf):
 #
 # Memoization (added 2026-05-23 to cut backtest runtime):
 # The function is pure for a given OHLC slice. During backtest replay it gets
-# called ~480x per scan, each time iterating the full history. We cache on a
-# content fingerprint (first_ts, last_ts, len, last OHLC values, period).
+# called ~480x per scan. Since §3.1 (2026-07-26) compute_atr tails the frame to
+# period+1 bars before computing, so the raw loop is O(period), not O(history).
+# We cache on a content fingerprint (first_ts, last_ts, len, last OHLC values,
+# period) OF THE TAILED SLICE.
 # Collision across instruments is effectively impossible because the OHLC
 # anchors differ. If anything in the cache path raises, we set a module flag
 # that the email layer reads — backtest email will be tagged [ATR-CACHE-FAIL]
@@ -165,6 +167,16 @@ def compute_atr(df, period=14):
     if df is None or len(df) < period + 1:
         return None
     try:
+        # PERF (§3.1, 2026-07-26): the ATR of a `period`-bar window needs only
+        # the last period+1 bars (period TRs). _atr_compute_raw loops the WHOLE
+        # frame; on a 9-yr backtest slice that is a ~55k-iteration loop for a
+        # 14-bar answer. Tail to exactly period+1 bars BEFORE the cache key +
+        # raw compute so every caller (live + backtest) does O(period) work.
+        # Result is bit-identical: np.mean of the last `period` TRs is unchanged
+        # by dropping bars that were never in that tail. Cache now keys on the
+        # tailed slice (its own first_ts/last_ts/len), still collision-safe.
+        if len(df) > period + 1:
+            df = df.tail(period + 1)
         n = len(df)
         first_ts = df.index[0]
         last_ts = df.index[-1]

@@ -323,9 +323,19 @@ def pool_status(bars, level, side):
     highs = bars["High"].to_numpy()
     lows = bars["Low"].to_numpy()
     closes = bars["Close"].to_numpy()
-    index = bars.index
+    # PERF (2026-07-26): box every timestamp ONCE via tolist() instead of
+    # index[i] per iteration. `index[i]` on a DatetimeIndex boxes a Timestamp
+    # each access; under py3.14 that per-element boxing detonates into millions
+    # of typing/annotationlib calls (Step 0 profile: pool_status was ~89% of sim
+    # time, almost all of it here). tolist() produces the identical Timestamp
+    # objects — only swept_ts/broken_ts/last_sweep_ts read them, and _iso()
+    # stringifies them the same way — so the returned dict is byte-identical
+    # (proven: 40 levels x 2 sides, and the §4 EURUSD+GOLD trade-row proof).
+    # This is a read-only micro-op, no logic change; safe for the live callers
+    # that share pool_status (eq_pools, liquidity_sweep, pool emails).
+    index = bars.index.tolist()
 
-    for i in range(len(bars)):
+    for i in range(len(highs)):
         if side == "above":
             pierced = highs[i] > level
             closed_beyond = closes[i] > level

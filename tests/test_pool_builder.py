@@ -23,6 +23,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 import pool_builder as pb  # noqa: E402
@@ -417,3 +418,79 @@ def test_naive_utc_index_accepts_live_reset_index_frame():
     out_aware = pb._naive_utc_index(aware)
     assert isinstance(out_aware.index, pd.DatetimeIndex)
     assert out_aware.index.tz is None
+
+
+# ---------------------------------------------------------------------------
+# PERF GUARD (2026-07-26): pool_status boxes its DatetimeIndex once via
+# tolist() instead of per-element index[i] (a ~9x speedup on py3.14, where
+# per-element Timestamp boxing detonates into typing/annotationlib calls).
+# This test pins that the optimisation is RESULT-IDENTICAL: a reference
+# implementation using per-element index[i] (the pre-fix read pattern) must
+# equal the live pool_status across many levels, both sides, and every event
+# type, on a large randomised multi-year frame. If pool_status is ever "sped
+# up" in a way that changes a value, this fails loud in CI (guard lives out of
+# the live path, per CLAUDE.md defensive-coding rule).
+# ---------------------------------------------------------------------------
+
+def _pool_status_ref(bars, level, side):
+    """Reference: byte-for-byte the pre-optimisation logic, reading index[i]
+    per iteration (no tolist). Any divergence from pb.pool_status is a bug."""
+    status, swept_ts, broken_ts, last_sweep_ts = "intact", None, None, None
+    pending_ts = None
+    if bars is None or len(bars) == 0 or level is None:
+        return {"status": status, "swept_ts": None, "broken_ts": None,
+                "last_sweep_ts": None}
+    highs = bars["High"].to_numpy()
+    lows = bars["Low"].to_numpy()
+    closes = bars["Close"].to_numpy()
+    index = bars.index  # per-element boxing (the slow pre-fix pattern)
+    for i in range(len(bars)):
+        if side == "above":
+            pierced = highs[i] > level
+            closed_beyond = closes[i] > level
+            closed_back = closes[i] <= level
+        else:
+            pierced = lows[i] < level
+            closed_beyond = closes[i] < level
+            closed_back = closes[i] >= level
+        if status == "broken" and closed_back:
+            status = "swept"
+            swept_ts = swept_ts or index[i]
+            last_sweep_ts = index[i]
+            broken_ts = None
+        if pending_ts is not None:
+            if closed_beyond:
+                status, broken_ts = "broken", index[i]
+                pending_ts = None
+                continue
+            status = "swept"
+            swept_ts = swept_ts or pending_ts
+            last_sweep_ts = pending_ts
+            pending_ts = None
+        if closed_beyond:
+            pending_ts = index[i]
+        elif pierced:
+            status = "swept"
+            swept_ts = swept_ts or index[i]
+            last_sweep_ts = index[i]
+    return {"status": status, "swept_ts": pb._iso(swept_ts),
+            "broken_ts": pb._iso(broken_ts), "last_sweep_ts": pb._iso(last_sweep_ts)}
+
+
+def test_pool_status_boxing_optimisation_is_byte_identical():
+    rng = np.random.default_rng(20260726)
+    n = 6000
+    idx = pd.date_range("2010-01-01", periods=n, freq="h")
+    close = 1.10 + np.cumsum(rng.normal(0, 0.0006, n))
+    high = close + rng.uniform(0, 0.0009, n)
+    low = close - rng.uniform(0, 0.0009, n)
+    bars = pd.DataFrame({"Open": close, "High": high, "Low": low, "Close": close},
+                        index=idx)
+    # Sweep the level across the whole price range so we hit intact / swept /
+    # broken / failed-break / reclaim transitions, on BOTH sides.
+    levels = np.linspace(float(low.min()), float(high.max()), 60)
+    for lv in levels:
+        for side in ("above", "below"):
+            assert pb.pool_status(bars, float(lv), side) == \
+                _pool_status_ref(bars, float(lv), side), \
+                f"pool_status diverged from reference at level={lv} side={side}"

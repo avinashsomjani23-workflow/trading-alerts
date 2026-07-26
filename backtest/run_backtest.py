@@ -122,6 +122,7 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
     worker's exit-lab sink rows for the main process to merge.
     """
     # Worker-local imports (each process re-imports these; no shared state).
+    import time as _time  # §3.6 sim-loop heartbeat
     import pandas as _pd
     from pathlib import Path as _Path
     from backtest import replay_engine as _re, h1_only_simulator as _sim
@@ -191,7 +192,18 @@ def _process_pair(pair_conf, df_h1, walk_start_ts, walk_end_ts,
     # kept-and-flagged, to keep the trade population clean and policy-comparable.
     # Backtest-only; live re-arming (Phase2_Alert_Engine) is untouched.
     filled_obs: set = set()
-    for alert in pair_alerts:
+    # §3.6 sim-loop heartbeat: the sim loop is the ~85-95% cost and ran silent in
+    # CI (run 30162233896 emitted nothing for ~6000 alerts). Print every _HB_EVERY
+    # alerts, flushed. Pure logging — no result impact. N=50 fires ~ every 1-2 min.
+    _HB_EVERY = 50
+    _hb_total = len(pair_alerts)
+    _hb_t0 = _time.time()
+    for _hb_i, alert in enumerate(pair_alerts):
+        if _hb_i and _hb_i % _HB_EVERY == 0:
+            _el = _time.time() - _hb_t0
+            _rate = _hb_i / _el if _el > 0 else 0.0
+            print(f"  [sim {name}] {_hb_i}/{_hb_total} alerts "
+                  f"({_el:.0f}s, {_rate:.1f} alerts/s, {n_trades} rows)", flush=True)
         ob_key = (
             (alert.get("ob") or {}).get("ob_timestamp"),
             (alert.get("ob") or {}).get("direction"),

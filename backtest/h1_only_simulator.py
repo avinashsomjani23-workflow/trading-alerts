@@ -2206,7 +2206,13 @@ def _session_level_features_at_alert(df_h1, alert_ts, entry, pair):
     Never raises (session_levels guarantees the all-'none' dict on failure).
     """
     import session_levels
-    prior = df_h1[df_h1.index < pd.Timestamp(alert_ts)]
+    # PERF (§3.9 Stage B, 2026-07-26): df_h1.index is sorted, so searchsorted+iloc
+    # selects the SAME "strictly before alert_ts" rows as the old
+    # `df_h1[df_h1.index < alert_ts]` boolean mask without copying the whole frame
+    # per alert. side='left' -> first row with index >= alert_ts, so iloc[:pos] is
+    # exactly the rows with index < alert_ts. Point-in-time wall unchanged.
+    _pos = df_h1.index.searchsorted(pd.Timestamp(alert_ts), side="left")
+    prior = df_h1.iloc[:_pos]
     return session_levels.build_session_level_event(prior, alert_ts, entry, pair)
 
 

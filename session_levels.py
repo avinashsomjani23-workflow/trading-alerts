@@ -189,13 +189,23 @@ def _session_hl_pools(bars, sess_key, alert_ts_utc):
     # Per bar: (session_local_date, in_window?, high, low)
     highs = bars["High"].to_numpy()
     lows = bars["Low"].to_numpy()
+    # PERF (§3.9 Stage A, 2026-07-26): the local hour+date for EVERY bar is a
+    # single vectorised tz conversion of the whole naive-UTC index, NOT a per-bar
+    # ts.to_pydatetime()+astimezone() call. `tz` is a ZoneInfo; pandas tz_convert
+    # uses the SAME IANA tz database, so `local.hour` / `local.date` are bit-
+    # identical to _local_hour_and_date() (which does astimezone(tz)) on every
+    # bar, DST boundaries included. This kills the py3.14 typing/annotationlib
+    # detonation the Step 0 profile showed came from per-element boxing. The
+    # bucketing loop below is unchanged — it now reads precomputed arrays.
+    local = idx.tz_localize("UTC").tz_convert(tz.key)
+    local_hours = local.hour.to_numpy()
+    local_dates = local.date  # numpy array of datetime.date, one per bar
     buckets = {}  # local_date -> [high, low]
     for i in range(len(idx)):
-        ts = idx[i]
-        py = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts
-        lh, ld = _local_hour_and_date(py, tz)
+        lh = int(local_hours[i])
         if not _in_session(lh, start_h, end_h):
             continue
+        ld = local_dates[i]
         b = buckets.get(ld)
         if b is None:
             buckets[ld] = [float(highs[i]), float(lows[i])]
@@ -286,7 +296,13 @@ def build_session_level_event(df_h1_prior, alert_ts, ref_price, pair=None):
                 # Bars strictly AFTER this pool closed, up to the alert. The pool
                 # is spent by bars that came after the session ended — never by the
                 # session's own bars (that would let the session sweep itself).
-                after = bars[bars.index >= p["close_utc"]]
+                # PERF (§3.9 Stage B, 2026-07-26): bars.index is sorted (one H1
+                # frame), so searchsorted+iloc selects the SAME rows as the old
+                # `bars[bars.index >= close_utc]` boolean mask without copying the
+                # whole frame per pool. side='left' -> first row with index >=
+                # close_utc, identical to the >= mask.
+                _pos = bars.index.searchsorted(p["close_utc"], side="left")
+                after = bars.iloc[_pos:]
                 for side_key, side_arg, level in (
                     ("high", "above", p["high"]),
                     ("low", "below", p["low"]),
