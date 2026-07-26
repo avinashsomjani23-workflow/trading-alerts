@@ -1560,10 +1560,14 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         exit (LONG tp - spread, SHORT tp + spread). A LONG sells at the bid, so the
         bid must reach TP; front-running by a spread makes it fill at the zone.
       - SL keeps its OB-distal +/- spread buffer (unchanged).
-    Trade SELECTION is byte-identical to pre-2026-07-22: entry/risk/RR grading and
-    the TP1 band + TP2 pool logic run on the RAW geometry; only the FINAL emitted
-    execution prices are shifted (raw values logged as *_raw for audit). Live and
-    backtest apply the identical shift so the simulator fills where live would.
+    Entry, SL and TP2/pool-separation logic run on the RAW geometry; only the FINAL
+    emitted execution prices are shifted (raw values logged as *_raw for audit). Live
+    and backtest apply the identical shift so the simulator fills where live would.
+    The TP1 RR band, HOWEVER, is graded on the PLACED geometry (2026-07-27): entry
+    and TP1 are pushed toward each other by one spread each, so a pool graded profit-
+    side on the raw lines can fill on the LOSS side of the placed entry. Grading the
+    band on the placed prices (what actually trades) is the only grade that can't
+    emit a physically-impossible loss-side "tp1" (scan-log gate G10).
 
     SL: H1 OB distal +/- 1x spread.
 
@@ -1685,6 +1689,28 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     if risk == 0:
         return {"valid": False, "reason": "Zero risk -- entry == SL."}
 
+    # PLACED geometry for RR grading (2026-07-27). The trade is graded on what it
+    # ACTUALLY executes, not the raw OB lines. Entry fills at _place_entry(entry)
+    # and TP fills at _place_tp(tp); the simulator's R-distance is measured from the
+    # placed entry to the SPREAD-WIDENED stop (raw sl is already ob-distal -1 spread
+    # here, the simulator widens it by one more — mirror that so graded R == traded
+    # R). Grading on the raw gap let a pool whose profit room is entirely eaten by
+    # the two opposite spread shifts (entry moves toward price, TP moves nearer)
+    # still pass the [0.5, 4.0]R band, then emit a TP1 on the LOSS side of entry —
+    # a physically-impossible "tp1" loser (scan-log G10 rule c). Grading on the
+    # placed prices makes such a pool score <= 0R and fail the floor honestly.
+    entry_placed = _place_entry(entry)
+    sl_placed = (sl - spread_val) if bias == "LONG" else (sl + spread_val)
+    risk_placed = abs(entry_placed - sl_placed)
+
+    def _placed_rr(px):
+        """RR of a raw target level on the PLACED geometry (what actually trades).
+        Signed toward profit: positive = profit side of the placed entry, <= 0 =
+        at/behind it (no profit room after spread)."""
+        placed = _place_tp(px)
+        signed = (placed - entry_placed) if bias == "LONG" else (entry_placed - placed)
+        return signed / risk_placed if risk_placed > 0 else 0.0
+
     # TP swings from H1 at lookback=3. Opposing swings only, past entry.
     # Full swing objects kept (not just prices) so TP2 can check for an
     # intervening opposite-type swing — the structural separator between pools.
@@ -1719,8 +1745,9 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     # the target is a real unbroken swing pool, or a defined 1:1, nothing in
     # between.
     def _pick_tp1(floor):
-        """Pick TP1 in the RR band [floor, TP1_MAX_RR], graded on the ZONE-EDGE
-        price, from UNBROKEN opposing swings only.
+        """Pick TP1 in the RR band [floor, TP1_MAX_RR], graded on the PLACED
+        ZONE-EDGE price (the level the trade actually fills at), from UNBROKEN
+        opposing swings only.
 
         Returns (tp1_zone, tp1_zone_rr, tp1_wick, tp1_wick_rr, idx_in_opposing,
         source, zone_source) or (None, ...) if no unbroken swing lands in band.
@@ -1729,18 +1756,23 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         too (too far to sit through -> the caller routes to the 1:1 fallback);
         because `opposing` is sorted nearest-first, the first unbroken swing that
         clears the floor is also the smallest-RR candidate, so an over-cap
-        nearest pool means every farther pool is over-cap too."""
+        nearest pool means every farther pool is over-cap too.
+
+        RR is graded on the PLACED geometry (_placed_rr): a pool whose zone edge is
+        profit-side on the RAW lines but is dragged to/behind the placed entry by
+        the two spread shifts scores <= 0R and correctly fails the floor, so no
+        loss-side TP1 is ever emitted."""
         for i, sw in enumerate(opposing):
             if not is_swing_active(sw, df_h1, pierce_min):
                 continue  # broken (closed beyond) or swept (wick drained) -> skip
             wick = sw['price']
             zone, zsrc = _tp_zone_edge(df_h1, sw.get('idx'), wick, bias, entry)
-            zone_rr = abs(zone - entry) / risk
+            zone_rr = _placed_rr(zone)   # placed geometry = the traded RR
             if zone_rr < floor:
-                continue  # too near -> not worth the risk; keep scanning farther
+                continue  # too near (or loss-side after spread) -> keep scanning
             if zone_rr > TP1_MAX_RR:
                 break     # too far -> 1:1 fallback (all farther pools are farther still)
-            wick_rr = abs(wick - entry) / risk
+            wick_rr = _placed_rr(wick)
             return zone, zone_rr, wick, wick_rr, i, "swing", zsrc
         return None, 0.0, None, 0.0, None, "swing", "wick"
 
@@ -1762,6 +1794,18 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         tp1_idx_in_opposing = None
         tp1_source = "fallback_1to1"
         tp1_zone_source = "wick"
+
+    # Placement backstop (2026-07-27). Even the 1:1 fallback (tp1 = entry +/- risk)
+    # loses its profit room on a razor-thin OB where risk <= 2x spread: the two
+    # opposite spread shifts leave placed TP1 at/behind placed entry. Such a setup
+    # is untradeable — there is no room to take profit after spread — so it fails
+    # validity exactly like a zero-risk entry. Live simply does not fire; the
+    # backtest drops the row. Graded on the placed TP1 (_placed_rr): <= 0R means
+    # loss-side or flush with entry.
+    if _placed_rr(tp1) <= 0:
+        return {"valid": False,
+                "reason": ("No profit room after spread -- placed TP1 is not on the "
+                           "profit side of the placed entry (OB thinner than 2x spread).")}
 
     # TP2: next opposing swing past TP1, only if it is a DIFFERENT liquidity pool.
     # Two opposing swings are the same pool when EITHER:
@@ -1840,7 +1884,7 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         "sl": round(sl, dp),
         "tp1": round(_place_tp(tp1), dp),   # spread-placed (fills before reversal)
         "tp1_raw": round(tp1, dp),          # zone-edge TP1 pre-shift (RR graded here)
-        "rr": round(tp1_rr, 2),         # RR of the traded (zone) level, raw geometry
+        "rr": round(tp1_rr, 2),         # RR of the traded TP1, PLACED geometry (what fills)
         "entry_source": entry_source,
         "tp1_source": tp1_source,       # "swing" | "fallback_1to1"
         # True when NO unbroken opposing pool landed in the [0.5, 4.0]R band and
