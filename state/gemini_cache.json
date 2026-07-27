@@ -1,17 +1,11 @@
 {
-  "EURUSD|2026-07-24": {
-    "macro_summary": "French and German Flash PMIs at 12:45 and 13:00 IST are scheduled. Stronger than expected PMIs would help this EURUSD long, while weaker readings would hurt it. All events are upcoming."
+  "EURUSD|2026-07-27": {
+    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no macroeconomic factors are expected to directly influence this EURUSD short setup today."
   },
-  "GOLD|2026-07-24": {
-    "macro_summary": "No scheduled high-impact events for USD today that would directly influence Gold. Therefore, this short Gold setup is primarily driven by technical factors and sentiment, with no immediate macro catalysts expected to help or hurt the trade."
-  },
-  "NZDUSD|2026-07-24": {
+  "NZDUSD|2026-07-27": {
     "macro_summary": "There are no scheduled high-impact events for NZD or USD today. Therefore, no external macro factors are expected to directly influence the NZDUSD pair's direction today."
   },
-  "USDJPY|2026-07-24": {
-    "macro_summary": "There are no scheduled high-impact events for JPY or USD today. Therefore, no scheduled events will directly influence the USDJPY pair's macro backdrop today. The trade setup will rely solely on technical factors and any unscheduled news."
-  },
-  "USDCHF|2026-07-24": {
-    "macro_summary": "There are no scheduled high-impact events for CHF or USD today. Therefore, no external macro factors are expected to directly influence the USDCHF pair's direction today. The trade setup will be driven solely by technical factors and intermarket correlations."
+  "GOLD|2026-07-27": {
+    "macro_summary": "There are no scheduled high-impact events for USD today that would directly influence Gold. Therefore, no scheduled events today will help or hurt this short Gold setup."
   }
 }
