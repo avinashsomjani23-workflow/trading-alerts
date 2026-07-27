@@ -1,3 +1,5 @@
 {
-  "alerted": false
+  "alerted": true,
+  "since_ist": "2026-07-27T09:36:07.808370",
+  "reason": "slate_date_2026-07-24_not_2026-07-27"
 }
