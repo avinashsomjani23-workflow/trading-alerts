@@ -53,6 +53,24 @@ Parked ideas + the working playbook, so nothing is forgotten at analysis time. I
 - **How:** bucket curves for both position features (weekly from the logged pool columns if present; daily from d1_pos_pct if logged); compare separation with CIs, per pair.
 - **Added:** 2026-07-25
 
+### Big-winner anatomy (trades that reach 2R+) — the target-distance axis
+- **What:** two Stage-1 exit recipes independently pointed at the SAME axis — a bigger, further target trades a lower hit-rate for larger wins and MORE positive quarters. Evidence (EURUSD Discovery h1only_20080102_20161231): (a) fixed-2R TP = 8/36 positive quarters vs baseline's 3/36; (b) single-target wick TP = lower WR 27.8% vs 33.3% but bigger avg win +1.86R vs +1.40R on the same 1401 trades. Goal: find what a big winner shares, so entries can be biased toward the setups that actually run far.
+- **Stage:** 3 — Loser autopsy / 4 — Screening (winner side).
+- **How:** flag trades whose real-order replay (walk_multileg, not raw MFE) reaches ≥2R; compare their feature distributions (break quality, PD zone, session, sweep, pool distance) vs the rest; bucket curves per feature with CI. Derived from trades.csv + exit replay.
+- **Added:** 2026-07-27
+
+### CAVEAT — exit choice must not be frozen on the raw (unfiltered) population
+- **What:** every exit recipe LOSES on the Discovery block because it contains all bad entries. The mechanical ATR exit "won" (−0.138 vs baseline −0.188, paired CI [+0.003,+0.084]) largely because a wide 1.5-ATR stop tolerates the sweeps that stop out our tight structural stop on GARBAGE setups — i.e. it is compensating for bad entries, not proving a better exit. Its positive quarters also cluster post-2013 (2012Q3, then 2014–2016), so the edge may be regime-specific. Do NOT crown an exit at Stage 1 on this population.
+- **Stage:** 1 — Pick the exit (deferral rule); re-decided after Stage 4 entry filtering.
+- **How:** carry BOTH finalists (baseline + E_atr_sl1.5_tp2.5) forward. Re-run the paired exit contest on the FILTERED / EV-gated book and on Validation years. ATR ships only if it still beats baseline beyond CI once trash entries are removed; if its edge collapses, it was an entry-quality artifact and baseline holds.
+- **Added:** 2026-07-27
+
+### ATR-scaled position size (risk-per-trade tied to volatility)
+- **What:** hypothesis — because the whole system is ATR-gated (ATR governs which setups even alert), position/risk sizing may belong on the same ATR axis rather than flat-per-trade. Test ONLY after bad entries are filtered (Stage 4+); a sizing edge on a losing raw population is meaningless.
+- **Stage:** post-6 — EV/sizing, and only on the filtered book.
+- **How:** compare flat-R sizing vs size ∝ f(ATR-at-fill) on the surviving (EV-gated) trades; measure expectancy and drawdown, not raw expR. Sizing never changes which trades are taken — outcome-neutral to entry selection.
+- **Added:** 2026-07-27
+
 ### Dealing range base timeframe: H4 vs D1
 - **What:** DR is built on H4 swings today; candidate rebuild on D1 swings — a DETECTION change, not an analysis feature.
 - **Stage:** post-10 — next generation, only if the autopsy shows DR-related misreads among losers.

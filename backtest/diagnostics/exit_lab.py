@@ -10,8 +10,10 @@ so the bars a trade was born from are the exact bars exit-lab re-reads. (This fa
 before only because the old trades were yfinance while the cache had moved to MT5.)
 The SELF-CHECK proves it: the baseline recipe must reproduce each trade's r_realised.
 
-Recipes (the locked set): baseline (live: liquidity TP + BE@1R), BE-sweep, fixed-TP
-{0.5/1/1.5/2}, partial 50%@1R + runner. One exit implementation: exit_engine.walk_multileg.
+Recipes (the pruned set, 2026-07-27): baseline (live: liquidity TP + BE@1R),
+BE-sweep {0.5/0.7}, fixed-TP {1/1.5/2}, mechanical ATR (1.5/2.5), single-target
+wick TP. Partials + the baseline-duplicate + the worse-than-baseline 0.5 fixed-TP
+were removed (see CONFIGS comment). One exit implementation: exit_engine.walk_multileg.
 
 Run:
   # 1) run the backtest (writes backtest/results/h1only_<start>_<end>/trades.csv)
@@ -42,15 +44,29 @@ RESULTS = os.path.join(ROOT, "backtest", "results")
 
 # ── The locked experiment set (HANDOFF / RECOMMENDATIONS) ───────────────────
 # target spec: float = R-multiple, "tp1" = liquidity TP. be_trigger_r None = no BE.
+#
+# Stage-1 exit-selection pruning (2026-07-27, trader-approved on the EURUSD
+# Discovery block h1only_20080102_20161231). Five recipes were removed as either
+# proven-worse, redundant, or un-bookable live (the trader cannot manually book
+# partial exits). REMOVED and why:
+#   - C_fullTP_0.5R          — statistically WORSE than baseline (paired CI < 0).
+#   - D_partial50_1R_runLiq  — partial exit; can't be booked live.
+#   - E_zoneTP_be1.0         — byte-for-byte DUPLICATE of baseline (+0.0000 diff);
+#                              tp1_zone_source already logs the zone-vs-wick fallback.
+#   - E_partial_zone_then_wick     — partial exit; can't be booked live. (The trader's
+#                              intended "zone-if-clear-else-wick" fallback IS baseline
+#                              TP1 already — see tp1_zone_source in the simulator.)
+#   - E_partial_zone_wick_nextpool — 3-way partial; can't be booked live, and only
+#                              ~32% of trades even had a next-pool target.
+# The single-target wick exit (E_wickTP_be1.0) is KEPT: it is a full-position,
+# bookable exit (one target), not a partial.
 CONFIGS: Dict[str, Dict[str, Any]] = {
     "baseline_liqTP_be1.0":  {"legs": [(1.0, "tp1")], "be_trigger_r": 1.0, "be_to_r": 0.0},
     "B_be0.5":               {"legs": [(1.0, "tp1")], "be_trigger_r": 0.5, "be_to_r": 0.0},
     "B_be0.7":               {"legs": [(1.0, "tp1")], "be_trigger_r": 0.7, "be_to_r": 0.0},
-    "C_fullTP_0.5R":         {"legs": [(1.0, 0.5)], "be_trigger_r": None},
     "C_fullTP_1.0R":         {"legs": [(1.0, 1.0)], "be_trigger_r": None},
     "C_fullTP_1.5R":         {"legs": [(1.0, 1.5)], "be_trigger_r": None},
     "C_fullTP_2.0R":         {"legs": [(1.0, 2.0)], "be_trigger_r": None},
-    "D_partial50_1R_runLiq": {"legs": [(0.5, 1.0), (0.5, "tp1")], "be_trigger_r": 1.0, "be_to_r": 0.0},
     # ATR-anchored mechanical exit (the KVignesh MT5-bot exit, for a head-to-head
     # vs our structural stop). SL = atr_sl_mult x ATR, TP = atr_tp_mult x ATR, both
     # measured from the fill price — NOT the structural r_distance. `atr_sl_mult`
@@ -62,17 +78,11 @@ CONFIGS: Dict[str, Dict[str, Any]] = {
     # <15 prior bars are skipped for this recipe (real ATR unavailable; never faked).
     "E_atr_sl1.5_tp2.5":     {"legs": [(1.0, "atr_tp")], "be_trigger_r": None,
                               "atr_sl_mult": 1.5, "atr_tp_mult": 2.5, "atr_period": 14},
-    # ── 3-TARGET LADDER (2026-07-17) — triple-mode structural TPs ────────────────
-    # Only run on trades that committed the needed target (guarded in _replay).
-    #   zone     = TP1 (pool A zone edge)  — the conservative reversal-zone read.
-    #   wick     = tp_wick (pool A liquidity wick, buffered)  — the true magnet.
-    #   nextpool = tp_nextpool (pool B, the runner).
-    "E_zoneTP_be1.0":              {"legs": [(1.0, "tp1")], "be_trigger_r": 1.0, "be_to_r": 0.0},
+    # Single-target structural wick exit (2026-07-17). Full position exits at the
+    # same-pool buffered liquidity wick (tp_wick) — the true magnet past the zone
+    # edge. Runs only on trades that committed a tp_wick price (~63%); guarded in
+    # _replay. KEPT through the 2026-07-27 pruning: it is bookable (one target).
     "E_wickTP_be1.0":              {"legs": [(1.0, "tp_wick")], "be_trigger_r": 1.0, "be_to_r": 0.0},
-    "E_partial_zone_then_wick":    {"legs": [(0.5, "tp1"), (0.5, "tp_wick")],
-                                    "be_trigger_r": 1.0, "be_to_r": 0.0},
-    "E_partial_zone_wick_nextpool": {"legs": [(1/3, "tp1"), (1/3, "tp_wick"), (1/3, "tp_nextpool")],
-                                     "be_trigger_r": 1.0, "be_to_r": 0.0},
 }
 
 
