@@ -1,0 +1,5528 @@
+{
+  "meta": {
+    "step": "step2_univariate_pooled_discovery",
+    "spec": "SMC_EDGE_LAB_SPEC.md \u00a74 / \u00a72 / \u00a73 / \u00a79",
+    "run_id": "h1only_20080102_20251231",
+    "scope": "pooled_fx_gold",
+    "window": "2008-01-02..2016-12-31",
+    "seed": 42,
+    "generated_utc": "2026-07-09T09:05:34.162736+00:00",
+    "n_features": 44,
+    "n_gates_off": 11363,
+    "n_gated": 10748,
+    "score_floor_live": 4,
+    "effect_floor_single_r": 0.05,
+    "mi_min_n": 500,
+    "schema_guard": {
+      "run_id": "h1only_20080102_20251231",
+      "n_rows": 33838,
+      "n_cols": 108,
+      "baseline_signal_columns": [
+        "sl_distance_atr",
+        "r_capture_ratio",
+        "trend_pd_agree",
+        "sl_max_adverse_after_sweep_atr",
+        "bars_sl_to_tp1_touch",
+        "sl_recovered_to_entry",
+        "sl_wick_depth_atr"
+      ],
+      "missing_baseline_columns": [],
+      "unparseable_numeric_columns": {},
+      "pass": true
+    }
+  },
+  "views": {
+    "gates_off": [
+      {
+        "kind": "ordinal",
+        "n_valid": 11363,
+        "spearman_rho": -0.0195,
+        "p_value": 0.0372548052453811,
+        "test": "spearman(ordinal)",
+        "curve": [
+          {
+            "level": "8",
+            "n": 1,
+            "expR": 4.825,
+            "thin": true,
+            "expR_shrunk": 0.045
+          },
+          {
+            "level": "5",
+            "n": 28,
+            "expR": 0.1651,
+            "thin": true,
+            "expR_shrunk": 0.026
+          },
+          {
+            "level": "4",
+            "n": 65,
+            "expR": 0.1616,
+            "thin": true,
+            "expR_shrunk": 0.0701
+          },
+          {
+            "level": "10",
+            "n": 1,
+            "expR": 0.0,
+            "thin": true,
+            "expR_shrunk": -0.0566
+          },
+          {
+            "level": "0",
+            "n": 7863,
+            "expR": -0.0471,
+            "thin": false,
+            "expR_shrunk": -0.0472
+          },
+          {
+            "level": "1",
+            "n": 2419,
+            "expR": -0.0651,
+            "thin": false,
+            "expR_shrunk": -0.065
+          },
+          {
+            "level": "2",
+            "n": 733,
+            "expR": -0.1187,
+            "thin": false,
+            "expR_shrunk": -0.1151
+          },
+          {
+            "level": "7",
+            "n": 3,
+            "expR": -0.192,
+            "thin": true,
+            "expR_shrunk": -0.0659
+          },
+          {
+            "level": "3",
+            "n": 237,
+            "expR": -0.2404,
+            "thin": false,
+            "expR_shrunk": -0.2104
+          },
+          {
+            "level": "6",
+            "n": 13,
+            "expR": -0.3164,
+            "thin": true,
+            "expR_shrunk": -0.1143
+          }
+        ],
+        "effect_r": -0.1933,
+        "effect_ci_lo": -0.3395,
+        "effect_ci_hi": -0.0394,
+        "effect_ci_excludes_0": true,
+        "effect_levels": "0..3",
+        "feature": "ob_walkback_depth",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "ship_gate_queue",
+        "rank": 1
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 11363,
+        "kruskal_h": 4.9603,
+        "p_value": 0.08373209771885809,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "counter_trend",
+            "n": 1013,
+            "expR": 0.0208,
+            "thin": false,
+            "expR_shrunk": -0.0358
+          },
+          {
+            "level": "with_trend",
+            "n": 7741,
+            "expR": -0.0539,
+            "thin": false,
+            "expR_shrunk": -0.0549
+          },
+          {
+            "level": "ambiguous",
+            "n": 2609,
+            "expR": -0.0999,
+            "thin": false,
+            "expR_shrunk": -0.0788
+          }
+        ],
+        "effect_r": 0.1207,
+        "effect_ci_lo": 0.0211,
+        "effect_ci_hi": 0.2198,
+        "effect_ci_excludes_0": true,
+        "effect_levels": "ambiguous..counter_trend",
+        "best_pos_quarters": "8/14",
+        "feature": "trend_alignment",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 2
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11363,
+        "spearman_rho": -0.0015,
+        "p_value": 0.8718566400983,
+        "mi": 0.00094,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1137,
+            "x_lo": 2.0,
+            "x_hi": 4.0,
+            "expR": -0.1391
+          },
+          {
+            "decile": 2,
+            "n": 1136,
+            "x_lo": 4.0,
+            "x_hi": 6.0,
+            "expR": -0.0539
+          },
+          {
+            "decile": 3,
+            "n": 1136,
+            "x_lo": 6.0,
+            "x_hi": 9.0,
+            "expR": -0.0558
+          },
+          {
+            "decile": 4,
+            "n": 1136,
+            "x_lo": 9.0,
+            "x_hi": 12.0,
+            "expR": -0.0641
+          },
+          {
+            "decile": 5,
+            "n": 1137,
+            "x_lo": 13.0,
+            "x_hi": 21.0,
+            "expR": -0.0324
+          },
+          {
+            "decile": 6,
+            "n": 1136,
+            "x_lo": 21.0,
+            "x_hi": 28.0,
+            "expR": -0.0309
+          },
+          {
+            "decile": 7,
+            "n": 1136,
+            "x_lo": 28.0,
+            "x_hi": 39.0,
+            "expR": -0.0037
+          },
+          {
+            "decile": 8,
+            "n": 1136,
+            "x_lo": 39.0,
+            "x_hi": 69.0,
+            "expR": -0.0964
+          },
+          {
+            "decile": 9,
+            "n": 1136,
+            "x_lo": 69.0,
+            "x_hi": 100.0,
+            "expR": -0.0756
+          },
+          {
+            "decile": 10,
+            "n": 1137,
+            "x_lo": 100.0,
+            "x_hi": 432.0,
+            "expR": -0.0259
+          }
+        ],
+        "effect_r": 0.1132,
+        "effect_ci_lo": 0.012,
+        "effect_ci_hi": 0.2144,
+        "effect_ci_excludes_0": true,
+        "top_pos_quarters": "6/19",
+        "feature": "ob_to_fill_hours",
+        "timing": "fill_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 3
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 11363,
+        "kruskal_h": 6.1256,
+        "p_value": 0.6331652229047415,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "USDCAD",
+            "n": 1445,
+            "expR": 0.0119,
+            "thin": false,
+            "expR_shrunk": -0.0218
+          },
+          {
+            "level": "GOLD",
+            "n": 1369,
+            "expR": -0.0503,
+            "thin": false,
+            "expR_shrunk": -0.054
+          },
+          {
+            "level": "USDJPY",
+            "n": 1132,
+            "expR": -0.0519,
+            "thin": false,
+            "expR_shrunk": -0.0551
+          },
+          {
+            "level": "AUDUSD",
+            "n": 1035,
+            "expR": -0.0562,
+            "thin": false,
+            "expR_shrunk": -0.0571
+          },
+          {
+            "level": "EURJPY",
+            "n": 1158,
+            "expR": -0.0635,
+            "thin": false,
+            "expR_shrunk": -0.0604
+          },
+          {
+            "level": "NZDUSD",
+            "n": 994,
+            "expR": -0.0697,
+            "thin": false,
+            "expR_shrunk": -0.0628
+          },
+          {
+            "level": "USDCHF",
+            "n": 1353,
+            "expR": -0.0707,
+            "thin": false,
+            "expR_shrunk": -0.0642
+          },
+          {
+            "level": "EURUSD",
+            "n": 1422,
+            "expR": -0.0835,
+            "thin": false,
+            "expR_shrunk": -0.071
+          },
+          {
+            "level": "GBPUSD",
+            "n": 1455,
+            "expR": -0.0898,
+            "thin": false,
+            "expR_shrunk": -0.0744
+          }
+        ],
+        "effect_r": 0.1017,
+        "effect_ci_lo": 0.006,
+        "effect_ci_hi": 0.195,
+        "effect_ci_excludes_0": true,
+        "effect_levels": "GBPUSD..USDCAD",
+        "best_pos_quarters": "16/35",
+        "feature": "pair",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 4
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11363,
+        "spearman_rho": 0.0292,
+        "p_value": 0.0018452779999546304,
+        "mi": 0.0,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1137,
+            "x_lo": 4.0,
+            "x_hi": 5.0,
+            "expR": -0.065
+          },
+          {
+            "decile": 2,
+            "n": 1136,
+            "x_lo": 5.0,
+            "x_hi": 7.0,
+            "expR": -0.0482
+          },
+          {
+            "decile": 3,
+            "n": 1136,
+            "x_lo": 7.0,
+            "x_hi": 8.0,
+            "expR": -0.097
+          },
+          {
+            "decile": 4,
+            "n": 1136,
+            "x_lo": 8.0,
+            "x_hi": 9.0,
+            "expR": -0.1057
+          },
+          {
+            "decile": 5,
+            "n": 1137,
+            "x_lo": 9.0,
+            "x_hi": 10.0,
+            "expR": -0.0503
+          },
+          {
+            "decile": 6,
+            "n": 1136,
+            "x_lo": 10.0,
+            "x_hi": 12.0,
+            "expR": -0.0586
+          },
+          {
+            "decile": 7,
+            "n": 1136,
+            "x_lo": 12.0,
+            "x_hi": 13.0,
+            "expR": -0.0792
+          },
+          {
+            "decile": 8,
+            "n": 1136,
+            "x_lo": 13.0,
+            "x_hi": 15.0,
+            "expR": -0.05
+          },
+          {
+            "decile": 9,
+            "n": 1136,
+            "x_lo": 15.0,
+            "x_hi": 16.0,
+            "expR": -0.0637
+          },
+          {
+            "decile": 10,
+            "n": 1137,
+            "x_lo": 16.0,
+            "x_hi": 18.0,
+            "expR": 0.04
+          }
+        ],
+        "effect_r": 0.105,
+        "effect_ci_lo": -0.0045,
+        "effect_ci_hi": 0.1827,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "17/27",
+        "feature": "alert_utc_hour",
+        "timing": "alert_time",
+        "fdr_reject": true,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 5
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 967,
+        "kruskal_h": 1.2248,
+        "p_value": 0.5420352616509223,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "A First Pullback",
+            "n": 485,
+            "expR": -0.0104,
+            "thin": false,
+            "expR_shrunk": -0.0328
+          },
+          {
+            "level": "Caution: Late-Trend Chase",
+            "n": 436,
+            "expR": -0.1067,
+            "thin": false,
+            "expR_shrunk": -0.0822
+          },
+          {
+            "level": "A+ Reversal at the Wall",
+            "n": 46,
+            "expR": -0.2718,
+            "thin": true,
+            "expR_shrunk": -0.0782
+          }
+        ],
+        "effect_r": 0.0963,
+        "effect_ci_lo": -0.0641,
+        "effect_ci_hi": 0.2553,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "Caution: Late-Trend Chase..A First Pullback",
+        "best_pos_quarters": "0/0",
+        "feature": "setup_badge",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 6
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11363,
+        "spearman_rho": -0.0048,
+        "p_value": 0.6063790349941413,
+        "mi": 0.00414,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1137,
+            "x_lo": 0.0,
+            "x_hi": 0.683,
+            "expR": -0.0096
+          },
+          {
+            "decile": 2,
+            "n": 1136,
+            "x_lo": 0.683,
+            "x_hi": 0.978,
+            "expR": -0.0971
+          },
+          {
+            "decile": 3,
+            "n": 1136,
+            "x_lo": 0.978,
+            "x_hi": 1.292,
+            "expR": -0.1154
+          },
+          {
+            "decile": 4,
+            "n": 1136,
+            "x_lo": 1.293,
+            "x_hi": 1.597,
+            "expR": -0.0165
+          },
+          {
+            "decile": 5,
+            "n": 1137,
+            "x_lo": 1.597,
+            "x_hi": 1.925,
+            "expR": -0.0736
+          },
+          {
+            "decile": 6,
+            "n": 1136,
+            "x_lo": 1.926,
+            "x_hi": 2.317,
+            "expR": -0.0364
+          },
+          {
+            "decile": 7,
+            "n": 1136,
+            "x_lo": 2.319,
+            "x_hi": 2.907,
+            "expR": -0.0502
+          },
+          {
+            "decile": 8,
+            "n": 1136,
+            "x_lo": 2.907,
+            "x_hi": 3.89,
+            "expR": -0.0045
+          },
+          {
+            "decile": 9,
+            "n": 1136,
+            "x_lo": 3.891,
+            "x_hi": 5.611,
+            "expR": -0.0748
+          },
+          {
+            "decile": 10,
+            "n": 1137,
+            "x_lo": 5.612,
+            "x_hi": 50.711,
+            "expR": -0.0996
+          }
+        ],
+        "effect_r": -0.09,
+        "effect_ci_lo": -0.1897,
+        "effect_ci_hi": 0.0124,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "11/23",
+        "feature": "impulse_leg_atr",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 7
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11058,
+        "spearman_rho": -0.0052,
+        "p_value": 0.5857010614898597,
+        "mi": 0.00115,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1106,
+            "x_lo": 1.6,
+            "x_hi": 28.0,
+            "expR": -0.0591
+          },
+          {
+            "decile": 2,
+            "n": 1106,
+            "x_lo": 28.0,
+            "x_hi": 38.1,
+            "expR": -0.0373
+          },
+          {
+            "decile": 3,
+            "n": 1106,
+            "x_lo": 38.1,
+            "x_hi": 47.2,
+            "expR": 0.0145
+          },
+          {
+            "decile": 4,
+            "n": 1105,
+            "x_lo": 47.2,
+            "x_hi": 55.4,
+            "expR": -0.1239
+          },
+          {
+            "decile": 5,
+            "n": 1106,
+            "x_lo": 55.4,
+            "x_hi": 64.0,
+            "expR": -0.1527
+          },
+          {
+            "decile": 6,
+            "n": 1106,
+            "x_lo": 64.0,
+            "x_hi": 71.9,
+            "expR": -0.082
+          },
+          {
+            "decile": 7,
+            "n": 1105,
+            "x_lo": 71.9,
+            "x_hi": 80.2,
+            "expR": -0.0238
+          },
+          {
+            "decile": 8,
+            "n": 1106,
+            "x_lo": 80.2,
+            "x_hi": 89.0,
+            "expR": -0.0905
+          },
+          {
+            "decile": 9,
+            "n": 1106,
+            "x_lo": 89.0,
+            "x_hi": 101.8,
+            "expR": -0.0553
+          },
+          {
+            "decile": 10,
+            "n": 1106,
+            "x_lo": 101.8,
+            "x_hi": 10131.6,
+            "expR": 0.0303
+          }
+        ],
+        "effect_r": 0.0894,
+        "effect_ci_lo": -0.0068,
+        "effect_ci_hi": 0.1915,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "11/20",
+        "feature": "leg_retrace_pct_at_alert",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 8
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11363,
+        "spearman_rho": -0.0023,
+        "p_value": 0.8060750113361721,
+        "mi": 0.00043,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1137,
+            "x_lo": 2.0,
+            "x_hi": 2.0,
+            "expR": -0.1346
+          },
+          {
+            "decile": 2,
+            "n": 1136,
+            "x_lo": 2.0,
+            "x_hi": 3.0,
+            "expR": 0.0041
+          },
+          {
+            "decile": 3,
+            "n": 1136,
+            "x_lo": 3.0,
+            "x_hi": 4.0,
+            "expR": -0.056
+          },
+          {
+            "decile": 4,
+            "n": 1136,
+            "x_lo": 4.0,
+            "x_hi": 5.0,
+            "expR": -0.0961
+          },
+          {
+            "decile": 5,
+            "n": 1137,
+            "x_lo": 5.0,
+            "x_hi": 6.0,
+            "expR": -0.0493
+          },
+          {
+            "decile": 6,
+            "n": 1136,
+            "x_lo": 6.0,
+            "x_hi": 8.0,
+            "expR": -0.0524
+          },
+          {
+            "decile": 7,
+            "n": 1136,
+            "x_lo": 8.0,
+            "x_hi": 13.0,
+            "expR": -0.028
+          },
+          {
+            "decile": 8,
+            "n": 1136,
+            "x_lo": 13.0,
+            "x_hi": 23.0,
+            "expR": -0.0397
+          },
+          {
+            "decile": 9,
+            "n": 1136,
+            "x_lo": 23.0,
+            "x_hi": 47.0,
+            "expR": -0.0715
+          },
+          {
+            "decile": 10,
+            "n": 1137,
+            "x_lo": 47.0,
+            "x_hi": 262.0,
+            "expR": -0.0542
+          }
+        ],
+        "effect_r": 0.0804,
+        "effect_ci_lo": -0.0245,
+        "effect_ci_hi": 0.1801,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "7/19",
+        "feature": "ob_age_h1_bars",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 9
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 4424,
+        "spearman_rho": 0.0054,
+        "p_value": 0.7192732681946497,
+        "mi": 0.0,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 443,
+            "x_lo": 0.059,
+            "x_hi": 0.161,
+            "expR": -0.1015
+          },
+          {
+            "decile": 2,
+            "n": 442,
+            "x_lo": 0.161,
+            "x_hi": 0.243,
+            "expR": -0.0528
+          },
+          {
+            "decile": 3,
+            "n": 442,
+            "x_lo": 0.243,
+            "x_hi": 0.332,
+            "expR": -0.0323
+          },
+          {
+            "decile": 4,
+            "n": 443,
+            "x_lo": 0.332,
+            "x_hi": 0.429,
+            "expR": -0.1232
+          },
+          {
+            "decile": 5,
+            "n": 442,
+            "x_lo": 0.43,
+            "x_hi": 0.53,
+            "expR": -0.0521
+          },
+          {
+            "decile": 6,
+            "n": 442,
+            "x_lo": 0.531,
+            "x_hi": 0.644,
+            "expR": 0.0742
+          },
+          {
+            "decile": 7,
+            "n": 443,
+            "x_lo": 0.644,
+            "x_hi": 0.805,
+            "expR": -0.0519
+          },
+          {
+            "decile": 8,
+            "n": 442,
+            "x_lo": 0.806,
+            "x_hi": 1.043,
+            "expR": -0.125
+          },
+          {
+            "decile": 9,
+            "n": 442,
+            "x_lo": 1.044,
+            "x_hi": 1.511,
+            "expR": -0.0585
+          },
+          {
+            "decile": 10,
+            "n": 443,
+            "x_lo": 1.512,
+            "x_hi": 9.522,
+            "expR": -0.0249
+          }
+        ],
+        "effect_r": 0.0766,
+        "effect_ci_lo": -0.096,
+        "effect_ci_hi": 0.2478,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "0/0",
+        "feature": "fvg_size_atr",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 10
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 11363,
+        "kruskal_h": 1.563,
+        "p_value": 0.6678093727265161,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "Asia",
+            "n": 1488,
+            "expR": -0.0136,
+            "thin": false,
+            "expR_shrunk": -0.0426
+          },
+          {
+            "level": "London",
+            "n": 4223,
+            "expR": -0.051,
+            "thin": false,
+            "expR_shrunk": -0.0537
+          },
+          {
+            "level": "NY",
+            "n": 5207,
+            "expR": -0.0736,
+            "thin": false,
+            "expR_shrunk": -0.068
+          },
+          {
+            "level": "Other",
+            "n": 445,
+            "expR": -0.0848,
+            "thin": false,
+            "expR_shrunk": -0.0614
+          }
+        ],
+        "effect_r": 0.0712,
+        "effect_ci_lo": -0.06,
+        "effect_ci_hi": 0.2059,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "Other..Asia",
+        "best_pos_quarters": "17/32",
+        "feature": "fill_session",
+        "timing": "fill_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 11
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 11363,
+        "kruskal_h": 11.4557,
+        "p_value": 0.009500343472263072,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "Neither",
+            "n": 2639,
+            "expR": -0.0309,
+            "thin": false,
+            "expR_shrunk": -0.0443
+          },
+          {
+            "level": "OB only",
+            "n": 2024,
+            "expR": -0.0401,
+            "thin": false,
+            "expR_shrunk": -0.0501
+          },
+          {
+            "level": "Both",
+            "n": 2596,
+            "expR": -0.0515,
+            "thin": false,
+            "expR_shrunk": -0.0546
+          },
+          {
+            "level": "Fill only",
+            "n": 4104,
+            "expR": -0.0877,
+            "thin": false,
+            "expR_shrunk": -0.076
+          }
+        ],
+        "effect_r": 0.0568,
+        "effect_ci_lo": -0.0057,
+        "effect_ci_hi": 0.1192,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "Fill only..Neither",
+        "best_pos_quarters": "15/36",
+        "feature": "killzone_alignment",
+        "timing": "fill_time",
+        "fdr_reject": true,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 12
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11363,
+        "spearman_rho": -0.0284,
+        "p_value": 0.0024724227202155575,
+        "mi": 0.0,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1137,
+            "x_lo": 0.0,
+            "x_hi": 0.48,
+            "expR": -0.0648
+          },
+          {
+            "decile": 2,
+            "n": 1136,
+            "x_lo": 0.48,
+            "x_hi": 0.61,
+            "expR": 0.0025
+          },
+          {
+            "decile": 3,
+            "n": 1136,
+            "x_lo": 0.61,
+            "x_hi": 0.77,
+            "expR": -0.0559
+          },
+          {
+            "decile": 4,
+            "n": 1136,
+            "x_lo": 0.77,
+            "x_hi": 0.94,
+            "expR": -0.0041
+          },
+          {
+            "decile": 5,
+            "n": 1137,
+            "x_lo": 0.94,
+            "x_hi": 1.09,
+            "expR": -0.0524
+          },
+          {
+            "decile": 6,
+            "n": 1136,
+            "x_lo": 1.09,
+            "x_hi": 1.25,
+            "expR": -0.0974
+          },
+          {
+            "decile": 7,
+            "n": 1136,
+            "x_lo": 1.25,
+            "x_hi": 1.44,
+            "expR": -0.0286
+          },
+          {
+            "decile": 8,
+            "n": 1136,
+            "x_lo": 1.44,
+            "x_hi": 1.71,
+            "expR": -0.0663
+          },
+          {
+            "decile": 9,
+            "n": 1136,
+            "x_lo": 1.71,
+            "x_hi": 2.19,
+            "expR": -0.0913
+          },
+          {
+            "decile": 10,
+            "n": 1137,
+            "x_lo": 2.19,
+            "x_hi": 9.64,
+            "expR": -0.1193
+          }
+        ],
+        "effect_r": -0.0545,
+        "effect_ci_lo": -0.1644,
+        "effect_ci_hi": 0.0388,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "4/20",
+        "feature": "break_close_atr",
+        "timing": "alert_time",
+        "fdr_reject": true,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 13
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11363,
+        "spearman_rho": 0.0062,
+        "p_value": 0.5106325037495597,
+        "mi": 0.00296,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1137,
+            "x_lo": 1.0,
+            "x_hi": 2.0,
+            "expR": -0.0798
+          },
+          {
+            "decile": 2,
+            "n": 1136,
+            "x_lo": 2.0,
+            "x_hi": 3.0,
+            "expR": -0.1457
+          },
+          {
+            "decile": 3,
+            "n": 1136,
+            "x_lo": 3.0,
+            "x_hi": 6.0,
+            "expR": -0.0397
+          },
+          {
+            "decile": 4,
+            "n": 1136,
+            "x_lo": 6.0,
+            "x_hi": 9.0,
+            "expR": -0.0437
+          },
+          {
+            "decile": 5,
+            "n": 1137,
+            "x_lo": 9.0,
+            "x_hi": 15.0,
+            "expR": -0.0827
+          },
+          {
+            "decile": 6,
+            "n": 1136,
+            "x_lo": 15.0,
+            "x_hi": 21.0,
+            "expR": -0.0175
+          },
+          {
+            "decile": 7,
+            "n": 1136,
+            "x_lo": 21.0,
+            "x_hi": 26.0,
+            "expR": -0.0299
+          },
+          {
+            "decile": 8,
+            "n": 1136,
+            "x_lo": 26.0,
+            "x_hi": 37.0,
+            "expR": -0.0457
+          },
+          {
+            "decile": 9,
+            "n": 1136,
+            "x_lo": 37.0,
+            "x_hi": 56.0,
+            "expR": -0.065
+          },
+          {
+            "decile": 10,
+            "n": 1137,
+            "x_lo": 56.0,
+            "x_hi": 284.0,
+            "expR": -0.0279
+          }
+        ],
+        "effect_r": 0.0519,
+        "effect_ci_lo": -0.0287,
+        "effect_ci_hi": 0.1653,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "8/21",
+        "feature": "bars_break_to_pullback",
+        "timing": "fill_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 14
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 11363,
+        "kruskal_h": 8.6574,
+        "p_value": 0.034209788880677716,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "BOS",
+            "n": 6457,
+            "expR": -0.0361,
+            "thin": false,
+            "expR_shrunk": -0.042
+          },
+          {
+            "level": "Confirm",
+            "n": 1585,
+            "expR": -0.076,
+            "thin": false,
+            "expR_shrunk": -0.065
+          },
+          {
+            "level": "CHoCH",
+            "n": 3264,
+            "expR": -0.0865,
+            "thin": false,
+            "expR_shrunk": -0.0743
+          },
+          {
+            "level": "Range",
+            "n": 57,
+            "expR": -0.3617,
+            "thin": true,
+            "expR_shrunk": -0.0648
+          }
+        ],
+        "effect_r": 0.0504,
+        "effect_ci_lo": -0.0015,
+        "effect_ci_hi": 0.103,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "CHoCH..BOS",
+        "best_pos_quarters": "11/36",
+        "feature": "bos_tier",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 15
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 11363,
+        "kruskal_h": 8.6574,
+        "p_value": 0.034209788880677716,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "BOS BOS",
+            "n": 6457,
+            "expR": -0.0361,
+            "thin": false,
+            "expR_shrunk": -0.042
+          },
+          {
+            "level": "Confirmation BOS",
+            "n": 1585,
+            "expR": -0.076,
+            "thin": false,
+            "expR_shrunk": -0.065
+          },
+          {
+            "level": "CHoCH CHoCH",
+            "n": 3264,
+            "expR": -0.0865,
+            "thin": false,
+            "expR_shrunk": -0.0743
+          },
+          {
+            "level": "Range BOS",
+            "n": 57,
+            "expR": -0.3617,
+            "thin": true,
+            "expR_shrunk": -0.0648
+          }
+        ],
+        "effect_r": 0.0504,
+        "effect_ci_lo": -0.0015,
+        "effect_ci_hi": 0.103,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "CHoCH CHoCH..BOS BOS",
+        "best_pos_quarters": "11/36",
+        "feature": "event",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 16
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11363,
+        "spearman_rho": -0.0214,
+        "p_value": 0.02260500895617664,
+        "mi": 0.00569,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1137,
+            "x_lo": 0.02,
+            "x_hi": 0.79,
+            "expR": -0.0052
+          },
+          {
+            "decile": 2,
+            "n": 1136,
+            "x_lo": 0.79,
+            "x_hi": 1.05,
+            "expR": -0.0606
+          },
+          {
+            "decile": 3,
+            "n": 1136,
+            "x_lo": 1.05,
+            "x_hi": 1.17,
+            "expR": 0.0022
+          },
+          {
+            "decile": 4,
+            "n": 1136,
+            "x_lo": 1.17,
+            "x_hi": 1.34,
+            "expR": -0.0009
+          },
+          {
+            "decile": 5,
+            "n": 1137,
+            "x_lo": 1.34,
+            "x_hi": 1.51,
+            "expR": -0.0716
+          },
+          {
+            "decile": 6,
+            "n": 1136,
+            "x_lo": 1.51,
+            "x_hi": 1.65,
+            "expR": -0.1435
+          },
+          {
+            "decile": 7,
+            "n": 1136,
+            "x_lo": 1.65,
+            "x_hi": 1.83,
+            "expR": -0.0562
+          },
+          {
+            "decile": 8,
+            "n": 1136,
+            "x_lo": 1.83,
+            "x_hi": 2.11,
+            "expR": -0.0755
+          },
+          {
+            "decile": 9,
+            "n": 1136,
+            "x_lo": 2.11,
+            "x_hi": 2.6,
+            "expR": -0.113
+          },
+          {
+            "decile": 10,
+            "n": 1137,
+            "x_lo": 2.6,
+            "x_hi": 12.56,
+            "expR": -0.0534
+          }
+        ],
+        "effect_r": -0.0482,
+        "effect_ci_lo": -0.14,
+        "effect_ci_hi": 0.0702,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "8/19",
+        "feature": "break_body_atr",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 17
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11363,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "1.0",
+        "level_lo": "0.0",
+        "expR_hi": -0.0921,
+        "expR_lo": -0.0487,
+        "n_hi": 2377,
+        "n_lo": 8986,
+        "effect_r": -0.0435,
+        "effect_ci_lo": -0.099,
+        "effect_ci_hi": 0.0112,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "9/36",
+        "curve": [
+          {
+            "level": "0.0",
+            "n": 8986,
+            "expR": -0.0487,
+            "thin": false,
+            "expR_shrunk": -0.0522
+          },
+          {
+            "level": "1.0",
+            "n": 2377,
+            "expR": -0.0921,
+            "thin": false,
+            "expR_shrunk": -0.0679
+          }
+        ],
+        "feature": "reversal_pct",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 18
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11363,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "CHoCH",
+        "level_lo": "BOS",
+        "expR_hi": -0.0865,
+        "expR_lo": -0.0462,
+        "n_hi": 3264,
+        "n_lo": 8099,
+        "effect_r": -0.0404,
+        "effect_ci_lo": -0.09,
+        "effect_ci_hi": 0.0107,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "10/36",
+        "curve": [
+          {
+            "level": "BOS",
+            "n": 8099,
+            "expR": -0.0462,
+            "thin": false,
+            "expR_shrunk": -0.051
+          },
+          {
+            "level": "CHoCH",
+            "n": 3264,
+            "expR": -0.0865,
+            "thin": false,
+            "expR_shrunk": -0.0683
+          }
+        ],
+        "feature": "bos_tag",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 19
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11363,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0737,
+        "expR_lo": -0.0349,
+        "n_hi": 6700,
+        "n_lo": 4663,
+        "effect_r": -0.0388,
+        "effect_ci_lo": -0.0855,
+        "effect_ci_hi": 0.0072,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "15/36",
+        "curve": [
+          {
+            "level": "False",
+            "n": 4663,
+            "expR": -0.0349,
+            "thin": false,
+            "expR_shrunk": -0.0475
+          },
+          {
+            "level": "True",
+            "n": 6700,
+            "expR": -0.0737,
+            "thin": false,
+            "expR_shrunk": -0.0664
+          }
+        ],
+        "feature": "fill_in_killzone",
+        "timing": "fill_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 20
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11363,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0316,
+        "expR_lo": -0.0701,
+        "n_hi": 3647,
+        "n_lo": 7716,
+        "effect_r": 0.0385,
+        "effect_ci_lo": -0.0105,
+        "effect_ci_hi": 0.0881,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "13/36",
+        "curve": [
+          {
+            "level": "True",
+            "n": 3647,
+            "expR": -0.0316,
+            "thin": false,
+            "expR_shrunk": -0.0475
+          },
+          {
+            "level": "False",
+            "n": 7716,
+            "expR": -0.0701,
+            "thin": false,
+            "expR_shrunk": -0.0649
+          }
+        ],
+        "feature": "trend_pd_agree",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 21
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11363,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "counter",
+        "level_lo": "aligned",
+        "expR_hi": -0.0763,
+        "expR_lo": -0.0396,
+        "n_hi": 5630,
+        "n_lo": 5733,
+        "effect_r": -0.0367,
+        "effect_ci_lo": -0.0827,
+        "effect_ci_hi": 0.0098,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "12/36",
+        "curve": [
+          {
+            "level": "aligned",
+            "n": 5733,
+            "expR": -0.0396,
+            "thin": false,
+            "expR_shrunk": -0.0486
+          },
+          {
+            "level": "counter",
+            "n": 5630,
+            "expR": -0.0763,
+            "thin": false,
+            "expR_shrunk": -0.067
+          }
+        ],
+        "feature": "pd_alignment",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 22
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11363,
+        "spearman_rho": -0.0085,
+        "p_value": 0.36772110362458543,
+        "mi": 0.00684,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1137,
+            "x_lo": 1.0,
+            "x_hi": 4.0,
+            "expR": -0.0522
+          },
+          {
+            "decile": 2,
+            "n": 1136,
+            "x_lo": 4.0,
+            "x_hi": 5.0,
+            "expR": -0.0419
+          },
+          {
+            "decile": 3,
+            "n": 1136,
+            "x_lo": 5.0,
+            "x_hi": 5.0,
+            "expR": -0.0537
+          },
+          {
+            "decile": 4,
+            "n": 1136,
+            "x_lo": 5.0,
+            "x_hi": 5.2,
+            "expR": -0.07
+          },
+          {
+            "decile": 5,
+            "n": 1137,
+            "x_lo": 5.2,
+            "x_hi": 6.0,
+            "expR": -0.0509
+          },
+          {
+            "decile": 6,
+            "n": 1136,
+            "x_lo": 6.0,
+            "x_hi": 6.0,
+            "expR": -0.0328
+          },
+          {
+            "decile": 7,
+            "n": 1136,
+            "x_lo": 6.0,
+            "x_hi": 7.0,
+            "expR": -0.0846
+          },
+          {
+            "decile": 8,
+            "n": 1136,
+            "x_lo": 7.0,
+            "x_hi": 7.0,
+            "expR": -0.107
+          },
+          {
+            "decile": 9,
+            "n": 1136,
+            "x_lo": 7.0,
+            "x_hi": 8.0,
+            "expR": 0.0041
+          },
+          {
+            "decile": 10,
+            "n": 1137,
+            "x_lo": 8.0,
+            "x_hi": 10.0,
+            "expR": -0.0885
+          }
+        ],
+        "effect_r": -0.0363,
+        "effect_ci_lo": -0.1116,
+        "effect_ci_hi": 0.0548,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "14/36",
+        "feature": "score",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 23
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 11363,
+        "kruskal_h": 10.719,
+        "p_value": 0.013346290434786946,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "Other",
+            "n": 641,
+            "expR": -0.0413,
+            "thin": false,
+            "expR_shrunk": -0.0549
+          },
+          {
+            "level": "London",
+            "n": 4626,
+            "expR": -0.0422,
+            "thin": false,
+            "expR_shrunk": -0.0484
+          },
+          {
+            "level": "NY",
+            "n": 1923,
+            "expR": -0.062,
+            "thin": false,
+            "expR_shrunk": -0.0594
+          },
+          {
+            "level": "Asia",
+            "n": 4173,
+            "expR": -0.0756,
+            "thin": false,
+            "expR_shrunk": -0.0681
+          }
+        ],
+        "effect_r": 0.0343,
+        "effect_ci_lo": -0.0762,
+        "effect_ci_hi": 0.1459,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "Asia..Other",
+        "best_pos_quarters": "0/0",
+        "feature": "ob_session",
+        "timing": "alert_time",
+        "fdr_reject": true,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 24
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 11363,
+        "kruskal_h": 3.2715,
+        "p_value": 0.19480463110003887,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "no_fvg",
+            "n": 5431,
+            "expR": -0.0546,
+            "thin": false,
+            "expR_shrunk": -0.0562
+          },
+          {
+            "level": "fresh",
+            "n": 5247,
+            "expR": -0.0571,
+            "thin": false,
+            "expR_shrunk": -0.0574
+          },
+          {
+            "level": "stale",
+            "n": 685,
+            "expR": -0.0879,
+            "thin": false,
+            "expR_shrunk": -0.0613
+          }
+        ],
+        "effect_r": 0.0333,
+        "effect_ci_lo": -0.0651,
+        "effect_ci_hi": 0.1304,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "stale..no_fvg",
+        "best_pos_quarters": "11/36",
+        "feature": "fvg_state",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 25
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 11363,
+        "kruskal_h": 5.2301,
+        "p_value": 0.07316555882889998,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "NY",
+            "n": 4616,
+            "expR": -0.042,
+            "thin": false,
+            "expR_shrunk": -0.0499
+          },
+          {
+            "level": "Asia",
+            "n": 1556,
+            "expR": -0.0496,
+            "thin": false,
+            "expR_shrunk": -0.0557
+          },
+          {
+            "level": "London",
+            "n": 5191,
+            "expR": -0.0742,
+            "thin": false,
+            "expR_shrunk": -0.0665
+          }
+        ],
+        "effect_r": 0.0322,
+        "effect_ci_lo": -0.017,
+        "effect_ci_hi": 0.0824,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "London..NY",
+        "best_pos_quarters": "13/36",
+        "feature": "session",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 26
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11363,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0767,
+        "expR_lo": -0.0507,
+        "n_hi": 3109,
+        "n_lo": 8254,
+        "effect_r": -0.026,
+        "effect_ci_lo": -0.0777,
+        "effect_ci_hi": 0.0248,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "9/36",
+        "curve": [
+          {
+            "level": "False",
+            "n": 8254,
+            "expR": -0.0507,
+            "thin": false,
+            "expR_shrunk": -0.0536
+          },
+          {
+            "level": "True",
+            "n": 3109,
+            "expR": -0.0767,
+            "thin": false,
+            "expR_shrunk": -0.0645
+          }
+        ],
+        "feature": "flip_pending_at_alert",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 27
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 11363,
+        "kruskal_h": 3.2146,
+        "p_value": 0.35971182814086156,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "partial",
+            "n": 1315,
+            "expR": -0.0519,
+            "thin": false,
+            "expR_shrunk": -0.0556
+          },
+          {
+            "level": "none",
+            "n": 5431,
+            "expR": -0.0546,
+            "thin": false,
+            "expR_shrunk": -0.0555
+          },
+          {
+            "level": "pristine",
+            "n": 3109,
+            "expR": -0.0561,
+            "thin": false,
+            "expR_shrunk": -0.0568
+          },
+          {
+            "level": "full",
+            "n": 1508,
+            "expR": -0.0779,
+            "thin": false,
+            "expR_shrunk": -0.0657
+          }
+        ],
+        "effect_r": 0.026,
+        "effect_ci_lo": -0.0669,
+        "effect_ci_hi": 0.1168,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "full..partial",
+        "best_pos_quarters": "11/31",
+        "feature": "fvg_mitigation",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 28
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11363,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0822,
+        "expR_lo": -0.0561,
+        "n_hi": 714,
+        "n_lo": 10649,
+        "effect_r": -0.026,
+        "effect_ci_lo": -0.1152,
+        "effect_ci_hi": 0.0678,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "7/36",
+        "curve": [
+          {
+            "level": "False",
+            "n": 10649,
+            "expR": -0.0561,
+            "thin": false,
+            "expR_shrunk": -0.0567
+          },
+          {
+            "level": "True",
+            "n": 714,
+            "expR": -0.0822,
+            "thin": false,
+            "expR_shrunk": -0.0605
+          }
+        ],
+        "feature": "structure_ranging_at_alert",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 29
+      },
+      {
+        "kind": "binary",
+        "n_valid": 3264,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0921,
+        "expR_lo": -0.0715,
+        "n_hi": 2377,
+        "n_lo": 887,
+        "effect_r": -0.0206,
+        "effect_ci_lo": -0.114,
+        "effect_ci_hi": 0.0747,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "4/7",
+        "curve": [
+          {
+            "level": "False",
+            "n": 887,
+            "expR": -0.0715,
+            "thin": false,
+            "expR_shrunk": -0.0626
+          },
+          {
+            "level": "True",
+            "n": 2377,
+            "expR": -0.0921,
+            "thin": false,
+            "expR_shrunk": -0.0781
+          }
+        ],
+        "feature": "reversed_from_extreme",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 30
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11363,
+        "spearman_rho": -0.0016,
+        "p_value": 0.8623832224161135,
+        "mi": 0.00339,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1137,
+            "x_lo": -179.9,
+            "x_hi": 16.2,
+            "expR": -0.0491
+          },
+          {
+            "decile": 2,
+            "n": 1136,
+            "x_lo": 16.3,
+            "x_hi": 25.7,
+            "expR": -0.039
+          },
+          {
+            "decile": 3,
+            "n": 1136,
+            "x_lo": 25.7,
+            "x_hi": 34.1,
+            "expR": -0.0454
+          },
+          {
+            "decile": 4,
+            "n": 1136,
+            "x_lo": 34.2,
+            "x_hi": 43.1,
+            "expR": -0.0825
+          },
+          {
+            "decile": 5,
+            "n": 1137,
+            "x_lo": 43.1,
+            "x_hi": 52.1,
+            "expR": -0.1015
+          },
+          {
+            "decile": 6,
+            "n": 1136,
+            "x_lo": 52.1,
+            "x_hi": 60.6,
+            "expR": -0.1184
+          },
+          {
+            "decile": 7,
+            "n": 1136,
+            "x_lo": 60.6,
+            "x_hi": 68.8,
+            "expR": 0.0189
+          },
+          {
+            "decile": 8,
+            "n": 1136,
+            "x_lo": 68.8,
+            "x_hi": 76.8,
+            "expR": -0.0145
+          },
+          {
+            "decile": 9,
+            "n": 1136,
+            "x_lo": 76.8,
+            "x_hi": 85.4,
+            "expR": -0.0774
+          },
+          {
+            "decile": 10,
+            "n": 1137,
+            "x_lo": 85.4,
+            "x_hi": 323.5,
+            "expR": -0.0687
+          }
+        ],
+        "effect_r": -0.0196,
+        "effect_ci_lo": -0.1244,
+        "effect_ci_hi": 0.0776,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "8/21",
+        "feature": "pd_pct",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 31
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11363,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0465,
+        "expR_lo": -0.0655,
+        "n_hi": 4620,
+        "n_lo": 6743,
+        "effect_r": 0.019,
+        "effect_ci_lo": -0.0276,
+        "effect_ci_hi": 0.0648,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "13/36",
+        "curve": [
+          {
+            "level": "True",
+            "n": 4620,
+            "expR": -0.0465,
+            "thin": false,
+            "expR_shrunk": -0.0527
+          },
+          {
+            "level": "False",
+            "n": 6743,
+            "expR": -0.0655,
+            "thin": false,
+            "expR_shrunk": -0.062
+          }
+        ],
+        "feature": "ob_in_killzone",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 32
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11363,
+        "spearman_rho": 0.038,
+        "p_value": 5.010938305317346e-05,
+        "mi": 0.0,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1137,
+            "x_lo": 0.012,
+            "x_hi": 0.531,
+            "expR": -0.1018
+          },
+          {
+            "decile": 2,
+            "n": 1136,
+            "x_lo": 0.531,
+            "x_hi": 0.66,
+            "expR": -0.0774
+          },
+          {
+            "decile": 3,
+            "n": 1136,
+            "x_lo": 0.66,
+            "x_hi": 0.755,
+            "expR": -0.0509
+          },
+          {
+            "decile": 4,
+            "n": 1136,
+            "x_lo": 0.755,
+            "x_hi": 0.852,
+            "expR": -0.0139
+          },
+          {
+            "decile": 5,
+            "n": 1137,
+            "x_lo": 0.852,
+            "x_hi": 0.944,
+            "expR": -0.0327
+          },
+          {
+            "decile": 6,
+            "n": 1136,
+            "x_lo": 0.944,
+            "x_hi": 1.051,
+            "expR": -0.0578
+          },
+          {
+            "decile": 7,
+            "n": 1136,
+            "x_lo": 1.051,
+            "x_hi": 1.183,
+            "expR": -0.0507
+          },
+          {
+            "decile": 8,
+            "n": 1136,
+            "x_lo": 1.183,
+            "x_hi": 1.341,
+            "expR": -0.0142
+          },
+          {
+            "decile": 9,
+            "n": 1136,
+            "x_lo": 1.342,
+            "x_hi": 1.578,
+            "expR": -0.0579
+          },
+          {
+            "decile": 10,
+            "n": 1137,
+            "x_lo": 1.578,
+            "x_hi": 2.0,
+            "expR": -0.1203
+          }
+        ],
+        "effect_r": -0.0185,
+        "effect_ci_lo": -0.1241,
+        "effect_ci_hi": 0.0808,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "6/22",
+        "feature": "ob_range_atr",
+        "timing": "alert_time",
+        "fdr_reject": true,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 33
+      },
+      {
+        "kind": "ordinal",
+        "n_valid": 11363,
+        "spearman_rho": 0.0108,
+        "p_value": 0.25125394556800495,
+        "test": "spearman(ordinal)",
+        "curve": [
+          {
+            "level": "1",
+            "n": 2071,
+            "expR": -0.0278,
+            "thin": false,
+            "expR_shrunk": -0.0428
+          },
+          {
+            "level": "0",
+            "n": 8831,
+            "expR": -0.0635,
+            "thin": false,
+            "expR_shrunk": -0.0624
+          },
+          {
+            "level": "2",
+            "n": 461,
+            "expR": -0.0816,
+            "thin": false,
+            "expR_shrunk": -0.0621
+          }
+        ],
+        "effect_r": -0.0181,
+        "effect_ci_lo": -0.133,
+        "effect_ci_hi": 0.0958,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "0..2",
+        "feature": "ob_touches",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 34
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11241,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0704,
+        "expR_lo": -0.0547,
+        "n_hi": 2293,
+        "n_lo": 8948,
+        "effect_r": -0.0157,
+        "effect_ci_lo": -0.0726,
+        "effect_ci_hi": 0.0423,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "6/36",
+        "curve": [
+          {
+            "level": "False",
+            "n": 8948,
+            "expR": -0.0547,
+            "thin": false,
+            "expR_shrunk": -0.0559
+          },
+          {
+            "level": "True",
+            "n": 2293,
+            "expR": -0.0704,
+            "thin": false,
+            "expR_shrunk": -0.0614
+          }
+        ],
+        "feature": "dr_floor_broken_at_ob",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 35
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11363,
+        "spearman_rho": 0.0085,
+        "p_value": 0.3660728929346653,
+        "mi": 0.00405,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1137,
+            "x_lo": 0.2,
+            "x_hi": 0.252,
+            "expR": -0.0274
+          },
+          {
+            "decile": 2,
+            "n": 1136,
+            "x_lo": 0.252,
+            "x_hi": 0.308,
+            "expR": -0.1152
+          },
+          {
+            "decile": 3,
+            "n": 1136,
+            "x_lo": 0.308,
+            "x_hi": 0.363,
+            "expR": -0.0778
+          },
+          {
+            "decile": 4,
+            "n": 1136,
+            "x_lo": 0.363,
+            "x_hi": 0.419,
+            "expR": -0.0608
+          },
+          {
+            "decile": 5,
+            "n": 1137,
+            "x_lo": 0.419,
+            "x_hi": 0.478,
+            "expR": -0.0328
+          },
+          {
+            "decile": 6,
+            "n": 1136,
+            "x_lo": 0.478,
+            "x_hi": 0.541,
+            "expR": -0.0242
+          },
+          {
+            "decile": 7,
+            "n": 1136,
+            "x_lo": 0.541,
+            "x_hi": 0.61,
+            "expR": -0.0732
+          },
+          {
+            "decile": 8,
+            "n": 1136,
+            "x_lo": 0.61,
+            "x_hi": 0.687,
+            "expR": -0.0849
+          },
+          {
+            "decile": 9,
+            "n": 1136,
+            "x_lo": 0.687,
+            "x_hi": 0.785,
+            "expR": -0.0697
+          },
+          {
+            "decile": 10,
+            "n": 1137,
+            "x_lo": 0.785,
+            "x_hi": 1.0,
+            "expR": -0.0118
+          }
+        ],
+        "effect_r": 0.0156,
+        "effect_ci_lo": -0.0867,
+        "effect_ci_hi": 0.1193,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "10/20",
+        "feature": "ob_body_ratio",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 36
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11241,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0479,
+        "expR_lo": -0.0606,
+        "n_hi": 2372,
+        "n_lo": 8869,
+        "effect_r": 0.0127,
+        "effect_ci_lo": -0.0446,
+        "effect_ci_hi": 0.0684,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "13/36",
+        "curve": [
+          {
+            "level": "True",
+            "n": 2372,
+            "expR": -0.0479,
+            "thin": false,
+            "expR_shrunk": -0.0548
+          },
+          {
+            "level": "False",
+            "n": 8869,
+            "expR": -0.0606,
+            "thin": false,
+            "expR_shrunk": -0.0595
+          }
+        ],
+        "feature": "dr_ceiling_broken_at_ob",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 37
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11363,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "SHORT",
+        "level_lo": "LONG",
+        "expR_hi": -0.062,
+        "expR_lo": -0.0536,
+        "n_hi": 5673,
+        "n_lo": 5690,
+        "effect_r": -0.0084,
+        "effect_ci_lo": -0.054,
+        "effect_ci_hi": 0.0383,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "10/36",
+        "curve": [
+          {
+            "level": "LONG",
+            "n": 5690,
+            "expR": -0.0536,
+            "thin": false,
+            "expR_shrunk": -0.0557
+          },
+          {
+            "level": "SHORT",
+            "n": 5673,
+            "expR": -0.062,
+            "thin": false,
+            "expR_shrunk": -0.0599
+          }
+        ],
+        "feature": "bias",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 38
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11363,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "premium",
+        "level_lo": "discount",
+        "expR_hi": -0.0615,
+        "expR_lo": -0.0537,
+        "n_hi": 5931,
+        "n_lo": 5432,
+        "effect_r": -0.0077,
+        "effect_ci_lo": -0.0533,
+        "effect_ci_hi": 0.0378,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "8/36",
+        "curve": [
+          {
+            "level": "discount",
+            "n": 5432,
+            "expR": -0.0537,
+            "thin": false,
+            "expR_shrunk": -0.0558
+          },
+          {
+            "level": "premium",
+            "n": 5931,
+            "expR": -0.0615,
+            "thin": false,
+            "expR_shrunk": -0.0597
+          }
+        ],
+        "feature": "pd_zone",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 39
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 11363,
+        "spearman_rho": -0.0034,
+        "p_value": 0.7202464336860082,
+        "mi": 0.00435,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1137,
+            "x_lo": 0.0003,
+            "x_hi": 0.0011,
+            "expR": -0.0227
+          },
+          {
+            "decile": 2,
+            "n": 1136,
+            "x_lo": 0.0011,
+            "x_hi": 0.0014,
+            "expR": -0.0727
+          },
+          {
+            "decile": 3,
+            "n": 1136,
+            "x_lo": 0.0014,
+            "x_hi": 0.0016,
+            "expR": -0.0792
+          },
+          {
+            "decile": 4,
+            "n": 1136,
+            "x_lo": 0.0016,
+            "x_hi": 0.0019,
+            "expR": -0.035
+          },
+          {
+            "decile": 5,
+            "n": 1137,
+            "x_lo": 0.0019,
+            "x_hi": 0.0023,
+            "expR": -0.0173
+          },
+          {
+            "decile": 6,
+            "n": 1136,
+            "x_lo": 0.0023,
+            "x_hi": 0.003,
+            "expR": -0.0961
+          },
+          {
+            "decile": 7,
+            "n": 1136,
+            "x_lo": 0.003,
+            "x_hi": 0.1009,
+            "expR": -0.1011
+          },
+          {
+            "decile": 8,
+            "n": 1136,
+            "x_lo": 0.1011,
+            "x_hi": 0.2141,
+            "expR": -0.048
+          },
+          {
+            "decile": 9,
+            "n": 1136,
+            "x_lo": 0.2141,
+            "x_hi": 2.1671,
+            "expR": -0.0756
+          },
+          {
+            "decile": 10,
+            "n": 1137,
+            "x_lo": 2.1686,
+            "x_hi": 19.5257,
+            "expR": -0.0302
+          }
+        ],
+        "effect_r": -0.0075,
+        "effect_ci_lo": -0.1001,
+        "effect_ci_hi": 0.1047,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "10/21",
+        "feature": "atr_at_ob",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 40
+      },
+      {
+        "kind": "binary",
+        "n_valid": 3109,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "bullish",
+        "level_lo": "bearish",
+        "expR_hi": -0.0795,
+        "expR_lo": -0.0739,
+        "n_hi": 1517,
+        "n_lo": 1592,
+        "effect_r": -0.0056,
+        "effect_ci_lo": -0.0946,
+        "effect_ci_hi": 0.0819,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "12/36",
+        "curve": [
+          {
+            "level": "bearish",
+            "n": 1592,
+            "expR": -0.0739,
+            "thin": false,
+            "expR_shrunk": -0.0659
+          },
+          {
+            "level": "bullish",
+            "n": 1517,
+            "expR": -0.0795,
+            "thin": false,
+            "expR_shrunk": -0.0685
+          }
+        ],
+        "feature": "flip_pending_dir_at_alert",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 41
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11363,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0548,
+        "expR_lo": -0.0597,
+        "n_hi": 4424,
+        "n_lo": 6939,
+        "effect_r": 0.0048,
+        "effect_ci_lo": -0.0419,
+        "effect_ci_hi": 0.0522,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "11/36",
+        "curve": [
+          {
+            "level": "True",
+            "n": 4424,
+            "expR": -0.0548,
+            "thin": false,
+            "expR_shrunk": -0.0565
+          },
+          {
+            "level": "False",
+            "n": 6939,
+            "expR": -0.0597,
+            "thin": false,
+            "expR_shrunk": -0.0588
+          }
+        ],
+        "feature": "fvg_present",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 42
+      },
+      {
+        "kind": "ordinal",
+        "n_valid": 11363,
+        "spearman_rho": 0.0194,
+        "p_value": 0.03834831027332131,
+        "test": "spearman(ordinal)",
+        "curve": [
+          {
+            "level": "5",
+            "n": 453,
+            "expR": 0.0496,
+            "thin": false,
+            "expR_shrunk": -0.0041
+          },
+          {
+            "level": "4",
+            "n": 666,
+            "expR": -0.0212,
+            "thin": false,
+            "expR_shrunk": -0.036
+          },
+          {
+            "level": "7",
+            "n": 109,
+            "expR": -0.0453,
+            "thin": true,
+            "expR_shrunk": -0.0554
+          },
+          {
+            "level": "2",
+            "n": 1805,
+            "expR": -0.0458,
+            "thin": false,
+            "expR_shrunk": -0.0482
+          },
+          {
+            "level": "1",
+            "n": 3662,
+            "expR": -0.0524,
+            "thin": false,
+            "expR_shrunk": -0.053
+          },
+          {
+            "level": "3",
+            "n": 1137,
+            "expR": -0.0681,
+            "thin": false,
+            "expR_shrunk": -0.0652
+          },
+          {
+            "level": "6",
+            "n": 228,
+            "expR": -0.0836,
+            "thin": false,
+            "expR_shrunk": -0.0664
+          },
+          {
+            "level": "0",
+            "n": 3264,
+            "expR": -0.0865,
+            "thin": false,
+            "expR_shrunk": -0.083
+          },
+          {
+            "level": "8",
+            "n": 34,
+            "expR": -0.123,
+            "thin": true,
+            "expR_shrunk": -0.0623
+          },
+          {
+            "level": "9",
+            "n": 4,
+            "expR": -0.3073,
+            "thin": true,
+            "expR_shrunk": -0.06
+          },
+          {
+            "level": "10",
+            "n": 1,
+            "expR": -1.0,
+            "thin": true,
+            "expR_shrunk": -0.0598
+          }
+        ],
+        "effect_r": 0.0029,
+        "effect_ci_lo": -0.1545,
+        "effect_ci_hi": 0.1681,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "0..6",
+        "feature": "bos_sequence_count",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 43
+      },
+      {
+        "kind": "binary",
+        "n_valid": 11363,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "holding",
+        "level_lo": "fading",
+        "expR_hi": -0.0576,
+        "expR_lo": -0.06,
+        "n_hi": 10736,
+        "n_lo": 627,
+        "effect_r": 0.0024,
+        "effect_ci_lo": -0.0984,
+        "effect_ci_hi": 0.0971,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "9/36",
+        "curve": [
+          {
+            "level": "holding",
+            "n": 10736,
+            "expR": -0.0576,
+            "thin": false,
+            "expR_shrunk": -0.0577
+          },
+          {
+            "level": "fading",
+            "n": 627,
+            "expR": -0.06,
+            "thin": false,
+            "expR_shrunk": -0.058
+          }
+        ],
+        "feature": "bos_verdict",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "gates_off",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 44
+      }
+    ],
+    "live_gated": [
+      {
+        "kind": "ordinal",
+        "n_valid": 10748,
+        "spearman_rho": -0.0211,
+        "p_value": 0.028373036749025853,
+        "test": "spearman(ordinal)",
+        "curve": [
+          {
+            "level": "8",
+            "n": 1,
+            "expR": 4.825,
+            "thin": true,
+            "expR_shrunk": 0.0506
+          },
+          {
+            "level": "4",
+            "n": 60,
+            "expR": 0.1507,
+            "thin": true,
+            "expR_shrunk": 0.0625
+          },
+          {
+            "level": "5",
+            "n": 27,
+            "expR": 0.1095,
+            "thin": true,
+            "expR_shrunk": 0.0054
+          },
+          {
+            "level": "10",
+            "n": 1,
+            "expR": 0.0,
+            "thin": true,
+            "expR_shrunk": -0.0578
+          },
+          {
+            "level": "0",
+            "n": 7456,
+            "expR": -0.0478,
+            "thin": false,
+            "expR_shrunk": -0.0479
+          },
+          {
+            "level": "1",
+            "n": 2275,
+            "expR": -0.065,
+            "thin": false,
+            "expR_shrunk": -0.0649
+          },
+          {
+            "level": "2",
+            "n": 691,
+            "expR": -0.1276,
+            "thin": false,
+            "expR_shrunk": -0.1235
+          },
+          {
+            "level": "3",
+            "n": 223,
+            "expR": -0.2334,
+            "thin": false,
+            "expR_shrunk": -0.205
+          },
+          {
+            "level": "6",
+            "n": 12,
+            "expR": -0.5113,
+            "thin": true,
+            "expR_shrunk": -0.1569
+          },
+          {
+            "level": "7",
+            "n": 2,
+            "expR": -1.0,
+            "thin": true,
+            "expR_shrunk": -0.1005
+          }
+        ],
+        "effect_r": -0.1856,
+        "effect_ci_lo": -0.3393,
+        "effect_ci_hi": -0.0262,
+        "effect_ci_excludes_0": true,
+        "effect_levels": "0..3",
+        "feature": "ob_walkback_depth",
+        "timing": "alert_time",
+        "fdr_reject": true,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "ship_gate_queue",
+        "rank": 1
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 10748,
+        "kruskal_h": 4.7712,
+        "p_value": 0.09203312412913406,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "counter_trend",
+            "n": 956,
+            "expR": 0.0209,
+            "thin": false,
+            "expR_shrunk": -0.0375
+          },
+          {
+            "level": "with_trend",
+            "n": 7215,
+            "expR": -0.0555,
+            "thin": false,
+            "expR_shrunk": -0.0565
+          },
+          {
+            "level": "ambiguous",
+            "n": 2577,
+            "expR": -0.0992,
+            "thin": false,
+            "expR_shrunk": -0.0792
+          }
+        ],
+        "effect_r": 0.1201,
+        "effect_ci_lo": 0.0206,
+        "effect_ci_hi": 0.2193,
+        "effect_ci_excludes_0": true,
+        "effect_levels": "ambiguous..counter_trend",
+        "best_pos_quarters": "6/12",
+        "feature": "trend_alignment",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 2
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 10748,
+        "kruskal_h": 5.9234,
+        "p_value": 0.6558173657728914,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "USDCAD",
+            "n": 1400,
+            "expR": 0.0085,
+            "thin": false,
+            "expR_shrunk": -0.0236
+          },
+          {
+            "level": "USDJPY",
+            "n": 1013,
+            "expR": -0.0435,
+            "thin": false,
+            "expR_shrunk": -0.0522
+          },
+          {
+            "level": "AUDUSD",
+            "n": 996,
+            "expR": -0.0505,
+            "thin": false,
+            "expR_shrunk": -0.0553
+          },
+          {
+            "level": "USDCHF",
+            "n": 1311,
+            "expR": -0.0646,
+            "thin": false,
+            "expR_shrunk": -0.0619
+          },
+          {
+            "level": "GOLD",
+            "n": 1265,
+            "expR": -0.0689,
+            "thin": false,
+            "expR_shrunk": -0.064
+          },
+          {
+            "level": "EURJPY",
+            "n": 1043,
+            "expR": -0.0705,
+            "thin": false,
+            "expR_shrunk": -0.0643
+          },
+          {
+            "level": "NZDUSD",
+            "n": 956,
+            "expR": -0.075,
+            "thin": false,
+            "expR_shrunk": -0.066
+          },
+          {
+            "level": "EURUSD",
+            "n": 1370,
+            "expR": -0.0804,
+            "thin": false,
+            "expR_shrunk": -0.0702
+          },
+          {
+            "level": "GBPUSD",
+            "n": 1394,
+            "expR": -0.0905,
+            "thin": false,
+            "expR_shrunk": -0.0756
+          }
+        ],
+        "effect_r": 0.099,
+        "effect_ci_lo": 0.005,
+        "effect_ci_hi": 0.1952,
+        "effect_ci_excludes_0": true,
+        "effect_levels": "GBPUSD..USDCAD",
+        "best_pos_quarters": "20/35",
+        "feature": "pair",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 3
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10748,
+        "spearman_rho": -0.003,
+        "p_value": 0.754790931964093,
+        "mi": 0.00311,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1075,
+            "x_lo": 2.0,
+            "x_hi": 4.0,
+            "expR": -0.1053
+          },
+          {
+            "decile": 2,
+            "n": 1075,
+            "x_lo": 4.0,
+            "x_hi": 6.0,
+            "expR": -0.0986
+          },
+          {
+            "decile": 3,
+            "n": 1075,
+            "x_lo": 6.0,
+            "x_hi": 9.0,
+            "expR": -0.0325
+          },
+          {
+            "decile": 4,
+            "n": 1074,
+            "x_lo": 9.0,
+            "x_hi": 12.0,
+            "expR": -0.0773
+          },
+          {
+            "decile": 5,
+            "n": 1075,
+            "x_lo": 12.0,
+            "x_hi": 20.0,
+            "expR": -0.0281
+          },
+          {
+            "decile": 6,
+            "n": 1075,
+            "x_lo": 20.0,
+            "x_hi": 27.0,
+            "expR": -0.0409
+          },
+          {
+            "decile": 7,
+            "n": 1074,
+            "x_lo": 27.0,
+            "x_hi": 39.0,
+            "expR": -0.0151
+          },
+          {
+            "decile": 8,
+            "n": 1075,
+            "x_lo": 39.0,
+            "x_hi": 68.0,
+            "expR": -0.0902
+          },
+          {
+            "decile": 9,
+            "n": 1075,
+            "x_lo": 68.0,
+            "x_hi": 99.0,
+            "expR": -0.0851
+          },
+          {
+            "decile": 10,
+            "n": 1075,
+            "x_lo": 99.0,
+            "x_hi": 432.0,
+            "expR": -0.0186
+          }
+        ],
+        "effect_r": 0.0867,
+        "effect_ci_lo": 0.0023,
+        "effect_ci_hi": 0.211,
+        "effect_ci_excludes_0": true,
+        "top_pos_quarters": "7/19",
+        "feature": "ob_to_fill_hours",
+        "timing": "fill_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 4
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10748,
+        "spearman_rho": 0.0352,
+        "p_value": 0.0002622996854144154,
+        "mi": 0.00018,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1075,
+            "x_lo": 4.0,
+            "x_hi": 5.0,
+            "expR": -0.0873
+          },
+          {
+            "decile": 2,
+            "n": 1075,
+            "x_lo": 5.0,
+            "x_hi": 7.0,
+            "expR": -0.0832
+          },
+          {
+            "decile": 3,
+            "n": 1075,
+            "x_lo": 7.0,
+            "x_hi": 8.0,
+            "expR": -0.1204
+          },
+          {
+            "decile": 4,
+            "n": 1074,
+            "x_lo": 8.0,
+            "x_hi": 9.0,
+            "expR": -0.0549
+          },
+          {
+            "decile": 5,
+            "n": 1075,
+            "x_lo": 9.0,
+            "x_hi": 10.0,
+            "expR": -0.0727
+          },
+          {
+            "decile": 6,
+            "n": 1075,
+            "x_lo": 10.0,
+            "x_hi": 12.0,
+            "expR": -0.0345
+          },
+          {
+            "decile": 7,
+            "n": 1074,
+            "x_lo": 12.0,
+            "x_hi": 13.0,
+            "expR": -0.0542
+          },
+          {
+            "decile": 8,
+            "n": 1075,
+            "x_lo": 13.0,
+            "x_hi": 15.0,
+            "expR": -0.0581
+          },
+          {
+            "decile": 9,
+            "n": 1075,
+            "x_lo": 15.0,
+            "x_hi": 16.0,
+            "expR": -0.0158
+          },
+          {
+            "decile": 10,
+            "n": 1075,
+            "x_lo": 16.0,
+            "x_hi": 18.0,
+            "expR": -0.0105
+          }
+        ],
+        "effect_r": 0.0768,
+        "effect_ci_lo": 0.0021,
+        "effect_ci_hi": 0.1983,
+        "effect_ci_excludes_0": true,
+        "top_pos_quarters": "16/26",
+        "feature": "alert_utc_hour",
+        "timing": "alert_time",
+        "fdr_reject": true,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "ship_gate_queue",
+        "rank": 5
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10748,
+        "spearman_rho": -0.0038,
+        "p_value": 0.6957778084970153,
+        "mi": 0.0064,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1075,
+            "x_lo": 2.0,
+            "x_hi": 2.0,
+            "expR": -0.1367
+          },
+          {
+            "decile": 2,
+            "n": 1075,
+            "x_lo": 2.0,
+            "x_hi": 3.0,
+            "expR": -0.0115
+          },
+          {
+            "decile": 3,
+            "n": 1075,
+            "x_lo": 3.0,
+            "x_hi": 4.0,
+            "expR": -0.0528
+          },
+          {
+            "decile": 4,
+            "n": 1074,
+            "x_lo": 4.0,
+            "x_hi": 5.0,
+            "expR": -0.0613
+          },
+          {
+            "decile": 5,
+            "n": 1075,
+            "x_lo": 5.0,
+            "x_hi": 6.0,
+            "expR": -0.0805
+          },
+          {
+            "decile": 6,
+            "n": 1075,
+            "x_lo": 6.0,
+            "x_hi": 7.0,
+            "expR": -0.0464
+          },
+          {
+            "decile": 7,
+            "n": 1074,
+            "x_lo": 8.0,
+            "x_hi": 12.0,
+            "expR": -0.0032
+          },
+          {
+            "decile": 8,
+            "n": 1075,
+            "x_lo": 12.0,
+            "x_hi": 23.0,
+            "expR": -0.0694
+          },
+          {
+            "decile": 9,
+            "n": 1075,
+            "x_lo": 23.0,
+            "x_hi": 46.0,
+            "expR": -0.0856
+          },
+          {
+            "decile": 10,
+            "n": 1075,
+            "x_lo": 46.0,
+            "x_hi": 262.0,
+            "expR": -0.0442
+          }
+        ],
+        "effect_r": 0.0925,
+        "effect_ci_lo": -0.025,
+        "effect_ci_hi": 0.1838,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "6/16",
+        "feature": "ob_age_h1_bars",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 6
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 735,
+        "kruskal_h": 0.8357,
+        "p_value": 0.6584536100190701,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "A First Pullback",
+            "n": 485,
+            "expR": -0.0104,
+            "thin": false,
+            "expR_shrunk": -0.0248
+          },
+          {
+            "level": "Caution: Late-Trend Chase",
+            "n": 204,
+            "expR": -0.1001,
+            "thin": false,
+            "expR_shrunk": -0.0796
+          },
+          {
+            "level": "A+ Reversal at the Wall",
+            "n": 46,
+            "expR": -0.2718,
+            "thin": true,
+            "expR_shrunk": -0.0983
+          }
+        ],
+        "effect_r": 0.0897,
+        "effect_ci_lo": -0.1181,
+        "effect_ci_hi": 0.2862,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "Caution: Late-Trend Chase..A First Pullback",
+        "best_pos_quarters": "0/0",
+        "feature": "setup_badge",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 7
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10748,
+        "spearman_rho": -0.0085,
+        "p_value": 0.3773049163671083,
+        "mi": 0.00358,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1075,
+            "x_lo": 0.0,
+            "x_hi": 0.677,
+            "expR": -0.0134
+          },
+          {
+            "decile": 2,
+            "n": 1075,
+            "x_lo": 0.677,
+            "x_hi": 0.96,
+            "expR": -0.1007
+          },
+          {
+            "decile": 3,
+            "n": 1075,
+            "x_lo": 0.961,
+            "x_hi": 1.272,
+            "expR": -0.0802
+          },
+          {
+            "decile": 4,
+            "n": 1074,
+            "x_lo": 1.272,
+            "x_hi": 1.577,
+            "expR": -0.0387
+          },
+          {
+            "decile": 5,
+            "n": 1075,
+            "x_lo": 1.578,
+            "x_hi": 1.901,
+            "expR": -0.0346
+          },
+          {
+            "decile": 6,
+            "n": 1075,
+            "x_lo": 1.902,
+            "x_hi": 2.291,
+            "expR": -0.0584
+          },
+          {
+            "decile": 7,
+            "n": 1074,
+            "x_lo": 2.292,
+            "x_hi": 2.875,
+            "expR": -0.0648
+          },
+          {
+            "decile": 8,
+            "n": 1075,
+            "x_lo": 2.878,
+            "x_hi": 3.866,
+            "expR": -0.0269
+          },
+          {
+            "decile": 9,
+            "n": 1075,
+            "x_lo": 3.868,
+            "x_hi": 5.6,
+            "expR": -0.073
+          },
+          {
+            "decile": 10,
+            "n": 1075,
+            "x_lo": 5.6,
+            "x_hi": 50.711,
+            "expR": -0.101
+          }
+        ],
+        "effect_r": -0.0876,
+        "effect_ci_lo": -0.1923,
+        "effect_ci_hi": 0.0143,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "6/17",
+        "feature": "impulse_leg_atr",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 8
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10454,
+        "spearman_rho": -0.0064,
+        "p_value": 0.5111787443212231,
+        "mi": 0.00765,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1046,
+            "x_lo": 1.6,
+            "x_hi": 28.3,
+            "expR": -0.0533
+          },
+          {
+            "decile": 2,
+            "n": 1045,
+            "x_lo": 28.3,
+            "x_hi": 38.5,
+            "expR": -0.0485
+          },
+          {
+            "decile": 3,
+            "n": 1045,
+            "x_lo": 38.5,
+            "x_hi": 47.6,
+            "expR": 0.0036
+          },
+          {
+            "decile": 4,
+            "n": 1046,
+            "x_lo": 47.6,
+            "x_hi": 56.0,
+            "expR": -0.1291
+          },
+          {
+            "decile": 5,
+            "n": 1045,
+            "x_lo": 56.0,
+            "x_hi": 64.4,
+            "expR": -0.1199
+          },
+          {
+            "decile": 6,
+            "n": 1045,
+            "x_lo": 64.4,
+            "x_hi": 72.3,
+            "expR": -0.0929
+          },
+          {
+            "decile": 7,
+            "n": 1046,
+            "x_lo": 72.3,
+            "x_hi": 80.6,
+            "expR": -0.0191
+          },
+          {
+            "decile": 8,
+            "n": 1045,
+            "x_lo": 80.6,
+            "x_hi": 89.5,
+            "expR": -0.072
+          },
+          {
+            "decile": 9,
+            "n": 1045,
+            "x_lo": 89.5,
+            "x_hi": 102.4,
+            "expR": -0.0813
+          },
+          {
+            "decile": 10,
+            "n": 1046,
+            "x_lo": 102.4,
+            "x_hi": 10131.6,
+            "expR": 0.0259
+          }
+        ],
+        "effect_r": 0.0792,
+        "effect_ci_lo": -0.0254,
+        "effect_ci_hi": 0.1809,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "6/16",
+        "feature": "leg_retrace_pct_at_alert",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 9
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 10748,
+        "kruskal_h": 11.82,
+        "p_value": 0.008026065644347621,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "Neither",
+            "n": 2406,
+            "expR": -0.0291,
+            "thin": false,
+            "expR_shrunk": -0.0444
+          },
+          {
+            "level": "OB only",
+            "n": 1995,
+            "expR": -0.0469,
+            "thin": false,
+            "expR_shrunk": -0.0537
+          },
+          {
+            "level": "Both",
+            "n": 2565,
+            "expR": -0.0477,
+            "thin": false,
+            "expR_shrunk": -0.0533
+          },
+          {
+            "level": "Fill only",
+            "n": 3782,
+            "expR": -0.0925,
+            "thin": false,
+            "expR_shrunk": -0.0793
+          }
+        ],
+        "effect_r": 0.0634,
+        "effect_ci_lo": -0.0011,
+        "effect_ci_hi": 0.1285,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "Fill only..Neither",
+        "best_pos_quarters": "16/36",
+        "feature": "killzone_alignment",
+        "timing": "fill_time",
+        "fdr_reject": true,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 10
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 10748,
+        "kruskal_h": 0.8038,
+        "p_value": 0.8485528441542521,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "Asia",
+            "n": 1387,
+            "expR": -0.0191,
+            "thin": false,
+            "expR_shrunk": -0.0455
+          },
+          {
+            "level": "London",
+            "n": 3956,
+            "expR": -0.0511,
+            "thin": false,
+            "expR_shrunk": -0.0544
+          },
+          {
+            "level": "NY",
+            "n": 4983,
+            "expR": -0.0748,
+            "thin": false,
+            "expR_shrunk": -0.0693
+          },
+          {
+            "level": "Other",
+            "n": 422,
+            "expR": -0.0819,
+            "thin": false,
+            "expR_shrunk": -0.0623
+          }
+        ],
+        "effect_r": 0.0628,
+        "effect_ci_lo": -0.0743,
+        "effect_ci_hi": 0.197,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "Other..Asia",
+        "best_pos_quarters": "13/30",
+        "feature": "fill_session",
+        "timing": "fill_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 11
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 4401,
+        "spearman_rho": 0.004,
+        "p_value": 0.7911440100194267,
+        "mi": 0.00143,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 441,
+            "x_lo": 0.059,
+            "x_hi": 0.161,
+            "expR": -0.0903
+          },
+          {
+            "decile": 2,
+            "n": 440,
+            "x_lo": 0.161,
+            "x_hi": 0.243,
+            "expR": -0.0526
+          },
+          {
+            "decile": 3,
+            "n": 440,
+            "x_lo": 0.243,
+            "x_hi": 0.332,
+            "expR": -0.031
+          },
+          {
+            "decile": 4,
+            "n": 440,
+            "x_lo": 0.332,
+            "x_hi": 0.429,
+            "expR": -0.1253
+          },
+          {
+            "decile": 5,
+            "n": 440,
+            "x_lo": 0.43,
+            "x_hi": 0.53,
+            "expR": -0.0478
+          },
+          {
+            "decile": 6,
+            "n": 440,
+            "x_lo": 0.531,
+            "x_hi": 0.644,
+            "expR": 0.0768
+          },
+          {
+            "decile": 7,
+            "n": 440,
+            "x_lo": 0.645,
+            "x_hi": 0.806,
+            "expR": -0.0476
+          },
+          {
+            "decile": 8,
+            "n": 440,
+            "x_lo": 0.806,
+            "x_hi": 1.044,
+            "expR": -0.1296
+          },
+          {
+            "decile": 9,
+            "n": 440,
+            "x_lo": 1.046,
+            "x_hi": 1.513,
+            "expR": -0.0571
+          },
+          {
+            "decile": 10,
+            "n": 440,
+            "x_lo": 1.516,
+            "x_hi": 9.522,
+            "expR": -0.0279
+          }
+        ],
+        "effect_r": 0.0624,
+        "effect_ci_lo": -0.1118,
+        "effect_ci_hi": 0.2355,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "0/0",
+        "feature": "fvg_size_atr",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 12
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10748,
+        "spearman_rho": -0.0263,
+        "p_value": 0.006344484251816405,
+        "mi": 0.00032,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1075,
+            "x_lo": 0.02,
+            "x_hi": 0.8,
+            "expR": 0.0036
+          },
+          {
+            "decile": 2,
+            "n": 1075,
+            "x_lo": 0.8,
+            "x_hi": 1.06,
+            "expR": -0.0478
+          },
+          {
+            "decile": 3,
+            "n": 1075,
+            "x_lo": 1.06,
+            "x_hi": 1.19,
+            "expR": -0.009
+          },
+          {
+            "decile": 4,
+            "n": 1074,
+            "x_lo": 1.19,
+            "x_hi": 1.36,
+            "expR": 0.0163
+          },
+          {
+            "decile": 5,
+            "n": 1075,
+            "x_lo": 1.36,
+            "x_hi": 1.53,
+            "expR": -0.101
+          },
+          {
+            "decile": 6,
+            "n": 1075,
+            "x_lo": 1.53,
+            "x_hi": 1.67,
+            "expR": -0.1285
+          },
+          {
+            "decile": 7,
+            "n": 1074,
+            "x_lo": 1.67,
+            "x_hi": 1.85,
+            "expR": -0.0834
+          },
+          {
+            "decile": 8,
+            "n": 1075,
+            "x_lo": 1.85,
+            "x_hi": 2.13,
+            "expR": -0.0654
+          },
+          {
+            "decile": 9,
+            "n": 1075,
+            "x_lo": 2.13,
+            "x_hi": 2.62,
+            "expR": -0.1194
+          },
+          {
+            "decile": 10,
+            "n": 1075,
+            "x_lo": 2.62,
+            "x_hi": 12.56,
+            "expR": -0.0569
+          }
+        ],
+        "effect_r": -0.0605,
+        "effect_ci_lo": -0.1665,
+        "effect_ci_hi": 0.055,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "7/17",
+        "feature": "break_body_atr",
+        "timing": "alert_time",
+        "fdr_reject": true,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 13
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 10748,
+        "kruskal_h": 4.7323,
+        "p_value": 0.09384252931369334,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "no_fvg",
+            "n": 5057,
+            "expR": -0.0543,
+            "thin": false,
+            "expR_shrunk": -0.0567
+          },
+          {
+            "level": "fresh",
+            "n": 5111,
+            "expR": -0.0578,
+            "thin": false,
+            "expR_shrunk": -0.0585
+          },
+          {
+            "level": "stale",
+            "n": 580,
+            "expR": -0.1131,
+            "thin": false,
+            "expR_shrunk": -0.0647
+          }
+        ],
+        "effect_r": 0.0588,
+        "effect_ci_lo": -0.0452,
+        "effect_ci_hi": 0.1588,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "stale..no_fvg",
+        "best_pos_quarters": "10/36",
+        "feature": "fvg_state",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 14
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 10748,
+        "kruskal_h": 12.5844,
+        "p_value": 0.005627357526390438,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "Other",
+            "n": 572,
+            "expR": -0.0307,
+            "thin": false,
+            "expR_shrunk": -0.0544
+          },
+          {
+            "level": "London",
+            "n": 4461,
+            "expR": -0.0427,
+            "thin": false,
+            "expR_shrunk": -0.0491
+          },
+          {
+            "level": "NY",
+            "n": 1845,
+            "expR": -0.0597,
+            "thin": false,
+            "expR_shrunk": -0.0594
+          },
+          {
+            "level": "Asia",
+            "n": 3870,
+            "expR": -0.0821,
+            "thin": false,
+            "expR_shrunk": -0.0724
+          }
+        ],
+        "effect_r": 0.0514,
+        "effect_ci_lo": -0.0657,
+        "effect_ci_hi": 0.1721,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "Asia..Other",
+        "best_pos_quarters": "0/0",
+        "feature": "ob_session",
+        "timing": "alert_time",
+        "fdr_reject": true,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 15
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 10748,
+        "kruskal_h": 4.5861,
+        "p_value": 0.20473935247642236,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "partial",
+            "n": 1293,
+            "expR": -0.0472,
+            "thin": false,
+            "expR_shrunk": -0.0547
+          },
+          {
+            "level": "none",
+            "n": 5057,
+            "expR": -0.0543,
+            "thin": false,
+            "expR_shrunk": -0.0558
+          },
+          {
+            "level": "pristine",
+            "n": 3108,
+            "expR": -0.0558,
+            "thin": false,
+            "expR_shrunk": -0.0572
+          },
+          {
+            "level": "full",
+            "n": 1290,
+            "expR": -0.0984,
+            "thin": false,
+            "expR_shrunk": -0.0737
+          }
+        ],
+        "effect_r": 0.0512,
+        "effect_ci_lo": -0.0456,
+        "effect_ci_hi": 0.1475,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "full..partial",
+        "best_pos_quarters": "12/28",
+        "feature": "fvg_mitigation",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 16
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10748,
+        "spearman_rho": 0.0047,
+        "p_value": 0.6260370510004123,
+        "mi": 0.00503,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1075,
+            "x_lo": 1.0,
+            "x_hi": 2.0,
+            "expR": -0.0867
+          },
+          {
+            "decile": 2,
+            "n": 1075,
+            "x_lo": 2.0,
+            "x_hi": 3.0,
+            "expR": -0.1193
+          },
+          {
+            "decile": 3,
+            "n": 1075,
+            "x_lo": 3.0,
+            "x_hi": 6.0,
+            "expR": -0.0516
+          },
+          {
+            "decile": 4,
+            "n": 1074,
+            "x_lo": 6.0,
+            "x_hi": 9.0,
+            "expR": -0.0639
+          },
+          {
+            "decile": 5,
+            "n": 1075,
+            "x_lo": 9.0,
+            "x_hi": 15.0,
+            "expR": -0.0627
+          },
+          {
+            "decile": 6,
+            "n": 1075,
+            "x_lo": 15.0,
+            "x_hi": 21.0,
+            "expR": -0.0311
+          },
+          {
+            "decile": 7,
+            "n": 1074,
+            "x_lo": 21.0,
+            "x_hi": 26.0,
+            "expR": -0.0435
+          },
+          {
+            "decile": 8,
+            "n": 1075,
+            "x_lo": 26.0,
+            "x_hi": 37.0,
+            "expR": -0.0593
+          },
+          {
+            "decile": 9,
+            "n": 1075,
+            "x_lo": 37.0,
+            "x_hi": 54.0,
+            "expR": -0.0378
+          },
+          {
+            "decile": 10,
+            "n": 1075,
+            "x_lo": 54.0,
+            "x_hi": 284.0,
+            "expR": -0.0358
+          }
+        ],
+        "effect_r": 0.0509,
+        "effect_ci_lo": -0.0436,
+        "effect_ci_hi": 0.1558,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "9/18",
+        "feature": "bars_break_to_pullback",
+        "timing": "fill_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 17
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10748,
+        "spearman_rho": -0.0295,
+        "p_value": 0.0022383847188551503,
+        "mi": 0.0,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1075,
+            "x_lo": 0.0,
+            "x_hi": 0.49,
+            "expR": -0.0546
+          },
+          {
+            "decile": 2,
+            "n": 1075,
+            "x_lo": 0.49,
+            "x_hi": 0.63,
+            "expR": -0.0074
+          },
+          {
+            "decile": 3,
+            "n": 1075,
+            "x_lo": 0.63,
+            "x_hi": 0.79,
+            "expR": -0.0623
+          },
+          {
+            "decile": 4,
+            "n": 1074,
+            "x_lo": 0.79,
+            "x_hi": 0.97,
+            "expR": -0.0232
+          },
+          {
+            "decile": 5,
+            "n": 1075,
+            "x_lo": 0.97,
+            "x_hi": 1.12,
+            "expR": -0.0458
+          },
+          {
+            "decile": 6,
+            "n": 1075,
+            "x_lo": 1.12,
+            "x_hi": 1.28,
+            "expR": -0.0832
+          },
+          {
+            "decile": 7,
+            "n": 1074,
+            "x_lo": 1.28,
+            "x_hi": 1.46,
+            "expR": -0.0355
+          },
+          {
+            "decile": 8,
+            "n": 1075,
+            "x_lo": 1.46,
+            "x_hi": 1.74,
+            "expR": -0.0604
+          },
+          {
+            "decile": 9,
+            "n": 1075,
+            "x_lo": 1.74,
+            "x_hi": 2.21,
+            "expR": -0.1149
+          },
+          {
+            "decile": 10,
+            "n": 1075,
+            "x_lo": 2.22,
+            "x_hi": 9.64,
+            "expR": -0.1043
+          }
+        ],
+        "effect_r": -0.0497,
+        "effect_ci_lo": -0.1562,
+        "effect_ci_hi": 0.0559,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "5/18",
+        "feature": "break_close_atr",
+        "timing": "alert_time",
+        "fdr_reject": true,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 18
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 10748,
+        "kruskal_h": 8.3031,
+        "p_value": 0.04014528775203884,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "BOS",
+            "n": 5886,
+            "expR": -0.0376,
+            "thin": false,
+            "expR_shrunk": -0.0439
+          },
+          {
+            "level": "Confirm",
+            "n": 1585,
+            "expR": -0.076,
+            "thin": false,
+            "expR_shrunk": -0.0659
+          },
+          {
+            "level": "CHoCH",
+            "n": 3220,
+            "expR": -0.085,
+            "thin": false,
+            "expR_shrunk": -0.074
+          },
+          {
+            "level": "Range",
+            "n": 57,
+            "expR": -0.3617,
+            "thin": true,
+            "expR_shrunk": -0.0662
+          }
+        ],
+        "effect_r": 0.0474,
+        "effect_ci_lo": -0.0052,
+        "effect_ci_hi": 0.1007,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "CHoCH..BOS",
+        "best_pos_quarters": "15/36",
+        "feature": "bos_tier",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 19
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 10748,
+        "kruskal_h": 8.3031,
+        "p_value": 0.04014528775203884,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "BOS BOS",
+            "n": 5886,
+            "expR": -0.0376,
+            "thin": false,
+            "expR_shrunk": -0.0439
+          },
+          {
+            "level": "Confirmation BOS",
+            "n": 1585,
+            "expR": -0.076,
+            "thin": false,
+            "expR_shrunk": -0.0659
+          },
+          {
+            "level": "CHoCH CHoCH",
+            "n": 3220,
+            "expR": -0.085,
+            "thin": false,
+            "expR_shrunk": -0.074
+          },
+          {
+            "level": "Range BOS",
+            "n": 57,
+            "expR": -0.3617,
+            "thin": true,
+            "expR_shrunk": -0.0662
+          }
+        ],
+        "effect_r": 0.0474,
+        "effect_ci_lo": -0.0052,
+        "effect_ci_hi": 0.1007,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "CHoCH CHoCH..BOS BOS",
+        "best_pos_quarters": "15/36",
+        "feature": "event",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 20
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10748,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "1.0",
+        "level_lo": "0.0",
+        "expR_hi": -0.0921,
+        "expR_lo": -0.0498,
+        "n_hi": 2377,
+        "n_lo": 8371,
+        "effect_r": -0.0423,
+        "effect_ci_lo": -0.0972,
+        "effect_ci_hi": 0.0137,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "11/36",
+        "curve": [
+          {
+            "level": "0.0",
+            "n": 8371,
+            "expR": -0.0498,
+            "thin": false,
+            "expR_shrunk": -0.0535
+          },
+          {
+            "level": "1.0",
+            "n": 2377,
+            "expR": -0.0921,
+            "thin": false,
+            "expR_shrunk": -0.0693
+          }
+        ],
+        "feature": "reversal_pct",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 21
+      },
+      {
+        "kind": "nominal",
+        "n_valid": 10748,
+        "kruskal_h": 7.5133,
+        "p_value": 0.02336208002100733,
+        "test": "kruskal(nominal)",
+        "curve": [
+          {
+            "level": "NY",
+            "n": 4431,
+            "expR": -0.037,
+            "thin": false,
+            "expR_shrunk": -0.0481
+          },
+          {
+            "level": "Asia",
+            "n": 1430,
+            "expR": -0.0619,
+            "thin": false,
+            "expR_shrunk": -0.0598
+          },
+          {
+            "level": "London",
+            "n": 4887,
+            "expR": -0.0784,
+            "thin": false,
+            "expR_shrunk": -0.0693
+          }
+        ],
+        "effect_r": 0.0414,
+        "effect_ci_lo": -0.0091,
+        "effect_ci_hi": 0.0911,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "London..NY",
+        "best_pos_quarters": "14/36",
+        "feature": "session",
+        "timing": "alert_time",
+        "fdr_reject": true,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 22
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10748,
+        "spearman_rho": 0.0357,
+        "p_value": 0.00021122825087172448,
+        "mi": 0.0,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1075,
+            "x_lo": 0.012,
+            "x_hi": 0.532,
+            "expR": -0.0904
+          },
+          {
+            "decile": 2,
+            "n": 1075,
+            "x_lo": 0.532,
+            "x_hi": 0.661,
+            "expR": -0.0901
+          },
+          {
+            "decile": 3,
+            "n": 1075,
+            "x_lo": 0.661,
+            "x_hi": 0.757,
+            "expR": -0.0421
+          },
+          {
+            "decile": 4,
+            "n": 1074,
+            "x_lo": 0.757,
+            "x_hi": 0.854,
+            "expR": -0.0313
+          },
+          {
+            "decile": 5,
+            "n": 1075,
+            "x_lo": 0.854,
+            "x_hi": 0.947,
+            "expR": -0.0213
+          },
+          {
+            "decile": 6,
+            "n": 1075,
+            "x_lo": 0.947,
+            "x_hi": 1.054,
+            "expR": -0.0675
+          },
+          {
+            "decile": 7,
+            "n": 1074,
+            "x_lo": 1.054,
+            "x_hi": 1.187,
+            "expR": -0.0522
+          },
+          {
+            "decile": 8,
+            "n": 1075,
+            "x_lo": 1.187,
+            "x_hi": 1.346,
+            "expR": -0.0141
+          },
+          {
+            "decile": 9,
+            "n": 1075,
+            "x_lo": 1.347,
+            "x_hi": 1.582,
+            "expR": -0.0537
+          },
+          {
+            "decile": 10,
+            "n": 1075,
+            "x_lo": 1.583,
+            "x_hi": 2.0,
+            "expR": -0.129
+          }
+        ],
+        "effect_r": -0.0386,
+        "effect_ci_lo": -0.143,
+        "effect_ci_hi": 0.0657,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "5/20",
+        "feature": "ob_range_atr",
+        "timing": "alert_time",
+        "fdr_reject": true,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 23
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10748,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0744,
+        "expR_lo": -0.0372,
+        "n_hi": 6347,
+        "n_lo": 4401,
+        "effect_r": -0.0372,
+        "effect_ci_lo": -0.0852,
+        "effect_ci_hi": 0.0109,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "14/36",
+        "curve": [
+          {
+            "level": "False",
+            "n": 4401,
+            "expR": -0.0372,
+            "thin": false,
+            "expR_shrunk": -0.0493
+          },
+          {
+            "level": "True",
+            "n": 6347,
+            "expR": -0.0744,
+            "thin": false,
+            "expR_shrunk": -0.0674
+          }
+        ],
+        "feature": "fill_in_killzone",
+        "timing": "fill_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 24
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10748,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "CHoCH",
+        "level_lo": "BOS",
+        "expR_hi": -0.085,
+        "expR_lo": -0.0481,
+        "n_hi": 3220,
+        "n_lo": 7528,
+        "effect_r": -0.0369,
+        "effect_ci_lo": -0.0885,
+        "effect_ci_hi": 0.0153,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "13/36",
+        "curve": [
+          {
+            "level": "BOS",
+            "n": 7528,
+            "expR": -0.0481,
+            "thin": false,
+            "expR_shrunk": -0.0527
+          },
+          {
+            "level": "CHoCH",
+            "n": 3220,
+            "expR": -0.085,
+            "thin": false,
+            "expR_shrunk": -0.0688
+          }
+        ],
+        "feature": "bos_tag",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 25
+      },
+      {
+        "kind": "ordinal",
+        "n_valid": 10748,
+        "spearman_rho": 0.0111,
+        "p_value": 0.25147924315804054,
+        "test": "spearman(ordinal)",
+        "curve": [
+          {
+            "level": "1",
+            "n": 1797,
+            "expR": -0.0315,
+            "thin": false,
+            "expR_shrunk": -0.0453
+          },
+          {
+            "level": "0",
+            "n": 8631,
+            "expR": -0.0635,
+            "thin": false,
+            "expR_shrunk": -0.0628
+          },
+          {
+            "level": "2",
+            "n": 320,
+            "expR": -0.0986,
+            "thin": false,
+            "expR_shrunk": -0.0651
+          }
+        ],
+        "effect_r": -0.0351,
+        "effect_ci_lo": -0.1698,
+        "effect_ci_hi": 0.102,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "0..2",
+        "feature": "ob_touches",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 26
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10748,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0368,
+        "expR_lo": -0.0697,
+        "n_hi": 3430,
+        "n_lo": 7318,
+        "effect_r": 0.0329,
+        "effect_ci_lo": -0.0187,
+        "effect_ci_hi": 0.0846,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "13/36",
+        "curve": [
+          {
+            "level": "True",
+            "n": 3430,
+            "expR": -0.0368,
+            "thin": false,
+            "expR_shrunk": -0.0505
+          },
+          {
+            "level": "False",
+            "n": 7318,
+            "expR": -0.0697,
+            "thin": false,
+            "expR_shrunk": -0.0652
+          }
+        ],
+        "feature": "trend_pd_agree",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 27
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10748,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "counter",
+        "level_lo": "aligned",
+        "expR_hi": -0.075,
+        "expR_lo": -0.0439,
+        "n_hi": 5263,
+        "n_lo": 5485,
+        "effect_r": -0.0311,
+        "effect_ci_lo": -0.0785,
+        "effect_ci_hi": 0.0156,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "9/36",
+        "curve": [
+          {
+            "level": "aligned",
+            "n": 5485,
+            "expR": -0.0439,
+            "thin": false,
+            "expR_shrunk": -0.0515
+          },
+          {
+            "level": "counter",
+            "n": 5263,
+            "expR": -0.075,
+            "thin": false,
+            "expR_shrunk": -0.067
+          }
+        ],
+        "feature": "pd_alignment",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 28
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10748,
+        "spearman_rho": -0.0046,
+        "p_value": 0.6356284471939941,
+        "mi": 0.00509,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1075,
+            "x_lo": 0.0003,
+            "x_hi": 0.0011,
+            "expR": -0.0221
+          },
+          {
+            "decile": 2,
+            "n": 1075,
+            "x_lo": 0.0011,
+            "x_hi": 0.0014,
+            "expR": -0.0691
+          },
+          {
+            "decile": 3,
+            "n": 1075,
+            "x_lo": 0.0014,
+            "x_hi": 0.0016,
+            "expR": -0.0798
+          },
+          {
+            "decile": 4,
+            "n": 1074,
+            "x_lo": 0.0016,
+            "x_hi": 0.0019,
+            "expR": -0.0374
+          },
+          {
+            "decile": 5,
+            "n": 1075,
+            "x_lo": 0.0019,
+            "x_hi": 0.0022,
+            "expR": -0.0232
+          },
+          {
+            "decile": 6,
+            "n": 1075,
+            "x_lo": 0.0022,
+            "x_hi": 0.0029,
+            "expR": -0.0761
+          },
+          {
+            "decile": 7,
+            "n": 1074,
+            "x_lo": 0.0029,
+            "x_hi": 0.0796,
+            "expR": -0.1007
+          },
+          {
+            "decile": 8,
+            "n": 1075,
+            "x_lo": 0.0799,
+            "x_hi": 0.2079,
+            "expR": -0.0625
+          },
+          {
+            "decile": 9,
+            "n": 1075,
+            "x_lo": 0.2079,
+            "x_hi": 2.1257,
+            "expR": -0.069
+          },
+          {
+            "decile": 10,
+            "n": 1075,
+            "x_lo": 2.1271,
+            "x_hi": 19.5257,
+            "expR": -0.0518
+          }
+        ],
+        "effect_r": -0.0297,
+        "effect_ci_lo": -0.1214,
+        "effect_ci_hi": 0.0851,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "10/20",
+        "feature": "atr_at_ob",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 29
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10748,
+        "spearman_rho": -0.0089,
+        "p_value": 0.3567962206608107,
+        "mi": 0.00638,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1075,
+            "x_lo": 4.0,
+            "x_hi": 4.0,
+            "expR": -0.0604
+          },
+          {
+            "decile": 2,
+            "n": 1075,
+            "x_lo": 4.0,
+            "x_hi": 5.0,
+            "expR": -0.0204
+          },
+          {
+            "decile": 3,
+            "n": 1075,
+            "x_lo": 5.0,
+            "x_hi": 5.0,
+            "expR": -0.0894
+          },
+          {
+            "decile": 4,
+            "n": 1074,
+            "x_lo": 5.0,
+            "x_hi": 6.0,
+            "expR": -0.0272
+          },
+          {
+            "decile": 5,
+            "n": 1075,
+            "x_lo": 6.0,
+            "x_hi": 6.0,
+            "expR": -0.0465
+          },
+          {
+            "decile": 6,
+            "n": 1075,
+            "x_lo": 6.0,
+            "x_hi": 6.0,
+            "expR": -0.0684
+          },
+          {
+            "decile": 7,
+            "n": 1074,
+            "x_lo": 6.0,
+            "x_hi": 7.0,
+            "expR": -0.0847
+          },
+          {
+            "decile": 8,
+            "n": 1075,
+            "x_lo": 7.0,
+            "x_hi": 7.0,
+            "expR": -0.0832
+          },
+          {
+            "decile": 9,
+            "n": 1075,
+            "x_lo": 7.0,
+            "x_hi": 8.0,
+            "expR": -0.0221
+          },
+          {
+            "decile": 10,
+            "n": 1075,
+            "x_lo": 8.0,
+            "x_hi": 10.0,
+            "expR": -0.0893
+          }
+        ],
+        "effect_r": -0.0289,
+        "effect_ci_lo": -0.1164,
+        "effect_ci_hi": 0.0703,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "14/36",
+        "feature": "score",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 30
+      },
+      {
+        "kind": "binary",
+        "n_valid": 3220,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0921,
+        "expR_lo": -0.065,
+        "n_hi": 2377,
+        "n_lo": 843,
+        "effect_r": -0.0272,
+        "effect_ci_lo": -0.123,
+        "effect_ci_hi": 0.0693,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "2/4",
+        "curve": [
+          {
+            "level": "False",
+            "n": 843,
+            "expR": -0.065,
+            "thin": false,
+            "expR_shrunk": -0.0612
+          },
+          {
+            "level": "True",
+            "n": 2377,
+            "expR": -0.0921,
+            "thin": false,
+            "expR_shrunk": -0.0788
+          }
+        ],
+        "feature": "reversed_from_extreme",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 31
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10748,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0774,
+        "expR_lo": -0.0519,
+        "n_hi": 3043,
+        "n_lo": 7705,
+        "effect_r": -0.0255,
+        "effect_ci_lo": -0.0769,
+        "effect_ci_hi": 0.0271,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "11/36",
+        "curve": [
+          {
+            "level": "False",
+            "n": 7705,
+            "expR": -0.0519,
+            "thin": false,
+            "expR_shrunk": -0.0549
+          },
+          {
+            "level": "True",
+            "n": 3043,
+            "expR": -0.0774,
+            "thin": false,
+            "expR_shrunk": -0.0658
+          }
+        ],
+        "feature": "flip_pending_at_alert",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 32
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10748,
+        "spearman_rho": -0.0034,
+        "p_value": 0.7210908032678697,
+        "mi": 0.00142,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1075,
+            "x_lo": -179.9,
+            "x_hi": 16.6,
+            "expR": -0.0508
+          },
+          {
+            "decile": 2,
+            "n": 1075,
+            "x_lo": 16.6,
+            "x_hi": 25.8,
+            "expR": -0.0361
+          },
+          {
+            "decile": 3,
+            "n": 1075,
+            "x_lo": 25.8,
+            "x_hi": 34.1,
+            "expR": -0.0435
+          },
+          {
+            "decile": 4,
+            "n": 1074,
+            "x_lo": 34.1,
+            "x_hi": 42.8,
+            "expR": -0.0923
+          },
+          {
+            "decile": 5,
+            "n": 1075,
+            "x_lo": 42.8,
+            "x_hi": 51.8,
+            "expR": -0.0932
+          },
+          {
+            "decile": 6,
+            "n": 1075,
+            "x_lo": 51.8,
+            "x_hi": 60.3,
+            "expR": -0.1092
+          },
+          {
+            "decile": 7,
+            "n": 1074,
+            "x_lo": 60.3,
+            "x_hi": 68.3,
+            "expR": -0.0056
+          },
+          {
+            "decile": 8,
+            "n": 1075,
+            "x_lo": 68.4,
+            "x_hi": 76.3,
+            "expR": -0.0188
+          },
+          {
+            "decile": 9,
+            "n": 1075,
+            "x_lo": 76.3,
+            "x_hi": 85.0,
+            "expR": -0.0677
+          },
+          {
+            "decile": 10,
+            "n": 1075,
+            "x_lo": 85.0,
+            "x_hi": 323.5,
+            "expR": -0.0744
+          }
+        ],
+        "effect_r": -0.0236,
+        "effect_ci_lo": -0.1324,
+        "effect_ci_hi": 0.0743,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "8/19",
+        "feature": "pd_pct",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 33
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10748,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0474,
+        "expR_lo": -0.0678,
+        "n_hi": 4560,
+        "n_lo": 6188,
+        "effect_r": 0.0205,
+        "effect_ci_lo": -0.028,
+        "effect_ci_hi": 0.0678,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "12/36",
+        "curve": [
+          {
+            "level": "True",
+            "n": 4560,
+            "expR": -0.0474,
+            "thin": false,
+            "expR_shrunk": -0.0538
+          },
+          {
+            "level": "False",
+            "n": 6188,
+            "expR": -0.0678,
+            "thin": false,
+            "expR_shrunk": -0.0638
+          }
+        ],
+        "feature": "ob_in_killzone",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 34
+      },
+      {
+        "kind": "continuous",
+        "n_valid": 10748,
+        "spearman_rho": 0.0084,
+        "p_value": 0.3815396224588407,
+        "mi": 0.00206,
+        "mi_reliable": true,
+        "curve": [
+          {
+            "decile": 1,
+            "n": 1075,
+            "x_lo": 0.2,
+            "x_hi": 0.252,
+            "expR": -0.028
+          },
+          {
+            "decile": 2,
+            "n": 1075,
+            "x_lo": 0.252,
+            "x_hi": 0.308,
+            "expR": -0.1198
+          },
+          {
+            "decile": 3,
+            "n": 1075,
+            "x_lo": 0.308,
+            "x_hi": 0.363,
+            "expR": -0.0915
+          },
+          {
+            "decile": 4,
+            "n": 1074,
+            "x_lo": 0.363,
+            "x_hi": 0.419,
+            "expR": -0.0557
+          },
+          {
+            "decile": 5,
+            "n": 1075,
+            "x_lo": 0.419,
+            "x_hi": 0.478,
+            "expR": -0.0363
+          },
+          {
+            "decile": 6,
+            "n": 1075,
+            "x_lo": 0.478,
+            "x_hi": 0.541,
+            "expR": -0.0214
+          },
+          {
+            "decile": 7,
+            "n": 1074,
+            "x_lo": 0.541,
+            "x_hi": 0.611,
+            "expR": -0.0683
+          },
+          {
+            "decile": 8,
+            "n": 1075,
+            "x_lo": 0.611,
+            "x_hi": 0.687,
+            "expR": -0.0891
+          },
+          {
+            "decile": 9,
+            "n": 1075,
+            "x_lo": 0.687,
+            "x_hi": 0.786,
+            "expR": -0.0733
+          },
+          {
+            "decile": 10,
+            "n": 1075,
+            "x_lo": 0.786,
+            "x_hi": 1.0,
+            "expR": -0.0082
+          }
+        ],
+        "effect_r": 0.0198,
+        "effect_ci_lo": -0.089,
+        "effect_ci_hi": 0.122,
+        "effect_ci_excludes_0": false,
+        "top_pos_quarters": "9/19",
+        "feature": "ob_body_ratio",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 35
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10748,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0771,
+        "expR_lo": -0.058,
+        "n_hi": 675,
+        "n_lo": 10073,
+        "effect_r": -0.0192,
+        "effect_ci_lo": -0.1137,
+        "effect_ci_hi": 0.0765,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "6/36",
+        "curve": [
+          {
+            "level": "False",
+            "n": 10073,
+            "expR": -0.058,
+            "thin": false,
+            "expR_shrunk": -0.0584
+          },
+          {
+            "level": "True",
+            "n": 675,
+            "expR": -0.0771,
+            "thin": false,
+            "expR_shrunk": -0.0612
+          }
+        ],
+        "feature": "structure_ranging_at_alert",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 36
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10634,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0471,
+        "expR_lo": -0.0629,
+        "n_hi": 2273,
+        "n_lo": 8361,
+        "effect_r": 0.0158,
+        "effect_ci_lo": -0.0422,
+        "effect_ci_hi": 0.0744,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "13/36",
+        "curve": [
+          {
+            "level": "True",
+            "n": 2273,
+            "expR": -0.0471,
+            "thin": false,
+            "expR_shrunk": -0.0556
+          },
+          {
+            "level": "False",
+            "n": 8361,
+            "expR": -0.0629,
+            "thin": false,
+            "expR_shrunk": -0.0614
+          }
+        ],
+        "feature": "dr_ceiling_broken_at_ob",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 37
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10748,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0532,
+        "expR_lo": -0.0633,
+        "n_hi": 4401,
+        "n_lo": 6347,
+        "effect_r": 0.01,
+        "effect_ci_lo": -0.038,
+        "effect_ci_hi": 0.0595,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "12/36",
+        "curve": [
+          {
+            "level": "True",
+            "n": 4401,
+            "expR": -0.0532,
+            "thin": false,
+            "expR_shrunk": -0.0565
+          },
+          {
+            "level": "False",
+            "n": 6347,
+            "expR": -0.0633,
+            "thin": false,
+            "expR_shrunk": -0.0614
+          }
+        ],
+        "feature": "fvg_present",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 38
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10748,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "premium",
+        "level_lo": "discount",
+        "expR_hi": -0.0637,
+        "expR_lo": -0.0543,
+        "n_hi": 5580,
+        "n_lo": 5168,
+        "effect_r": -0.0095,
+        "effect_ci_lo": -0.0564,
+        "effect_ci_hi": 0.0381,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "8/36",
+        "curve": [
+          {
+            "level": "discount",
+            "n": 5168,
+            "expR": -0.0543,
+            "thin": false,
+            "expR_shrunk": -0.0568
+          },
+          {
+            "level": "premium",
+            "n": 5580,
+            "expR": -0.0637,
+            "thin": false,
+            "expR_shrunk": -0.0615
+          }
+        ],
+        "feature": "pd_zone",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 39
+      },
+      {
+        "kind": "ordinal",
+        "n_valid": 10748,
+        "spearman_rho": 0.0208,
+        "p_value": 0.03084381800385608,
+        "test": "spearman(ordinal)",
+        "curve": [
+          {
+            "level": "5",
+            "n": 416,
+            "expR": 0.0557,
+            "thin": false,
+            "expR_shrunk": -0.0017
+          },
+          {
+            "level": "7",
+            "n": 98,
+            "expR": -0.0151,
+            "thin": true,
+            "expR_shrunk": -0.0508
+          },
+          {
+            "level": "4",
+            "n": 598,
+            "expR": -0.0376,
+            "thin": false,
+            "expR_shrunk": -0.0464
+          },
+          {
+            "level": "8",
+            "n": 31,
+            "expR": -0.0381,
+            "thin": true,
+            "expR_shrunk": -0.0577
+          },
+          {
+            "level": "2",
+            "n": 1658,
+            "expR": -0.049,
+            "thin": false,
+            "expR_shrunk": -0.051
+          },
+          {
+            "level": "3",
+            "n": 986,
+            "expR": -0.0564,
+            "thin": false,
+            "expR_shrunk": -0.0572
+          },
+          {
+            "level": "1",
+            "n": 3536,
+            "expR": -0.0582,
+            "thin": false,
+            "expR_shrunk": -0.0583
+          },
+          {
+            "level": "6",
+            "n": 200,
+            "expR": -0.0757,
+            "thin": false,
+            "expR_shrunk": -0.0645
+          },
+          {
+            "level": "0",
+            "n": 3220,
+            "expR": -0.085,
+            "thin": false,
+            "expR_shrunk": -0.082
+          },
+          {
+            "level": "9",
+            "n": 4,
+            "expR": -0.3073,
+            "thin": true,
+            "expR_shrunk": -0.0615
+          },
+          {
+            "level": "10",
+            "n": 1,
+            "expR": -1.0,
+            "thin": true,
+            "expR_shrunk": -0.0614
+          }
+        ],
+        "effect_r": 0.0093,
+        "effect_ci_lo": -0.1584,
+        "effect_ci_hi": 0.1853,
+        "effect_ci_excludes_0": false,
+        "effect_levels": "0..6",
+        "feature": "bos_sequence_count",
+        "timing": "alert_time",
+        "fdr_reject": true,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 40
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10748,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "SHORT",
+        "level_lo": "LONG",
+        "expR_hi": -0.0635,
+        "expR_lo": -0.0548,
+        "n_hi": 5387,
+        "n_lo": 5361,
+        "effect_r": -0.0087,
+        "effect_ci_lo": -0.0558,
+        "effect_ci_hi": 0.038,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "7/36",
+        "curve": [
+          {
+            "level": "LONG",
+            "n": 5361,
+            "expR": -0.0548,
+            "thin": false,
+            "expR_shrunk": -0.057
+          },
+          {
+            "level": "SHORT",
+            "n": 5387,
+            "expR": -0.0635,
+            "thin": false,
+            "expR_shrunk": -0.0613
+          }
+        ],
+        "feature": "bias",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 41
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10634,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "True",
+        "level_lo": "False",
+        "expR_hi": -0.0663,
+        "expR_lo": -0.0577,
+        "n_hi": 2206,
+        "n_lo": 8428,
+        "effect_r": -0.0086,
+        "effect_ci_lo": -0.0643,
+        "effect_ci_hi": 0.0498,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "7/36",
+        "curve": [
+          {
+            "level": "False",
+            "n": 8428,
+            "expR": -0.0577,
+            "thin": false,
+            "expR_shrunk": -0.0583
+          },
+          {
+            "level": "True",
+            "n": 2206,
+            "expR": -0.0663,
+            "thin": false,
+            "expR_shrunk": -0.0613
+          }
+        ],
+        "feature": "dr_floor_broken_at_ob",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 42
+      },
+      {
+        "kind": "binary",
+        "n_valid": 3043,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "bullish",
+        "level_lo": "bearish",
+        "expR_hi": -0.0797,
+        "expR_lo": -0.0753,
+        "n_hi": 1482,
+        "n_lo": 1561,
+        "effect_r": -0.0044,
+        "effect_ci_lo": -0.0936,
+        "effect_ci_hi": 0.0843,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "14/36",
+        "curve": [
+          {
+            "level": "bearish",
+            "n": 1561,
+            "expR": -0.0753,
+            "thin": false,
+            "expR_shrunk": -0.0673
+          },
+          {
+            "level": "bullish",
+            "n": 1482,
+            "expR": -0.0797,
+            "thin": false,
+            "expR_shrunk": -0.0693
+          }
+        ],
+        "feature": "flip_pending_dir_at_alert",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 43
+      },
+      {
+        "kind": "binary",
+        "n_valid": 10748,
+        "test": "bootstrap_diff_ci(binary)",
+        "level_hi": "holding",
+        "level_lo": "fading",
+        "expR_hi": -0.0591,
+        "expR_lo": -0.0605,
+        "n_hi": 10434,
+        "n_lo": 314,
+        "effect_r": 0.0014,
+        "effect_ci_lo": -0.1374,
+        "effect_ci_hi": 0.1384,
+        "effect_ci_excludes_0": false,
+        "strong_pos_quarters": "9/36",
+        "curve": [
+          {
+            "level": "holding",
+            "n": 10434,
+            "expR": -0.0591,
+            "thin": false,
+            "expR_shrunk": -0.0591
+          },
+          {
+            "level": "fading",
+            "n": 314,
+            "expR": -0.0605,
+            "thin": false,
+            "expR_shrunk": -0.0592
+          }
+        ],
+        "feature": "bos_verdict",
+        "timing": "alert_time",
+        "fdr_reject": false,
+        "view": "live_gated",
+        "window": "2008-01-02..2016-12-31",
+        "scope": "pooled_fx_gold",
+        "disposition": "interesting_not_proven",
+        "rank": 44
+      }
+    ]
+  }
+}
