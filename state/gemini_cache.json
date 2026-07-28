@@ -1,17 +1,14 @@
 {
-  "EURUSD|2026-07-27": {
-    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no macroeconomic factors are expected to directly influence this EURUSD short setup today."
+  "USDJPY|2026-07-28": {
+    "macro_summary": "There are no scheduled high-impact events for JPY or USD today. Therefore, no scheduled events will directly influence the USDJPY pair's macro backdrop. The trade setup will rely solely on technical factors and any unforeseen geopolitical developments."
   },
-  "NZDUSD|2026-07-27": {
-    "macro_summary": "There are no scheduled high-impact events for NZD or USD today. Therefore, no external macro factors are expected to directly influence the NZDUSD pair's direction today."
+  "NZDUSD|2026-07-28": {
+    "macro_summary": "There are no scheduled high-impact events for NZD or USD today. Therefore, no scheduled macro events will directly influence the NZDUSD pair's direction today."
   },
-  "GOLD|2026-07-27": {
+  "EURUSD|2026-07-28": {
+    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no scheduled events will directly influence this EURUSD short setup. The trade will be driven by technicals and any unscheduled news flow."
+  },
+  "GOLD|2026-07-28": {
     "macro_summary": "There are no scheduled high-impact events for USD today that would directly influence Gold. Therefore, no scheduled events today will help or hurt this short Gold setup."
-  },
-  "USDCHF|2026-07-27": {
-    "macro_summary": "There are no scheduled high-impact events for CHF or USD today. Therefore, no external macro factors are expected to directly influence the USDCHF pair's direction today. The trade setup will rely solely on technical factors and sentiment."
-  },
-  "USDJPY|2026-07-27": {
-    "macro_summary": "There are no scheduled high-impact events for JPY or USD today. Therefore, no scheduled events will directly influence the USDJPY pair's direction today. The trade setup is free from immediate macro event risk."
   }
 }
