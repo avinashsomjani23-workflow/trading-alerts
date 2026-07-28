@@ -2,21 +2,25 @@
 RELABEL (Playbook Stage 2) — assign every Discovery trade a loss/BE/win label
 under a FROZEN exit, on the completed backtest. No re-run.
 
-Two label sets, kept physically separate so the next session cannot confuse them
-or contaminate one with the other:
+Three label sets, kept physically separate so the next session cannot confuse them
+or contaminate one with another:
 
-  - PRIMARY  = baseline exit (live: liquidity TP + BE@1R). Column `label_baseline`.
-  - SHADOW   = mechanical ATR exit (E_atr_sl1.5_tp2.5). Column `label_atr`.
+  - PRIMARY   = baseline exit (live: liquidity TP + BE@1R). Column `label_baseline`.
+  - SHADOW    = mechanical ATR exit (E_atr_sl1.5_tp2.5). Column `label_atr`.
+  - FIXED-1R  = full position exits at exactly +1.0R, no BE (C_fullTP_1.0R).
+                Column `label_fulltp1r`.
 
-Both come from exit_lab_trades.csv, which holds one row per (trade, config). The
+All come from exit_lab_trades.csv, which holds one row per (trade, config). The
 `config` column is the firewall: label_baseline is read ONLY from
 config==baseline_liqTP_be1.0 rows, label_atr ONLY from config==E_atr_sl1.5_tp2.5
-rows. No cell is shared; neither label is ever derived from the other's R.
+rows, label_fulltp1r ONLY from config==C_fullTP_1.0R rows. No cell is shared;
+no label is ever derived from another's R.
 
 Non-contamination rules (hard):
   - The ATR recipe emits NaN r on trades with <15 pre-fill bars (ATR undefined).
     Those trades get label_atr = NA. We NEVER borrow the baseline label to fill an
-    ATR gap. A missing ATR label stays missing (r_atr also NA).
+    ATR gap. A missing ATR label stays missing (r_atr also NA). The same no-borrow
+    rule applies to label_fulltp1r (though the fixed-1R recipe always resolves).
   - label_baseline exists for every filled proximal trade (baseline always resolves).
   - Per-trade self-check: baseline r must equal the trade's committed r_realised;
     any mismatch aborts (the label set is not trustworthy).
@@ -36,6 +40,7 @@ import pandas as pd
 
 BASELINE_CFG = "baseline_liqTP_be1.0"
 ATR_CFG = "E_atr_sl1.5_tp2.5"
+FULLTP1R_CFG = "C_fullTP_1.0R"  # full position exits at exactly +1.0R, no BE
 
 # Unique per trade in the replay file. alert_ts+fill_ts alone is NOT unique — two
 # different order blocks can fire on the same bar and fill on the same bar (26 such
@@ -65,11 +70,12 @@ def main():
 
     base = rep[rep["config"] == BASELINE_CFG].copy()
     atr = rep[rep["config"] == ATR_CFG].copy()
+    fulltp1r = rep[rep["config"] == FULLTP1R_CFG].copy()
     if base.empty:
         ap.error(f"no {BASELINE_CFG} rows in the replay file")
 
     # Key must be unique per config, or a merge would fan out and cross-contaminate.
-    for nm, df in (("baseline", base), ("atr", atr)):
+    for nm, df in (("baseline", base), ("atr", atr), ("fulltp1r", fulltp1r)):
         dup = df.duplicated(KEY).sum()
         if dup:
             ap.error(f"{dup} duplicate keys in {nm} rows — key not unique, abort")
@@ -94,6 +100,20 @@ def main():
         raise SystemExit(f"CONTAMINATION: {borrowed} ATR labels present without an "
                          f"ATR r — aborting")
 
+    # FIXED-1R: full position exits at exactly +1.0R (C_fullTP_1.0R). Same left-merge
+    # + no-borrow discipline as the ATR shadow. This recipe always resolves, so the
+    # column is normally fully populated, but the guard below stays structurally
+    # identical so a label can never be borrowed from baseline.
+    fulltp1r_slim = fulltp1r[KEY + ["r"]].rename(columns={"r": "r_fulltp1r"})
+    out = out.merge(fulltp1r_slim, on=KEY, how="left")
+    out["label_fulltp1r"] = [_label(r) for r in out["r_fulltp1r"]]
+
+    # ── CONTAMINATION GUARD: r_fulltp1r NaN => label_fulltp1r must be NA ──
+    borrowed_ft = ((out["r_fulltp1r"].isna()) & (out["label_fulltp1r"].notna())).sum()
+    if borrowed_ft:
+        raise SystemExit(f"CONTAMINATION: {borrowed_ft} fixed-1R labels present "
+                         f"without a fixed-1R r — aborting")
+
     # ── SELF-CHECK: baseline r must match committed r_realised, per trade ──
     # committed_r_realised is stored to 3 dp in trades.csv; the replay is full
     # precision. So allow up to the stored rounding (1.1e-3) on the NUMBER, but
@@ -116,14 +136,18 @@ def main():
 
     n = len(out)
     n_atr = int(out["label_atr"].notna().sum())
+    n_ft = int(out["label_fulltp1r"].notna().sum())
     print(f"Relabel written: {out_p}")
     print(f"  {n} trades  (baseline labels: {n}/{n}, ATR labels: {n_atr}/{n}; "
-          f"{n - n_atr} ATR-undefined kept NA — NOT borrowed)")
+          f"{n - n_atr} ATR-undefined kept NA — NOT borrowed; "
+          f"fixed-1R labels: {n_ft}/{n})")
     print("  baseline self-check vs committed r_realised: PASS")
     print("\n  label_baseline:")
     print(out["label_baseline"].value_counts(dropna=False).to_string())
     print("  label_atr:")
     print(out["label_atr"].value_counts(dropna=False).to_string())
+    print("  label_fulltp1r:")
+    print(out["label_fulltp1r"].value_counts(dropna=False).to_string())
 
 
 if __name__ == "__main__":
