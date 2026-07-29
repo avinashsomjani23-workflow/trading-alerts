@@ -2227,11 +2227,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-27T10:36:02.505046",
-      "last_seen_ist": "2026-07-29T16:36:00.645661",
+      "last_seen_ist": "2026-07-29T17:36:18.660535",
       "last_email_day": "2026-07-28",
       "still_valid_count": 0,
-      "reentry_armed": false,
-      "max_exit_distance": 0.0022299999999999542,
+      "reentry_armed": true,
+      "max_exit_distance": 0.00270999999999999,
       "bias": "SHORT",
       "pair": "EURUSD",
       "ob_snapshot": {
@@ -3116,7 +3116,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-28T11:36:02.437185",
-      "last_seen_ist": "2026-07-29T16:36:00.645661",
+      "last_seen_ist": "2026-07-29T17:36:18.660535",
       "last_email_day": "2026-07-28",
       "still_valid_count": 0,
       "reentry_armed": true,
@@ -3243,7 +3243,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-28T16:36:09.504929",
-      "last_seen_ist": "2026-07-29T16:36:00.645661",
+      "last_seen_ist": "2026-07-29T17:36:18.660535",
       "last_email_day": "2026-07-29",
       "still_valid_count": 1,
       "reentry_armed": false,
@@ -3497,11 +3497,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-28T21:36:12.953895",
-      "last_seen_ist": "2026-07-29T16:36:00.645661",
+      "last_seen_ist": "2026-07-29T17:36:18.660535",
       "last_email_day": "2026-07-29",
       "still_valid_count": 1,
       "reentry_armed": false,
-      "max_exit_distance": 0.0020599999999999508,
+      "max_exit_distance": 0.0021599999999999397,
       "bias": "SHORT",
       "pair": "NZDUSD",
       "ob_snapshot": {
@@ -3624,7 +3624,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-28T22:36:05.342986",
-      "last_seen_ist": "2026-07-29T16:36:00.645661",
+      "last_seen_ist": "2026-07-29T17:36:18.660535",
       "last_email_day": "2026-07-28",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4022,7 +4022,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-29T10:35:57.445386",
-      "last_seen_ist": "2026-07-29T16:36:00.645661",
+      "last_seen_ist": "2026-07-29T17:36:18.660535",
       "last_email_day": "2026-07-29",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4166,7 +4166,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-29T16:36:00.645661",
-      "last_seen_ist": "2026-07-29T16:36:00.645661",
+      "last_seen_ist": "2026-07-29T17:36:18.660535",
       "last_email_day": "2026-07-29",
       "still_valid_count": 0,
       "reentry_armed": false,
