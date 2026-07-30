@@ -165,9 +165,11 @@ CATEGORICAL_FEATURES = [
     # via h1_trend (which is redundant-by-construction with trend_alignment).
     "trend_pd_agree",
     # PD/PW liquidity pools (FILL-time) — day state, per-pool swept/intact status,
-    # nearest-pool tiers, and the draw-on-liquidity direction read.
-    "day_state_at_alert", "pdh_status_at_alert", "pdl_status_at_alert",
-    "pwh_status_at_alert", "pwl_status_at_alert",
+    # nearest-pool tiers, and the draw-on-liquidity direction read. Column names
+    # carry the honest `_at_fill` suffix (fill-anchored); the old `_at_alert` names
+    # were renamed at the CSV writer and never existed on current runs.
+    "day_state_at_fill", "pdh_status_at_fill", "pdl_status_at_fill",
+    "pwh_status_at_fill", "pwl_status_at_fill",
     "next_pool_above_tier", "next_pool_below_tier", "trade_toward_pool",
     # EQ clusters (FILL-time) — draw-toward + the instant-death stop-in-a-pool test
     # + intact-shelf counts (screened as levels-as-is like ob_touches).
@@ -186,11 +188,11 @@ FILL_TIME_FEATURES = {
     # PD/PW pool + EQ columns are FILL-anchored (owner call 2026-07-16,
     # h1_only_simulator.py:1677-1697): derived from bars strictly BEFORE fill_ts,
     # because alert-time pool status can be stale by the time the limit fills. The
-    # `_at_alert` suffix on the pool/EQ names is HISTORICAL — the anchor is the
-    # fill. So they screen in Stage 1 but route to the order-rule track, never the
-    # alert-time EV model.
-    "day_state_at_alert", "pdh_status_at_alert", "pdl_status_at_alert",
-    "pwh_status_at_alert", "pwl_status_at_alert",
+    # column names carry the honest `_at_fill` suffix — the anchor IS the fill. So
+    # they screen in Stage 1 but route to the order-rule track, never the alert-time
+    # EV model. (Older code used `_at_alert` names that never existed on the CSV.)
+    "day_state_at_fill", "pdh_status_at_fill", "pdl_status_at_fill",
+    "pwh_status_at_fill", "pwl_status_at_fill",
     "dist_next_pool_above_atr", "dist_next_pool_below_atr",
     "next_pool_above_tier", "next_pool_below_tier", "trade_toward_pool",
     "eqh_above_dist_atr", "eqh_above_size", "eql_below_dist_atr", "eql_below_size",

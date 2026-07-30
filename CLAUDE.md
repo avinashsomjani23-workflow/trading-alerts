@@ -10,7 +10,7 @@ and drop the rest. Not to keep building detection.
 
 ## NON-NEGOTIABLE — READ EVERY TURN
 
-Six rules. Break one and the response is wrong — rewrite before sending.
+Seven rules. Break one and the response is wrong — rewrite before sending.
 
 **1. Code is truth.**
 - Quote the live `file:line` in the SAME response before stating any column meaning,
@@ -47,6 +47,20 @@ Six rules. Break one and the response is wrong — rewrite before sending.
 - Never launch the full 2008→now run on your own judgment — slow and expensive.
 - Default to SMART SAMPLING: a few months / pairs / a targeted window proves or kills a
   hypothesis. Cached windows (`backtest/cache/*.parquet`) and single-window replays first.
+
+**7. Read `COLUMN_BUCKETS.md` before ANY analysis — no column missed, no look-ahead.**
+- Before running a loser / entry analysis, read `COLUMN_BUCKETS.md`. It lists EVERY canonical
+  column, tagged by WHEN its value is knowable: `alert` / `fill` / `outcome`. It is generated
+  from the live CSV header (`python -m backtest.gen_column_buckets`), so nothing is ever missing.
+- **Use every column** in the analysis population — none is silently skipped.
+- **`outcome` columns are look-ahead** (r_realised, mfe/mae, bars_to_*, exit_*, sl_* anatomy).
+  Use them FREELY to describe / group / find patterns in losers (autopsy). NEVER let one drive
+  a live entry filter — live, you don't know them yet.
+- **`fill` columns** are usable for entry analysis, but ALWAYS say out loud "this is fill-time"
+  (a live alert-time scorer can't see them). The alert/fill gate is flexible; the label is not.
+- Never guess a column's class from its NAME — the doc/generator is truth (a name like
+  `pdh_status_at_fill` is fill-anchored; older code mis-named it `_at_alert`). If a column isn't
+  in the doc, the generator RAISES and CI goes red — that is the guarantee, not a suggestion.
 
 ---
 

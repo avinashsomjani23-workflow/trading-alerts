@@ -574,9 +574,44 @@ def test_canonical_stated_column_count_matches_its_file():
     )
 
 
+def test_column_buckets_doc_is_complete_and_current():
+    """COLUMN_BUCKETS.md must classify EVERY canonical column exactly once, and be
+    byte-current with the generator. This is the "no column missed, nothing
+    contaminated" guarantee: a new CSV column that nobody classified makes the
+    generator RAISE (unknown column is a hard error, never a silent 'safe'), and a
+    stale doc (generator changed, doc not rebuilt) turns CI red.
+
+    Bite-proven: add a column to the canonical header that is in no timing set ->
+    build_doc() raises KeyError; edit a set without rerunning the generator ->
+    --check returns 1.
+    """
+    import importlib.util
+
+    gen_path = _ROOT / "backtest" / "gen_column_buckets.py"
+    spec = importlib.util.spec_from_file_location("gen_column_buckets", gen_path)
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+
+    # 1) every canonical column classifies (raises here if one is unclassified) and
+    #    lands in exactly one of the three timing classes.
+    with _canonical_csv().open(newline="", encoding="utf-8") as fh:
+        header = next(csv.reader(fh))
+    classes = {c: gen.classify(c) for c in header}  # raises on any unknown column
+    assert set(classes.values()) <= {"alert", "fill", "outcome"}
+    assert len(classes) == len(header), "a column classified more than once"
+
+    # 2) the doc on disk is byte-current with the generator (no manual drift).
+    want = gen.build_doc()
+    have = (_ROOT / "COLUMN_BUCKETS.md").read_text(encoding="utf-8")
+    assert have == want, (
+        "COLUMN_BUCKETS.md is stale — run: python -m backtest.gen_column_buckets"
+    )
+
+
 if __name__ == "__main__":
     test_every_csv_column_has_a_ledger_row()
     test_canonical_stated_column_count_matches_its_file()
+    test_column_buckets_doc_is_complete_and_current()
     test_row_build_ledger_line_refs_point_at_the_column()
     test_baseline_ex_corrupted_columns_are_real()
     print("truth-ledger gate: OK")
