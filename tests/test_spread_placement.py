@@ -1,16 +1,20 @@
-"""Spread-aware execution placement (2026-07-22).
+"""Spread model: RAW convention (2026-07-30).
 
-Verifies the entry/TP spread SHIFT built into compute_phase2_levels and the
-simulator's raw-line fill trigger. Physical model (chart bars are BID; a LONG
-fills at the ASK = bid + spread, exits selling at the BID):
+Verifies compute_phase2_levels and the simulator's fill trigger under the RAW
+spread model. entry/TP are the RAW OB / zone-edge levels — NO spread shift.
+The spread lives in exactly ONE place: the stop, widened by one spread away
+from entry (LONG sl below distal, SHORT sl above distal).
 
-  - ENTRY shifts TOWARD price so a live limit fills at the intended zone
-    (LONG entry_raw + spread, SHORT entry_raw - spread).
-  - TP shifts NEARER so it fills before the reversal
-    (LONG tp_raw - spread, SHORT tp_raw + spread).
-  - SL keeps its OB-distal +/- spread buffer (unchanged).
-  - Trade SELECTION is unchanged: *_raw carries the pre-shift geometry.
-  - spread_pips == 0 -> every placed price equals its *_raw (byte-identical).
+This REPLACES the 2026-07-22 three-leg shift (entry +spread, TP -spread,
+SL -spread), which double-counted the stop (one spread there + one more in
+the simulator) and grew every 1R by ~8%. Now there is one spread, on the
+stop, once. See smc_detector.py compute_phase2_levels docstring (:1551).
+
+  - ENTRY == entry_raw (no shift).
+  - TP == its *_raw twin (no shift).
+  - SL keeps its OB-distal +/- spread buffer (the only spread in the model).
+  - spread_pips == 0 -> every placed price equals its *_raw (byte-identical),
+    same as spread_pips > 0 now (the raw convention is a no-op by construction).
 
 Run: python -m pytest tests/test_spread_placement.py -q
 """
@@ -46,15 +50,15 @@ def test_long_entry_and_tp_placement():
     lv = smc_detector.compute_phase2_levels(
         conf, "LONG", ob, 0.61010, _frame(True), tp_targets="single")
     assert lv["valid"]
-    # entry placed one spread ABOVE the raw OB proximal (fills at the ask).
-    assert abs((lv["entry"] - lv["entry_raw"]) - spread) < 1e-9, \
-        f"LONG entry shift wrong: {lv['entry']} vs raw {lv['entry_raw']}"
+    # RAW convention: entry == entry_raw (no spread shift).
+    assert abs(lv["entry"] - lv["entry_raw"]) < 1e-9, \
+        f"LONG entry should equal raw: {lv['entry']} vs raw {lv['entry_raw']}"
     assert lv["entry_raw"] == 0.61000
-    # tp1 placed one spread NEARER than the raw zone edge (fills before reversal).
+    # tp1 == tp1_raw (no spread shift).
     if lv.get("tp1_raw") is not None:
-        assert abs((lv["tp1_raw"] - lv["tp1"]) - spread) < 1e-9, \
-            f"LONG tp1 shift wrong: {lv['tp1']} vs raw {lv['tp1_raw']}"
-    # SL keeps its distal - spread buffer (unchanged by placement).
+        assert abs(lv["tp1"] - lv["tp1_raw"]) < 1e-9, \
+            f"LONG tp1 should equal raw: {lv['tp1']} vs raw {lv['tp1_raw']}"
+    # SL keeps its distal - spread buffer (the only spread in the model).
     assert abs(lv["sl"] - (0.60800 - spread)) < 1e-9
 
 
@@ -66,19 +70,21 @@ def test_short_entry_and_tp_placement():
     lv = smc_detector.compute_phase2_levels(
         conf, "SHORT", ob, 0.60990, _frame(False), tp_targets="single")
     assert lv["valid"]
-    # entry placed one spread BELOW the raw OB proximal (SHORT fills at the bid).
-    assert abs((lv["entry_raw"] - lv["entry"]) - spread) < 1e-9, \
-        f"SHORT entry shift wrong: {lv['entry']} vs raw {lv['entry_raw']}"
+    # RAW convention: entry == entry_raw (no spread shift).
+    assert abs(lv["entry"] - lv["entry_raw"]) < 1e-9, \
+        f"SHORT entry should equal raw: {lv['entry']} vs raw {lv['entry_raw']}"
     assert lv["entry_raw"] == 0.61000
-    # tp1 placed one spread NEARER (higher for a SHORT) than the raw zone edge.
+    # tp1 == tp1_raw (no spread shift).
     if lv.get("tp1_raw") is not None:
-        assert abs((lv["tp1"] - lv["tp1_raw"]) - spread) < 1e-9, \
-            f"SHORT tp1 shift wrong: {lv['tp1']} vs raw {lv['tp1_raw']}"
+        assert abs(lv["tp1"] - lv["tp1_raw"]) < 1e-9, \
+            f"SHORT tp1 should equal raw: {lv['tp1']} vs raw {lv['tp1_raw']}"
     assert abs(lv["sl"] - (0.61200 + spread)) < 1e-9
 
 
 def test_zero_spread_is_byte_identical():
-    """spread_pips == 0 -> placement is a no-op: every placed price == its *_raw."""
+    """spread_pips == 0 -> placement is a no-op: every placed price == its *_raw.
+    Under the RAW convention this holds for ANY spread_pips value, but the
+    zero case stays as the sanity floor."""
     conf = _conf(0.0)
     ob = {"high": 0.61000, "low": 0.60800,
           "direction": "bullish", "h1_atr": 0.0015}
@@ -91,10 +97,11 @@ def test_zero_spread_is_byte_identical():
 
 
 def test_simulator_fills_on_raw_line_not_placed():
-    """The simulator must trigger the fill on entry_raw (bid reaches the OB line),
-    NOT on the spread-placed entry — otherwise a LONG fills one spread too easily.
-    A bar low that reaches entry_raw fills; a bar low that only reaches the placed
-    entry (one spread short of raw) must NOT."""
+    """The simulator must trigger the fill on entry_raw (bid reaches the OB line).
+    Under the RAW convention entry == entry_raw by construction, so the fill
+    trigger and the placed entry are the same line — asserting that identity
+    is the regression guard against a future re-introduction of a shift that
+    would silently decouple the two again."""
     import backtest.h1_only_simulator as sim  # noqa: F401  (import guard only)
     conf = _conf(2.0)
     ob = {"high": 0.61000, "low": 0.60800,
@@ -103,9 +110,6 @@ def test_simulator_fills_on_raw_line_not_placed():
         conf, "LONG", ob, 0.61010, _frame(True), tp_targets="triple")
     entry_raw = lv["entry_raw"]
     entry_placed = lv["entry"]
-    # placed is ABOVE raw for a LONG; a fill trigger on placed would fire when the
-    # bid only fell to placed — that is one spread too shallow. Assert the ordering
-    # the simulator relies on (trigger must be the lower/raw line).
-    assert entry_placed > entry_raw
-    # sanity: bid must fall to entry_raw (below placed) for the ask to reach placed.
-    assert entry_raw < entry_placed
+    # RAW convention: placed == raw, so the fill trigger (on entry_raw) is
+    # exactly the traded entry — no spread gap between trigger and fill.
+    assert entry_placed == entry_raw
