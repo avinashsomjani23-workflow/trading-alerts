@@ -1,5 +1,3 @@
 {
-  "alerted": true,
-  "since_ist": "2026-07-30T09:36:09.702832",
-  "reason": "slate_date_2026-07-29_not_2026-07-30"
+  "alerted": false
 }
