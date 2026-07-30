@@ -58,6 +58,8 @@ ROOT_KEEP = {
     "DECISION_GUARDRAILS.md", # frozen rules, referenced at root by CLAUDE.md
     "Benchmarking.md",        # code-wired doc (stays root per FOLDER_MAP)
     "TRUTH_LEDGER.md",        # the column truth-ledger, root by convention + CI
+    "COLUMN_BUCKETS.md",      # generated + read at root by backtest/gen_column_buckets.py
+                              # and tests/test_truth_ledger.py; read before analysis (CLAUDE.md R7)
     "SWING_SWEEP_SPEC.md",    # referenced by the swing-sweep tooling
     "BACKTEST_LOG.md",        # written at root by backtest/update_registry.py
     # --- test scripts wired to run FROM ROOT by .github/workflows/tests.yml ---
