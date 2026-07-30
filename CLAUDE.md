@@ -2,117 +2,107 @@
 
 Automated SMC alert system. Goal: replicate veteran SMC judgment, not generate noise.
 
+**We are in the ANALYSIS / TESTING phase.** The system is built. The job now is to measure
+it on the backtest, keep the signals that filter out losing trades and amplify winning ones,
+and drop the rest. Not to keep building detection.
+
 ---
 
 ## NON-NEGOTIABLE — READ EVERY TURN
 
-Four rules. Violating any one means the response is wrong — rewrite before sending.
+Six rules. Break one and the response is wrong — rewrite before sending.
 
 **1. Code is truth.**
-- Before stating ANY column meaning, detection behaviour, or trading logic, quote the live `file:line` in the SAME response. No code quote = do not state it.
-- Column meanings: read the `file:line` pointer in `TRUTH_LEDGER.md`, then read that code. `TRUTH_LEDGER.md` is the ONLY doc trusted for columns.
-- Every other `.md` (handoffs, specs, findings) is background, not truth. If a doc and the code disagree, code wins and the doc is a stale trap — do not repeat it. (Docs have lied before: "dual entry" / "yfinance" long after both were removed.)
-- If you cannot quote the code, say "I haven't verified this" — never imply you did.
-- Changing code = update its comments/docstrings in the SAME edit. A comment that now lies is a bug (stale comments have burned hours). If behaviour moves, the words next to it move too.
-- **STALE-COMMENT CHECK (mandatory, every code edit).** Before finishing ANY code edit, re-read the comments and docstrings ATTACHED TO THE LINES YOU JUST CHANGED — nothing else, just the edited region I already have in front of me. For each, ask: does this comment still match the code now? If the edit changed a name, number, path, condition, or behaviour the comment describes, fix the comment in the SAME edit. This is cheap because it only looks at the diff I just made, never the whole system. Do not report an edit as done until this pass is run. (Rule 1 says a lying comment is a bug — this is the step that catches it at write-time, not weeks later.)
-- Session memories and recalled numbers/insights are HYPOTHESES, not facts. State one only after re-verifying against live code or an approved analysis `.md` (TRUTH_LEDGER.md, backtest/RECOMMENDATIONS.md) whose date is AFTER the last detection change. Detection changed = every older derived stat (%, WR, counts) is stale until recomputed. (The "93% with-trend" figure was quoted 2 weeks stale — this rule exists because of that.)
+- Quote the live `file:line` in the SAME response before stating any column meaning,
+  detection behaviour, or trading logic. No code quote = do not state it.
+- Column meanings come ONLY from `TRUTH_LEDGER.md` (its pointer, read against live code).
+  Every other `.md` is background — if a doc disagrees with code, code wins, doc is stale.
+- Can't quote the code? Say "I haven't verified this." Never imply you did.
+- **Stale-comment check:** after any edit, re-read the comments on the lines you changed;
+  if the edit changed a name, number, path, condition, or behaviour they describe, fix them
+  in the SAME edit. A comment that now lies is a bug.
 
-**2. One data file.**
-- The only analysis CSV is the one named in `backtest/results/CANONICAL.md`. Never `glob` for `trades.csv` and use whatever turns up — dozens of stale versions with different schemas have burned hours.
-- Confirm the column count matches CANONICAL before using it. Wrong count = wrong file = STOP.
+**2. Canonical = the active analysis run.**
+- The ONE truth CSV is whatever `backtest/results/CANONICAL.md` names. Read it EVERY time —
+  never `glob` for `trades.csv`. Confirm the column count before use; wrong count = STOP.
+- New run → repoint CANONICAL.md (path + shape) in the SAME commit and archive the old run.
 
-**3. No sycophancy.** Softening a real disagreement or praising before thinking causes wrong logic and lost money.
-- State disagreements. Delete "great question" / "you're right" — show reasoning instead.
-- Don't flip position under pushback without new evidence — hold and cite, or admit error with reasoning.
-- Don't call something "the big one" before proving it. Don't claim "verified" on a skim.
+**3. Validation & Holdout are SEALED.**
+- Discovery is the ONLY block open. NEVER read or compute on Validation/Holdout years
+  without explicit permission that turn — peeking burns the one-shot test.
+- Log any method change made after seeing a sealed block in `ANALYSIS_POINTERS.md`.
 
-**4. Response format.** Bullets and headers only, no paragraphs. Every word earns its place. Plain English, simple sentences.
+**4. Every pre-change number is stale.**
+- Detection changed = every %, win-rate, count, CI, and feature verdict from before is VOID
+  until re-derived from the new run. A remembered number is a HYPOTHESIS — re-verify against
+  the current canonical + live code before stating it.
 
-**5b. Alert-time is NOT "better" than fill-time — and never re-anchor without permission.**
-- Alert-time anchoring carries no quality bonus. Alert timing is subject to the PROXIMITY CAP (how close price must be before an alert fires) — it is a constrained snapshot, not a superior read. Never call a feature "better placed" or "well positioned" because it is alert-time. Judge every feature on its MECHANISM and its test result, never on when it is stamped.
-- NOTHING that is anchored to alert-time (or any time) gets re-anchored, moved, or re-timed without explicit permission in that turn. Proposing is fine; changing is not.
+**5. Question me — this system filters losers and amplifies winners, it does not flatter me.**
+- Every bias, hypothesis, and assumption I bring gets questioned and tested for relevance and
+  accuracy — including in the turn I bring it. Agreeing to please me loses money.
+- State disagreements plainly. Delete "great question" / "you're right" — show reasoning.
+- Don't flip under pushback without new evidence — hold and cite, or admit error with reasoning.
 
-**5. No 18-year backtest without an explicit ask.**
-- NEVER launch the full 18-yr run (2008→now) on your own judgment. It is slow and expensive. Run it ONLY when the user says so in that turn.
-- Default to SMART SAMPLING: a small, representative slice (a few months / a few pairs / a targeted window) proves or kills a hypothesis. Validate on a sample first; escalate to more data only when the sample is genuinely ambiguous, and say why.
-- Frozen cached windows (`backtest/cache/*.parquet`) and single-window replays are the first tool — no feed pull, no full run.
-
----
-
-## NON-NEGOTIABLE — DECISION GUARDRAILS
-
-- `DECISION_GUARDRAILS.md` holds the frozen edge-engine-phase rules.
-- Before any backtest/engine/detection decision, check the action against it. If it breaks a rule, FLAG THE RULE ID FIRST (e.g. "this breaks C5"), then help.
-- Those rules change only per that file's own change-log procedure — never in the same sitting as the decision they block.
-
----
-
-## What The System Actually Does (verified against code)
-
-**Live-traded instruments (5):** EURUSD, USDJPY, NZDUSD, USDCHF, GOLD (XAUUSD).
-- NAS100 + GBPUSD, AUDUSD, USDCAD, EURJPY, BTCUSD are `backtest_only: true` in `config.json` — never judge or tune live behaviour on them.
-
-**Timeframe:** H1 only. M15/M5 entry is retired (`Phase2_Alert_Engine.py:1400, 2635`). Phase 3 (`phase3_engine.py`) is dormant dead code on the old yfinance feed. Do not propose M5/M15 changes.
-
-**Live feed:** Twelve Data (`feed_adapter.py`). yfinance removed from live. Backtest data is MT5 2008+.
-
-**How a trade is found:**
-1. Dealing Range defines what we trade within.
-2. CHoCH or BOS inside the range identifies the relevant Order Block.
-3. When price approaches the OB, confluences are scored (FVG, liquidity sweep, kill zone, macro news, PD array alignment, OB/FVG freshness).
-
-**Phases:**
-- **Phase 1 — Scout** (`smc_detector.py`, `smc_radar.py`, `dealing_range.py`): dealing range, structure, OBs.
-- **Phase 2 — Trade Readiness** (`Phase2_Alert_Engine.py`): tradeability, limit orders, confidence score.
-- **Weekly Review** (`weekly_review.py`).
+**6. No full 18-yr run without an explicit ask.**
+- Never launch the full 2008→now run on your own judgment — slow and expensive.
+- Default to SMART SAMPLING: a few months / pairs / a targeted window proves or kills a
+  hypothesis. Cached windows (`backtest/cache/*.parquet`) and single-window replays first.
 
 ---
 
-## Rules
+## THE ANALYSIS ANSWER CONTRACT — every finding, fixed shape
 
-**Communication**
-- Plain English, no jargon unless necessary. Match length to the question — default short.
-- Recommend thinking-mode upfront for non-trivial methodology / architecture / scoring questions.
+Six beats, plain English, in order. Never dump raw stats.
 
-**Reading vs changing**
-- Reading is NEVER gated — read code, data, logs, config, state immediately without asking.
-- Approval gates apply ONLY to writing (edits, commits, pushes).
+1. **The idea** — what am I testing and why would a vet care.
+2. **What the data is** — pair, block (Discovery unless permitted), row count, news-clean.
+   In words, not just a filename.
+3. **The result** — the numbers; each number followed by ONE plain sentence of what it means.
+4. **Significant or not** — show the CI AND NAME THE METHOD (bootstrap / Wilson / whatever),
+   or the sample size N. Then say plainly: "real" or "thin — don't act." A number with no CI
+   and no N is not a finding, it's noise. Name any other stat used (FDR, DSR, calibration).
+5. **SMC cross-check** — does the mechanism agree? Agree → conclude. Disagree → DISCUSSION
+   POINT, not a filter: name the likely cause (detector bug, thin sample, TF mismatch). A
+   thin sample never overrides sound SMC; weak data never disproves a sound signal.
+6. **So what** — act, park, or kill. One line.
 
-**Code changes**
-- Never touch code without explicit approval. Trading-logic changes always need confirmation.
-- Flag architectural changes before acting; small obvious fixes after announcing.
-- One concept, one implementation. Duplicate logic is a bug, not design.
-
-**Data vs SMC methodology — never conclude on data alone**
-- Map every data finding against verified SMC methodology before it becomes a conclusion.
-- Data + SMC agree → conclude and act. Data + SMC disagree → DISCUSSION POINT, not a conclusion: surface it, name the likely cause (detector bug, thin sample, timeframe mismatch), brainstorm — do NOT score/filter on it yet.
-- A thin sample never overrides sound SMC logic, and weak data does not disprove a sound SMC signal.
-
-**Git workflow**
-- Approving an edit ≠ approving a push. Commit + push only on "ship it" / "push" / "publish".
-- On ship: stage only relevant files (never blanket `git add -A`), clear message, push `origin main`. Skip `.claude/settings.local.json` unless asked.
-- Repo lives in OneDrive — backtests commit local-only on dev, push only in CI (lock collisions). Pull only when the remote may have moved.
-
-**Quality**
-- Sanity check after every change. Flag design / logic / system problems proactively.
-- Anticipate edge cases. Present options when input is needed; never surface a problem without solutions.
-- Prefer low/no-maintenance solutions; flag and justify any medium/high-maintenance option.
-
-**Logging (log everything measurable)**
-- If a value can be measured, LOG IT — into the per-trade row (trades.csv) at minimum, and the email breakdown when it's a win-rate lever.
-- Always FLAG what you logged and where. If a new metric is NOT logged, say so and why.
-- **Truth-ledger gate:** no new trades.csv column or emitted insight ships without a row in `TRUTH_LEDGER.md` (source file:line, when stamped, population). Mutable OB state must be stamped `*_at_alert` at the yield, never read live at row-build time.
-
-**Dual perspective**
-- Trading logic: think like a vet who has placed thousands of trades — "would a vet respect this signal?"
-- Architecture: think like a senior Python architect — "is this clean, observable, maintainable?"
-- Surface where the two disagree. Methodology is open to evolution — raise better detection / scoring approaches.
+**Standing rules for every finding:**
+- **News-clean only.** News-mixed rows are filtered OUT of the population. Always.
+- **A signal is one hammer, not the wall.** Judge it on whether it correctly filters bad
+  trades and/or amplifies good ones — NEVER dismiss it because it doesn't move the whole book.
+  Many small correct signals stacked is the goal.
+- **Barely-insignificant → LOG it, don't bin it.** A near-miss (CI just crossing, small
+  effect) gets logged to `ANALYSIS_POINTERS.md` with its numbers. Nine years of one pair is
+  not the verdict — it may hold on Validation, Holdout, or another pair.
+- **Plain English always.** Explain idea, data, and result as to someone smart who doesn't
+  speak SMC. Define any term you must use.
+- The full 10-step method lives in `ANALYSIS_POINTERS.md` — followed there, not copied here.
 
 ---
 
-## Defensive Coding & Regression Guards — Judgment, Not Reflex
+## STILL BINDING (from the build phase — a change now must not leave these behind)
 
-- Add a guard only when a change can **silently** fail, be skipped, or regress in a way that corrupts alerts or P&L unnoticed. If the failure mode isn't real and silent, don't — a needless guard is dead weight.
-- **A guard must never break the thing it protects.** Guards live OUT of the live trade path: offline tests, CI gates, standalone scripts.
-- Do NOT put a new assertion / fail-loud raise INSIDE live alert generation or the row build unless the alternative is a silent WRONG alert. When in doubt, log-and-continue and catch it in a test.
-- Cheapest guard that bites is usually one regression test. When a guard IS warranted, state briefly: failure mode → the check (confirm out-of-band) → trading impact if unguarded.
+- **Log everything measurable** — into `trades.csv` at minimum, email breakdown when it's a
+  WR lever. Flag what you logged and where; if a metric is NOT logged, say so and why.
+- **Truth-ledger gate** — no new column or emitted insight ships without a row in
+  `TRUTH_LEDGER.md` (source `file:line`, when stamped, population). Mutable OB state stamped
+  `*_at_alert` at the yield, never read live at row-build.
+- **Edits need approval, then the stale-comment check.** No code touched without your OK;
+  trading-logic changes always confirmed. One concept, one implementation.
+
+---
+
+## REFERENCE — stable facts + pointers
+
+- **System:** 5 live pairs (EURUSD, USDJPY, NZDUSD, USDCHF, GOLD); others `backtest_only` in
+  `config.json` — never tune live on them. H1 only (M15/M5 retired, Phase 3 dormant). Live
+  feed Twelve Data (`feed_adapter.py`); backtest data MT5 2008+. Trade = Dealing Range →
+  CHoCH/BOS finds the Order Block → confluences scored as price approaches the OB.
+- **Reading is never gated** (code, data, logs, config, state — read immediately). Approval
+  gates apply ONLY to writing. Bullets/headers, not paragraphs. Default short.
+- **Git:** edit-approval ≠ push-approval; push only on "ship it". Stage relevant files only.
+  OneDrive repo — backtests commit local-only on dev, push in CI.
+- **Decision guardrails:** `DECISION_GUARDRAILS.md` is frozen. Breaking a rule → FLAG THE
+  RULE ID FIRST (e.g. "this breaks C5"), then help.
+- **Pointers:** playbook + parked ideas → `ANALYSIS_POINTERS.md` · columns → `TRUTH_LEDGER.md`
+  · active data → `backtest/results/CANONICAL.md` · reliability method → `backtest/RECOMMENDATIONS.md`
