@@ -1,168 +1,5 @@
 [
   {
-    "ts": "2026-07-13T19:35:59.584705",
-    "ts_human": "19:35 IST, 13 Jul 2026",
-    "ob_count_total": 4,
-    "ob_count_per_pair": {
-      "EURUSD": 0,
-      "USDJPY": 2,
-      "NZDUSD": 1,
-      "USDCHF": 0,
-      "GOLD": 1
-    },
-    "ob_age_hrs": 0.009119135833333332,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 0,
-    "issues": []
-  },
-  {
-    "ts": "2026-07-13T23:35:58.177562",
-    "ts_human": "23:35 IST, 13 Jul 2026",
-    "ob_count_total": 5,
-    "ob_count_per_pair": {
-      "EURUSD": 0,
-      "USDJPY": 2,
-      "NZDUSD": 2,
-      "USDCHF": 0,
-      "GOLD": 1
-    },
-    "ob_age_hrs": 0.009054187222222222,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 1,
-    "issues": [
-      {
-        "title": "10 silent Phase-1 degrade(s) in last 3h (pool_context_fail\u00d710)",
-        "action": "Check p1_degrade_log.json + P1 Actions tab. p1_email_fail=a digest was lost; walls_*_error=a pair degraded to a placeholder (no structure/OBs)."
-      }
-    ]
-  },
-  {
-    "ts": "2026-07-14T09:35:56.830494",
-    "ts_human": "09:35 IST, 14 Jul 2026",
-    "ob_count_total": 3,
-    "ob_count_per_pair": {
-      "EURUSD": 0,
-      "USDJPY": 2,
-      "NZDUSD": 0,
-      "USDCHF": 0,
-      "GOLD": 1
-    },
-    "ob_age_hrs": 0.009574168611111112,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 1,
-    "issues": [
-      {
-        "title": "5 silent Phase-1 degrade(s) in last 3h (pool_context_fail\u00d75)",
-        "action": "Check p1_degrade_log.json + P1 Actions tab. p1_email_fail=a digest was lost; walls_*_error=a pair degraded to a placeholder (no structure/OBs)."
-      }
-    ]
-  },
-  {
-    "ts": "2026-07-14T13:35:58.843946",
-    "ts_human": "13:35 IST, 14 Jul 2026",
-    "ob_count_total": 4,
-    "ob_count_per_pair": {
-      "EURUSD": 0,
-      "USDJPY": 2,
-      "NZDUSD": 1,
-      "USDCHF": 0,
-      "GOLD": 1
-    },
-    "ob_age_hrs": 0.008914278888888887,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 1,
-    "issues": [
-      {
-        "title": "15 silent Phase-1 degrade(s) in last 3h (pool_context_fail\u00d715)",
-        "action": "Check p1_degrade_log.json + P1 Actions tab. p1_email_fail=a digest was lost; walls_*_error=a pair degraded to a placeholder (no structure/OBs)."
-      }
-    ]
-  },
-  {
-    "ts": "2026-07-14T17:35:57.305789",
-    "ts_human": "17:35 IST, 14 Jul 2026",
-    "ob_count_total": 4,
-    "ob_count_per_pair": {
-      "EURUSD": 0,
-      "USDJPY": 2,
-      "NZDUSD": 1,
-      "USDCHF": 0,
-      "GOLD": 1
-    },
-    "ob_age_hrs": 0.0090669275,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 1,
-    "issues": [
-      {
-        "title": "15 silent Phase-1 degrade(s) in last 3h (pool_context_fail\u00d715)",
-        "action": "Check p1_degrade_log.json + P1 Actions tab. p1_email_fail=a digest was lost; walls_*_error=a pair degraded to a placeholder (no structure/OBs)."
-      }
-    ]
-  },
-  {
-    "ts": "2026-07-14T20:36:03.943950",
-    "ts_human": "20:36 IST, 14 Jul 2026",
-    "ob_count_total": 7,
-    "ob_count_per_pair": {
-      "EURUSD": 1,
-      "USDJPY": 2,
-      "NZDUSD": 1,
-      "USDCHF": 1,
-      "GOLD": 2
-    },
-    "ob_age_hrs": 0.009571681666666667,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 1,
-    "issues": [
-      {
-        "title": "15 silent Phase-1 degrade(s) in last 3h (pool_context_fail\u00d715)",
-        "action": "Check p1_degrade_log.json + P1 Actions tab. p1_email_fail=a digest was lost; walls_*_error=a pair degraded to a placeholder (no structure/OBs)."
-      }
-    ]
-  },
-  {
-    "ts": "2026-07-15T00:35:55.368406",
-    "ts_human": "00:35 IST, 15 Jul 2026",
-    "ob_count_total": 7,
-    "ob_count_per_pair": {
-      "EURUSD": 1,
-      "USDJPY": 2,
-      "NZDUSD": 1,
-      "USDCHF": 1,
-      "GOLD": 2
-    },
-    "ob_age_hrs": 0.008099420555555556,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 1,
-    "issues": [
-      {
-        "title": "10 silent Phase-1 degrade(s) in last 3h (pool_context_fail\u00d710)",
-        "action": "Check p1_degrade_log.json + P1 Actions tab. p1_email_fail=a digest was lost; walls_*_error=a pair degraded to a placeholder (no structure/OBs)."
-      }
-    ]
-  },
-  {
     "ts": "2026-07-15T09:35:55.181708",
     "ts_human": "09:35 IST, 15 Jul 2026",
     "ob_count_total": 7,
@@ -987,6 +824,139 @@
       "GOLD": 2
     },
     "ob_age_hrs": 0.00898512111111111,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
+  },
+  {
+    "ts": "2026-07-28T21:36:12.953895",
+    "ts_human": "21:36 IST, 28 Jul 2026",
+    "ob_count_total": 7,
+    "ob_count_per_pair": {
+      "EURUSD": 1,
+      "USDJPY": 2,
+      "NZDUSD": 1,
+      "USDCHF": 1,
+      "GOLD": 2
+    },
+    "ob_age_hrs": 0.00950985611111111,
+    "gemini_fails_3h": 1,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
+  },
+  {
+    "ts": "2026-07-29T10:35:57.445386",
+    "ts_human": "10:35 IST, 29 Jul 2026",
+    "ob_count_total": 10,
+    "ob_count_per_pair": {
+      "EURUSD": 2,
+      "USDJPY": 2,
+      "NZDUSD": 2,
+      "USDCHF": 2,
+      "GOLD": 2
+    },
+    "ob_age_hrs": 0.008264810833333334,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
+  },
+  {
+    "ts": "2026-07-29T13:36:07.723982",
+    "ts_human": "13:36 IST, 29 Jul 2026",
+    "ob_count_total": 10,
+    "ob_count_per_pair": {
+      "EURUSD": 2,
+      "USDJPY": 2,
+      "NZDUSD": 2,
+      "USDCHF": 2,
+      "GOLD": 2
+    },
+    "ob_age_hrs": 0.008544838333333332,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
+  },
+  {
+    "ts": "2026-07-29T17:36:18.660535",
+    "ts_human": "17:36 IST, 29 Jul 2026",
+    "ob_count_total": 9,
+    "ob_count_per_pair": {
+      "EURUSD": 3,
+      "USDJPY": 2,
+      "NZDUSD": 1,
+      "USDCHF": 1,
+      "GOLD": 2
+    },
+    "ob_age_hrs": 0.01027964388888889,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
+  },
+  {
+    "ts": "2026-07-29T21:36:16.324211",
+    "ts_human": "21:36 IST, 29 Jul 2026",
+    "ob_count_total": 5,
+    "ob_count_per_pair": {
+      "EURUSD": 2,
+      "USDJPY": 0,
+      "NZDUSD": 0,
+      "USDCHF": 1,
+      "GOLD": 2
+    },
+    "ob_age_hrs": 0.009294364722222222,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
+  },
+  {
+    "ts": "2026-07-30T10:36:14.785432",
+    "ts_human": "10:36 IST, 30 Jul 2026",
+    "ob_count_total": 6,
+    "ob_count_per_pair": {
+      "EURUSD": 0,
+      "USDJPY": 1,
+      "NZDUSD": 2,
+      "USDCHF": 2,
+      "GOLD": 1
+    },
+    "ob_age_hrs": 0.009593414722222223,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
+  },
+  {
+    "ts": "2026-07-30T14:35:58.423076",
+    "ts_human": "14:35 IST, 30 Jul 2026",
+    "ob_count_total": 6,
+    "ob_count_per_pair": {
+      "EURUSD": 0,
+      "USDJPY": 0,
+      "NZDUSD": 2,
+      "USDCHF": 2,
+      "GOLD": 2
+    },
+    "ob_age_hrs": 0.008030374722222221,
     "gemini_fails_3h": 0,
     "yfinance_stale_3h": 0,
     "chart_fails_3h": 0,
