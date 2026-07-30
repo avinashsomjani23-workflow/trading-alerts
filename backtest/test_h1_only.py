@@ -135,35 +135,36 @@ def test_levels_dual_entry():
         print(f"    lv_mid  = {lv_mid}")
         assert False, "levels not valid (see lv_prox/lv_mid above)"
 
-    # entry_raw = the raw OB geometry (proximal / midpoint). `entry` is the
-    # spread-PLACED execution price (2026-07-22): LONG entry_raw + spread.
+    # RAW convention (2026-07-30): entry is the raw OB line (no spread). entry_raw
+    # equals entry. The ONLY spread is on the stop (distal - spread).
     ok &= check(abs(lv_prox["entry_raw"] - proximal_expected) < 1e-6,
                 f"proximal entry_raw == OB proximal ({lv_prox['entry_raw']} vs {proximal_expected})")
     ok &= check(abs(lv_mid["entry_raw"] - midpoint_expected) < 1e-6,
                 f"50pct entry_raw == OB midpoint ({lv_mid['entry_raw']} vs {midpoint_expected})")
-    ok &= check(abs(lv_prox["entry"] - (proximal_expected + spread)) < 1e-6,
-                f"proximal entry placed == proximal + spread ({lv_prox['entry']} vs {proximal_expected + spread})")
+    ok &= check(abs(lv_prox["entry"] - proximal_expected) < 1e-6,
+                f"proximal entry == OB proximal, raw ({lv_prox['entry']} vs {proximal_expected})")
+    ok &= check(abs(lv_prox["entry"] - lv_prox["entry_raw"]) < 1e-6,
+                "entry == entry_raw (no spread on entry)")
     ok &= check(abs(lv_prox["sl"] - lv_mid["sl"]) < 1e-6,
                 "SL identical for both entry zones")
     ok &= check(abs(lv_prox["sl"] - sl_expected) < 1e-6,
                 f"SL == distal - spread ({lv_prox['sl']} vs {sl_expected})")
 
-    # R-distance relation on the TRADED (placed) entry -> SL. LONG entry moved UP
-    # by spread and SL moved DOWN by spread, so R = OB_width + 2*spread (proximal)
-    # / OB_width/2 + 2*spread (50pct). Wider than pre-placement by one spread — the
-    # honest risk of buying at the ask with the stop below the OB distal.
+    # R-distance = raw entry -> stop. The stop carries the ONE spread (distal -
+    # spread), so R = OB_width + 1*spread (proximal) / OB_width/2 + 1*spread (50pct).
+    # entry no longer moves, so the whole spread cost is the stop buffer alone.
     r_prox = abs(lv_prox["entry"] - lv_prox["sl"])
     r_mid = abs(lv_mid["entry"] - lv_mid["sl"])
     ok &= check(r_mid < r_prox,
                 f"50pct R-distance smaller than proximal ({r_mid:.5f} < {r_prox:.5f})")
     ob_w = ob["high"] - ob["low"]
     spread = pair_conf["spread_pips"] * 0.0001
-    r_mid_expected = ob_w / 2.0 + 2.0 * spread
-    r_prox_expected = ob_w + 2.0 * spread
+    r_mid_expected = ob_w / 2.0 + 1.0 * spread
+    r_prox_expected = ob_w + 1.0 * spread
     ok &= check(abs(r_mid - r_mid_expected) < 1e-6,
-                f"50pct R == OB_width/2 + 2*spread ({r_mid:.5f} vs {r_mid_expected:.5f})")
+                f"50pct R == OB_width/2 + 1*spread ({r_mid:.5f} vs {r_mid_expected:.5f})")
     ok &= check(abs(r_prox - r_prox_expected) < 1e-6,
-                f"proximal R == OB_width + 2*spread ({r_prox:.5f} vs {r_prox_expected:.5f})")
+                f"proximal R == OB_width + 1*spread ({r_prox:.5f} vs {r_prox_expected:.5f})")
 
     # TP1: because 50pct entry has tighter R, its 1.5R threshold is lower,
     # so it can qualify a NEARER opposing swing. Proximal needs a further

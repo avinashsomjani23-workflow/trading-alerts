@@ -1548,28 +1548,19 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
       - "50pct" (backtest only)    -> OB midpoint. Deeper fill, tighter R.
     Both entries share the same SL (OB distal +/- 1x spread).
 
-    SPREAD-AWARE EXECUTION PLACEMENT (2026-07-22): the chart is the BID; a LONG
-    fills at the ASK (= bid + spread) and exits by selling at the BID. So the raw
-    OB/swing levels are shifted by one spread to the price a live limit actually
-    fills at — placement, NOT a P&L cost bolted on:
-      - ENTRY shifts TOWARD price so the limit fills right at the intended zone
-        instead of needing price to travel one extra spread (LONG entry + spread,
-        SHORT entry - spread). Without this the ask/bid never reaches a limit sat
-        on the raw line and the fill is missed.
-      - TP shifts NEARER by one spread so it triggers before the reversal eats the
-        exit (LONG tp - spread, SHORT tp + spread). A LONG sells at the bid, so the
-        bid must reach TP; front-running by a spread makes it fill at the zone.
-      - SL keeps its OB-distal +/- spread buffer (unchanged).
-    Entry, SL and TP2/pool-separation logic run on the RAW geometry; only the FINAL
-    emitted execution prices are shifted (raw values logged as *_raw for audit). Live
-    and backtest apply the identical shift so the simulator fills where live would.
-    The TP1 RR band, HOWEVER, is graded on the PLACED geometry (2026-07-27): entry
-    and TP1 are pushed toward each other by one spread each, so a pool graded profit-
-    side on the raw lines can fill on the LOSS side of the placed entry. Grading the
-    band on the placed prices (what actually trades) is the only grade that can't
-    emit a physically-impossible loss-side "tp1" (scan-log gate G10).
+    SPREAD MODEL (2026-07-30, "raw" convention): entry and TP are the RAW OB /
+    zone-edge levels — NO spread shift. The spread lives in exactly ONE place: the
+    stop, widened by one spread away from entry (LONG sl below, SHORT sl above) as a
+    worst-case execution buffer. Rationale: live prices come from a different feed
+    (Twelve Data) than the MT5 backtest, so shifting entry/TP by a modelled spread
+    added noise, not realism — the only defensible, uniform spread cost is on the
+    stop. This REPLACES the 2026-07-22 three-leg shift (entry +spread, TP -spread,
+    SL -spread), which double-counted the stop (one spread here + one more in the
+    simulator) and grew every 1R by ~8%. Now there is one spread, on the stop, once.
+    The TP1 RR band is graded on the RAW geometry (raw entry -> 1-spread stop) —
+    exactly the geometry the trade fills and exits on.
 
-    SL: H1 OB distal +/- 1x spread.
+    SL: H1 OB distal +/- 1x spread (the only spread in the model).
 
     TP swings: H1 swings at lookback=3. Only UNBROKEN pools are targets — a swing
     is dropped once a later candle SWEPT it (wick past by >= sweep pierce) or
@@ -1626,19 +1617,18 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     _pip_for_dp = {5: 0.0001, 3: 0.01, 2: 1.0}.get(dp, 0.0001)
     spread_val = pair_conf.get("spread_pips", 2) * _pip_for_dp
 
-    # Spread-aware execution placement (2026-07-22). These helpers are CALLED only
-    # at the final `out` dict — entry/risk/RR grading and TP selection below all run
-    # on the RAW geometry, so trade selection is unchanged. Entry shifts TOWARD price
-    # (LONG +, SHORT -) so a limit fills at the zone; TP shifts NEARER (LONG -,
-    # SHORT +) so it fills before the reversal. spread_val==0 -> no-op, so the *_raw
-    # and placed prices coincide and nothing changes.
+    # Spread model (2026-07-30, "raw" convention): entry and TP are RAW — the spread
+    # lives ONLY on the stop (below). These placement helpers are now IDENTITY (no
+    # shift); they are kept as pass-throughs so the emitted price and its *_raw twin
+    # coincide and every downstream reader (fill trigger on entry_raw, *_raw audit
+    # columns) keeps working unchanged. The prior 2026-07-22 entry+/TP- shift was
+    # removed because live and MT5 use different feeds, so a modelled entry/TP shift
+    # added noise, and it double-counted the stop spread.
     def _place_entry(px):
-        return px + spread_val if bias == "LONG" else px - spread_val
+        return px
 
     def _place_tp(px):
-        if px is None:
-            return None
-        return px - spread_val if bias == "LONG" else px + spread_val
+        return px
 
     # H1 OB geometry. Strict read -- schema drift returns invalid rather than guess.
     try:
@@ -1689,26 +1679,21 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     if risk == 0:
         return {"valid": False, "reason": "Zero risk -- entry == SL."}
 
-    # PLACED geometry for RR grading (2026-07-27). The trade is graded on what it
-    # ACTUALLY executes, not the raw OB lines. Entry fills at _place_entry(entry)
-    # and TP fills at _place_tp(tp); the simulator's R-distance is measured from the
-    # placed entry to the SPREAD-WIDENED stop (raw sl is already ob-distal -1 spread
-    # here, the simulator widens it by one more — mirror that so graded R == traded
-    # R). Grading on the raw gap let a pool whose profit room is entirely eaten by
-    # the two opposite spread shifts (entry moves toward price, TP moves nearer)
-    # still pass the [0.5, 4.0]R band, then emit a TP1 on the LOSS side of entry —
-    # a physically-impossible "tp1" loser (scan-log G10 rule c). Grading on the
-    # placed prices makes such a pool score <= 0R and fail the floor honestly.
-    entry_placed = _place_entry(entry)
-    sl_placed = (sl - spread_val) if bias == "LONG" else (sl + spread_val)
+    # RR grading geometry (2026-07-30, raw convention). The trade is graded on the
+    # geometry it ACTUALLY fills and exits on: RAW entry -> the 1-spread stop (`sl`,
+    # already ob-distal -/+ 1 spread from above). No second spread anywhere now — the
+    # simulator no longer re-widens the stop, so graded R == traded R with one spread.
+    # `_placed_rr` keeps its name and callers; the "placed" prices are now the raw
+    # prices (the placement helpers are identity). A pool whose zone edge lands
+    # at/behind entry still scores <= 0R and correctly fails the floor.
+    entry_placed = entry
+    sl_placed = sl
     risk_placed = abs(entry_placed - sl_placed)
 
     def _placed_rr(px):
-        """RR of a raw target level on the PLACED geometry (what actually trades).
-        Signed toward profit: positive = profit side of the placed entry, <= 0 =
-        at/behind it (no profit room after spread)."""
-        placed = _place_tp(px)
-        signed = (placed - entry_placed) if bias == "LONG" else (entry_placed - placed)
+        """RR of a target level on the traded geometry (raw entry -> 1-spread stop).
+        Signed toward profit: positive = profit side of entry, <= 0 = at/behind it."""
+        signed = (px - entry_placed) if bias == "LONG" else (entry_placed - px)
         return signed / risk_placed if risk_placed > 0 else 0.0
 
     # TP swings from H1 at lookback=3. Opposing swings only, past entry.
@@ -1795,17 +1780,15 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
         tp1_source = "fallback_1to1"
         tp1_zone_source = "wick"
 
-    # Placement backstop (2026-07-27). Even the 1:1 fallback (tp1 = entry +/- risk)
-    # loses its profit room on a razor-thin OB where risk <= 2x spread: the two
-    # opposite spread shifts leave placed TP1 at/behind placed entry. Such a setup
-    # is untradeable — there is no room to take profit after spread — so it fails
-    # validity exactly like a zero-risk entry. Live simply does not fire; the
-    # backtest drops the row. Graded on the placed TP1 (_placed_rr): <= 0R means
-    # loss-side or flush with entry.
+    # Profit-room backstop (2026-07-30, raw convention). With entry and TP both raw
+    # and the stop the only spread-widened leg, the 1:1 fallback (tp1 = entry +/-
+    # risk) is on the profit side by construction, so this is now only a defensive
+    # guard against a degenerate zero/inverted target. <= 0R means TP1 is at or
+    # behind entry -> untradeable; live does not fire, the backtest drops the row.
     if _placed_rr(tp1) <= 0:
         return {"valid": False,
-                "reason": ("No profit room after spread -- placed TP1 is not on the "
-                           "profit side of the placed entry (OB thinner than 2x spread).")}
+                "reason": ("No profit room -- TP1 is not on the profit side of "
+                           "entry (degenerate target).")}
 
     # TP2: next opposing swing past TP1, only if it is a DIFFERENT liquidity pool.
     # Two opposing swings are the same pool when EITHER:
@@ -1875,16 +1858,16 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
 
     out = {
         "valid": True,
-        # entry/tp1 are the SPREAD-PLACED execution prices (the live limit / target
-        # actually sits here). entry_raw/tp1_raw are the raw OB/zone geometry the
-        # RR band was graded on — logged so the placement shift is a clean audit
-        # (same pattern as sl_raw/sl_initial in the simulator).
+        # entry/tp1 are RAW OB/zone-edge prices (2026-07-30 raw convention — no
+        # spread shift). entry_raw/tp1_raw are kept and equal entry/tp1 now (placement
+        # is identity), so the fill trigger (simulator reads entry_raw) and the *_raw
+        # audit columns keep working. The only spread is on `sl` below.
         "entry": round(_place_entry(entry), dp),
         "entry_raw": round(entry, dp),
-        "sl": round(sl, dp),
-        "tp1": round(_place_tp(tp1), dp),   # spread-placed (fills before reversal)
-        "tp1_raw": round(tp1, dp),          # zone-edge TP1 pre-shift (RR graded here)
-        "rr": round(tp1_rr, 2),         # RR of the traded TP1, PLACED geometry (what fills)
+        "sl": round(sl, dp),                # OB distal -/+ 1 spread (the only spread)
+        "tp1": round(_place_tp(tp1), dp),   # raw zone-edge TP1
+        "tp1_raw": round(tp1, dp),          # == tp1 (RR graded on this raw geometry)
+        "rr": round(tp1_rr, 2),             # RR of the traded TP1 (raw entry -> stop)
         "entry_source": entry_source,
         "tp1_source": tp1_source,       # "swing" | "fallback_1to1"
         # True when NO unbroken opposing pool landed in the [0.5, 4.0]R band and

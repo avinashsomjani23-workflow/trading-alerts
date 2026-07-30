@@ -660,7 +660,7 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
     if "tp1_rr" in df.columns:
         tp1 = df["tp1_rr"].astype(float)
         sections.append(("TP1 R-multiple", [
-            ("Restore live's 1.5R floor (TP1 R >= 1.5)", tp1 >= 1.5),
+            ("Raise TP1 floor to 1.5R (live floor is 0.5R)", tp1 >= 1.5),
             ("Only TP1 R >= 2.0",        tp1 >= 2.0),
             ("Only TP1 R >= 2.5",        tp1 >= 2.5),
         ]))
@@ -1180,7 +1180,6 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
             "Killzone Alignment":      _v(prox, "killzone_alignment"),
             "Day of Week":             zr_dow,
             "Entry Price (Proximal)":  _v(prox, "entry"),
-            "Stop Loss (raw)":         _v(prox, "sl_raw"),
             "Stop Loss":               _v(prox, "sl_initial"),
             "Take Profit 1":           _v(prox, "tp1"),
             "Take Profit 2":           _v(prox, "tp2"),
@@ -1293,8 +1292,9 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "setup_id",
         "pair", "alert_ts", "fill_ts", "exit_ts", "session",
         "direction", "event", "entry_zone",
-        # entry/tp1/tp2 = SPREAD-PLACED execution levels; *_raw = pre-placement OB/
-        # zone geometry (2026-07-22 spread shift audit, mirrors sl_raw/sl_initial).
+        # entry/tp1/tp2 = RAW OB/zone execution levels (2026-07-30 raw convention).
+        # *_raw twins EQUAL them now (spread only on the stop); sl_raw == sl_initial.
+        # Kept as columns so downstream readers don't break.
         "entry", "entry_raw", "sl_raw", "sl_initial",
         "tp1", "tp1_raw", "tp2", "tp2_raw", "tp1_rr", "tp2_rr",
         # TP-placement audit (2026-07-15): tp1/tp2 above are the ZONE-EDGE
@@ -1454,14 +1454,12 @@ _EXCEL_COL_NAMES = {
     "h1_trend":          "H1 Trend",
     "trend_alignment":   "Trend Alignment",
     "entry_zone":        "Entry Type",
-    # levels
+    # levels (raw convention 2026-07-30: entry/tp are raw, spread only on the stop;
+    # the redundant *_raw twins are dropped from the Excel sheet).
     "entry":             "Entry Price",
-    "entry_raw":         "Entry Price (raw)",
     "sl_initial":        "Stop Loss",
     "tp1":               "Take Profit 1",
-    "tp1_raw":           "Take Profit 1 (raw)",
     "tp2":               "Take Profit 2",
-    "tp2_raw":           "Take Profit 2 (raw)",
     "tp1_rr":            "TP1 Reward:Risk",
     "tp2_rr":            "TP2 Reward:Risk",
     # PD array

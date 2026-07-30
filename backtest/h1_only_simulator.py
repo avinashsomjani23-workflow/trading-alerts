@@ -68,12 +68,13 @@ MSS_BODY_ATR_MULT = 1.70
 # late reversal is still caught. Diagnostic only.
 SL_SWEEP_LOOKBACK_BARS = MAX_HOLD_H1_BARS
 
-# Backtest trade-existence floor (2026-07). Live rejects any setup whose best
-# target clears < 1.5R; the backtest relaxes that to 0.5R so we can study the
-# sub-1.5R population live never sees. This ONLY adds previously-rejected trades
-# — TP1 selection still prefers a >= 1.5R target when one exists, so every trade
-# that lives today keeps its exact TP1 (winners are never cut). See
-# compute_phase2_levels(tp1_min_rr=...).
+# TP1 RR floor. As of 2026-07-15 LIVE also floors at 0.5R (compute_phase2_levels
+# default tp1_min_rr=0.5), so this is NOT a backtest-only relaxation anymore —
+# live and backtest share the 0.5R floor and surface the same population. TP1
+# selection takes the NEAREST unbroken opposing pool whose PLACED zone-edge RR
+# lands in [0.5R, TP1_MAX_RR(4.0)]; if none qualifies the trade still fires on a
+# mechanical 1:1 fallback (no pool). See compute_phase2_levels(tp1_min_rr=...) /
+# _pick_tp1.
 BACKTEST_TP1_MIN_RR = 0.5
 
 # Weekend-flat (user rule, 2026-06-21): never hold a position into the FX
@@ -504,9 +505,11 @@ def _simulate_single_entry(
 ) -> Optional[Dict[str, Any]]:
     """Simulate one proximal trade for one OB-touch alert.
 
-    Returns a row dict or None if the trade is invalid (e.g. no TP1 clearing
-    1.5R — same gate as live). Returns a "never_filled" row when the limit is
-    not touched within the hold window, so we can count the miss.
+    Returns a row dict or None if the trade is invalid (entry would chase price,
+    zero risk, or an OB thinner than the spread leaves no profit room — the same
+    validity rules as live; a below-0.5R pool is NOT invalid, it routes to the 1:1
+    fallback). Returns a "never_filled" row when the limit is not touched within
+    the hold window, so we can count the miss.
     """
     ob = alert["ob"]
     pair = alert["pair"]
@@ -532,8 +535,8 @@ def _simulate_single_entry(
     # closed bars are those indexed strictly before alert_ts, clamped to live
     # P2's 200-bar fetch window (TRUTH_FIXES_SPEC_2 T5). Passing the full df_h1
     # let compute_phase2_levels.get_swing_points pick opposing swings that formed
-    # AFTER the alert (future liquidity), biasing both TP selection and the 1.5R
-    # validity gate optimistically; passing UNBOUNDED past history made TP
+    # AFTER the alert (future liquidity), biasing both TP selection and the 0.5R
+    # TP1-floor grade optimistically; passing UNBOUNDED past history made TP
     # selection depend on run start date instead of matching live. The forward
     # fill-walk below intentionally keeps the FULL df_h1 -- it must see the
     # future to simulate how the trade plays out.
@@ -557,12 +560,11 @@ def _simulate_single_entry(
                   reason=levels.get("reason", "levels_invalid")
                          if isinstance(levels, dict) else "levels_none")
         return None
-    # entry = the SPREAD-PLACED execution price (the ask you pay on a LONG / bid on
-    # a SHORT) — used for R-distance, MFE/MAE anchor and all exit math. entry_raw =
-    # the raw OB edge the live limit sits behind. Backtest bars are BID (chart), so
-    # the FILL is triggered on entry_raw (bid must reach the OB line) while the fill
-    # PRICE is entry (the spread-placed level). Falls back to entry if a caller ever
-    # returns no entry_raw (spread==0 -> identical anyway). 2026-07-22.
+    # entry = the RAW OB execution price (2026-07-30 raw convention — no spread on
+    # entry) — used for R-distance, MFE/MAE anchor and all exit math. entry_raw is
+    # the same raw OB edge (kept as the fill trigger; bars are BID so the fill fires
+    # when the chart reaches this line). entry == entry_raw now. Falls back to entry
+    # if a caller ever omits entry_raw.
     entry  = float(levels["entry"])
     entry_raw = float(levels.get("entry_raw", levels["entry"]))
     sl     = float(levels["sl"])
@@ -577,10 +579,10 @@ def _simulate_single_entry(
     #     recipes target them via walk_multileg string specs.
     tp_nextpool = levels.get("tp_nextpool")
     tp2    = float(tp_nextpool) if tp_nextpool is not None else None
-    # Raw (pre-spread-placement) execution levels, logged alongside the placed
-    # entry/tp1/tp2 so the 2026-07-22 spread shift is a clean per-row audit (same
-    # pattern as sl_raw vs sl_initial). tp2 local == the next-pool runner, so its
-    # raw comes from tp_nextpool_raw. None-safe: spread==0 -> raw == placed.
+    # *_raw execution levels. Under the raw model (2026-07-30) they EQUAL the emitted
+    # entry/tp1/tp2 (no spread shift), kept as columns so audit/Excel readers don't
+    # break. tp2 local == the next-pool runner, so its raw comes from tp_nextpool_raw.
+    # None-safe.
     tp1_raw = levels.get("tp1_raw")
     _tp_np_raw = levels.get("tp_nextpool_raw")
     tp2_raw = float(_tp_np_raw) if _tp_np_raw is not None else None
@@ -607,37 +609,15 @@ def _simulate_single_entry(
     tp2_collapsed_to_tp1 = levels.get("tp2_collapsed_to_tp1", False)
     tp_targets = levels.get("tp_targets", "triple")
 
-    # Apply pair spread to widen SL (worst-case execution). spread_pips is
-    # the pair's typical broker spread. pip_size derived from decimal_places:
-    # 4-5dp instruments (EURUSD, NZDUSD, USDCHF) -> pip = 0.0001
-    # 2-3dp instruments (USDJPY, GOLD, NAS100)   -> pip = 0.01
-    # For a LONG, SL sits below entry; spread pushes SL further down (worse).
-    # For a SHORT, SL sits above entry; spread pushes SL further up (worse).
-    # ENTRY and TP are already SPREAD-PLACED upstream in compute_phase2_levels
-    # (2026-07-22): entry shifted toward price (fills at the zone), TP shifted
-    # nearer (fills before the reversal). This block widens ONLY the SL, using the
-    # SAME spread_pips/pip_size convention, so all three legs share one spread
-    # model. Slippage and swap are NOT modelled (user decision). RCA #9.
-    #
-    # CRYPTO EXCEPTION: BTC is quoted in dollars and its spread is stated in
-    # dollars (~$20), not in 0.01 "pips". Using pip_size=0.01 would shrink a $20
-    # spread to $0.20 (100x too small) and flatter RR. For crypto, spread_pips is
-    # read as a DOLLAR spread directly (pip_size = 1.0).
-    spread_pips = float(pair_conf.get("spread_pips", 0.0))
-    decimal_places = int(pair_conf.get("decimal_places", 5))
-    if pair_conf.get("pair_type") == "crypto":
-        pip_size = 1.0
-    else:
-        pip_size = 0.01 if decimal_places <= 3 else 0.0001
-    spread_price = spread_pips * pip_size
-    # Pre-spread stop (the raw OB distal boundary), logged so a spread audit is a
-    # clean two-column diff (sl_raw vs sl_initial) instead of a reconstruction.
+    # SPREAD MODEL (2026-07-30, "raw" convention): the ONE spread in the system is
+    # applied ONCE, upstream in compute_phase2_levels, which returns `sl` already
+    # widened one spread past the OB distal (LONG below / SHORT above). Entry and TP
+    # come back RAW. The simulator must NOT re-widen the stop — doing so double-
+    # counted the spread and grew every 1R by ~8% (the pre-2026-07-30 bug). So `sl`
+    # is used as-is. sl_raw is kept as an audit twin but now EQUALS sl (the one
+    # spread is already in it upstream); it stays a column so downstream readers and
+    # the Excel audit don't break. Slippage and swap are NOT modelled (user decision).
     sl_raw = sl
-    if spread_price > 0:
-        if bias == "LONG":
-            sl = sl - spread_price
-        else:
-            sl = sl + spread_price
 
     r_distance = abs(entry - sl)
     if r_distance <= 0:
@@ -836,11 +816,11 @@ def _simulate_single_entry(
             # Monday rather than being killed -- same as any other no-touch bar.
             friday_evening = (WEEKEND_FLAT and ts.dayofweek == 4
                               and ts.hour >= WEEKEND_FLAT_HOUR_UTC)
-            # Pending limit fill: the FILL TRIGGER is the raw OB line (bars are BID;
-            # a LONG limit sat at entry_raw+spread fills when the ASK reaches it, i.e.
-            # the bid/chart reaches entry_raw). Long triggers when bar.low <= entry_raw,
-            # short when bar.high >= entry_raw. The recorded fill PRICE is `entry` (the
-            # spread-placed ask/bid actually paid) — set as mfe/mae anchor below.
+            # Pending limit fill: the FILL TRIGGER is the OB line entry_raw (bars are
+            # BID; the chart must reach the limit). Long triggers when bar.low <=
+            # entry_raw, short when bar.high >= entry_raw. Under the raw model
+            # entry == entry_raw (no spread on entry), so the fill price `entry` is the
+            # same line — set as the mfe/mae anchor below.
             if not friday_evening and (
                     (bias == "LONG" and bar_lo <= entry_raw) or
                     (bias == "SHORT" and bar_hi >= entry_raw)):
@@ -1598,10 +1578,10 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     # from real, frozen source columns so every run reproduces them deterministically.
     #
     #   sl_distance_atr : |entry - sl_initial| / OB-formation ATR. Risk width in
-    #     ATR. Uses sl_initial (the stop actually traded, spread-widened), NOT
-    #     sl_raw. This is ~1 for most trades (the "one H1 bar" instant-death axis).
-    #     Point-in-time clean: entry + sl + ATR are all known at fill. `sl` here is
-    #     the traded initial stop (sl_initial in the row).
+    #     ATR. Uses sl_initial = the traded stop (OB distal -/+ 1 spread). Under the
+    #     raw model sl_raw == sl_initial, so this is the one true stop distance.
+    #     This is ~1 for most trades (the "one H1 bar" instant-death axis).
+    #     Point-in-time clean: entry + sl + ATR are all known at fill.
     sl_distance_atr = round(abs(entry - sl) / _h1_atr, 3) \
         if (_h1_atr and entry is not None and sl is not None) else None
 
@@ -1716,15 +1696,14 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "model":         "h1_only",
         "event":         _event_label(bos_tag, bos_tier),
         "entry_zone":    entry_zone,
-        # entry/tp1/tp2 are the SPREAD-PLACED execution levels (the price the trade
-        # actually fills/exits at). entry_raw/tp1_raw/tp2_raw are the raw OB/zone
-        # geometry before the 2026-07-22 placement shift — logged so the shift is a
-        # clean per-row diff (same rationale as sl_raw vs sl_initial). None-safe.
+        # entry/tp1/tp2 are RAW OB/zone-edge levels (2026-07-30 raw convention — no
+        # spread shift). entry_raw/tp1_raw/tp2_raw equal them now (kept so the fill
+        # trigger and audit columns don't break). None-safe.
         "entry":         entry,
         "entry_raw":     entry_raw,
-        # sl_raw = the raw OB distal (pre-spread) stop. sl_initial = sl_raw widened
-        # by one spread (the stop actually traded). Logging both makes a spread
-        # audit a clean diff instead of reconstructing sl_raw from sl_initial.
+        # sl_raw == sl_initial now: both are the traded stop = OB distal -/+ 1 spread
+        # (the single spread, applied once upstream). Kept as two columns so existing
+        # readers/Excel don't break; they are equal by design under the raw model.
         "sl_raw":        sl_raw,
         "sl_initial":    sl,
         "tp1":           tp1,
@@ -2032,8 +2011,10 @@ def simulate_h1_only_dual(
 ) -> List[Dict[str, Any]]:
     """Public entry point: simulate the proximal entry for one OB-touch alert.
 
-    Returns [] if proximal levels are invalid (e.g. no TP1 >= 1.5R), else the
-    one proximal trade row. (`_dual` is a historical name from the removed 50%
+    Returns [] if proximal levels are invalid (entry would chase price, zero risk,
+    or the OB is thinner than the spread — a below-0.5R pool instead routes to the
+    1:1 fallback, still a valid trade), else the one proximal trade row. (`_dual`
+    is a historical name from the removed 50%
     A/B leg; it now yields a single proximal row.)
     """
     alert_ts = alert["ts"]
