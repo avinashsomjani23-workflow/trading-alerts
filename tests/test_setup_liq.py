@@ -59,7 +59,7 @@ def test_stop_side_present_offset_negative_below_sl():
     """LONG: the active swing low 1.0925 sits BELOW an SL of 1.0928 -> present,
     offset negative (a sweep must blow through the stop then recover)."""
     df, *_ = build_scenario()
-    r = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp1=1.1050, atr=ATR,
+    r = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp=1.1050, atr=ATR,
                              pair_type="forex")
     assert r["setup_liq_stop_present"] is True
     # (1.0925 - 1.0928)/0.0010 = -0.3
@@ -71,7 +71,7 @@ def test_stop_side_offset_positive_inside_risk():
     """LONG: the swing low 1.0925 sits ABOVE (inside risk of) an SL of 1.0922 ->
     positive offset (survive-the-hunt: sweep+reverse before the stop)."""
     df, *_ = build_scenario()
-    r = sl.reads_stop_and_tp(df, "bullish", sl=1.0922, tp1=1.1050, atr=ATR,
+    r = sl.reads_stop_and_tp(df, "bullish", sl=1.0922, tp=1.1050, atr=ATR,
                              pair_type="forex")
     assert r["setup_liq_stop_present"] is True
     # (1.0925 - 1.0922)/0.0010 = +0.3
@@ -110,18 +110,20 @@ def test_tp_side_magnet_present():
     """LONG: an UNBROKEN swing high 1.1080 sits in a TP band of 1.1080 -> magnet
     present, offset ~0."""
     df = _scenario_unbroken_high_above()
-    r = sl.reads_stop_and_tp(df, "bullish", sl=1.1030, tp1=1.1080, atr=ATR,
+    r = sl.reads_stop_and_tp(df, "bullish", sl=1.1030, tp=1.1080, atr=ATR,
                              pair_type="forex")
     assert r["setup_liq_tp_present"] is True
     assert abs(r["setup_liq_tp_offset_atr"] - 0.0) < 1e-6
 
 
-def test_tp_fallback_reads_no_magnet():
-    """A 1:1-fallback TP1 sits on no pool -> magnet absent by construction, even
-    with a swing near the price."""
+def test_tp_no_swing_in_band_reads_no_magnet():
+    """FIXED_2R_BASELINE (2026-07-31): the 1:1-fallback no-magnet branch is gone
+    (fixed 2R always has a target). A target with NO active swing in its band still
+    reads no magnet — the honest absent read. Here the +2R target 1.1200 sits far
+    from any swing in build_scenario, so present is False and offset stays None."""
     df, *_ = build_scenario()
-    r = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp1=1.1050, atr=ATR,
-                             pair_type="forex", tp1_is_fallback=True)
+    r = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp=1.1200, atr=ATR,
+                             pair_type="forex")
     assert r["setup_liq_tp_present"] is False
     assert r["setup_liq_tp_offset_atr"] is None
 
@@ -132,7 +134,7 @@ def test_swing_beyond_band_not_counted():
     """The swing high 1.1050 is 20 pips from a TP of 1.1070 (> 0.5 ATR = 5 pips)
     -> out of band, not the magnet."""
     df, *_ = build_scenario()
-    r = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp1=1.1070, atr=ATR,
+    r = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp=1.1070, atr=ATR,
                              pair_type="forex")
     assert r["setup_liq_tp_present"] is False
 
@@ -150,7 +152,7 @@ def test_broken_swing_in_band_not_counted():
     rows += bar(ts, 1.1070, 1.1071, 1.0910, 1.0912)   # closes below 1.0925 -> broken
     rows += quiet(ts + pd.Timedelta(hours=1), 3, mid=1.0912)
     df2 = frame(rows)
-    r = sl.reads_stop_and_tp(df2, "bullish", sl=1.0928, tp1=1.1050, atr=ATR,
+    r = sl.reads_stop_and_tp(df2, "bullish", sl=1.0928, tp=1.1050, atr=ATR,
                              pair_type="forex")
     assert r["setup_liq_stop_present"] is False
 
@@ -159,9 +161,9 @@ def test_broken_swing_in_band_not_counted():
 
 def test_determinism():
     df, *_ = build_scenario()
-    a = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp1=1.1050, atr=ATR,
+    a = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp=1.1050, atr=ATR,
                              pair_type="forex")
-    b = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp1=1.1050, atr=ATR,
+    b = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp=1.1050, atr=ATR,
                              pair_type="forex")
     assert a == b
 
@@ -231,7 +233,7 @@ def test_legextreme_degraded_returns_none():
 
 def test_features_from_reads_assembles_all_six():
     df, *_ = build_scenario()
-    reads = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp1=1.1050, atr=ATR,
+    reads = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp=1.1050, atr=ATR,
                                  pair_type="forex")
     feats = sl.features_from_reads(reads, legextreme_swept=False)
     assert set(feats.keys()) == set(sl.SETUP_LIQ_FEATURE_COLUMNS)

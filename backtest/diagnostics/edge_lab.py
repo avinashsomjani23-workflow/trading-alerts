@@ -123,19 +123,19 @@ BASELINE_RUN_ID = "h1only_20080102_20251231"
 # OUTCOME-TIME (§12 + spec §7): usable ONLY in the exit track, NEVER as entry
 # features. Leakage if used to select entries. This set is the wall.
 OUTCOME_TIME_FEATURES = {
-    # pre-existing outcome-time columns (were 'noise' in v1, now correctly classed)
-    "mfe_r", "mae_r", "sl_bar_was_sweep", "sl_swept_then_tp1",
+    # pre-existing outcome-time columns (were 'noise' in v1, now correctly classed).
+    # SL-anatomy re-anchored to the fixed 2R / 1R targets (FIXED_2R_BASELINE_SPEC).
+    "mfe_r", "mae_r", "sl_bar_was_sweep", "sl_swept_then_2r", "sl_swept_then_1r",
     "sl_wick_depth_atr", "r_capture_ratio",
-    # three NEW outcome-time columns shipped 2026-07-08 (§12)
-    "sl_max_adverse_after_sweep_atr", "bars_sl_to_tp1_touch",
+    "sl_max_adverse_after_sweep_atr", "bars_sl_to_2r_touch", "bars_sl_to_1r_touch",
     "sl_recovered_to_entry",
     # bars-to-* are all measured after the trade runs → outcome-time
-    "bars_to_exit", "bars_to_tp1", "bars_to_tp2",
+    "bars_to_exit",
     # bars from fill to the MFE/MAE bar (2026-07-26 loser autopsy). Pure
     # look-ahead — descriptor of how the trade ran, never an entry input.
     "bars_to_mfe", "bars_to_mae",
     "exit_reason", "exit_price", "exit_ts",
-    "r_realised", "r_if_exit_tp1", "r_if_exit_tp2", "pnl_usd",
+    "r_realised", "pnl_usd",
 }
 
 # FILL-TIME (§12; same set as v1's FILL_TIME_FEATURES + fill geometry): known only
@@ -220,15 +220,16 @@ def exit_features(df: pd.DataFrame) -> List[str]:
 # from the entry-legal continuous set + the numeric outcome-time columns.
 _NUMERIC_MUST_PARSE = sorted(set(spine.CONTINUOUS_FEATURES) | {
     "r_realised", "mfe_r", "mae_r", "sl_distance_atr", "r_capture_ratio",
-    "sl_wick_depth_atr", "sl_max_adverse_after_sweep_atr", "bars_sl_to_tp1_touch",
-    "atr_at_ob", "entry", "sl_initial", "tp1",
+    "sl_wick_depth_atr", "sl_max_adverse_after_sweep_atr", "bars_sl_to_2r_touch",
+    "bars_sl_to_1r_touch",
+    "atr_at_ob", "entry", "sl_initial", "tp_2r",
 })
 
 # The six new columns (§12) that PROVE this is the clean post-2026-07-08 baseline,
 # not the old corrupted CSV. Their presence is the entry-contract signal.
 SIX_NEW_COLUMNS = [
     "sl_distance_atr", "r_capture_ratio", "trend_pd_agree",       # 3 derived-in-code
-    "sl_max_adverse_after_sweep_atr", "bars_sl_to_tp1_touch",     # 2 of 3 new outcome
+    "sl_max_adverse_after_sweep_atr", "bars_sl_to_2r_touch",      # 2 of 3 new outcome
     "sl_recovered_to_entry",                                      # 3rd new outcome
 ]
 # sl_wick_depth_atr is the 7th sizing column (shipped alongside); require it too.

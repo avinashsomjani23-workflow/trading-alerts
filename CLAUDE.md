@@ -64,6 +64,25 @@ Seven rules. Break one and the response is wrong — rewrite before sending.
 
 ---
 
+## HYPOTHESIS MODE — trigger: I say "generate" or "what am I missing"
+
+When I say **"generate"** (or "what am I missing on X"), your ONLY job that turn is to
+bring me hypotheses I have NOT raised — never to test or defend the one I already gave.
+Hard-bounded so it stays cheap and scannable:
+
+- Bring UP TO 5 hypotheses, ranked best-first. Fewer is fine — never pad to hit 5.
+- Each is TWO lines only: (1) the SMC / price-action MECHANISM a veteran would buy;
+  (2) the single cheapest cut that confirms or kills it — name the column and the split.
+- Mine the LOSERS across alert-time columns AND obvious interactions. At least 2 of the
+  5 must be columns or interactions we have NOT already screened.
+- NO running numbers, NO code this turn — proposals only. I pick which 1–2 to test next.
+- If the honest answer is "nothing new worth testing," say that plainly. Do not invent.
+
+This is my switch for making YOU generate breadth (you are tireless and unbiased across
+every column); I keep the domain judgment on which mechanisms are real.
+
+---
+
 ## THE ANALYSIS ANSWER CONTRACT — every finding, fixed shape
 
 Six beats, plain English, in order. Never dump raw stats.
@@ -112,6 +131,10 @@ Six beats, plain English, in order. Never dump raw stats.
   `config.json` — never tune live on them. H1 only (M15/M5 retired, Phase 3 dormant). Live
   feed Twelve Data (`feed_adapter.py`); backtest data MT5 2008+. Trade = Dealing Range →
   CHoCH/BOS finds the Order Block → confluences scored as price approaches the OB.
+- **Backtest exit = FIXED 2R** (2026-07-31, `docs/FIXED_2R_BASELINE_SPEC.md`): full position
+  exits at +2R (`exit_reason == "tp"`) or −1R stop, no BE, no trail. A constant ruler to study
+  ENTRIES; expected-negative by design. The liquidity-pool TP1/TP2 exit + BE@1R are retired
+  from the run (detector still computes pool levels for LIVE Phase 2 — live is byte-identical).
 - **Reading is never gated** (code, data, logs, config, state — read immediately). Approval
   gates apply ONLY to writing. Bullets/headers, not paragraphs. Default short.
 - **Git:** edit-approval ≠ push-approval; push only on "ship it". Stage relevant files only.

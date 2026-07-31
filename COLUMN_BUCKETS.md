@@ -11,11 +11,11 @@
 - **`fill` columns** are usable for entry analysis, but ALWAYS say "this is fill-time" — a live alert-time scorer cannot see them.
 - No column may enter analysis unclassified. A new column not in a set makes the generator RAISE and CI go red — that is the "nothing missed, nothing contaminated" guarantee.
 
-Canonical: `backtest/results/h1only_20080102_20161231/trades.csv` — **203 columns** (133 alert, 47 fill, 23 outcome).
+Canonical: `backtest/results/h1only_20080102_20161231/trades.csv` — **182 columns** (115 alert, 47 fill, 20 outcome).
 
 ---
 
-## ✅ SAFE FOR AN ENTRY FILTER — 180 columns (alert + fill)
+## ✅ SAFE FOR AN ENTRY FILTER — 162 columns (alert + fill)
 
 A live scorer could act on these. `fill` ones are only known once the limit fills — flag that whenever you use one.
 
@@ -31,26 +31,8 @@ A live scorer could act on these. `fill` ones are only known once the limit fill
 | `entry_zone` | alert | known when the alert fires — safe for the live entry filter |
 | `entry` | alert | known when the alert fires — safe for the live entry filter |
 | `entry_raw` | alert | known when the alert fires — safe for the live entry filter |
-| `sl_raw` | alert | known when the alert fires — safe for the live entry filter |
 | `sl_initial` | alert | known when the alert fires — safe for the live entry filter |
-| `tp1` | alert | known when the alert fires — safe for the live entry filter |
-| `tp1_raw` | alert | known when the alert fires — safe for the live entry filter |
-| `tp2` | alert | known when the alert fires — safe for the live entry filter |
-| `tp2_raw` | alert | known when the alert fires — safe for the live entry filter |
-| `tp1_rr` | alert | known when the alert fires — safe for the live entry filter |
-| `tp2_rr` | alert | known when the alert fires — safe for the live entry filter |
-| `tp1_wick` | alert | known when the alert fires — safe for the live entry filter |
-| `tp1_wick_rr` | alert | known when the alert fires — safe for the live entry filter |
-| `tp1_zone_source` | alert | known when the alert fires — safe for the live entry filter |
-| `tp2_wick` | alert | known when the alert fires — safe for the live entry filter |
-| `tp2_zone_source` | alert | known when the alert fires — safe for the live entry filter |
-| `tp_wick` | alert | known when the alert fires — safe for the live entry filter |
-| `tp_wick_rr` | alert | known when the alert fires — safe for the live entry filter |
-| `tp_nextpool` | alert | known when the alert fires — safe for the live entry filter |
-| `tp_nextpool_rr` | alert | known when the alert fires — safe for the live entry filter |
-| `tp_nextpool_zone_source` | alert | known when the alert fires — safe for the live entry filter |
-| `tp2_collapsed_to_tp1` | alert | known when the alert fires — safe for the live entry filter |
-| `tp_targets` | alert | known when the alert fires — safe for the live entry filter |
+| `tp_2r` | alert | known when the alert fires — safe for the live entry filter |
 | `eligible_for_headline` | alert | known when the alert fires — safe for the live entry filter |
 | `headline_exclusion` | alert | known when the alert fires — safe for the live entry filter |
 | `sl_distance_atr` | fill | known only once the limit fills — usable for entry analysis, but label it FILL |
@@ -202,7 +184,7 @@ A live scorer could act on these. `fill` ones are only known once the limit fill
 | `news_open` | fill | known only once the limit fills — usable for entry analysis, but label it FILL |
 | `news_open_event` | fill | known only once the limit fills — usable for entry analysis, but label it FILL |
 
-## 🚩 OUTCOME / LOOK-AHEAD — 23 columns
+## 🚩 OUTCOME / LOOK-AHEAD — 20 columns
 
 Known only after the trade runs. **Describe losers with these; never filter entries on them.**
 
@@ -212,23 +194,20 @@ Known only after the trade runs. **Describe losers with these; never filter entr
 | `exit_reason` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `exit_price` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `r_realised` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
-| `r_if_exit_tp1` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
-| `r_if_exit_tp2` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `pnl_usd` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `mfe_r` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `mae_r` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `r_capture_ratio` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `sl_bar_was_sweep` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
-| `sl_swept_then_tp1` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
+| `sl_swept_then_2r` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
+| `sl_swept_then_1r` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `sl_wick_depth_atr` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `sl_max_adverse_after_sweep_atr` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
-| `bars_sl_to_tp1_touch` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
+| `bars_sl_to_2r_touch` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
+| `bars_sl_to_1r_touch` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `sl_recovered_to_entry` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `bars_to_exit` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
-| `bars_to_tp1` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
-| `bars_to_tp2` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `bars_to_mfe` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `bars_to_mae` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `sl_collision` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
-| `be_arm_bar_touched_entry` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 

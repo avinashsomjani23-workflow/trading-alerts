@@ -31,7 +31,8 @@ from typing import Any, Dict, Iterable, List
 
 # Outcome-time column families (SMC_EDGE_LAB_SPEC.md §12 timing classifier).
 OUTCOME_TIME_PREFIXES = ("sl_", "exit_", "r_")
-OUTCOME_TIME_EXACT = {"mfe_r", "mae_r", "bars_to_exit", "bars_sl_to_tp1_touch"}
+OUTCOME_TIME_EXACT = {"mfe_r", "mae_r", "bars_to_exit",
+                      "bars_sl_to_2r_touch", "bars_sl_to_1r_touch"}
 # Entry-legal exceptions that carry a matching prefix but are known BEFORE the
 # outcome (sl_distance_atr is fixed at fill; r_distance is the risk, not a result).
 ENTRY_LEGAL_EXCEPTIONS = {"sl_distance_atr", "r_distance"}

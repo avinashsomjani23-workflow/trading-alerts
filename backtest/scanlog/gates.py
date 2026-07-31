@@ -4,7 +4,7 @@ Evaluated at run end. Any FAIL gate -> overall FAIL -> process exit code 1.
 WARN never flips overall but always prints and sets warnings_present.
 
 The gate layer is the JUDGE. It recomputes the headline P&L from r_realised
-ALONE (never from the hypothetical tp1/tp2 columns) and compares; it checks
+ALONE (the fixed 2R outcome; the hypothetical tp1/tp2 columns are retired) and compares; it checks
 causality strict-inequalities on every filled trade; it checks the heartbeat is
 complete; it checks for the contradiction conditions the emitter recorded.
 
@@ -106,20 +106,21 @@ def g10_violations(t: Dict[str, Any]) -> List[str]:
     """The G10 rule set (per-trade physical possibility) as a pure predicate, so
     the gate loop and its regression test bind to ONE threshold definition.
 
-    Rules (tolerances cover 3dp rounding of the stored mfe_r/mae_r):
-      a) mfe_r < 0 or mae_r > 0            -- impossible by construction
-         (both start at entry = 0 and only widen).
-      b) exit sl at <=-1R with mfe_r >= +1.001R -- the fake-excursion bug class:
-         a bar high credited to MFE that was actually pre-fill / same-SL-bar
-         price. Threshold is +1.001R, NOT +0.999R: a GENUINE full-SL loser can
-         reach 0.9995-0.99999R MFE without arming break-even (arm tolerance
-         be_eps = 1e-6*r_distance is far tighter than the 5e-4*r_distance
-         rounding boundary of the stored mfe_r), and that rounds UP to exactly
-         1.000. Such a row is physically real. Only MFE PAST +1R -- unreachable
-         by rounding a sub-(1-1e-6)R excursion -- proves the old bug is back.
-         See h1_only_simulator.py be_eps.
-      c) exit tp1 with mfe_r > r_realised   -- MFE is capped at the TP1 exit
-         level; beyond it is post-exit price.
+    FIXED_2R_BASELINE (2026-07-31): under WINDOW-MFE (h1_only_simulator.py A3),
+    mfe_r/mae_r track the FULL post-fill window, decoupled from where the fixed 2R
+    exit fired. So the old "SL loser can't show +1R MFE" and "MFE capped at the TP1
+    exit" rules are RETIRED — a stopped-out trade whose price later ran favourable
+    legitimately shows a high mfe_r. The surviving invariants:
+      a) mfe_r < 0 or mae_r > 0   -- impossible by construction (both start at
+         entry = 0; MFE only rises, MAE only falls).
+      b) mfe_r < r_realised  -- for a CLEAN bracket exit only (sl / tp). There the
+         exit price is the stop (-1R) or the +2R target, both of which the window-MFE
+         walk necessarily saw, so the window best is always >= the realised R.
+         NOT applied to forced partial-R exits (friday_flat / timeout / window_end):
+         those close at a bar's OPEN/CLOSE that the MFE recorder can legitimately
+         miss (the fill bar and the exit bar are excluded from the excursion update),
+         so a small positive realised R can exceed the recorded mfe_r — physically
+         real, not a fake excursion. (tolerance covers 3dp rounding.)
     Returns the list of violated rule tags (empty = physically possible).
     `never_filled` rows carry no excursion and are skipped by the caller.
     """
@@ -132,10 +133,8 @@ def g10_violations(t: Dict[str, Any]) -> List[str]:
     bad: List[str] = []
     if mfe < -0.002 or mae > 0.002:
         bad.append("excursion_sign")
-    if t.get("exit_reason") == "sl" and r <= -0.999 and mfe >= 1.001:
-        bad.append("full_sl_loser_with_1R_mfe")
-    if t.get("exit_reason") == "tp1" and mfe > r + 0.002:
-        bad.append("mfe_beyond_tp1_exit")
+    if t.get("exit_reason") in ("sl", "tp") and mfe < r - 0.002:
+        bad.append("mfe_below_realised")
     return bad
 
 
@@ -289,20 +288,17 @@ def evaluate(
         drift or "none", PASS if g5_ok else FAIL,
     ))
 
-    # ---- G6 hypothetical isolation ----------------------------------------
-    # The health headline is recomputed from r_realised only (above). If it
-    # equals a tp2-derived figure that would be coincidence, not consumption;
-    # the proof of isolation is that THIS layer never reads tp1/tp2. We assert
-    # the recomputed headline does not silently equal the tp2 aggregate when
-    # they should differ - i.e. we recompute independently and expose both.
-    tp2_headline = round(
-        sum(float(t.get("r_if_exit_tp2", 0.0)) for t in trades if _is_counted(t))
-        * risk_usd, 6)
+    # ---- G6 headline isolation --------------------------------------------
+    # The health headline is recomputed from r_realised ONLY (above). Under the
+    # FIXED_2R_BASELINE (2026-07-31) the liquidity-pool tp1/tp2 hypothetical
+    # columns are retired from the run, so a leak from them is now structurally
+    # impossible — there is nothing to leak from. The gate keeps the "headline
+    # from r_realised only" assertion as the standing guarantee.
     gates.append(Gate(
-        "G6", "headline recomputed from r_realised only; tp1/tp2 excluded",
+        "G6", "headline recomputed from r_realised only (no hypothetical exit columns exist)",
         "independent recompute",
-        {"realised_headline": headline, "tp2_headline_for_contrast": tp2_headline},
-        PASS,  # structurally guaranteed: this function never sums into headline from tp2
+        {"realised_headline": headline},
+        PASS,  # structurally guaranteed: this function only ever sums r_realised
     ))
 
     # ---- G7 determinism stamp ---------------------------------------------

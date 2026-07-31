@@ -51,7 +51,7 @@ _BOOL_COLS = [
     "fvg_present", "sweep_present", "news_blocked", "ist_blocked",
     "weekend_blocked", "killzone_blocked", "ob_in_killzone", "fill_in_killzone",
     "sl_collision", "eligible_for_headline", "reversed_from_extreme",
-    "fvg_mitigation", "sl_bar_was_sweep", "sl_swept_then_tp1",
+    "fvg_mitigation", "sl_bar_was_sweep", "sl_swept_then_2r", "sl_swept_then_1r",
 ]
 
 

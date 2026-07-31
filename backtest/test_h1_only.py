@@ -231,9 +231,9 @@ def test_dual_simulator_columns():
     print(f"  rows returned: {len(rows)}")
     assert rows, "dual simulator returned 0 rows for valid setup"
     expected_cols = {
-        "pair", "alert_ts", "entry_zone", "entry", "sl_raw", "sl_initial",
-        "tp1", "tp2", "tp1_rr", "tp2_rr", "exit_reason",
-        "r_realised", "r_if_exit_tp1", "r_if_exit_tp2",
+        "pair", "alert_ts", "entry_zone", "entry", "sl_initial",
+        "tp_2r", "exit_reason",
+        "r_realised",
         "mfe_r", "mae_r", "bars_to_exit", "ob_age_h1_bars",
         "pd_zone", "score", "structure_pts", "sweep_pts",
         "fvg_pts", "freshness_pts", "killzone_pts",
@@ -538,44 +538,49 @@ def test_trailing_stop_lever():
     assert ok, "trailing-stop lever checks failed (see output above)"
 
 
-def test_g10_rounded_near_miss_is_not_a_violation():
-    """Regression (2026-07-03): G10 rule (b) must NOT fire on a genuine full-SL
-    loser whose raw MFE (0.9995-0.99999R) rounds UP to exactly 1.000R.
+def test_g10_window_mfe_invariants():
+    """G10 under WINDOW-MFE (FIXED_2R_BASELINE A3, 2026-07-31).
 
-    Root bug: rule (b) tripped at `mfe_r >= 0.999`. A real trade can reach just
-    under +1R (below the be_eps arm tolerance, so break-even never arms) and then
-    take a full -1R stop -> the stored 3dp-rounded mfe_r shows 1.000. That is
-    physically possible, but the old threshold flagged it as PHYS_IMPOSSIBLE.
-    Over an 18yr run 2 such rows tripped G10 FAIL after the be_eps walk fix was
-    already in place -- the gate threshold, not the walk, was the residual gap.
-    This pins rule (b) at +1.001R: rounding a sub-(1-1e-6)R excursion can never
-    reach it, but the true fake-excursion bug (MFE of 2-5R) still trips.
+    The old rules (full-SL-loser-can't-show-+1R-MFE; MFE capped at the TP1 exit)
+    are RETIRED: mfe_r/mae_r now track the full post-fill window, decoupled from
+    where the fixed 2R exit fired, so a stopped-out trade whose price LATER ran
+    favourable legitimately shows a high mfe_r. The surviving invariants:
+      (a) mfe_r < 0 or mae_r > 0        -> excursion_sign.
+      (b) mfe_r < r_realised            -> mfe_below_realised (window best is one
+          point on the path, so it is always >= the realised R).
     Binds to the LIVE predicate (g10_violations), not a copy of the threshold.
     """
-    print("\n== test_g10_rounded_near_miss_is_not_a_violation ==")
+    print("\n== test_g10_window_mfe_invariants ==")
     from backtest.scanlog.gates import g10_violations
     ok = True
-    # (A) The exact failing shape: full SL, mfe_r rounded to 1.0 -> must PASS.
-    near_miss = {"exit_reason": "sl", "r_realised": -1.0, "mfe_r": 1.0,
-                 "mae_r": -1.0}
-    ok &= check("full_sl_loser_with_1R_mfe" not in g10_violations(near_miss),
-                f"rounded near-miss (mfe_r=1.0, r=-1.0) is not a G10 violation "
-                f"(got {g10_violations(near_miss)})")
-    # (B) The real fake-excursion bug: MFE well past +1R -> must still FAIL.
-    fake = {"exit_reason": "sl", "r_realised": -1.0, "mfe_r": 2.3, "mae_r": -1.0}
-    ok &= check("full_sl_loser_with_1R_mfe" in g10_violations(fake),
-                f"true fake excursion (mfe_r=2.3 on a full SL) still trips G10 "
-                f"(got {g10_violations(fake)})")
-    # (C) Sign rules and TP1-cap rule unaffected.
+    # (A) SL loser whose window later ran +2.3R -> LEGAL now (window-MFE decouple).
+    legit = {"exit_reason": "sl", "r_realised": -1.0, "mfe_r": 2.3, "mae_r": -1.0}
+    ok &= check(g10_violations(legit) == [],
+                f"SL loser with high window-MFE is legal now "
+                f"(got {g10_violations(legit)})")
+    # (B) TP (+2R) win whose window ran further (+3.5R) -> LEGAL (the A3 case).
+    ran_on = {"exit_reason": "tp", "r_realised": 2.0, "mfe_r": 3.5, "mae_r": -0.4}
+    ok &= check(g10_violations(ran_on) == [],
+                f"+2R win with window-MFE 3.5R is legal (got {g10_violations(ran_on)})")
+    # (C) Sign rule still trips.
     ok &= check("excursion_sign" in g10_violations(
                     {"exit_reason": "sl", "r_realised": -1.0, "mfe_r": -0.5,
                      "mae_r": 0.0}),
                 "negative mfe_r still trips excursion_sign")
-    ok &= check("mfe_beyond_tp1_exit" in g10_violations(
-                    {"exit_reason": "tp1", "r_realised": 1.0, "mfe_r": 1.5,
+    # (D) mfe_r < r_realised on a CLEAN bracket exit is impossible -> trips.
+    ok &= check("mfe_below_realised" in g10_violations(
+                    {"exit_reason": "tp", "r_realised": 2.0, "mfe_r": 1.5,
                      "mae_r": -0.2}),
-                "mfe past TP1 exit still trips mfe_beyond_tp1_exit")
-    assert ok, "g10 rounded-near-miss checks failed (see output above)"
+                "mfe_r below the realised R on a tp exit trips mfe_below_realised")
+    # (E) A forced partial-R exit (friday_flat/timeout/window_end) can close at a
+    # bar OPEN/CLOSE the MFE recorder legitimately missed -> small +r > mfe_r is
+    # physically REAL there, so it must NOT trip. (This is the exact case the full
+    # 2008-2016 run surfaced: friday_flat r=+0.192, mfe_r=0.0.)
+    ok &= check(g10_violations(
+                    {"exit_reason": "friday_flat", "r_realised": 0.192,
+                     "mfe_r": 0.0, "mae_r": 0.0}) == [],
+                "friday_flat partial-R above mfe_r is legal (not mfe_below_realised)")
+    assert ok, "g10 window-MFE invariant checks failed (see output above)"
 
 
 def test_sl_wick_depth_atr():
@@ -670,31 +675,34 @@ def test_edge_lab_columns():
     adverse0 = round(max(0.0, cur_sl - 1.2005) / atr2, 3)
     ok &= check(adverse0 == 0.0, f"max_adverse: no further run -> 0.0 (got {adverse0})")
 
-    # --- bars_sl_to_tp1_touch: 1-indexed bar of first TP1 touch after the stop
+    # --- bars_sl_to_2r_touch: 1-indexed bar of first +2R touch after the stop
     # (first post-stop bar == 1). Simulated via a small index-of search.
-    highs = [1.0, 1.0, 5.0, 1.0]  # tp1=4.0 first cleared at position 2 (0-indexed)
-    tp1 = 4.0
-    idx = next((i for i, h in enumerate(highs) if h >= tp1), None)
+    highs = [1.0, 1.0, 5.0, 1.0]  # +2R target=4.0 first cleared at position 2 (0-indexed)
+    tp_2r = 4.0
+    idx = next((i for i, h in enumerate(highs) if h >= tp_2r), None)
     bars = (idx + 1) if idx is not None else None
-    ok &= check(bars == 3, f"bars_sl_to_tp1_touch: 1-indexed -> 3 (got {bars})")
-    idx_none = next((i for i, h in enumerate([1.0, 2.0]) if h >= tp1), None)
-    ok &= check(idx_none is None, "bars_sl_to_tp1_touch: never touched -> None")
+    ok &= check(bars == 3, f"bars_sl_to_2r_touch: 1-indexed -> 3 (got {bars})")
+    idx_none = next((i for i, h in enumerate([1.0, 2.0]) if h >= tp_2r), None)
+    ok &= check(idx_none is None, "bars_sl_to_2r_touch: never touched -> None")
 
     assert ok, "one or more edge-lab column checks failed (see output above)"
 
 
 def _swept_then_scenario(post_stop_bars, atr=0.0010):
     """Drive the LIVE simulator to a bullish SL-SWEEP exit, then paint an EXPLICIT
-    post-stop price path so the STRICT sl_swept_then_tp1 walk can be bite-proven.
+    post-stop price path so the STRICT sl_swept_then_2r/1r walk can be bite-proven.
 
     Geometry (mirrors _atr_sweep_scenario): a Monday-open bullish OB, price fills
     the proximal, bar 4 wicks DEEP below the fired stop but CLOSES back above it
     (guaranteeing sl_bar_was_sweep=True and the SL fires on bar 4). From bar 5 on
     we lay down `post_stop_bars` — a list of (high, low) tuples — verbatim, so the
-    caller controls exactly when price re-hits the stop (cur_sl) vs reaches TP1.
+    caller controls exactly when price re-hits the stop (cur_sl) vs reaches the
+    fixed +2R / +1R targets.
 
-    Returns the single trade row. The fired stop cur_sl == sl (bot - spread) and
-    tp1 sits above `top`; callers shape their bars relative to those levels.
+    Returns the single trade row. The fired stop cur_sl == sl (bot - spread).
+    Under the fixed 2R baseline, entry=top=1.0800, r_distance=|entry-sl|=0.0020,
+    so the +1R target = 1.0820 and the +2R target (tp_2r) = 1.0840; callers shape
+    their bars relative to those levels.
     """
     base = pd.Timestamp("2026-04-06 00:00", tz="UTC")   # Monday (dayofweek==0)
     n = 60
@@ -746,58 +754,68 @@ def _swept_then_scenario(post_stop_bars, atr=0.0010):
     return rows[0], sl, top
 
 
-def test_sl_swept_then_tp1_strict():
-    """STRICT sl_swept_then_tp1 + gated bars_sl_to_tp1_touch (2026-07-23).
+def test_sl_swept_then_targets_strict():
+    """STRICT sl_swept_then_2r/1r + gated bars_sl_to_2r/1r_touch (FIXED_2R_BASELINE
+    A5, 2026-07-31).
 
-    sl_swept_then_tp1 must mean: the stop bar was a sweep AND, walking the
-    post-stop bars in order, price reached TP1 BEFORE ever trading back to the
-    fired stop level cur_sl. bars_sl_to_tp1_touch is the 1-indexed bar of that
-    win, defined ONLY for this clean case; None otherwise. Non-sweep SL exits
-    carry None on both. Bite-proven by driving the LIVE simulator down three
-    explicit post-stop paths:
-      (a) swept, HELD the stop, then reached TP -> True + correct bar count.
-      (b) swept, then RE-HIT cur_sl before TP    -> False / None.
-      (c) non-sweep SL exit                      -> both None.
+    sl_swept_then_2r must mean: the stop bar was a sweep AND, walking the post-stop
+    bars in order, price reached the +2R target BEFORE ever trading back to the
+    fired stop cur_sl. sl_swept_then_1r is the same for the +1R (breakeven-plus)
+    target. bars_sl_to_2r/1r_touch are the 1-indexed bars of those wins, defined
+    ONLY for the clean case; None otherwise. Non-sweep SL exits carry None on all.
+    Bite-proven by driving the LIVE simulator down three explicit post-stop paths:
+      (a) swept, HELD the stop, then reached +2R -> both True + correct bar counts.
+      (b) swept, then RE-HIT cur_sl before any target -> all False / None.
+      (c) non-sweep SL exit                          -> all None.
+
+    Levels: entry=1.0800, r_distance=0.0020 -> +1R=1.0820, +2R(tp_2r)=1.0840.
     """
-    print("\n== test_sl_swept_then_tp1_strict ==")
+    print("\n== test_sl_swept_then_targets_strict ==")
     ok = True
 
-    # tp1 sits ABOVE top; a High that clears it touches target. cur_sl == sl,
-    # a Low at/below it re-hits the stop. Neutral bar = inside (top, sl), no touch.
+    # +2R sits at 1.0840, +1R at 1.0820. cur_sl == sl, a Low at/below it re-hits the
+    # stop. Neutral bar = inside (top, sl) — no target, no stop-rehit.
     NEUTRAL = (1.0800 - 0.0002, 1.0800 - 0.0004)   # High/Low both inside, no touch
 
-    # --- (a) SWEPT, HELD, then TP on the 3rd post-stop bar ------------------
-    # bars 1,2 hold above the stop and below tp1; bar 3 spikes up to TP1.
+    # --- (a) SWEPT, HELD, then +2R on the 3rd post-stop bar -----------------
+    # bars 1,2 hold above the stop and below +1R; bar 3 spikes up past +2R (which
+    # also clears +1R on the same bar).
     r_a, sl_a, top_a = _swept_then_scenario([
         NEUTRAL,                              # post-stop bar 1: quiet, holds the stop
         NEUTRAL,                              # post-stop bar 2: quiet, holds the stop
-        (1.0800 + 0.0050, 1.0800 - 0.0001),   # bar 3 High clears tp1 (~1.0818)
+        (1.0800 + 0.0050, 1.0800 - 0.0001),   # bar 3 High ~1.0850 clears +2R (1.0840)
     ])
     ok &= check(r_a.get("exit_reason") == "sl", "(a) exit is an SL")
     ok &= check(r_a.get("sl_bar_was_sweep") is True, "(a) stop bar was a sweep")
-    ok &= check(r_a.get("sl_swept_then_tp1") is True,
-                f"(a) swept-held-ran -> True (got {r_a.get('sl_swept_then_tp1')})")
-    ok &= check(r_a.get("bars_sl_to_tp1_touch") == 3,
-                f"(a) bar count == 3 (got {r_a.get('bars_sl_to_tp1_touch')})")
+    ok &= check(r_a.get("sl_swept_then_2r") is True,
+                f"(a) swept-held-ran +2R -> True (got {r_a.get('sl_swept_then_2r')})")
+    ok &= check(r_a.get("sl_swept_then_1r") is True,
+                f"(a) same bar also cleared +1R -> True (got {r_a.get('sl_swept_then_1r')})")
+    ok &= check(r_a.get("bars_sl_to_2r_touch") == 3,
+                f"(a) +2R bar count == 3 (got {r_a.get('bars_sl_to_2r_touch')})")
+    ok &= check(r_a.get("bars_sl_to_1r_touch") == 3,
+                f"(a) +1R bar count == 3 (got {r_a.get('bars_sl_to_1r_touch')})")
 
-    # --- (b) SWEPT, then RE-HIT the stop before any TP ---------------------
+    # --- (b) SWEPT, then RE-HIT the stop before any target -----------------
     # bar 1 holds, bar 2 trades back down THROUGH cur_sl (fail), even though a
-    # LATER bar would have reached TP -> must be False / None (path-aware).
+    # LATER bar would have reached +2R -> must be False / None (path-aware).
     r_b, sl_b, top_b = _swept_then_scenario([
         NEUTRAL,                                 # bar 1: holds
         (1.0800 - 0.0002, 1.0778 - 0.0005),      # bar 2 Low <= cur_sl (~1.0778) -> fail
-        (1.0800 + 0.0050, 1.0800 - 0.0001),      # bar 3 WOULD hit TP, too late
+        (1.0800 + 0.0050, 1.0800 - 0.0001),      # bar 3 WOULD hit +2R, too late
     ])
     ok &= check(r_b.get("exit_reason") == "sl", "(b) exit is an SL")
     ok &= check(r_b.get("sl_bar_was_sweep") is True, "(b) stop bar was a sweep")
-    ok &= check(r_b.get("sl_swept_then_tp1") is False,
-                f"(b) re-hit stop first -> False (got {r_b.get('sl_swept_then_tp1')})")
-    ok &= check(r_b.get("bars_sl_to_tp1_touch") is None,
-                f"(b) bars None on fail (got {r_b.get('bars_sl_to_tp1_touch')})")
+    ok &= check(r_b.get("sl_swept_then_2r") is False,
+                f"(b) re-hit stop first -> +2R False (got {r_b.get('sl_swept_then_2r')})")
+    ok &= check(r_b.get("sl_swept_then_1r") is False,
+                f"(b) re-hit stop first -> +1R False (got {r_b.get('sl_swept_then_1r')})")
+    ok &= check(r_b.get("bars_sl_to_2r_touch") is None,
+                f"(b) +2R bars None on fail (got {r_b.get('bars_sl_to_2r_touch')})")
+    ok &= check(r_b.get("bars_sl_to_1r_touch") is None,
+                f"(b) +1R bars None on fail (got {r_b.get('bars_sl_to_1r_touch')})")
 
-    # --- (c) NON-SWEEP SL exit -> both None -------------------------------
-    # Reuse the synthetic single-trade path; whatever its exit, assert the
-    # invariant: when sl_bar_was_sweep is not True, BOTH columns are None.
+    # --- (c) NON-SWEEP SL exit -> all None --------------------------------
     df_h1 = _synth_h1_df()
     ob_c = _synth_ob_bullish(df_h1, ts_idx=-150)
     alert_c = {
@@ -810,18 +828,19 @@ def test_sl_swept_then_tp1_strict():
     assert rows_c, "(c) sim returned no rows"
     r_c = rows_c[0]
     if r_c.get("sl_bar_was_sweep") is not True:
-        ok &= check(r_c.get("sl_swept_then_tp1") is None,
-                    f"(c) non-sweep -> sl_swept_then_tp1 None "
-                    f"(got {r_c.get('sl_swept_then_tp1')})")
-        ok &= check(r_c.get("bars_sl_to_tp1_touch") is None,
-                    f"(c) non-sweep -> bars None "
-                    f"(got {r_c.get('bars_sl_to_tp1_touch')})")
+        ok &= check(r_c.get("sl_swept_then_2r") is None,
+                    f"(c) non-sweep -> sl_swept_then_2r None "
+                    f"(got {r_c.get('sl_swept_then_2r')})")
+        ok &= check(r_c.get("sl_swept_then_1r") is None,
+                    f"(c) non-sweep -> sl_swept_then_1r None "
+                    f"(got {r_c.get('sl_swept_then_1r')})")
+        ok &= check(r_c.get("bars_sl_to_2r_touch") is None,
+                    f"(c) non-sweep -> +2R bars None "
+                    f"(got {r_c.get('bars_sl_to_2r_touch')})")
     else:
-        # If this fixture ever produces a sweep, prove the invariant a different
-        # way: a synthesized non-sweep SL bar leaves both None (formula check).
         ok &= check(True, "(c) fixture produced a sweep; invariant covered by (a)/(b)")
 
-    assert ok, "one or more strict sl_swept_then_tp1 checks failed (see output above)"
+    assert ok, "one or more strict sl_swept_then_targets checks failed (see output above)"
 
 
 def _atr_sweep_scenario(atr):
@@ -2167,11 +2186,11 @@ def main():
         ("test_wider_stop_replay_and_pre_payment",
          test_wider_stop_replay_and_pre_payment),
         ("test_trailing_stop_lever",     test_trailing_stop_lever),
-        ("test_g10_rounded_near_miss_is_not_a_violation",
-         test_g10_rounded_near_miss_is_not_a_violation),
+        ("test_g10_window_mfe_invariants",
+         test_g10_window_mfe_invariants),
         ("test_sl_wick_depth_atr",      test_sl_wick_depth_atr),
         ("test_edge_lab_columns",       test_edge_lab_columns),
-        ("test_sl_swept_then_tp1_strict", test_sl_swept_then_tp1_strict),
+        ("test_sl_swept_then_targets_strict", test_sl_swept_then_targets_strict),
         ("test_area_b_all_atr_cols_share_the_one_h1_atr_denominator",
          test_area_b_all_atr_cols_share_the_one_h1_atr_denominator),
         ("test_area_b_atr_source_uses_h1_atr",

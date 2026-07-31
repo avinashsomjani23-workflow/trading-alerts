@@ -61,16 +61,17 @@ def _header() -> list[str]:
 # describe losers but must never drive a live entry filter.
 OUTCOME = {
     # realised result + P&L (exit_ts is outcome-time: the exit clock is only known
-    # once the trade ends, same as exit_price/exit_reason)
-    "exit_ts", "exit_reason", "exit_price", "r_realised", "r_if_exit_tp1",
-    "r_if_exit_tp2", "pnl_usd",
-    # excursions and how the trade ran
+    # once the trade ends, same as exit_price/exit_reason). FIXED_2R_BASELINE
+    # 2026-07-31: the r_if_exit_tp1/tp2 hypothetical columns are retired.
+    "exit_ts", "exit_reason", "exit_price", "r_realised", "pnl_usd",
+    # excursions and how the trade ran (mfe_r/mae_r are now FULL-WINDOW, A3 decouple)
     "mfe_r", "mae_r", "r_capture_ratio",
-    "bars_to_exit", "bars_to_tp1", "bars_to_tp2", "bars_to_mfe", "bars_to_mae",
-    # stop anatomy — all measured during/after the trade
-    "sl_bar_was_sweep", "sl_swept_then_tp1", "sl_wick_depth_atr",
-    "sl_max_adverse_after_sweep_atr", "bars_sl_to_tp1_touch", "sl_recovered_to_entry",
-    "sl_collision", "be_arm_bar_touched_entry",
+    "bars_to_exit", "bars_to_mfe", "bars_to_mae",
+    # stop anatomy — all measured during/after the trade. Re-anchored to the fixed
+    # 2R / 1R targets (FIXED_2R_BASELINE_SPEC A5); both readings kept.
+    "sl_bar_was_sweep", "sl_swept_then_2r", "sl_swept_then_1r", "sl_wick_depth_atr",
+    "sl_max_adverse_after_sweep_atr", "bars_sl_to_2r_touch", "bars_sl_to_1r_touch",
+    "sl_recovered_to_entry", "sl_collision",
 }
 
 # FILL = knowable only if/when the limit fills (fill-anchored). Usable for entry
@@ -109,10 +110,10 @@ FILL = {
 ALERT_BOOKKEEPING = {
     "setup_id", "pair", "model", "alert_ts", "alert_bar_ts", "alert_seq",
     "ob_timestamp", "bos_timestamp", "direction", "bias",
-    "entry_zone", "entry", "entry_raw", "sl_raw", "sl_initial",
-    "tp1", "tp1_raw", "tp2", "tp2_raw", "tp1_wick", "tp2_wick", "tp_wick",
-    "tp_nextpool", "tp1_zone_source", "tp2_zone_source", "tp_nextpool_zone_source",
-    "tp2_collapsed_to_tp1", "tp_targets",
+    "entry_zone", "entry", "entry_raw", "sl_initial",
+    # tp_2r = the fixed 2R target (FIXED_2R_BASELINE_SPEC 2026-07-31). Computed from
+    # entry & sl (both alert-known), so it is an alert-time level like the retired tp1.
+    "tp_2r",
     "eligible_for_headline", "headline_exclusion", "killzone_windows",
 }
 
@@ -156,7 +157,8 @@ _ALERT_KNOWN = {
     "ob_walkback_depth", "ob_age_h1_bars", "alert_utc_hour", "h1_trend",
     "trend_alignment", "trend_pd_agree", "ob_session", "ob_in_killzone",
     "setup_badge", "setup_badge_kind", "leg_extreme_clipped",
-    "tp1_rr", "tp2_rr", "tp1_wick_rr", "tp_wick_rr", "tp_nextpool_rr",
+    # (tp1_rr / tp2_rr / *_wick_rr / tp_nextpool_rr retired 2026-07-31 — the
+    # liquidity-pool RR columns are gone under the fixed 2R baseline.)
     # sweep2 SW + EQ legs freeze at OB birth -> alert-time
     "sweep2_present", "sweep2_pools_swept", "sweep2_tiers_checked",
     "sweep2_sw_present", "sweep2_sw_pierce_atr", "sweep2_sw_rejection_ratio",

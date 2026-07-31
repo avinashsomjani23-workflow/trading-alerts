@@ -2,6 +2,11 @@
 
 Parked ideas + the working playbook, so nothing is forgotten at analysis time. Ideas only — no results, no findings.
 
+> **Baseline exit = FIXED 2R** (2026-07-31, `docs/FIXED_2R_BASELINE_SPEC.md`). The run's exit is a
+> constant +2R / −1R bracket (no BE, no trail, no liquidity-pool TP). Playbook step 1 ("pick the
+> exit") is effectively frozen to fixed 2R for the entry-study phase; EV in step 6 is
+> `p(win)×2 − p(loss)×1` (the fixed 2R:1R payoff), not a per-trade `tp1_rr`.
+
 ---
 
 ## STANDING GUARDS
@@ -76,3 +81,33 @@ Parked ideas + the working playbook, so nothing is forgotten at analysis time. I
 - **Stage:** post-10 — next generation, only if the autopsy shows DR-related misreads among losers.
 - **How:** needs its own discovery+validation evidence; changes every downstream row, so never mid-analysis.
 - **Added:** 2026-07-25
+
+### Garbage-first cut (define obviously-bad setups before fine screening)
+- **What:** raise the baseline and de-noise every later screen by first removing setups a vet rejects on sight, defined by SMC MECHANISM (not data-mined). News was the first such cut. Candidates: no room to target (opposing pool immediately in front, direction-aware), SL sitting inside an opposing liquidity pool, structurally-weak break, dead-hours tiny-target.
+- **Stage:** before 4 — pre-screen. Screening on a garbage-laden book is noisy (see the exit-choice CAVEAT).
+- **How:** each garbage rule stated as an SMC reason first, then measured on news-clean WR/meanR with CIs; a rule only ships if SMC and data agree. Direction-aware.
+- **Added:** 2026-07-28
+
+### Within-bucket winner/loser separation (interaction / ML)
+- **What:** buckets with equal WR (e.g. ob_in_killzone=False: 332 wins vs 506 losers) still hide a price/structure feature that splits winners from straight-to-stop losers. Find it in combination, not singly.
+- **Stage:** 5 — Model (RF/XGBoost, interactions). Not a single-feature screen.
+- **How:** train on news-clean; target = win vs loss; inspect splits inside equal-WR buckets. CI-overlap near-misses from Stage 4 feed here.
+- **Added:** 2026-07-28
+
+### Pool-distance features are direction-blind
+- **What:** dist_next_pool_above / _below carry no LONG/SHORT meaning as-is. A pool above is a TARGET for a long but a STOP hazard for a short. Any pool-distance reading must be re-expressed as toward-target vs behind-stop, per direction.
+- **Stage:** 4 — Screening (re-derive before use).
+- **How:** on news-clean, fold `bias` (LONG/SHORT) into pool distance → distance-to-target-pool and distance-to-stop-side-pool; then curve WR/meanR with CIs.
+- **Added:** 2026-07-28
+
+### OB freshness: H4-OB-reversal-without-H1-touch hypothesis
+- **What:** older OBs (ob_age_h1_bars = OB→ALERT bars) may lose more because price reversed off the H4 OB without ever touching the H1 OB, then returned days later once the move's fuel was spent → dies on arrival. Hypothesis only.
+- **Stage:** 4 — Screening (freshness), news-clean.
+- **How:** cross ob_age_h1_bars with whether the H4 level was hit first / displacement since OB; WR+meanR curves with CIs. Direction-aware.
+- **Added:** 2026-07-28
+
+### Trend alignment should carry a money signal if detection is right
+- **What:** trend_alignment showed only death-texture separation so far, not money. If H1-trend detection is correct, with-trend should beat counter-trend on WR/meanR. If it doesn't, suspect the trend detector, not the market.
+- **Stage:** 4 — Screening, news-clean. Data+SMC-disagreement → discussion point, not a filter.
+- **How:** WR + meanR by trend_alignment on news-clean with CIs; if flat, audit the trend detector before concluding.
+- **Added:** 2026-07-28
