@@ -10,7 +10,6 @@
   "coverage": {
     "state": "up",
     "flip_unconfirmed": false,
-    "ranging": false,
     "n_events": 20,
     "n_choch": 7,
     "n_range_bos": 0,
@@ -4822,7 +4821,6 @@
   ],
   "golden_output": {
     "state": "up",
-    "ranging": false,
     "prior_trend": null,
     "choch_pending_dir": null,
     "flip_unconfirmed": false,

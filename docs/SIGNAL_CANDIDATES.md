@@ -48,16 +48,19 @@ already see (or almost see) that may predict trade quality.
   displacement-decay overhaul.
 - **Status:** logged. Test in Stage 1 as an interaction with #2, not alone.
 
-## 4. Ranging structure flag — COMPUTED, NOT LOGGED
+## 4. Ranging structure flag — REMOVED (2026-07-31)
 
-- **Definition:** structure engine sets `ranging` when the trend is intact but no
-  trend-direction swing has extended for STRUCTURE_RANGING_STALE swings
-  (dealing_range.py structure v2).
-- **Vet logic:** trend labels are stale inside a box; continuation entries in chop
-  are the classic bleed. Daily-bias evidence (in-sample) said ranging days were the
-  biggest money-loser.
-- **Status:** computed every bar, invisible in trades.csv. Candidate column:
-  `structure_ranging_at_alert`.
+- **Definition (retired):** the structure engine used to set `ranging` when the trend
+  was intact but no trend-direction swing had extended for STRUCTURE_RANGING_STALE
+  swings (dealing_range.py structure v2).
+- **Why removed:** informational-only flag that gated nothing; it and its
+  `structure_ranging_at_alert` column were ripped out completely (detection engine,
+  live email, backtest schema, tests, golden fixtures) so it stops polluting the
+  downstream ML feature set. The stall counter (`trend_dir_swings_since_extend`) and
+  `STRUCTURE_RANGING_STALE` no longer exist. The separate daily Choppiness Index
+  (`chop_at_alert`) is unaffected.
+- **Status:** GONE. Do not re-add as a candidate. Any "ranging regime" idea must be
+  built fresh from the daily-chop layer, not this dead structural flag.
 
 ## 5. Pending flip (CHoCH armed, unconfirmed) — COMPUTED, NOT LOGGED
 

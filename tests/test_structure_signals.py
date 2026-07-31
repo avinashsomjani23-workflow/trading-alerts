@@ -4,9 +4,6 @@ Run:  python tests/test_structure_signals.py
 Exit 0 iff every guard passes.
 
 Covers:
-  S1  ranging counter resets on a Confirmation-BOS trend flip (behavioral proof
-      on REAL cached USDCHF H1 candles — a ranging trend that flips — plus a
-      source guard proving the reset lives in both flip branches).
   S2  structure state snapshotted at alert as PAYLOAD scalars (re-fire freeze +
       source tripwire) — kills the last-fire-stamp bug class for these columns.
   S3  leg-retracement math (long/short/degenerate/missing/clipped/>100) + the
@@ -28,8 +25,6 @@ _ROOT = _HERE.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-import pandas as pd  # noqa: E402
-import dealing_range as dr  # noqa: E402
 from backtest.h1_only_simulator import (  # noqa: E402
     read_s4_broken_flags,
 )
@@ -47,102 +42,6 @@ def _bad(m):
     raise AssertionError(m)
 
 
-# ── S1 fixture: REAL H1 candles from the committed cache (backtest/cache/
-# CHF_X_1h.parquet — real USDCHF market history, the ONLY real H1 data CI can
-# see; the raw MT5 CSVs under backtest/mt5_data/ are gitignored/local-only and
-# absent in CI, so a CI guard cannot read them). This immutable 500-bar window
-# (the cache tail, verified 2026-07-10) contains trend flips whose pre-flip trend
-# was RANGING and whose post-flip trend is NOT — e.g. down/ranging=True →
-# up/ranging=False. On the flip bar the ranging counter belongs to the OLD trend
-# and must reset to 0 (ranging False). Pre-fix it leaked True. Real candles (not a
-# crafted chart) so the fixture cannot silently drift with a detector tweak — a
-# genuine flip is a genuine flip. The cache is sliced, never fetched.
-_S1_CACHE = _ROOT / "backtest" / "cache" / "CHF_X_1h.parquet"
-_S1_WINDOW_BARS = 500
-
-
-def _s1_window():
-    """Load the frozen real-cache USDCHF window as an OHLCV frame the engine reads."""
-    df = pd.read_parquet(_S1_CACHE)
-    return df.tail(_S1_WINDOW_BARS)
-
-
-def test_s1_ranging_resets_on_flip():
-    if not _S1_CACHE.exists():
-        _bad(f"cache missing: {_S1_CACHE} (cannot run S1 behavioral guard)")
-        return
-    w = _s1_window()
-    if len(w) < _S1_WINDOW_BARS:
-        _bad(f"S1 window short: {len(w)} bars (want {_S1_WINDOW_BARS})")
-        return
-
-    # Walk the window bar-by-bar; record every trend flip and the (state, ranging)
-    # on the bar just before vs the flip bar. Data-driven — no hardcoded indices to
-    # drift. The engine is pure, so w.iloc[:n] is the state as of bar n.
-    prev = None
-    flips = []
-    for n in range(60, len(w) + 1):
-        s = dr.compute_structure(w.iloc[:n], None)
-        cur = (s["state"], s.get("ranging"))
-        if (prev and prev[0] in ("up", "down") and cur[0] in ("up", "down")
-                and prev[0] != cur[0]):
-            flips.append({"bar": n, "pre_state": prev[0], "pre_ranging": prev[1],
-                          "post_state": cur[0], "post_ranging": cur[1]})
-        prev = cur
-
-    if not flips:
-        _bad("frozen cache window emitted NO trend flip — window stale or engine broken")
-        return
-    _ok(f"{len(flips)} trend flip(s) detected on real cached candles")
-
-    # THE FIX: on every flip where the OLD trend was ranging, the NEW trend must
-    # NOT inherit ranging=True. At least one such ranging-pre flip must exist
-    # (proving the reset actually fires, not that no flip was ever ranging).
-    ranging_flips = [f for f in flips if f["pre_ranging"] is True]
-    if not ranging_flips:
-        _bad("no flip in the window had a RANGING pre-flip trend — cannot prove the "
-             "reset fires (window drifted)")
-        return
-    _dirs = sorted({f["pre_state"] + "->" + f["post_state"] for f in ranging_flips})
-    _ok(f"{len(ranging_flips)} flip(s) had a ranging pre-flip trend (directions: {_dirs})")
-
-    for f in ranging_flips:
-        tag = f"{f['pre_state']}->{f['post_state']} @ bar {f['bar']}"
-        if f["post_ranging"] is False:
-            _ok(f"ranging reset to False on the fresh trend ({tag})")
-        else:
-            _bad(f"flip leaked ranging=True — S1 reset missing ({tag}); stale "
-                 "counter survived the trend flip")
-
-
-def test_s1_reset_in_both_flip_branches_only():
-    """Source guard: the reset lives in BOTH Confirmation-BOS flip branches and
-    NOT in the CHoCH_FAILED / reclaim paths (where the old trend resumes and the
-    stale count legitimately carries)."""
-    src = (_ROOT / "dealing_range.py").read_text(encoding="utf-8")
-    # Both flip branches re-seed the leg extremes then reset the counter.
-    up_flip = "leg_extreme_high = hi_i; leg_extreme_low = lo_i" in src
-    n_reset = src.count("trend_dir_swings_since_extend = 0")
-    # 5 pre-existing resets (init, continuation-BOS x2, HL/LH extend x2) + the
-    # two S1 flip-branch resets = 7. Assert >= 6 so the two flip resets can't be
-    # silently dropped; the S1 comment markers below pin them to the flip path.
-    s1_up = "# S1: a trend flip starts a fresh leg" in src
-    s1_down = "# S1: fresh leg on the flip" in src
-    if up_flip and s1_up and s1_down and n_reset >= 6:
-        _ok(f"both flip branches reset the ranging counter "
-            f"({n_reset} total resets incl. S1's two)")
-    else:
-        _bad(f"S1 flip-branch reset missing/misplaced: up_flip={up_flip} "
-             f"s1_up={s1_up} s1_down={s1_down} n_reset={n_reset}")
-    # The reclaim/failed paths must NOT carry an S1-style reset — the old trend
-    # resumes there. Assert the CHoCH_FAILED branches do not reset the counter by
-    # checking the reset never appears in the two lines after a CHoCH_FAILED stamp.
-    if 'kind": "CHoCH_FAILED"' in src:
-        _ok("CHoCH_FAILED branches present (reclaim path — no reset, by design)")
-    else:
-        _bad("CHoCH_FAILED branch not found — structure changed, re-verify S1")
-
-
 # ── S2/S3 re-fire freeze — mirror the S2/S3 payload-scalar logic and prove the
 # FIRST fire's snapshot wins when the shared ob dict / walls change on a re-fire.
 # _build_row reads these strictly from alert.get(...) (payload scalars). ----------
@@ -155,7 +54,6 @@ def _row_structure_signals(alert):
     ob = alert["ob"]
     cb, fb = read_s4_broken_flags(ob.get("dealing_range"))
     return {
-        "structure_ranging_at_alert": alert.get("structure_ranging_at_alert"),
         "flip_pending_at_alert": alert.get("flip_pending_at_alert"),
         "flip_pending_dir_at_alert": alert.get("flip_pending_dir_at_alert"),
         "leg_extreme_at_alert": alert.get("leg_extreme_at_alert"),
@@ -166,25 +64,22 @@ def _row_structure_signals(alert):
 
 
 def test_s2_state_frozen_from_first_fire_payload():
-    # First fire: not ranging, no pending flip. A LATER fire flipped the shared
-    # walls/ob to ranging+pending — but the traded row is built from the FIRST
-    # fire's payload scalars, which must win.
+    # First fire: no pending flip. A LATER fire flipped the shared walls/ob to
+    # pending — but the traded row is built from the FIRST fire's payload
+    # scalars, which must win.
     alert = {
-        "structure_ranging_at_alert": False,
         "flip_pending_at_alert": False,
         "flip_pending_dir_at_alert": None,
         "leg_extreme_at_alert": 1.2345,
         "leg_extreme_clipped": False,
         # shared ob dict re-stamped by a later fire (must be ignored):
-        "ob": {"structure_ranging_at_alert": True,
-               "flip_pending_at_alert": True,
+        "ob": {"flip_pending_at_alert": True,
                "leg_extreme_at_alert": 9.9999,
                "dealing_range": {"valid": True, "ceiling_broken": True,
                                  "floor_broken": False}},
     }
     r = _row_structure_signals(alert)
-    if (r["structure_ranging_at_alert"] is False
-            and r["flip_pending_at_alert"] is False
+    if (r["flip_pending_at_alert"] is False
             and r["leg_extreme_at_alert"] == 1.2345):
         _ok("S2/S3: row reads the FIRST fire's payload, not the re-stamped dict")
     else:
@@ -245,14 +140,12 @@ def test_source_yield_carries_payload_scalars():
     yield_src = (_ROOT / "backtest" / "replay_engine.py").read_text(encoding="utf-8")
     row_src = (_ROOT / "backtest" / "h1_only_simulator.py").read_text(encoding="utf-8")
     y_ok = all(k in yield_src for k in (
-        '"structure_ranging_at_alert": _structure_ranging_at_alert',
         '"flip_pending_at_alert": _flip_pending_at_alert',
         '"flip_pending_dir_at_alert": _flip_pending_dir_at_alert',
         '"leg_extreme_at_alert": _leg_extreme_at_alert',
         '"leg_extreme_clipped": _leg_extreme_clipped',
     ))
     r_ok = all(k in row_src for k in (
-        'alert.get("structure_ranging_at_alert")',
         'alert.get("flip_pending_at_alert")',
         'alert.get("flip_pending_dir_at_alert")',
         'alert.get("leg_extreme_at_alert")',
@@ -359,10 +252,7 @@ def test_single_implementation_of_trend_alignment():
 
 
 def main():
-    print("== S1: ranging counter resets on trend flip ==")
-    test_s1_ranging_resets_on_flip()
-    test_s1_reset_in_both_flip_branches_only()
-    print("\n== S2/S3: alert-time payload freeze ==")
+    print("== S2/S3: alert-time payload freeze ==")
     test_s2_state_frozen_from_first_fire_payload()
     test_s3_extreme_higher_on_refire_but_first_wins()
     print("\n== S4: broken-wall PD flags ==")
