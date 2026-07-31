@@ -508,12 +508,11 @@ def _simulate_single_entry(
                          if isinstance(levels, dict) else "levels_none")
         return None
     # entry = the RAW OB execution price (2026-07-30 raw convention — no spread on
-    # entry) — used for R-distance, MFE/MAE anchor and all exit math. entry_raw is
-    # the same raw OB edge (kept as the fill trigger; bars are BID so the fill fires
-    # when the chart reaches this line). entry == entry_raw now. Falls back to entry
-    # if a caller ever omits entry_raw.
+    # entry) — used for R-distance, MFE/MAE anchor, the FILL TRIGGER, and all exit
+    # math. It IS the raw OB edge: bars are BID so the fill fires when the chart
+    # reaches this line. (The entry_raw twin was dropped 2026-07-31 — under the raw
+    # model it equalled entry, so it was a redundant column.)
     entry  = float(levels["entry"])
-    entry_raw = float(levels.get("entry_raw", levels["entry"]))
     sl     = float(levels["sl"])
     # FIXED_2R_BASELINE (2026-07-31): the liquidity-pool TP ladder
     # (tp1/tp2/tp_wick/tp_nextpool + all their *_raw/*_rr/zone_source twins) is
@@ -696,14 +695,14 @@ def _simulate_single_entry(
             # Monday rather than being killed -- same as any other no-touch bar.
             friday_evening = (WEEKEND_FLAT and ts.dayofweek == 4
                               and ts.hour >= WEEKEND_FLAT_HOUR_UTC)
-            # Pending limit fill: the FILL TRIGGER is the OB line entry_raw (bars are
+            # Pending limit fill: the FILL TRIGGER is the OB line `entry` (bars are
             # BID; the chart must reach the limit). Long triggers when bar.low <=
-            # entry_raw, short when bar.high >= entry_raw. Under the raw model
-            # entry == entry_raw (no spread on entry), so the fill price `entry` is the
-            # same line — set as the mfe/mae anchor below.
+            # entry, short when bar.high >= entry. Under the raw model there is no
+            # spread on entry, so this same line is also the fill price and the
+            # mfe/mae anchor set below.
             if not friday_evening and (
-                    (bias == "LONG" and bar_lo <= entry_raw) or
-                    (bias == "SHORT" and bar_hi >= entry_raw)):
+                    (bias == "LONG" and bar_lo <= entry) or
+                    (bias == "SHORT" and bar_hi >= entry)):
                 filled = True
                 fill_ts = ts
                 fill_bar_idx = i
@@ -825,7 +824,7 @@ def _simulate_single_entry(
         # so the report can count "would-have-missed" trades.
         return _build_row(
             alert=alert, pair_conf=pair_conf, ob=ob,
-            entry_zone=entry_zone, entry=entry, entry_raw=entry_raw,
+            entry_zone=entry_zone, entry=entry,
             sl=sl,
             setup_liq_reads=_setup_liq_reads,
             score=score, breakdown=breakdown,
@@ -1115,7 +1114,7 @@ def _simulate_single_entry(
 
     return _build_row(
         alert=alert, pair_conf=pair_conf, ob=ob,
-        entry_zone=entry_zone, entry=entry, entry_raw=entry_raw,
+        entry_zone=entry_zone, entry=entry,
         sl=sl,
         setup_liq_reads=_setup_liq_reads,
         score=score, breakdown=breakdown,
@@ -1250,7 +1249,6 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl,
                mfe_r, mae_r, bars_to_exit,
                bars_to_mfe=None, bars_to_mae=None,
                sl_collision, risk_usd,
-               entry_raw=None,
                sl_bar_was_sweep=None,
                sl_swept_then_2r=None, sl_swept_then_1r=None,
                sl_wick_depth_atr=None, sl_max_adverse_after_sweep_atr=None,
@@ -1540,9 +1538,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl,
         "event":         _event_label(bos_tag, bos_tier),
         "entry_zone":    entry_zone,
         # entry is the RAW OB execution price (2026-07-30 raw convention — no spread
-        # shift). entry_raw equals it (kept as the fill trigger column). None-safe.
+        # shift) and the fill-trigger line. None-safe. (entry_raw twin dropped
+        # 2026-07-31 — it equalled entry under the raw model.)
         "entry":         entry,
-        "entry_raw":     entry_raw,
         # sl_initial = the traded stop = OB distal -/+ 1 spread (the single spread,
         # applied once upstream). The one stop column (sl_raw twin dropped
         # 2026-07-31 — it equalled this under the raw model).

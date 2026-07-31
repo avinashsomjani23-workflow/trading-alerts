@@ -107,6 +107,17 @@ Six beats, plain English, in order. Never dump raw stats.
 - **Barely-insignificant → LOG it, don't bin it.** A near-miss (CI just crossing, small
   effect) gets logged to `ANALYSIS_POINTERS.md` with its numbers. Nine years of one pair is
   not the verdict — it may hold on Validation, Holdout, or another pair.
+- **Originals over repackaging — analyse the numbers, not the buckets.** When a column is a
+  LOSSY repackaging of others — a bucket/tier/label/summary that discards resolution — derive
+  every insight from the ORIGINAL continuous columns, never the repackaged one. The bucket is
+  a convenience for humans, not a signal. Two live cases: **break quality** comes from
+  `break_close_atr` / `break_body_atr` / `break_excess` (absolute numbers), NEVER `bos_tier`
+  or `break_tier` — if a finding leans on the tier, that is a red flag, re-derive it on the
+  raw number. **`day_state_at_fill`** is computed entirely from `pdh_status_at_fill` +
+  `pdl_status_at_fill`, so it is `DECREED_OUT` of the feature screen (kept only for the email)
+  — screen the two status columns instead. (This is NOT anti-derivation in general: a ratio or
+  interaction that captures something neither source column holds is a real feature. The bar is
+  "does it add information," and a lossy bucket does not.)
 - **Plain English always.** Explain idea, data, and result as to someone smart who doesn't
   speak SMC. Define any term you must use.
 - The full 10-step method lives in `ANALYSIS_POINTERS.md` — followed there, not copied here.

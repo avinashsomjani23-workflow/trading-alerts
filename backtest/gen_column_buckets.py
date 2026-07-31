@@ -110,11 +110,23 @@ FILL = {
 ALERT_BOOKKEEPING = {
     "setup_id", "pair", "model", "alert_ts", "alert_bar_ts", "alert_seq",
     "ob_timestamp", "bos_timestamp", "direction", "bias",
-    "entry_zone", "entry", "entry_raw", "sl_initial",
+    "entry_zone", "entry", "sl_initial",
     # tp_2r = the fixed 2R target (FIXED_2R_BASELINE_SPEC 2026-07-31). Computed from
     # entry & sl (both alert-known), so it is an alert-time level like the retired tp1.
     "tp_2r",
     "eligible_for_headline", "headline_exclusion", "killzone_windows",
+}
+
+# RETIRING — columns REMOVED from emission but still physically present in the
+# not-yet-regenerated canonical CSV. They must still classify (so the doc builds and
+# the CI gate stays green) until the next full run drops them from the header and
+# CANONICAL.md is repointed. DELETE each entry from this set in the SAME commit that
+# repoints CANONICAL.md to a run that no longer contains it — otherwise the gate can
+# no longer prove the column is gone.
+#   entry_raw (alert): dropped 2026-07-31, byte-identical to `entry` under the raw
+#     spread model. Leaves the CSV at the next EURUSD Discovery re-run.
+RETIRING = {
+    "entry_raw": "alert",
 }
 
 
@@ -126,6 +138,8 @@ def classify(col: str) -> str:
         return "fill"
     if col in ALERT_BOOKKEEPING:
         return "alert"
+    if col in RETIRING:
+        return RETIRING[col]
     # Honest timing suffixes route deterministically. Audited 2026-07-30: every CSV
     # column carrying one of these suffixes is stamped consistent with its name.
     if col.endswith("_at_fill"):

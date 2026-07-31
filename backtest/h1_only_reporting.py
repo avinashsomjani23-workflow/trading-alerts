@@ -1243,12 +1243,12 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "setup_id",
         "pair", "alert_ts", "fill_ts", "exit_ts", "session",
         "direction", "event", "entry_zone",
-        # entry = RAW OB execution level (2026-07-30 raw convention); entry_raw
-        # equals it (fill trigger). sl_initial = the traded stop (one spread on the
-        # stop only). tp_2r = the FIXED 2R target (FIXED_2R_BASELINE_SPEC 2026-07-31)
-        # — the ONE committed exit level; liquidity-pool TP1/TP2/wick/next-pool are
-        # retired from this run.
-        "entry", "entry_raw", "sl_initial", "tp_2r",
+        # entry = RAW OB execution level (2026-07-30 raw convention) and the fill
+        # trigger (entry_raw twin dropped 2026-07-31 — identical under the raw model).
+        # sl_initial = the traded stop (one spread on the stop only). tp_2r = the
+        # FIXED 2R target (FIXED_2R_BASELINE_SPEC 2026-07-31) — the ONE committed exit
+        # level; liquidity-pool TP1/TP2/wick/next-pool are retired from this run.
+        "entry", "sl_initial", "tp_2r",
         "exit_reason", "exit_price",
         "r_realised", "pnl_usd",
         # Headline membership: True rows sum to the email headline. When False,

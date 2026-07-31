@@ -1619,11 +1619,11 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
 
     # Spread model (2026-07-30, "raw" convention): entry and TP are RAW — the spread
     # lives ONLY on the stop (below). These placement helpers are now IDENTITY (no
-    # shift); they are kept as pass-throughs so the emitted price and its *_raw twin
-    # coincide and every downstream reader (fill trigger on entry_raw, *_raw audit
-    # columns) keeps working unchanged. The prior 2026-07-22 entry+/TP- shift was
-    # removed because live and MT5 use different feeds, so a modelled entry/TP shift
-    # added noise, and it double-counted the stop spread.
+    # shift); they are kept as pass-throughs so the emitted `entry` IS the raw OB line
+    # the fill trigger reads (the entry_raw twin was dropped 2026-07-31 — identity made
+    # it redundant), while tp1_raw is kept as the RR-grading geometry. The prior
+    # 2026-07-22 entry+/TP- shift was removed because live and MT5 use different feeds,
+    # so a modelled entry/TP shift added noise, and it double-counted the stop spread.
     def _place_entry(px):
         return px
 
@@ -1859,11 +1859,11 @@ def compute_phase2_levels(pair_conf, bias, ob, current_price, df_h1,
     out = {
         "valid": True,
         # entry/tp1 are RAW OB/zone-edge prices (2026-07-30 raw convention — no
-        # spread shift). entry_raw/tp1_raw are kept and equal entry/tp1 now (placement
-        # is identity), so the fill trigger (simulator reads entry_raw) and the *_raw
-        # audit columns keep working. The only spread is on `sl` below.
+        # spread shift). entry placement is identity, so `entry` IS the raw OB line
+        # the simulator triggers the fill on. The entry_raw twin was dropped
+        # 2026-07-31 (it equalled entry under the raw model). tp1_raw kept as the
+        # RR-grading geometry. The only spread is on `sl` below.
         "entry": round(_place_entry(entry), dp),
-        "entry_raw": round(entry, dp),
         "sl": round(sl, dp),                # OB distal -/+ 1 spread (the only spread)
         "tp1": round(_place_tp(tp1), dp),   # raw zone-edge TP1
         "tp1_raw": round(tp1, dp),          # == tp1 (RR graded on this raw geometry)

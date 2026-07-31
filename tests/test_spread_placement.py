@@ -10,11 +10,13 @@ SL -spread), which double-counted the stop (one spread there + one more in
 the simulator) and grew every 1R by ~8%. Now there is one spread, on the
 stop, once. See smc_detector.py compute_phase2_levels docstring (:1551).
 
-  - ENTRY == entry_raw (no shift).
+  - ENTRY == the raw OB line (no shift). The entry_raw twin was dropped
+    2026-07-31 (identical to entry under the raw model), so the invariant is
+    now asserted against the OB level directly.
   - TP == its *_raw twin (no shift).
   - SL keeps its OB-distal +/- spread buffer (the only spread in the model).
-  - spread_pips == 0 -> every placed price equals its *_raw (byte-identical),
-    same as spread_pips > 0 now (the raw convention is a no-op by construction).
+  - spread_pips == 0 -> tp still equals its *_raw (byte-identical), same as
+    spread_pips > 0 now (the raw convention is a no-op by construction).
 
 Run: python -m pytest tests/test_spread_placement.py -q
 """
@@ -50,10 +52,9 @@ def test_long_entry_and_tp_placement():
     lv = smc_detector.compute_phase2_levels(
         conf, "LONG", ob, 0.61010, _frame(True), tp_targets="single")
     assert lv["valid"]
-    # RAW convention: entry == entry_raw (no spread shift).
-    assert abs(lv["entry"] - lv["entry_raw"]) < 1e-9, \
-        f"LONG entry should equal raw: {lv['entry']} vs raw {lv['entry_raw']}"
-    assert lv["entry_raw"] == 0.61000
+    # RAW convention: entry IS the raw OB line (no spread shift).
+    assert lv["entry"] == 0.61000, \
+        f"LONG entry should be the raw OB line: {lv['entry']}"
     # tp1 == tp1_raw (no spread shift).
     if lv.get("tp1_raw") is not None:
         assert abs(lv["tp1"] - lv["tp1_raw"]) < 1e-9, \
@@ -70,10 +71,9 @@ def test_short_entry_and_tp_placement():
     lv = smc_detector.compute_phase2_levels(
         conf, "SHORT", ob, 0.60990, _frame(False), tp_targets="single")
     assert lv["valid"]
-    # RAW convention: entry == entry_raw (no spread shift).
-    assert abs(lv["entry"] - lv["entry_raw"]) < 1e-9, \
-        f"SHORT entry should equal raw: {lv['entry']} vs raw {lv['entry_raw']}"
-    assert lv["entry_raw"] == 0.61000
+    # RAW convention: entry IS the raw OB line (no spread shift).
+    assert lv["entry"] == 0.61000, \
+        f"SHORT entry should be the raw OB line: {lv['entry']}"
     # tp1 == tp1_raw (no spread shift).
     if lv.get("tp1_raw") is not None:
         assert abs(lv["tp1"] - lv["tp1_raw"]) < 1e-9, \
@@ -91,25 +91,26 @@ def test_zero_spread_is_byte_identical():
     lv = smc_detector.compute_phase2_levels(
         conf, "LONG", ob, 0.61010, _frame(True), tp_targets="single")
     assert lv["valid"]
-    assert lv["entry"] == lv["entry_raw"]
+    # entry IS the raw OB line under the raw model (no entry_raw twin to compare).
+    assert lv["entry"] == 0.61000
     if lv.get("tp1_raw") is not None:
         assert lv["tp1"] == lv["tp1_raw"]
 
 
 def test_simulator_fills_on_raw_line_not_placed():
-    """The simulator must trigger the fill on entry_raw (bid reaches the OB line).
-    Under the RAW convention entry == entry_raw by construction, so the fill
-    trigger and the placed entry are the same line — asserting that identity
-    is the regression guard against a future re-introduction of a shift that
-    would silently decouple the two again."""
+    """The simulator triggers the fill on `entry` (bid reaches the raw OB line).
+    Under the RAW convention there is no spread on entry, so the single `entry`
+    column IS both the fill trigger and the traded fill price — no spread gap.
+    This guards against a future re-introduction of an entry shift that would
+    silently decouple the trigger line from the traded entry. (The entry_raw
+    twin that used to encode this identity was dropped 2026-07-31.)"""
     import backtest.h1_only_simulator as sim  # noqa: F401  (import guard only)
     conf = _conf(2.0)
     ob = {"high": 0.61000, "low": 0.60800,
           "direction": "bullish", "h1_atr": 0.0015}
     lv = smc_detector.compute_phase2_levels(
         conf, "LONG", ob, 0.61010, _frame(True), tp_targets="triple")
-    entry_raw = lv["entry_raw"]
-    entry_placed = lv["entry"]
-    # RAW convention: placed == raw, so the fill trigger (on entry_raw) is
-    # exactly the traded entry — no spread gap between trigger and fill.
-    assert entry_placed == entry_raw
+    # No entry_raw twin: entry must simply be the raw OB proximal line, which is
+    # exactly the fill trigger the simulator uses (bar_lo <= entry).
+    assert "entry_raw" not in lv, "entry_raw must no longer be emitted"
+    assert lv["entry"] == 0.61000

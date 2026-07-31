@@ -135,16 +135,13 @@ def test_levels_dual_entry():
         print(f"    lv_mid  = {lv_mid}")
         assert False, "levels not valid (see lv_prox/lv_mid above)"
 
-    # RAW convention (2026-07-30): entry is the raw OB line (no spread). entry_raw
-    # equals entry. The ONLY spread is on the stop (distal - spread).
-    ok &= check(abs(lv_prox["entry_raw"] - proximal_expected) < 1e-6,
-                f"proximal entry_raw == OB proximal ({lv_prox['entry_raw']} vs {proximal_expected})")
-    ok &= check(abs(lv_mid["entry_raw"] - midpoint_expected) < 1e-6,
-                f"50pct entry_raw == OB midpoint ({lv_mid['entry_raw']} vs {midpoint_expected})")
+    # RAW convention (2026-07-30): entry IS the raw OB line (no spread). The ONLY
+    # spread is on the stop (distal - spread). (entry_raw twin dropped 2026-07-31 —
+    # it equalled entry, so the invariant is now asserted on entry directly.)
     ok &= check(abs(lv_prox["entry"] - proximal_expected) < 1e-6,
                 f"proximal entry == OB proximal, raw ({lv_prox['entry']} vs {proximal_expected})")
-    ok &= check(abs(lv_prox["entry"] - lv_prox["entry_raw"]) < 1e-6,
-                "entry == entry_raw (no spread on entry)")
+    ok &= check(abs(lv_mid["entry"] - midpoint_expected) < 1e-6,
+                f"50pct entry == OB midpoint, raw ({lv_mid['entry']} vs {midpoint_expected})")
     ok &= check(abs(lv_prox["sl"] - lv_mid["sl"]) < 1e-6,
                 "SL identical for both entry zones")
     ok &= check(abs(lv_prox["sl"] - sl_expected) < 1e-6,
@@ -2105,7 +2102,7 @@ def test_bars_to_mfe_mae_hand_path():
     ts_idx = -8                       # alert 8 bars from the end -> 8 future bars I own
     ob = _synth_ob_bullish(df, ts_idx=ts_idx)
     # Overwrite the future window (alert bar onward) with the hand path above.
-    # bar0 fills (low <= entry_raw); its high 1.2400 is PRE-fill and must not count.
+    # bar0 fills (low <= entry); its high 1.2400 is PRE-fill and must not count.
     hand = {
         "Open":  [1.2389, 1.2385, 1.2385, 1.2390, 1.2390, 1.2390, 1.2390, 1.2390],
         "High":  [1.2400, 1.2395, 1.2394, 1.2405, 1.2392, 1.2392, 1.2392, 1.2392],

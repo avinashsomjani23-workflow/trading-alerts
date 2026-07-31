@@ -164,11 +164,12 @@ CATEGORICAL_FEATURES = [
     # Trend-vs-PD confluence bool (2026-07-08, was un-screened) — enters here, NOT
     # via h1_trend (which is redundant-by-construction with trend_alignment).
     "trend_pd_agree",
-    # PD/PW liquidity pools (FILL-time) — day state, per-pool swept/intact status,
-    # nearest-pool tiers, and the draw-on-liquidity direction read. Column names
-    # carry the honest `_at_fill` suffix (fill-anchored); the old `_at_alert` names
-    # were renamed at the CSV writer and never existed on current runs.
-    "day_state_at_fill", "pdh_status_at_fill", "pdl_status_at_fill",
+    # PD/PW liquidity pools (FILL-time) — per-pool swept/intact status, nearest-pool
+    # tiers, and the draw-on-liquidity direction read. Column names carry the honest
+    # `_at_fill` suffix (fill-anchored); the old `_at_alert` names were renamed at the
+    # CSV writer and never existed on current runs. (day_state_at_fill is DECREED_OUT:
+    # a lossy repackaging of pdh/pdl status — screen the originals, not the summary.)
+    "pdh_status_at_fill", "pdl_status_at_fill",
     "pwh_status_at_fill", "pwl_status_at_fill",
     "next_pool_above_tier", "next_pool_below_tier", "trade_toward_pool",
     # EQ clusters (FILL-time) — draw-toward + the instant-death stop-in-a-pool test
@@ -191,7 +192,8 @@ FILL_TIME_FEATURES = {
     # column names carry the honest `_at_fill` suffix — the anchor IS the fill. So
     # they screen in Stage 1 but route to the order-rule track, never the alert-time
     # EV model. (Older code used `_at_alert` names that never existed on the CSV.)
-    "day_state_at_fill", "pdh_status_at_fill", "pdl_status_at_fill",
+    # day_state_at_fill is NOT here — it is DECREED_OUT (lossy repackaging of pdh/pdl).
+    "pdh_status_at_fill", "pdl_status_at_fill",
     "pwh_status_at_fill", "pwl_status_at_fill",
     "dist_next_pool_above_atr", "dist_next_pool_below_atr",
     "next_pool_above_tier", "next_pool_below_tier", "trade_toward_pool",
@@ -224,7 +226,14 @@ REQUIRED_OUTCOME_COLS = [
 SL_ANATOMY_COLS = ["sl_bar_was_sweep", "sl_swept_then_2r"]
 
 # Decreed out (SPEC §5.1) — must NOT appear in the screened manifest.
-DECREED_OUT = {"sweep_present"}
+#   sweep_present: a raw input to other sweep features, not itself a screen candidate.
+#   day_state_at_fill (2026-07-31): a LOSSY REPACKAGING — computed ENTIRELY from
+#     pdh_status_at_fill + pdl_status_at_fill (pool_builder.day_state()). Screening it
+#     alongside its two source columns triple-counts the same fact and inflates the
+#     FDR multiple-testing penalty on a phantom correlation. We screen the ORIGINALS;
+#     day_state rides along only for the human-readable email. Same rule already
+#     applied to h1_trend (redundant-by-construction with trend_alignment).
+DECREED_OUT = {"sweep_present", "day_state_at_fill"}
 
 
 def _classify_timing(feat: str) -> str:
