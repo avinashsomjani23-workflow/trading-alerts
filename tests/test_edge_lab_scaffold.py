@@ -92,7 +92,8 @@ def test_guard_tolerates_na_tokens_in_numeric():
 
 def test_outcome_time_features_are_classed_outcome_time():
     for f in ["r_capture_ratio", "sl_wick_depth_atr", "mfe_r", "mae_r",
-              "sl_max_adverse_after_sweep_atr", "bars_sl_to_tp1_touch",
+              "sl_max_adverse_after_sweep_atr", "bars_sl_to_2r_touch",
+              "bars_sl_to_1r_touch",
               "sl_recovered_to_entry", "r_realised", "exit_reason"]:
         assert lab.classify_timing(f) == "outcome_time", f
 

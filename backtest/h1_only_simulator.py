@@ -11,9 +11,12 @@ swings, reused from live compute_phase2_levels.
 No scoring gate — every OB-touch is simulated regardless of confluence score.
 Score is logged for post-run analysis (discover the optimal threshold empirically).
 
-Per-trade outputs cover both exit policies (TP1 vs TP2) so the user can
-see what their real-life TP1-only behaviour would produce vs the system's
-default TP2 target.
+Exit policy (2026-07-31, FIXED_2R_BASELINE_SPEC): a single FIXED 2R bracket —
+full position exits at +2R (`exit_reason == "tp"`) or the stop at -1R
+(`exit_reason == "sl"`), no break-even, no trail, no liquidity-pool target. The
+committed run speaks ONE exit language: fixed 2R. Liquidity-pool TP columns and
+the BE@1R policy are retired from this run (the code that computes pool levels
+stays for LIVE Phase 2; the backtest just stops logging it).
 
 Hard rule (matches live simulator): same-bar SL+TP collision resolves SL-first.
 """
@@ -63,9 +66,9 @@ DEFAULT_RISK_USD = 250.0
 # CSV predates the 2026-07-10 break-gate removal — detection columns are stale).
 MSS_BODY_ATR_MULT = 1.70
 
-# sl_swept_then_tp1 lookahead: bars after an SL exit to check for a reversal to
-# TP1 (only when the stop bar itself was a sweep). Matches the hold horizon so a
-# late reversal is still caught. Diagnostic only.
+# SL-sweep lookahead: bars after an SL exit to check whether a swept stop later
+# recovered to the +2R or +1R target (only when the stop bar itself was a sweep).
+# Matches the hold horizon so a late reversal is still caught. Diagnostic only.
 SL_SWEEP_LOOKBACK_BARS = MAX_HOLD_H1_BARS
 
 # TP1 RR floor. As of 2026-07-15 LIVE also floors at 0.5R (compute_phase2_levels
@@ -438,62 +441,6 @@ def _score_h1_only(alert: Dict[str, Any], pair_conf: Dict[str, Any],
     return total, breakdown
 
 
-def _reference_touch_indices(future, bias, entry, sl, tp1, tp2, fill_bar_idx):
-    """Replay the legacy 'ride to TP2 on original SL' policy over `future`
-    (post-fill bars) purely to populate the REFERENCE columns r_if_exit_tp1 /
-    r_if_exit_tp2. Independent of the live TP1+BE@1R walk so those study
-    columns keep meaning exactly what they meant before the 2026-06-18 change:
-    "did price touch TP1 / TP2 before the ORIGINAL stop would have hit."
-
-    Returns (tp1_hit_bar_idx, tp2_hit_bar_idx, ref_exit_r_unscaled_price).
-    The third value is the exit price under the legacy default policy (TP1->BE
-    ->TP2), used as the fallback R when neither TP was touched.
-    """
-    sl_after_tp1 = sl
-    tp1_idx = -1
-    tp2_idx = -1
-    ref_exit_price = None
-    for i, (ts, bar) in enumerate(future.iterrows()):
-        if i < fill_bar_idx:
-            continue
-        is_fill_bar = (i == fill_bar_idx)
-        bar_hi = float(bar["High"]); bar_lo = float(bar["Low"])
-        bars_post = i - fill_bar_idx
-        if bars_post > MAX_HOLD_H1_BARS and ref_exit_price is None:
-            ref_exit_price = float(bar["Close"])
-            break
-        if bias == "LONG":
-            sl_hit = bar_lo <= sl_after_tp1
-            tp1_hit = bar_hi >= tp1
-            tp2_hit = (tp2 is not None) and (bar_hi >= tp2)
-        else:
-            sl_hit = bar_hi >= sl_after_tp1
-            tp1_hit = bar_lo <= tp1
-            tp2_hit = (tp2 is not None) and (bar_lo <= tp2)
-        if is_fill_bar:
-            tp1_hit = False; tp2_hit = False
-        # SL-first on ANY collision bar (2026-07-02 fix): when the same bar hits
-        # both the stop and a TP, the intra-bar order is unprovable, so the TP
-        # touch must NOT be recorded. Previously tp1_idx/tp2_idx were stamped
-        # BEFORE the SL check, so r_if_exit_tp1/r_if_exit_tp2 booked the TP as a
-        # win on the very bar the walk itself resolved as SL — the reference
-        # columns were optimistic exactly where the realised walk is pessimistic.
-        if sl_hit:
-            ref_exit_price = sl_after_tp1; break
-        if tp1_hit and tp1_idx == -1:
-            tp1_idx = bars_post
-        if tp2_hit and tp2_idx == -1:
-            tp2_idx = bars_post
-        if tp2_hit:
-            ref_exit_price = tp2; break
-        if tp1_hit and sl_after_tp1 != entry:
-            sl_after_tp1 = entry
-    if ref_exit_price is None:
-        # Window exhausted with position open under legacy policy.
-        ref_exit_price = float(future.iloc[-1]["Close"]) if len(future) else entry
-    return tp1_idx, tp2_idx, ref_exit_price
-
-
 def _simulate_single_entry(
     alert: Dict[str, Any],
     pair_conf: Dict[str, Any],
@@ -568,56 +515,18 @@ def _simulate_single_entry(
     entry  = float(levels["entry"])
     entry_raw = float(levels.get("entry_raw", levels["entry"]))
     sl     = float(levels["sl"])
-    tp1    = float(levels["tp1"])
-    # TRIPLE mode (backtest, 2026-07-17): compute_phase2_levels returns the 3-target
-    # ladder. The next-different-pool runner comes back as `tp_nextpool` (single
-    # mode's `tp2`); the SAME-pool buffered wick target comes back as `tp_wick`.
-    #   - Backtest `tp2` local KEEPS its historical meaning = next pool (so every
-    #     downstream reader, the ordering guard, r_if_exit_tp2 and bars_to_tp2 are
-    #     unchanged). It reads from tp_nextpool.
-    #   - tp_wick / tp_nextpool are emitted as new, unambiguous columns; the exit
-    #     recipes target them via walk_multileg string specs.
-    tp_nextpool = levels.get("tp_nextpool")
-    tp2    = float(tp_nextpool) if tp_nextpool is not None else None
-    # *_raw execution levels. Under the raw model (2026-07-30) they EQUAL the emitted
-    # entry/tp1/tp2 (no spread shift), kept as columns so audit/Excel readers don't
-    # break. tp2 local == the next-pool runner, so its raw comes from tp_nextpool_raw.
-    # None-safe.
-    tp1_raw = levels.get("tp1_raw")
-    _tp_np_raw = levels.get("tp_nextpool_raw")
-    tp2_raw = float(_tp_np_raw) if _tp_np_raw is not None else None
-    tp1_rr = float(levels.get("rr", 0.0))
-    tp2_rr = float(levels.get("tp_nextpool_rr", 0.0)) if tp2 is not None else 0.0
-    # TP-placement audit (2026-07-15): the zone-edge TP vs the raw swing wick it
-    # replaced, and both RRs. Lets the analysis separate "nearer TP" (zone vs
-    # wick) from "lower floor" (0.5). Straight pass-through of compute_phase2_levels.
-    tp1_wick = levels.get("tp1_wick")
-    tp1_wick_rr = float(levels.get("tp1_wick_rr", 0.0))
-    tp1_zone_source = levels.get("tp1_zone_source", "wick")
-    # tp2_wick / tp2_zone_source audit the NEXT-POOL runner's raw wick + source
-    # (same meaning as before — `tp2` == next pool). In triple mode the runner is
-    # zone-edge placed by tp_nextpool_zone_source.
-    tp2_wick = levels.get("tp2_wick")
-    tp2_zone_source = (levels.get("tp_nextpool_zone_source", "wick")
-                       if tp2 is not None else None)
-    # Triple-mode 3rd/wick target set (new): the same-pool buffered wick and the
-    # runner, plus the collapse flag and mode marker. Passed straight to the row.
-    tp_wick = levels.get("tp_wick")
-    tp_wick_rr = levels.get("tp_wick_rr")
-    tp_nextpool_rr = levels.get("tp_nextpool_rr")
-    tp_nextpool_zone_source = levels.get("tp_nextpool_zone_source")
-    tp2_collapsed_to_tp1 = levels.get("tp2_collapsed_to_tp1", False)
-    tp_targets = levels.get("tp_targets", "triple")
+    # FIXED_2R_BASELINE (2026-07-31): the liquidity-pool TP ladder
+    # (tp1/tp2/tp_wick/tp_nextpool + all their *_raw/*_rr/zone_source twins) is
+    # RETIRED from this run. compute_phase2_levels still computes it (LIVE Phase 2
+    # consumes it) — the backtest simply stops reading it into the row. The one
+    # committed exit is a fixed 2R bracket computed below from entry & sl.
 
     # SPREAD MODEL (2026-07-30, "raw" convention): the ONE spread in the system is
     # applied ONCE, upstream in compute_phase2_levels, which returns `sl` already
-    # widened one spread past the OB distal (LONG below / SHORT above). Entry and TP
-    # come back RAW. The simulator must NOT re-widen the stop — doing so double-
-    # counted the spread and grew every 1R by ~8% (the pre-2026-07-30 bug). So `sl`
-    # is used as-is. sl_raw is kept as an audit twin but now EQUALS sl (the one
-    # spread is already in it upstream); it stays a column so downstream readers and
-    # the Excel audit don't break. Slippage and swap are NOT modelled (user decision).
-    sl_raw = sl
+    # widened one spread past the OB distal (LONG below / SHORT above). Entry comes
+    # back RAW. The simulator must NOT re-widen the stop — doing so double-counted
+    # the spread and grew every 1R by ~8% (the pre-2026-07-30 bug). So `sl` is used
+    # as-is. Slippage and swap are NOT modelled (user decision).
 
     r_distance = abs(entry - sl)
     if r_distance <= 0:
@@ -626,33 +535,25 @@ def _simulate_single_entry(
                   reason="zero_r_distance")
         return None
 
+    # ── FIXED 2R target ───────────────────────────────────────────────────────
+    # The single committed exit level: +2R above (LONG) / below (SHORT) entry,
+    # where 1R = r_distance = |entry - sl| (sl already one-spread-widened upstream).
+    tp_2r = (entry + 2 * r_distance) if bias == "LONG" else (entry - 2 * r_distance)
+
     # ── SETUP-LIQ Reads 1 & 2 (setup_liq / SWING_SWEEP_SPEC) ──────────────────
     # Read 1 (stop-side liquidity) + Read 2 (tp-side magnet) anchor on the FINAL
-    # trade SL (post-spread) and TP1 born from compute_phase2_levels above. Same
-    # closed-bar frame the levels used (df_h1_at_alert -> look-ahead-safe); ATR =
-    # ob['h1_atr'] (the shared *_atr denominator). A 1:1-fallback TP1 has no pool
-    # behind it, so the magnet reads absent by construction (flagged via
-    # no_liquidity_pool_fallback). Observation only; never raises (all-None on
-    # failure). Read 3.2 (leg-extreme) is a SEPARATE payload scalar from the
-    # replay yield (leg_extreme_swept) — it anchors on leg geometry, not SL/TP.
+    # trade SL (post-spread) and the fixed 2R target. SETUP features (where liquidity
+    # rests near the stop / the 2R target), NOT exit columns. Same closed-bar frame
+    # the levels used (df_h1_at_alert -> look-ahead-safe); ATR = ob['h1_atr'] (the
+    # shared *_atr denominator). Fixed 2R always has a target (no 1:1 fallback), so
+    # the tp-side magnet is always evaluated. Observation only; never raises (all-None
+    # on failure). Read 3.2 (leg-extreme) is a SEPARATE payload scalar from the replay
+    # yield (leg_extreme_swept) — it anchors on leg geometry, not SL/TP.
     import setup_liq
     _setup_liq_reads = setup_liq.reads_stop_and_tp(
-        df_h1_at_alert, ob.get("direction"), sl, tp1,
+        df_h1_at_alert, ob.get("direction"), sl, tp_2r,
         ob.get("h1_atr"), pair_conf.get("pair_type", "forex"),
-        tp1_is_fallback=bool(levels.get("no_liquidity_pool_fallback")),
     )
-
-    # Defense in depth: drop the trade if TP2 is on the wrong side of TP1.
-    # compute_phase2_levels already filters this; this guard catches any
-    # future regression or forced-TP path where the upstream check is bypassed.
-    if tp2 is not None:
-        bad = (bias == "LONG" and tp2 <= tp1) or (bias == "SHORT" and tp2 >= tp1)
-        if bad:
-            log_event("h1only_sim_skip", level="error", pair=pair,
-                      entry_zone=entry_zone, alert_ts=str(alert_ts),
-                      reason="tp_order_invalid",
-                      tp1=tp1, tp2=tp2, bias=bias)
-            return None
 
     # Fill walk starts on the ALERT candle itself (alert_ts).
     #
@@ -749,8 +650,6 @@ def _simulate_single_entry(
     exit_ts: Optional[pd.Timestamp] = None
     exit_reason: Optional[str] = None
     exit_price: Optional[float] = None
-    tp1_hit_bar_idx = -1
-    tp2_hit_bar_idx = -1
     mfe_price = entry
     mae_price = entry
     # OUTCOME-side descriptors (2026-07-26): H1 bars from fill (bar 0) to the bar
@@ -763,42 +662,23 @@ def _simulate_single_entry(
     mae_bar_idx = 0
     sl_collision = False
     bars_walked_post_fill = 0
-    bars_to_tp1 = -1
-    bars_to_tp2 = -1
+    # Bars from fill (bar 0) to the EXIT bar. Captured when the exit LATCHES — the
+    # walk keeps running afterwards for window-MFE (A3), so bars_walked_post_fill
+    # would otherwise inflate bars_to_exit to the window end (2026-07-31 fix).
+    exit_bar_offset: Optional[int] = None
 
-    # ── LIVE policy state (2026-06-18): TP1 + break-even at +1R ──────────────
-    # The realised policy is now: fill -> if price reaches +1R move SL to entry
-    # -> exit at TP1. TP2 is never traded; it survives only as a reference
-    # column (r_if_exit_tp2) for the MFE/TP2 study. `r_realised` and `pnl_usd`
-    # follow THIS policy and nothing else.
+    # ── FIXED 2R policy state (2026-07-31, FIXED_2R_BASELINE_SPEC) ────────────
+    # The committed exit is a single fixed 2R bracket: full position exits at the
+    # +2R target (tp_2r) or the stop (sl) — no break-even, no trail. `cur_sl` is
+    # just `sl` (never mutated). `r_realised` and `pnl_usd` follow THIS policy and
+    # nothing else.
     #
-    # `cur_sl` is the live stop: starts at the initial SL, jumps to entry once
-    # the +1R break-even arms. The walk BREAKS at the realised exit, so mfe_r /
-    # mae_r measure IN-TRADE excursion only (fill -> exit), never the post-exit
-    # path. The full-window touch diagnostics (bars_to_tp1 / bars_to_tp2) and
-    # the r_if_exit_* reference columns come from the SEPARATE legacy walk in
-    # _reference_touch_indices, which ignores the realised exit.
+    # WINDOW-MFE DECOUPLE (A3): the walk does NOT break at the exit. Once the exit
+    # is latched, it keeps walking bars for MFE/MAE ONLY until the window ends
+    # (48-bar hold cap / friday / data end). So mfe_r tracks the FULL post-fill
+    # window excursion, independent of where the 2R exit fired — mfe_r can legally
+    # EXCEED r_realised (exit +2R, price later ran +3.5R -> mfe_r = 3.5).
     cur_sl = sl
-    be_armed = False
-    be_trigger = (entry + r_distance) if bias == "LONG" else (entry - r_distance)
-    # FP-boundary tolerance (2026-07-03): be_trigger = entry +/- r_distance carries
-    # accumulated float error (e.g. 1.0151000000000001 vs a bar high of 1.0151), so
-    # a bar that touches EXACTLY +1R can fail `bar_hi >= be_trigger` by ~2e-16 while
-    # MFE still credits +1R off the raw high. That split produced a physically
-    # impossible row (exit sl at -1R with mfe_r rounded to +1.0) — G10 rule (b). Arm
-    # break-even when price reaches +1R within this tolerance so the BE trigger and
-    # the MFE recorder agree on the exact-touch bar. Scaled to r_distance so it is
-    # instrument-agnostic and far below any real tick.
-    be_eps = r_distance * 1e-6
-    # Measurement only (2026-07-02, no behavior change): on the bar that arms
-    # break-even, did that SAME bar's wick also trade back to entry? If so the
-    # intra-bar order of "+1R first, arm, THEN pull back to entry" vs "pull back
-    # to entry first, THEN +1R" is unprovable -- we arm at bar CLOSE regardless
-    # and let the trade ride, which is optimistic if the pullback actually came
-    # first (a live break-even stop would have been tagged for 0R that bar).
-    # Logged so the ambiguous population size can be measured before deciding
-    # whether it's worth a rule.
-    be_arm_bar_touched_entry: Optional[bool] = None
 
     for i, (ts, bar) in enumerate(future.iterrows()):
         bar_hi = float(bar["High"])
@@ -839,159 +719,142 @@ def _simulate_single_entry(
                 continue
 
         bars_walked_post_fill = i - fill_bar_idx
-        if bars_walked_post_fill > MAX_HOLD_H1_BARS and exit_reason is None:
-            exit_ts = ts
-            exit_reason = "timeout"
-            exit_price = float(bar["Close"])
+        # Hold cap ends BOTH the trade and (post-exit) the MFE-only walk. If the
+        # 2R exit already latched, this just stops the window; only stamp a
+        # `timeout` exit when nothing resolved (still open).
+        if bars_walked_post_fill > MAX_HOLD_H1_BARS:
+            if exit_reason is None:
+                exit_ts = ts
+                exit_reason = "timeout"
+                exit_price = float(bar["Close"])
+                exit_bar_offset = bars_walked_post_fill
             break
 
-        # Weekend-flat: force-close an OPEN position before the FX weekend.
-        # Realised walk only -- the reference TP1/TP2 study columns ignore it.
-        if (WEEKEND_FLAT and not is_fill_bar_this_iter and exit_reason is None
+        # Weekend-flat: force-close an OPEN position before the FX weekend. Also
+        # bounds the MFE-only walk after a 2R exit — a swept-past-Friday excursion
+        # is not something the trade could hold, so the window ends here too.
+        if (WEEKEND_FLAT and not is_fill_bar_this_iter
                 and ts.dayofweek == 4 and ts.hour >= WEEKEND_FLAT_HOUR_UTC):
-            exit_ts = ts
-            exit_reason = "friday_flat"
-            exit_price = float(bar["Open"])
+            if exit_reason is None:
+                exit_ts = ts
+                exit_reason = "friday_flat"
+                exit_price = float(bar["Open"])
+                exit_bar_offset = bars_walked_post_fill
             break
 
         if bias == "LONG":
             sl_hit_in_bar = bar_lo <= cur_sl
-            tp1_hit_in_bar = bar_hi >= tp1
-            tp2_hit_in_bar = (tp2 is not None) and (bar_hi >= tp2)
-            be_reached_in_bar = bar_hi >= be_trigger - be_eps
-            # MFE/MAE track the trade's IN-TRADE excursion only (fill -> exit).
-            # Three bars cannot contribute their raw extremes:
+            tp_hit_in_bar = bar_hi >= tp_2r
+            # WINDOW-MFE/MAE (A3): track the FULL post-fill window excursion off
+            # the RAW bar extremes — NO cap at the 2R target (that cap belonged to
+            # the retired TP1 exit). mfe_r can legitimately exceed r_realised.
+            # Two bars still cannot contribute their raw extremes (intrabar order
+            # unknowable — same pessimism as before):
             #   - SL bar: the wick that touched SL also printed the bar high, so
-            #     crediting that high fakes a positive excursion on the very bar
-            #     that stopped us out.
+            #     crediting that high fakes a positive excursion on the stop bar.
             #   - FILL bar: a LONG limit fills on the bar LOW; that bar's HIGH
             #     happened BEFORE the fill (price fell through entry), so it is
-            #     pre-fill price, not favourable excursion. Crediting it fakes a
-            #     large MFE on a bar where price was actually falling to SL.
-            #   - TP1-EXIT bar (2026-07-02): the realised exit fills AT the first
-            #     TP1 touch, so any price beyond TP1 printed at-or-after the exit
-            #     (post-exit, not ours); MFE is capped at TP1. The bar's LOW is
-            #     order-ambiguous (before or after the touch) -> no MAE update.
-            # None of these bars lets us infer the intra-bar sequence.
+            #     pre-fill price, not favourable excursion.
             if not sl_hit_in_bar and not is_fill_bar_this_iter:
                 # Compare-then-record (not max/min) so bars_to_mfe/mae capture the
                 # bar index of the extreme with strict >/< (first bar wins ties).
-                # Identical numeric result to the old max/min — same bars, same cap.
-                cand_mfe = tp1 if tp1_hit_in_bar else bar_hi
-                if cand_mfe > mfe_price:
-                    mfe_price = cand_mfe
+                if bar_hi > mfe_price:
+                    mfe_price = bar_hi
                     mfe_bar_idx = i - fill_bar_idx
-                if not tp1_hit_in_bar and bar_lo < mae_price:
+                if bar_lo < mae_price:
                     mae_price = bar_lo
                     mae_bar_idx = i - fill_bar_idx
         else:
             sl_hit_in_bar = bar_hi >= cur_sl
-            tp1_hit_in_bar = bar_lo <= tp1
-            tp2_hit_in_bar = (tp2 is not None) and (bar_lo <= tp2)
-            be_reached_in_bar = bar_lo <= be_trigger + be_eps
+            tp_hit_in_bar = bar_lo <= tp_2r
             if not sl_hit_in_bar and not is_fill_bar_this_iter:
                 # SHORT: favourable = lower price (MFE), adverse = higher (MAE).
-                # Compare-then-record (not min/max) so bars_to_mfe/mae capture the
-                # extreme's bar index; strict </> keeps the first bar on ties.
-                # Numerically identical to the old min/max — same bars, same cap.
-                cand_mfe = tp1 if tp1_hit_in_bar else bar_lo
-                if cand_mfe < mfe_price:
-                    mfe_price = cand_mfe
+                if bar_lo < mfe_price:
+                    mfe_price = bar_lo
                     mfe_bar_idx = i - fill_bar_idx
-                if not tp1_hit_in_bar and bar_hi > mae_price:
+                if bar_hi > mae_price:
                     mae_price = bar_hi
                     mae_bar_idx = i - fill_bar_idx
 
+        # Once the 2R exit is latched, there is no more SL/TP resolution to do —
+        # post-exit bars ONLY update the window MFE/MAE above and honor the window
+        # cap. Skip the resolution block.
+        if exit_reason is not None:
+            continue
+
         # Fill-bar rule (2026-05-25):
         # On the bar where the limit just filled, we cannot infer intra-bar
-        # sequence of fill -> TP vs fill -> SL. SL-side: if the bar pierced
-        # SL, price had to travel through entry first (limit fills, then SL),
-        # so SL is the honest outcome. TP-side: bar high reaching TP could
-        # mean (a) price ticked up to TP before pulling down to fill, OR (b)
-        # filled then rallied to TP. Can't tell. Conservative call: do NOT
-        # credit TP (or arm break-even) on the fill bar. Walk forward.
+        # sequence of fill -> TP vs fill -> SL. SL-side: if the bar pierced SL,
+        # price had to travel through entry first (limit fills, then SL), so SL is
+        # the honest outcome. TP-side: bar high reaching the 2R target could mean
+        # (a) price ticked up to it before pulling down to fill, OR (b) filled then
+        # rallied. Can't tell. Conservative: do NOT credit TP on the fill bar.
         if is_fill_bar_this_iter:
-            tp1_hit_in_bar = False
-            tp2_hit_in_bar = False
-            be_reached_in_bar = False
+            tp_hit_in_bar = False
 
-        # Record first-touch bar indices for diagnostic columns.
-        if tp1_hit_in_bar and tp1_hit_bar_idx == -1:
-            tp1_hit_bar_idx = bars_walked_post_fill
-        if tp2_hit_in_bar and tp2_hit_bar_idx == -1:
-            tp2_hit_bar_idx = bars_walked_post_fill
-
-        # ── Realised exit: TP1 + break-even at +1R ──────────────────────────
+        # ── Realised exit: fixed 2R bracket ─────────────────────────────────
         # Priority within a bar:
-        #   1. SL+TP1 collision -> SL wins (conservative, matches legacy).
-        #   2. SL hit (at cur_sl: initial SL, or entry once BE armed).
-        #   3. TP1 hit -> win, terminal (no TP2 ride).
-        #   4. Else arm break-even if +1R reached this bar.
-        # +1R-and-SL in the same bar (pre-arm) falls into case 1/2: SL wins,
-        # because we cannot prove +1R printed before the stop.
-        if sl_hit_in_bar and tp1_hit_in_bar:
+        #   1. SL+TP same bar -> SL wins (unprovable order; keep pessimism).
+        #   2. SL hit -> loss (-1R), terminal.
+        #   3. 2R target hit -> win (+2R), terminal. Exit reason "tp" (one target,
+        #      so NOT "tp1"/"tp2r" — avoids TP1/TP2 confusion).
+        # After latching, the loop keeps running for MFE/MAE only (the `continue`
+        # above); it does NOT break here — that is the window-MFE decouple.
+        if sl_hit_in_bar and tp_hit_in_bar:
             sl_collision = True
             exit_ts = ts
             exit_reason = "sl"
             exit_price = cur_sl
-            break
+            exit_bar_offset = bars_walked_post_fill
+            continue
         if sl_hit_in_bar:
             exit_ts = ts
             exit_reason = "sl"
             exit_price = cur_sl
-            break
-        if tp1_hit_in_bar:
+            exit_bar_offset = bars_walked_post_fill
+            continue
+        if tp_hit_in_bar:
             exit_ts = ts
-            exit_reason = "tp1"
-            exit_price = tp1
-            break
-        if be_reached_in_bar and not be_armed:
-            # Price reached +1R without hitting SL/TP1 this bar -> move the
-            # stop to entry. A later pullback to entry now books 0R.
-            be_armed = True
-            cur_sl = entry
-            be_arm_bar_touched_entry = bool(
-                bar_lo <= entry if bias == "LONG" else bar_hi >= entry
-            )
+            exit_reason = "tp"
+            exit_price = tp_2r
+            exit_bar_offset = bars_walked_post_fill
+            continue
 
     if not filled:
         # Limit never touched within the hold window. Emit a "never_filled" row
         # so the report can count "would-have-missed" trades.
-        bars_to_exit = bars_walked_post_fill
         return _build_row(
             alert=alert, pair_conf=pair_conf, ob=ob,
             entry_zone=entry_zone, entry=entry, entry_raw=entry_raw,
-            sl=sl, sl_raw=sl_raw, tp1=tp1, tp1_raw=tp1_raw, tp2=tp2, tp2_raw=tp2_raw,
-            tp1_rr=tp1_rr, tp2_rr=tp2_rr,
-            tp1_wick=tp1_wick, tp1_wick_rr=tp1_wick_rr, tp1_zone_source=tp1_zone_source,
-            tp2_wick=tp2_wick, tp2_zone_source=tp2_zone_source,
-            tp_wick=tp_wick, tp_wick_rr=tp_wick_rr,
-            tp_nextpool=tp_nextpool, tp_nextpool_rr=tp_nextpool_rr,
-            tp_nextpool_zone_source=tp_nextpool_zone_source,
-            tp2_collapsed_to_tp1=tp2_collapsed_to_tp1, tp_targets=tp_targets,
+            sl=sl,
             setup_liq_reads=_setup_liq_reads,
             score=score, breakdown=breakdown,
             df_h1=df_h1, alert_ts=alert_ts,
             fill_ts=None, exit_ts=None, exit_reason="never_filled",
             exit_price=None,
-            r_realised=0.0, r_if_exit_tp1=0.0, r_if_exit_tp2=0.0,
+            r_realised=0.0,
             mfe_r=0.0, mae_r=0.0, bars_to_mfe=None, bars_to_mae=None,
             bars_to_exit=0,
-            bars_to_tp1=-1, bars_to_tp2=-1,
             sl_collision=False, risk_usd=risk_usd,
-            sl_bar_was_sweep=None, sl_swept_then_tp1=None, ob_to_fill_hours=None,
+            sl_bar_was_sweep=None,
+            sl_swept_then_2r=None, sl_swept_then_1r=None,
+            ob_to_fill_hours=None,
             bars_break_to_pullback=None,
         )
 
     if exit_reason is None:
-        # Window exhausted with position open and no SL/TP hit.
+        # Window exhausted with position open and no SL/2R hit.
         last = future.iloc[-1]
         exit_ts = future.index[-1]
         exit_reason = "window_end"
         exit_price = float(last["Close"])
+        exit_bar_offset = bars_walked_post_fill
 
-    # ── r_realised: the LIVE policy (TP1 + break-even at +1R). This is the
-    # one true outcome — pnl_usd and every report headline derive from it.
+    # ── r_realised: the FIXED 2R policy. This is the one true outcome — pnl_usd
+    # and every report headline derive from it. A clean win books +2R, a clean
+    # loss -1R; timeout/friday_flat/window_end book the partial close-price R.
+    # mfe_r/mae_r are the FULL post-fill WINDOW excursion (A3 decouple), so
+    # mfe_r can legitimately exceed r_realised (invariant: mfe_r >= r_realised).
     if bias == "LONG":
         r_realised = (exit_price - entry) / r_distance
         mfe_r = (mfe_price - entry) / r_distance
@@ -1014,37 +877,11 @@ def _simulate_single_entry(
         bars_to_mfe = None
         bars_to_mae = None
 
-    # ── Reference columns (study only — never traded). Computed from an
-    # independent legacy walk (original SL, TP1->BE->TP2 ride) so they answer
-    # "what would TP1-only / TP2-ride have produced" regardless of where the
-    # live TP1+BE walk exited.
-    ref_tp1_idx, ref_tp2_idx, ref_exit_price = _reference_touch_indices(
-        future, bias, entry, sl, tp1, tp2, fill_bar_idx
-    )
-    if bias == "LONG":
-        ref_realised = (ref_exit_price - entry) / r_distance
-    else:
-        ref_realised = (entry - ref_exit_price) / r_distance
-
-    # Overwrite the diagnostic touch indices with the reference-walk values so
-    # bars_to_tp1 / bars_to_tp2 describe the full-window touches (the live walk
-    # breaks early at TP1 and would under-report them).
-    tp1_hit_bar_idx = ref_tp1_idx
-    tp2_hit_bar_idx = ref_tp2_idx
-
-    # r_if_exit_tp1: TP1 touched (on original stop) -> book TP1, else legacy R.
-    if ref_tp1_idx >= 0:
-        r_if_exit_tp1 = round(tp1_rr, 3)
-    else:
-        r_if_exit_tp1 = round(ref_realised, 3)
-
-    # r_if_exit_tp2: TP2 touched -> book TP2, else the legacy ride outcome.
-    if ref_tp2_idx >= 0:
-        r_if_exit_tp2 = round(tp2_rr, 3) if tp2 is not None else round(ref_realised, 3)
-    else:
-        r_if_exit_tp2 = round(ref_realised, 3)
-
-    bars_to_exit = max(0, bars_walked_post_fill)
+    # bars_to_exit is the bars-to-EXIT captured when the exit latched (A3: the walk
+    # continues past the exit for window-MFE, so bars_walked_post_fill overshoots to
+    # the window end). Fall back to the walked count only if never captured.
+    bars_to_exit = max(0, exit_bar_offset if exit_bar_offset is not None
+                       else bars_walked_post_fill)
 
     # ── Sweep diagnostics: was the STOP a liquidity grab, and did it reverse? ──
     # SMC definition of a sweep: the candle WICKS through the level but CLOSES BACK
@@ -1052,62 +889,66 @@ def _simulate_single_entry(
     # genuine break, not a sweep — and a wider stop would just lose more.
     #
     #   sl_bar_was_sweep   : the STOP CANDLE itself was a sweep of the stop that
-    #                        fired (cur_sl — the initial SL, or entry once BE armed).
+    #                        fired (cur_sl — the fixed SL; BE is retired, so cur_sl
+    #                        is always the initial SL).
     #                        Long : Low <= cur_sl AND Close > cur_sl.
     #                        Short: High >= cur_sl AND Close < cur_sl.
-    #   sl_swept_then_tp1  : STRICT (2026-07-23). sl_bar_was_sweep is True AND,
-    #                        walking the post-stop bars in order within
-    #                        SL_SWEEP_LOOKBACK_BARS, price reached TP1 BEFORE it
-    #                        ever traded back to the fired stop level cur_sl.
-    #                        Swept once, HELD the stop, then ran to target. A bar
-    #                        that re-hits cur_sl first (or spans both cur_sl and
-    #                        TP1) = False. None when the stop bar was not a sweep.
+    #   sl_swept_then_2r   : STRICT. sl_bar_was_sweep is True AND, walking the
+    #                        post-stop bars in order within SL_SWEEP_LOOKBACK_BARS,
+    #                        price reached the +2R target BEFORE it ever traded back
+    #                        to the fired stop cur_sl. Swept once, HELD, then ran the
+    #                        full 2R. A bar re-hitting cur_sl first (or spanning both
+    #                        cur_sl and +2R) = False.
+    #   sl_swept_then_1r   : same STRICT test, but the target is +1R (breakeven-plus
+    #                        = entry ± r_distance). Answers the narrower "came back
+    #                        to just +1R" question. Both None when the stop bar was
+    #                        not a sweep.
+    # Rationale (FIXED_2R_BASELINE_SPEC A5): keeping BOTH readings shows which
+    # stopped-out trades came back only to +1R vs ran all the way to the 2R target
+    # — the wider-stop question.
     #
-    # HONEST CAVEAT (peak-vs-fill law): sl_swept_then_tp1 is now PATH-aware (it
-    # requires the stop to HOLD until TP1), but the TP1 leg is still a TOUCH
-    # check on the winning bar, not a real-order replay — that TP1 tag could be
-    # its own spike-and-fade. Read it as a strong HINT ("would a wider stop have
-    # saved us"), never as bankable "free money". Both are None for non-SL /
-    # non-sweep exits.
-    # cur_sl at this point is the level that actually stopped the trade (BE-aware).
+    # HONEST CAVEAT (peak-vs-fill law): these are PATH-aware (they require the stop
+    # to HOLD until the target), but the target leg is still a TOUCH check on the
+    # winning bar, not a real-order replay — that touch could be its own spike-and-
+    # fade. Read them as strong HINTS ("would a wider stop have saved us"), never as
+    # bankable "free money". All None for non-SL / non-sweep exits.
     sl_bar_was_sweep = None
-    sl_swept_then_tp1 = None
+    sl_swept_then_2r = None
+    sl_swept_then_1r = None
     # sl_wick_depth_atr (2026-07-08): how far the STOP CANDLE's wick pierced BEYOND
-    # the stop that fired (cur_sl — initial SL, or entry once BE armed), normalised
-    # by the OB-formation ATR (ob['h1_atr'], the same denominator every *_atr
-    # feature uses). This is the missing input for sizing a wider stop: a sweep
-    # tells us the wick crossed the stop, this tells us HOW FAR, so a "distal + X·ATR"
-    # replay grid can be chosen from data instead of guessed.
+    # the fired stop (cur_sl), normalised by the OB-formation ATR (ob['h1_atr'], the
+    # same denominator every *_atr feature uses). The missing input for sizing a
+    # wider stop: a sweep tells us the wick crossed the stop, this tells us HOW FAR,
+    # so a "distal + X·ATR" replay grid can be chosen from data instead of guessed.
     #   LONG  (stop below): depth = (cur_sl - sl_bar_low)  / h1_atr   [>=0]
     #   SHORT (stop above): depth = (sl_bar_high - cur_sl) / h1_atr   [>=0]
     # 0.0 = the wick closed exactly at the stop (no overshoot). None for non-SL exits
     # or when h1_atr is unavailable (legacy zone). NOT a gate — logging only.
     sl_wick_depth_atr = None
-    # ── Exit-lab outcome-time columns (2026-07-08; EXIT TRACK ONLY — leakage as
-    # entry features). All three describe what happened AFTER the stop fired, so a
-    # wider-stop replay can be designed and sanity-checked from data. None for
-    # non-SL exits. C6: these are TOUCH-based HINTS, never bankable — only a real
-    # -order replay counts. The sweep-conditioned ones (max_adverse, recovered)
-    # are only set when the stop bar was a sweep (a clean close-through has no
-    # "would a wider stop have survived" question to answer).
+    # ── Exit-track outcome-time columns (EXIT TRACK ONLY — leakage as entry
+    # features). All describe what happened AFTER the stop fired, so a wider-stop
+    # replay can be designed and sanity-checked from data. None for non-SL exits.
+    # TOUCH-based HINTS, never bankable — only a real-order replay counts. The
+    # sweep-conditioned ones (max_adverse, recovered) are only set when the stop bar
+    # was a sweep (a clean close-through has no "would a wider stop have survived"
+    # question to answer).
     #   sl_max_adverse_after_sweep_atr : furthest price ran AGAINST us BEYOND the
     #     fired stop, over SL_SWEEP_LOOKBACK_BARS after the stop bar, in OB-formation
-    #     ATR. RAW measure only (2026-07-23): it no longer drives the recovery
-    #     question — sl_swept_then_tp1 now answers "held then ran to target"
-    #     directly. Distinguishes "shallow wick" (small) from "start of a bigger
-    #     move" (large). 0.0 = never past the stop. None = non-sweep/no ATR.
-    #   bars_sl_to_tp1_touch : STRICT (2026-07-23). Defined ONLY for the clean
-    #     swept-then-HELD-then-TP case: 1-indexed H1 bars from the stop bar to the
-    #     bar that reached TP1, when TP1 was reached BEFORE price traded back to
-    #     the fired stop cur_sl. None whenever sl_swept_then_tp1 is not True
-    #     (non-sweep, re-hit the stop first, or TP1 never reached in the lookback).
-    #     Sizes how long a wider stop would have had to hold to reach target.
+    #     ATR. RAW context measure. 0.0 = never past the stop. None = non-sweep/no ATR.
+    #   bars_sl_to_2r_touch : STRICT. Defined ONLY for the clean swept-then-HELD-then
+    #     -2R case: 1-indexed H1 bars from the stop bar to the bar that reached +2R,
+    #     when +2R was reached BEFORE price traded back to the fired stop cur_sl.
+    #     None whenever sl_swept_then_2r is not True.
+    #   bars_sl_to_1r_touch : same, for the +1R target (sl_swept_then_1r True).
     #   sl_recovered_to_entry : after a sweep, did price trade back to ENTRY
-    #     (breakeven) within the lookback, even if TP1 was never reached? Catches
+    #     (breakeven) within the lookback, even if no target was reached? Catches
     #     the "a wider stop would have SCRATCHED, not won" middle case (BE-sweep).
     sl_max_adverse_after_sweep_atr = None
-    bars_sl_to_tp1_touch = None
+    bars_sl_to_2r_touch = None
+    bars_sl_to_1r_touch = None
     sl_recovered_to_entry = None
+    # The +1R target (breakeven-plus) for the SL-anatomy 1R reading. +2R is tp_2r.
+    _target_1r = (entry + r_distance) if bias == "LONG" else (entry - r_distance)
     if exit_reason == "sl" and exit_ts is not None:
         try:
             sl_bar = future.loc[exit_ts]
@@ -1130,45 +971,53 @@ def _simulate_single_entry(
             post_sl = future.loc[future.index > exit_ts]
             horizon = post_sl.iloc[:SL_SWEEP_LOOKBACK_BARS]
 
-            # sl_swept_then_tp1 (STRICT, 2026-07-23) + bars_sl_to_tp1_touch are
-            # BOTH defined ONLY for a swept stop bar. A non-sweep (clean
-            # close-through) has no "held the stop then ran to target" story to
-            # tell, so both stay None. Walk the post-stop bars IN ORDER and, at
-            # each bar, test in this priority:
-            #   FAIL first: price traded back to the fired stop level cur_sl
-            #     (LONG Low <= cur_sl / SHORT High >= cur_sl) -> the stop was hit
-            #     again -> False, bars = None, stop the walk.
-            #   WIN  first: price reached TP1 in our direction
-            #     (LONG High >= tp1 / SHORT Low <= tp1) -> True, bars = 1-indexed
-            #     count from the stop bar, stop the walk.
-            # Whichever fires on the EARLIER bar wins. Edge case: a single bar
-            # that both breaches cur_sl AND touches tp1 (wick spans both) is a
-            # FAIL — the stop level was hit, we can't know the intrabar order, so
-            # take the conservative read. Neither in the lookback -> False / None.
+            # sl_swept_then_2r / _1r (STRICT) + bars_sl_to_2r/1r_touch are BOTH
+            # defined ONLY for a swept stop bar. A non-sweep (clean close-through)
+            # has no "held then ran to target" story to tell, so all stay None.
+            # Walk the post-stop bars IN ORDER once; per bar, per target (+2R, +1R),
+            # test in this priority:
+            #   FAIL first: price traded back to the fired stop cur_sl (LONG Low <=
+            #     cur_sl / SHORT High >= cur_sl) -> stop hit again -> False, bars
+            #     None. Applies to BOTH readings (a re-hit kills both).
+            #   WIN  first: price reached the target in our direction (LONG High >=
+            #     target / SHORT Low <= target) -> True, bars = 1-indexed from the
+            #     stop bar. Recorded independently for +2R and +1R (a bar can reach
+            #     +1R without reaching +2R). Whichever fires on the EARLIER bar wins.
+            # Edge case: a single bar that both breaches cur_sl AND touches a target
+            # (wick spans both) is a FAIL — the stop level was hit, intrabar order
+            # unknowable, conservative read. Neither in the lookback -> False / None.
             if sl_bar_was_sweep:
-                sl_swept_then_tp1 = False  # default: swept but never cleanly ran
+                sl_swept_then_2r = False   # swept but never cleanly ran the 2R
+                sl_swept_then_1r = False   # swept but never cleanly ran the 1R
+                _done_2r = False
+                _done_1r = False
                 for _i in range(len(horizon)):
                     _bar = horizon.iloc[_i]
                     _bhi = float(_bar["High"])
                     _blo = float(_bar["Low"])
                     if bias == "LONG":
                         _hit_stop = _blo <= cur_sl
-                        _hit_tp1 = _bhi >= tp1
+                        _hit_2r = _bhi >= tp_2r
+                        _hit_1r = _bhi >= _target_1r
                     else:
                         _hit_stop = _bhi >= cur_sl
-                        _hit_tp1 = _blo <= tp1
-                    if _hit_stop:                       # fail wins ties
-                        sl_swept_then_tp1 = False
-                        bars_sl_to_tp1_touch = None
+                        _hit_2r = _blo <= tp_2r
+                        _hit_1r = _blo <= _target_1r
+                    if _hit_stop:                       # fail wins ties, kills both
                         break
-                    if _hit_tp1:
-                        sl_swept_then_tp1 = True
-                        bars_sl_to_tp1_touch = _i + 1   # 1-indexed from stop bar
+                    if _hit_2r and not _done_2r:
+                        sl_swept_then_2r = True
+                        bars_sl_to_2r_touch = _i + 1    # 1-indexed from stop bar
+                        _done_2r = True
+                    if _hit_1r and not _done_1r:
+                        sl_swept_then_1r = True
+                        bars_sl_to_1r_touch = _i + 1
+                        _done_1r = True
+                    if _done_2r and _done_1r:
                         break
 
                 # Max adverse excursion BEYOND the fired stop, after the stop
-                # bar (how much further it ran against us). RAW measure only —
-                # kept for context, no longer drives the recovery question.
+                # bar (how much further it ran against us). RAW context measure.
                 # LONG stop is below, so "against" = further DOWN (lower Low);
                 # SHORT = further UP.
                 if len(horizon) and _h1_atr_sl:
@@ -1191,10 +1040,12 @@ def _simulate_single_entry(
                     sl_recovered_to_entry = False
         except Exception:
             sl_bar_was_sweep = None
-            sl_swept_then_tp1 = None
+            sl_swept_then_2r = None
+            sl_swept_then_1r = None
             sl_wick_depth_atr = None
             sl_max_adverse_after_sweep_atr = None
-            bars_sl_to_tp1_touch = None
+            bars_sl_to_2r_touch = None
+            bars_sl_to_1r_touch = None
             sl_recovered_to_entry = None
 
     # ── ob_to_fill_hours: OB formation -> fill gap (diagnostic; NOT a gate) ──
@@ -1225,24 +1076,21 @@ def _simulate_single_entry(
         bars_break_to_pullback = None
 
     # ── Exit-lab side-channel (diagnostic; no effect on r_realised / the row) ──
+    # FIXED_2R_BASELINE (2026-07-31): the liquidity-TP comparison recipes ("tp1",
+    # "tp_wick", "tp_nextpool" specs) are RETIRED — this run studies only fixed-R
+    # exits (float R-multiple legs), which need no structural target. Any recipe
+    # still carrying a structural string spec is skipped rather than raising.
     if EXIT_LAB_CONFIGS and EXIT_LAB_SINK is not None and fill_bar_idx >= 0:
         from backtest.exit_engine import walk_multileg
         _post = future.iloc[fill_bar_idx:]
-        # Structural-target coercion: tp_wick/tp_nextpool are floats or None here.
-        _tpw = float(tp_wick) if tp_wick is not None else None
-        _tpn = float(tp_nextpool) if tp_nextpool is not None else None
         for _name, _cfg in EXIT_LAB_CONFIGS.items():
-            # A recipe that targets a structural TP we did not commit for this trade
-            # (tp_wick / tp_nextpool absent) can't run — skip it rather than let
-            # walk_multileg raise (same policy as exit_lab._replay's no_target guard).
             _specs = {s for _, s in _cfg["legs"] if isinstance(s, str)}
-            if ("tp_wick" in _specs and _tpw is None) or \
-               ("tp_nextpool" in _specs and _tpn is None):
+            # Structural / liquidity-TP specs are no longer computed in this run.
+            if _specs & {"tp1", "tp_wick", "tp_nextpool"}:
                 continue
             try:
                 _res = walk_multileg(
-                    _post, bias, entry, sl, r_distance, tp1, _cfg,
-                    tp_wick=_tpw, tp_nextpool=_tpn,
+                    _post, bias, entry, sl, r_distance, None, _cfg,
                     weekend_flat=WEEKEND_FLAT,
                     weekend_hour_utc=WEEKEND_FLAT_HOUR_UTC,
                     max_hold=MAX_HOLD_H1_BARS,
@@ -1268,37 +1116,27 @@ def _simulate_single_entry(
     return _build_row(
         alert=alert, pair_conf=pair_conf, ob=ob,
         entry_zone=entry_zone, entry=entry, entry_raw=entry_raw,
-        sl=sl, sl_raw=sl_raw, tp1=tp1, tp1_raw=tp1_raw, tp2=tp2, tp2_raw=tp2_raw,
-        tp1_rr=tp1_rr, tp2_rr=tp2_rr,
-        tp1_wick=tp1_wick, tp1_wick_rr=tp1_wick_rr, tp1_zone_source=tp1_zone_source,
-        tp2_wick=tp2_wick, tp2_zone_source=tp2_zone_source,
-        tp_wick=tp_wick, tp_wick_rr=tp_wick_rr,
-        tp_nextpool=tp_nextpool, tp_nextpool_rr=tp_nextpool_rr,
-        tp_nextpool_zone_source=tp_nextpool_zone_source,
-        tp2_collapsed_to_tp1=tp2_collapsed_to_tp1, tp_targets=tp_targets,
+        sl=sl,
         setup_liq_reads=_setup_liq_reads,
         score=score, breakdown=breakdown,
         df_h1=df_h1, alert_ts=alert_ts,
         fill_ts=fill_ts, exit_ts=exit_ts, exit_reason=exit_reason,
         exit_price=exit_price,
         r_realised=round(r_realised, 3),
-        r_if_exit_tp1=r_if_exit_tp1,
-        r_if_exit_tp2=r_if_exit_tp2,
         mfe_r=round(mfe_r, 3), mae_r=round(mae_r, 3),
         bars_to_mfe=bars_to_mfe, bars_to_mae=bars_to_mae,
         bars_to_exit=bars_to_exit,
-        bars_to_tp1=tp1_hit_bar_idx,
-        bars_to_tp2=tp2_hit_bar_idx,
         sl_collision=sl_collision, risk_usd=risk_usd,
         sl_bar_was_sweep=sl_bar_was_sweep,
-        sl_swept_then_tp1=sl_swept_then_tp1,
+        sl_swept_then_2r=sl_swept_then_2r,
+        sl_swept_then_1r=sl_swept_then_1r,
         sl_wick_depth_atr=sl_wick_depth_atr,
         sl_max_adverse_after_sweep_atr=sl_max_adverse_after_sweep_atr,
-        bars_sl_to_tp1_touch=bars_sl_to_tp1_touch,
+        bars_sl_to_2r_touch=bars_sl_to_2r_touch,
+        bars_sl_to_1r_touch=bars_sl_to_1r_touch,
         sl_recovered_to_entry=sl_recovered_to_entry,
         ob_to_fill_hours=ob_to_fill_hours,
         bars_break_to_pullback=bars_break_to_pullback,
-        be_arm_bar_touched_entry=be_arm_bar_touched_entry,
     )
 
 
@@ -1316,8 +1154,9 @@ def _simulate_single_entry(
 #   STAMPED AT ALERT (correct source): bos_verdict, touches_at_alert +
 #     fvg_at_alert, h1_trend / trend_alignment / alert_bar_*, and the S2/S3
 #     structure signals (structure_ranging_at_alert, flip_pending_at_alert,
-#     flip_pending_dir_at_alert, leg_extreme_at_alert, leg_extreme_clipped —
-#     all payload scalars from the replay yield).
+#     flip_pending_dir_at_alert,
+#     leg_extreme_at_alert, leg_extreme_clipped — all payload scalars from the
+#     replay yield).
 #   MUTABLE STATE, fixed by this spec: touches/status (3a), break_quality (3b),
 #     fvg (3c/3d).
 # RULE: mutable state is stamped `*_at_alert` at the replay yield and read from
@@ -1404,25 +1243,21 @@ def read_s4_broken_flags(dr):
     return (None, None)
 
 
-def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
-               tp1_rr, tp2_rr, score, breakdown, df_h1, alert_ts,
+def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl,
+               score, breakdown, df_h1, alert_ts,
                fill_ts, exit_ts, exit_reason, exit_price,
-               r_realised, r_if_exit_tp1, r_if_exit_tp2,
-               mfe_r, mae_r, bars_to_exit, bars_to_tp1, bars_to_tp2,
+               r_realised,
+               mfe_r, mae_r, bars_to_exit,
                bars_to_mfe=None, bars_to_mae=None,
-               sl_collision, risk_usd, sl_raw=None,
-               entry_raw=None, tp1_raw=None, tp2_raw=None,
-               sl_bar_was_sweep=None, sl_swept_then_tp1=None,
+               sl_collision, risk_usd,
+               entry_raw=None,
+               sl_bar_was_sweep=None,
+               sl_swept_then_2r=None, sl_swept_then_1r=None,
                sl_wick_depth_atr=None, sl_max_adverse_after_sweep_atr=None,
-               bars_sl_to_tp1_touch=None, sl_recovered_to_entry=None,
+               bars_sl_to_2r_touch=None, bars_sl_to_1r_touch=None,
+               sl_recovered_to_entry=None,
                ob_to_fill_hours=None,
                bars_break_to_pullback=None,
-               be_arm_bar_touched_entry=None,
-               tp1_wick=None, tp1_wick_rr=None, tp1_zone_source=None,
-               tp2_wick=None, tp2_zone_source=None,
-               tp_wick=None, tp_wick_rr=None,
-               tp_nextpool=None, tp_nextpool_rr=None, tp_nextpool_zone_source=None,
-               tp2_collapsed_to_tp1=None, tp_targets=None,
                setup_liq_reads=None) -> Dict[str, Any]:
     """Assemble the final trade row dict in stable column order."""
     # Field freeze/live/re-read classification (which ob[...] reads are frozen at
@@ -1578,10 +1413,9 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     # from real, frozen source columns so every run reproduces them deterministically.
     #
     #   sl_distance_atr : |entry - sl_initial| / OB-formation ATR. Risk width in
-    #     ATR. Uses sl_initial = the traded stop (OB distal -/+ 1 spread). Under the
-    #     raw model sl_raw == sl_initial, so this is the one true stop distance.
-    #     This is ~1 for most trades (the "one H1 bar" instant-death axis).
-    #     Point-in-time clean: entry + sl + ATR are all known at fill.
+    #     ATR. Uses sl_initial = the traded stop (OB distal -/+ 1 spread), the one
+    #     true stop distance. This is ~1 for most trades (the "one H1 bar" instant-
+    #     death axis). Point-in-time clean: entry + sl + ATR are all known at fill.
     sl_distance_atr = round(abs(entry - sl) / _h1_atr, 3) \
         if (_h1_atr and entry is not None and sl is not None) else None
 
@@ -1591,30 +1425,39 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
     #     _h1_atr, stale by alert). Here:
     #       - anchor = OB PROXIMAL line (the live system's reference; no fill exists
     #         at alert), matching live Phase2_Alert_Engine.
+    #       - target = the fixed +2R level (entry ± 2·r_distance) — the ONE committed
+    #         target now (liquidity-pool TP1 retired, FIXED_2R_BASELINE_SPEC).
     #       - ruler = a FRESH ATR(14) on the last 14 CLOSED H1 candles as of the
     #         alert (_closed_bars_at_alert already drops the forming bar), NOT the
     #         formation ATR. Backtest/live identical (same anchor, same closed-bar
     #         fresh ATR, same period).
-    #     Point-in-time clean: proximal + SL + TP1 + alert-time bars all known at
+    #     Point-in-time clean: proximal + SL + entry + alert-time bars all known at
     #     alert. Observe-only. None when the ATR slice is too short or a level missing.
     _prox_alert = ob.get("proximal_line")
+    _bias_row = "LONG" if direction == "bullish" else "SHORT"
+    _r_dist_row = abs(entry - sl) if (entry is not None and sl is not None) else None
+    _tp_2r_row = (
+        ((entry + 2 * _r_dist_row) if _bias_row == "LONG" else (entry - 2 * _r_dist_row))
+        if _r_dist_row is not None else None
+    )
     _alert_slice = _closed_bars_at_alert(df_h1, alert_ts) if df_h1 is not None else None
     _atr_alert = smc_detector.compute_atr(_alert_slice, period=14) if _alert_slice is not None else None
     if _atr_alert and _atr_alert > 0 and _prox_alert is not None:
         sl_dist_atr_at_alert = round(abs(_prox_alert - sl) / _atr_alert, 3) \
             if sl is not None else None
-        tp_dist_atr_at_alert = round(abs(_prox_alert - tp1) / _atr_alert, 3) \
-            if tp1 is not None else None
+        tp_dist_atr_at_alert = round(abs(_prox_alert - _tp_2r_row) / _atr_alert, 3) \
+            if _tp_2r_row is not None else None
     else:
         sl_dist_atr_at_alert = None
         tp_dist_atr_at_alert = None
 
     #   r_capture_ratio : r_realised / mfe_r. How much of the best favorable move
-    #     we actually kept. 1.0 = rode the full excursion to exit; 0.0 = gave the
-    #     whole move back (the BE-sweep signature); can be negative on a loser that
-    #     had a favorable poke first. None when mfe_r <= 0 (no favorable move to
-    #     capture — ratio undefined, never 0/0). OUTCOME-time (uses r_realised) →
-    #     exit/description only, NEVER an entry feature.
+    #     we actually kept — now against the FULL-WINDOW MFE (A3 decouple), so this
+    #     is "2R capture of the full-window excursion". 1.0 = kept all the way to the
+    #     window's best; <1 = the window ran further after we exited; can be negative
+    #     on a loser that had a favorable poke first. None when mfe_r <= 0 (no
+    #     favorable move to capture — ratio undefined, never 0/0). OUTCOME-time (uses
+    #     r_realised) → exit/description only, NEVER an entry feature.
     r_capture_ratio = round(r_realised / mfe_r, 3) \
         if (mfe_r is not None and mfe_r > 0 and r_realised is not None) else None
 
@@ -1696,49 +1539,23 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         "model":         "h1_only",
         "event":         _event_label(bos_tag, bos_tier),
         "entry_zone":    entry_zone,
-        # entry/tp1/tp2 are RAW OB/zone-edge levels (2026-07-30 raw convention — no
-        # spread shift). entry_raw/tp1_raw/tp2_raw equal them now (kept so the fill
-        # trigger and audit columns don't break). None-safe.
+        # entry is the RAW OB execution price (2026-07-30 raw convention — no spread
+        # shift). entry_raw equals it (kept as the fill trigger column). None-safe.
         "entry":         entry,
         "entry_raw":     entry_raw,
-        # sl_raw == sl_initial now: both are the traded stop = OB distal -/+ 1 spread
-        # (the single spread, applied once upstream). Kept as two columns so existing
-        # readers/Excel don't break; they are equal by design under the raw model.
-        "sl_raw":        sl_raw,
+        # sl_initial = the traded stop = OB distal -/+ 1 spread (the single spread,
+        # applied once upstream). The one stop column (sl_raw twin dropped
+        # 2026-07-31 — it equalled this under the raw model).
         "sl_initial":    sl,
-        "tp1":           tp1,
-        "tp1_raw":       tp1_raw,
-        "tp2":           tp2,
-        "tp2_raw":       tp2_raw,
-        "tp1_rr":        round(tp1_rr, 3),
-        "tp2_rr":        round(tp2_rr, 3) if tp2 is not None else None,
-        # TP-placement audit (2026-07-15). tp1/tp2 above are the ZONE-EDGE
-        # (traded) levels; these expose the raw swing wick they replaced and its
-        # RR, plus the source ("zone" = opposing OB edge used, "wick" = fallback).
-        "tp1_wick":         tp1_wick,
-        "tp1_wick_rr":      round(tp1_wick_rr, 3) if tp1_wick_rr is not None else None,
-        "tp1_zone_source":  tp1_zone_source,
-        "tp2_wick":         tp2_wick,
-        "tp2_zone_source":  tp2_zone_source,
-        # 3-TARGET LADDER (backtest triple mode, 2026-07-17). Unambiguous names so
-        # `tp2` above keeps meaning "next pool" for every existing reader. tp_wick =
-        # same-pool-as-TP1 liquidity wick front-run by the equal-level buffer;
-        # tp_nextpool = the runner (next DIFFERENT pool, zone-edge, uncapped RR).
-        # tp2_collapsed_to_tp1 = tp_wick landed on TP1 (zone==wick / tiny-pool guard
-        # / rounding). None on a 1:1 fallback (no pool). Consumed by the exit recipes
-        # via walk_multileg "tp_wick"/"tp_nextpool" string specs.
-        "tp_wick":                 tp_wick,
-        "tp_wick_rr":              round(tp_wick_rr, 3) if tp_wick_rr is not None else None,
-        "tp_nextpool":             tp_nextpool,
-        "tp_nextpool_rr":          round(tp_nextpool_rr, 3) if tp_nextpool_rr is not None else None,
-        "tp_nextpool_zone_source": tp_nextpool_zone_source,
-        "tp2_collapsed_to_tp1":    tp2_collapsed_to_tp1,
-        "tp_targets":              tp_targets,
+        # tp_2r = the FIXED 2R target (entry ± 2·r_distance), the ONE committed exit
+        # level (FIXED_2R_BASELINE_SPEC 2026-07-31). Liquidity-pool TP1/TP2 and the
+        # 3-target ladder are retired from this run. Known at fill; audit-friendly.
+        "tp_2r":         _tp_2r_row,
         "exit_price":    exit_price,
+        # exit_reason "tp" == the fixed 2R target was hit (+2R); "sl" == stop (-1R).
+        # One target, so NOT "tp1"/"tp2" — avoids TP1/TP2 confusion.
         "exit_reason":   exit_reason,
         "r_realised":    r_realised,
-        "r_if_exit_tp1": r_if_exit_tp1,
-        "r_if_exit_tp2": r_if_exit_tp2,
         "pnl_usd":       pnl_usd,
         "mfe_r":         mfe_r,
         "mae_r":         mae_r,
@@ -1753,38 +1570,36 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl, tp1, tp2,
         # Sweep diagnostics (SL exits only; None otherwise).
         #   sl_bar_was_sweep  : stop candle wicked the stop but closed back on our
         #                       side (SMC grab-then-reject) vs a clean close-through.
-        #   sl_swept_then_tp1 : STRICT — sweep bar AND price reached TP1 BEFORE
-        #                       re-hitting the fired stop cur_sl (swept, held,
-        #                       ran). None on non-sweep. HINT only, not a replay.
+        #   sl_swept_then_2r  : STRICT — sweep bar AND price reached the +2R target
+        #                       BEFORE re-hitting the fired stop cur_sl (swept, held,
+        #                       ran the full 2R). None on non-sweep. HINT, not a replay.
+        #   sl_swept_then_1r  : same, but the target is +1R (breakeven-plus). Shows
+        #                       which stopped-out trades came back only to +1R vs ran
+        #                       all the way to +2R (the wider-stop question).
         #   sl_wick_depth_atr : how far the stop candle's wick pierced BEYOND the
         #                       fired stop, in OB-formation ATR. The missing input
         #                       for sizing a "distal + X·ATR" wider-stop replay.
         #                       0.0 = closed at the stop; None = non-SL / no ATR.
         "sl_bar_was_sweep":  sl_bar_was_sweep,
-        "sl_swept_then_tp1": sl_swept_then_tp1,
+        "sl_swept_then_2r":  sl_swept_then_2r,
+        "sl_swept_then_1r":  sl_swept_then_1r,
         "sl_wick_depth_atr": sl_wick_depth_atr,
-        # Outcome-time exit-track columns (2026-07-08; NEVER entry features).
+        # Outcome-time exit-track columns (NEVER entry features).
         #   sl_max_adverse_after_sweep_atr : furthest run against us BEYOND the
-        #     stop after a sweep, in ATR — RAW context (no longer the recovery test).
-        #   bars_sl_to_tp1_touch : STRICT — 1-indexed bars from stop bar to TP1,
-        #     ONLY when swept-then-held-then-TP (sl_swept_then_tp1 True); else None.
+        #     stop after a sweep, in ATR — RAW context.
+        #   bars_sl_to_2r_touch : STRICT — 1-indexed bars from stop bar to +2R,
+        #     ONLY when swept-then-held-then-2R (sl_swept_then_2r True); else None.
+        #   bars_sl_to_1r_touch : same, for +1R (sl_swept_then_1r True).
         #   sl_recovered_to_entry : after a sweep, did price return to entry (BE)?
         "sl_max_adverse_after_sweep_atr": sl_max_adverse_after_sweep_atr,
-        "bars_sl_to_tp1_touch":           bars_sl_to_tp1_touch,
+        "bars_sl_to_2r_touch":            bars_sl_to_2r_touch,
+        "bars_sl_to_1r_touch":            bars_sl_to_1r_touch,
         "sl_recovered_to_entry":          sl_recovered_to_entry,
-        # Measurement only, no behavior change (2026-07-02). True when the bar
-        # that armed break-even (+1R touch) ALSO traded back to entry within the
-        # same bar -- the intra-bar order (arm-then-pullback vs pullback-then-arm)
-        # is unprovable, so we arm at bar close and let the trade ride either way.
-        # None when BE never armed (SL/TP1 hit first, or trade never reached +1R).
-        "be_arm_bar_touched_entry": be_arm_bar_touched_entry,
         # OB-formation -> fill gap (hours). Diagnostic only, corr with r ~0.
         "ob_to_fill_hours": ob_to_fill_hours,
         # H1 bars from break candle to the pullback that fills us (BS1 flag).
         "bars_break_to_pullback": bars_break_to_pullback,
         "bars_to_exit":  bars_to_exit,
-        "bars_to_tp1":   bars_to_tp1,
-        "bars_to_tp2":   bars_to_tp2,
         "ob_age_h1_bars": _ob_age_h1_bars(ob, df_h1, alert_ts),
         "ob_timestamp":  ob.get("ob_timestamp"),
         # Event-candle delta (2026-07-09): bars the true break candle sits before

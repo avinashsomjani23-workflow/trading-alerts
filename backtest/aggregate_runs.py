@@ -508,8 +508,10 @@ def main() -> None:
                     help="Which entry zone to use as the primary analysis view. "
                          "Proximal is the only zone (50%% mean entry removed 2026-07).")
     ap.add_argument("--r-col", default="r_realised",
-                    choices=["r_realised", "r_if_exit_tp1", "r_if_exit_tp2"],
-                    help="Which R column to use as the outcome measure.")
+                    choices=["r_realised"],
+                    help="Which R column to use as the outcome measure. "
+                         "r_realised is the fixed 2R outcome (the retired "
+                         "r_if_exit_tp1/tp2 hypotheticals are gone).")
     args = ap.parse_args()
 
     groups = [int(g.strip()) for g in args.groups.split(",")] if args.groups else None

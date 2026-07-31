@@ -493,33 +493,6 @@ def _slice_read(rows: List[Dict[str, Any]], base_exr: float,
 
 
 
-def _runner_r(t: Dict[str, Any]) -> float:
-    """R under TP1+runner reference policy: 50% closes at TP1 when TP1 hit,
-    50% rides to whatever the TP2-ride reference did (r_if_exit_tp2 — original
-    SL, BE after TP1). When TP1 never hits, the full position is the reference
-    outcome.
-
-    NOTE (2026-06-18): rides against `r_if_exit_tp2`, the TP2-ride REFERENCE —
-    NOT `r_realised`, which is now the live TP1+BE@1R policy. Using r_realised
-    here would collapse the runner to plain TP1.
-    """
-    if t.get("exit_reason") == "never_filled":
-        return 0.0
-    ref_tp2 = float(t.get("r_if_exit_tp2") or 0.0)
-    bars_to_tp1 = t.get("bars_to_tp1")
-    tp1_rr = float(t.get("tp1_rr") or 0.0)
-    if bars_to_tp1 is not None and bars_to_tp1 >= 0:
-        return 0.5 * tp1_rr + 0.5 * ref_tp2
-    return ref_tp2
-
-
-def _attach_runner_r(trades: List[Dict[str, Any]]) -> None:
-    """Mutate trades in place to add `r_if_runner` (TP1+runner policy)."""
-    for t in trades:
-        if "r_if_runner" not in t:
-            t["r_if_runner"] = round(_runner_r(t), 3)
-
-
 
 # ---------------------------------------------------------------------------
 # Killzone Alignment — OB session vs Fill session alignment buckets.
@@ -657,20 +630,10 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
 
     sections: List[Tuple[str, List[Tuple[str, "pd.Series"]]]] = []
 
-    if "tp1_rr" in df.columns:
-        tp1 = df["tp1_rr"].astype(float)
-        sections.append(("TP1 R-multiple", [
-            ("Raise TP1 floor to 1.5R (live floor is 0.5R)", tp1 >= 1.5),
-            ("Only TP1 R >= 2.0",        tp1 >= 2.0),
-            ("Only TP1 R >= 2.5",        tp1 >= 2.5),
-        ]))
-    if "tp2_rr" in df.columns:
-        tp2 = pd.to_numeric(df["tp2_rr"], errors="coerce")
-        sections.append(("TP2 R-multiple", [
-            ("Only TP2 R >= 2.0",        (tp2 >= 2.0) & tp2.notna()),
-            ("Only TP2 R >= 2.5",        (tp2 >= 2.5) & tp2.notna()),
-            ("Only TP2 R >= 3.0",        (tp2 >= 3.0) & tp2.notna()),
-        ]))
+    # TP1/TP2 R-multiple counterfactual sections removed 2026-07-31 (FIXED_2R_
+    # BASELINE_SPEC): the exit is a fixed 2R, so there is no liquidity-pool TP
+    # distance to filter on. Score / confluence / killzone / session / dow / pd
+    # sections below are entry-side and unchanged.
     if "score" in df.columns:
         sc = pd.to_numeric(df["score"], errors="coerce")
         sections.append(("Score threshold", [
@@ -767,22 +730,17 @@ def _counterfactual_dataframe(trades: List[Dict[str, Any]],
 # ---------------------------------------------------------------------------
 # Exit-recipe display labels + the LIVE baseline key. Shared by the recipe table,
 # the winner rule, and the leak-table exit-fix join.
+# FIXED_2R_BASELINE_SPEC (2026-07-31): the committed baseline is a fixed 2R exit;
+# the liquidity-TP comparison recipes (TP1/wick/next-pool/BE-on-liqTP) are retired.
+# Only fixed-R exits remain as comparisons (they need no liquidity target). The
+# baseline key points at the fixed-2R recipe.
 _EXIT_RECIPE_LABELS = {
-    "baseline_liqTP_be1.0":  "TP1 + BE@1R (LIVE)",
-    "B_be0.5":               "TP1, BE@0.5R",
-    "B_be0.7":               "TP1, BE@0.7R",
-    "C_fullTP_0.5R":         "Fixed TP 0.5R",
-    "C_fullTP_1.0R":         "Fixed TP 1.0R",
-    "C_fullTP_1.5R":         "Fixed TP 1.5R",
-    "C_fullTP_2.0R":         "Fixed TP 2.0R",
-    "D_partial50_1R_runLiq": "Partial 50% @1R, runner to TP1",
-    # 3-target ladder (2026-07-17): zone (TP1) / wick (pool A magnet) / next pool.
-    "E_zoneTP_be1.0":              "Zone TP (TP1) + BE@1R",
-    "E_wickTP_be1.0":              "Wick TP + BE@1R",
-    "E_partial_zone_then_wick":    "50% zone, 50% wick",
-    "E_partial_zone_wick_nextpool": "Thirds: zone / wick / next pool",
+    "C_fullTP_0.5R":         "Fixed 0.5R",
+    "C_fullTP_1.0R":         "Fixed 1.0R",
+    "C_fullTP_1.5R":         "Fixed 1.5R",
+    "C_fullTP_2.0R":         "Fixed 2R (baseline)",
 }
-_EXIT_BASELINE_KEY = "baseline_liqTP_be1.0"
+_EXIT_BASELINE_KEY = "C_fullTP_2.0R"
 
 # Dimensions the driver/mined engine screens. Categorical => value as-is;
 # continuous => tertile buckets (low/mid/high) from this run's distribution.
@@ -809,7 +767,6 @@ _DRIVER_CONTINUOUS = [
     ("fvg_size_atr",      "FVG size (ATR)"),
     ("impulse_leg_to_extreme_atr", "Impulse leg to extreme (ATR)"),
     ("ob_age_h1_bars",    "OB age (H1 bars)"),
-    ("tp1_rr",            "TP1 distance (R)"),
     ("score",             "Confidence score"),
     ("atr_at_ob",         "ATR at OB (volatility)"),
 ]
@@ -981,22 +938,22 @@ def _same_bar_resolution_html(trades: List[Dict[str, Any]]) -> str:
         return "<p style='color:#888;'>No resolved trades this period.</p>"
     fill_bar = [t for t in filled if int(t.get("bars_to_exit") or 0) == 0]
     losers = [t for t in filled if (t.get("r_realised") or 0) < 0]
-    # Loser whose MFE reached TP1's price -> TP1 was touched in-bar but booked SL.
-    tp1_touched = [t for t in losers
-                   if (t.get("mfe_r") or 0) >= (t.get("tp1_rr") or 1e9)]
+    # Loser whose full-window MFE reached +2R -> the 2R target's price was touched
+    # in the window but the trade still booked SL (window-MFE, FIXED_2R_BASELINE).
+    tp_touched = [t for t in losers if (t.get("mfe_r") or 0) >= 2.0]
     pct = len(fill_bar) / n * 100
     tone = "#e74c3c" if pct >= 25 else ("#f39c12" if pct >= 10 else "#27ae60")
     return (
         f"<p style='font-size:13px;line-height:1.6;'>"
         f"<b style='color:{tone};'>{len(fill_bar)} of {n}</b> resolved trades "
         f"({pct:.0f}%) exited on the <b>fill bar</b> — the same H1 candle that "
-        f"filled the limit also hit SL (and sometimes TP1). On H1 we cannot tell "
-        f"whether TP or SL printed first, so these are booked <b>SL</b> "
+        f"filled the limit also hit SL. On H1 we cannot tell whether the 2R target "
+        f"or SL printed first, so these are booked <b>SL</b> "
         f"(pessimistic, no look-ahead). Of the losers, "
-        f"<b>{len(tp1_touched)}</b> had TP1's price touched in-bar yet booked a "
-        f"full −1R. Read the headline knowing this slice is H1-resolution-limited, "
-        f"not clean directional losses — a lower-timeframe fill model would "
-        f"reclassify some.</p>"
+        f"<b>{len(tp_touched)}</b> had the +2R price touched somewhere in the window "
+        f"yet booked a full −1R. Read the headline knowing this slice is "
+        f"H1-resolution-limited, not clean directional losses — a lower-timeframe "
+        f"fill model would reclassify some.</p>"
     )
 
 
@@ -1076,35 +1033,32 @@ def _validate_trades(trades: List[Dict[str, Any]]) -> List[str]:
         direction = t.get("direction", "")
         entry     = t.get("entry")
         sl        = t.get("sl_initial")
-        tp1       = t.get("tp1")
-        tp2       = t.get("tp2")
+        tp_2r     = t.get("tp_2r")
         r         = t.get("r_realised", 0)
         reason    = t.get("exit_reason", "")
 
-        if entry is None or sl is None or tp1 is None:
-            violations.append(f"{pair} @ {ts}: missing entry/SL/TP1")
+        if entry is None or sl is None or tp_2r is None:
+            violations.append(f"{pair} @ {ts}: missing entry/SL/2R target")
             continue
 
+        # Fixed 2R is computed from entry & sl, so it can't be mis-ordered; this is
+        # a cheap regression tripwire (sign of the stop and the +2R target).
         if direction == "bullish":
             if sl >= entry:
                 violations.append(f"{pair} @ {ts}: SL ({sl}) ≥ entry ({entry}) for LONG")
-            if tp1 <= entry:
-                violations.append(f"{pair} @ {ts}: TP1 ({tp1}) ≤ entry ({entry}) for LONG")
-            if tp2 is not None and tp2 <= tp1:
-                violations.append(f"{pair} @ {ts}: TP2 ({tp2}) ≤ TP1 ({tp1}) for LONG")
+            if tp_2r <= entry:
+                violations.append(f"{pair} @ {ts}: 2R target ({tp_2r}) ≤ entry ({entry}) for LONG")
         elif direction == "bearish":
             if sl <= entry:
                 violations.append(f"{pair} @ {ts}: SL ({sl}) ≤ entry ({entry}) for SHORT")
-            if tp1 >= entry:
-                violations.append(f"{pair} @ {ts}: TP1 ({tp1}) ≥ entry ({entry}) for SHORT")
-            if tp2 is not None and tp2 >= tp1:
-                violations.append(f"{pair} @ {ts}: TP2 ({tp2}) ≥ TP1 ({tp1}) for SHORT")
+            if tp_2r >= entry:
+                violations.append(f"{pair} @ {ts}: 2R target ({tp_2r}) ≥ entry ({entry}) for SHORT")
 
-        # TP/SL exit should have correct sign
+        # TP/SL exit should have the correct sign (exit reason "tp" == +2R hit).
         if reason == "sl" and r > 0:
             violations.append(f"{pair} @ {ts}: exit=SL but r_realised={r:.2f} (positive — unexpected)")
-        if reason in ("tp1", "tp2") and r < 0:
-            violations.append(f"{pair} @ {ts}: exit={reason} but r_realised={r:.2f} (negative — unexpected)")
+        if reason == "tp" and r < 0:
+            violations.append(f"{pair} @ {ts}: exit=TP but r_realised={r:.2f} (negative — unexpected)")
 
     return violations
 
@@ -1140,7 +1094,7 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
         return pd.DataFrame()
 
     _exit_labels = {
-        "sl": "Stop Loss Hit", "tp1": "TP1 Hit", "tp2": "TP2 Hit",
+        "sl": "Stop Loss Hit", "tp": "TP Hit (2R)",
         "timeout": "Time Limit (48h)", "window_end": "End of Window",
         "sl_collision": "SL+TP Same Bar", "never_filled": "Never Filled",
         "friday_flat": "Weekend Flat (Fri)",
@@ -1181,10 +1135,7 @@ def _build_zone_register_df(trades: List[Dict[str, Any]]) -> pd.DataFrame:
             "Day of Week":             zr_dow,
             "Entry Price (Proximal)":  _v(prox, "entry"),
             "Stop Loss":               _v(prox, "sl_initial"),
-            "Take Profit 1":           _v(prox, "tp1"),
-            "Take Profit 2":           _v(prox, "tp2"),
-            "TP1 Reward:Risk":         _v(prox, "tp1_rr"),
-            "TP2 Reward:Risk":         _v(prox, "tp2_rr"),
+            "Target (Fixed 2R)":       _v(prox, "tp_2r"),
             "Proximal Filled?":        "Yes" if _v(prox, "exit_reason") != "never_filled" and prox else "No",
             "Proximal Outcome":        _exit_labels.get(_v(prox, "exit_reason"), _v(prox, "exit_reason")),
             "Proximal R":              _v(prox, "r_realised"),
@@ -1292,38 +1243,27 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "setup_id",
         "pair", "alert_ts", "fill_ts", "exit_ts", "session",
         "direction", "event", "entry_zone",
-        # entry/tp1/tp2 = RAW OB/zone execution levels (2026-07-30 raw convention).
-        # *_raw twins EQUAL them now (spread only on the stop); sl_raw == sl_initial.
-        # Kept as columns so downstream readers don't break.
-        "entry", "entry_raw", "sl_raw", "sl_initial",
-        "tp1", "tp1_raw", "tp2", "tp2_raw", "tp1_rr", "tp2_rr",
-        # TP-placement audit (2026-07-15): tp1/tp2 above are the ZONE-EDGE
-        # (traded) levels; these expose the raw swing wick they replaced, its RR,
-        # and the source ("zone" opposing-OB edge used | "wick" fallback).
-        "tp1_wick", "tp1_wick_rr", "tp1_zone_source",
-        "tp2_wick", "tp2_zone_source",
-        # 3-TARGET LADDER (backtest triple mode, 2026-07-17). Unambiguous names —
-        # `tp2` above still means "next pool". tp_wick = pool-A liquidity wick
-        # (buffered); tp_nextpool = the runner (next different pool); tp2_collapsed_
-        # to_tp1 = wick landed on TP1; tp_targets = "triple" marker. Consumed by the
-        # exit recipes via walk_multileg "tp_wick"/"tp_nextpool" specs.
-        "tp_wick", "tp_wick_rr",
-        "tp_nextpool", "tp_nextpool_rr", "tp_nextpool_zone_source",
-        "tp2_collapsed_to_tp1", "tp_targets",
+        # entry = RAW OB execution level (2026-07-30 raw convention); entry_raw
+        # equals it (fill trigger). sl_initial = the traded stop (one spread on the
+        # stop only). tp_2r = the FIXED 2R target (FIXED_2R_BASELINE_SPEC 2026-07-31)
+        # — the ONE committed exit level; liquidity-pool TP1/TP2/wick/next-pool are
+        # retired from this run.
+        "entry", "entry_raw", "sl_initial", "tp_2r",
         "exit_reason", "exit_price",
-        "r_realised", "r_if_exit_tp1", "r_if_exit_tp2", "pnl_usd",
+        "r_realised", "pnl_usd",
         # Headline membership: True rows sum to the email headline. When False,
         # headline_exclusion names why (unresolved:*, below_score_floor,
         # ist_blocked). Stamped from the single _headline_exclusion rule.
         "eligible_for_headline", "headline_exclusion",
         "mfe_r", "mae_r", "r_capture_ratio",
-        "sl_bar_was_sweep", "sl_swept_then_tp1",
+        "sl_bar_was_sweep", "sl_swept_then_2r", "sl_swept_then_1r",
         "sl_wick_depth_atr",
-        # Outcome-time exit-track columns (2026-07-08; NEVER entry features).
-        "sl_max_adverse_after_sweep_atr", "bars_sl_to_tp1_touch",
+        # Outcome-time exit-track columns (NEVER entry features).
+        "sl_max_adverse_after_sweep_atr",
+        "bars_sl_to_2r_touch", "bars_sl_to_1r_touch",
         "sl_recovered_to_entry", "sl_distance_atr",
         "sl_dist_atr_at_alert", "tp_dist_atr_at_alert",
-        "bars_to_exit", "bars_to_tp1", "bars_to_tp2",
+        "bars_to_exit",
         # OUTCOME-side (NEVER entry features): bars from fill to the MFE/MAE bar.
         "bars_to_mfe", "bars_to_mae",
         "ob_to_fill_hours", "bars_break_to_pullback",
@@ -1362,8 +1302,8 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "h1_trend", "trend_alignment", "trend_pd_agree",
         # Structure signals (STRUCTURE_SIGNALS_SPEC) — edge-discovery inputs, no
         # gate/email change yet. S2 ranging/pending-flip state at alert; S3 leg
-        # leg extreme (extreme + clipped are audit support); S4 broken-wall PD
-        # flags at OB formation. None per each column's rule.
+        # extreme (extreme + clipped are audit support); S4 broken-wall PD flags at
+        # OB formation. None per each column's rule.
         "structure_ranging_at_alert", "flip_pending_at_alert",
         "flip_pending_dir_at_alert",
         "leg_extreme_at_alert", "leg_extreme_clipped",
@@ -1454,14 +1394,12 @@ _EXCEL_COL_NAMES = {
     "h1_trend":          "H1 Trend",
     "trend_alignment":   "Trend Alignment",
     "entry_zone":        "Entry Type",
-    # levels (raw convention 2026-07-30: entry/tp are raw, spread only on the stop;
-    # the redundant *_raw twins are dropped from the Excel sheet).
+    # levels (raw convention 2026-07-30: entry is raw, spread only on the stop.
+    # FIXED_2R_BASELINE 2026-07-31: the one target is the fixed 2R level; liquidity-
+    # pool TP1/TP2 columns are retired).
     "entry":             "Entry Price",
     "sl_initial":        "Stop Loss",
-    "tp1":               "Take Profit 1",
-    "tp2":               "Take Profit 2",
-    "tp1_rr":            "TP1 Reward:Risk",
-    "tp2_rr":            "TP2 Reward:Risk",
+    "tp_2r":             "Target (Fixed 2R)",
     # PD array
     "pd_zone":           "PD Zone",
     "pd_alignment":      "PD Alignment",
@@ -1471,16 +1409,17 @@ _EXCEL_COL_NAMES = {
     # outcome
     "exit_reason":       "How Trade Closed",
     "exit_price":        "Exit Price",
-    "r_realised":        "R Achieved (LIVE: TP1+BE@1R)",
-    "pnl_usd":           "Dollar P&L (LIVE: TP1+BE@1R)",
-    "r_if_exit_tp1":     "R if Closed at TP1",
-    "pnl_usd_tp1":       "Dollar P&L (TP1-only)",
-    "r_if_runner":       "R if TP1 + Runner",
-    "pnl_usd_runner":    "Dollar P&L (TP1+Runner)",
+    "r_realised":        "R Achieved (Fixed 2R)",
+    "pnl_usd":           "Dollar P&L (Fixed 2R)",
     "mfe_r":             "Best Price Reached (R)",
     "mae_r":             "Worst Price Reached (R)",
     "bars_to_exit":      "Hours Held",
-    "bars_to_tp1":       "Hours to TP1 (-1 if never)",
+    # SL anatomy (wider-stop study) — re-anchored to the fixed 2R / 1R targets.
+    "sl_bar_was_sweep":  "Stop Bar Was Sweep",
+    "sl_swept_then_2r":  "Swept Then Ran +2R",
+    "sl_swept_then_1r":  "Swept Then Ran +1R",
+    "bars_sl_to_2r_touch": "Hours Stop→+2R",
+    "bars_sl_to_1r_touch": "Hours Stop→+1R",
     # setup quality
     "score":             "Setup Score (0–8)",
     "confluences_present": "Confluences Active",
@@ -1513,8 +1452,7 @@ _EXCEL_COL_NAMES = {
 
 _EXIT_LABELS = {
     "sl":           "Stop Loss Hit",
-    "tp1":          "TP1 Hit",
-    "tp2":          "TP2 Hit",
+    "tp":           "TP Hit (2R)",
     "timeout":      "Time Limit Reached (48h)",
     "window_end":   "End of Test Window",
     "sl_collision": "SL and TP Same Bar — SL Taken",
@@ -1662,15 +1600,9 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
     if not filled:
         return None
     try:
-        # Make sure r_if_runner is populated for every row so the new Excel
-        # column has data. _attach_runner_r is idempotent.
-        _attach_runner_r(filled)
-        # Dollar P&L under TP1-only and TP1+runner. Same formula as the
-        # TP2-ride scoreboard uses internally (R × risk_usd), so per-row
-        # sums reconcile to the email's headline totals.
-        for t in filled:
-            t["pnl_usd_tp1"]    = round(float(t.get("r_if_exit_tp1") or 0.0) * risk_usd, 0)
-            t["pnl_usd_runner"] = round(float(t.get("r_if_runner")  or 0.0) * risk_usd, 0)
+        # FIXED_2R_BASELINE (2026-07-31): the TP1-only / TP1+runner reference P&L
+        # columns are retired — the one committed outcome is r_realised / pnl_usd
+        # under the fixed 2R exit.
         df = pd.DataFrame(filled)
 
         # Day of week — sourced from fill_ts (when the trade was actually
@@ -1697,7 +1629,7 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
             return _to_ist_str(row.get("exit_ts")) if row.get("exit_reason") in ("sl", "sl_collision") else ""
 
         def _tp_ist(row):
-            return _to_ist_str(row.get("exit_ts")) if row.get("exit_reason") in ("tp1", "tp2") else ""
+            return _to_ist_str(row.get("exit_ts")) if row.get("exit_reason") == "tp" else ""
 
         df["sl_hit_time_ist"] = df.apply(_sl_ist, axis=1) if "exit_ts" in df.columns else ""
         df["tp_fill_time_ist"] = df.apply(_tp_ist, axis=1) if "exit_ts" in df.columns else ""
@@ -1752,16 +1684,14 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
             "H1 Trend": 12, "Trend Alignment": 16,
             "Day of Week": 11,
             "Entry Type": 18, "Entry Price": 12, "Stop Loss": 12,
-            "Take Profit 1": 13, "Take Profit 2": 13,
-            "TP1 Reward:Risk": 14, "TP2 Reward:Risk": 14,
+            "Target (Fixed 2R)": 16,
             "How Trade Closed": 24, "Exit Price": 12,
-            "R Achieved (LIVE: TP1+BE@1R)": 22, "Dollar P&L (LIVE: TP1+BE@1R)": 24,
-            "R if Closed at TP1": 18, "Dollar P&L (TP1-only)": 20,
-            "R if TP1 + Runner": 18, "Dollar P&L (TP1+Runner)": 22,
+            "R Achieved (Fixed 2R)": 22, "Dollar P&L (Fixed 2R)": 24,
             "Proximal R": 12, "Proximal Dollar P&L": 18,
-            "Stop Loss (raw)": 14,
             "Best Price Reached (R)": 20, "Worst Price Reached (R)": 20,
-            "Hours Held": 10, "Hours to TP1 (-1 if never)": 22,
+            "Hours Held": 10,
+            "Swept Then Ran +2R": 18, "Swept Then Ran +1R": 18,
+            "Hours Stop→+2R": 16, "Hours Stop→+1R": 16,
             "Setup Score (0–8)": 14,
             "Confluences Active": 22,
             "FVG Present": 12, "Liquidity Sweep Present": 22,
@@ -1793,7 +1723,7 @@ def _try_excel(trades: List[Dict[str, Any]], path: Path,
 
             headers = [cell.value for cell in ws[1]]
             pnl_cols = [headers.index(h) + 1 for h in
-                        ("Dollar P&L (LIVE: TP1+BE@1R)", "Dollar P&L",
+                        ("Dollar P&L (Fixed 2R)", "Dollar P&L",
                          "Proximal Dollar P&L")
                         if h in headers]
             rev_col = headers.index("Worth Reviewing") + 1 if "Worth Reviewing" in headers else None
@@ -2273,8 +2203,8 @@ def _act2_html(prox_trades: List[Dict[str, Any]], out_dir: Path,
     counts = _exit_reason_counts(filled)
     real = {k: v for k, v in counts.items() if k not in _EXCLUDE_REASONS}
     total_real = sum(real.values()) or 1
-    # Group into tp1 / sl / breakeven-ish / other.
-    seg_order = [("tp1", _C["good"], "TP1"), ("sl", _C["red"], "SL"),
+    # Group into tp (2R win) / sl / weekend-flat / other.
+    seg_order = [("tp", _C["good"], "TP (2R)"), ("sl", _C["red"], "SL"),
                  ("friday_flat", _C["blue"], "Weekend flat")]
     seg_html = ""
     legend = ""
@@ -3237,8 +3167,6 @@ def _build_group_html(
     prox_trades = [t for t in trades if t.get("entry_zone") == "proximal"]
 
     sb_prox     = _aggregate_for_exit(prox_trades, "r_realised",    risk_usd)
-    sb_prox_tp1 = _aggregate_for_exit(prox_trades, "r_if_exit_tp1", risk_usd)
-    sb_prox_tp2 = _aggregate_for_exit(prox_trades, "r_if_exit_tp2", risk_usd)
     fill_prox   = _fill_rate(trades, "proximal")
 
     # Reconciliation invariant: headline P&L must equal the per-trade sum.
@@ -3414,8 +3342,6 @@ def _build_group_html(
         # for the registry / aggregate_runs readers (they read *proximal*).
         "scoreboards": {
             "proximal_realised":  sb_prox,
-            "proximal_exit_tp1":  sb_prox_tp1,
-            "proximal_exit_tp2":  sb_prox_tp2,
         },
         "fill_rate_proximal": fill_prox,
         "news_blocked_trade_rows": len(blocked_trades),
@@ -3491,11 +3417,9 @@ def write_h1_only_report(
     # future re-introduction of a second zone can't silently leak into metrics.
     prox_trades = [t for t in trades if t.get("entry_zone") == "proximal"]
 
-    # r_realised = the LIVE policy (TP1 + break-even at +1R). Every per-pair /
-    # per-session / score breakdown uses it so headline + breakdowns reconcile.
+    # r_realised = the committed FIXED 2R policy. Every per-pair / per-session /
+    # score breakdown uses it so headline + breakdowns reconcile.
     sb_prox    = _aggregate_for_exit(prox_trades, "r_realised",     risk_usd)
-    sb_prox_tp2 = _aggregate_for_exit(prox_trades, "r_if_exit_tp2", risk_usd)
-    sb_prox_tp1 = _aggregate_for_exit(prox_trades, "r_if_exit_tp1", risk_usd)
 
     pp_prox   = _per_pair_breakdown(prox_trades,  "r_realised", risk_usd)
     ss_prox   = _per_session_breakdown(prox_trades, "r_realised", risk_usd)
@@ -3550,13 +3474,11 @@ def write_h1_only_report(
         "total_trade_rows":    len(trades),
         "fill_rate_proximal":  fill_prox,
         "exit_reason_counts_proximal": exit_counts_prox,
-        # Scoreboards under the exit policies. r_realised is the LIVE policy
-        # (TP1 + break-even at +1R); the tp1/tp2 columns are pure hypotheticals
-        # and named accordingly. Proximal only — 50% mean entry is dead.
+        # Scoreboard under the committed exit policy. r_realised is the FIXED 2R
+        # exit (FIXED_2R_BASELINE_SPEC 2026-07-31). Proximal only — 50% mean entry
+        # is dead; the liquidity-pool TP1/TP2 hypothetical boards are retired.
         "scoreboards": {
             "proximal_realised":  sb_prox,
-            "proximal_exit_tp1":  sb_prox_tp1,
-            "proximal_exit_tp2":  sb_prox_tp2,
         },
         # Per-pair / per-session breakdowns use r_realised so they reconcile
         # to the headline total. Keys carry the column name explicitly.

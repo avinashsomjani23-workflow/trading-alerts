@@ -5,11 +5,15 @@ Any analysis, finding, or column question uses THIS file and no other:
     backtest/results/h1only_20080102_20161231/trades.csv
 
 - Run: `h1only_20080102_20161231` — EURUSD only, 2008-01-02 → 2016-12-31 (Discovery
-  block). Built 2026-07-27 on live detection code (break gates removed 2026-07-10;
-  liquidity-sweep v2, EQ/PD/PW pools, multi-target TP, ATR-regime + MFE/MAE timing
-  all live). Local-only (OneDrive policy — not git-tracked; commit in CI).
-- Shape: **203 columns, 3,317 rows.** All run-produced.
+  block). Rebuilt 2026-07-31 under the **FIXED 2R baseline**
+  (`docs/FIXED_2R_BASELINE_SPEC.md`): exit = fixed +2R / −1R, no BE, no liquidity-pool
+  TP; window-MFE decoupled from the exit; SL-anatomy re-anchored to +2R/+1R. All 10
+  scan-log gates PASS. Local-only (OneDrive policy — not git-tracked; commit in CI).
+- Shape: **182 columns, 3,322 rows.** All run-produced.
 - Per-year trade count: 346–391 (flat — noted, not yet acted on).
+- Expectancy −0.09R (headline −$51,597.50) — NEGATIVE by design; the fixed 2R is a
+  constant ruler for studying ENTRIES, not a profitable exit. Every pre-2026-07-31
+  backtest number is VOID (exit changed).
 
 ## Canonical = the CURRENT active analysis run (repointed per run)
 
@@ -24,7 +28,7 @@ Any analysis, finding, or column question uses THIS file and no other:
 
 - NEVER `glob` for `trades.csv` and use whatever turns up. There is exactly one
   truth file — the path above.
-- Before using it, confirm the header has **203 columns**. Wrong count = wrong file
+- Before using it, confirm the header has **182 columns**. Wrong count = wrong file
   = STOP. (This number changes when canonical is repointed — always re-confirm it
   against whatever this doc currently names.)
 - `backtest/archive/` is STALE by definition. NEVER read any CSV under it as an

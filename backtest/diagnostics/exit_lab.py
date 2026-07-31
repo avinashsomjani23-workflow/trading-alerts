@@ -43,27 +43,17 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 RESULTS = os.path.join(ROOT, "backtest", "results")
 
 # ── The locked experiment set (HANDOFF / RECOMMENDATIONS) ───────────────────
-# target spec: float = R-multiple, "tp1" = liquidity TP. be_trigger_r None = no BE.
+# target spec: float = R-multiple. be_trigger_r None = no BE.
 #
-# Stage-1 exit-selection pruning (2026-07-27, trader-approved on the EURUSD
-# Discovery block h1only_20080102_20161231). Five recipes were removed as either
-# proven-worse, redundant, or un-bookable live (the trader cannot manually book
-# partial exits). REMOVED and why:
-#   - C_fullTP_0.5R          — statistically WORSE than baseline (paired CI < 0).
-#   - D_partial50_1R_runLiq  — partial exit; can't be booked live.
-#   - E_zoneTP_be1.0         — byte-for-byte DUPLICATE of baseline (+0.0000 diff);
-#                              tp1_zone_source already logs the zone-vs-wick fallback.
-#   - E_partial_zone_then_wick     — partial exit; can't be booked live. (The trader's
-#                              intended "zone-if-clear-else-wick" fallback IS baseline
-#                              TP1 already — see tp1_zone_source in the simulator.)
-#   - E_partial_zone_wick_nextpool — 3-way partial; can't be booked live, and only
-#                              ~32% of trades even had a next-pool target.
-# The single-target wick exit (E_wickTP_be1.0) is KEPT: it is a full-position,
-# bookable exit (one target), not a partial.
+# FIXED_2R_BASELINE_SPEC (2026-07-31): the committed run's exit is a FIXED 2R, so
+# the liquidity-pool comparison recipes (any leg targeting "tp1" / "tp_wick" /
+# "tp_nextpool") are RETIRED — the simulator no longer computes those targets and
+# they must never resurface. What remains is a fixed-R sweep plus the self-
+# contained ATR-mechanical exit (which rebuilds its own SL/TP from ATR and needs
+# no structural target). The fixed-2R recipe is the baseline (see
+# h1_only_reporting._EXIT_BASELINE_KEY == "C_fullTP_2.0R").
 CONFIGS: Dict[str, Dict[str, Any]] = {
-    "baseline_liqTP_be1.0":  {"legs": [(1.0, "tp1")], "be_trigger_r": 1.0, "be_to_r": 0.0},
-    "B_be0.5":               {"legs": [(1.0, "tp1")], "be_trigger_r": 0.5, "be_to_r": 0.0},
-    "B_be0.7":               {"legs": [(1.0, "tp1")], "be_trigger_r": 0.7, "be_to_r": 0.0},
+    "C_fullTP_0.5R":         {"legs": [(1.0, 0.5)], "be_trigger_r": None},
     "C_fullTP_1.0R":         {"legs": [(1.0, 1.0)], "be_trigger_r": None},
     "C_fullTP_1.5R":         {"legs": [(1.0, 1.5)], "be_trigger_r": None},
     "C_fullTP_2.0R":         {"legs": [(1.0, 2.0)], "be_trigger_r": None},
@@ -78,11 +68,6 @@ CONFIGS: Dict[str, Dict[str, Any]] = {
     # <15 prior bars are skipped for this recipe (real ATR unavailable; never faked).
     "E_atr_sl1.5_tp2.5":     {"legs": [(1.0, "atr_tp")], "be_trigger_r": None,
                               "atr_sl_mult": 1.5, "atr_tp_mult": 2.5, "atr_period": 14},
-    # Single-target structural wick exit (2026-07-17). Full position exits at the
-    # same-pool buffered liquidity wick (tp_wick) — the true magnet past the zone
-    # edge. Runs only on trades that committed a tp_wick price (~63%); guarded in
-    # _replay. KEPT through the 2026-07-27 pruning: it is bookable (one target).
-    "E_wickTP_be1.0":              {"legs": [(1.0, "tp_wick")], "be_trigger_r": 1.0, "be_to_r": 0.0},
 }
 
 
@@ -164,26 +149,19 @@ def _replay(trades: pd.DataFrame, bars: Dict[str, pd.DataFrame]) -> pd.DataFrame
         future = future.iloc[: max_hold + 2]
         bias = t["bias"] if t.get("bias") in ("LONG", "SHORT") else (
             "LONG" if t["direction"] == "bullish" else "SHORT")
-        entry = float(t["entry"]); sl = float(t["sl_initial"]); tp1 = float(t["tp1"])
+        entry = float(t["entry"]); sl = float(t["sl_initial"])
         r_distance = abs(entry - sl)
         if r_distance <= 0:
             skipped += 1
             continue
-        # Triple-target ladder prices (2026-07-17). Committed on the trade row by
-        # the simulator (triple mode). A recipe leg targeting "tp_wick"/"tp_nextpool"
-        # gets the committed price; None when the trade had no such target (1:1
-        # fallback, no runner) -> walk_multileg raises for that leg, so those
-        # recipes are only run when the price exists (guarded below). NaN in the CSV
-        # (missing/blank) is treated as None.
-        def _price(col):
-            v = t.get(col)
-            return None if v is None or (isinstance(v, float) and pd.isna(v)) else float(v)
-        tp_wick = _price("tp_wick")
-        tp_nextpool = _price("tp_nextpool")
+        # FIXED_2R_BASELINE (2026-07-31): the liquidity-pool targets (tp1 / tp_wick /
+        # tp_nextpool) are retired — no remaining recipe references them, so they are
+        # no longer read from the row. Every recipe is a fixed-R or self-contained
+        # ATR exit; walk_multileg receives None for the (unused) structural-tp arg.
         base = {
             "pair": pair, "quarter": _quarter(t["alert_ts"]),
             "alert_ts": t["alert_ts"], "fill_ts": t["fill_ts"],
-            "direction": t.get("direction"), "entry": entry, "sl_initial": sl, "tp1": tp1,
+            "direction": t.get("direction"), "entry": entry, "sl_initial": sl,
             "committed_r": float(t["r_realised"]),
             "committed_mfe_r": float(t.get("mfe_r", np.nan)),
             "committed_mae_r": float(t.get("mae_r", np.nan)),
@@ -195,7 +173,7 @@ def _replay(trades: pd.DataFrame, bars: Dict[str, pd.DataFrame]) -> pd.DataFrame
         # recipe needs it. None when <15 pre-fill bars exist (ATR undefined).
         _atr_fill_cache: Dict[int, Optional[float]] = {}
         for name, cfg in CONFIGS.items():
-            r_sl, r_rd, r_tp1, r_legs = sl, r_distance, tp1, None
+            r_sl, r_rd, r_legs = sl, r_distance, None
             atr_mult = cfg.get("atr_sl_mult")
             if atr_mult is not None:
                 period = int(cfg.get("atr_period", 14))
@@ -219,20 +197,10 @@ def _replay(trades: pd.DataFrame, bars: Dict[str, pd.DataFrame]) -> pd.DataFrame
             run_cfg = dict(cfg)
             if r_legs is not None:
                 run_cfg["legs"] = r_legs
-            # Structural-target guard: a recipe that targets "tp_wick"/"tp_nextpool"
-            # can only run on a trade that committed that price. When it is missing
-            # (1:1 fallback, or no runner / collapsed away), emit a NaN row (same
-            # as the ATR-unavailable path) rather than raising — the summary drops
-            # NaN so a recipe's stats are computed on the trades it actually ran.
-            _specs = {spec for _, spec in run_cfg["legs"] if isinstance(spec, str)}
-            if ("tp_wick" in _specs and tp_wick is None) or \
-               ("tp_nextpool" in _specs and tp_nextpool is None):
-                rows.append({**base, "config": name, "r": np.nan,
-                             "recipe_exit_reason": "no_target",
-                             "recipe_mfe_r": np.nan, "recipe_mae_r": np.nan})
-                continue
-            res = walk_multileg(future, bias, entry, r_sl, r_rd, r_tp1, run_cfg,
-                                tp_wick=tp_wick, tp_nextpool=tp_nextpool,
+            # All remaining recipes target a fixed R-multiple (or the self-contained
+            # ATR exit) — none references a liquidity target, so the structural-target
+            # guard is gone. walk_multileg gets None for the unused structural-tp arg.
+            res = walk_multileg(future, bias, entry, r_sl, r_rd, None, run_cfg,
                                 weekend_flat=wk_flat, weekend_hour_utc=wk_hour,
                                 max_hold=max_hold)
             rows.append({**base, "config": name, "r": res["r_realised"],
@@ -330,7 +298,9 @@ def main():
         return
 
     # ── SELF-CHECK: baseline recipe must reproduce committed r_realised ──────
-    base = rep[rep["config"] == "baseline_liqTP_be1.0"]
+    # The committed policy is the fixed 2R exit (FIXED_2R_BASELINE_SPEC), so the
+    # fixed-2R recipe must reproduce r_realised.
+    base = rep[rep["config"] == "C_fullTP_2.0R"]
     c_exp = round(base["committed_r"].mean(), 4)
     r_exp = round(base["r"].mean(), 4)
     diff = round(abs(c_exp - r_exp), 4)

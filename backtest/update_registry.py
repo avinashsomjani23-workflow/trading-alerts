@@ -157,16 +157,14 @@ def _extract_metrics(run_dir: Path, summary: Dict[str, Any]) -> Dict[str, Any]:
     """Pull all cross-run-relevant metrics from one run folder."""
     trades_df = _load_trades(run_dir)
 
-    # Headline view: proximal r_realised (default policy = TP2-ride with
-    # SL-to-BE after TP1). Same column the email headline uses, so the
-    # registry's numbers reconcile with what the user saw in their inbox.
-    # The exit_tp1 / exit_tp2 hypotheticals are kept in summary.json for
-    # the head-to-head policy comparison only -- never as the headline.
+    # Headline view: proximal r_realised (2026-07-31 policy = FIXED 2R exit).
+    # Same column the email headline uses, so the registry's numbers reconcile
+    # with what the user saw in their inbox.
     boards = summary.get("scoreboards", {})
     primary = boards.get("proximal_realised", {})
     if not primary or primary.get("trades", 0) == 0:
-        # Legacy summaries (pre-2026-05) only had the tp1/tp2 hypotheticals;
-        # fall back so old runs still register.
+        # Legacy summaries (pre-2026-05) only had the retired tp1/tp2
+        # hypotheticals; fall back so old runs still register.
         primary = boards.get("proximal_exit_tp2", {}) or boards.get("proximal_exit_tp1", {})
 
     total_trade_rows = summary.get("total_trade_rows", 0)

@@ -607,8 +607,6 @@ def _run_h1_only(cfg, start, end, pair_names, regime, risk_usd, send_email,
                           exit_reason=row.get("exit_reason"),
                           r_realised=row.get("r_realised"),
                           pnl_usd=row.get("pnl_usd"),
-                          r_if_exit_tp1=row.get("r_if_exit_tp1"),
-                          r_if_exit_tp2=row.get("r_if_exit_tp2"),
                           hypothetical=True)
 
     # Hand the merged exit-lab sink to a diagnostic caller (exit_lab.py) if one

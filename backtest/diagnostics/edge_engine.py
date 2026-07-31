@@ -212,15 +212,16 @@ WEEKLY_PD_ONLY_FEATURES = {"weekly_pd_position_at_alert", "weekly_pd_zone_at_ale
 # Pool/EQ/approach: None on never_filled rows (fill_ts=None) + thin history; screen
 # each on its own non-null subpopulation only (same rule as FVG_ONLY).
 
-# Outcome / geometry columns Stage 0 requires present (SPEC §4.1).
+# Outcome / geometry columns Stage 0 requires present (SPEC §4.1). tp_2r = the
+# fixed 2R target (FIXED_2R_BASELINE_SPEC 2026-07-31; replaced the retired tp1).
 REQUIRED_OUTCOME_COLS = [
-    "r_realised", "exit_reason", "fill_ts", "entry", "sl_initial", "tp1",
+    "r_realised", "exit_reason", "fill_ts", "entry", "sl_initial", "tp_2r",
     "eligible_for_headline",
 ]
 
 # SL-anatomy columns (SPEC §5.5) — present on current runs; absence disables the
-# sub-screen with a stamped note (they are 2026-07-02 additions).
-SL_ANATOMY_COLS = ["sl_bar_was_sweep", "sl_swept_then_tp1"]
+# sub-screen with a stamped note.
+SL_ANATOMY_COLS = ["sl_bar_was_sweep", "sl_swept_then_2r"]
 
 # Decreed out (SPEC §5.1) — must NOT appear in the screened manifest.
 DECREED_OUT = {"sweep_present"}

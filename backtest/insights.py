@@ -3,7 +3,7 @@
 Input:  a pandas DataFrame of combined trades from one or more runs.
         Expected columns (all produced by h1_only_reporting):
           pair, session, entry_zone, exit_reason, r_realised,
-          r_if_exit_tp1, r_if_exit_tp2, mfe_r, mae_r,
+          mfe_r, mae_r,
           score, fvg_present, sweep_present,
           killzone_pts, freshness_pts, structure_pts,
           pd_zone, bos_tier, group (added by aggregate_runs)
