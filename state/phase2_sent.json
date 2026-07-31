@@ -3284,7 +3284,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-30T10:36:14.785432",
-      "last_seen_ist": "2026-07-31T17:36:01.720945",
+      "last_seen_ist": "2026-07-31T18:36:03.096590",
       "last_email_day": "2026-07-31",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -3673,7 +3673,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-30T15:36:07.943662",
-      "last_seen_ist": "2026-07-31T17:36:01.720945",
+      "last_seen_ist": "2026-07-31T18:36:03.096590",
       "last_email_day": "2026-07-30",
       "still_valid_count": 0,
       "reentry_armed": true,
@@ -3927,7 +3927,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-30T15:36:07.943662",
-      "last_seen_ist": "2026-07-31T00:36:21.806976",
+      "last_seen_ist": "2026-07-31T18:36:03.096590",
       "last_email_day": "2026-07-30",
       "still_valid_count": 0,
       "reentry_armed": true,
@@ -4071,7 +4071,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-30T16:35:59.919120",
-      "last_seen_ist": "2026-07-31T00:36:21.806976",
+      "last_seen_ist": "2026-07-31T18:36:03.096590",
       "last_email_day": "2026-07-30",
       "still_valid_count": 0,
       "reentry_armed": true,
@@ -4342,7 +4342,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-31T14:36:06.656264",
-      "last_seen_ist": "2026-07-31T17:36:01.720945",
+      "last_seen_ist": "2026-07-31T18:36:03.096590",
       "last_email_day": "2026-07-31",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4459,7 +4459,7 @@
     "EURUSD_SHORT_CHoCH_1.1505_2026-07-31T06": {
       "score_int": 7,
       "score_raw": 7.0,
-      "score_high_water": 7.0,
+      "score_high_water": 9.0,
       "score_low_water": 7.0,
       "breakdown": {
         "structure": 4,
@@ -4469,7 +4469,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-31T17:36:01.720945",
-      "last_seen_ist": "2026-07-31T17:36:01.720945",
+      "last_seen_ist": "2026-07-31T18:36:03.096590",
       "last_email_day": "2026-07-31",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4586,7 +4586,7 @@
     "NZDUSD_SHORT_CHoCH_0.5863_2026-07-31T06": {
       "score_int": 6,
       "score_raw": 6.0,
-      "score_high_water": 6.0,
+      "score_high_water": 8.0,
       "score_low_water": 6.0,
       "breakdown": {
         "structure": 4,
@@ -4596,7 +4596,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-07-31T17:36:01.720945",
-      "last_seen_ist": "2026-07-31T17:36:01.720945",
+      "last_seen_ist": "2026-07-31T18:36:03.096590",
       "last_email_day": "2026-07-31",
       "still_valid_count": 0,
       "reentry_armed": false,
