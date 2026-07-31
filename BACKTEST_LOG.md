@@ -1,6 +1,6 @@
 # Backtest Registry
 
-*Last updated: 2026-07-31 10:12 UTC*
+*Last updated: 2026-07-31 10:43 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
