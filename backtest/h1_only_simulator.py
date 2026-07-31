@@ -1153,7 +1153,7 @@ def _simulate_single_entry(
 #     snapshot), sweep_v2 (v1 retired 2026-07-24).
 #   STAMPED AT ALERT (correct source): bos_verdict, touches_at_alert +
 #     fvg_at_alert, h1_trend / trend_alignment / alert_bar_*, and the S2/S3
-#     structure signals (structure_ranging_at_alert, flip_pending_at_alert,
+#     structure signals (flip_pending_at_alert,
 #     flip_pending_dir_at_alert,
 #     leg_extreme_at_alert, leg_extreme_clipped — all payload scalars from the
 #     replay yield).
@@ -1716,7 +1716,6 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl,
         # S2: v2 structure state at THIS alert (payload scalars, frozen at the
         # replay yield — never re-read off the shared ob dict). None only when
         # structure_v2 was missing (degraded walls).
-        "structure_ranging_at_alert":   alert.get("structure_ranging_at_alert"),
         "flip_pending_at_alert":        alert.get("flip_pending_at_alert"),
         "flip_pending_dir_at_alert":    alert.get("flip_pending_dir_at_alert"),
         # S3 (DISPLACEMENT_LEG_BUILD_SPEC): structural displacement-leg extreme +

@@ -111,16 +111,6 @@ DEDUPE_PROXIMAL_ATR_MULT = 1.0
 _SWEEP_DEFERRED = object()
 
 # ---------------------------------------------------------------------------
-# RANGING (INFORMATION ONLY — gates nothing). Two-component definition:
-#   1. Structure stalled: structure_v2 'ranging' flag (no new extreme for
-#      STRUCTURE_RANGING_STALE=2 counter-swings; resets on every fresh extreme).
-#   2. Range compressed: dealing-range height < RANGING_DR_ATR_MULT * H1 ATR.
-# Both must be true. The ratio is volatility-normalised so ONE multiplier
-# works for FX, Gold and NAS (DR and ATR both scale with the instrument).
-# Shown as plain-English email text; never blocks or scores a trade.
-RANGING_DR_ATR_MULT = 5.0
-
-# ---------------------------------------------------------------------------
 # STALENESS THRESHOLDS (B3)
 # ---------------------------------------------------------------------------
 STALENESS_HOURS = {
@@ -420,7 +410,6 @@ def _build_phase1_scan_record(pair_name, ist_now, current_price, walls,
             'state':            sv2.get('state'),
             'flip_unconfirmed': sv2.get('flip_unconfirmed'),
             'choch_pending_dir': sv2.get('choch_pending_dir'),
-            'ranging':          sv2.get('ranging'),
             'defended':         sv2.get('defended'),
             'choch_flip_count': sv2.get('choch_flip_count'),
             'label':            sv2.get('label'),
@@ -2851,8 +2840,8 @@ def build_active_zone_card_html(sz, name, dp, narrative, cid, ist_timestamp,
         dist_text = "—"
 
     # H1 trend state — canonical three-state field from structure_v2
-    # (up | down | undefined). Distinct from the OB's own bias. ranging /
-    # transition / unconfirmed sub-flags are intentionally NOT shown here.
+    # (up | down | undefined). Distinct from the OB's own bias. transition /
+    # unconfirmed sub-flags are intentionally NOT shown here.
     _sv2 = ((walls or sz.get('walls')) or {}).get('structure_v2') or {}
     _state = _sv2.get('state')
     if _state == 'up':
@@ -3137,43 +3126,6 @@ def _summarise_last_ob_attempt(ob_build_diagnostics):
     )
 
 
-def evaluate_ranging(walls, h1_atr, dp):
-    """Two-component ranging verdict (INFORMATION ONLY — gates nothing).
-
-    ranging = structure stalled (structure_v2 'ranging') AND range compressed
-    (DR height < RANGING_DR_ATR_MULT * H1 ATR). Returns:
-        (is_ranging: bool, reason: Optional[str])
-    `reason` is plain-English email text with the numbers filled in, or None
-    when not ranging / inputs unusable. Fails safe to (False, None) on any
-    missing or zero input — an info flag must never fire on bad data.
-    """
-    sv2 = (walls or {}).get('structure_v2') or {}
-    state = sv2.get('state')
-    if state not in ('up', 'down'):
-        return False, None                      # undefined -> never ranging
-    if not sv2.get('ranging'):
-        return False, None                      # Component 1: structure not stalled
-    try:
-        atr = float(h1_atr)
-        ceil_px = float((walls or {}).get('ceiling_price'))
-        floor_px = float((walls or {}).get('floor_price'))
-    except (TypeError, ValueError):
-        return False, None
-    dr_height = ceil_px - floor_px
-    if atr <= 0 or dr_height <= 0:
-        return False, None                      # bad data -> fail safe
-    ratio = dr_height / atr
-    if ratio >= RANGING_DR_ATR_MULT:
-        return False, None                      # Component 2: range not compressed
-    extreme = "high" if state == 'up' else "low"
-    reason = (
-        f"trend stalled (no new {extreme} for 2+ swings) and range is tight "
-        f"({dr_height:.{dp}f} vs {atr:.{dp}f} ATR = {ratio:.1f}x, "
-        f"under {RANGING_DR_ATR_MULT:.0f}x)"
-    )
-    return True, reason
-
-
 def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
                                   last_event, ob_build_diagnostics=None,
                                   h1_atr=None):
@@ -3213,8 +3165,7 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
     ceil_px = w.get('ceiling_price')
     floor_px = w.get('floor_price')
     # H1 trend comes from the single structure engine (structure_v2 on state):
-    # up / down / transition, with `ranging` as a flag inside up/down. The old
-    # wall `trend` field is NOT used.
+    # up / down / transition. The old wall `trend` field is NOT used.
     range_parts = []
     if ceil_px is not None and floor_px is not None:
         range_parts.append(
@@ -3232,12 +3183,7 @@ def build_inactive_pair_card_html(name, dp, cid, ist_timestamp, walls,
                 _pd = str(sv2['choch_pending_dir']).upper()
                 trend_txt = f"{state.upper()} (CHoCH {_pd} pending — needs Confirmation BOS)"
             else:
-                # Two-component ranging verdict (info only). Falls back to the
-                # bare trend when not ranging or ATR unavailable.
-                _is_rng, _rng_reason = evaluate_ranging(walls, h1_atr, dp)
-                trend_txt = state.upper() + (
-                    f" — ranging ({_rng_reason})" if _is_rng else ""
-                )
+                trend_txt = state.upper()
         else:
             trend_txt = "undefined"
         range_parts.append(f"H1 trend: {trend_txt}")

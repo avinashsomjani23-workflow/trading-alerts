@@ -651,11 +651,9 @@ def replay_pair(
             _pend_dir_raw = _sv2.get("choch_pending_dir")
             _pend_dir_map = {"up": "bullish", "down": "bearish"}
             if _sv2:
-                _structure_ranging_at_alert = bool(_sv2.get("ranging"))
                 _flip_pending_at_alert = bool(_sv2.get("flip_unconfirmed"))
                 _flip_pending_dir_at_alert = _pend_dir_map.get(_pend_dir_raw)
             else:
-                _structure_ranging_at_alert = None
                 _flip_pending_at_alert = None
                 _flip_pending_dir_at_alert = None
 
@@ -745,7 +743,6 @@ def replay_pair(
                 # S2 (STRUCTURE_SIGNALS_SPEC): v2 structure state snapshotted at
                 # THIS fire as payload scalars (T1 pattern — never stamped on the
                 # shared ob dict, which the next re-fire would overwrite).
-                "structure_ranging_at_alert": _structure_ranging_at_alert,
                 "flip_pending_at_alert": _flip_pending_at_alert,
                 "flip_pending_dir_at_alert": _flip_pending_dir_at_alert,
                 # S3 (STRUCTURE_SIGNALS_SPEC / DISPLACEMENT_LEG_BUILD_SPEC):

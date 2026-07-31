@@ -587,10 +587,6 @@ STRUCTURE_CHOCH_BODY_ATR_MULT = 1.5
 # confirms only on a BOS and cancels only on reclaim, with no lock and no timeout.
 STRUCTURE_LOCK_ATR_MULT   = 1.5
 
-# Ranging flag: trend intact but no trend-direction swing extended for at
-# least this many confirmed swings. Informational only.
-STRUCTURE_RANGING_STALE   = 2
-
 
 def _structure_confirm_idx(swing: Dict[str, Any], lookback: int) -> int:
     """Candle index at which a swing becomes known (lookback confirmation lag)."""
@@ -627,7 +623,6 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     Returns:
       {
         'state':            'up'|'down'|'undefined',
-        'ranging':          bool,
         'prior_trend':      'up'|'down'|None,
         'flip_unconfirmed': bool,
         'choch':            bool,
@@ -648,7 +643,7 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     _DOWN = "down"
     _UNDEF = "undefined"
 
-    empty = {"state": _UNDEF, "ranging": False, "prior_trend": None,
+    empty = {"state": _UNDEF, "prior_trend": None,
              "flip_unconfirmed": False, "choch": False, "choch_ts": None,
              "choch_level": None, "choch_from_zone": False, "choch_flip_count": 0,
              "defended": None, "broken_swing_ts": None, "last_bos": None,
@@ -794,7 +789,6 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     lows:  List[Dict[str, Any]] = []
     recent_low:  Optional[Dict[str, Any]] = None
     recent_high: Optional[Dict[str, Any]] = None
-    trend_dir_swings_since_extend = 0
     leg_extreme_high: Optional[float] = None
     leg_extreme_low:  Optional[float] = None
     leg_start = 0
@@ -1072,11 +1066,6 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     defended_swing = None  # raw leg extreme until the next confirmed swing low
                     leg_extreme_high = hi_i; leg_extreme_low = lo_i
                     leg_start = ci
-                    # S1: a trend flip starts a fresh leg — the ranging counter
-                    # belongs to the OLD trend and must not carry across the flip,
-                    # or the new (up) trend is born labelled "ranging" until its
-                    # first HL confirms. Re-seed to 0 alongside the leg extremes.
-                    trend_dir_swings_since_extend = 0
                     impulse_start_ts = choch_impulse_ts or ts_now
                     rearm_block_dir = _DOWN
                     bos_break_high = None; bos_break_low = None
@@ -1130,10 +1119,6 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     defended_swing = None  # raw leg extreme until the next confirmed swing high
                     leg_extreme_high = hi_i; leg_extreme_low = lo_i
                     leg_start = ci
-                    # S1: fresh leg on the flip — reset the ranging counter (see the
-                    # matching UP-flip branch). The stale OLD-trend count must not
-                    # brand the new (down) trend "ranging" before its first LH.
-                    trend_dir_swings_since_extend = 0
                     impulse_start_ts = choch_impulse_ts or ts_now
                     rearm_block_dir = _UP
                     bos_break_high = None; bos_break_low = None
@@ -1255,7 +1240,6 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             impulse_start_ts, False, "bearish", bos_tier,
                             broken_swing_ts_arg=bos_break_low["ts"], break_idx=_tbi,
                             confirm_idx=ci)
-                trend_dir_swings_since_extend = 0
                 bos_break_low = None  # spent — re-seeds on next confirmed low
                 # A continuation BOS DOWN = the down-trend extended = any pending
                 # CHoCH-UP failed (price resumed down instead of confirming up).
@@ -1283,7 +1267,6 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                             impulse_start_ts, False, "bullish", bos_tier,
                             broken_swing_ts_arg=bos_break_high["ts"], break_idx=_tbi,
                             confirm_idx=ci)
-                trend_dir_swings_since_extend = 0
                 # A continuation BOS UP = the up-trend extended = any pending
                 # CHoCH-DOWN failed (price resumed up instead of confirming down).
                 # Silently cancel it — this BOS event already tells the story.
@@ -1382,13 +1365,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             #     `impulse_start_ts` / `leg_extreme_*` travel with `defended`
             #     (the new swing IS the current leg's origin), and the re-arm
             #     block clears — its purpose is "wait for a REAL confirmed
-            #     defended swing", which either polarity satisfies. Only the
-            #     RANGING counter still distinguishes polarity: HL/LH is a
-            #     trend extension (reset), the counter-polarity swing is not
-            #     (increment).
+            #     defended swing", which either polarity satisfies.
             if state == _UP:
-                made_hl = (s["type"] == "low"  and len(lows)  >= 2
-                           and lows[-1]["price"]  > lows[-2]["price"])
                 if s["type"] == "high":
                     # New confirmed swing high = next BOS-up break target.
                     bos_break_high = highs[-1]
@@ -1397,15 +1375,9 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     defended_swing = lows[-1]  # last confirmed swing low
                     leg_extreme_high = float(H[ci])
                     impulse_start_ts = lows[-1]["ts"]
-                    if made_hl:
-                        trend_dir_swings_since_extend = 0
-                    else:
-                        trend_dir_swings_since_extend += 1
                     if rearm_block_dir == _DOWN:
                         rearm_block_dir = None
             elif state == _DOWN:
-                made_lh = (s["type"] == "high" and len(highs) >= 2
-                           and highs[-1]["price"] < highs[-2]["price"])
                 if s["type"] == "low":
                     # New confirmed swing low = next BOS-down break target.
                     bos_break_low = lows[-1]
@@ -1414,26 +1386,11 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     defended_swing = highs[-1]  # last confirmed swing high
                     leg_extreme_low = float(L[ci])
                     impulse_start_ts = highs[-1]["ts"]
-                    if made_lh:
-                        trend_dir_swings_since_extend = 0
-                    else:
-                        trend_dir_swings_since_extend += 1
                     if rearm_block_dir == _UP:
                         rearm_block_dir = None
 
         if _trace is not None:
             _trace.append(state)
-
-    # `ranging` = trend defined AND >= STRUCTURE_RANGING_STALE consecutive
-    # counter-trend swings have confirmed WITHOUT a trend extension. The counter
-    # (`trend_dir_swings_since_extend`) starts at 0 and is reset to 0 on: birth,
-    # a trend extension (a new HL/LH — note `defended` itself now updates on ANY
-    # counter-trend swing, but only HL/LH counts as an extension), a continuation BOS, and
-    # (S1) a Confirmation-BOS trend flip. It increments only on a confirmed
-    # counter-trend swing that did not extend the trend. Informational only —
-    # never gates detection, alerts, or trades.
-    ranging = (state in (_UP, _DOWN)
-               and trend_dir_swings_since_extend >= STRUCTURE_RANGING_STALE)
 
     # CONFIRMATION-BOS model: a pending CHoCH means a reversal is ARMED but NOT
     # yet confirmed. `state` is the confirmed trend (UNCHANGED by the CHoCH).
@@ -1446,12 +1403,10 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
 
     if state == _UP:
         label = ("H1 trend UP" + (f" (CHoCH {_pend_to} pending — needs Confirmation BOS)"
-                                   if flip_unconfirmed else
-                                   (" (ranging)" if ranging else "")))
+                                   if flip_unconfirmed else ""))
     elif state == _DOWN:
         label = ("H1 trend DOWN" + (f" (CHoCH {_pend_to} pending — needs Confirmation BOS)"
-                                    if flip_unconfirmed else
-                                    (" (ranging)" if ranging else "")))
+                                    if flip_unconfirmed else ""))
     else:
         label = "H1 structure undefined (insufficient structure)"
 
@@ -1468,7 +1423,6 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
 
     return {
         "state":            state,
-        "ranging":          ranging,
         # `prior_trend` = the confirmed trend the pending CHoCH would flip FROM
         # (i.e. the current `state`). Only meaningful while a CHoCH is pending.
         "prior_trend":      state if flip_unconfirmed else None,

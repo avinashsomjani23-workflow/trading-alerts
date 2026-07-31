@@ -20,7 +20,6 @@ names (verified present in the live data):
   - CHoCH-in-flight      : a window whose tail leaves flip_unconfirmed True
                            (failure-window live -> the `continue` block exercised)
   - Range BOS            : a window containing >=1 tier=='Range' event (H4-wall break)
-  - ranging              : a window that ends with the ranging flag set
   - plain trend          : a clean trending window (baseline)
   - weekend gap          : a window straddling a >5h bar gap (gap-aware H4 resample)
 
@@ -84,7 +83,6 @@ def _summary(out: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "state": out.get("state"),
         "flip_unconfirmed": bool(out.get("flip_unconfirmed")),
-        "ranging": bool(out.get("ranging")),
         "n_events": len(ev),
         "n_choch": sum(1 for e in ev if e.get("type") == "CHoCH"),
         "n_range_bos": sum(1 for e in ev if e.get("tier") == "Range"),
@@ -125,7 +123,7 @@ def _select_windows(pair: str, df: "pd.DataFrame") -> List[Dict[str, Any]]:
     specs.append({"case": "cold_start", "start": 0, "size": COLD_START})
 
     # cases to satisfy by scanning, in priority order
-    want = ["choch_in_flight", "confirmation_bos", "range_bos", "ranging",
+    want = ["choch_in_flight", "confirmation_bos", "range_bos",
             "plain_trend", "weekend_gap"]
     covered: set = set()
 
@@ -151,8 +149,6 @@ def _select_windows(pair: str, df: "pd.DataFrame") -> List[Dict[str, Any]]:
             take("confirmation_bos")
         elif s["n_range_bos"] >= 1:
             take("range_bos")
-        elif s["ranging"]:
-            take("ranging")
         elif gap and s["n_events"] >= 5:
             take("weekend_gap")
         elif s["n_choch"] >= 1 and s["n_plain_bos"] >= 1:
@@ -217,7 +213,7 @@ def main() -> int:
             cov = fx["coverage"]
             print(f"  wrote {fname:32s} bars={fx['window']['n_bars']:4d} "
                   f"state={cov['state']:9s} flip={int(cov['flip_unconfirmed'])} "
-                  f"rng={int(cov['ranging'])} choch={cov['n_choch']} "
+                  f"choch={cov['n_choch']} "
                   f"rangeBOS={cov['n_range_bos']}")
             total += 1
     print(f"\nWrote {total} fixtures to {out_dir}")

@@ -157,7 +157,7 @@ CATEGORICAL_FEATURES = [
     "ob_in_killzone", "fill_in_killzone", "trend_alignment", "setup_badge",
     "ob_touches", "bias", "pair", "ob_walkback_depth",
     # STRUCTURE_SIGNALS_SPEC S2/S4 screen candidates (booleans + pending dir).
-    "structure_ranging_at_alert", "flip_pending_at_alert",
+    "flip_pending_at_alert",
     "flip_pending_dir_at_alert", "dr_ceiling_broken_at_ob", "dr_floor_broken_at_ob",
     # Weekly PD zone (ALERT-time) — premium/discount + H4-vs-weekly agreement.
     "weekly_pd_zone_at_alert", "pd_zone_agreement_at_alert",

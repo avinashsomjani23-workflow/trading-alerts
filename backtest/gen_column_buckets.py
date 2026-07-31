@@ -183,7 +183,7 @@ _ALERT_KNOWN = {
     "weekly_pd_position_at_alert", "weekly_range_high_at_alert",
     "weekly_range_low_at_alert", "weekly_pd_zone_at_alert", "pd_zone_agreement_at_alert",
     # structure-state + displacement-leg snapshots at the alert yield
-    "structure_ranging_at_alert", "flip_pending_at_alert", "flip_pending_dir_at_alert",
+    "flip_pending_at_alert", "flip_pending_dir_at_alert",
     "leg_extreme_at_alert", "leg_er_at_alert",
     # dealing-range break flags frozen at OB build; distance-to-level reads at alert
     "dr_ceiling_broken_at_ob", "dr_floor_broken_at_ob",

@@ -1301,10 +1301,10 @@ def _trades_csv(trades: List[Dict[str, Any]], path: Path) -> None:
         "ist_blocked", "alert_utc_hour",
         "h1_trend", "trend_alignment", "trend_pd_agree",
         # Structure signals (STRUCTURE_SIGNALS_SPEC) — edge-discovery inputs, no
-        # gate/email change yet. S2 ranging/pending-flip state at alert; S3 leg
+        # gate/email change yet. S2 pending-flip state at alert; S3 leg
         # extreme (extreme + clipped are audit support); S4 broken-wall PD flags at
         # OB formation. None per each column's rule.
-        "structure_ranging_at_alert", "flip_pending_at_alert",
+        "flip_pending_at_alert",
         "flip_pending_dir_at_alert",
         "leg_extreme_at_alert", "leg_extreme_clipped",
         "dr_ceiling_broken_at_ob", "dr_floor_broken_at_ob",
