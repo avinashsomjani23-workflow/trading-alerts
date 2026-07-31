@@ -117,13 +117,25 @@ def test_tp_side_magnet_present():
 
 
 def test_tp_no_swing_in_band_reads_no_magnet():
-    """FIXED_2R_BASELINE (2026-07-31): the 1:1-fallback no-magnet branch is gone
-    (fixed 2R always has a target). A target with NO active swing in its band still
-    reads no magnet — the honest absent read. Here the +2R target 1.1200 sits far
-    from any swing in build_scenario, so present is False and offset stays None."""
+    """A target with NO active swing in its band reads no magnet — the honest
+    absent read. Here the +2R target 1.1200 sits far from any swing in
+    build_scenario, so present is False and offset stays None."""
     df, *_ = build_scenario()
     r = sl.reads_stop_and_tp(df, "bullish", sl=1.0928, tp=1.1200, atr=ATR,
                              pair_type="forex")
+    assert r["setup_liq_tp_present"] is False
+    assert r["setup_liq_tp_offset_atr"] is None
+
+
+def test_tp_fallback_flag_suppresses_magnet_live_parity():
+    """LIVE-PARITY GUARD (2026-07-31): reads_stop_and_tp is SHARED with live
+    Phase 2, which passes `tp1_is_fallback=True` for a 1:1 mechanical fallback TP
+    (no pool). That kwarg MUST be accepted (a signature break here crashes the live
+    Phase2_Alert_Engine per-pair scan — it did once, caught by P2_Radar CI) and MUST
+    suppress the tp-side magnet (present=False), even with a swing near the target."""
+    df = _scenario_unbroken_high_above()   # has a real swing high 1.1080
+    r = sl.reads_stop_and_tp(df, "bullish", sl=1.1030, tp=1.1080, atr=ATR,
+                             pair_type="forex", tp1_is_fallback=True)
     assert r["setup_liq_tp_present"] is False
     assert r["setup_liq_tp_offset_atr"] is None
 

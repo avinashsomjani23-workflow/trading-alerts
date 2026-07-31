@@ -183,21 +183,30 @@ def _stop_tier(h1, swing, side, atr, swings):
 # Read 1 & 2 — computed WITH the trade levels (compute_phase2_levels output)
 # ---------------------------------------------------------------------------
 
-def reads_stop_and_tp(df_h1, direction, sl, tp, atr, pair_type):
+def reads_stop_and_tp(df_h1, direction, sl, tp, atr, pair_type,
+                      tp1_is_fallback=False):
     """Reads 1 (stop-side) & 2 (tp-side magnet) as a dict of the four columns
     they own. Anchored on the SL / target born from compute_phase2_levels.
+
+    SHARED between LIVE Phase 2 (Phase2_Alert_Engine.py) and the fixed-2R backtest
+    (h1_only_simulator.py), so the signature must serve both:
+      - LIVE passes the liquidity-pool TP1 as `tp` and tp1_is_fallback=True when it
+        is a 1:1 mechanical fallback (no pool) -> the tp-side magnet reads absent by
+        construction (the honest no-magnet read). Live output stays byte-identical.
+      - The fixed-2R backtest passes the +2R target as `tp` and leaves
+        tp1_is_fallback=False (fixed 2R always has a target, no 1:1 fallback).
 
     Args:
       df_h1        — the closed-bar H1 frame the levels were computed on (same
                      point-in-time slice; look-ahead-safe).
       direction    — 'bullish' | 'bearish' (LONG hunts stop-side lows / tp-side
                      highs; SHORT mirrors).
-      sl, tp       — the trade's stop / target prices. Under the fixed-2R baseline
-                     `tp` is the +2R level; both are always defined (no 1:1
-                     fallback), so the tp-side magnet is always evaluated.
+      sl, tp       — the trade's stop / target prices.
       atr          — H1 ATR for the band + offset normalisation (ob['h1_atr'],
                      the shared *_atr denominator).
       pair_type    — for the sweep pierce constant.
+      tp1_is_fallback — True (LIVE 1:1 fallback) -> no pool behind the target, so
+                     the tp-side magnet reads absent (present=False). Default False.
 
     Returns {setup_liq_stop_present, setup_liq_stop_offset_atr,
              setup_liq_stop_tier, setup_liq_tp_present, setup_liq_tp_offset_atr}.
@@ -241,9 +250,11 @@ def reads_stop_and_tp(df_h1, direction, sl, tp, atr, pair_type):
 
         # ── Read 2 — TP-side magnet ───────────────────────────────────────────
         # LONG's target sits above -> hunt active swing HIGHS near the target;
-        # SHORT mirrors. Signed offset = (swing - tp)/ATR. Under fixed 2R the
-        # target is always defined, so this is always evaluated.
-        if tp is not None:
+        # SHORT mirrors. Signed offset = (swing - tp)/ATR. A LIVE 1:1-fallback TP
+        # (tp1_is_fallback) sits on no pool -> magnet absent by construction (the
+        # honest read, never a bug). The fixed-2R backtest never sets that flag, so
+        # its +2R target is always evaluated.
+        if tp is not None and not tp1_is_fallback:
             tp_type = "high" if direction == "bullish" else "low"
             tp_sw = _active_swing_in_band(h1, swings, tp_type, float(tp),
                                           atr, pierce_min)
