@@ -1,6 +1,6 @@
 # Backtest Registry
 
-*Last updated: 2026-07-31 08:46 UTC*
+*Last updated: 2026-07-31 10:12 UTC*
 
 Each row is one backtest run. Use this to spot patterns across runs — not just within one.
 
@@ -8,7 +8,7 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 - Runs completed: **19** of 19
 - Total filled trades across all runs: **7948**
-- Average expectancy across runs: **-0.12R**
+- Average expectancy across runs: **-0.11R**
 
 
 ---
@@ -21,38 +21,38 @@ Each row is one backtest run. Use this to spot patterns across runs — not just
 
 | Metric | Value |
 |--------|-------|
-| Filled trades | 2221 (of 3317 rows) |
-| Win rate | 38.7% |
-| Expectancy | -0.19R |
-| Max drawdown | +418.10R |
-| Longest losing streak | 10 trades |
-| Proximal fill rate | 67.0% |
+| Filled trades | 2221 (of 3322 rows) |
+| Win rate | 31.1% |
+| Expectancy | -0.09R |
+| Max drawdown | +242.02R |
+| Longest losing streak | 20 trades |
+| Proximal fill rate | 66.9% |
 | Score verdict | WEAK — partial relationship |
 
 **By pair (proximal entry, TP2 exit):**
 
 | Pair | Trades | Win rate | Expectancy |
 |------|--------|----------|------------|
-| EURUSD | 2221 | 38.7% | -0.19R |
+| EURUSD | 2221 | 31.1% | -0.09R |
 
 **By session:**
 
 | Session | Trades | Win rate | Expectancy |
 |---------|--------|----------|------------|
-| Asia | 217 | 39.2% | -0.17R |
-| London | 1027 | 38.0% | -0.22R |
-| NY | 981 | 39.3% | -0.16R |
+| Asia | 217 | 30.4% | -0.09R |
+| London | 1028 | 30.9% | -0.09R |
+| NY | 983 | 31.7% | -0.09R |
 
 **Score vs outcome:**
 
 | Score bucket | Trades | Win rate | Expectancy |
 |-------------|--------|----------|------------|
-| 2-3 | 3 | 33.3% | -0.47R |
-| 3-4 | 37 | 28.6% | -0.50R |
-| 4-5 | 81 | 44.7% | -0.13R |
-| 5-6 | 385 | 33.6% | -0.33R |
-| 6-7 | 615 | 40.2% | -0.15R |
-| 7+ | 1100 | 39.5% | -0.15R |
+| 2-3 | 3 | 33.3% | +0.00R |
+| 3-4 | 36 | 19.4% | -0.47R |
+| 4-5 | 81 | 33.3% | -0.01R |
+| 5-6 | 385 | 25.7% | -0.24R |
+| 6-7 | 617 | 31.9% | -0.07R |
+| 7+ | 1099 | 32.7% | -0.05R |
 
 ---
 
