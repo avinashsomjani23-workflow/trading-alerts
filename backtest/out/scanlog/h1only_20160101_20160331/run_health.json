@@ -3,10 +3,10 @@
   "overall": "PASS",
   "exit_code": 0,
   "warnings_present": false,
-  "headline_pnl_usd": -416.25,
-  "live_proximal_headline_usd": -416.25,
+  "headline_pnl_usd": -2089.25,
+  "live_proximal_headline_usd": -2089.25,
   "study_fifty_pct_headline_usd": 0.0,
-  "content_hash": "bd41eda8aaf4385ca2887563daadde71a3607598ac6942b4e8754e9622cdfc28",
+  "content_hash": "f10cd3921f8040aad617604080cfee488f5970fb54edf3c3a2efeb290a9d2dc3",
   "condition_counts": {},
   "event_counts": {
     "ob_seen": 96,
@@ -14,13 +14,13 @@
     "ob_mitigated": 81,
     "re_arm": 87,
     "ob_aged_out": 12,
-    "trade_fill": 116,
-    "trade_exit": 154
+    "trade_fill": 79,
+    "trade_exit": 109
   },
   "outcome_counts": {
     "OUT_OF_RANGE": 203,
     "ALERT": 141,
-    "RE_ARM_WAIT": 1081,
+    "RE_ARM_WAIT": 1082,
     "NO_ZONE": 85
   },
   "gates": [
@@ -29,8 +29,8 @@
       "description": "Sum pnl_usd == Sum r_realised*risk, and equals reporting headline",
       "threshold": "rel_tol 1e-09",
       "observed": {
-        "headline_usd": -416.25,
-        "reported": -416.25,
+        "headline_usd": -2089.25,
+        "reported": -2089.25,
         "row_mismatches": 0
       },
       "verdict": "PASS"
@@ -40,8 +40,8 @@
       "description": "scan records == expected (pair x walk bars); zero HEARTBEAT_GAP; never vacuous (0 declared bars with trades present = blind run)",
       "threshold": "exact, non-vacuous",
       "observed": {
-        "expected": 1510,
-        "actual": 1510,
+        "expected": 1511,
+        "actual": 1511,
         "missing_by_pair": {},
         "vacuous": false
       },
@@ -73,11 +73,10 @@
     },
     {
       "id": "G6",
-      "description": "headline recomputed from r_realised only; tp1/tp2 excluded",
+      "description": "headline recomputed from r_realised only (no hypothetical exit columns exist)",
       "threshold": "independent recompute",
       "observed": {
-        "realised_headline": -416.25,
-        "tp2_headline_for_contrast": 6884.5
+        "realised_headline": -2089.25
       },
       "verdict": "PASS"
     },
@@ -85,7 +84,7 @@
       "id": "G7",
       "description": "content hash of scan_log + events recorded for re-run compare",
       "threshold": "recorded",
-      "observed": "bd41eda8aaf4385ca2887563daadde71a3607598ac6942b4e8754e9622cdfc28",
+      "observed": "f10cd3921f8040aad617604080cfee488f5970fb54edf3c3a2efeb290a9d2dc3",
       "verdict": "PASS"
     },
     {
