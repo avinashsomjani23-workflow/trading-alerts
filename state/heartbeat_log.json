@@ -1,24 +1,5 @@
 [
   {
-    "ts": "2026-07-16T20:35:54.458906",
-    "ts_human": "20:35 IST, 16 Jul 2026",
-    "ob_count_total": 7,
-    "ob_count_per_pair": {
-      "EURUSD": 2,
-      "USDJPY": 1,
-      "NZDUSD": 1,
-      "USDCHF": 2,
-      "GOLD": 1
-    },
-    "ob_age_hrs": 0.00806385361111111,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 0,
-    "issues": []
-  },
-  {
     "ts": "2026-07-16T23:35:59.827369",
     "ts_human": "23:35 IST, 16 Jul 2026",
     "ob_count_total": 7,
@@ -958,5 +939,29 @@
     "smtp_fails_3h": 0,
     "issue_count": 0,
     "issues": []
+  },
+  {
+    "ts": "2026-08-03T00:36:01.813691",
+    "ts_human": "00:36 IST, 03 Aug 2026",
+    "ob_count_total": 6,
+    "ob_count_per_pair": {
+      "EURUSD": 1,
+      "USDJPY": 1,
+      "NZDUSD": 0,
+      "USDCHF": 2,
+      "GOLD": 2
+    },
+    "ob_age_hrs": 0.008666498333333333,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 4,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 1,
+    "issues": [
+      {
+        "title": "4 stale/failed data fetches in last 3h",
+        "action": "Check yfinance_stale_log.json. If persistent, the Twelve Data feed may be rate-limiting or down."
+      }
+    ]
   }
 ]
