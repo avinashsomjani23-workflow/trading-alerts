@@ -3,11 +3,32 @@ name: Tests
 # Runs automatically on every push and pull request so a regression is caught
 # without anyone remembering to run anything by hand. These are the offline
 # safety nets — no network, no secrets, no yfinance. Fast (seconds).
+#
+# paths-ignore: these are CODE gates. Docs, notes, state logs and backtest
+# result dumps contain no code, so a commit that touches ONLY those must not
+# trigger the suite (and must never wear a red X for a pre-existing failure it
+# didn't cause). This replaces the manual "[skip ci]" habit — self-organising
+# docs/state commits stay green hands-free. A commit that touches ANY code path
+# still runs the full suite normally.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "state/**"
+      - "backtest/results/**"
+      - "backtest/diagnostics/**"
+      - "backtest/scanlog/**"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "state/**"
+      - "backtest/results/**"
+      - "backtest/diagnostics/**"
+      - "backtest/scanlog/**"
   workflow_dispatch:
 
 jobs:
