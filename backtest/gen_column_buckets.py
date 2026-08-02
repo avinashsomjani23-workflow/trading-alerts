@@ -66,12 +66,22 @@ OUTCOME = {
     "exit_ts", "exit_reason", "exit_price", "r_realised", "pnl_usd",
     # excursions and how the trade ran (mfe_r/mae_r are now FULL-WINDOW, A3 decouple)
     "mfe_r", "mae_r", "r_capture_ratio",
+    # mfe_intrade_r (2026-08-02, MFE_FIX_PLAN): fill→stop-truncated favourable move —
+    # the correct MFE for the loser autopsy (mfe_r keeps running post-stop). Measured
+    # during the trade → outcome.
+    "mfe_intrade_r",
     "bars_to_exit", "bars_to_mfe", "bars_to_mae",
     # stop anatomy — all measured during/after the trade. Re-anchored to the fixed
     # 2R / 1R targets (FIXED_2R_BASELINE_SPEC A5); both readings kept.
     "sl_bar_was_sweep", "sl_swept_then_2r", "sl_swept_then_1r", "sl_wick_depth_atr",
     "sl_max_adverse_after_sweep_atr", "bars_sl_to_2r_touch", "bars_sl_to_1r_touch",
     "sl_recovered_to_entry", "sl_collision",
+    # stop-bar favourable extreme + intrabar-order ambiguity flag (2026-08-02,
+    # MFE_FIX_PLAN Problem B). Measured ON the stop bar → outcome.
+    "sl_bar_best_favor_r", "sl_bar_reached_1r_ambiguous",
+    # ob_penetration_depth (2026-08-02): in-trade adverse poke as a fraction of OB
+    # depth. Uses the fill→stop adverse extreme → measured during the trade → outcome.
+    "ob_penetration_depth",
 }
 
 # FILL = knowable only if/when the limit fills (fill-anchored). Usable for entry
@@ -123,11 +133,11 @@ ALERT_BOOKKEEPING = {
 # CANONICAL.md is repointed. DELETE each entry from this set in the SAME commit that
 # repoints CANONICAL.md to a run that no longer contains it — otherwise the gate can
 # no longer prove the column is gone.
-#   entry_raw (alert): dropped 2026-07-31, byte-identical to `entry` under the raw
-#     spread model. Leaves the CSV at the next EURUSD Discovery re-run.
-RETIRING = {
-    "entry_raw": "alert",
-}
+#   Empty as of 2026-08-02: entry_raw (dropped 2026-07-31) and structure_ranging_at_
+#   alert (the "ranging delete") are BOTH gone from the current 180-column canonical
+#   CSV, so their RETIRING placeholders were removed. Add a new entry here only while
+#   a column is mid-retirement (dropped from emission but still in the live header).
+RETIRING: dict[str, str] = {}
 
 
 def classify(col: str) -> str:

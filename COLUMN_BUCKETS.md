@@ -11,11 +11,11 @@
 - **`fill` columns** are usable for entry analysis, but ALWAYS say "this is fill-time" — a live alert-time scorer cannot see them.
 - No column may enter analysis unclassified. A new column not in a set makes the generator RAISE and CI go red — that is the "nothing missed, nothing contaminated" guarantee.
 
-Canonical: `backtest/results/h1only_20080102_20161231/trades.csv` — **182 columns** (115 alert, 47 fill, 20 outcome).
+Canonical: `backtest/results/h1only_20080102_20161231/trades.csv` — **180 columns** (113 alert, 47 fill, 20 outcome).
 
 ---
 
-## ✅ SAFE FOR AN ENTRY FILTER — 162 columns (alert + fill)
+## ✅ SAFE FOR AN ENTRY FILTER — 160 columns (alert + fill)
 
 A live scorer could act on these. `fill` ones are only known once the limit fills — flag that whenever you use one.
 
@@ -30,7 +30,6 @@ A live scorer could act on these. `fill` ones are only known once the limit fill
 | `event` | alert | known when the alert fires — safe for the live entry filter |
 | `entry_zone` | alert | known when the alert fires — safe for the live entry filter |
 | `entry` | alert | known when the alert fires — safe for the live entry filter |
-| `entry_raw` | alert | known when the alert fires — safe for the live entry filter |
 | `sl_initial` | alert | known when the alert fires — safe for the live entry filter |
 | `tp_2r` | alert | known when the alert fires — safe for the live entry filter |
 | `eligible_for_headline` | alert | known when the alert fires — safe for the live entry filter |
@@ -84,7 +83,6 @@ A live scorer could act on these. `fill` ones are only known once the limit fill
 | `h1_trend` | alert | known when the alert fires — safe for the live entry filter |
 | `trend_alignment` | alert | known when the alert fires — safe for the live entry filter |
 | `trend_pd_agree` | alert | known when the alert fires — safe for the live entry filter |
-| `structure_ranging_at_alert` | alert | known when the alert fires — safe for the live entry filter |
 | `flip_pending_at_alert` | alert | known when the alert fires — safe for the live entry filter |
 | `flip_pending_dir_at_alert` | alert | known when the alert fires — safe for the live entry filter |
 | `leg_extreme_at_alert` | alert | known when the alert fires — safe for the live entry filter |

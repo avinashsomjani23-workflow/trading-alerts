@@ -14,7 +14,11 @@ Populations (see docs/LOSER_AUTOPSY_PLAYBOOK.md §1 + CLAUDE.md standing rules):
   - STRICT = news_fill==0 & news_open==0 -> the loser-autopsy / feature-screen pop.
 
 The LOOSE row is THE baseline. Frozen 2026-08-02 against canonical
-`h1only_20080102_20161231` (EURUSD Discovery 2008-2016, FIXED 2R, 182 x 3322).
+`h1only_20080102_20161231` (EURUSD Discovery 2008-2016, FIXED 2R, 180 x 3322).
+(Shape corrected 2026-08-02 from a stale 182: the `ranging delete` dropped
+`structure_ranging_at_alert` and `entry_raw` was retired, leaving 180. The frozen
+tier numbers below derive from r_realised + news columns, which the column-count
+change does not touch, so they stand.)
 
 Run (from repo root):
   python -m backtest.diagnostics.baseline_freeze
@@ -27,7 +31,7 @@ import pandas as pd
 
 # --- what the canonical run must be (repoint here + re-freeze on a new run) ---
 CANONICAL_CSV = "backtest/results/h1only_20080102_20161231/trades.csv"
-EXPECT_SHAPE = (3322, 182)
+EXPECT_SHAPE = (3322, 180)
 
 # --- the FROZEN baseline (LOOSE) + the tiers around it. re-derive on any re-run. ---
 # Each: (N, wins, losses, WR%, meanR, sumR) rounded as printed below.

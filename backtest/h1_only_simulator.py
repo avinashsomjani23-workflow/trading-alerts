@@ -651,6 +651,19 @@ def _simulate_single_entry(
     exit_price: Optional[float] = None
     mfe_price = entry
     mae_price = entry
+    # IN-TRADE excursion snapshots (2026-08-02, MFE_FIX_PLAN). Problem A: mfe_price /
+    # mae_price above keep updating for up to 48 bars AFTER the stop latches (the A3
+    # window-MFE decouple), so on a loser they count favourable/adverse moves that
+    # happened when the trade was already dead (~67% of losers peak post-stop). These
+    # two capture the SAME running extreme but FROZEN at the instant the exit latches
+    # — i.e. the fill→stop-truncated excursion, the only correct MFE for classifying
+    # losers. They REUSE mfe_price/mae_price verbatim (no duplicated sign math), so
+    # mfe_r/mae_r stay byte-identical. Anchor at `entry` (bar 0); if no exit ever
+    # latches (timeout/window_end/friday_flat — not clean win/loss, autopsy-excluded)
+    # they equal the full-walk extreme (nothing died → nothing to truncate).
+    mfe_intrade_price = entry
+    mae_intrade_price = entry
+    intrade_snapshotted = False
     # OUTCOME-side descriptors (2026-07-26): H1 bars from fill (bar 0) to the bar
     # that SET the running MFE/MAE extreme. Tracked O(1) inside the SAME walk that
     # finds mfe_r/mae_r — no second pass. First bar to reach an extreme wins ties
@@ -718,6 +731,23 @@ def _simulate_single_entry(
                 continue
 
         bars_walked_post_fill = i - fill_bar_idx
+
+        # IN-TRADE MFE/MAE snapshot (2026-08-02, MFE_FIX_PLAN). Freeze the running
+        # mfe_price/mae_price the FIRST bar we reach with the exit already latched.
+        # An SL/TP/timeout/friday exit latches on bar N (via `continue`/`break`),
+        # so this fires on bar N+1 BEFORE bar N+1's favourable/adverse tracking runs
+        # (that block is below) — capturing exactly the through-exit-bar extreme, with
+        # every post-exit bar excluded. The stop bar itself is already excluded from
+        # mfe_price (its favourable tracking is guarded off by `not sl_hit_in_bar`),
+        # so a bar-1 loser death correctly freezes at entry (mfe_intrade_r == 0).
+        # If the walk `break`s on the exit bar with no bar N+1 (timeout/friday_flat),
+        # this never fires and the end-of-loop fallback keeps the full-walk value —
+        # correct, as those are not clean wins/losses (autopsy-excluded).
+        if exit_reason is not None and not intrade_snapshotted:
+            mfe_intrade_price = mfe_price
+            mae_intrade_price = mae_price
+            intrade_snapshotted = True
+
         # Hold cap ends BOTH the trade and (post-exit) the MFE-only walk. If the
         # 2R exit already latched, this just stops the window; only stamp a
         # `timeout` exit when nothing resolved (still open).
@@ -858,10 +888,40 @@ def _simulate_single_entry(
         r_realised = (exit_price - entry) / r_distance
         mfe_r = (mfe_price - entry) / r_distance
         mae_r = -(entry - mae_price) / r_distance
+        # IN-TRADE MFE (fill→stop, post-stop truncated). SAME formula as mfe_r, on the
+        # snapshot frozen at the exit latch — the only correct favourable-excursion
+        # for the loser autopsy. LONG favourable = higher price.
+        mfe_intrade_r = (mfe_intrade_price - entry) / r_distance
     else:
         r_realised = (entry - exit_price) / r_distance
         mfe_r = (entry - mfe_price) / r_distance
         mae_r = -(mae_price - entry) / r_distance
+        # SHORT favourable = lower price (mirrors mfe_r's SHORT branch).
+        mfe_intrade_r = (entry - mfe_intrade_price) / r_distance
+
+    # ── ob_penetration_depth (2026-08-02, MFE_FIX_PLAN batch rider): how far past the
+    # proximal entry line price poked INTO the OB zone before reversing, as a FRACTION
+    # of the OB depth. Entry sits at the proximal edge; distal_line is the far edge, so
+    # OB depth = |entry − distal_line|. Uses the IN-TRADE adverse extreme
+    # (mae_intrade_price, fill→stop-truncated) — post-stop wander is not "penetration
+    # of the entry we hold". LONG (zone below entry): (entry − mae_intrade_price)/depth;
+    # SHORT (zone above entry): (mae_intrade_price − entry)/depth. 0.0 = never traded
+    # past entry; ≈1.0 = poked to the distal. NOT clamped: it can slightly exceed 1.0
+    # because sl sits ONE spread beyond the distal, so a stopped trade poked past the
+    # far edge — that is truthful, not an error. None when distal_line is unavailable
+    # (legacy zone) or the OB depth is non-positive. Purpose (user, 2026-08-02): the
+    # entry-placement knob — "are we entering too early; would a deeper limit (e.g. 50%
+    # into the zone) have filled at a better price for a tighter distal-anchored stop /
+    # better RR?" Expressed in zone-fraction because that is the knob you turn. OUTCOME.
+    ob_penetration_depth = None
+    if distal_line is not None:
+        try:
+            _ob_depth = abs(entry - float(distal_line))
+            if _ob_depth > 0:
+                _poke = abs(entry - mae_intrade_price)
+                ob_penetration_depth = round(_poke / _ob_depth, 4)
+        except (TypeError, ValueError):
+            ob_penetration_depth = None
 
     # bars_to_mfe / bars_to_mae: bar index (fill = 0) of the running extreme,
     # captured O(1) in the walk above. If a filled trade had NO post-fill bar
@@ -946,6 +1006,24 @@ def _simulate_single_entry(
     bars_sl_to_2r_touch = None
     bars_sl_to_1r_touch = None
     sl_recovered_to_entry = None
+    # ── STOP-BAR favourable extreme (2026-08-02, MFE_FIX_PLAN Problem B). The ONE
+    # bar H1 data cannot resolve: on the stop bar, the favourable wick and the stop
+    # both printed, and OHLC cannot tell us which came first. mfe_intrade_r excludes
+    # this bar (pessimistic floor). These two BOUND it instead of faking it:
+    #   sl_bar_best_favor_r         : the stop bar's most-favourable move in R.
+    #       LONG  (favourable = up):   (sl_bar_high − entry) / r_distance
+    #       SHORT (favourable = down): (entry − sl_bar_low)  / r_distance
+    #     May be negative (a bar that gapped straight against us never traded above
+    #     entry). None on non-SL exits.
+    #   sl_bar_reached_1r_ambiguous : True when sl_bar_best_favor_r ≥ +1R AND the stop
+    #     was hit in that SAME bar (both +1R favourable and −1R stop touched in one
+    #     bar → intrabar order unknowable). This is the trade whose loser-bucket is
+    #     genuinely uncertain. When sl_bar_best_favor_r < 1R the loser UNAMBIGUOUSLY
+    #     never reached the half-target regardless of order — a firm classification.
+    #     Report the COUNT of the ambiguous flag so the taxonomy's uncertainty is
+    #     explicit. None on non-SL exits.
+    sl_bar_best_favor_r = None
+    sl_bar_reached_1r_ambiguous = None
     # The +1R target (breakeven-plus) for the SL-anatomy 1R reading. +2R is tp_2r.
     _target_1r = (entry + r_distance) if bias == "LONG" else (entry - r_distance)
     if exit_reason == "sl" and exit_ts is not None:
@@ -958,6 +1036,17 @@ def _simulate_single_entry(
                 sl_bar_was_sweep = bool(sl_bar_lo <= cur_sl and sl_bar_cl > cur_sl)
             else:
                 sl_bar_was_sweep = bool(sl_bar_hi >= cur_sl and sl_bar_cl < cur_sl)
+
+            # Stop-bar favourable extreme in R + the intrabar-order ambiguity flag
+            # (MFE_FIX_PLAN Problem B). LONG favourable = the bar high above entry;
+            # SHORT favourable = the bar low below entry. r_distance > 0 always.
+            if bias == "LONG":
+                sl_bar_best_favor_r = round((sl_bar_hi - entry) / r_distance, 3)
+            else:
+                sl_bar_best_favor_r = round((entry - sl_bar_lo) / r_distance, 3)
+            # The stop bar by definition hit the stop (−1R); if it ALSO reached ≥+1R
+            # favourable, both levels printed in one bar and the order is unknowable.
+            sl_bar_reached_1r_ambiguous = bool(sl_bar_best_favor_r >= 1.0)
 
             _h1_atr_sl = ob.get("h1_atr")
             if _h1_atr_sl:
@@ -1046,6 +1135,8 @@ def _simulate_single_entry(
             bars_sl_to_2r_touch = None
             bars_sl_to_1r_touch = None
             sl_recovered_to_entry = None
+            sl_bar_best_favor_r = None
+            sl_bar_reached_1r_ambiguous = None
 
     # ── ob_to_fill_hours: OB formation -> fill gap (diagnostic; NOT a gate) ──
     # corr with r ~0 both years, not monotonic — logged only for the edge engine
@@ -1123,6 +1214,7 @@ def _simulate_single_entry(
         exit_price=exit_price,
         r_realised=round(r_realised, 3),
         mfe_r=round(mfe_r, 3), mae_r=round(mae_r, 3),
+        mfe_intrade_r=round(mfe_intrade_r, 3),
         bars_to_mfe=bars_to_mfe, bars_to_mae=bars_to_mae,
         bars_to_exit=bars_to_exit,
         sl_collision=sl_collision, risk_usd=risk_usd,
@@ -1134,6 +1226,9 @@ def _simulate_single_entry(
         bars_sl_to_2r_touch=bars_sl_to_2r_touch,
         bars_sl_to_1r_touch=bars_sl_to_1r_touch,
         sl_recovered_to_entry=sl_recovered_to_entry,
+        sl_bar_best_favor_r=sl_bar_best_favor_r,
+        sl_bar_reached_1r_ambiguous=sl_bar_reached_1r_ambiguous,
+        ob_penetration_depth=ob_penetration_depth,
         ob_to_fill_hours=ob_to_fill_hours,
         bars_break_to_pullback=bars_break_to_pullback,
     )
@@ -1248,12 +1343,15 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl,
                r_realised,
                mfe_r, mae_r, bars_to_exit,
                bars_to_mfe=None, bars_to_mae=None,
+               mfe_intrade_r=0.0,
                sl_collision, risk_usd,
                sl_bar_was_sweep=None,
                sl_swept_then_2r=None, sl_swept_then_1r=None,
                sl_wick_depth_atr=None, sl_max_adverse_after_sweep_atr=None,
                bars_sl_to_2r_touch=None, bars_sl_to_1r_touch=None,
                sl_recovered_to_entry=None,
+               sl_bar_best_favor_r=None, sl_bar_reached_1r_ambiguous=None,
+               ob_penetration_depth=None,
                ob_to_fill_hours=None,
                bars_break_to_pullback=None,
                setup_liq_reads=None) -> Dict[str, Any]:
@@ -1557,6 +1655,15 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl,
         "pnl_usd":       pnl_usd,
         "mfe_r":         mfe_r,
         "mae_r":         mae_r,
+        # IN-TRADE MFE (2026-08-02, MFE_FIX_PLAN). Best favourable move fill→stop
+        # ONLY (post-stop bars truncated). The CORRECT MFE for classifying losers:
+        # mfe_r keeps running after the stop (~67% of losers peak after death), so
+        # it mislabels dead-on-arrival losers as "had profit"; this does not. For a
+        # loser mfe_intrade_r ∈ [0, 2) by construction (reaching +2R = a tp win) and
+        # mfe_intrade_r ≤ mfe_r always. Loser autopsy → THIS column; winner run-past
+        # -target study → mfe_r. never_filled carries 0.0 (matches mfe_r). OUTCOME —
+        # never an entry filter (look-ahead). See LOSER_AUTOPSY_PLAYBOOK §2 table.
+        "mfe_intrade_r": mfe_intrade_r,
         # OUTCOME-side descriptors (2026-07-26; NEVER entry/model features — pure
         # look-ahead). H1 bars from fill (bar 0) to the bar that SET mfe_r / mae_r,
         # captured O(1) inside the same walk. First bar to reach the extreme wins
@@ -1593,6 +1700,26 @@ def _build_row(*, alert, pair_conf, ob, entry_zone, entry, sl,
         "bars_sl_to_2r_touch":            bars_sl_to_2r_touch,
         "bars_sl_to_1r_touch":            bars_sl_to_1r_touch,
         "sl_recovered_to_entry":          sl_recovered_to_entry,
+        # Stop-bar favourable extreme + intrabar-order ambiguity flag (2026-08-02,
+        # MFE_FIX_PLAN Problem B). The one bar H1 cannot resolve — mfe_intrade_r
+        # excludes it (pessimistic floor); these BOUND it instead of faking it.
+        #   sl_bar_best_favor_r         : the stop bar's most-favourable move in R
+        #     (LONG (high−entry)/R, SHORT (entry−low)/R). May be negative. None off-SL.
+        #   sl_bar_reached_1r_ambiguous : True when that extreme ≥ +1R AND the stop
+        #     was hit in the same bar (both levels one bar → order unknowable). When
+        #     it is False and best_favor_r < 1R, the loser UNAMBIGUOUSLY never reached
+        #     the half-target. Report the COUNT so the taxonomy's uncertainty is
+        #     explicit. None off-SL. Both OUTCOME (never an entry filter).
+        "sl_bar_best_favor_r":            sl_bar_best_favor_r,
+        "sl_bar_reached_1r_ambiguous":    sl_bar_reached_1r_ambiguous,
+        # OB penetration depth (2026-08-02, MFE_FIX_PLAN batch rider): the in-trade
+        # adverse poke past the proximal entry line, as a FRACTION of OB depth
+        # (|entry−distal|). 0 = never past entry; ~1 = poked to the distal (can slightly
+        # exceed 1 — sl sits one spread past the distal). Uses the fill→stop-truncated
+        # adverse extreme (post-stop wander excluded). The entry-placement knob: "are we
+        # entering too early; would a deeper limit fill at a better price for a tighter
+        # stop / better RR?" None when distal missing. OUTCOME (never an entry filter).
+        "ob_penetration_depth":           ob_penetration_depth,
         # OB-formation -> fill gap (hours). Diagnostic only, corr with r ~0.
         "ob_to_fill_hours": ob_to_fill_hours,
         # H1 bars from break candle to the pullback that fills us (BS1 flag).

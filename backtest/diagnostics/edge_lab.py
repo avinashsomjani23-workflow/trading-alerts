@@ -129,6 +129,10 @@ OUTCOME_TIME_FEATURES = {
     "sl_wick_depth_atr", "r_capture_ratio",
     "sl_max_adverse_after_sweep_atr", "bars_sl_to_2r_touch", "bars_sl_to_1r_touch",
     "sl_recovered_to_entry",
+    # MFE_FIX_PLAN (2026-08-02): in-trade MFE + stop-bar bound + OB penetration.
+    # All measured during/after the trade → outcome-time, walled out of entry screens.
+    "mfe_intrade_r", "sl_bar_best_favor_r", "sl_bar_reached_1r_ambiguous",
+    "ob_penetration_depth",
     # bars-to-* are all measured after the trade runs → outcome-time
     "bars_to_exit",
     # bars from fill to the MFE/MAE bar (2026-07-26 loser autopsy). Pure
@@ -222,6 +226,9 @@ _NUMERIC_MUST_PARSE = sorted(set(spine.CONTINUOUS_FEATURES) | {
     "r_realised", "mfe_r", "mae_r", "sl_distance_atr", "r_capture_ratio",
     "sl_wick_depth_atr", "sl_max_adverse_after_sweep_atr", "bars_sl_to_2r_touch",
     "bars_sl_to_1r_touch",
+    # MFE_FIX_PLAN (2026-08-02) numeric additions. sl_bar_reached_1r_ambiguous is a
+    # bool, not numeric, so it is NOT listed here.
+    "mfe_intrade_r", "sl_bar_best_favor_r", "ob_penetration_depth",
     "atr_at_ob", "entry", "sl_initial", "tp_2r",
 })
 

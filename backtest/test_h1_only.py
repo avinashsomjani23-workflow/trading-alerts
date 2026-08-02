@@ -2162,6 +2162,194 @@ def test_bars_to_mfe_mae_hand_path():
     assert ok, "bars_to_mfe/mae checks failed (see output above)"
 
 
+def _paint_long_loser(post_fill_bars, *, top=1.0800, ob_width=0.0018,
+                      spread=0.0002, atr=0.0010):
+    """Drive the LIVE simulator to a bullish LONG that fills on bar 0 and then
+    follows an EXPLICIT painted path (`post_fill_bars` = list of (high, low)), so
+    the MFE_FIX_PLAN columns can be bite-proven against a known outcome.
+
+    Geometry: bullish OB, entry = proximal = top, sl = (top − ob_width) − spread.
+    r_distance = |entry − sl| = ob_width + spread. distal_line = top − ob_width.
+    The fill bar (bar 0) dips to `top` (fills the proximal limit) and its high is
+    pre-fill (excluded). From bar 1 on, the caller's (high, low) tuples are laid
+    down verbatim; the caller shapes them relative to entry/sl/tp to force a
+    specific loser path (rally-then-stop-then-rally, bar-1 death, etc.).
+
+    Returns (row, entry, sl, distal, r_distance).
+    """
+    base = pd.Timestamp("2026-04-06 00:00", tz="UTC")   # Monday
+    n = 2 + len(post_fill_bars) + 4                       # pad tail with neutral bars
+    idx = pd.date_range(base, periods=n, freq="h")
+    bot = top - ob_width
+    distal = bot
+    sl = bot - spread
+    r_distance = abs(top - sl)
+    ob = {
+        "direction": "bullish", "bos_tag": "BOS", "bos_tier": "Major",
+        "high": top, "low": bot, "proximal_line": top, "distal_line": distal,
+        "ob_timestamp": idx[0].isoformat(), "touches": 0, "h1_atr": atr,
+        "dealing_range": {"valid": True, "range_low": bot - 0.02,
+                          "range_high": top + 0.05},
+    }
+    highs = [0.0] * n
+    lows = [0.0] * n
+    closes = [0.0] * n
+    # bars 0..1 sit above the zone; bar 1 dips to `top` to FILL the proximal limit.
+    # (Alert fills from the alert bar = idx[0]; a LONG fills when Low <= entry.)
+    highs[0], lows[0], closes[0] = top + 0.0012, top + 0.0006, top + 0.0009
+    highs[1], lows[1], closes[1] = top + 0.0004, top - 0.0001, top - 0.00005  # fill bar
+    # painted post-fill path from bar 2 (== the walk's first post-fill bar).
+    for j, (bh, bl) in enumerate(post_fill_bars):
+        b = 2 + j
+        highs[b], lows[b] = bh, bl
+        closes[b] = (bh + bl) / 2.0
+    # neutral tail: sit flat just below entry, never touching sl or +2R, so they
+    # never resolve anything and never move an in-trade extreme post-stop.
+    for b in range(2 + len(post_fill_bars), n):
+        highs[b] = top - 0.0002
+        lows[b] = top - 0.0003
+        closes[b] = top - 0.00025
+    df = pd.DataFrame({"Open": closes, "High": highs, "Low": lows,
+                       "Close": closes, "Volume": [100] * n}, index=idx)
+    alert = {"pair": "TESTPAIR", "ts": idx[0], "current_price": top,
+             "h1_atr": atr, "ob": ob}
+    rows = h1_only_simulator.simulate_h1_only_dual(
+        alert, _synth_pair_conf(), df, risk_usd=250.0)
+    assert rows, "paint_long_loser produced no trade row"
+    return rows[0], top, sl, distal, r_distance
+
+
+def test_mfe_intrade_and_stop_bar_bound():
+    """mfe_intrade_r + sl_bar_best_favor_r + sl_bar_reached_1r_ambiguous
+    (MFE_FIX_PLAN, 2026-08-02).
+
+    Bite-proves the three Problem A/B columns on hand-painted LONG losers driven
+    through the LIVE simulator:
+
+      (1) POST-STOP CONTAMINATION: a loser rallies a little in-trade, gets stopped,
+          then rallies HUGE after the stop. mfe_r must catch the post-stop rally
+          (full window), mfe_intrade_r must NOT (fill→stop only), and
+          mfe_intrade_r <= mfe_r. This is the whole point of the fix.
+
+      (2) BAR-1 DEATH: fills then the very next bar just stops us with no favourable
+          poke above entry. mfe_intrade_r must be 0.0 (never looked good in-trade).
+
+      (3) STOP-BAR BOUND + AMBIGUITY: on the stop bar the high pokes >= +1R before
+          the low takes the stop. sl_bar_best_favor_r must equal that high in R, and
+          sl_bar_reached_1r_ambiguous must be True (both +1R and −1R in one bar).
+          A stop bar whose high never reaches +1R must set the flag False.
+    """
+    print("\n== test_mfe_intrade_and_stop_bar_bound ==")
+    ok = True
+
+    # ---- (1) post-stop contamination -----------------------------------------
+    # entry=top=1.0800, ob_width=0.0018, spread=0.0002 -> sl=1.0780, r_distance=0.0020.
+    # +2R target = 1.0840. Path:
+    #   bar1: small favourable poke to 1.0810 (=+0.5R), low stays above sl -> in-trade MFE
+    #   bar2: STOP bar — low 1.0778 (< sl) takes the stop; high 1.0805 (< +1R, no ambiguity)
+    #   bar3: HUGE post-stop rally to 1.0900 (=+5R) — must contaminate mfe_r ONLY
+    #         (1.0900 − 1.0800)/0.0020 = +5.0R.
+    r1, entry, sl, distal, rdist = _paint_long_loser([
+        (1.0810, 1.0802),   # bar1: favourable, high=+0.5R, never near sl
+        (1.0805, 1.0778),   # bar2: stop bar (low < sl); high 1.0805 = +0.25R
+        (1.0900, 1.0800),   # bar3: post-stop moonshot (+5R high) — must be ignored in-trade
+    ])
+    ok &= check(r1.get("exit_reason") == "sl",
+                f"(1) resolved as a stop ({r1.get('exit_reason')})")
+    mfe_full = r1.get("mfe_r")
+    mfe_intr = r1.get("mfe_intrade_r")
+    # in-trade favourable peak was bar1 high 1.0810 = +0.5R.
+    ok &= check(abs(mfe_intr - 0.5) < 1e-6,
+                f"(1) mfe_intrade_r == +0.5R (bar1 poke, pre-stop) (got {mfe_intr})")
+    # full-window MFE caught the +5R post-stop moonshot (bar3 high 1.0900).
+    ok &= check(abs(mfe_full - 5.0) < 1e-6,
+                f"(1) mfe_r caught the post-stop +5R rally (got {mfe_full})")
+    ok &= check(mfe_intr <= mfe_full + 1e-9,
+                f"(1) invariant mfe_intrade_r <= mfe_r ({mfe_intr} <= {mfe_full})")
+    ok &= check(0.0 <= mfe_intr < 2.0,
+                f"(1) loser mfe_intrade_r in [0,2) (got {mfe_intr})")
+
+    # ---- (2) bar-1 death ------------------------------------------------------
+    # bar1 IS the stop bar: high never above entry, low takes the stop. No in-trade
+    # favourable move at all -> mfe_intrade_r must be exactly 0.0.
+    r2, *_ = _paint_long_loser([
+        (1.0800, 1.0778),   # bar1 = stop bar; high == entry (no favourable poke), low < sl
+    ])
+    ok &= check(r2.get("exit_reason") == "sl",
+                f"(2) bar-1 death resolved as a stop ({r2.get('exit_reason')})")
+    ok &= check(abs(r2.get("mfe_intrade_r") - 0.0) < 1e-6,
+                f"(2) bar-1 death -> mfe_intrade_r == 0.0 (got {r2.get('mfe_intrade_r')})")
+
+    # ---- (3) stop-bar bound + ambiguity flag ---------------------------------
+    # Stop bar high pokes to +1.5R (1.0830) BEFORE its low takes the stop (1.0778).
+    # sl_bar_best_favor_r = (1.0830 - 1.0800)/0.0020 = +1.5 ; ambiguous = True.
+    r3, e3, sl3, d3, rd3 = _paint_long_loser([
+        (1.0830, 1.0778),   # bar1 = stop bar; high +1.5R AND low < sl -> ambiguous
+    ])
+    ok &= check(r3.get("exit_reason") == "sl", "(3) stop-bar case is a stop")
+    best = r3.get("sl_bar_best_favor_r")
+    ok &= check(best is not None and abs(best - 1.5) < 1e-6,
+                f"(3) sl_bar_best_favor_r == +1.5R (got {best})")
+    ok &= check(r3.get("sl_bar_reached_1r_ambiguous") is True,
+                f"(3) ambiguous flag True (>= +1R and stopped same bar) "
+                f"(got {r3.get('sl_bar_reached_1r_ambiguous')})")
+    # A stop bar whose high never reaches +1R -> flag False (unambiguous non-reach).
+    # r2's stop bar high == entry == +0R.
+    ok &= check(r2.get("sl_bar_reached_1r_ambiguous") is False,
+                f"(3) low-poke stop bar -> ambiguous False "
+                f"(got {r2.get('sl_bar_reached_1r_ambiguous')})")
+    ok &= check(r2.get("sl_bar_best_favor_r") is not None
+                and r2.get("sl_bar_best_favor_r") < 1.0,
+                f"(3) low-poke sl_bar_best_favor_r < 1R "
+                f"(got {r2.get('sl_bar_best_favor_r')})")
+
+    assert ok, "mfe_intrade / stop-bar-bound checks failed (see output above)"
+
+
+def test_ob_penetration_depth():
+    """ob_penetration_depth (MFE_FIX_PLAN batch rider, 2026-08-02).
+
+    Fraction of OB depth (|entry − distal|) that the IN-TRADE adverse extreme poked
+    past the proximal entry line. Bite-proven on a LONG whose deepest in-trade low is
+    a known distance below entry, with a post-stop deeper low that must be IGNORED.
+
+    Geometry: entry=1.0800, distal=1.0782 (ob_width 0.0018) -> OB depth = 0.0018.
+      bar1: low 1.0791 = 0.0009 below entry = HALF the OB depth -> depth 0.5
+      bar2: STOP bar low 1.0778 (< sl=1.0780) — takes the stop
+      bar3: post-stop low 1.0700 (way past distal) — must NOT count (post-stop wander)
+    Expected: penetration measured from the in-trade extreme. The deepest PRE-stop
+    low reaching the stop bar is used; the post-stop crater is excluded.
+    """
+    print("\n== test_ob_penetration_depth ==")
+    ok = True
+    # ob_width 0.0018, distal = entry - 0.0018 = 1.0782, sl = 1.0780.
+    r, entry, sl, distal, rdist = _paint_long_loser([
+        (1.0804, 1.0791),   # bar1: in-trade poke 0.0009 below entry = 50% of OB depth
+        (1.0805, 1.0778),   # bar2: STOP bar (low < sl) — its low 1.0778 = deepest pre-truncation
+        (1.0790, 1.0700),   # bar3: post-stop crater — MUST be excluded
+    ])
+    ok &= check(r.get("exit_reason") == "sl", "resolved as a stop")
+    depth = r.get("ob_penetration_depth")
+    ob_depth = abs(entry - distal)      # 0.0018
+    # The in-trade adverse extreme is the stop bar's low 1.0778 (deepest fill->stop
+    # low; the walk's mae_price on the stop bar is EXCLUDED from tracking, so the
+    # deepest tracked low is bar1's 1.0791 = 0.0009 below entry). Verify against the
+    # actual mae_intrade the sim used by reading the emitted mae_r is NOT possible
+    # (that's full-window); instead assert the depth equals the pre-stop poke.
+    expected = round(abs(entry - 1.0791) / ob_depth, 4)   # 0.0009/0.0018 = 0.5
+    ok &= check(depth is not None, "ob_penetration_depth present on the row")
+    ok &= check(abs(depth - expected) < 1e-6,
+                f"depth == pre-stop 50% poke ({expected}); post-stop crater excluded "
+                f"(got {depth})")
+    ok &= check(depth < 1.0,
+                f"depth did NOT include the post-stop 1.0700 crater (got {depth})")
+    # formula sanity (mirrors the sim): fraction of OB depth, non-negative.
+    ok &= check(round(abs(1.0800 - 1.0791) / 0.0018, 4) == 0.5,
+                "formula: 0.0009 poke / 0.0018 depth -> 0.5")
+
+    assert ok, "ob_penetration_depth checks failed (see output above)"
+
+
 def main():
     # Robust to BOTH styles: assert-based tests (return None on pass, raise on
     # fail — the pytest-visible ones) and legacy bool-returning tests. A raised
@@ -2188,6 +2376,9 @@ def main():
         ("test_sl_wick_depth_atr",      test_sl_wick_depth_atr),
         ("test_edge_lab_columns",       test_edge_lab_columns),
         ("test_sl_swept_then_targets_strict", test_sl_swept_then_targets_strict),
+        ("test_mfe_intrade_and_stop_bar_bound",
+         test_mfe_intrade_and_stop_bar_bound),
+        ("test_ob_penetration_depth",   test_ob_penetration_depth),
         ("test_area_b_all_atr_cols_share_the_one_h1_atr_denominator",
          test_area_b_all_atr_cols_share_the_one_h1_atr_denominator),
         ("test_area_b_atr_source_uses_h1_atr",
