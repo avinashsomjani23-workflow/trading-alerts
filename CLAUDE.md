@@ -100,6 +100,12 @@ Six beats, plain English, in order. Never dump raw stats.
 6. **So what** — act, park, or kill. One line.
 
 **Standing rules for every finding:**
+- **Analysis population = resolved trades only.** Every entry/loser analysis runs on
+  `exit_reason ∈ {tp, sl}` (clean win +2R / clean loss −1R under the frozen exit).
+  `never_filled`, `friday_flat`, `timeout`, `window_end` are AUDIT-ONLY — EXCLUDED from
+  the population every time (they are not clean wins/losses; folding them corrupts WR/meanR).
+  News filter on top: LOOSE `news_fill==0` for baseline/EV; STRICT `news_fill==0 &
+  news_open==0` for the loser autopsy / feature screen. Recipe: `docs/LOSER_AUTOPSY_PLAYBOOK.md`.
 - **News-clean only.** News-mixed rows are filtered OUT of the population. Always.
 - **A signal is one hammer, not the wall.** Judge it on whether it correctly filters bad
   trades and/or amplifies good ones — NEVER dismiss it because it doesn't move the whole book.
