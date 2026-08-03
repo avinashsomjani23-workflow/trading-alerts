@@ -2495,7 +2495,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-03T20:35:58.895548",
-      "last_seen_ist": "2026-08-03T21:36:03.335427",
+      "last_seen_ist": "2026-08-03T22:36:17.083938",
       "last_email_day": "2026-08-03",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -3553,7 +3553,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-03T10:36:00.521396",
-      "last_seen_ist": "2026-08-03T21:36:03.335427",
+      "last_seen_ist": "2026-08-03T22:36:17.083938",
       "last_email_day": "2026-08-03",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -3934,7 +3934,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-07-31T19:36:01.045807",
-      "last_seen_ist": "2026-08-03T21:36:03.335427",
+      "last_seen_ist": "2026-08-03T22:36:17.083938",
       "last_email_day": "2026-07-31",
       "still_valid_count": 0,
       "reentry_armed": true,
@@ -4332,7 +4332,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-03T13:36:01.804308",
-      "last_seen_ist": "2026-08-03T21:36:03.335427",
+      "last_seen_ist": "2026-08-03T22:36:17.083938",
       "last_email_day": "2026-08-03",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4449,7 +4449,7 @@
     "EURUSD_SHORT_CHoCH_1.1517_2026-08-03T11": {
       "score_int": 7,
       "score_raw": 7.0,
-      "score_high_water": 7.0,
+      "score_high_water": 9.0,
       "score_low_water": 7.0,
       "breakdown": {
         "structure": 4,
@@ -4459,7 +4459,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-03T21:36:03.335427",
-      "last_seen_ist": "2026-08-03T21:36:03.335427",
+      "last_seen_ist": "2026-08-03T22:36:17.083938",
       "last_email_day": "2026-08-03",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4576,7 +4576,7 @@
     "USDCHF_LONG_CHoCH_0.8095_2026-08-03T11": {
       "score_int": 7,
       "score_raw": 7.0,
-      "score_high_water": 7.0,
+      "score_high_water": 9.0,
       "score_low_water": 7.0,
       "breakdown": {
         "structure": 4,
@@ -4586,7 +4586,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-03T21:36:03.335427",
-      "last_seen_ist": "2026-08-03T21:36:03.335427",
+      "last_seen_ist": "2026-08-03T22:36:17.083938",
       "last_email_day": "2026-08-03",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4704,7 +4704,7 @@
       "score_int": 7,
       "score_raw": 7.0,
       "score_high_water": 7.0,
-      "score_low_water": 7.0,
+      "score_low_water": 6.0,
       "breakdown": {
         "structure": 3,
         "sweep": 0.0,
@@ -4713,7 +4713,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-03T21:36:03.335427",
-      "last_seen_ist": "2026-08-03T21:36:03.335427",
+      "last_seen_ist": "2026-08-03T22:36:17.083938",
       "last_email_day": "2026-08-03",
       "still_valid_count": 0,
       "reentry_armed": false,
