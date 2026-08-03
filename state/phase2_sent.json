@@ -4060,7 +4060,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-03T10:36:00.521396",
-      "last_seen_ist": "2026-08-03T15:35:59.999905",
+      "last_seen_ist": "2026-08-03T16:36:06.550626",
       "last_email_day": "2026-08-03",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4585,7 +4585,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-03T10:36:00.521396",
-      "last_seen_ist": "2026-08-03T15:35:59.999905",
+      "last_seen_ist": "2026-08-03T16:36:06.550626",
       "last_email_day": "2026-08-03",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4703,7 +4703,7 @@
       "score_int": 7,
       "score_raw": 7.0,
       "score_high_water": 7.0,
-      "score_low_water": 7.0,
+      "score_low_water": 6.0,
       "breakdown": {
         "structure": 4,
         "sweep": 0.0,
@@ -4712,7 +4712,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-03T10:36:00.521396",
-      "last_seen_ist": "2026-08-03T15:35:59.999905",
+      "last_seen_ist": "2026-08-03T16:36:06.550626",
       "last_email_day": "2026-08-03",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4839,7 +4839,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-03T13:36:01.804308",
-      "last_seen_ist": "2026-08-03T15:35:59.999905",
+      "last_seen_ist": "2026-08-03T16:36:06.550626",
       "last_email_day": "2026-08-03",
       "still_valid_count": 0,
       "reentry_armed": false,
