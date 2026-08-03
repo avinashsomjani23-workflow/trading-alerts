@@ -1,24 +1,5 @@
 [
   {
-    "ts": "2026-07-16T23:35:59.827369",
-    "ts_human": "23:35 IST, 16 Jul 2026",
-    "ob_count_total": 7,
-    "ob_count_per_pair": {
-      "EURUSD": 2,
-      "USDJPY": 1,
-      "NZDUSD": 1,
-      "USDCHF": 2,
-      "GOLD": 1
-    },
-    "ob_age_hrs": 0.008813834444444444,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 0,
-    "issues": []
-  },
-  {
     "ts": "2026-07-17T09:35:54.432919",
     "ts_human": "09:35 IST, 17 Jul 2026",
     "ob_count_total": 8,
@@ -963,5 +944,24 @@
         "action": "Check yfinance_stale_log.json. If persistent, the Twelve Data feed may be rate-limiting or down."
       }
     ]
+  },
+  {
+    "ts": "2026-08-03T10:36:00.521396",
+    "ts_human": "10:36 IST, 03 Aug 2026",
+    "ob_count_total": 5,
+    "ob_count_per_pair": {
+      "EURUSD": 0,
+      "USDJPY": 1,
+      "NZDUSD": 1,
+      "USDCHF": 0,
+      "GOLD": 3
+    },
+    "ob_age_hrs": 0.0084529225,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
   }
 ]
