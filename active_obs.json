@@ -11,9 +11,9 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-03T20:34:03.071543",
           "first_seen_label": "20:34 IST",
-          "last_seen_iso": "2026-08-03T20:34:03.071543",
-          "last_seen_label": "20:34 IST",
-          "is_new_this_scan": true,
+          "last_seen_iso": "2026-08-03T21:34:01.766219",
+          "last_seen_label": "21:34 IST",
+          "is_new_this_scan": false,
           "ob_timestamp": "2026-08-03T11:00:00+00:00",
           "direction": "bearish",
           "bos_tag": "CHoCH",
@@ -38,23 +38,23 @@
           "break_quality": {
             "tier": "marginal",
             "close_beyond_atr": 0.18,
-            "body_atr": 0.98,
-            "excess": 0.65
+            "body_atr": 0.96,
+            "excess": 0.64
           },
           "touches": 0,
           "status_label": "Pristine",
           "h1_atr": 0.0009478571428571193,
-          "current_price_at_scan": 1.15117,
-          "distance_to_proximal_pips": 9.2,
+          "current_price_at_scan": 1.15093,
+          "distance_to_proximal_pips": 11.6,
           "fvg": {
-            "exists": false,
-            "fvg_top": null,
-            "fvg_bottom": null,
-            "c1_idx": null,
-            "c3_idx": null,
-            "c1_timestamp": null,
-            "was_detected": false,
-            "mitigation": "none",
+            "exists": true,
+            "fvg_top": 1.15223,
+            "fvg_bottom": 1.15151,
+            "c1_idx": 133,
+            "c3_idx": 135,
+            "c1_timestamp": "2026-08-03T13:00:00+00:00",
+            "was_detected": true,
+            "mitigation": "pristine",
             "ghost_top": null,
             "ghost_bottom": null,
             "ghost_c1_idx": null,
@@ -103,7 +103,7 @@
           }
         }
       ],
-      "last_displayed_zone_id": null
+      "last_displayed_zone_id": "EUR32"
     },
     "USDJPY": {
       "next_id_counter": 33,
@@ -114,8 +114,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-07-31T23:34:02.562449",
           "first_seen_label": "23:34 IST",
-          "last_seen_iso": "2026-08-03T20:34:03.071543",
-          "last_seen_label": "20:34 IST",
+          "last_seen_iso": "2026-08-03T21:34:01.766219",
+          "last_seen_label": "21:34 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-07-31T16:00:00+00:00",
           "direction": "bearish",
@@ -141,14 +141,14 @@
           "break_quality": {
             "tier": "strong",
             "close_beyond_atr": 0.09,
-            "body_atr": 2.94,
-            "excess": 2.94
+            "body_atr": 2.86,
+            "excess": 2.86
           },
           "touches": 1,
           "status_label": "Tested (1x proximal)",
           "h1_atr": 0.7228214285714358,
-          "current_price_at_scan": 156.59436,
-          "distance_to_proximal_pips": 254.5,
+          "current_price_at_scan": 156.96311,
+          "distance_to_proximal_pips": 217.6,
           "fvg": {
             "exists": false,
             "fvg_top": null,
@@ -217,8 +217,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-03T09:35:05.178661",
           "first_seen_label": "09:35 IST",
-          "last_seen_iso": "2026-08-03T20:34:03.071543",
-          "last_seen_label": "20:34 IST",
+          "last_seen_iso": "2026-08-03T21:34:01.766219",
+          "last_seen_label": "21:34 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-07-31T12:00:00+00:00",
           "direction": "bullish",
@@ -243,15 +243,15 @@
           "bos_sequence_count": 1,
           "break_quality": {
             "tier": "marginal",
-            "close_beyond_atr": 0.27,
+            "close_beyond_atr": 0.26,
             "body_atr": 0.2,
             "excess": 0.2
           },
           "touches": 1,
           "status_label": "Tested (1x proximal)",
           "h1_atr": 0.0008585714285714387,
-          "current_price_at_scan": 0.58687,
-          "distance_to_proximal_pips": 3.8,
+          "current_price_at_scan": 0.58669,
+          "distance_to_proximal_pips": 2.0,
           "fvg": {
             "exists": false,
             "fvg_top": null,
@@ -314,8 +314,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-03T12:34:07.954398",
           "first_seen_label": "12:34 IST",
-          "last_seen_iso": "2026-08-03T20:34:03.071543",
-          "last_seen_label": "20:34 IST",
+          "last_seen_iso": "2026-08-03T21:34:01.766219",
+          "last_seen_label": "21:34 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-08-03T05:00:00+00:00",
           "direction": "bearish",
@@ -341,14 +341,14 @@
           "break_quality": {
             "tier": "marginal",
             "close_beyond_atr": 0.03,
-            "body_atr": 1.09,
-            "excess": 0.72
+            "body_atr": 1.07,
+            "excess": 0.71
           },
           "touches": 1,
           "status_label": "Tested (1x proximal)",
           "h1_atr": 0.0008657142857142871,
-          "current_price_at_scan": 0.58687,
-          "distance_to_proximal_pips": 10.4,
+          "current_price_at_scan": 0.58669,
+          "distance_to_proximal_pips": 12.2,
           "fvg": {
             "exists": false,
             "fvg_top": null,
@@ -417,9 +417,9 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-03T20:34:03.071543",
           "first_seen_label": "20:34 IST",
-          "last_seen_iso": "2026-08-03T20:34:03.071543",
-          "last_seen_label": "20:34 IST",
-          "is_new_this_scan": true,
+          "last_seen_iso": "2026-08-03T21:34:01.766219",
+          "last_seen_label": "21:34 IST",
+          "is_new_this_scan": false,
           "ob_timestamp": "2026-08-03T11:00:00+00:00",
           "direction": "bullish",
           "bos_tag": "CHoCH",
@@ -443,24 +443,24 @@
           "bos_sequence_count": 0,
           "break_quality": {
             "tier": "marginal",
-            "close_beyond_atr": 0.63,
-            "body_atr": 0.75,
-            "excess": 0.5
+            "close_beyond_atr": 0.62,
+            "body_atr": 0.74,
+            "excess": 0.49
           },
           "touches": 0,
           "status_label": "Pristine",
           "h1_atr": 0.001089285714285729,
-          "current_price_at_scan": 0.81053,
-          "distance_to_proximal_pips": 11.1,
+          "current_price_at_scan": 0.81064,
+          "distance_to_proximal_pips": 12.2,
           "fvg": {
-            "exists": false,
-            "fvg_top": null,
-            "fvg_bottom": null,
-            "c1_idx": null,
-            "c3_idx": null,
-            "c1_timestamp": null,
-            "was_detected": false,
-            "mitigation": "none",
+            "exists": true,
+            "fvg_top": 0.81019,
+            "fvg_bottom": 0.8096,
+            "c1_idx": 133,
+            "c3_idx": 135,
+            "c1_timestamp": "2026-08-03T13:00:00+00:00",
+            "was_detected": true,
+            "mitigation": "pristine",
             "ghost_top": null,
             "ghost_bottom": null,
             "ghost_c1_idx": null,
@@ -514,9 +514,9 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-03T20:34:03.071543",
           "first_seen_label": "20:34 IST",
-          "last_seen_iso": "2026-08-03T20:34:03.071543",
-          "last_seen_label": "20:34 IST",
-          "is_new_this_scan": true,
+          "last_seen_iso": "2026-08-03T21:34:01.766219",
+          "last_seen_label": "21:34 IST",
+          "is_new_this_scan": false,
           "ob_timestamp": "2026-07-30T06:00:00+00:00",
           "direction": "bearish",
           "bos_tag": "BOS",
@@ -540,15 +540,15 @@
           "bos_sequence_count": 1,
           "break_quality": {
             "tier": "marginal",
-            "close_beyond_atr": 0.38,
-            "body_atr": 1.17,
-            "excess": 1.17
+            "close_beyond_atr": 0.37,
+            "body_atr": 1.14,
+            "excess": 1.14
           },
           "touches": 0,
           "status_label": "Pristine",
           "h1_atr": 0.001089285714285729,
-          "current_price_at_scan": 0.81053,
-          "distance_to_proximal_pips": 50.2,
+          "current_price_at_scan": 0.81064,
+          "distance_to_proximal_pips": 49.1,
           "fvg": {
             "exists": true,
             "fvg_top": 0.8151,
@@ -623,7 +623,7 @@
           }
         }
       ],
-      "last_displayed_zone_id": null
+      "last_displayed_zone_id": "CHF40"
     },
     "GOLD": {
       "next_id_counter": 74,
@@ -634,8 +634,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-07-31T13:34:11.581810",
           "first_seen_label": "13:34 IST",
-          "last_seen_iso": "2026-08-03T20:34:03.071543",
-          "last_seen_label": "20:34 IST",
+          "last_seen_iso": "2026-08-03T21:34:01.766219",
+          "last_seen_label": "21:34 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-07-31T06:00:00+00:00",
           "direction": "bearish",
@@ -660,15 +660,15 @@
           "bos_sequence_count": 1,
           "break_quality": {
             "tier": "marginal",
-            "close_beyond_atr": 0.15,
-            "body_atr": 0.64,
-            "excess": 0.64
+            "close_beyond_atr": 0.16,
+            "body_atr": 0.67,
+            "excess": 0.67
           },
           "touches": 0,
           "status_label": "Pristine",
           "h1_atr": 11.169441428571547,
-          "current_price_at_scan": 4033.87163,
-          "distance_to_proximal_pips": 39.3,
+          "current_price_at_scan": 4035.94547,
+          "distance_to_proximal_pips": 37.2,
           "fvg": {
             "exists": true,
             "fvg_top": 4073.15384,
@@ -731,8 +731,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-03T19:34:02.668486",
           "first_seen_label": "19:34 IST",
-          "last_seen_iso": "2026-08-03T20:34:03.071543",
-          "last_seen_label": "20:34 IST",
+          "last_seen_iso": "2026-08-03T21:34:01.766219",
+          "last_seen_label": "21:34 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-07-29T13:00:00+00:00",
           "direction": "bullish",
@@ -819,9 +819,9 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-03T20:34:03.071543",
           "first_seen_label": "20:34 IST",
-          "last_seen_iso": "2026-08-03T20:34:03.071543",
-          "last_seen_label": "20:34 IST",
-          "is_new_this_scan": true,
+          "last_seen_iso": "2026-08-03T21:34:01.766219",
+          "last_seen_label": "21:34 IST",
+          "is_new_this_scan": false,
           "ob_timestamp": "2026-08-03T11:00:00+00:00",
           "direction": "bearish",
           "bos_tag": "BOS",
@@ -845,15 +845,15 @@
           "bos_sequence_count": 1,
           "break_quality": {
             "tier": "marginal",
-            "close_beyond_atr": 0.38,
-            "body_atr": 0.39,
-            "excess": 0.39
+            "close_beyond_atr": 0.39,
+            "body_atr": 0.41,
+            "excess": 0.41
           },
           "touches": 0,
           "status_label": "Pristine",
           "h1_atr": 13.183274285714267,
-          "current_price_at_scan": 4033.87163,
-          "distance_to_proximal_pips": 11.9,
+          "current_price_at_scan": 4035.94547,
+          "distance_to_proximal_pips": 9.8,
           "fvg": {
             "exists": true,
             "fvg_top": 4042.80435,
@@ -862,7 +862,7 @@
             "c3_idx": 128,
             "c1_timestamp": "2026-08-03T12:00:00+00:00",
             "was_detected": true,
-            "mitigation": "pristine",
+            "mitigation": "partial",
             "ghost_top": null,
             "ghost_bottom": null,
             "ghost_c1_idx": null,
@@ -911,7 +911,7 @@
           }
         }
       ],
-      "last_displayed_zone_id": "XAU71"
+      "last_displayed_zone_id": "XAU74"
     }
   },
   "schema_version": 1
