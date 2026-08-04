@@ -1860,11 +1860,11 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-03T20:35:58.895548",
-      "last_seen_ist": "2026-08-04T21:39:37.816477",
+      "last_seen_ist": "2026-08-04T22:36:16.753484",
       "last_email_day": "2026-08-03",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 59.359669999999824,
+      "max_exit_distance": 66.28847999999971,
       "bias": "LONG",
       "pair": "GOLD",
       "ob_snapshot": {
@@ -3951,7 +3951,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-03T21:36:03.335427",
-      "last_seen_ist": "2026-08-04T21:39:37.816477",
+      "last_seen_ist": "2026-08-04T22:36:16.753484",
       "last_email_day": "2026-08-04",
       "still_valid_count": 1,
       "reentry_armed": false,
@@ -4205,7 +4205,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-04T09:36:03.104874",
-      "last_seen_ist": "2026-08-04T21:39:37.816477",
+      "last_seen_ist": "2026-08-04T22:36:16.753484",
       "last_email_day": "2026-08-04",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4586,7 +4586,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-04T14:35:59.534019",
-      "last_seen_ist": "2026-08-04T21:39:37.816477",
+      "last_seen_ist": "2026-08-04T22:36:16.753484",
       "last_email_day": "2026-08-04",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4713,7 +4713,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-04T16:36:00.946398",
-      "last_seen_ist": "2026-08-04T21:39:37.816477",
+      "last_seen_ist": "2026-08-04T22:36:16.753484",
       "last_email_day": "2026-08-04",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4840,7 +4840,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-04T17:36:08.165899",
-      "last_seen_ist": "2026-08-04T21:39:37.816477",
+      "last_seen_ist": "2026-08-04T22:36:16.753484",
       "last_email_day": "2026-08-04",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4958,7 +4958,7 @@
       "score_int": 5,
       "score_raw": 5.0,
       "score_high_water": 5.0,
-      "score_low_water": 5.0,
+      "score_low_water": 4.0,
       "breakdown": {
         "structure": 3,
         "sweep": 0.0,
@@ -4967,7 +4967,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-04T17:36:08.165899",
-      "last_seen_ist": "2026-08-04T21:39:37.816477",
+      "last_seen_ist": "2026-08-04T22:36:16.753484",
       "last_email_day": "2026-08-04",
       "still_valid_count": 0,
       "reentry_armed": false,
