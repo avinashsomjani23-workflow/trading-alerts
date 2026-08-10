@@ -3849,7 +3849,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-07T13:36:00.939387",
-      "last_seen_ist": "2026-08-10T17:36:15.196454",
+      "last_seen_ist": "2026-08-10T18:38:10.889553",
       "last_email_day": "2026-08-07",
       "still_valid_count": 0,
       "reentry_armed": true,
@@ -4230,11 +4230,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-10T10:36:18.830516",
-      "last_seen_ist": "2026-08-10T17:36:15.196454",
+      "last_seen_ist": "2026-08-10T18:38:10.889553",
       "last_email_day": "2026-08-10",
       "still_valid_count": 0,
-      "reentry_armed": true,
-      "max_exit_distance": 0.0019200000000000328,
+      "reentry_armed": false,
+      "max_exit_distance": 0.0,
       "bias": "LONG",
       "pair": "NZDUSD",
       "ob_snapshot": {
@@ -4243,8 +4243,8 @@
         "drop_reason": null,
         "first_seen_iso": "2026-08-07T19:34:10.952737",
         "first_seen_label": "19:34 IST",
-        "last_seen_iso": "2026-08-10T09:34:03.311473",
-        "last_seen_label": "09:34 IST",
+        "last_seen_iso": "2026-08-10T18:33:55.970971",
+        "last_seen_label": "18:33 IST",
         "is_new_this_scan": false,
         "ob_timestamp": "2026-08-07T10:00:00+00:00",
         "direction": "bullish",
@@ -4268,16 +4268,16 @@
         "bos_swing_price": 0.58779,
         "bos_sequence_count": 1,
         "break_quality": {
-          "tier": "strong",
-          "close_beyond_atr": 1.18,
-          "body_atr": 2.55,
-          "excess": 2.55
+          "tier": "solid",
+          "close_beyond_atr": 1.07,
+          "body_atr": 2.31,
+          "excess": 2.31
         },
         "touches": 0,
         "status_label": "Pristine",
         "h1_atr": 0.0007778571428571397,
-        "current_price_at_scan": 0.58849,
-        "distance_to_proximal_pips": 9.9,
+        "current_price_at_scan": 0.58851,
+        "distance_to_proximal_pips": 10.1,
         "fvg": {
           "exists": true,
           "fvg_top": 0.58837,
@@ -4302,7 +4302,7 @@
           "equilibrium": 0.587905,
           "tentative": false,
           "chop_flag": false,
-          "last_event_type": "CHoCH",
+          "last_event_type": "CHoCH_FAILED",
           "source": "h4_dealing_range",
           "ceiling_broken": false,
           "floor_broken": false
@@ -4337,12 +4337,12 @@
         "bos_count_maxed": false,
         "bos_verdict": "holding"
       },
-      "approach_speed_atr_at_email": -0.514,
-      "approach_body_ratio_at_email": 0.29,
-      "approach_er_at_email": 0.384,
+      "approach_speed_atr_at_email": 1.26,
+      "approach_body_ratio_at_email": 0.441,
+      "approach_er_at_email": 0.238,
       "leg_extreme_at_email": 0.5907,
       "leg_er_at_email": 0.515,
-      "approach_asof_utc": "2026-08-10T04:00:00+00:00"
+      "approach_asof_utc": "2026-08-10T12:00:00+00:00"
     },
     "EURUSD_SHORT_CHoCH_1.1556_2026-08-10T00": {
       "score_int": 5,
@@ -4611,7 +4611,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-10T17:36:15.196454",
-      "last_seen_ist": "2026-08-10T17:36:15.196454",
+      "last_seen_ist": "2026-08-10T18:38:10.889553",
       "last_email_day": "2026-08-10",
       "still_valid_count": 0,
       "reentry_armed": false,
