@@ -11,7 +11,7 @@
 - **`fill` columns** are usable for entry analysis, but ALWAYS say "this is fill-time" — a live alert-time scorer cannot see them.
 - No column may enter analysis unclassified. A new column not in a set makes the generator RAISE and CI go red — that is the "nothing missed, nothing contaminated" guarantee.
 
-Canonical: `backtest/results/h1only_20080102_20161231/trades.csv` — **180 columns** (113 alert, 47 fill, 20 outcome).
+Canonical: `backtest/results/h1only_20080102_20161231/trades.csv` — **184 columns** (113 alert, 47 fill, 24 outcome).
 
 ---
 
@@ -182,7 +182,7 @@ A live scorer could act on these. `fill` ones are only known once the limit fill
 | `news_open` | fill | known only once the limit fills — usable for entry analysis, but label it FILL |
 | `news_open_event` | fill | known only once the limit fills — usable for entry analysis, but label it FILL |
 
-## 🚩 OUTCOME / LOOK-AHEAD — 20 columns
+## 🚩 OUTCOME / LOOK-AHEAD — 24 columns
 
 Known only after the trade runs. **Describe losers with these; never filter entries on them.**
 
@@ -208,4 +208,8 @@ Known only after the trade runs. **Describe losers with these; never filter entr
 | `bars_to_mfe` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `bars_to_mae` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 | `sl_collision` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
+| `mfe_intrade_r` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
+| `sl_bar_best_favor_r` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
+| `sl_bar_reached_1r_ambiguous` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
+| `ob_penetration_depth` | outcome | known only after the trade runs — LOOK-AHEAD: describe losers freely, never a live entry filter |
 
