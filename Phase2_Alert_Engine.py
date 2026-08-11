@@ -2042,6 +2042,114 @@ def _is_weekday_market_hours(ist_now):
 # hours, P2 refuses to scan and emails a one-shot "P1 stale" warning.
 P1_FRESHNESS_MAX_AGE_HOURS = 1.25
 
+# --- Bar-match wait (fixes the 1-hour-late alert + stale morning/late-night) ---
+# P1 and P2 are independent cron jobs ~1 min apart. P2 checks out the repo before
+# P1's fresh push for this hour lands, so P2 can scan the PREVIOUS hour's slate and
+# alert a full hour late (or, first thing in the morning, on yesterday's slate).
+# Instead of an age-only test, P2 waits for the slate stamped with THIS hour's
+# just-closed H1 bar (slate_bar_ts, written by smc_radar.save_slate), pulling from
+# origin between tries. Bounded — never an endless loop. On timeout it decides by
+# P1's active window: inside it -> real P1 failure -> warn; outside it -> P1 isn't
+# scheduled, the bar will never come -> silent.
+BAR_MATCH_MAX_TRIES = 6          # 6 tries x 30s = up to 3 min of waiting
+BAR_MATCH_SLEEP_SECONDS = 30
+
+
+def expected_closed_bar_utc(ist_now):
+    """The H1 bar that should back a P2 run starting at ist_now: the most recent
+    top-of-hour that has already CLOSED, as a tz-aware UTC datetime. A run at
+    18:06 IST expects the bar that opened 17:00 IST and closed 18:00 IST -> its
+    open-stamp (bars are open-stamped) is 17:00 IST = the prior full hour."""
+    now_utc = (ist_now - timedelta(hours=5, minutes=30)).replace(
+        minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+    # now_utc is the CURRENT (forming) hour's open. The just-closed bar opened one
+    # hour earlier.
+    return now_utc - timedelta(hours=1)
+
+
+def p1_active_now(ist_now):
+    """True if P1 is scheduled to be running at ist_now (weekday, within the
+    configured active-hours window). Outside this, a missing fresh slate is
+    EXPECTED, not a failure — P2 stays silent rather than emailing stale/warn."""
+    if not _is_weekday_market_hours(ist_now):
+        return False
+    window = config.get("p1_active_hours", [9, 23])
+    try:
+        start_h, end_h = int(window[0]), int(window[1])
+    except (TypeError, ValueError, IndexError):
+        start_h, end_h = 9, 23
+    return start_h <= ist_now.hour <= end_h
+
+
+def _slate_bar_ts_utc(path="active_obs.json"):
+    """Read slate_bar_ts from the slate on disk and return it as a tz-aware UTC
+    datetime, or None if absent/unparseable (legacy slate, or no data that scan)."""
+    raw = load_json(path, {})
+    if not isinstance(raw, dict):
+        return None
+    val = raw.get("slate_bar_ts")
+    if not val:
+        return None
+    try:
+        dt = datetime.fromisoformat(val)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def _git_pull_main():
+    """Best-effort `git pull` so P2 sees P1's latest push mid-run. Never raises;
+    returns True on success. No-op safe: P2 has not written any state yet at the
+    point this is called, so there is nothing to conflict with."""
+    import subprocess
+    try:
+        subprocess.run(["git", "fetch", "origin", "main"], check=False,
+                       capture_output=True, timeout=60)
+        subprocess.run(["git", "reset", "--hard", "origin/main"], check=False,
+                       capture_output=True, timeout=60)
+        return True
+    except Exception as e:
+        print(f"  [BAR-MATCH] git pull failed (continuing on local slate): {e}")
+        return False
+
+
+def wait_for_matching_slate(ist_now, _sleep=time.sleep, _pull=_git_pull_main,
+                            _read_bar=_slate_bar_ts_utc):
+    """Bounded wait for the slate stamped with THIS hour's just-closed bar.
+
+    Returns one of three verdicts (never raises, never loops unbounded):
+      ("run",    reason)  -> slate matches expected bar; scan + email now.
+      ("warn",   reason)  -> timed out AND P1 was scheduled -> real P1 failure.
+      ("silent", reason)  -> timed out AND P1 not scheduled -> nothing to catch.
+
+    `_sleep`/`_pull`/`_read_bar` are injectable for tests. Legacy slate with no
+    slate_bar_ts (None) is treated as 'cannot verify' -> falls through to the
+    window decision on the FIRST try (no waiting), so a pre-deploy slate never
+    hangs P2 for 3 minutes.
+    """
+    expected = expected_closed_bar_utc(ist_now)
+    for attempt in range(1, BAR_MATCH_MAX_TRIES + 1):
+        _pull()
+        bar = _read_bar()
+        if bar is not None and bar >= expected:
+            # Fresh: slate is for the expected bar (>= guards a clock skew where
+            # P1 already stamped the next bar). Run immediately.
+            return "run", f"matched bar {bar.isoformat()} on try {attempt}"
+        if bar is None:
+            # Legacy / no-data slate: cannot verify by bar. Do not waste 3 min —
+            # decide by window now.
+            break
+        if attempt < BAR_MATCH_MAX_TRIES:
+            print(f"  [BAR-MATCH] try {attempt}: slate bar {bar.isoformat()} < "
+                  f"expected {expected.isoformat()} — waiting {BAR_MATCH_SLEEP_SECONDS}s")
+            _sleep(BAR_MATCH_SLEEP_SECONDS)
+    # Timed out (or unverifiable). Decide by whether P1 was supposed to run.
+    if p1_active_now(ist_now):
+        return "warn", f"expected bar {expected.isoformat()} never arrived within P1 window"
+    return "silent", f"P1 not scheduled at {ist_now.strftime('%H:%M')} IST — no fresh bar expected"
+
 
 def check_p1_freshness(ist_now):
     """
@@ -2357,15 +2465,40 @@ if __name__ == "__main__":
     scan_start_ts = ist_now  # Captured at scan start; separate from per-alert send time.
     print(f"Phase 2 Engine started {ist_now.strftime('%H:%M')} IST")
 
-    # --- Phase 1 freshness gate -----------------------------------------
-    # Phase 2 must NEVER alert on stale Phase 1 data. If P1 hasn't refreshed
-    # active_obs.json within the freshness window during market hours, we
-    # send one warning email and exit. The flag self-clears on recovery.
+    import sys
+
+    # --- Bar-match gate (PRIMARY freshness test) ------------------------
+    # Wait (bounded) until the slate on disk is the one P1 built from THIS hour's
+    # just-closed H1 bar, pulling from origin between tries. This is what stops
+    # the 1-hour-late alert: P2 no longer scans the previous hour's slate just
+    # because it checked out before P1's fresh push landed.
+    #   run    -> fresh slate present; proceed to scan.
+    #   warn   -> P1 was scheduled but its fresh slate never arrived -> P1 is
+    #             down: send the one-shot stale warning (never a stale trade).
+    #   silent -> P1 not scheduled now (late-night straggler, pre-09:00, weekend)
+    #             -> the bar was never coming; exit with NO email. This kills the
+    #             unwanted 00:xx email and the stale first-of-morning alert.
+    verdict, verdict_reason = wait_for_matching_slate(ist_now)
+    print(f"  [BAR-MATCH] verdict={verdict} ({verdict_reason})")
+    if verdict == "silent":
+        print("  [BAR-MATCH] P1 not scheduled — exiting silent (no stale alert).")
+        sys.exit(0)
+    if verdict == "warn":
+        emit_p1_stale_alert(ist_now, f"bar_mismatch: {verdict_reason}")
+        sys.exit(0)
+    # verdict == "run" -> ist_now may be a few minutes older than the real clock
+    # after waiting; that is fine (send times are captured per-alert later).
+
+    # --- Phase 1 freshness gate (age backstop) --------------------------
+    # Kept as a second line of defence for edge cases the bar-match gate can't
+    # see (e.g. legacy slate with no slate_bar_ts that still slipped through as
+    # "run"). If P1 hasn't refreshed active_obs.json within the age window during
+    # market hours, send one warning email and exit. The flag self-clears on
+    # recovery.
     is_fresh, fresh_reason = check_p1_freshness(ist_now)
     if not is_fresh:
         print(f"  [STALE GATE] Refusing to scan — {fresh_reason}")
         emit_p1_stale_alert(ist_now, fresh_reason)
-        import sys
         sys.exit(0)
     else:
         clear_p1_stale_flag()

@@ -4933,6 +4933,28 @@ def run_radar():
     # Single fsync, single rotation check. File path = current month.
     _write_phase1_scan_records(phase1_scan_records, ist_now)
 
+    # Stamp the just-closed H1 bar this scan ran on, so Phase 2 can verify it is
+    # scanning THIS hour's slate (not the previous hour's still-committed file).
+    # P1 and P2 are independent cron jobs ~1 min apart; P2 checks out the repo
+    # before P1's fresh push lands, so an age-only freshness test lets a stale
+    # slate through. slate_bar_ts is the per-scan identity P2 matches against.
+    # Value = the newest CLOSED H1 bar across the pairs that fetched fresh data
+    # this scan (max, so a lagging pair cannot under-stamp). ISO-UTC string; None
+    # only if no pair returned data (P2 then falls back to its age/window logic).
+    _slate_bar_ts = None
+    for _df in pair_dfs.values():
+        _closed = drop_forming_bar(_df)
+        if _closed is None or 'Datetime' not in getattr(_closed, 'columns', []) or len(_closed) == 0:
+            continue
+        _bar = _closed['Datetime'].iloc[-1]
+        try:
+            _bar_iso = _bar.tz_convert('UTC').isoformat()
+        except (AttributeError, TypeError):
+            _bar_iso = str(_bar)
+        if _slate_bar_ts is None or _bar_iso > _slate_bar_ts:
+            _slate_bar_ts = _bar_iso
+    slate["slate_bar_ts"] = _slate_bar_ts
+
     # Persist slate. Zones accumulate across days; only invalidation drops them.
     # slate_date is updated on day rollover (for Phase 2 freshness gate) without
     # wiping zones.
