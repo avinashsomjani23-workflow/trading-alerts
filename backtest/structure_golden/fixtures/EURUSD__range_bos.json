@@ -11,10 +11,10 @@
     "state": "down",
     "flip_unconfirmed": false,
     "n_events": 20,
-    "n_choch": 4,
+    "n_choch": 5,
     "n_range_bos": 1,
-    "n_plain_bos": 12,
-    "n_confirm_bos": 0
+    "n_plain_bos": 9,
+    "n_confirm_bos": 1
   },
   "decimals": 5,
   "input_rows": [
@@ -4840,19 +4840,51 @@
     "events": [
       {
         "type": "BOS",
-        "tier": "BOS",
+        "tier": "Confirm",
         "direction": "bearish",
-        "candle_ts": "2016-11-08T17:00:00+00:00",
-        "confirm_ts": "2016-11-08T18:00:00+00:00",
-        "impulse_start_ts": "2016-11-08T08:00:00+00:00",
-        "broken_swing_price": 1.10295,
-        "broken_swing_ts": "2016-11-08T02:00:00+00:00",
+        "candle_ts": "2016-11-07T15:00:00+00:00",
+        "confirm_ts": "2016-11-07T15:00:00+00:00",
+        "impulse_start_ts": "2016-11-04T12:00:00+00:00",
+        "broken_swing_price": 1.10479,
+        "broken_swing_ts": "2016-11-07T09:00:00+00:00",
         "broken_was_wall": false,
         "reversal_pct": 0.0,
         "trend_after": "bearish",
         "chop": false,
-        "break_body_atr": 0.64,
-        "event_candle_delta": 1
+        "break_body_atr": 0.79,
+        "event_candle_delta": 0
+      },
+      {
+        "type": "CHoCH",
+        "tier": "CHoCH",
+        "direction": "bullish",
+        "candle_ts": "2016-11-08T07:00:00+00:00",
+        "confirm_ts": "2016-11-08T07:00:00+00:00",
+        "impulse_start_ts": "2016-11-07T23:00:00+00:00",
+        "broken_swing_price": 1.10493,
+        "broken_swing_ts": "2016-11-07T23:00:00+00:00",
+        "broken_was_wall": false,
+        "reversal_pct": 0.0,
+        "trend_after": "bullish",
+        "chop": false,
+        "break_body_atr": 0.52,
+        "event_candle_delta": 0
+      },
+      {
+        "type": "CHoCH_FAILED",
+        "tier": "CHoCH_FAILED",
+        "direction": "bearish",
+        "candle_ts": "2016-11-08T17:00:00+00:00",
+        "confirm_ts": null,
+        "impulse_start_ts": "2016-11-08T08:00:00+00:00",
+        "broken_swing_price": 1.10493,
+        "broken_swing_ts": null,
+        "broken_was_wall": false,
+        "reversal_pct": 0.0,
+        "trend_after": "bearish",
+        "chop": false,
+        "break_body_atr": 0.57,
+        "event_candle_delta": null
       },
       {
         "type": "BOS",
@@ -4901,22 +4933,6 @@
         "chop": false,
         "break_body_atr": 2.78,
         "event_candle_delta": null
-      },
-      {
-        "type": "BOS",
-        "tier": "BOS",
-        "direction": "bearish",
-        "candle_ts": "2016-11-09T14:00:00+00:00",
-        "confirm_ts": "2016-11-09T15:00:00+00:00",
-        "impulse_start_ts": "2016-11-09T05:00:00+00:00",
-        "broken_swing_price": 1.09892,
-        "broken_swing_ts": "2016-11-09T01:00:00+00:00",
-        "broken_was_wall": false,
-        "reversal_pct": 0.0,
-        "trend_after": "bearish",
-        "chop": false,
-        "break_body_atr": 0.12,
-        "event_candle_delta": 1
       },
       {
         "type": "BOS",
@@ -5077,22 +5093,6 @@
         "chop": false,
         "break_body_atr": 0.85,
         "event_candle_delta": null
-      },
-      {
-        "type": "BOS",
-        "tier": "BOS",
-        "direction": "bearish",
-        "candle_ts": "2016-11-17T15:00:00+00:00",
-        "confirm_ts": "2016-11-17T16:00:00+00:00",
-        "impulse_start_ts": "2016-11-17T01:00:00+00:00",
-        "broken_swing_price": 1.06827,
-        "broken_swing_ts": "2016-11-17T06:00:00+00:00",
-        "broken_was_wall": false,
-        "reversal_pct": 0.0,
-        "trend_after": "bearish",
-        "chop": false,
-        "break_body_atr": 0.94,
-        "event_candle_delta": 1
       },
       {
         "type": "BOS",

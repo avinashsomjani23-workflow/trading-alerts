@@ -13,7 +13,7 @@
     "n_events": 20,
     "n_choch": 8,
     "n_range_bos": 2,
-    "n_plain_bos": 6,
+    "n_plain_bos": 5,
     "n_confirm_bos": 4
   },
   "decimals": 3,
@@ -4840,20 +4840,20 @@
     "label": "H1 trend UP",
     "events": [
       {
-        "type": "BOS",
-        "tier": "BOS",
+        "type": "CHoCH_FAILED",
+        "tier": "CHoCH_FAILED",
         "direction": "bullish",
         "candle_ts": "2008-01-28T13:00:00+00:00",
-        "confirm_ts": "2008-01-28T14:00:00+00:00",
+        "confirm_ts": null,
         "impulse_start_ts": "2008-01-28T06:00:00+00:00",
-        "broken_swing_price": 106.69,
-        "broken_swing_ts": "2008-01-28T09:00:00+00:00",
+        "broken_swing_price": 106.61,
+        "broken_swing_ts": null,
         "broken_was_wall": false,
         "reversal_pct": 0.0,
         "trend_after": "bullish",
         "chop": false,
-        "break_body_atr": 1.04,
-        "event_candle_delta": 1
+        "break_body_atr": 2.15,
+        "event_candle_delta": null
       },
       {
         "type": "BOS",

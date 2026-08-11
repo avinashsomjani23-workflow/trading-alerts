@@ -251,6 +251,47 @@ def test_single_implementation_of_trend_alignment():
         _bad(f"single-impl guard — calls_ok={calls_ok}, no_old_vocab={no_old_vocab}")
 
 
+def test_no_spent_swing_break_in_golden_fixtures():
+    """Spent-swing guard (dealing_range._already_broken): NO CHoCH/BOS in any
+    committed golden fixture may (a) break a swing already broken by an earlier
+    event [re-fire] or (b) break a level a prior candle already BODY-closed
+    through [spent]. Locks out the bug proven live on EURUSD 2026-08-10 (two
+    CHoCHs fired on the same 1.15558 low). Data-driven over real windows, so a
+    regen with buggy code re-introduces a violation and turns this red."""
+    import glob
+    import json as _json
+    fdir = _ROOT / "backtest" / "structure_golden" / "fixtures"
+    refires = spent = 0
+    for p in sorted(glob.glob(str(fdir / "*.json"))):
+        with open(p, encoding="utf-8") as fh:
+            fx = _json.load(fh)
+        rows = fx["input_rows"]
+        idx = {r["ts"]: i for i, r in enumerate(rows)}
+        C = [r["Close"] for r in rows]
+        seen = {}
+        for e in fx["golden_output"].get("events", []):
+            if e.get("type") not in ("CHoCH", "BOS"):
+                continue
+            st = e.get("broken_swing_ts")
+            seen[st] = seen.get(st, 0) + 1
+            P = e.get("broken_swing_price")
+            bi = idx.get(e.get("candle_ts"))
+            si = idx.get(st)
+            if P is None or bi is None or si is None or si + 1 >= bi:
+                continue
+            seg = C[si + 1:bi]
+            if e["direction"] == "bearish" and any(x < P for x in seg):
+                spent += 1
+            elif e["direction"] == "bullish" and any(x > P for x in seg):
+                spent += 1
+        refires += sum(1 for k, v in seen.items() if k and v > 1)
+    if refires == 0 and spent == 0:
+        _ok("no re-fire / no spent break across all golden fixtures")
+    else:
+        _bad(f"spent-swing guard breached: {refires} re-fire(s), {spent} "
+             f"spent-break(s) — a break fired on an already-broken swing")
+
+
 def main():
     print("== S2/S3: alert-time payload freeze ==")
     test_s2_state_frozen_from_first_fire_payload()
@@ -264,6 +305,8 @@ def main():
     test_trend_alignment_branch_table()
     test_trend_alignment_matches_live_phase2_branches()
     test_single_implementation_of_trend_alignment()
+    print("\n== spent-swing guard (no break on an already-broken swing) ==")
+    test_no_spent_swing_break_in_golden_fixtures()
     print()
     if _FAILS:
         print(f"FAILED: {len(_FAILS)} problem(s)")

@@ -1000,6 +1000,29 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
     # reclaim — so this knob is now inert (no lock distance is computed/used).
     _ = lock_atr_mult  # intentionally unused (see note)
 
+    def _already_broken(level: Optional[float], side: str,
+                        since_idx: Optional[int], before_idx: int) -> bool:
+        """True if the swing at `level` was ALREADY body-closed through between its
+        formation (`since_idx`, exclusive) and `before_idx` (exclusive) — a PRIOR,
+        separate break already spent it. Guards every CHoCH/BOS fire so a swing
+        whose structure was already taken can NEVER fire a second break (SMC: a
+        spent swing is not a fresh change of character; live proof EURUSD
+        2026-08-10 fired two CHoCHs on the same 1.15558 low). BODY CLOSE ONLY — a
+        bare wick is a sweep, not a structural break, so sweep-then-break setups
+        are untouched. `side`='down' -> a close BELOW level; 'up' -> ABOVE.
+        `before_idx` (the current candle) is EXCLUDED, so the FIRST legitimate
+        break is never suppressed — only the 2nd+ on the same swing."""
+        if level is None or since_idx is None:
+            return False
+        lo = int(since_idx) + 1
+        hi = int(before_idx)
+        if lo >= hi:
+            return False
+        seg = closes[lo:hi]
+        if side == 'down':
+            return bool((seg < level).any())
+        return bool((seg > level).any())
+
     for ci in range(n):
         c    = closes[ci]
         hi_i = float(H[ci])
@@ -1043,7 +1066,9 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     continue
                 elif (confirm_break_swing is not None
                       and c > confirm_break_swing["price"]
-                      and _traded_through(ci, confirm_break_swing["price"], 'up')):
+                      and _traded_through(ci, confirm_break_swing["price"], 'up')
+                      and not _already_broken(confirm_break_swing["price"], 'up',
+                                              confirm_break_swing.get("idx"), ci)):
                     # CONFIRMATION BOS up — the CHoCH-up is confirmed. Flip to UP
                     # now and seed the new (up) trend exactly as the old CHoCH flip
                     # did. Emit a Confirmation BOS (type BOS, tier 'Confirm') that
@@ -1099,7 +1124,9 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
                     continue
                 elif (confirm_break_swing is not None
                       and c < confirm_break_swing["price"]
-                      and _traded_through(ci, confirm_break_swing["price"], 'down')):
+                      and _traded_through(ci, confirm_break_swing["price"], 'down')
+                      and not _already_broken(confirm_break_swing["price"], 'down',
+                                              confirm_break_swing.get("idx"), ci)):
                     # CONFIRMATION BOS down — the CHoCH-down is confirmed. Flip to
                     # DOWN now and seed the new (down) trend. Emit a Confirmation
                     # BOS that breaks the post-CHoCH swing low.
@@ -1145,7 +1172,12 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             # Gap guard via _traded_through: a down-break of defended only counts
             # if price actually traded through it (continuous candle), not a
             # weekend teleport across it.
-            if c < defended and _traded_through(ci, defended, 'down'):
+            # Spent-swing guard: a `defended` low a prior candle already closed
+            # below is spent — not a fresh CHoCH. since_idx = the swing's own
+            # formation (leg_start for a raw leg-extreme defended).
+            _def_since = defended_swing["idx"] if defended_swing else leg_start
+            if c < defended and _traded_through(ci, defended, 'down') \
+                    and not _already_broken(defended, 'down', _def_since, ci):
                 rev_idx = recent_high["idx"] if recent_high else leg_start
                 choch = True
                 # True break candle. With the distance buffer removed (choch_disp=0)
@@ -1181,7 +1213,10 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             # Gap guard via _traded_through: an up-break of defended only counts
             # if price actually traded through it (continuous candle), not a
             # weekend teleport across it.
-            if c > defended and _traded_through(ci, defended, 'up'):
+            # Spent-swing guard (symmetric to the bearish arm above).
+            _def_since = defended_swing["idx"] if defended_swing else leg_start
+            if c > defended and _traded_through(ci, defended, 'up') \
+                    and not _already_broken(defended, 'up', _def_since, ci):
                 rev_idx = recent_low["idx"] if recent_low else leg_start
                 choch = True
                 # True break candle. Buffer removed (choch_disp=0) -> buffer IS
@@ -1228,7 +1263,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             broken_price = bos_break_low["price"]
             # Gap guard via _traded_through: a down-break only counts if price
             # traded through the level (continuous candle), not a weekend gap.
-            if c < broken_price and _traded_through(ci, broken_price, 'down'):
+            if c < broken_price and _traded_through(ci, broken_price, 'down') \
+                    and not _already_broken(broken_price, 'down', bos_break_low.get("idx"), ci):
                 _tbi = _true_break_idx(ci, broken_price, "bearish", leg_start, bos_disp)
                 ts_now = _ts_iso(df, _tbi)
                 bos_tier = ("Range" if h4_floor is not None
@@ -1255,7 +1291,8 @@ def compute_structure(df, h4_range: Optional[Dict[str, Any]],
             broken_price = bos_break_high["price"]
             # Gap guard via _traded_through: an up-break only counts if price
             # traded through the level (continuous candle), not a weekend gap.
-            if c > broken_price and _traded_through(ci, broken_price, 'up'):
+            if c > broken_price and _traded_through(ci, broken_price, 'up') \
+                    and not _already_broken(broken_price, 'up', bos_break_high.get("idx"), ci):
                 _tbi = _true_break_idx(ci, broken_price, "bullish", leg_start, bos_disp)
                 ts_now = _ts_iso(df, _tbi)
                 bos_tier = ("Range" if h4_ceiling is not None
