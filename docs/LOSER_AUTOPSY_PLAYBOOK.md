@@ -67,22 +67,23 @@ Two favourable-excursion measures exist. Picking the wrong one silently corrupts
 
 | column | measures | USE IT FOR | NEVER use it for |
 |---|---|---|---|
-| **`mfe_intrade_r`** (in-trade; ADD, see MFE_FIX_PLAN) | best favourable move **fill → stop only** (post-stop bars truncated) | the **loser autopsy** — "did this loser ever look good before it died?" (buckets 1–4) | — |
+| **`mfe_intrade_r`** (in-trade; SHIPPED 2026-08-02 in commit `c555fa71`, canonical col 150) | best favourable move **fill → stop only** (post-stop bars truncated) | the **loser autopsy** — "did this loser ever look good before it died?" (buckets 1–4) | — |
 | **`mfe_r`** (full-window) | best favourable move over the **whole 48-bar window**, incl. *after* the trade already exited | the **winner** study — "how far past +2R does a winner run?" (target-distance / exit research) | **the loser autopsy** — it keeps running after the stop, so ~67% of losers "peak" after they are already dead. Splitting losers on `mfe_r` mislabels dead-on-arrival trades as "had profit." |
 
 **Rule of thumb:** loser question → `mfe_intrade_r`. Winner run-past-target question → `mfe_r`.
-If `mfe_intrade_r` does not yet exist in the run, the loser autopsy's MFE-dependent buckets
-(3/4) are **not yet answerable** — do NOT substitute `mfe_r`; use the MFE-free piles below.
+`mfe_intrade_r` now EXISTS in the canonical run, so the MFE-dependent buckets (3/4) are
+answerable — never substitute `mfe_r` for it.
 
 ### ⚠️ MFE dependency — current status
 Buckets 1–4 need a clean **in-trade** MFE (favourable move *before* the stop). The raw
 `mfe_r` column is a FULL-WINDOW measure that keeps running *after* the stop, so it is
-**contaminated for losers** (a large fraction peak after death). Until the in-trade MFE
-fix ships (`docs/MFE_FIX_PLAN.md`):
+**contaminated for losers** (a large fraction peak after death). The in-trade MFE fix has
+**SHIPPED** (2026-08-02, commit `c555fa71`, `docs/MFE_FIX_PLAN.md`) — `mfe_intrade_r` is
+canonical col 150 in the 184-column run:
 - **Trustworthy now:** *Instant death* / *Slow bleed* via `bars_to_exit`; *Stop-hunt*
   via strict `sl_swept_then_1r` / `sl_swept_then_2r` + `sl_bar_was_sweep`.
-- **Pending the fix:** *Weak reaction* vs *Real give-back* (both need in-trade MFE to
-  separate cleanly).
+- **Now also answerable:** *Weak reaction* vs *Real give-back* — split them on
+  `mfe_intrade_r` (fill→stop favourable move), never on the contaminated `mfe_r`.
 
 ---
 

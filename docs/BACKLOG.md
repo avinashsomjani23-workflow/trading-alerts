@@ -285,3 +285,18 @@ methodology wastes effort.
 **Evidence required to call it a success:** ≥60% mechanical win rate over
 6 months of historical data, OR a clearly explainable failure mode that
 points at a fixable methodology issue.
+
+---
+
+## 2026-08-06 — Future to-do list started (parked ideas & knowledge)
+
+A running list of things we are NOT building now but want ready for later, each with
+a Trigger saying when to open it. First entry (Item 1) is the CTA / trend-following
+concept notes — what a CTA is and their recipe — kept ready for the day we build a
+momentum / continuation entry, a volatility-based position-sizing layer, or a
+"let winners run" trailing exit. Includes the key honesty note that their PROOF is
+slow (weeks–months) and diversified, so it does NOT transfer to our fast intraday
+system without re-proving.
+
+**Full list:** `docs/FUTURE_TODO_LIST.md` (append new items there).
+**Open an item when:** its own Trigger line fires. Until then, parked.
