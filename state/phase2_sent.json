@@ -3307,7 +3307,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-07T13:36:00.939387",
-      "last_seen_ist": "2026-08-11T13:36:00.036370",
+      "last_seen_ist": "2026-08-11T14:35:54.187255",
       "last_email_day": "2026-08-11",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4196,7 +4196,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-10T21:36:08.239951",
-      "last_seen_ist": "2026-08-11T13:36:00.036370",
+      "last_seen_ist": "2026-08-11T14:35:54.187255",
       "last_email_day": "2026-08-11",
       "still_valid_count": 1,
       "reentry_armed": true,
@@ -4323,7 +4323,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-10T23:36:04.631831",
-      "last_seen_ist": "2026-08-11T13:36:00.036370",
+      "last_seen_ist": "2026-08-11T14:35:54.187255",
       "last_email_day": "2026-08-10",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4450,7 +4450,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-11T00:36:07.118451",
-      "last_seen_ist": "2026-08-11T13:36:00.036370",
+      "last_seen_ist": "2026-08-11T14:35:54.187255",
       "last_email_day": "2026-08-11",
       "still_valid_count": 1,
       "reentry_armed": false,
@@ -4577,11 +4577,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-11T09:36:01.773528",
-      "last_seen_ist": "2026-08-11T13:36:00.036370",
+      "last_seen_ist": "2026-08-11T14:35:54.187255",
       "last_email_day": "2026-08-11",
       "still_valid_count": 0,
-      "reentry_armed": false,
-      "max_exit_distance": 0.438430000000011,
+      "reentry_armed": true,
+      "max_exit_distance": 0.45555000000001655,
       "bias": "LONG",
       "pair": "USDJPY",
       "ob_snapshot": {
@@ -4721,7 +4721,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-11T13:36:00.036370",
-      "last_seen_ist": "2026-08-11T13:36:00.036370",
+      "last_seen_ist": "2026-08-11T14:35:54.187255",
       "last_email_day": "2026-08-11",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4838,7 +4838,7 @@
     "USDJPY_LONG_BOS_159.31_2026-08-11T03": {
       "score_int": 5,
       "score_raw": 5.0,
-      "score_high_water": 5.0,
+      "score_high_water": 7.0,
       "score_low_water": 5.0,
       "breakdown": {
         "structure": 3,
@@ -4848,7 +4848,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-11T13:36:00.036370",
-      "last_seen_ist": "2026-08-11T13:36:00.036370",
+      "last_seen_ist": "2026-08-11T14:35:54.187255",
       "last_email_day": "2026-08-11",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4975,7 +4975,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-11T13:36:00.036370",
-      "last_seen_ist": "2026-08-11T13:36:00.036370",
+      "last_seen_ist": "2026-08-11T14:35:54.187255",
       "last_email_day": "2026-08-11",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -5102,7 +5102,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-11T13:36:00.036370",
-      "last_seen_ist": "2026-08-11T13:36:00.036370",
+      "last_seen_ist": "2026-08-11T14:35:54.187255",
       "last_email_day": "2026-08-11",
       "still_valid_count": 0,
       "reentry_armed": false,
