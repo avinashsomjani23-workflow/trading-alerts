@@ -9,135 +9,135 @@
     "pairs": [
       "EURUSD"
     ],
-    "generated_utc": "2026-08-02T11:18:27.523793+00:00",
-    "code_sha": "c555fa7-dirty",
+    "generated_utc": "2026-08-11T08:02:19.743224+00:00",
+    "code_sha": "21d272a-dirty",
     "news_coverage": {
       "ff": false
     },
     "news_events_fetched": 0,
     "news_blocked_rows": 0,
     "news_window_minutes": 30,
-    "ist_blocked_rows": 945,
+    "ist_blocked_rows": 856,
     "ist_window_forex": "UTC 03:30-18:30 (IST 09:00-24:00)",
     "ist_window_index": "UTC 03:30-18:30 (IST 09:00-24:00)",
-    "killzone_dropped_alerts": 2397,
+    "killzone_dropped_alerts": 2172,
     "killzone_drops_by_pair": {
-      "EURUSD": 2397
+      "EURUSD": 2172
     },
     "killzone_windows_by_pair": {
       "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
     }
   },
   "risk_per_trade_usd": 250.0,
-  "total_trade_rows": 3322,
+  "total_trade_rows": 3041,
   "fill_rate_proximal": {
-    "alerts": 3322,
-    "filled": 2221,
-    "fill_rate_pct": 66.9
+    "alerts": 3041,
+    "filled": 2048,
+    "fill_rate_pct": 67.3
   },
   "exit_reason_counts_proximal": {
-    "sl": 1512,
-    "tp": 641,
-    "never_filled": 1094,
-    "timeout": 7,
-    "friday_flat": 68
+    "sl": 1401,
+    "tp": 589,
+    "never_filled": 988,
+    "timeout": 5,
+    "friday_flat": 58
   },
   "scoreboards": {
     "proximal_realised": {
-      "trades": 2221,
-      "wins": 690,
-      "losses": 1531,
+      "trades": 2048,
+      "wins": 634,
+      "losses": 1414,
       "breakevens": 0,
-      "win_rate_pct": 31.1,
-      "expectancy_r": -0.093,
-      "expectancy_usd": -23.23,
-      "total_r": -206.39,
-      "total_pnl_usd": -51597.5,
-      "avg_win_r": 1.899,
-      "avg_loss_r": -0.991,
-      "avg_win_usd": 475.0,
+      "win_rate_pct": 31.0,
+      "expectancy_r": -0.098,
+      "expectancy_usd": -24.56,
+      "total_r": -201.174,
+      "total_pnl_usd": -50293.5,
+      "avg_win_r": 1.897,
+      "avg_loss_r": -0.993,
+      "avg_win_usd": 474.0,
       "avg_loss_usd": -248.0,
-      "avg_mfe_r": 6.021,
-      "avg_mae_r": -0.637,
-      "win_capture_pct": 32.0
+      "avg_mfe_r": 6.078,
+      "avg_mae_r": -0.629,
+      "win_capture_pct": 31.0
     }
   },
   "per_pair_proximal_realised": [
     {
       "pair": "EURUSD",
-      "trades": 2221,
-      "win_rate_pct": 31.1,
-      "expectancy_r": -0.093,
-      "total_pnl_usd": -51597.5,
+      "trades": 2048,
+      "win_rate_pct": 31.0,
+      "expectancy_r": -0.098,
+      "total_pnl_usd": -50293.5,
       "verdict": "loser"
     }
   ],
   "per_session_proximal_realised": [
     {
       "session": "Asia",
-      "trades": 217,
+      "trades": 204,
       "win_rate_pct": 30.4,
       "expectancy_r": -0.088,
-      "total_pnl_usd": -4750.0
+      "total_pnl_usd": -4500.0
     },
     {
       "session": "London",
-      "trades": 1027,
-      "win_rate_pct": 30.9,
-      "expectancy_r": -0.095,
-      "total_pnl_usd": -24409.25
+      "trades": 971,
+      "win_rate_pct": 30.0,
+      "expectancy_r": -0.121,
+      "total_pnl_usd": -29452.5
     },
     {
       "session": "NY",
-      "trades": 977,
-      "win_rate_pct": 31.4,
-      "expectancy_r": -0.092,
-      "total_pnl_usd": -22438.25
+      "trades": 873,
+      "win_rate_pct": 32.2,
+      "expectancy_r": -0.075,
+      "total_pnl_usd": -16341.0
     }
   ],
   "score_buckets_proximal_realised": [
     {
       "score_bucket": "2-3",
-      "trades": 3,
-      "win_rate_pct": 33.3,
-      "expectancy_r": 0.0
+      "trades": 4,
+      "win_rate_pct": 50.0,
+      "expectancy_r": 0.5
     },
     {
       "score_bucket": "3-4",
-      "trades": 36,
-      "win_rate_pct": 19.4,
-      "expectancy_r": -0.467
+      "trades": 41,
+      "win_rate_pct": 22.0,
+      "expectancy_r": -0.385
     },
     {
       "score_bucket": "4-5",
-      "trades": 81,
-      "win_rate_pct": 33.3,
-      "expectancy_r": -0.011
+      "trades": 77,
+      "win_rate_pct": 36.4,
+      "expectancy_r": 0.071
     },
     {
       "score_bucket": "5-6",
-      "trades": 385,
-      "win_rate_pct": 25.7,
-      "expectancy_r": -0.237
+      "trades": 367,
+      "win_rate_pct": 25.6,
+      "expectancy_r": -0.245
     },
     {
       "score_bucket": "6-7",
-      "trades": 617,
+      "trades": 570,
       "win_rate_pct": 31.9,
-      "expectancy_r": -0.07
+      "expectancy_r": -0.071
     },
     {
       "score_bucket": "7+",
-      "trades": 1099,
-      "win_rate_pct": 32.7,
-      "expectancy_r": -0.049
+      "trades": 989,
+      "win_rate_pct": 32.3,
+      "expectancy_r": -0.063
     }
   ],
   "news_blocked_trade_rows": 0,
   "news_blocked_audit": [],
-  "killzone_dropped_alerts": 2397,
+  "killzone_dropped_alerts": 2172,
   "killzone_drops_by_pair": {
-    "EURUSD": 2397
+    "EURUSD": 2172
   },
   "killzone_windows_by_pair": {
     "EURUSD": "London Open: 02:00-05:00 America/New_York, New York (forex): 07:00-10:00 America/New_York, London Close: 10:00-12:00 America/New_York"
@@ -145,28 +145,14 @@
   "score_floor": 4.0,
   "below_score_floor_trade_rows": 0,
   "below_score_floor_audit": [],
-  "ist_blocked_trade_rows": 945,
+  "ist_blocked_trade_rows": 856,
   "ist_blocked_audit": [
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2008-01-14T02:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
-    },
     {
       "pair": "EURUSD",
       "alert_ts": "2008-01-15T22:00:00+00:00",
       "score": 9.0,
       "exit_reason": "never_filled",
       "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2008-01-21T01:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -240,13 +226,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-02-28T23:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2008-03-05T19:00:00+00:00",
       "score": 8.0,
       "exit_reason": "never_filled",
@@ -268,13 +247,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-03-17T01:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2008-03-18T19:00:00+00:00",
       "score": 5.0,
       "exit_reason": "tp",
@@ -282,22 +254,8 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-03-18T20:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2008-03-21T01:00:00+00:00",
       "score": 3.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2008-03-24T01:00:00+00:00",
-      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -324,17 +282,10 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-03-31T22:00:00+00:00",
+      "alert_ts": "2008-03-31T19:00:00+00:00",
       "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2008-04-02T20:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
+      "exit_reason": "tp",
+      "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
@@ -352,20 +303,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-04-08T02:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2008-04-14T00:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2008-04-14T19:00:00+00:00",
       "score": 8.0,
       "exit_reason": "never_filled",
@@ -373,8 +310,8 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-04-16T01:00:00+00:00",
-      "score": 9.0,
+      "alert_ts": "2008-04-21T22:00:00+00:00",
+      "score": 7.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -389,13 +326,6 @@
       "pair": "EURUSD",
       "alert_ts": "2008-04-29T01:00:00+00:00",
       "score": 5.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2008-05-06T02:00:00+00:00",
-      "score": 8.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -437,13 +367,6 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2008-06-03T02:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2008-06-05T03:00:00+00:00",
       "score": 8.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
@@ -492,6 +415,13 @@
     },
     {
       "pair": "EURUSD",
+      "alert_ts": "2008-07-04T03:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
       "alert_ts": "2008-07-07T01:00:00+00:00",
       "score": 7.0,
       "exit_reason": "never_filled",
@@ -528,7 +458,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2008-07-17T19:00:00+00:00",
-      "score": 7.0,
+      "score": 8.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -541,13 +471,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-07-21T21:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2008-07-30T03:00:00+00:00",
       "score": 5.0,
       "exit_reason": "sl",
@@ -555,24 +478,10 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-08-05T02:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2008-08-08T01:00:00+00:00",
       "score": 7.0,
       "exit_reason": "never_filled",
       "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2008-08-11T00:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -674,13 +583,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-09-14T23:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2008-09-15T03:00:00+00:00",
       "score": 8.0,
       "exit_reason": "never_filled",
@@ -702,14 +604,7 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-09-17T19:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2008-09-17T19:00:00+00:00",
+      "alert_ts": "2008-09-17T20:00:00+00:00",
       "score": 8.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
@@ -723,20 +618,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-09-24T21:00:00+00:00",
-      "score": 9.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2008-09-29T00:00:00+00:00",
-      "score": 3.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2008-09-30T03:00:00+00:00",
       "score": 3.0,
       "exit_reason": "sl",
@@ -745,9 +626,23 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2008-10-02T01:00:00+00:00",
-      "score": 5.0,
+      "score": 8.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2008-10-03T02:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "tp",
+      "would_have_r": 2.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2008-10-12T23:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -821,17 +716,10 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-11-06T23:00:00+00:00",
-      "score": 5.0,
+      "alert_ts": "2008-11-07T00:00:00+00:00",
+      "score": 3.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2008-11-10T01:00:00+00:00",
-      "score": 4.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -867,13 +755,6 @@
       "score": 6.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2008-11-13T21:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -947,15 +828,8 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2008-12-29T03:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2008-12-29T21:00:00+00:00",
-      "score": 6.0,
+      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -997,21 +871,21 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2009-01-19T21:00:00+00:00",
-      "score": 8.0,
+      "score": 9.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2009-01-21T21:00:00+00:00",
-      "score": 8.0,
+      "score": 9.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2009-01-23T19:00:00+00:00",
-      "score": 8.0,
+      "score": 9.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -1052,13 +926,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2009-02-02T01:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2009-02-05T01:00:00+00:00",
       "score": 7.0,
       "exit_reason": "sl",
@@ -1094,13 +961,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2009-02-16T02:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2009-02-17T02:00:00+00:00",
       "score": 7.0,
       "exit_reason": "never_filled",
@@ -1112,13 +972,6 @@
       "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2009-02-23T02:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -1140,13 +993,6 @@
       "score": 4.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2009-03-18T00:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
@@ -1173,13 +1019,6 @@
       "pair": "EURUSD",
       "alert_ts": "2009-03-29T23:00:00+00:00",
       "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2009-04-01T02:00:00+00:00",
-      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -1266,13 +1105,6 @@
       "score": 7.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2009-05-04T20:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
@@ -1374,6 +1206,13 @@
     },
     {
       "pair": "EURUSD",
+      "alert_ts": "2009-06-25T01:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "friday_flat",
+      "would_have_r": 0.056
+    },
+    {
+      "pair": "EURUSD",
       "alert_ts": "2009-06-26T01:00:00+00:00",
       "score": 5.0,
       "exit_reason": "tp",
@@ -1413,13 +1252,6 @@
       "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2009-07-08T01:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
@@ -1563,13 +1395,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2009-09-15T19:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2009-09-22T02:00:00+00:00",
       "score": 7.0,
       "exit_reason": "never_filled",
@@ -1669,14 +1494,14 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2009-10-14T02:00:00+00:00",
-      "score": 7.0,
+      "score": 5.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2009-10-14T21:00:00+00:00",
-      "score": 5.0,
+      "score": 3.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -1724,13 +1549,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2009-11-03T01:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2009-11-11T01:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
@@ -1770,13 +1588,6 @@
       "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2009-11-30T01:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -1838,13 +1649,6 @@
       "pair": "EURUSD",
       "alert_ts": "2009-12-31T02:00:00+00:00",
       "score": 8.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2010-01-04T01:00:00+00:00",
-      "score": 9.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -1948,13 +1752,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2010-02-18T23:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2010-02-25T01:00:00+00:00",
       "score": 5.0,
       "exit_reason": "tp",
@@ -1997,13 +1794,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2010-03-08T01:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2010-03-12T00:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
@@ -2025,13 +1815,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2010-03-25T21:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2010-03-26T20:00:00+00:00",
       "score": 8.0,
       "exit_reason": "sl",
@@ -2039,10 +1822,10 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2010-03-29T00:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
+      "alert_ts": "2010-04-06T01:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -2069,13 +1852,6 @@
       "pair": "EURUSD",
       "alert_ts": "2010-04-14T01:00:00+00:00",
       "score": 6.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2010-04-19T02:00:00+00:00",
-      "score": 4.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
     },
@@ -2118,6 +1894,13 @@
       "pair": "EURUSD",
       "alert_ts": "2010-05-03T02:00:00+00:00",
       "score": 9.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2010-05-11T00:00:00+00:00",
+      "score": 8.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -2180,13 +1963,6 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2010-06-10T01:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2010-06-21T02:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
@@ -2284,23 +2060,9 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2010-07-19T00:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2010-07-21T19:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2010-07-23T19:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "timeout",
+      "score": 4.0,
+      "exit_reason": "never_filled",
       "would_have_r": null
     },
     {
@@ -2363,13 +2125,6 @@
       "pair": "EURUSD",
       "alert_ts": "2010-09-02T03:00:00+00:00",
       "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2010-09-03T01:00:00+00:00",
-      "score": 4.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -2438,13 +2193,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2010-10-14T02:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "friday_flat",
-      "would_have_r": -0.009
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2010-10-15T00:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
@@ -2481,7 +2229,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2010-10-25T01:00:00+00:00",
-      "score": 7.0,
+      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -2512,13 +2260,6 @@
       "score": 6.0,
       "exit_reason": "never_filled",
       "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2010-11-09T22:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
@@ -2564,13 +2305,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2010-11-22T01:00:00+00:00",
-      "score": 3.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2010-11-23T03:00:00+00:00",
       "score": 9.0,
       "exit_reason": "never_filled",
@@ -2578,22 +2312,8 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2010-11-29T00:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2010-12-02T19:00:00+00:00",
-      "score": 4.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2010-12-03T21:00:00+00:00",
-      "score": 6.0,
+      "score": 7.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -2610,13 +2330,6 @@
       "score": 8.0,
       "exit_reason": "never_filled",
       "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2010-12-07T22:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "friday_flat",
-      "would_have_r": 0.516
     },
     {
       "pair": "EURUSD",
@@ -2662,13 +2375,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2010-12-21T20:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2010-12-27T00:00:00+00:00",
       "score": 5.0,
       "exit_reason": "sl",
@@ -2684,21 +2390,21 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2010-12-30T01:00:00+00:00",
-      "score": 7.0,
+      "score": 6.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2010-12-31T02:00:00+00:00",
-      "score": 3.0,
+      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2011-01-03T01:00:00+00:00",
-      "score": 6.0,
+      "score": 7.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -2715,6 +2421,13 @@
       "score": 8.0,
       "exit_reason": "never_filled",
       "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2011-01-05T21:00:00+00:00",
+      "score": 3.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -2760,13 +2473,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2011-01-31T01:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2011-02-08T03:00:00+00:00",
       "score": 6.0,
       "exit_reason": "tp",
@@ -2790,20 +2496,6 @@
       "pair": "EURUSD",
       "alert_ts": "2011-02-15T02:00:00+00:00",
       "score": 8.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2011-02-17T02:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2011-02-18T00:00:00+00:00",
-      "score": 7.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -2900,13 +2592,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2011-04-08T03:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2011-04-12T01:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
@@ -2925,6 +2610,13 @@
       "score": 7.0,
       "exit_reason": "never_filled",
       "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2011-04-18T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "tp",
+      "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
@@ -3005,13 +2697,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2011-05-23T00:00:00+00:00",
-      "score": 9.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2011-05-25T01:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
@@ -3026,24 +2711,10 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2011-05-26T01:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2011-05-27T21:00:00+00:00",
       "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2011-05-31T00:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -3058,13 +2729,6 @@
       "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2011-06-01T20:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -3173,15 +2837,8 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2011-07-11T00:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2011-07-12T02:00:00+00:00",
-      "score": 5.0,
+      "score": 3.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -3265,14 +2922,21 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2011-08-02T01:00:00+00:00",
-      "score": 5.0,
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2011-08-02T23:00:00+00:00",
+      "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2011-08-03T22:00:00+00:00",
-      "score": 5.0,
+      "score": 7.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -3320,13 +2984,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2011-09-05T00:00:00+00:00",
-      "score": 3.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2011-09-15T01:00:00+00:00",
       "score": 8.0,
       "exit_reason": "tp",
@@ -3334,22 +2991,15 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2011-09-19T00:00:00+00:00",
-      "score": 6.0,
+      "alert_ts": "2011-09-21T20:00:00+00:00",
+      "score": 9.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2011-09-19T20:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2011-09-23T01:00:00+00:00",
-      "score": 8.0,
+      "score": 7.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -3383,7 +3033,7 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2011-10-26T19:00:00+00:00",
+      "alert_ts": "2011-10-26T23:00:00+00:00",
       "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
@@ -3413,20 +3063,6 @@
       "pair": "EURUSD",
       "alert_ts": "2011-11-23T02:00:00+00:00",
       "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2011-11-28T02:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2011-12-05T19:00:00+00:00",
-      "score": 8.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -3481,13 +3117,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2012-01-09T01:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2012-01-11T00:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
@@ -3497,20 +3126,6 @@
       "pair": "EURUSD",
       "alert_ts": "2012-01-17T02:00:00+00:00",
       "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2012-01-23T03:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2012-01-25T19:00:00+00:00",
-      "score": 10.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -3530,13 +3145,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2012-02-14T00:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2012-02-16T01:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
@@ -3544,24 +3152,10 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2012-02-20T01:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2012-02-21T00:00:00+00:00",
-      "score": 6.0,
+      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2012-02-21T03:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -3607,6 +3201,13 @@
     },
     {
       "pair": "EURUSD",
+      "alert_ts": "2012-04-04T02:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
       "alert_ts": "2012-04-05T01:00:00+00:00",
       "score": 6.0,
       "exit_reason": "tp",
@@ -3642,15 +3243,8 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2012-04-16T00:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2012-04-26T22:00:00+00:00",
-      "score": 8.0,
+      "score": 9.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -3684,31 +3278,10 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2012-05-14T00:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2012-05-18T20:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2012-05-21T02:00:00+00:00",
       "score": 9.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2012-05-21T20:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -3720,7 +3293,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2012-05-23T03:00:00+00:00",
-      "score": 9.0,
+      "score": 8.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -3740,10 +3313,10 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2012-06-01T19:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
+      "alert_ts": "2012-06-06T02:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -3775,13 +3348,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2012-06-18T00:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2012-06-20T19:00:00+00:00",
       "score": 7.0,
       "exit_reason": "tp",
@@ -3796,13 +3362,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2012-06-28T01:00:00+00:00",
-      "score": 4.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2012-06-29T03:00:00+00:00",
       "score": 6.0,
       "exit_reason": "never_filled",
@@ -3810,24 +3369,10 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2012-07-01T23:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2012-07-02T01:00:00+00:00",
       "score": 6.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2012-07-02T03:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -3849,13 +3394,6 @@
       "score": 5.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2012-07-23T00:00:00+00:00",
-      "score": 4.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -3917,6 +3455,13 @@
       "pair": "EURUSD",
       "alert_ts": "2012-09-05T00:00:00+00:00",
       "score": 5.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2012-09-09T22:00:00+00:00",
+      "score": 8.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -4091,16 +3636,9 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2012-12-11T19:00:00+00:00",
-      "score": 8.0,
+      "score": 9.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2012-12-12T21:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
@@ -4174,6 +3712,13 @@
     },
     {
       "pair": "EURUSD",
+      "alert_ts": "2013-01-08T02:00:00+00:00",
+      "score": 8.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
       "alert_ts": "2013-01-08T03:00:00+00:00",
       "score": 7.0,
       "exit_reason": "never_filled",
@@ -4188,13 +3733,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2013-01-29T23:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2013-02-01T00:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
@@ -4203,30 +3741,9 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2013-02-04T19:00:00+00:00",
-      "score": 7.0,
+      "score": 8.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2013-02-04T19:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2013-02-04T19:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2013-02-04T19:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -4238,6 +3755,13 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2013-02-07T03:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2013-02-10T23:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
@@ -4262,13 +3786,6 @@
       "score": 8.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2013-02-25T19:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -4307,6 +3824,13 @@
     },
     {
       "pair": "EURUSD",
+      "alert_ts": "2013-03-25T00:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
       "alert_ts": "2013-03-28T03:00:00+00:00",
       "score": 5.0,
       "exit_reason": "tp",
@@ -4335,13 +3859,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2013-04-03T02:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2013-04-11T00:00:00+00:00",
       "score": 5.0,
       "exit_reason": "never_filled",
@@ -4363,20 +3880,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2013-04-15T20:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2013-04-18T19:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2013-04-25T02:00:00+00:00",
       "score": 9.0,
       "exit_reason": "sl",
@@ -4388,13 +3891,6 @@
       "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2013-04-29T00:00:00+00:00",
-      "score": 3.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
@@ -4566,20 +4062,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2013-07-10T19:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2013-07-10T21:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2013-07-11T19:00:00+00:00",
       "score": 5.0,
       "exit_reason": "sl",
@@ -4650,13 +4132,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2013-09-16T00:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2013-09-17T03:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
@@ -4696,6 +4171,13 @@
       "score": 6.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2013-10-30T02:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -4748,13 +4230,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2013-11-20T01:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2013-11-26T00:00:00+00:00",
       "score": 5.0,
       "exit_reason": "never_filled",
@@ -4780,13 +4255,6 @@
       "score": 6.0,
       "exit_reason": "never_filled",
       "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2013-12-10T03:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
@@ -4846,13 +4314,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2014-01-02T01:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2014-01-15T02:00:00+00:00",
       "score": 10.0,
       "exit_reason": "sl",
@@ -4885,6 +4346,13 @@
       "score": 7.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-01-30T22:00:00+00:00",
+      "score": 4.0,
+      "exit_reason": "sl",
+      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -4938,16 +4406,23 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2014-03-04T02:00:00+00:00",
-      "score": 5.0,
+      "score": 3.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2014-03-06T03:00:00+00:00",
-      "score": 4.0,
+      "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-03-14T00:00:00+00:00",
+      "score": 6.0,
+      "exit_reason": "tp",
+      "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
@@ -4965,13 +4440,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2014-04-14T01:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2014-04-17T01:00:00+00:00",
       "score": 7.0,
       "exit_reason": "sl",
@@ -4979,8 +4447,8 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2014-04-24T20:00:00+00:00",
-      "score": 6.0,
+      "alert_ts": "2014-04-24T22:00:00+00:00",
+      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -4990,13 +4458,6 @@
       "score": 8.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2014-04-28T02:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -5029,14 +4490,14 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2014-05-13T19:00:00+00:00",
-      "score": 5.0,
+      "score": 7.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
       "alert_ts": "2014-05-27T01:00:00+00:00",
-      "score": 6.0,
+      "score": 7.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -5057,16 +4518,9 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2014-06-12T19:00:00+00:00",
-      "score": 6.0,
+      "score": 7.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2014-06-18T19:00:00+00:00",
-      "score": 4.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -5088,13 +4542,6 @@
       "score": 6.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2014-07-07T02:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -5148,13 +4595,6 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2014-07-30T19:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2014-07-30T19:00:00+00:00",
       "score": 8.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
@@ -5165,6 +4605,13 @@
       "score": 4.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2014-08-11T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -5189,10 +4636,10 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2014-09-03T19:00:00+00:00",
+      "alert_ts": "2014-08-27T01:00:00+00:00",
       "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
+      "exit_reason": "sl",
+      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -5218,7 +4665,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2014-09-28T23:00:00+00:00",
-      "score": 3.0,
+      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -5294,13 +4741,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2014-10-22T21:00:00+00:00",
-      "score": 4.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2014-10-23T02:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
@@ -5316,7 +4756,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2014-10-29T19:00:00+00:00",
-      "score": 9.0,
+      "score": 10.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -5366,13 +4806,6 @@
       "pair": "EURUSD",
       "alert_ts": "2014-11-21T01:00:00+00:00",
       "score": 5.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2014-11-24T00:00:00+00:00",
-      "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -5553,15 +4986,8 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2015-03-02T00:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2015-03-10T01:00:00+00:00",
-      "score": 7.0,
+      "alert_ts": "2015-03-05T23:00:00+00:00",
+      "score": 4.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -5575,21 +5001,21 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2015-03-18T21:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2015-03-18T21:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2015-03-18T21:00:00+00:00",
       "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2015-03-18T21:00:00+00:00",
+      "score": 7.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2015-03-18T21:00:00+00:00",
+      "score": 5.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -5597,6 +5023,13 @@
       "pair": "EURUSD",
       "alert_ts": "2015-03-19T01:00:00+00:00",
       "score": 6.0,
+      "exit_reason": "never_filled",
+      "would_have_r": null
+    },
+    {
+      "pair": "EURUSD",
+      "alert_ts": "2015-03-19T01:00:00+00:00",
+      "score": 5.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -5672,10 +5105,10 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2015-04-23T02:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
+      "alert_ts": "2015-04-21T02:00:00+00:00",
+      "score": 5.0,
+      "exit_reason": "tp",
+      "would_have_r": 2.0
     },
     {
       "pair": "EURUSD",
@@ -5746,13 +5179,6 @@
       "score": 5.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2015-06-17T20:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
     },
     {
       "pair": "EURUSD",
@@ -5841,7 +5267,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2015-08-17T00:00:00+00:00",
-      "score": 9.0,
+      "score": 8.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
     },
@@ -5904,7 +5330,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2015-09-08T20:00:00+00:00",
-      "score": 6.0,
+      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -5953,7 +5379,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2015-09-29T02:00:00+00:00",
-      "score": 5.0,
+      "score": 7.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -6142,7 +5568,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2016-01-08T21:00:00+00:00",
-      "score": 7.0,
+      "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -6190,13 +5616,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2016-02-08T20:00:00+00:00",
-      "score": 8.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2016-02-15T23:00:00+00:00",
       "score": 6.0,
       "exit_reason": "tp",
@@ -6205,7 +5624,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2016-02-24T02:00:00+00:00",
-      "score": 5.0,
+      "score": 3.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
     },
@@ -6233,13 +5652,6 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2016-04-01T02:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2016-04-22T03:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
@@ -6547,13 +5959,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2016-10-07T01:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2016-10-11T02:00:00+00:00",
       "score": 7.0,
       "exit_reason": "tp",
@@ -6603,13 +6008,6 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2016-10-31T21:00:00+00:00",
-      "score": 5.0,
-      "exit_reason": "tp",
-      "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2016-11-03T03:00:00+00:00",
       "score": 6.0,
       "exit_reason": "sl",
@@ -6619,13 +6017,6 @@
       "pair": "EURUSD",
       "alert_ts": "2016-11-07T03:00:00+00:00",
       "score": 7.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2016-11-08T19:00:00+00:00",
-      "score": 8.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -6646,7 +6037,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2016-11-14T00:00:00+00:00",
-      "score": 5.0,
+      "score": 3.0,
       "exit_reason": "never_filled",
       "would_have_r": null
     },
@@ -6660,7 +6051,7 @@
     {
       "pair": "EURUSD",
       "alert_ts": "2016-11-18T01:00:00+00:00",
-      "score": 3.0,
+      "score": 5.0,
       "exit_reason": "sl",
       "would_have_r": -1.0
     },
@@ -6673,24 +6064,10 @@
     },
     {
       "pair": "EURUSD",
-      "alert_ts": "2016-11-28T03:00:00+00:00",
-      "score": 7.0,
-      "exit_reason": "never_filled",
-      "would_have_r": null
-    },
-    {
-      "pair": "EURUSD",
       "alert_ts": "2016-12-01T19:00:00+00:00",
       "score": 7.0,
       "exit_reason": "tp",
       "would_have_r": 2.0
-    },
-    {
-      "pair": "EURUSD",
-      "alert_ts": "2016-12-05T00:00:00+00:00",
-      "score": 6.0,
-      "exit_reason": "sl",
-      "would_have_r": -1.0
     },
     {
       "pair": "EURUSD",
@@ -6771,32 +6148,32 @@
       ],
       "scoreboards": {
         "proximal_realised": {
-          "trades": 2221,
-          "wins": 690,
-          "losses": 1531,
+          "trades": 2048,
+          "wins": 634,
+          "losses": 1414,
           "breakevens": 0,
-          "win_rate_pct": 31.1,
-          "expectancy_r": -0.093,
-          "expectancy_usd": -23.23,
-          "total_r": -206.39,
-          "total_pnl_usd": -51597.5,
-          "avg_win_r": 1.899,
-          "avg_loss_r": -0.991,
-          "avg_win_usd": 475.0,
+          "win_rate_pct": 31.0,
+          "expectancy_r": -0.098,
+          "expectancy_usd": -24.56,
+          "total_r": -201.174,
+          "total_pnl_usd": -50293.5,
+          "avg_win_r": 1.897,
+          "avg_loss_r": -0.993,
+          "avg_win_usd": 474.0,
           "avg_loss_usd": -248.0,
-          "avg_mfe_r": 6.021,
-          "avg_mae_r": -0.637,
-          "win_capture_pct": 32.0
+          "avg_mfe_r": 6.078,
+          "avg_mae_r": -0.629,
+          "win_capture_pct": 31.0
         }
       },
       "fill_rate_proximal": {
-        "alerts": 3322,
-        "filled": 2221,
-        "fill_rate_pct": 66.9
+        "alerts": 3041,
+        "filled": 2048,
+        "fill_rate_pct": 67.3
       },
       "news_blocked_trade_rows": 0,
       "ist_blocked_trade_rows": 0,
-      "killzone_dropped_alerts": 2397,
+      "killzone_dropped_alerts": 2172,
       "score_floor": 4.0,
       "below_score_floor_trade_rows": 0,
       "html_file": "report_forex.html",
