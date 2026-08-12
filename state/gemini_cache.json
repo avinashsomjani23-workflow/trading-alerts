@@ -1,17 +1,17 @@
 {
-  "EURUSD|2026-08-11": {
-    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no scheduled macroeconomic events will directly influence this EURUSD short setup today."
+  "EURUSD|2026-08-12": {
+    "macro_summary": "There are no scheduled high-impact events for EUR or USD today. Therefore, no external macro factors are expected to directly influence this EURUSD setup. The trade will likely be driven by technicals and sentiment alone."
   },
-  "USDJPY|2026-08-11": {
-    "macro_summary": "There are no scheduled high-impact events for JPY or USD today. Therefore, no scheduled events will directly influence the USDJPY pair's direction today."
+  "USDJPY|2026-08-12": {
+    "macro_summary": "There are no scheduled high-impact events for JPY or USD today. Therefore, no scheduled events will directly impact the USDJPY pair's direction. The trade setup is free from immediate macroeconomic event risk."
   },
-  "NZDUSD|2026-08-11": {
-    "macro_summary": "There are no scheduled high-impact events for NZD or USD today. Therefore, no external macro factors are expected to directly influence the NZDUSD pair's direction today."
+  "NZDUSD|2026-08-12": {
+    "macro_summary": "There are no scheduled high-impact events for NZD or USD today. This lack of scheduled news means the pair may trade on technicals or unexpected geopolitical developments. Any significant shift in global risk sentiment could help this short trade by increasing demand for safe-haven currencies like the USD, while a sudden improvement in global growth prospects would hurt it."
   },
-  "USDCHF|2026-08-11": {
-    "macro_summary": "There are no scheduled high-impact events for CHF or USD today. Therefore, no external macro factors are expected to influence the USDCHF pair's direction today."
+  "USDCHF|2026-08-12": {
+    "macro_summary": "There are no scheduled high-impact events for CHF or USD today. Therefore, no scheduled events will directly influence the USDCHF pair's direction today."
   },
-  "GOLD|2026-08-11": {
-    "macro_summary": "There are no scheduled high-impact events for USD today that would directly influence Gold. Therefore, no specific macro events are expected to help or hurt this Gold long setup today."
+  "GOLD|2026-08-12": {
+    "macro_summary": "There are no scheduled high-impact events for USD today that will directly affect Gold. Therefore, no specific macro events will help or hurt this Gold long setup today."
   }
 }
