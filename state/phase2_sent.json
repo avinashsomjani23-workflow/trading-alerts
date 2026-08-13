@@ -1919,11 +1919,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-11T09:36:01.773528",
-      "last_seen_ist": "2026-08-13T20:36:18.183306",
+      "last_seen_ist": "2026-08-13T21:36:05.679021",
       "last_email_day": "2026-08-13",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.36760000000001014,
+      "max_exit_distance": 0.4597300000000075,
       "bias": "LONG",
       "pair": "USDJPY",
       "ob_snapshot": {
@@ -2825,7 +2825,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-12T09:36:09.216547",
-      "last_seen_ist": "2026-08-13T20:36:18.183306",
+      "last_seen_ist": "2026-08-13T21:36:05.679021",
       "last_email_day": "2026-08-12",
       "still_valid_count": 0,
       "reentry_armed": true,
@@ -3858,7 +3858,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-13T10:36:08.473312",
-      "last_seen_ist": "2026-08-13T20:36:18.183306",
+      "last_seen_ist": "2026-08-13T21:36:05.679021",
       "last_email_day": "2026-08-13",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4112,7 +4112,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-13T15:36:06.682901",
-      "last_seen_ist": "2026-08-13T20:36:18.183306",
+      "last_seen_ist": "2026-08-13T21:36:05.679021",
       "last_email_day": "2026-08-13",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4230,7 +4230,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-13T15:36:06.682901",
-      "last_seen_ist": "2026-08-13T20:36:18.183306",
+      "last_seen_ist": "2026-08-13T21:36:05.679021",
       "last_email_day": "2026-08-13",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4357,7 +4357,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-13T15:36:06.682901",
-      "last_seen_ist": "2026-08-13T20:36:18.183306",
+      "last_seen_ist": "2026-08-13T21:36:05.679021",
       "last_email_day": "2026-08-13",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4484,11 +4484,11 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-13T18:36:04.988576",
-      "last_seen_ist": "2026-08-13T20:36:18.183306",
+      "last_seen_ist": "2026-08-13T21:36:05.679021",
       "last_email_day": "2026-08-13",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0022200000000001108,
+      "max_exit_distance": 0.00275000000000003,
       "bias": "SHORT",
       "pair": "EURUSD",
       "ob_snapshot": {
