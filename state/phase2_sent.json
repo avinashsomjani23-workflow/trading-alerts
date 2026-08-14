@@ -2825,7 +2825,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-12T09:36:09.216547",
-      "last_seen_ist": "2026-08-14T09:36:11.109824",
+      "last_seen_ist": "2026-08-14T10:36:26.250821",
       "last_email_day": "2026-08-14",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4112,11 +4112,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-13T15:36:06.682901",
-      "last_seen_ist": "2026-08-14T09:36:11.109824",
+      "last_seen_ist": "2026-08-14T10:36:26.250821",
       "last_email_day": "2026-08-13",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.0012499999999999734,
       "bias": "LONG",
       "pair": "EURUSD",
       "ob_snapshot": {
@@ -4357,7 +4357,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-13T15:36:06.682901",
-      "last_seen_ist": "2026-08-13T23:38:15.100152",
+      "last_seen_ist": "2026-08-14T10:36:26.250821",
       "last_email_day": "2026-08-13",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4611,7 +4611,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-13T23:38:15.100152",
-      "last_seen_ist": "2026-08-14T09:36:11.109824",
+      "last_seen_ist": "2026-08-14T10:36:26.250821",
       "last_email_day": "2026-08-13",
       "still_valid_count": 0,
       "reentry_armed": false,
