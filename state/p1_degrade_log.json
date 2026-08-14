@@ -1,41 +1,5 @@
 [
   {
-    "ts": "2026-08-02T12:40:35.776286",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "EURUSD",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-08-02T12:40:35.794652",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "EURUSD",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-08-02T12:40:35.816512",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "EURUSD",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-08-02T12:40:35.843306",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "EURUSD",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-08-02T12:40:35.860774",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "EURUSD",
-    "source": "legacy_window_120h"
-  },
-  {
-    "ts": "2026-08-02T12:40:35.876598",
-    "kind": "dealing_range_legacy_fallback",
-    "pair": "EURUSD",
-    "source": "legacy_window_120h"
-  },
-  {
     "ts": "2026-08-02T12:40:35.890417",
     "kind": "dealing_range_legacy_fallback",
     "pair": "EURUSD",
@@ -1195,6 +1159,42 @@
   },
   {
     "ts": "2026-08-14T10:34:05.409804",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "NZDUSD",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-08-14T11:34:01.166780",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "NZDUSD",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-08-14T11:34:01.168694",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "NZDUSD",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-08-14T11:34:01.170580",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "NZDUSD",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-08-14T11:34:01.172488",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "NZDUSD",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-08-14T11:34:01.174566",
+    "kind": "dealing_range_legacy_fallback",
+    "pair": "NZDUSD",
+    "source": "legacy_window_120h"
+  },
+  {
+    "ts": "2026-08-14T11:34:01.176475",
     "kind": "dealing_range_legacy_fallback",
     "pair": "NZDUSD",
     "source": "legacy_window_120h"
