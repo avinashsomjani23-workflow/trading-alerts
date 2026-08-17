@@ -11,8 +11,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-17T10:34:04.836962",
           "first_seen_label": "10:34 IST",
-          "last_seen_iso": "2026-08-17T21:33:59.197498",
-          "last_seen_label": "21:33 IST",
+          "last_seen_iso": "2026-08-17T22:35:47.128384",
+          "last_seen_label": "22:35 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-08-17T02:00:00+00:00",
           "direction": "bullish",
@@ -44,8 +44,8 @@
           "touches": 2,
           "status_label": "Tested (2x proximal)",
           "h1_atr": 0.0005749999999999446,
-          "current_price_at_scan": 1.15887,
-          "distance_to_proximal_pips": 4.1,
+          "current_price_at_scan": 1.15891,
+          "distance_to_proximal_pips": 4.5,
           "fvg": {
             "exists": false,
             "fvg_top": null,
@@ -119,8 +119,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-17T09:34:03.594502",
           "first_seen_label": "09:34 IST",
-          "last_seen_iso": "2026-08-17T21:33:59.197498",
-          "last_seen_label": "21:33 IST",
+          "last_seen_iso": "2026-08-17T22:35:47.128384",
+          "last_seen_label": "22:35 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-08-14T17:00:00+00:00",
           "direction": "bullish",
@@ -145,15 +145,15 @@
           "bos_sequence_count": 1,
           "break_quality": {
             "tier": "solid",
-            "close_beyond_atr": 1.24,
-            "body_atr": 2.37,
-            "excess": 2.37
+            "close_beyond_atr": 1.26,
+            "body_atr": 2.41,
+            "excess": 2.41
           },
           "touches": 0,
           "status_label": "Pristine",
           "h1_atr": 0.0004907142857142967,
-          "current_price_at_scan": 0.59089,
-          "distance_to_proximal_pips": 19.0,
+          "current_price_at_scan": 0.59087,
+          "distance_to_proximal_pips": 18.8,
           "fvg": {
             "exists": true,
             "fvg_top": 0.59035,
@@ -222,8 +222,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-17T14:34:03.433567",
           "first_seen_label": "14:34 IST",
-          "last_seen_iso": "2026-08-17T21:33:59.197498",
-          "last_seen_label": "21:33 IST",
+          "last_seen_iso": "2026-08-17T22:35:47.128384",
+          "last_seen_label": "22:35 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-08-14T21:00:00+00:00",
           "direction": "bearish",
@@ -248,15 +248,15 @@
           "bos_sequence_count": 2,
           "break_quality": {
             "tier": "solid",
-            "close_beyond_atr": 2.01,
-            "body_atr": 2.17,
-            "excess": 2.17
+            "close_beyond_atr": 2.0,
+            "body_atr": 2.16,
+            "excess": 2.16
           },
           "touches": 0,
           "status_label": "Pristine",
           "h1_atr": 0.0009114285714285551,
-          "current_price_at_scan": 0.80976,
-          "distance_to_proximal_pips": 32.2,
+          "current_price_at_scan": 0.80999,
+          "distance_to_proximal_pips": 29.9,
           "fvg": {
             "exists": true,
             "fvg_top": 0.8131,
@@ -317,7 +317,7 @@
       "last_displayed_zone_id": "CHF80"
     },
     "GOLD": {
-      "next_id_counter": 99,
+      "next_id_counter": 100,
       "zones": [
         {
           "zone_id": "XAU98",
@@ -325,8 +325,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-17T20:34:08.458708",
           "first_seen_label": "20:34 IST",
-          "last_seen_iso": "2026-08-17T21:33:59.197498",
-          "last_seen_label": "21:33 IST",
+          "last_seen_iso": "2026-08-17T22:35:47.128384",
+          "last_seen_label": "22:35 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-08-17T12:00:00+00:00",
           "direction": "bullish",
@@ -351,15 +351,15 @@
           "bos_sequence_count": 2,
           "break_quality": {
             "tier": "marginal",
-            "close_beyond_atr": 0.32,
-            "body_atr": 0.82,
-            "excess": 0.82
+            "close_beyond_atr": 0.33,
+            "body_atr": 0.83,
+            "excess": 0.83
           },
           "touches": 0,
           "status_label": "Pristine",
           "h1_atr": 13.838335714285677,
-          "current_price_at_scan": 4426.07667,
-          "distance_to_proximal_pips": 28.3,
+          "current_price_at_scan": 4424.58982,
+          "distance_to_proximal_pips": 26.9,
           "fvg": {
             "exists": true,
             "fvg_top": 4404.18399,
@@ -379,9 +379,9 @@
           },
           "dealing_range": {
             "valid": true,
-            "range_high": 4427.32545,
+            "range_high": 4427.91357,
             "range_low": 4310.61379,
-            "equilibrium": 4368.96962,
+            "equilibrium": 4369.26368,
             "tentative": true,
             "chop_flag": false,
             "last_event_type": "BOS",
@@ -415,11 +415,125 @@
               "tf_atr": 13.838335714285677
             }
           }
+        },
+        {
+          "zone_id": "XAU100",
+          "status": "dropped",
+          "drop_reason": "choch_superseded_2bos",
+          "first_seen_iso": "2026-08-17T22:35:47.128384",
+          "first_seen_label": "22:35 IST",
+          "last_seen_iso": "2026-08-17T22:35:47.128384",
+          "last_seen_label": "22:35 IST",
+          "is_new_this_scan": true,
+          "ob_timestamp": "2026-08-14T10:00:00+00:00",
+          "direction": "bullish",
+          "bos_tag": "CHoCH",
+          "bos_tier": "CHoCH",
+          "broken_was_wall": false,
+          "reversal_pct": 1.0,
+          "bos_timestamp": "2026-08-14T11:00:00+00:00",
+          "proximal_line": 4358.33229,
+          "distal_line": 4348.58236,
+          "high": 4358.33229,
+          "low": 4348.58236,
+          "ob_body": 5.108430000000226,
+          "median_leg_body": 5.605025000000296,
+          "body_ratio": 0.524,
+          "walkback_depth": 0,
+          "bos_idx": 102,
+          "ob_idx": 101,
+          "impulse_start_idx": 91,
+          "impulse_start_price": 4348.61358,
+          "bos_swing_price": 4364.52514,
+          "bos_sequence_count": 0,
+          "break_quality": {
+            "tier": "marginal",
+            "close_beyond_atr": 0.26,
+            "body_atr": 1.38,
+            "excess": 0.92
+          },
+          "touches": 0,
+          "status_label": "Pristine",
+          "h1_atr": 13.667397142857096,
+          "current_price_at_scan": 4424.58982,
+          "distance_to_proximal_pips": 66.3,
+          "fvg": {
+            "exists": true,
+            "fvg_top": 4366.12816,
+            "fvg_bottom": 4358.33229,
+            "c1_idx": 101,
+            "c3_idx": 103,
+            "c1_timestamp": "2026-08-14T10:00:00+00:00",
+            "was_detected": true,
+            "mitigation": "pristine",
+            "ghost_top": null,
+            "ghost_bottom": null,
+            "ghost_c1_idx": null,
+            "ghost_c3_idx": null,
+            "ghost_c1_timestamp": null,
+            "mitigated_at_idx": null,
+            "mitigated_at_iso": null
+          },
+          "dealing_range": {
+            "valid": true,
+            "range_high": 4427.91357,
+            "range_low": 4310.61379,
+            "equilibrium": 4369.26368,
+            "tentative": true,
+            "chop_flag": false,
+            "last_event_type": "BOS",
+            "source": "h4_dealing_range",
+            "ceiling_broken": true,
+            "floor_broken": false
+          },
+          "role": "alternative",
+          "sweep_v2": {
+            "exists": true,
+            "tier": "SW",
+            "side": "low",
+            "level": 4317.12328,
+            "sweep_ts": "2026-08-14T01:00:00",
+            "pierce_atr": 0.311,
+            "rejection_ratio": 0.328,
+            "follow_atr": 3.803,
+            "pools_swept": 1,
+            "rn_aligned": false,
+            "rn_dist_atr": 0.155,
+            "eq_size": null,
+            "tiers_checked": "pd,eq,sw",
+            "sw_block": {
+              "present": true,
+              "pierce_atr": 0.311,
+              "rejection_ratio": 0.328,
+              "follow_atr": 3.803,
+              "rn_aligned": false,
+              "sweep_ts": "2026-08-14T01:00:00"
+            },
+            "eq_block": {
+              "present": false,
+              "pierce_atr": null,
+              "rejection_ratio": null,
+              "follow_atr": null,
+              "rn_aligned": null,
+              "sweep_ts": null
+            },
+            "eq_block_size": null,
+            "_leg": {
+              "leg_start_ts": "2026-08-13T20:00:00",
+              "leg_end_ts": "2026-08-14T10:00:00",
+              "break_ts": "2026-08-14T11:00:00",
+              "direction": "bullish",
+              "pair_type": "commodity",
+              "pair_name": "GOLD",
+              "tf_atr": 13.667397142857096
+            },
+            "observed_at": "2026-08-17T17:06:54.225454+00:00"
+          }
         }
       ],
       "last_displayed_zone_id": "XAU98"
     }
   },
   "schema_version": 1,
-  "slate_bar_ts": "2026-08-17T15:00:00+00:00"
+  "slate_bar_ts": "2026-08-17T16:00:00+00:00"
 }
