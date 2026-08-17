@@ -11,8 +11,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-17T10:34:04.836962",
           "first_seen_label": "10:34 IST",
-          "last_seen_iso": "2026-08-17T17:34:05.966138",
-          "last_seen_label": "17:34 IST",
+          "last_seen_iso": "2026-08-17T18:34:10.322723",
+          "last_seen_label": "18:34 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-08-17T02:00:00+00:00",
           "direction": "bullish",
@@ -38,14 +38,14 @@
           "break_quality": {
             "tier": "marginal",
             "close_beyond_atr": 0.01,
-            "body_atr": 0.3,
-            "excess": 0.3
+            "body_atr": 0.29,
+            "excess": 0.29
           },
           "touches": 1,
           "status_label": "Tested (1x proximal)",
           "h1_atr": 0.0005749999999999446,
-          "current_price_at_scan": 1.15936,
-          "distance_to_proximal_pips": 9.0,
+          "current_price_at_scan": 1.15975,
+          "distance_to_proximal_pips": 12.9,
           "fvg": {
             "exists": false,
             "fvg_top": null,
@@ -119,8 +119,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-17T09:34:03.594502",
           "first_seen_label": "09:34 IST",
-          "last_seen_iso": "2026-08-17T17:34:05.966138",
-          "last_seen_label": "17:34 IST",
+          "last_seen_iso": "2026-08-17T18:34:10.322723",
+          "last_seen_label": "18:34 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-08-14T17:00:00+00:00",
           "direction": "bullish",
@@ -145,15 +145,15 @@
           "bos_sequence_count": 1,
           "break_quality": {
             "tier": "solid",
-            "close_beyond_atr": 1.31,
-            "body_atr": 2.5,
-            "excess": 2.5
+            "close_beyond_atr": 1.21,
+            "body_atr": 2.31,
+            "excess": 2.31
           },
           "touches": 0,
           "status_label": "Pristine",
           "h1_atr": 0.0004907142857142967,
-          "current_price_at_scan": 0.5916,
-          "distance_to_proximal_pips": 26.1,
+          "current_price_at_scan": 0.59173,
+          "distance_to_proximal_pips": 27.4,
           "fvg": {
             "exists": true,
             "fvg_top": 0.59035,
@@ -222,8 +222,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-17T14:34:03.433567",
           "first_seen_label": "14:34 IST",
-          "last_seen_iso": "2026-08-17T17:34:05.966138",
-          "last_seen_label": "17:34 IST",
+          "last_seen_iso": "2026-08-17T18:34:10.322723",
+          "last_seen_label": "18:34 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-08-14T21:00:00+00:00",
           "direction": "bearish",
@@ -248,15 +248,15 @@
           "bos_sequence_count": 2,
           "break_quality": {
             "tier": "solid",
-            "close_beyond_atr": 2.18,
-            "body_atr": 2.36,
-            "excess": 2.36
+            "close_beyond_atr": 2.07,
+            "body_atr": 2.23,
+            "excess": 2.23
           },
           "touches": 0,
           "status_label": "Pristine",
           "h1_atr": 0.0009114285714285551,
-          "current_price_at_scan": 0.80976,
-          "distance_to_proximal_pips": 32.2,
+          "current_price_at_scan": 0.80954,
+          "distance_to_proximal_pips": 34.4,
           "fvg": {
             "exists": true,
             "fvg_top": 0.8131,
@@ -319,8 +319,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-17T14:34:03.433567",
           "first_seen_label": "14:34 IST",
-          "last_seen_iso": "2026-08-17T17:34:05.966138",
-          "last_seen_label": "17:34 IST",
+          "last_seen_iso": "2026-08-17T18:34:10.322723",
+          "last_seen_label": "18:34 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-08-10T07:00:00+00:00",
           "direction": "bullish",
@@ -345,15 +345,15 @@
           "bos_sequence_count": 1,
           "break_quality": {
             "tier": "marginal",
-            "close_beyond_atr": 0.31,
-            "body_atr": 0.96,
-            "excess": 0.96
+            "close_beyond_atr": 0.29,
+            "body_atr": 0.91,
+            "excess": 0.91
           },
           "touches": 2,
           "status_label": "Tested (2x proximal)",
           "h1_atr": 0.0009114285714285551,
-          "current_price_at_scan": 0.80976,
-          "distance_to_proximal_pips": 10.1,
+          "current_price_at_scan": 0.80954,
+          "distance_to_proximal_pips": 7.9,
           "fvg": {
             "exists": false,
             "fvg_top": null,
@@ -422,8 +422,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-14T13:34:05.102059",
           "first_seen_label": "13:34 IST",
-          "last_seen_iso": "2026-08-17T17:34:05.966138",
-          "last_seen_label": "17:34 IST",
+          "last_seen_iso": "2026-08-17T18:34:10.322723",
+          "last_seen_label": "18:34 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-08-12T23:00:00+00:00",
           "direction": "bearish",
@@ -449,14 +449,14 @@
           "break_quality": {
             "tier": "marginal",
             "close_beyond_atr": 0.0,
-            "body_atr": 1.1,
-            "excess": 0.73
+            "body_atr": 1.15,
+            "excess": 0.77
           },
           "touches": 2,
           "status_label": "Tested (2x proximal)",
           "h1_atr": 12.80077857142851,
-          "current_price_at_scan": 4393.16171,
-          "distance_to_proximal_pips": 9.0,
+          "current_price_at_scan": 4383.35655,
+          "distance_to_proximal_pips": 18.8,
           "fvg": {
             "exists": false,
             "fvg_top": null,
@@ -476,12 +476,12 @@
           },
           "dealing_range": {
             "valid": true,
-            "range_high": 4441.22288,
+            "range_high": 4415.05846,
             "range_low": 4310.61379,
-            "equilibrium": 4375.918335,
+            "equilibrium": 4362.836125,
             "tentative": false,
             "chop_flag": false,
-            "last_event_type": "CHoCH",
+            "last_event_type": "BOS",
             "source": "h4_dealing_range",
             "ceiling_broken": false,
             "floor_broken": false
@@ -519,8 +519,8 @@
           "drop_reason": null,
           "first_seen_iso": "2026-08-14T17:34:02.724543",
           "first_seen_label": "17:34 IST",
-          "last_seen_iso": "2026-08-17T17:34:05.966138",
-          "last_seen_label": "17:34 IST",
+          "last_seen_iso": "2026-08-17T18:34:10.322723",
+          "last_seen_label": "18:34 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-08-14T10:00:00+00:00",
           "direction": "bullish",
@@ -545,15 +545,15 @@
           "bos_sequence_count": 0,
           "break_quality": {
             "tier": "marginal",
-            "close_beyond_atr": 0.32,
-            "body_atr": 1.66,
-            "excess": 1.11
+            "close_beyond_atr": 0.28,
+            "body_atr": 1.47,
+            "excess": 0.98
           },
           "touches": 0,
           "status_label": "Pristine",
           "h1_atr": 14.37869571428564,
-          "current_price_at_scan": 4395.6962,
-          "distance_to_proximal_pips": 37.4,
+          "current_price_at_scan": 4383.35655,
+          "distance_to_proximal_pips": 25.0,
           "fvg": {
             "exists": true,
             "fvg_top": 4366.12816,
@@ -583,7 +583,7 @@
             "ceiling_broken": false,
             "floor_broken": false
           },
-          "role": "alternative",
+          "role": "primary",
           "sweep_v2": {
             "exists": true,
             "tier": "SW",
@@ -629,12 +629,12 @@
         },
         {
           "zone_id": "XAU97",
-          "status": "active",
-          "drop_reason": null,
+          "status": "dropped",
+          "drop_reason": "mitigated_distal_break",
           "first_seen_iso": "2026-08-17T09:34:03.594502",
           "first_seen_label": "09:34 IST",
-          "last_seen_iso": "2026-08-17T17:34:05.966138",
-          "last_seen_label": "17:34 IST",
+          "last_seen_iso": "2026-08-17T18:34:10.322723",
+          "last_seen_label": "18:34 IST",
           "is_new_this_scan": false,
           "ob_timestamp": "2026-08-17T02:00:00+00:00",
           "direction": "bullish",
@@ -746,5 +746,5 @@
     }
   },
   "schema_version": 1,
-  "slate_bar_ts": "2026-08-17T11:00:00+00:00"
+  "slate_bar_ts": "2026-08-17T12:00:00+00:00"
 }
