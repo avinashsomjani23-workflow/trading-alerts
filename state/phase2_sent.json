@@ -4823,7 +4823,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-17T20:36:12.434741",
-      "last_seen_ist": "2026-08-17T21:36:11.376654",
+      "last_seen_ist": "2026-08-17T22:36:08.181086",
       "last_email_day": "2026-08-17",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4950,11 +4950,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-17T21:36:11.376654",
-      "last_seen_ist": "2026-08-17T21:36:11.376654",
+      "last_seen_ist": "2026-08-17T22:36:08.181086",
       "last_email_day": "2026-08-17",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.0017800000000000038,
       "bias": "LONG",
       "pair": "NZDUSD",
       "ob_snapshot": {
