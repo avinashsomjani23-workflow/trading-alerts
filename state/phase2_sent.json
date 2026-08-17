@@ -3993,11 +3993,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-17T18:36:10.822778",
-      "last_seen_ist": "2026-08-17T18:36:10.822778",
+      "last_seen_ist": "2026-08-17T19:36:12.373447",
       "last_email_day": "2026-08-17",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 47.24004999999943,
       "bias": "LONG",
       "pair": "GOLD",
       "ob_snapshot": {
@@ -4281,7 +4281,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-17T10:36:15.516924",
-      "last_seen_ist": "2026-08-17T18:36:10.822778",
+      "last_seen_ist": "2026-08-17T19:36:12.373447",
       "last_email_day": "2026-08-17",
       "still_valid_count": 0,
       "reentry_armed": false,
