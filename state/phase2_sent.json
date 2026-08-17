@@ -1,5 +1,5 @@
 {
-  "day_id": "2026-08-14",
+  "day_id": "2026-08-17",
   "zones": {
     "USDCHF_SHORT_BOS_0.8119_2026-08-07T02": {
       "score_int": 6,
@@ -2958,19 +2958,19 @@
     },
     "GOLD_SHORT_CHoCH_4398.3_2026-08-12T23": {
       "score_int": 4,
-      "score_raw": 4.5,
-      "score_high_water": 4.5,
-      "score_low_water": 4.5,
+      "score_raw": 4.0,
+      "score_high_water": 4.0,
+      "score_low_water": 4.0,
       "breakdown": {
         "structure": 4,
         "sweep": 0.0,
         "fvg": 0,
-        "freshness": 0.5,
+        "freshness": 0.0,
         "killzone": 0
       },
-      "alert_ist": "2026-08-13T10:36:08.473312",
-      "last_seen_ist": "2026-08-14T23:38:07.119363",
-      "last_email_day": "2026-08-14",
+      "alert_ist": "2026-08-17T09:36:15.263828",
+      "last_seen_ist": "2026-08-17T09:36:15.263828",
+      "last_email_day": "2026-08-17",
       "still_valid_count": 0,
       "reentry_armed": false,
       "max_exit_distance": 0.0,
@@ -2982,8 +2982,8 @@
         "drop_reason": null,
         "first_seen_iso": "2026-08-14T13:34:05.102059",
         "first_seen_label": "13:34 IST",
-        "last_seen_iso": "2026-08-14T17:34:02.724543",
-        "last_seen_label": "17:34 IST",
+        "last_seen_iso": "2026-08-17T09:34:03.594502",
+        "last_seen_label": "09:34 IST",
         "is_new_this_scan": false,
         "ob_timestamp": "2026-08-12T23:00:00+00:00",
         "direction": "bearish",
@@ -3000,23 +3000,23 @@
         "median_leg_body": 7.237000000000535,
         "body_ratio": 0.95,
         "walkback_depth": 0,
-        "bos_idx": 114,
-        "ob_idx": 110,
-        "impulse_start_idx": 109,
+        "bos_idx": 72,
+        "ob_idx": 68,
+        "impulse_start_idx": 67,
         "impulse_start_price": 4409.94884,
         "bos_swing_price": 4398.31105,
         "bos_sequence_count": 0,
         "break_quality": {
           "tier": "marginal",
           "close_beyond_atr": 0.0,
-          "body_atr": 1.03,
-          "excess": 0.69
+          "body_atr": 1.1,
+          "excess": 0.73
         },
-        "touches": 1,
-        "status_label": "Tested (1x proximal)",
+        "touches": 2,
+        "status_label": "Tested (2x proximal)",
         "h1_atr": 12.80077857142851,
-        "current_price_at_scan": 4373.63803,
-        "distance_to_proximal_pips": 28.5,
+        "current_price_at_scan": 4393.16171,
+        "distance_to_proximal_pips": 9.0,
         "fvg": {
           "exists": false,
           "fvg_top": null,
@@ -3028,10 +3028,10 @@
           "mitigation": "full",
           "ghost_top": 4392.90107,
           "ghost_bottom": 4384.53217,
-          "ghost_c1_idx": 114,
-          "ghost_c3_idx": 116,
+          "ghost_c1_idx": 72,
+          "ghost_c3_idx": 74,
           "ghost_c1_timestamp": "2026-08-13T04:00:00+00:00",
-          "mitigated_at_idx": 122,
+          "mitigated_at_idx": 80,
           "mitigated_at_iso": "2026-08-13T12:00:00+00:00"
         },
         "dealing_range": {
@@ -3076,12 +3076,12 @@
         "bos_count_maxed": false,
         "bos_verdict": "holding"
       },
-      "approach_speed_atr_at_email": 1.597,
-      "approach_body_ratio_at_email": 0.708,
-      "approach_er_at_email": 0.741,
+      "approach_speed_atr_at_email": 1.68,
+      "approach_body_ratio_at_email": 0.252,
+      "approach_er_at_email": 0.738,
       "leg_extreme_at_email": 4364.90615,
       "leg_er_at_email": 0.787,
-      "approach_asof_utc": "2026-08-14T11:00:00+00:00"
+      "approach_asof_utc": "2026-08-17T03:00:00+00:00"
     },
     "EURUSD_SHORT_BOS_1.152_2026-08-13T04": {
       "score_int": 4,
@@ -3976,11 +3976,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-14T13:36:03.485580",
-      "last_seen_ist": "2026-08-14T23:38:07.119363",
+      "last_seen_ist": "2026-08-17T09:36:15.263828",
       "last_email_day": "2026-08-14",
       "still_valid_count": 0,
       "reentry_armed": true,
-      "max_exit_distance": 0.0041999999999999815,
+      "max_exit_distance": 0.0044800000000000395,
       "bias": "LONG",
       "pair": "EURUSD",
       "ob_snapshot": {
@@ -4247,11 +4247,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-14T17:36:09.395201",
-      "last_seen_ist": "2026-08-14T23:38:07.119363",
+      "last_seen_ist": "2026-08-17T09:36:15.263828",
       "last_email_day": "2026-08-14",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 37.715180000000146,
       "bias": "LONG",
       "pair": "GOLD",
       "ob_snapshot": {
