@@ -4950,7 +4950,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-18T09:36:17.176400",
-      "last_seen_ist": "2026-08-18T20:36:14.388413",
+      "last_seen_ist": "2026-08-18T21:36:26.432956",
       "last_email_day": "2026-08-18",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -5077,11 +5077,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-18T09:36:17.176400",
-      "last_seen_ist": "2026-08-18T20:36:14.388413",
+      "last_seen_ist": "2026-08-18T21:36:26.432956",
       "last_email_day": "2026-08-18",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 42.2489400000004,
       "bias": "SHORT",
       "pair": "GOLD",
       "ob_snapshot": {
@@ -5195,7 +5195,7 @@
       "score_int": 5,
       "score_raw": 5.0,
       "score_high_water": 7.0,
-      "score_low_water": 5.0,
+      "score_low_water": 4.5,
       "breakdown": {
         "structure": 3,
         "sweep": 0.0,
@@ -5204,7 +5204,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-18T10:36:15.650112",
-      "last_seen_ist": "2026-08-18T19:36:23.182688",
+      "last_seen_ist": "2026-08-18T21:36:26.432956",
       "last_email_day": "2026-08-18",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -5458,7 +5458,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-18T12:36:09.323392",
-      "last_seen_ist": "2026-08-18T20:36:14.388413",
+      "last_seen_ist": "2026-08-18T21:36:26.432956",
       "last_email_day": "2026-08-18",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -5585,11 +5585,11 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-18T13:36:12.234438",
-      "last_seen_ist": "2026-08-18T20:36:14.388413",
+      "last_seen_ist": "2026-08-18T21:36:26.432956",
       "last_email_day": "2026-08-18",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0,
+      "max_exit_distance": 0.0022199999999999998,
       "bias": "LONG",
       "pair": "USDCHF",
       "ob_snapshot": {
@@ -5712,11 +5712,11 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-18T18:36:22.542759",
-      "last_seen_ist": "2026-08-18T20:36:14.388413",
+      "last_seen_ist": "2026-08-18T21:36:26.432956",
       "last_email_day": "2026-08-18",
       "still_valid_count": 0,
       "reentry_armed": false,
-      "max_exit_distance": 0.0017199999999999438,
+      "max_exit_distance": 0.0020999999999999908,
       "bias": "SHORT",
       "pair": "NZDUSD",
       "ob_snapshot": {
@@ -5839,7 +5839,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-18T19:36:23.182688",
-      "last_seen_ist": "2026-08-18T20:36:14.388413",
+      "last_seen_ist": "2026-08-18T21:36:26.432956",
       "last_email_day": "2026-08-18",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -5966,7 +5966,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-18T19:36:23.182688",
-      "last_seen_ist": "2026-08-18T20:36:14.388413",
+      "last_seen_ist": "2026-08-18T21:36:26.432956",
       "last_email_day": "2026-08-18",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -6083,7 +6083,7 @@
     "GOLD_SHORT_BOS_4385.8_2026-08-18T10": {
       "score_int": 5,
       "score_raw": 5.0,
-      "score_high_water": 5.0,
+      "score_high_water": 7.0,
       "score_low_water": 5.0,
       "breakdown": {
         "structure": 4,
@@ -6093,7 +6093,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-18T20:36:14.388413",
-      "last_seen_ist": "2026-08-18T20:36:14.388413",
+      "last_seen_ist": "2026-08-18T21:36:26.432956",
       "last_email_day": "2026-08-18",
       "still_valid_count": 0,
       "reentry_armed": false,
