@@ -4,5 +4,11 @@
   },
   "USDCHF|2026-08-21": {
     "macro_summary": "There are no scheduled high-impact events for CHF or USD today. Therefore, no scheduled events will directly influence the USDCHF pair's direction today."
+  },
+  "USDJPY|2026-08-21": {
+    "macro_summary": "There are no scheduled high-impact events for JPY or USD today. Therefore, no scheduled events will directly influence the USDJPY pair's macro backdrop. The trade setup will rely solely on technical factors and any unscheduled news."
+  },
+  "GOLD|2026-08-21": {
+    "macro_summary": "There are no scheduled high-impact events for USD today that would directly affect Gold. Therefore, no specific macro events will help or hurt this Gold long setup today."
   }
 }
