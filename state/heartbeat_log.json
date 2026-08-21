@@ -1,24 +1,5 @@
 [
   {
-    "ts": "2026-08-06T13:36:01.399064",
-    "ts_human": "13:36 IST, 06 Aug 2026",
-    "ob_count_total": 7,
-    "ob_count_per_pair": {
-      "EURUSD": 3,
-      "USDJPY": 0,
-      "NZDUSD": 0,
-      "USDCHF": 2,
-      "GOLD": 2
-    },
-    "ob_age_hrs": 0.008838974444444444,
-    "gemini_fails_3h": 0,
-    "yfinance_stale_3h": 0,
-    "chart_fails_3h": 0,
-    "smtp_fails_3h": 0,
-    "issue_count": 0,
-    "issues": []
-  },
-  {
     "ts": "2026-08-06T17:36:06.742076",
     "ts_human": "17:36 IST, 06 Aug 2026",
     "ob_count_total": 5,
@@ -947,6 +928,25 @@
       "GOLD": 1
     },
     "ob_age_hrs": 0.0075931133333333335,
+    "gemini_fails_3h": 0,
+    "yfinance_stale_3h": 0,
+    "chart_fails_3h": 0,
+    "smtp_fails_3h": 0,
+    "issue_count": 0,
+    "issues": []
+  },
+  {
+    "ts": "2026-08-21T15:36:06.590038",
+    "ts_human": "15:36 IST, 21 Aug 2026",
+    "ob_count_total": 6,
+    "ob_count_per_pair": {
+      "EURUSD": 2,
+      "USDJPY": 1,
+      "NZDUSD": 1,
+      "USDCHF": 1,
+      "GOLD": 1
+    },
+    "ob_age_hrs": -0.00017014166666666668,
     "gemini_fails_3h": 0,
     "yfinance_stale_3h": 0,
     "chart_fails_3h": 0,

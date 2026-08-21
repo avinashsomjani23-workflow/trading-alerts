@@ -4739,7 +4739,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-21T11:36:03.548990",
-      "last_seen_ist": "2026-08-21T14:36:01.083965",
+      "last_seen_ist": "2026-08-21T15:36:06.590038",
       "last_email_day": "2026-08-21",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4866,7 +4866,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-21T11:36:03.548990",
-      "last_seen_ist": "2026-08-21T14:36:01.083965",
+      "last_seen_ist": "2026-08-21T15:36:06.590038",
       "last_email_day": "2026-08-21",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -4984,7 +4984,7 @@
       "score_int": 6,
       "score_raw": 6.0,
       "score_high_water": 6.0,
-      "score_low_water": 6.0,
+      "score_low_water": 5.0,
       "breakdown": {
         "structure": 3,
         "sweep": 0.0,
@@ -4993,7 +4993,7 @@
         "killzone": 1
       },
       "alert_ist": "2026-08-21T14:36:01.083965",
-      "last_seen_ist": "2026-08-21T14:36:01.083965",
+      "last_seen_ist": "2026-08-21T15:36:06.590038",
       "last_email_day": "2026-08-21",
       "still_valid_count": 0,
       "reentry_armed": false,
@@ -5110,7 +5110,7 @@
     "NZDUSD_LONG_BOS_0.5974_2026-08-21T07": {
       "score_int": 5,
       "score_raw": 5.0,
-      "score_high_water": 5.0,
+      "score_high_water": 7.0,
       "score_low_water": 5.0,
       "breakdown": {
         "structure": 3,
@@ -5120,7 +5120,7 @@
         "killzone": 0
       },
       "alert_ist": "2026-08-21T14:36:01.083965",
-      "last_seen_ist": "2026-08-21T14:36:01.083965",
+      "last_seen_ist": "2026-08-21T15:36:06.590038",
       "last_email_day": "2026-08-21",
       "still_valid_count": 0,
       "reentry_armed": false,
